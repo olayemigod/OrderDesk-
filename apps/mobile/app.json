@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "OrderDesk",
+    "slug": "orderdesk",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "android": {
+      "package": "ng.processedge.orderdesk"
+    },
+    "ios": {
+      "bundleIdentifier": "ng.processedge.orderdesk"
+    }
+  }
+}
