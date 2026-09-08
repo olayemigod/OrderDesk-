@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Pressable,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -8,8 +10,10 @@ import {
   View,
 } from 'react-native';
 
-import { demoOrders } from './src/data/demoOrders';
+import { AuthGate } from './src/components/AuthGate';
 import { orderTotal, type MerchantOrder, type OrderStatus } from './src/domain/order';
+import { useOrders } from './src/hooks/useOrders';
+import { supabase } from './src/lib/supabase';
 
 const money = new Intl.NumberFormat('en-NG', {
   style: 'currency',
@@ -29,8 +33,16 @@ const statusLabels: Record<OrderStatus, string> = {
 };
 
 export default function App() {
-  const [orders, setOrders] = useState<MerchantOrder[]>(demoOrders);
-  const [selectedOrderId, setSelectedOrderId] = useState<string>(demoOrders[0]?.id ?? '');
+  return (
+    <AuthGate>
+      <OrdersScreen />
+    </AuthGate>
+  );
+}
+
+function OrdersScreen() {
+  const { orders, loading, error, refresh, setStatus } = useOrders();
+  const [selectedOrderId, setSelectedOrderId] = useState<string>('');
 
   const selectedOrder = useMemo(
     () => orders.find((order) => order.id === selectedOrderId) ?? orders[0],
@@ -39,28 +51,57 @@ export default function App() {
 
   const reviewCount = orders.filter((order) => order.status === 'needs_review').length;
 
-  function setOrderStatus(orderId: string, status: OrderStatus) {
-    setOrders((current) =>
-      current.map((order) => (order.id === orderId ? { ...order, status } : order)),
-    );
-  }
-
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.page}>
+      <ScrollView
+        contentContainerStyle={styles.page}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void refresh()} />}
+      >
         <View style={styles.header}>
-          <View>
+          <View style={styles.headerCopy}>
             <Text style={styles.eyebrow}>ORDERDESK</Text>
             <Text style={styles.title}>Orders</Text>
             <Text style={styles.subtitle}>WhatsApp orders, organised for action.</Text>
           </View>
-          <View style={styles.reviewBadge}>
-            <Text style={styles.reviewNumber}>{reviewCount}</Text>
-            <Text style={styles.reviewText}>to review</Text>
+          <View style={styles.headerActions}>
+            <View style={styles.reviewBadge}>
+              <Text style={styles.reviewNumber}>{reviewCount}</Text>
+              <Text style={styles.reviewText}>to review</Text>
+            </View>
+            <Pressable onPress={() => void supabase.auth.signOut()} style={styles.signOutButton}>
+              <Text style={styles.signOutText}>Sign out</Text>
+            </Pressable>
           </View>
         </View>
 
+        {error ? (
+          <View style={styles.errorCard}>
+            <Text style={styles.errorTitle}>Order sync problem</Text>
+            <Text style={styles.errorText}>{error}</Text>
+            <Pressable onPress={() => void refresh()} style={styles.retryButton}>
+              <Text style={styles.retryText}>Retry</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         <Text style={styles.sectionTitle}>Order inbox</Text>
+
+        {loading && orders.length === 0 ? (
+          <View style={styles.loadingCard}>
+            <ActivityIndicator />
+            <Text style={styles.metaText}>Loading orders…</Text>
+          </View>
+        ) : null}
+
+        {!loading && orders.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>No orders yet</Text>
+            <Text style={styles.emptyText}>
+              New WhatsApp orders will appear here as soon as the OrderDesk webhook creates them.
+            </Text>
+          </View>
+        ) : null}
+
         <View style={styles.inbox}>
           {orders.map((order) => (
             <Pressable
@@ -79,11 +120,15 @@ export default function App() {
                 <StatusPill status={order.status} />
               </View>
               <Text numberOfLines={2} style={styles.messagePreview}>
-                {order.customerMessage}
+                {order.customerMessage || 'No customer message captured.'}
               </Text>
               <View style={styles.orderMeta}>
-                <Text style={styles.metaText}>{order.items.length} item{order.items.length === 1 ? '' : 's'}</Text>
-                <Text style={styles.metaText}>WhatsApp</Text>
+                <Text style={styles.metaText}>
+                  {order.items.length} item{order.items.length === 1 ? '' : 's'}
+                </Text>
+                <Text style={styles.metaText}>
+                  {order.source === 'whatsapp' ? 'WhatsApp' : 'Manual'}
+                </Text>
                 <Text style={styles.metaText}>
                   {order.confidence === null ? 'Unscored' : `${Math.round(order.confidence * 100)}% parsed`}
                 </Text>
@@ -95,11 +140,11 @@ export default function App() {
         {selectedOrder ? (
           <OrderDetail
             order={selectedOrder}
-            onAccept={() => setOrderStatus(selectedOrder.id, 'accepted')}
-            onReject={() => setOrderStatus(selectedOrder.id, 'rejected')}
-            onStart={() => setOrderStatus(selectedOrder.id, 'processing')}
-            onReady={() => setOrderStatus(selectedOrder.id, 'ready')}
-            onComplete={() => setOrderStatus(selectedOrder.id, 'completed')}
+            onAccept={() => void setStatus(selectedOrder.id, 'accepted')}
+            onReject={() => void setStatus(selectedOrder.id, 'rejected')}
+            onStart={() => void setStatus(selectedOrder.id, 'processing')}
+            onReady={() => void setStatus(selectedOrder.id, 'ready')}
+            onComplete={() => void setStatus(selectedOrder.id, 'completed')}
           />
         ) : null}
       </ScrollView>
@@ -136,7 +181,9 @@ function OrderDetail({
 
       <View style={styles.sourceMessage}>
         <Text style={styles.sourceLabel}>CUSTOMER MESSAGE</Text>
-        <Text style={styles.sourceText}>{order.customerMessage}</Text>
+        <Text style={styles.sourceText}>
+          {order.customerMessage || 'No customer message captured.'}
+        </Text>
       </View>
 
       <Text style={styles.itemsTitle}>Parsed order</Text>
@@ -198,17 +245,9 @@ function ActionBar({
     );
   }
 
-  if (status === 'accepted') {
-    return <ActionButton label="Start processing" onPress={onStart} />;
-  }
-
-  if (status === 'processing') {
-    return <ActionButton label="Mark ready" onPress={onReady} />;
-  }
-
-  if (status === 'ready') {
-    return <ActionButton label="Complete order" onPress={onComplete} />;
-  }
+  if (status === 'accepted') return <ActionButton label="Start processing" onPress={onStart} />;
+  if (status === 'processing') return <ActionButton label="Mark ready" onPress={onReady} />;
+  if (status === 'ready') return <ActionButton label="Complete order" onPress={onComplete} />;
 
   return null;
 }
@@ -254,13 +293,17 @@ function StatusPill({ status }: { status: OrderStatus }) {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F6F7F9' },
   page: { padding: 20, paddingBottom: 48, gap: 16 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
+  headerCopy: { flex: 1 },
+  headerActions: { gap: 8, alignItems: 'stretch' },
   eyebrow: { fontSize: 12, fontWeight: '800', letterSpacing: 1.4, color: '#246BFD' },
   title: { fontSize: 32, fontWeight: '800', color: '#111827', marginTop: 2 },
   subtitle: { color: '#667085', marginTop: 4, fontSize: 14 },
   reviewBadge: { backgroundColor: '#111827', borderRadius: 16, paddingVertical: 10, paddingHorizontal: 14, alignItems: 'center' },
   reviewNumber: { color: '#FFFFFF', fontWeight: '800', fontSize: 18 },
   reviewText: { color: '#D0D5DD', fontSize: 11 },
+  signOutButton: { alignItems: 'center', paddingVertical: 6 },
+  signOutText: { color: '#667085', fontWeight: '700', fontSize: 12 },
   sectionTitle: { fontSize: 16, fontWeight: '800', color: '#111827', marginTop: 8 },
   inbox: { gap: 10 },
   orderCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#EAECF0' },
@@ -299,4 +342,13 @@ const styles = StyleSheet.create({
   actionButtonPressed: { opacity: 0.75 },
   actionButtonText: { color: '#FFFFFF', fontWeight: '800', fontSize: 14 },
   actionButtonSecondaryText: { color: '#344054' },
+  errorCard: { backgroundColor: '#FEF3F2', borderRadius: 14, padding: 14, gap: 6 },
+  errorTitle: { color: '#B42318', fontWeight: '800' },
+  errorText: { color: '#912018', fontSize: 13, lineHeight: 18 },
+  retryButton: { alignSelf: 'flex-start', marginTop: 4 },
+  retryText: { color: '#B42318', fontWeight: '800' },
+  loadingCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, gap: 10, alignItems: 'center' },
+  emptyCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: '#EAECF0' },
+  emptyTitle: { color: '#101828', fontWeight: '800', fontSize: 16 },
+  emptyText: { color: '#667085', marginTop: 6, lineHeight: 20 },
 });
