@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Linking,
+  Platform,
   Pressable,
   SafeAreaView,
   StyleSheet,
@@ -15,7 +16,8 @@ import { supabase } from '../lib/supabase';
 
 type AuthMode = 'sign-in' | 'forgot-password' | 'reset-password';
 
-const recoveryRedirectUrl = 'orderdesk://reset-password';
+const recoveryRedirectUrl =
+  Platform.OS === 'web' ? 'http://localhost:3000' : 'orderdesk://reset-password';
 
 export function AuthGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -98,7 +100,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
     }
 
     setNotice(
-      'Recovery email sent. Open the link. If Expo Go cannot open OrderDesk automatically, copy the final recovery URL and paste it below.',
+      Platform.OS === 'web'
+        ? 'Recovery email sent. Open the link on this PC to return to OrderDesk and set a new password.'
+        : 'Recovery email sent. Open the link. If Expo Go cannot open OrderDesk automatically, copy the final recovery URL and paste it below.',
     );
   }
 
@@ -242,28 +246,30 @@ export function AuthGate({ children }: { children: ReactNode }) {
           onPress={() => void requestPasswordReset()}
         />
 
-        <View style={styles.manualRecovery}>
-          <Text style={styles.manualTitle}>Expo Go fallback</Text>
-          <Text style={styles.note}>
-            If the recovery link opens in a browser instead of OrderDesk, paste the complete final URL here. It is processed only on this device.
-          </Text>
-          <TextInput
-            autoCapitalize="none"
-            autoCorrect={false}
-            multiline
-            placeholder="Paste recovery URL"
-            value={recoveryUrl}
-            onChangeText={setRecoveryUrl}
-            style={[styles.input, styles.urlInput]}
-          />
-          <Pressable
-            disabled={submitting || !recoveryUrl.trim()}
-            onPress={() => void consumeRecoveryUrl(recoveryUrl.trim())}
-            style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
-          >
-            <Text style={styles.secondaryButtonText}>Continue with recovery URL</Text>
-          </Pressable>
-        </View>
+        {Platform.OS !== 'web' ? (
+          <View style={styles.manualRecovery}>
+            <Text style={styles.manualTitle}>Expo Go fallback</Text>
+            <Text style={styles.note}>
+              If the recovery link opens in a browser instead of OrderDesk, paste the complete final URL here. It is processed only on this device.
+            </Text>
+            <TextInput
+              autoCapitalize="none"
+              autoCorrect={false}
+              multiline
+              placeholder="Paste recovery URL"
+              value={recoveryUrl}
+              onChangeText={setRecoveryUrl}
+              style={[styles.input, styles.urlInput]}
+            />
+            <Pressable
+              disabled={submitting || !recoveryUrl.trim()}
+              onPress={() => void consumeRecoveryUrl(recoveryUrl.trim())}
+              style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
+            >
+              <Text style={styles.secondaryButtonText}>Continue with recovery URL</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         <Pressable onPress={showSignIn} style={styles.linkButton}>
           <Text style={styles.linkText}>Back to sign in</Text>
