@@ -14,6 +14,7 @@ export function useOrders() {
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
+    setLoading(true);
     try {
       const next = await loadOrders();
       setOrders(next);
