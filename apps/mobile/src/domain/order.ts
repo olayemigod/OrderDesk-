@@ -21,7 +21,7 @@ export type MerchantOrder = {
   customerPhone: string;
   receivedAt: string;
   status: OrderStatus;
-  source: 'whatsapp';
+  source: 'whatsapp' | 'manual';
   customerMessage: string;
   confidence: number | null;
   items: OrderItem[];
