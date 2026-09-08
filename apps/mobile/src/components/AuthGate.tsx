@@ -32,12 +32,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    void supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setBooting(false);
-    });
+    let active = true;
 
     const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (!active) return;
       setSession(nextSession);
       if (event === 'PASSWORD_RECOVERY') {
         setMode('reset-password');
@@ -45,18 +43,44 @@ export function AuthGate({ children }: { children: ReactNode }) {
       setBooting(false);
     });
 
+    async function bootstrapAuth() {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        const currentUrl = window.location.href;
+        const tokens = parseRecoveryTokens(currentUrl);
+
+        if (tokens) {
+          await consumeRecoveryUrl(currentUrl);
+          if (active) {
+            window.history.replaceState(null, '', window.location.pathname || '/');
+            setBooting(false);
+          }
+          return;
+        }
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!active) return;
+      setSession(sessionData.session);
+      setBooting(false);
+    }
+
+    void bootstrapAuth();
+
     const handleUrl = ({ url }: { url: string }) => {
       void consumeRecoveryUrl(url);
     };
 
     const subscription = Linking.addEventListener('url', handleUrl);
-    void Linking.getInitialURL().then((url) => {
-      if (url?.startsWith('orderdesk://reset-password')) {
-        void consumeRecoveryUrl(url);
-      }
-    });
+    if (Platform.OS !== 'web') {
+      void Linking.getInitialURL().then((url) => {
+        if (url?.startsWith('orderdesk://reset-password')) {
+          void consumeRecoveryUrl(url);
+        }
+      });
+    }
 
     return () => {
+      active = false;
       data.subscription.unsubscribe();
       subscription.remove();
     };
