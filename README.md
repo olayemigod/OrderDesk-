@@ -23,7 +23,7 @@ OrderDesk is a lightweight AI-assisted order management SaaS for small merchants
 
 ```text
 apps/mobile/                         Expo merchant mobile app
-supabase/schema.sql                  tenant-safe Postgres/RLS schema
+supabase/schema.sql                  tenant-safe Postgres/RLS source schema
 supabase/functions/whatsapp-webhook/ Meta WhatsApp webhook ingestion
 docs/architecture.md                product and technical boundaries
 ```
@@ -35,21 +35,31 @@ Current baseline: Expo SDK 57 / React Native 0.86.
 ```bash
 cd apps/mobile
 cp .env.example .env
-# configure the dedicated OrderDesk Supabase URL + publishable key
 npm install
 npm run typecheck
 npm start
 ```
 
-The mobile app now uses authenticated Supabase data rather than fixtures. A merchant must have an Auth user plus a matching `tenant_members` row. Row Level Security limits reads and mutations to that merchant's tenant memberships.
+The mobile app is wired to the dedicated OrderDesk Supabase project through the project URL and publishable key in `.env.example`. Merchant sessions are persisted, order reads are RLS-filtered, status changes are written back to Supabase, and order/order-item changes refresh through Realtime.
 
-Order changes and order-item changes are subscribed through Supabase Realtime Postgres Changes. The source schema adds both tables to the `supabase_realtime` publication when that publication exists.
+## Live Supabase environment
 
-## Backend
+Dedicated project: `OrderDesk`
 
-`supabase/schema.sql` defines tenant, membership, customer, catalogue, message, order and order-item models with Row Level Security and same-tenant composite foreign keys.
+Project ref: `eujxswjspolugrzlsjnn`
 
-The WhatsApp Edge Function implements:
+The live database contains the tenant, membership, customer, catalogue, inbound-message, order and order-item model with Row Level Security. Anonymous table reads are denied. `orders` and `order_items` are enabled for Realtime Postgres Changes.
+
+Applied migrations:
+
+- `orderdesk_mvp_foundation`
+- `add_orderdesk_fk_indexes`
+
+Supabase security advisor is clean. Performance advisor has no missing-foreign-key-index findings; the only current notices are unused-index informational notices expected on a new empty database.
+
+## WhatsApp webhook
+
+The `whatsapp-webhook` Edge Function is deployed and active. It implements:
 
 - Meta GET verification challenge
 - `X-Hub-Signature-256` HMAC verification before JSON parsing
@@ -59,20 +69,28 @@ The WhatsApp Edge Function implements:
 - structured draft order creation
 - provider-neutral AI parser adapter with conservative fallback parsing
 
+The function deliberately has Supabase JWT verification disabled because Meta cannot send a Supabase JWT; webhook POST authentication is instead enforced with Meta's HMAC signature. GET verification requires the configured Meta verify token.
+
 ## Required server secrets
 
 The webhook requires server-side secrets and they must never be shipped in the mobile app:
 
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_URL` (injected by Supabase)
+- `SUPABASE_SERVICE_ROLE_KEY` (injected by Supabase)
 - `META_WEBHOOK_VERIFY_TOKEN`
 - `META_APP_SECRET`
 - optional `ORDER_PARSER_URL`
 - optional `ORDER_PARSER_TOKEN`
 
-## Live environment status
+The tenant must also be mapped to the Meta `whatsapp_phone_number_id` before messages can produce orders.
 
-No live Supabase project is modified by this branch yet. The next deployment checkpoint is a dedicated OrderDesk Supabase project, schema/advisor verification, webhook deployment, first merchant provisioning, Meta webhook mapping and an end-to-end WhatsApp-to-mobile acceptance test.
+## Remaining live activation
+
+- configure Meta verify token and app secret in Edge Function secrets
+- create the first merchant Auth user and tenant membership
+- map the merchant tenant to its WhatsApp phone number ID
+- complete Meta webhook subscription
+- execute the first end-to-end test: WhatsApp message -> structured draft -> merchant mobile inbox -> Accept order
 
 ## Stack
 
