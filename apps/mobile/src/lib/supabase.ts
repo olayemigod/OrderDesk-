@@ -18,7 +18,9 @@ export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
     ...(Platform.OS !== 'web' ? { storage: AsyncStorage } : {}),
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: Platform.OS === 'web',
+    // OrderDesk handles recovery URLs explicitly in AuthGate so the
+    // PASSWORD_RECOVERY state cannot be consumed before the UI mounts.
+    detectSessionInUrl: false,
   },
 });
 
