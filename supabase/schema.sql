@@ -1,5 +1,6 @@
 -- OrderDesk MVP schema.
--- Source schema for a fresh dedicated Supabase project. Not yet applied to a live project.
+-- Source schema for a fresh dedicated Supabase project.
+-- Applied to the dedicated OrderDesk project on 2026-09-08; keep this file aligned with live migrations.
 
 create extension if not exists pgcrypto;
 
@@ -116,6 +117,20 @@ create index inbound_messages_tenant_received_idx on public.inbound_messages (te
 create index orders_tenant_status_created_idx on public.orders (tenant_id, status, created_at desc);
 create index order_items_tenant_order_idx on public.order_items (tenant_id, order_id);
 
+-- Cover all foreign-key paths used by deletes, joins and tenant-scoped lookups.
+create index inbound_messages_tenant_customer_idx
+  on public.inbound_messages (tenant_id, customer_id);
+create index order_items_tenant_catalog_idx
+  on public.order_items (tenant_id, catalog_item_id)
+  where catalog_item_id is not null;
+create index orders_tenant_customer_idx
+  on public.orders (tenant_id, customer_id);
+create index orders_tenant_source_message_idx
+  on public.orders (tenant_id, source_message_id)
+  where source_message_id is not null;
+create index tenant_members_user_idx
+  on public.tenant_members (user_id);
+
 alter table public.tenants enable row level security;
 alter table public.tenant_members enable row level security;
 alter table public.customers enable row level security;
@@ -152,7 +167,8 @@ for select
 to authenticated
 using (
   exists (
-    select 1 from public.tenant_members tm
+    select 1
+    from public.tenant_members tm
     where tm.tenant_id = tenants.id
       and tm.user_id = (select auth.uid())
   )
