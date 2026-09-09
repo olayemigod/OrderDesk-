@@ -29,6 +29,9 @@ Dedicated Supabase project: `OrderDesk` (`eujxswjspolugrzlsjnn`).
 - Merchant review editor implemented for `draft` / `needs_review` orders: add, edit and remove order items; correct quantity/name; set selling price.
 - Client disables Accept until the order has at least one fully priced item.
 - OD-03 correction test order seeded in the isolated test tenant for merchant acceptance.
+- Mobile CI run #20 passed after the OD-03 client implementation.
+- Post-DDL security advisor has no database/RLS findings; one Auth warning remains for leaked-password protection being disabled.
+- Performance advisor reports only unused-index INFO findings, expected at the current very low data volume.
 
 ## OD-02 acceptance status
 
