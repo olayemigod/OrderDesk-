@@ -13,23 +13,39 @@ Dedicated Supabase project: `OrderDesk` (`eujxswjspolugrzlsjnn`).
 - `orders` and `order_items` added to Realtime publication.
 - Supabase security advisor clean.
 - WhatsApp webhook Edge Function deployed and active.
-- Mobile `.env.example` bound to project URL and publishable key.
-- Mobile TypeScript CI green after live project binding.
+- Meta webhook verification configured and passed.
+- Meta `messages` webhook subscription configured.
+- HMAC `X-Hub-Signature-256` validation passed.
+- Real merchant tenant mapped to its WhatsApp phone-number ID.
+- Isolated temporary Meta test tenant created for the dashboard sample phone-number ID; real tenant mapping was left unchanged.
+- Meta sample webhook created exactly one customer, one inbound message and one `needs_review` order.
+- Replaying the same provider message ID created no duplicate inbound message or order.
+- Merchant Auth access and tenant-scoped RLS reads verified.
+- Expo Web acceptance path added so the merchant workflow can be tested on PC without blocking on local Android networking.
+- Merchant accepted the test order and progressed it end-to-end: `needs_review -> accepted -> processing -> ready -> completed`.
+- Final `completed` status verified directly in Supabase.
 
-## Required before first real WhatsApp order
+## OD-02 acceptance status
 
-1. Configure Edge Function secrets:
-   - `META_WEBHOOK_VERIFY_TOKEN`
-   - `META_APP_SECRET`
-   - optional `ORDER_PARSER_URL`
-   - optional `ORDER_PARSER_TOKEN`
-2. Create the first merchant in Supabase Auth.
-3. Insert a tenant and matching `tenant_members` row for that Auth user.
-4. Set the tenant `whatsapp_phone_number_id` to the Meta phone-number ID.
-5. Subscribe Meta WhatsApp Cloud API to the deployed webhook.
-6. Send a real WhatsApp order and verify it becomes a `needs_review` order.
-7. Sign into the merchant mobile app and accept the order.
+The backend and merchant workflow acceptance test has passed using the PC web client against the live Supabase project.
+
+Verified path:
+
+`Meta webhook -> signature validation -> tenant resolution -> customer/inbound storage -> needs_review order -> authenticated merchant inbox -> accepted -> processing -> ready -> completed`
+
+This proves the live tenant/RLS/order-state path independently of the outstanding native-device transport issue.
+
+## Still required before production WhatsApp launch
+
+1. Complete Meta business verification / production app publishing as required by Meta.
+2. Send a real WhatsApp message through the actual production phone-number mapping and verify the same ingestion path.
+3. Run one native Android/Expo smoke test when a suitable device transport is available; this is not a backend acceptance blocker.
+4. Configure production SMTP for merchant authentication emails instead of relying on Supabase's restricted built-in development mail service.
+5. Remove the isolated temporary Meta test tenant and temporary test merchant only after native smoke testing no longer needs them.
+6. Configure the production AI parser and catalogue matching/correction in later bounded MVP slices.
 
 ## Pass condition
 
-The OD-02 live pipeline passes only when a customer WhatsApp message produces one idempotent structured order visible to the correct authenticated tenant, and the merchant can change its status from `needs_review` to `accepted` from the mobile app.
+OD-02 backend + merchant workflow acceptance is PASS when a signed WhatsApp webhook creates one idempotent tenant-scoped order and an authenticated merchant can progress it through the supported order states. This condition passed on 2026-09-09 using the isolated Meta sample tenant and PC web client.
+
+Native Android smoke testing and the first real production WhatsApp message remain separate release-readiness checks.
