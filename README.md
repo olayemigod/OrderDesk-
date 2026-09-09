@@ -1,100 +1,110 @@
 # OrderDesk
 
-OrderDesk is a lightweight AI-assisted order management SaaS for small merchants who sell through WhatsApp.
+OrderDesk is a deliberately small SaaS for merchants who sell through WhatsApp.
 
-## Product contract
+Customers remain on WhatsApp. Merchants use the OrderDesk mobile app to review, correct and progress structured orders created from incoming WhatsApp messages.
 
-- Customers stay on WhatsApp.
-- Merchants operate from a mobile app.
-- OrderDesk converts free-form customer messages into structured draft orders.
-- Merchants review, accept, reject and progress orders from the app.
-- The MVP is intentionally not an ERP, POS, inventory suite, CRM or accounting system.
+OrderDesk is intentionally **not** an ERP, POS, inventory suite, accounting package or CRM.
 
-## MVP vertical slice
+## MVP product boundary
 
-1. WhatsApp message arrives.
-2. Signed webhook validates and stores the event idempotently.
-3. Parser converts order intent into structured line items.
-4. Order is created as `needs_review`.
-5. Authenticated merchant receives the order in the mobile inbox.
-6. Merchant accepts/rejects and progresses it to processing, ready and completed.
+OrderDesk handles one narrow operational problem:
 
-## Repository structure
+1. A customer sends an order on WhatsApp.
+2. OrderDesk receives and validates the webhook.
+3. The message is converted into a structured `needs_review` order.
+4. The merchant reviews the parsed lines, corrects item names/quantities and sets selling prices when needed.
+5. An order can only be accepted when it contains at least one fully priced line item.
+6. The merchant progresses the order through `accepted -> processing -> ready -> completed`.
 
-```text
-apps/mobile/                         Expo merchant mobile app
-supabase/schema.sql                  tenant-safe Postgres/RLS source schema
-supabase/functions/whatsapp-webhook/ Meta WhatsApp webhook ingestion
-docs/architecture.md                product and technical boundaries
-```
+## Repository layout
 
-## Mobile app
+- `apps/mobile` — Expo / React Native merchant client, including Expo Web acceptance support.
+- `supabase/schema.sql` — source schema for a fresh dedicated OrderDesk Supabase project.
+- `supabase/migrations` — incremental database migrations applied after the foundation schema.
+- `supabase/functions/whatsapp-webhook` — WhatsApp Cloud API webhook ingestion Edge Function.
+- `docs/architecture.md` — product and technical architecture boundary.
+- `docs/live_activation.md` — live activation, acceptance evidence and remaining release-readiness checks.
 
-Current baseline: Expo SDK 57 / React Native 0.86.
+## Merchant client
+
+The client supports:
+
+- Supabase email/password authentication.
+- Password recovery for native/mobile and PC web acceptance.
+- Tenant-scoped live order inbox through RLS.
+- Realtime order and line-item refresh.
+- WhatsApp message context and parser confidence.
+- Merchant correction of `draft` / `needs_review` line items.
+- Add, edit and remove order lines.
+- Quantity and selling-price correction.
+- Acceptance gating until at least one priced line exists.
+- Order progression through the supported workflow.
+
+### Run on PC for acceptance
+
+From `apps/mobile`:
 
 ```bash
-cd apps/mobile
-cp .env.example .env
 npm install
-npm run typecheck
-npm start
+npx expo start --web --port 3000 -c
 ```
 
-The mobile app is wired to the dedicated OrderDesk Supabase project through the project URL and publishable key in `.env.example`. Merchant sessions are persisted, order reads are RLS-filtered, status changes are written back to Supabase, and order/order-item changes refresh through Realtime.
+Then open `http://localhost:3000`.
 
-## Live Supabase environment
+### Mobile environment
 
-Dedicated project: `OrderDesk`
+Copy `.env.example` to `.env` and configure the dedicated OrderDesk Supabase project values:
 
-Project ref: `eujxswjspolugrzlsjnn`
+```env
+EXPO_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
+```
 
-The live database contains the tenant, membership, customer, catalogue, inbound-message, order and order-item model with Row Level Security. Anonymous table reads are denied. `orders` and `order_items` are enabled for Realtime Postgres Changes.
+Only the publishable client key belongs in the mobile application. Never place the Supabase secret/service key in the client.
 
-Applied migrations:
+## Live backend
 
-- `orderdesk_mvp_foundation`
-- `add_orderdesk_fk_indexes`
+The MVP schema provides tenant-scoped tables for:
 
-Supabase security advisor is clean. Performance advisor has no missing-foreign-key-index findings; the only current notices are unused-index informational notices expected on a new empty database.
+- tenants and merchant memberships
+- customers
+- catalog items
+- inbound messages
+- orders
+- order items
+
+Security and integrity controls include:
+
+- Row Level Security on all exposed application tables.
+- Tenant-membership policies.
+- Anonymous application-table access revoked.
+- Same-tenant composite foreign keys.
+- Generated line totals.
+- Foreign-key covering indexes.
+- Server-side order status transition guard.
+- Server-side rejection of empty or unpriced order acceptance.
+- Realtime publication for orders and order items.
 
 ## WhatsApp webhook
 
-The `whatsapp-webhook` Edge Function is deployed and active. It implements:
+The Edge Function supports:
 
-- Meta GET verification challenge
-- `X-Hub-Signature-256` HMAC verification before JSON parsing
-- tenant resolution by WhatsApp phone number ID
-- customer upsert
-- provider-message idempotency
-- structured draft order creation
-- provider-neutral AI parser adapter with conservative fallback parsing
+- Meta GET verification challenge.
+- `X-Hub-Signature-256` HMAC validation before payload processing.
+- Tenant resolution by WhatsApp phone-number ID.
+- Customer upsert.
+- Idempotent inbound-message storage by provider message ID.
+- Structured `needs_review` order creation.
+- Optional provider-neutral AI parser integration.
+- Conservative fallback parsing when no AI parser is configured.
 
-The function deliberately has Supabase JWT verification disabled because Meta cannot send a Supabase JWT; webhook POST authentication is instead enforced with Meta's HMAC signature. GET verification requires the configured Meta verify token.
+Server secrets such as Meta app secrets, webhook verification tokens and Supabase server credentials must remain in Supabase/Edge Function secret storage and must never be committed to this repository or exposed in the merchant client.
 
-## Required server secrets
+## Current acceptance status
 
-The webhook requires server-side secrets and they must never be shipped in the mobile app:
+The live backend and merchant workflow have passed the first E2E acceptance path using an isolated Meta sample tenant and the PC web client:
 
-- `SUPABASE_URL` (injected by Supabase)
-- `SUPABASE_SERVICE_ROLE_KEY` (injected by Supabase)
-- `META_WEBHOOK_VERIFY_TOKEN`
-- `META_APP_SECRET`
-- optional `ORDER_PARSER_URL`
-- optional `ORDER_PARSER_TOKEN`
+`Meta webhook -> needs_review -> accepted -> processing -> ready -> completed`
 
-The tenant must also be mapped to the Meta `whatsapp_phone_number_id` before messages can produce orders.
-
-## Remaining live activation
-
-- configure Meta verify token and app secret in Edge Function secrets
-- create the first merchant Auth user and tenant membership
-- map the merchant tenant to its WhatsApp phone number ID
-- complete Meta webhook subscription
-- execute the first end-to-end test: WhatsApp message -> structured draft -> merchant mobile inbox -> Accept order
-
-## Stack
-
-- Mobile: Expo + React Native + TypeScript
-- Backend: Supabase Postgres, Auth, Realtime and Edge Functions
-- WhatsApp: Meta WhatsApp Cloud API
-- AI: provider-neutral structured order parser
+OD-03 adds merchant order-line correction and server-side status hardening. See `docs/live_activation.md` for the current acceptance checkpoint and release-readiness gaps.
