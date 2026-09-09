@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import {
+  addOrderItem,
+  deleteOrderItem,
   loadOrders,
   subscribeToOrderChanges,
   unsubscribeFromOrderChanges,
+  updateOrderItem,
   updateOrderStatus,
+  type OrderItemInput,
 } from '../data/ordersRepository';
 import type { MerchantOrder, OrderStatus } from '../domain/order';
 
@@ -56,5 +60,44 @@ export function useOrders() {
     [orders],
   );
 
-  return { orders, loading, error, refresh, setStatus };
+  const addItem = useCallback(
+    async (orderId: string, item: OrderItemInput) => {
+      try {
+        await addOrderItem(orderId, item);
+        await refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unable to add order item.');
+        throw err;
+      }
+    },
+    [refresh],
+  );
+
+  const editItem = useCallback(
+    async (itemId: string, item: OrderItemInput) => {
+      try {
+        await updateOrderItem(itemId, item);
+        await refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unable to update order item.');
+        throw err;
+      }
+    },
+    [refresh],
+  );
+
+  const removeItem = useCallback(
+    async (itemId: string) => {
+      try {
+        await deleteOrderItem(itemId);
+        await refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unable to remove order item.');
+        throw err;
+      }
+    },
+    [refresh],
+  );
+
+  return { orders, loading, error, refresh, setStatus, addItem, editItem, removeItem };
 }
