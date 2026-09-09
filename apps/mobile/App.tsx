@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 
 import { AuthGate } from './src/components/AuthGate';
+import { OrderItemsEditor } from './src/components/OrderItemsEditor';
+import type { OrderItemInput } from './src/data/ordersRepository';
 import { orderTotal, type MerchantOrder, type OrderStatus } from './src/domain/order';
 import { useOrders } from './src/hooks/useOrders';
 import { supabase } from './src/lib/supabase';
@@ -41,7 +43,7 @@ export default function App() {
 }
 
 function OrdersScreen() {
-  const { orders, loading, error, refresh, setStatus } = useOrders();
+  const { orders, loading, error, refresh, setStatus, addItem, editItem, removeItem } = useOrders();
   const [selectedOrderId, setSelectedOrderId] = useState<string>('');
 
   const selectedOrder = useMemo(
@@ -140,11 +142,14 @@ function OrdersScreen() {
         {selectedOrder ? (
           <OrderDetail
             order={selectedOrder}
-            onAccept={() => void setStatus(selectedOrder.id, 'accepted')}
-            onReject={() => void setStatus(selectedOrder.id, 'rejected')}
-            onStart={() => void setStatus(selectedOrder.id, 'processing')}
-            onReady={() => void setStatus(selectedOrder.id, 'ready')}
-            onComplete={() => void setStatus(selectedOrder.id, 'completed')}
+            onAccept={() => setStatus(selectedOrder.id, 'accepted')}
+            onReject={() => setStatus(selectedOrder.id, 'rejected')}
+            onStart={() => setStatus(selectedOrder.id, 'processing')}
+            onReady={() => setStatus(selectedOrder.id, 'ready')}
+            onComplete={() => setStatus(selectedOrder.id, 'completed')}
+            onAddItem={(input) => addItem(selectedOrder.id, input)}
+            onEditItem={editItem}
+            onRemoveItem={removeItem}
           />
         ) : null}
       </ScrollView>
@@ -159,15 +164,23 @@ function OrderDetail({
   onStart,
   onReady,
   onComplete,
+  onAddItem,
+  onEditItem,
+  onRemoveItem,
 }: {
   order: MerchantOrder;
-  onAccept: () => void;
-  onReject: () => void;
-  onStart: () => void;
-  onReady: () => void;
-  onComplete: () => void;
+  onAccept: () => Promise<void>;
+  onReject: () => Promise<void>;
+  onStart: () => Promise<void>;
+  onReady: () => Promise<void>;
+  onComplete: () => Promise<void>;
+  onAddItem: (item: OrderItemInput) => Promise<void>;
+  onEditItem: (itemId: string, item: OrderItemInput) => Promise<void>;
+  onRemoveItem: (itemId: string) => Promise<void>;
 }) {
   const total = orderTotal(order);
+  const editable = order.status === 'needs_review' || order.status === 'draft';
+  const canAccept = order.items.length > 0 && order.items.every((item) => item.unitPrice !== null);
 
   return (
     <View style={styles.detailCard}>
@@ -186,31 +199,36 @@ function OrderDetail({
         </Text>
       </View>
 
-      <Text style={styles.itemsTitle}>Parsed order</Text>
-      {order.items.map((item) => (
-        <View key={item.id} style={styles.lineItem}>
-          <View style={styles.quantityBox}>
-            <Text style={styles.quantityText}>{item.quantity}×</Text>
-          </View>
-          <View style={styles.lineItemNameWrap}>
-            <Text style={styles.lineItemName}>{item.name}</Text>
-            <Text style={styles.lineItemPrice}>
-              {item.unitPrice === null ? 'Price not set' : money.format(item.unitPrice)} each
-            </Text>
-          </View>
-          <Text style={styles.lineTotal}>
-            {item.unitPrice === null ? '—' : money.format(item.unitPrice * item.quantity)}
-          </Text>
-        </View>
-      ))}
+      <View style={styles.itemsHeadingRow}>
+        <Text style={styles.itemsTitle}>{editable ? 'Review order items' : 'Order items'}</Text>
+        {editable ? <Text style={styles.reviewHint}>Correct AI parsing before acceptance</Text> : null}
+      </View>
+
+      <OrderItemsEditor
+        order={order}
+        editable={editable}
+        onAdd={(_orderId, item) => onAddItem(item)}
+        onEdit={onEditItem}
+        onRemove={onRemoveItem}
+      />
 
       <View style={styles.totalRow}>
         <Text style={styles.totalLabel}>Order total</Text>
         <Text style={styles.totalValue}>{total === null ? 'Needs pricing' : money.format(total)}</Text>
       </View>
 
+      {editable && !canAccept ? (
+        <View style={styles.acceptanceNotice}>
+          <Text style={styles.acceptanceNoticeTitle}>Complete the order before accepting</Text>
+          <Text style={styles.acceptanceNoticeText}>
+            An accepted order must contain at least one item and every item must have a selling price.
+          </Text>
+        </View>
+      ) : null}
+
       <ActionBar
         status={order.status}
+        canAccept={canAccept}
         onAccept={onAccept}
         onReject={onReject}
         onStart={onStart}
@@ -223,6 +241,7 @@ function OrderDetail({
 
 function ActionBar({
   status,
+  canAccept,
   onAccept,
   onReject,
   onStart,
@@ -230,24 +249,35 @@ function ActionBar({
   onComplete,
 }: {
   status: OrderStatus;
-  onAccept: () => void;
-  onReject: () => void;
-  onStart: () => void;
-  onReady: () => void;
-  onComplete: () => void;
+  canAccept: boolean;
+  onAccept: () => Promise<void>;
+  onReject: () => Promise<void>;
+  onStart: () => Promise<void>;
+  onReady: () => Promise<void>;
+  onComplete: () => Promise<void>;
 }) {
   if (status === 'needs_review' || status === 'draft') {
     return (
       <View style={styles.actions}>
-        <ActionButton label="Reject" variant="secondary" onPress={onReject} />
-        <ActionButton label="Accept order" onPress={onAccept} />
+        <ActionButton label="Reject" variant="secondary" onPress={() => void onReject()} />
+        <ActionButton
+          label="Accept order"
+          disabled={!canAccept}
+          onPress={() => void onAccept()}
+        />
       </View>
     );
   }
 
-  if (status === 'accepted') return <ActionButton label="Start processing" onPress={onStart} />;
-  if (status === 'processing') return <ActionButton label="Mark ready" onPress={onReady} />;
-  if (status === 'ready') return <ActionButton label="Complete order" onPress={onComplete} />;
+  if (status === 'accepted') {
+    return <ActionButton label="Start processing" onPress={() => void onStart()} />;
+  }
+  if (status === 'processing') {
+    return <ActionButton label="Mark ready" onPress={() => void onReady()} />;
+  }
+  if (status === 'ready') {
+    return <ActionButton label="Complete order" onPress={() => void onComplete()} />;
+  }
 
   return null;
 }
@@ -256,18 +286,22 @@ function ActionButton({
   label,
   onPress,
   variant = 'primary',
+  disabled = false,
 }: {
   label: string;
   onPress: () => void;
   variant?: 'primary' | 'secondary';
+  disabled?: boolean;
 }) {
   return (
     <Pressable
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.actionButton,
         variant === 'secondary' && styles.actionButtonSecondary,
-        pressed && styles.actionButtonPressed,
+        disabled && styles.actionButtonDisabled,
+        pressed && !disabled && styles.actionButtonPressed,
       ]}
     >
       <Text
@@ -293,52 +327,104 @@ function StatusPill({ status }: { status: OrderStatus }) {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F6F7F9' },
   page: { padding: 20, paddingBottom: 48, gap: 16 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
   headerCopy: { flex: 1 },
   headerActions: { gap: 8, alignItems: 'stretch' },
   eyebrow: { fontSize: 12, fontWeight: '800', letterSpacing: 1.4, color: '#246BFD' },
   title: { fontSize: 32, fontWeight: '800', color: '#111827', marginTop: 2 },
   subtitle: { color: '#667085', marginTop: 4, fontSize: 14 },
-  reviewBadge: { backgroundColor: '#111827', borderRadius: 16, paddingVertical: 10, paddingHorizontal: 14, alignItems: 'center' },
+  reviewBadge: {
+    backgroundColor: '#111827',
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+  },
   reviewNumber: { color: '#FFFFFF', fontWeight: '800', fontSize: 18 },
   reviewText: { color: '#D0D5DD', fontSize: 11 },
   signOutButton: { alignItems: 'center', paddingVertical: 6 },
   signOutText: { color: '#667085', fontWeight: '700', fontSize: 12 },
   sectionTitle: { fontSize: 16, fontWeight: '800', color: '#111827', marginTop: 8 },
   inbox: { gap: 10 },
-  orderCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#EAECF0' },
+  orderCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#EAECF0',
+  },
   orderCardSelected: { borderColor: '#246BFD', borderWidth: 2 },
-  orderCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
+  orderCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
   orderCardIdentity: { flex: 1 },
   customerName: { fontSize: 16, fontWeight: '800', color: '#101828' },
   orderId: { marginTop: 2, fontSize: 12, color: '#98A2B3' },
   messagePreview: { color: '#475467', fontSize: 14, lineHeight: 20, marginTop: 10 },
   orderMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 10 },
   metaText: { color: '#667085', fontSize: 12 },
-  statusPill: { borderRadius: 999, backgroundColor: '#EAECF0', paddingVertical: 6, paddingHorizontal: 10 },
+  statusPill: {
+    borderRadius: 999,
+    backgroundColor: '#EAECF0',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
   statusReview: { backgroundColor: '#FFF3D6' },
   statusText: { fontSize: 11, fontWeight: '800', color: '#344054' },
-  detailCard: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 18, marginTop: 4, borderWidth: 1, borderColor: '#EAECF0' },
-  detailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
+  detailCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 18,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: '#EAECF0',
+  },
+  detailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
   detailTitle: { fontSize: 20, fontWeight: '800', color: '#101828' },
   phone: { marginTop: 3, fontSize: 13, color: '#667085' },
   sourceMessage: { backgroundColor: '#F9FAFB', borderRadius: 14, padding: 14, marginTop: 16 },
   sourceLabel: { fontSize: 10, fontWeight: '800', color: '#98A2B3', letterSpacing: 1 },
   sourceText: { marginTop: 7, color: '#344054', fontSize: 14, lineHeight: 21 },
-  itemsTitle: { fontSize: 14, fontWeight: '800', color: '#101828', marginTop: 18, marginBottom: 4 },
-  lineItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#EAECF0' },
-  quantityBox: { minWidth: 40, borderRadius: 10, backgroundColor: '#EEF4FF', paddingVertical: 8, alignItems: 'center' },
-  quantityText: { color: '#246BFD', fontWeight: '800' },
-  lineItemNameWrap: { flex: 1 },
-  lineItemName: { color: '#101828', fontWeight: '700', fontSize: 14 },
-  lineItemPrice: { color: '#98A2B3', marginTop: 2, fontSize: 12 },
-  lineTotal: { color: '#101828', fontWeight: '800', fontSize: 13 },
-  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16 },
+  itemsHeadingRow: { marginTop: 18, marginBottom: 8, gap: 3 },
+  itemsTitle: { fontSize: 14, fontWeight: '800', color: '#101828' },
+  reviewHint: { color: '#667085', fontSize: 12 },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 16,
+  },
   totalLabel: { color: '#667085', fontWeight: '700' },
   totalValue: { color: '#101828', fontWeight: '900', fontSize: 20 },
+  acceptanceNotice: { backgroundColor: '#FFF8E7', borderRadius: 12, padding: 12, marginTop: 14 },
+  acceptanceNoticeTitle: { color: '#7A2E0E', fontWeight: '800', fontSize: 13 },
+  acceptanceNoticeText: { color: '#854A0E', marginTop: 4, fontSize: 12, lineHeight: 18 },
   actions: { flexDirection: 'row', gap: 10, marginTop: 18 },
-  actionButton: { flex: 1, backgroundColor: '#246BFD', borderRadius: 13, minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, marginTop: 18 },
+  actionButton: {
+    flex: 1,
+    backgroundColor: '#246BFD',
+    borderRadius: 13,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    marginTop: 18,
+  },
   actionButtonSecondary: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D0D5DD' },
+  actionButtonDisabled: { opacity: 0.35 },
   actionButtonPressed: { opacity: 0.75 },
   actionButtonText: { color: '#FFFFFF', fontWeight: '800', fontSize: 14 },
   actionButtonSecondaryText: { color: '#344054' },
@@ -347,8 +433,20 @@ const styles = StyleSheet.create({
   errorText: { color: '#912018', fontSize: 13, lineHeight: 18 },
   retryButton: { alignSelf: 'flex-start', marginTop: 4 },
   retryText: { color: '#B42318', fontWeight: '800' },
-  loadingCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, gap: 10, alignItems: 'center' },
-  emptyCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: '#EAECF0' },
+  loadingCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    gap: 10,
+    alignItems: 'center',
+  },
+  emptyCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#EAECF0',
+  },
   emptyTitle: { color: '#101828', fontWeight: '800', fontSize: 16 },
   emptyText: { color: '#667085', marginTop: 6, lineHeight: 20 },
 });
