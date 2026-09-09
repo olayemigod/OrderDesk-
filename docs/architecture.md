@@ -45,7 +45,7 @@ Merchant UI rules are convenience and guidance, not the final integrity boundary
 - `tenant_members` — authenticated merchant membership and role.
 - `customers` — tenant-scoped WhatsApp customers.
 - `catalog_items` — optional tenant catalogue and selling prices.
-- `inbound_messages` — immutable-ish source-message record used for idempotency/audit.
+- `inbound_messages` — source-message record used for idempotency/audit.
 - `orders` — merchant workflow state and parser confidence.
 - `order_items` — structured/corrected order lines with generated line totals.
 
@@ -60,6 +60,20 @@ The supported normal workflow is:
 Review orders may instead become `rejected`. Accepted/processing/ready orders may be cancelled.
 
 A database trigger prevents unsupported transitions, prevents terminal states from regressing, and prevents acceptance of empty or unpriced orders. This protects the workflow even if a modified client bypasses UI controls.
+
+## Merchant correction boundary
+
+OD-03 keeps correction deliberately narrow. During `draft` / `needs_review`, a merchant may:
+
+- correct the parsed item name;
+- correct quantity;
+- set the selling price;
+- add a missing line;
+- remove an incorrect line.
+
+Once an order is accepted, line editing is removed from the ordinary merchant flow. This keeps the order record stable after operational commitment without introducing inventory, quotation, invoicing or ERP concepts.
+
+Catalogue matching can later assist this review flow, but it must not remove the merchant's final acceptance step.
 
 ## Realtime
 
