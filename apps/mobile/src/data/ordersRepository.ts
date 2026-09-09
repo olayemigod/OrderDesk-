@@ -25,6 +25,12 @@ type OrderRow = {
   }> | null;
 };
 
+export type OrderItemInput = {
+  name: string;
+  quantity: number;
+  unitPrice: number | null;
+};
+
 function one<T>(value: T | T[] | null): T | null {
   if (Array.isArray(value)) return value[0] ?? null;
   return value;
@@ -83,6 +89,45 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus): P
     .update({ status, updated_at: new Date().toISOString() })
     .eq('id', orderId);
 
+  if (error) throw error;
+}
+
+export async function addOrderItem(orderId: string, item: OrderItemInput): Promise<void> {
+  const { data: order, error: orderError } = await supabase
+    .from('orders')
+    .select('tenant_id')
+    .eq('id', orderId)
+    .single();
+
+  if (orderError) throw orderError;
+  if (!order?.tenant_id) throw new Error('Unable to resolve the order tenant.');
+
+  const { error } = await supabase.from('order_items').insert({
+    tenant_id: order.tenant_id,
+    order_id: orderId,
+    item_name: item.name.trim(),
+    quantity: item.quantity,
+    unit_price: item.unitPrice,
+  });
+
+  if (error) throw error;
+}
+
+export async function updateOrderItem(itemId: string, item: OrderItemInput): Promise<void> {
+  const { error } = await supabase
+    .from('order_items')
+    .update({
+      item_name: item.name.trim(),
+      quantity: item.quantity,
+      unit_price: item.unitPrice,
+    })
+    .eq('id', itemId);
+
+  if (error) throw error;
+}
+
+export async function deleteOrderItem(itemId: string): Promise<void> {
+  const { error } = await supabase.from('order_items').delete().eq('id', itemId);
   if (error) throw error;
 }
 
