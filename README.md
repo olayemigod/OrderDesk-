@@ -107,4 +107,4 @@ The live backend and merchant workflow have passed the first E2E acceptance path
 
 `Meta webhook -> needs_review -> accepted -> processing -> ready -> completed`
 
-OD-03 adds merchant order-line correction and server-side status hardening. See `docs/live_activation.md` for the current acceptance checkpoint and release-readiness gaps.
+OD-03 adds merchant order-line correction and server-side status hardening. Its implementation and database guard tests are complete; one merchant UI correction acceptance run remains. See `docs/live_activation.md` for the current checkpoint and release-readiness gaps.
