@@ -102,6 +102,7 @@ This document records the governed rollout state for SellerTray. SellerTray rema
 - Owner business export includes safe settlement history but deliberately excludes reusable charge credentials.
 - `docs/usage_billing.md` is CI-gated; backend function/migration paths now trigger release CI as well as mobile/document changes.
 - Mobile CI #200 passed the first settlement safety preflight; a final post-reconciliation checkpoint is pending below.
+- Mobile CI #235 passed the final S9D settlement-safety checkpoint, including locked install, dependency audit, TypeScript and release preflight.
 - Commercial prices, reusable authorization capture, and real/test Paystack usage debit acceptance remain pending.
 
 ### S10A — ProcessEdge SaaS operations console — PASS AUTOMATED / VISUAL SMOKE PENDING
