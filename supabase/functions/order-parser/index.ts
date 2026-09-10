@@ -21,6 +21,28 @@ type ParsedOrder = {
   confidence: number;
 };
 
+type ProviderUsage = {
+  model: string;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  reasoningTokens: number | null;
+  totalTokens: number | null;
+};
+
+type ParserTelemetryOutcome = 'success' | 'provider_error' | 'invalid_output' | 'network_error';
+
+class ParserProviderError extends Error {
+  constructor(
+    message: string,
+    readonly outcome: Exclude<ParserTelemetryOutcome, 'success' | 'network_error'>,
+    readonly providerHttpStatus: number | null,
+    readonly usage: ProviderUsage | null,
+  ) {
+    super(message);
+    this.name = 'ParserProviderError';
+  }
+}
+
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') ?? '';
 const OPENAI_PARSER_MODEL = Deno.env.get('OPENAI_PARSER_MODEL') ?? 'gpt-5.6-luna';
 const ORDER_PARSER_TOKEN = Deno.env.get('ORDER_PARSER_TOKEN') ?? '';
@@ -86,15 +108,30 @@ Deno.serve(withObservability('order-parser', async (request) => {
   }
 
   try {
-    const parsed = await extractOrder(parsedRequest.value);
-    return json(parsed, 200);
+    const result = await extractOrder(parsedRequest.value);
+    return json(
+      result.parsed,
+      200,
+      parserTelemetryHeaders('success', 200, result.usage),
+    );
   } catch (error) {
     console.error('Order parser provider request failed', error);
-    return json({ error: 'Parser provider unavailable' }, 502);
+    if (error instanceof ParserProviderError) {
+      return json(
+        { error: 'Parser provider unavailable' },
+        502,
+        parserTelemetryHeaders(error.outcome, error.providerHttpStatus, error.usage),
+      );
+    }
+    return json(
+      { error: 'Parser provider unavailable' },
+      502,
+      parserTelemetryHeaders('network_error', null, null),
+    );
   }
 }));
 
-async function extractOrder(input: ParserRequest): Promise<ParsedOrder> {
+async function extractOrder(input: ParserRequest): Promise<{ parsed: ParsedOrder; usage: ProviderUsage }> {
   const catalogueContext = input.catalogue.map((item) => ({
     name: item.name,
     aliases: item.aliases,
@@ -144,35 +181,85 @@ async function extractOrder(input: ParserRequest): Promise<ParsedOrder> {
   });
 
   const rawText = await response.text();
-  if (!response.ok) {
-    throw new Error(`OpenAI Responses API ${response.status}: ${safeProviderError(rawText)}`);
-  }
-
-  let providerPayload: unknown;
+  let providerPayload: unknown = null;
   try {
     providerPayload = JSON.parse(rawText);
   } catch {
-    throw new Error('OpenAI response was not valid JSON.');
+    providerPayload = null;
+  }
+  const usage = extractProviderUsage(providerPayload);
+
+  if (!response.ok) {
+    throw new ParserProviderError(
+      `OpenAI Responses API ${response.status}: ${safeProviderError(rawText)}`,
+      'provider_error',
+      response.status,
+      usage,
+    );
   }
 
-  const outputText = extractOutputText(providerPayload);
+  if (!providerPayload) {
+    throw new ParserProviderError(
+      'OpenAI response was not valid JSON.',
+      'invalid_output',
+      response.status,
+      null,
+    );
+  }
+
+  let outputText: string | null;
+  try {
+    outputText = extractOutputText(providerPayload);
+  } catch (error) {
+    throw new ParserProviderError(
+      error instanceof Error ? error.message : 'OpenAI response could not be read.',
+      'invalid_output',
+      response.status,
+      usage,
+    );
+  }
   if (!outputText) {
-    throw new Error('OpenAI response contained no structured output text.');
+    throw new ParserProviderError(
+      'OpenAI response contained no structured output text.',
+      'invalid_output',
+      response.status,
+      usage,
+    );
   }
 
   let candidate: unknown;
   try {
     candidate = JSON.parse(outputText);
   } catch {
-    throw new Error('Structured output text was not valid JSON.');
+    throw new ParserProviderError(
+      'Structured output text was not valid JSON.',
+      'invalid_output',
+      response.status,
+      usage,
+    );
   }
 
   const validated = validateParsedOrder(candidate);
   if (!validated) {
-    throw new Error('Structured parser output failed SellerTray validation.');
+    throw new ParserProviderError(
+      'Structured parser output failed SellerTray validation.',
+      'invalid_output',
+      response.status,
+      usage,
+    );
   }
 
-  return validated;
+  return {
+    parsed: validated,
+    usage: usage ?? {
+      model: OPENAI_PARSER_MODEL,
+      inputTokens: null,
+      outputTokens: null,
+      reasoningTokens: null,
+      totalTokens: null,
+    },
+  };
+
 }
 
 function validateRequest(
@@ -257,6 +344,55 @@ function extractOutputText(value: unknown): string | null {
   return null;
 }
 
+function extractProviderUsage(value: unknown): ProviderUsage | null {
+  if (!isRecord(value)) return null;
+  const usage = isRecord(value.usage) ? value.usage : null;
+  if (!usage) return null;
+  const outputDetails = isRecord(usage.output_tokens_details) ? usage.output_tokens_details : null;
+
+  return {
+    model: cleanString(value.model, 120) ?? OPENAI_PARSER_MODEL,
+    inputTokens: nonNegativeInteger(usage.input_tokens),
+    outputTokens: nonNegativeInteger(usage.output_tokens),
+    reasoningTokens: outputDetails ? nonNegativeInteger(outputDetails.reasoning_tokens) : null,
+    totalTokens: nonNegativeInteger(usage.total_tokens),
+  };
+}
+
+function parserTelemetryHeaders(
+  outcome: ParserTelemetryOutcome,
+  providerHttpStatus: number | null,
+  usage: ProviderUsage | null,
+): Record<string, string> {
+  const headers: Record<string, string> = {
+    'x-sellertray-ai-outcome': outcome,
+    'x-sellertray-ai-model': usage?.model ?? OPENAI_PARSER_MODEL,
+  };
+
+  if (providerHttpStatus !== null) {
+    headers['x-sellertray-ai-provider-status'] = String(providerHttpStatus);
+  }
+  if (usage?.inputTokens !== null && usage?.inputTokens !== undefined) {
+    headers['x-sellertray-ai-input-tokens'] = String(usage.inputTokens);
+  }
+  if (usage?.outputTokens !== null && usage?.outputTokens !== undefined) {
+    headers['x-sellertray-ai-output-tokens'] = String(usage.outputTokens);
+  }
+  if (usage?.reasoningTokens !== null && usage?.reasoningTokens !== undefined) {
+    headers['x-sellertray-ai-reasoning-tokens'] = String(usage.reasoningTokens);
+  }
+  if (usage?.totalTokens !== null && usage?.totalTokens !== undefined) {
+    headers['x-sellertray-ai-total-tokens'] = String(usage.totalTokens);
+  }
+
+  return headers;
+}
+
+function nonNegativeInteger(value: unknown): number | null {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
 function safeProviderError(raw: string): string {
   try {
     const value = JSON.parse(raw) as unknown;
@@ -289,12 +425,17 @@ function constantTimeEqual(left: string, right: string): boolean {
   return difference === 0;
 }
 
-function json(body: unknown, status: number): Response {
+function json(
+  body: unknown,
+  status: number,
+  extraHeaders: Record<string, string> = {},
+): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       'content-type': 'application/json; charset=utf-8',
       'cache-control': 'no-store',
+      ...extraHeaders,
     },
   });
 }
