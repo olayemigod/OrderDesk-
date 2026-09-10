@@ -172,6 +172,28 @@ Deno.serve(withObservability('usage-settlement', async (request) => {
     const amount = toNumber(settlement.amount);
     if (amount === null || amount <= 0) return json({ error: 'Settlement amount is invalid' }, 409);
 
+    const claimedAt = new Date().toISOString();
+    const claimRows = await rest<JsonRecord[]>(
+      `/rest/v1/usage_settlements?id=eq.${encodeURIComponent(settlement.id)}&status=eq.pending&select=id,status`,
+      {
+        method: 'PATCH',
+        headers: { Prefer: 'return=representation' },
+        body: JSON.stringify({
+          status: 'submitted',
+          submitted_at: claimedAt,
+          updated_at: claimedAt,
+        }),
+      },
+    );
+    if (!claimRows[0]) {
+      const claimedSettlement = await loadSettlement(settlement.id);
+      return json({
+        settlement: claimedSettlement ? sanitizeSettlement(claimedSettlement) : sanitizeSettlement(settlement),
+        duplicateChargePrevented: true,
+        chargeClaimedByAnotherRequest: true,
+      });
+    }
+
     const paystackResponse = await fetch('https://api.paystack.co/transaction/charge_authorization', {
       method: 'POST',
       headers: {
@@ -218,15 +240,13 @@ Deno.serve(withObservability('usage-settlement', async (request) => {
     }
 
     await rest(
-      `/rest/v1/usage_settlements?id=eq.${encodeURIComponent(settlement.id)}&status=eq.pending`,
+      `/rest/v1/usage_settlements?id=eq.${encodeURIComponent(settlement.id)}&status=eq.submitted`,
       {
         method: 'PATCH',
         headers: { Prefer: 'return=minimal' },
         body: JSON.stringify({
-          status: 'submitted',
           provider_transaction_ref: providerTransactionRef(providerPayload.data),
           last_error: null,
-          submitted_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }),
       },
@@ -289,7 +309,7 @@ async function importBillingAuthorizationKey(): Promise<CryptoKey | null> {
 }
 
 async function markSettlementFailure(id: string, error: string): Promise<void> {
-  await rest(`/rest/v1/usage_settlements?id=eq.${encodeURIComponent(id)}&status=eq.pending`, {
+  await rest(`/rest/v1/usage_settlements?id=eq.${encodeURIComponent(id)}&status=eq.submitted`, {
     method: 'PATCH',
     headers: { Prefer: 'return=minimal' },
     body: JSON.stringify({
