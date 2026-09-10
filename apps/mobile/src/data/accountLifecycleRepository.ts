@@ -31,7 +31,7 @@ export async function deleteOrderDeskAccount(password: string): Promise<void> {
 
 async function functionError(error: unknown, fallback: string): Promise<string> {
   if (isRecord(error) && isRecord(error.context)) {
-    const response = error.context as Response;
+    const response = error.context as unknown as Response;
     if (typeof response.clone === 'function') {
       try {
         const payload = await response.clone().json() as unknown;
