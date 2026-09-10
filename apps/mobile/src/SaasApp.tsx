@@ -14,6 +14,7 @@ import {
 import { AuthGate } from './components/AuthGate';
 import { BusinessProfileView } from './components/BusinessProfileView';
 import { OrderItemsEditor } from './components/OrderItemsEditor';
+import { OrderStatusHistory } from './components/OrderStatusHistory';
 import { OrderWorkflowPanel } from './components/OrderWorkflowPanel';
 import type { MerchantBusiness } from './data/businessRepository';
 import type { OrderItemInput } from './data/ordersRepository';
@@ -373,7 +374,7 @@ function OrdersView({
   loading: boolean;
   selectedOrder: MerchantOrder | undefined;
   onSelectOrder: (orderId: string) => void;
-  setStatus: (orderId: string, status: OrderStatus) => Promise<void>;
+  setStatus: (orderId: string, status: OrderStatus, reason?: string | null) => Promise<void>;
   addItem: (orderId: string, item: OrderItemInput) => Promise<void>;
   editItem: (itemId: string, item: OrderItemInput) => Promise<void>;
   removeItem: (itemId: string) => Promise<void>;
@@ -423,6 +424,7 @@ function OrdersView({
         order.customerName,
         order.customerPhone,
         order.customerMessage,
+        order.statusReason ?? '',
         ...order.items.flatMap((item) => [item.name, item.originalName ?? '']),
       ]
         .join(' ')
@@ -507,10 +509,11 @@ function OrdersView({
           order={visibleSelectedOrder}
           currency={business.currency}
           onAccept={() => setStatus(visibleSelectedOrder.id, 'accepted')}
-          onReject={() => setStatus(visibleSelectedOrder.id, 'rejected')}
+          onReject={(reason) => setStatus(visibleSelectedOrder.id, 'rejected', reason)}
           onStart={() => setStatus(visibleSelectedOrder.id, 'processing')}
           onReady={() => setStatus(visibleSelectedOrder.id, 'ready')}
           onComplete={() => setStatus(visibleSelectedOrder.id, 'completed')}
+          onCancel={(reason) => setStatus(visibleSelectedOrder.id, 'cancelled', reason)}
           onAddItem={(item) => addItem(visibleSelectedOrder.id, item)}
           onEditItem={editItem}
           onRemoveItem={removeItem}
@@ -602,6 +605,7 @@ function OrderList({
             <Text numberOfLines={2} style={styles.orderMessage}>
               {order.customerMessage || 'No customer message captured.'}
             </Text>
+            {order.statusReason ? <Text numberOfLines={1} style={styles.closureMeta}>Reason: {order.statusReason}</Text> : null}
             <Text style={styles.orderMeta}>
               {order.items.length} item{order.items.length === 1 ? '' : 's'} · {order.source === 'whatsapp' ? 'WhatsApp' : 'Manual'} · {order.confidence === null ? 'Unscored' : `${Math.round(order.confidence * 100)}% parsed`}{reviewChecks > 0 ? ` · ${reviewChecks} initial review check${reviewChecks === 1 ? '' : 's'}` : ''}
             </Text>
@@ -620,6 +624,7 @@ function OrderDetail({
   onStart,
   onReady,
   onComplete,
+  onCancel,
   onAddItem,
   onEditItem,
   onRemoveItem,
@@ -627,10 +632,11 @@ function OrderDetail({
   order: MerchantOrder;
   currency: string;
   onAccept: () => Promise<void>;
-  onReject: () => Promise<void>;
+  onReject: (reason: string) => Promise<void>;
   onStart: () => Promise<void>;
   onReady: () => Promise<void>;
   onComplete: () => Promise<void>;
+  onCancel: (reason: string) => Promise<void>;
   onAddItem: (item: OrderItemInput) => Promise<void>;
   onEditItem: (itemId: string, item: OrderItemInput) => Promise<void>;
   onRemoveItem: (itemId: string) => Promise<void>;
@@ -679,7 +685,10 @@ function OrderDetail({
         onStart={onStart}
         onReady={onReady}
         onComplete={onComplete}
+        onCancel={onCancel}
       />
+
+      <OrderStatusHistory order={order} />
     </View>
   );
 }
@@ -834,6 +843,7 @@ const styles = StyleSheet.create({
   orderValue: { color: '#101828', fontSize: 11, fontWeight: '900' },
   orderValuePending: { color: '#B54708' },
   orderMessage: { color: '#475467', fontSize: 13, lineHeight: 19, marginTop: 9 },
+  closureMeta: { color: '#B54708', fontSize: 10, fontWeight: '700', marginTop: 6 },
   orderMeta: { color: '#667085', fontSize: 10, marginTop: 8 },
   statusPill: { borderRadius: 999, backgroundColor: '#EAECF0', paddingVertical: 5, paddingHorizontal: 8 },
   statusReview: { backgroundColor: '#FFF3D6' },
