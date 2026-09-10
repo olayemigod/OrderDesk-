@@ -119,16 +119,16 @@
       "required": true,
       "status": "accepted",
       "owner": "ProcessEdge",
-      "evidence": "S9C/S9D deployed; paystack-webhook v4, usage-settlement v3, account-lifecycle v6, billing-checkout v5; settlement-preparation Cron ACTIVE; closed-period/currency/deletion guards smoke-tested; CI backend path gating and provider-reference reconciliation implemented",
-      "acceptance": "AI_ORDER_ACTIVITY metering is idempotent and trial-free; price/currency/period are snapshotted; only closed single-currency periods settle; reusable authorization storage is encrypted/server-only; closed periods are prepared automatically without money movement; self-service deletion blocks unsettled priced usage; live charging is explicitly gated; ambiguous provider state can be reconciled by reference without another debit; safe settlement history is exportable and ProcessEdge sees only non-secret health indicators."
+      "evidence": "S9C/S9D deployed; paystack-webhook v5, usage-settlement v4, account-lifecycle v6, billing-checkout v5; settlement Cron ACTIVE; closed-period/currency/deletion/concurrency guards smoke-tested; dual charging interlock defaults off",
+      "acceptance": "AI_ORDER_ACTIVITY metering is idempotent and trial-free; price/currency/period are snapshotted; only closed single-currency periods settle; reusable authorization storage is encrypted/server-only; closed periods are prepared automatically without money movement; self-service deletion blocks unsettled priced usage; debit requires both the server live flag and database commercial flag; ambiguous provider state can be reconciled by reference without another debit; safe settlement history is exportable and ProcessEdge sees only non-secret health indicators."
     },
     {
       "id": "paystack_commercial_activation",
       "required": true,
       "status": "pending",
       "owner": "ProcessEdge",
-      "evidence": "S9C metering and S9D postpaid settlement foundation are deployed; usage-settlement worker is fail-closed, but base price, usage rate, reusable authorization and Paystack acceptance remain unset/pending",
-      "acceptance": "Approve SellerTray monthly base price and flat AI-assisted activity price; configure Paystack plan/secret, BILLING_AUTH_ENCRYPTION_KEY and USAGE_SETTLEMENT_TOKEN; capture a reusable authorization in test mode; pass base checkout, closed-period/currency-safe idempotent usage settlement, exact amount/currency webhook reconciliation and Verify Transaction reconciliation; then explicitly enable USAGE_BILLING_LIVE."
+      "evidence": "S9C metering and S9D postpaid settlement foundation are deployed; usage-settlement v4 requires two independent charging gates, both currently disabled; base price, usage rate, reusable authorization and Paystack acceptance remain unset/pending",
+      "acceptance": "Approve SellerTray monthly base price and flat AI-assisted activity price; configure Paystack plan/secret, BILLING_AUTH_ENCRYPTION_KEY and USAGE_SETTLEMENT_TOKEN; capture a reusable authorization in test mode; pass base checkout, closed-period/currency-safe idempotent usage settlement, exact amount/currency webhook reconciliation and Verify Transaction reconciliation; then explicitly enable both USAGE_BILLING_LIVE and subscription_plans.usage_charging_enabled."
     },
     {
       "id": "google_play_data_safety",
