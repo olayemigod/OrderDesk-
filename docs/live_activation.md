@@ -67,33 +67,58 @@ Dedicated Supabase project: `OrderDesk` (`eujxswjspolugrzlsjnn`).
 - Authenticated merchants can insert/update only merchant-correctable order-item fields: item name, quantity and selling price.
 - Direct authenticated order creation is revoked; inbound orders are server-created.
 - Existing historical records remain marked `legacy`; future manual provenance defaults to `manual` where applicable.
-- `whatsapp-webhook` v5 is ACTIVE.
+- `whatsapp-webhook` v5 deployed for provenance recording.
 - Supabase security advisor has no new database/RLS finding; the only security warning is leaked-password protection being disabled.
 - Performance advisor reports only low-volume unused-index INFO findings.
 - Mobile CI #68 passed after aligning stale demo fixtures with the provenance domain.
 
+### S4B external AI parser integration
+
+**IMPLEMENTED — ACTIVATION PENDING SERVER SECRETS / LIVE AI ACCEPTANCE**
+
+- Private `order-parser` Edge Function added and deployed ACTIVE as v1.
+- Parser uses the OpenAI Responses API with strict JSON Schema Structured Outputs.
+- Default model is `gpt-5.6-luna`, overridable through server-only `OPENAI_PARSER_MODEL`.
+- Parser request is limited to customer message plus tenant catalogue names/aliases; merchant prices are deliberately excluded.
+- Parser response is limited to `{ items: [{ name, quantity }], confidence }` and is validated again by OrderDesk.
+- `order-parser` requires custom bearer-token authentication and fails closed when `ORDER_PARSER_TOKEN` or `OPENAI_API_KEY` is absent.
+- `whatsapp-webhook` v6 is ACTIVE and derives the internal parser URL automatically unless an explicit server URL is configured.
+- Webhook calls AI only when the shared server token exists; otherwise it keeps the conservative fallback parser.
+- Tenant catalogue is now loaded once per inbound order and reused for AI context plus deterministic matching/pricing.
+- AI/provider/network/schema failure falls back instead of failing WhatsApp ordering.
+- External successful parses will be recorded as `parser_source = external`, `parser_version = external-v2-catalogue`.
+- Activation and acceptance contract is documented in `docs/ai_parser_activation.md`.
+- Mobile CI #72 passed on the S4B webhook integration head.
+
+### S5A review-first merchant inbox
+
+**PASS — CI**
+
+- Orders screen defaults to `Needs review` instead of an undifferentiated growing list.
+- Workflow filters: Needs review, In progress, Completed and All, each with counts.
+- Search covers order ID, customer, phone, message and product wording.
+- Order cards show received time, known order value or `Needs pricing`, parse confidence and review-check count.
+- Normal Orders navigation remains review-first.
+- Selecting a specific recent order from Home opens the correct workflow bucket instead of hiding the requested order.
+- Status progression keeps the selected order visible as it moves review → active → completed.
+- Mobile CI #75 passed on the corrected S5A head.
+
 ## Current acceptance checkpoint
 
-Backend ingestion, merchant review/correction, order workflow, tenant isolation, catalogue pricing and S4A provenance are implemented and gated.
+Backend ingestion, merchant review/correction, order workflow, tenant isolation, catalogue pricing, parser provenance and the review-first inbox are implemented and gated.
 
-A new real production WhatsApp message is still required to prove the full production-number path with the current catalogue/provenance code. The fixed Meta dashboard sample cannot be reused for that proof because provider-message idempotency correctly rejects duplicate message IDs.
+S4B code is deployed safely but is not production-accepted until the server-only OpenAI/shared-token secrets are configured and a new live parser request is exercised. A new real production WhatsApp message is also still required to prove the production phone-number path with the current S3/S4 code. The fixed Meta dashboard sample cannot be reused for that proof because provider-message idempotency correctly rejects duplicate message IDs.
 
 ## Next bounded slice
 
-**S4B — external production AI parser integration.**
+**S5B — order action feedback and exception-focused detail polish.**
 
-The existing webhook already has a provider-neutral parser adapter and safe fallback. S4B should:
-
-1. Pass tenant catalogue context into the parser request.
-2. Require structured `{ items, confidence }` output.
-3. Keep the deterministic catalogue matcher/pricer authoritative after AI extraction.
-4. Fall back safely when the external parser is unavailable or invalid.
-5. Never allow the AI layer to invent merchant selling prices.
+Keep the slice bounded to merchant usability: visible pending/success/error state for workflow actions, clearer terminal-state presentation, and concise exception handling without expanding into CRM/POS functionality.
 
 ## Release-readiness gaps
 
 1. Complete Meta production/business verification and send one real production WhatsApp order.
-2. Configure and acceptance-test the production AI parser.
+2. Configure `OPENAI_API_KEY` and `ORDER_PARSER_TOKEN` directly in Supabase secrets and execute the S4B live AI acceptance checklist.
 3. Run one native Android release smoke test.
 4. Configure production SMTP for Auth emails.
 5. Enable Supabase leaked-password protection if available for the selected Auth plan: https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection
