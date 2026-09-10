@@ -8,6 +8,19 @@ type ParsedOrder = {
   confidence: number;
 };
 
+type CatalogueRow = {
+  id: string;
+  name: string;
+  price_ngn: number | string | null;
+  catalog_item_aliases: Array<{ alias: string }> | null;
+};
+
+type EnrichedItem = ParsedItem & {
+  catalogItemId: string | null;
+  canonicalName: string;
+  unitPrice: number | null;
+};
+
 type JsonRecord = Record<string, unknown>;
 
 const encoder = new TextEncoder();
@@ -165,10 +178,11 @@ function extractInboundMessages(payload: JsonRecord) {
 }
 
 async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[number]) {
-  const tenant = await rest<{ id: string }[]>(
-    `/rest/v1/tenants?select=id&whatsapp_phone_number_id=eq.${encodeURIComponent(event.phoneNumberId)}&limit=1`,
+  const tenants = await rest<Array<{ id: string; currency: string | null }>>(
+    `/rest/v1/tenants?select=id,currency&whatsapp_phone_number_id=eq.${encodeURIComponent(event.phoneNumberId)}&limit=1`,
   );
-  const tenantId = tenant[0]?.id;
+  const tenant = tenants[0];
+  const tenantId = tenant?.id;
 
   if (!tenantId) {
     console.warn('No OrderDesk tenant mapped to WhatsApp phone number', event.phoneNumberId);
@@ -215,10 +229,12 @@ async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[nu
   }
 
   if (!event.text) {
-    return; // Media/status handling is intentionally outside MVP slice 1.
+    return; // Media/status handling is intentionally outside the current MVP slice.
   }
 
   const parsed = await parseOrder(event.text);
+  const enrichedItems = await enrichFromCatalogue(tenantId, parsed.items);
+
   const createdOrders = await rest<Array<{ id: string }>>('/rest/v1/orders?select=id', {
     method: 'POST',
     headers: { Prefer: 'return=representation' },
@@ -230,27 +246,96 @@ async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[nu
       source: 'whatsapp',
       customer_note: event.text,
       parser_confidence: parsed.confidence,
-      currency: 'NGN',
+      currency: tenant.currency || 'NGN',
     }),
   });
 
   const orderId = createdOrders[0]?.id;
   if (!orderId) throw new Error('Order insert returned no row.');
 
-  if (parsed.items.length > 0) {
+  if (enrichedItems.length > 0) {
     await rest('/rest/v1/order_items', {
       method: 'POST',
       headers: { Prefer: 'return=minimal' },
       body: JSON.stringify(
-        parsed.items.map((item) => ({
+        enrichedItems.map((item) => ({
           tenant_id: tenantId,
           order_id: orderId,
-          item_name: item.name,
+          catalog_item_id: item.catalogItemId,
+          item_name: item.canonicalName,
           quantity: item.quantity,
+          unit_price: item.unitPrice,
         })),
       ),
     });
   }
+}
+
+async function enrichFromCatalogue(tenantId: string, parsedItems: ParsedItem[]): Promise<EnrichedItem[]> {
+  if (parsedItems.length === 0) return [];
+
+  const rows = await rest<CatalogueRow[]>(
+    `/rest/v1/catalog_items?select=id,name,price_ngn,catalog_item_aliases(alias)&tenant_id=eq.${encodeURIComponent(tenantId)}&is_active=eq.true`,
+  );
+
+  return parsedItems.map((item) => {
+    const match = findCatalogueMatch(item.name, rows);
+    if (!match) {
+      return {
+        ...item,
+        catalogItemId: null,
+        canonicalName: item.name,
+        unitPrice: null,
+      };
+    }
+
+    return {
+      ...item,
+      catalogItemId: match.id,
+      canonicalName: match.name,
+      unitPrice: toNumber(match.price_ngn),
+    };
+  });
+}
+
+function findCatalogueMatch(parsedName: string, catalogue: CatalogueRow[]): CatalogueRow | null {
+  const parsedVariants = phraseVariants(parsedName);
+
+  // Canonical product names take precedence over aliases.
+  for (const item of catalogue) {
+    const canonical = normalizePhrase(item.name);
+    if (parsedVariants.has(canonical)) return item;
+  }
+
+  for (const item of catalogue) {
+    for (const alias of item.catalog_item_aliases ?? []) {
+      if (parsedVariants.has(normalizePhrase(alias.alias))) return item;
+    }
+  }
+
+  return null;
+}
+
+function phraseVariants(value: string): Set<string> {
+  const normalized = normalizePhrase(value);
+  const variants = new Set<string>([normalized]);
+  const words = normalized.split(' ');
+
+  // Common WhatsApp quantity phrases vary only by plural container:
+  // "bags of rice" ↔ "bag of rice", "bottles of oil" ↔ "bottle of oil".
+  if (words.length >= 3 && words[1] === 'of' && words[0].endsWith('s') && words[0].length > 2) {
+    variants.add([words[0].slice(0, -1), ...words.slice(1)].join(' '));
+  }
+
+  return variants;
+}
+
+function normalizePhrase(value: string): string {
+  return value
+    .toLocaleLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 async function parseOrder(text: string): Promise<ParsedOrder> {
@@ -347,4 +432,10 @@ function isRecord(value: unknown): value is JsonRecord {
 
 function asString(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function toNumber(value: number | string | null): number | null {
+  if (value === null) return null;
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
