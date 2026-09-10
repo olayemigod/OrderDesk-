@@ -1,10 +1,10 @@
-# OrderDesk Data Lifecycle and Recovery Contract
+# SellerTray Data Lifecycle and Recovery Contract
 
 Status: S11C pilot baseline.
 
 ## Scope
 
-OrderDesk stores merchant workspace data needed to receive, review, fulfil and audit WhatsApp orders. Customers stay on WhatsApp; merchants use the OrderDesk application.
+SellerTray stores merchant workspace data needed to receive, review, fulfil and audit WhatsApp orders. Customers stay on WhatsApp; merchants use the SellerTray application.
 
 ## Merchant export
 
@@ -25,20 +25,20 @@ OrderDesk stores merchant workspace data needed to receive, review, fulfil and a
 
 ## Access-token window
 
-Deleting the Supabase Auth user removes refresh sessions, but an already-issued access JWT can remain cryptographically valid until its expiry. OrderDesk deletes owned tenants and remaining membership records before deleting Auth so the stale token no longer has tenant authorization. Sensitive server actions continue to require tenant membership or platform-admin state.
+Deleting the Supabase Auth user removes refresh sessions, but an already-issued access JWT can remain cryptographically valid until its expiry. SellerTray deletes owned tenants and remaining membership records before deleting Auth so the stale token no longer has tenant authorization. Sensitive server actions continue to require tenant membership or platform-admin state.
 
 ## Retention baseline
 
 For the MVP pilot:
 - Active merchant operational data is retained while the workspace exists.
 - Merchant-created workspace data is deleted when the owning account is deleted through the governed path.
-- No separate long-term analytics copy of customer message content is created by OrderDesk.
+- No separate long-term analytics copy of customer message content is created by SellerTray.
 - Edge Function observability must not log request bodies, customer WhatsApp message text, passwords, authorization headers or query strings.
 - Infrastructure backups can temporarily contain data deleted from the live database until the provider backup lifecycle expires. They are for disaster recovery, not ordinary application access.
 
 ## Backup and recovery
 
-Supabase provides daily database backups for projects; Point-in-Time Recovery is an optional higher-frequency recovery capability. OrderDesk also keeps all schema changes in versioned migrations.
+Supabase provides daily database backups for projects; Point-in-Time Recovery is an optional higher-frequency recovery capability. SellerTray also keeps all schema changes in versioned migrations.
 
 Pilot recovery procedure:
 1. Confirm incident scope and stop affected writes when necessary.

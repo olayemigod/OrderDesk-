@@ -1,6 +1,6 @@
-# OrderDesk SaaS Rollout Status
+# SellerTray SaaS Rollout Status
 
-This document records the governed rollout state for OrderDesk. OrderDesk remains a focused WhatsApp-order SaaS: customers stay on WhatsApp; merchants use the mobile app. ERP, POS, accounting, inventory valuation and general CRM are outside the MVP contract.
+This document records the governed rollout state for SellerTray. SellerTray remains a focused WhatsApp-order SaaS: customers stay on WhatsApp; merchants use the mobile app. ERP, POS, accounting, inventory valuation and general CRM are outside the MVP contract.
 
 ## Implemented and gated
 
@@ -20,7 +20,7 @@ This document records the governed rollout state for OrderDesk. OrderDesk remain
 - Product name, selling price, SKU, category, aliases, active state and image-URL placeholder.
 - Owner/Manager catalogue writes.
 - WhatsApp wording resolves against merchant catalogue names/aliases.
-- Recognized products inherit merchant price; OrderDesk never invents selling prices.
+- Recognized products inherit merchant price; SellerTray never invents selling prices.
 
 ### S4A — parser provenance — PASS
 - Parser source/version and review reasons on orders.
@@ -55,7 +55,7 @@ This document records the governed rollout state for OrderDesk. OrderDesk remain
 - Realtime refresh on order/item changes.
 
 ### S9A — subscription lifecycle and enforcement — PASS
-- Provider-neutral `OrderDesk Business` plan contract.
+- Provider-neutral `SellerTray Business` plan contract.
 - 14-day trial default.
 - Active / Past due / Grace / Suspended / Cancelled lifecycle.
 - Expired/suspended businesses retain read access while operational writes fail server-side.
@@ -65,7 +65,7 @@ This document records the governed rollout state for OrderDesk. OrderDesk remain
 ### S9B — Paystack billing adapter — IMPLEMENTED, ACTIVATION PENDING
 - Owner-only JWT-protected checkout endpoint.
 - HMAC-SHA512 Paystack webhook and idempotent provider-event ledger.
-- Matching OrderDesk checkout reference required before `charge.success` can activate a tenant.
+- Matching SellerTray checkout reference required before `charge.success` can activate a tenant.
 - Recurring subscription/payment-success/failure/non-renewal/disable reconciliation.
 - Billing remains deliberately inactive until an approved monthly price, Paystack plan reference and server secret are configured.
 - Current `checkout_ready = false`; no billing event has charged or activated a tenant.
@@ -98,7 +98,7 @@ These are implemented but must not be described as production-accepted yet:
 - Every function-generated response receives an `x-orderdesk-request-id` correlation header.
 - Logs include only service, request ID, method, pathname, status and duration by default; query strings, request bodies, customer message text and authorization headers are not logged by the wrapper.
 - Uncaught error messages are length-limited and redact common bearer/secret-key patterns before logging.
-- All six target functions were redeployed ACTIVE to the OrderDesk Supabase project without changing their existing JWT verification boundaries.
+- All six target functions were redeployed ACTIVE to the SellerTray Supabase project without changing their existing JWT verification boundaries.
 - Mobile CI #146 passed on commit `4d7904d`.
 - Direct external HTTP correlation smoke could not be run from the current execution environment because outbound DNS resolution is unavailable; production/provider E2E remains an explicit acceptance gate rather than being silently assumed.
 
@@ -123,20 +123,48 @@ These are implemented but must not be described as production-accepted yet:
 - Owned businesses and their tenant-scoped operational data are removed before the Auth user; memberships in other businesses are removed. User-owned Storage objects are removed through the Storage API within the bounded self-service contract.
 - Active provider subscriptions, ProcessEdge platform-admin identities/audit history and oversized Storage cleanup fail closed to controlled support handling.
 - Added `docs/data_lifecycle.md` covering retention, access-token expiry considerations, backup/recovery and destructive-restore controls.
-- `account-lifecycle` is ACTIVE in the OrderDesk Supabase project with JWT verification enabled.
+- `account-lifecycle` is ACTIVE in the SellerTray Supabase project with JWT verification enabled.
 - Initial Mobile CI #150 exposed one TypeScript-only cast issue; the smallest correction was applied and Mobile CI #151 passed on commit `86e4151`.
 - Published the required external deletion resource at `https://processedge.com.ng/sellertray/account-deletion` with legacy `/orderdesk/account-deletion` alias. ProcessEdge website production deployment `6cf677c5` is READY and the canonical route returns HTTP 200.
 - Full destructive account-deletion smoke is intentionally not run against the current working merchant account; first disposable-account E2E remains part of release acceptance.
 
-### Remaining S11 hardening
-- Production Auth URL/deep-link configuration and leaked-password protection where available.
-- SellerTray-specific Privacy Policy / Terms alignment and legal review.
-- Signed Android production build configuration and native smoke test.
-- Release/versioning and rollback runbook.
+### S11D — production identity, Auth/deep-link and Android release contract — PASS CODE / EXTERNAL ACCEPTANCE PENDING
+- SellerTray is frozen as the store/display identity at version `1.0.0`.
+- Android application ID is frozen as `ng.processedge.sellertray`; iOS bundle identifier matches for future iOS release.
+- Canonical native scheme is `sellertray://`; legacy `orderdesk://` remains registered temporarily for beta confirmation/recovery compatibility.
+- New native signup/password-recovery links are generated with the SellerTray scheme while AuthGate accepts both schemes.
+- Added `apps/mobile/eas.json`: internal preview produces an installable APK; production produces a Google Play AAB with remote auto-incremented version codes.
+- Client build profiles contain only the already-public Supabase URL/publishable key. Server/service-role/provider secrets remain outside the mobile bundle.
+- Added `docs/release_runbook.md` with preview QA, AAB release, rollback/forward-fix and release-record contracts.
+- Completed visible SellerTray UI rebrand across auth, workspace, provisioning, business settings, notifications, teams and ProcessEdge SaaS Admin surfaces.
+- Account deletion now asks for `DELETE MY SELLERTRAY ACCOUNT`; the server temporarily accepts the former beta phrase for compatibility.
+- `account-lifecycle` v2 is ACTIVE with JWT verification enabled.
+- Live plan name changed from `OrderDesk Business` to `SellerTray Business`; stale user-facing subscription/team and Edge Function messages were corrected and deployed.
+- In-app Privacy Policy and Terms links now target the SellerTray-specific production URLs.
+- Mobile CI #154 passed the production-identity/UI change and CI #155 passed the in-app legal-link change. The final service-identity migration head is undergoing the same CI gate.
+- **Not yet accepted:** Supabase Auth Additional Redirect URLs must be configured/verified; leaked-password protection remains disabled; SellerTray icon/adaptive-icon/splash assets do not yet exist; no signed EAS preview APK/native smoke or production AAB has been completed.
+
+### S11E — SellerTray legal-policy alignment — PREVIEW READY / LEGAL APPROVAL PENDING
+- Prepared SellerTray-specific Privacy Policy and Terms covering merchant/customer order data, WhatsApp, AI-assisted parsing, subscriptions, service providers, retention/export/deletion, security, acceptable use and merchant responsibilities.
+- Draft website PR #2 remains deliberately unmerged.
+- Vercel preview for legal commit `836089d` is READY.
+- Privacy wording is aligned to the current SellerTray data contract and the Nigeria Data Protection Act rights baseline.
+- The account-deletion page links to the product-specific Privacy/Terms routes on the legal branch.
+- Google Play requires a comprehensive privacy policy accessible in the app plus the separate account-deletion resource; mobile links are implemented but production legal URLs must not be considered accepted until PR #2 is legally approved and published.
+
+### Remaining S11 release gates
+- Configure/verify Supabase Auth redirects for `sellertray://auth-confirm`, `sellertray://reset-password` and the two temporary legacy equivalents.
+- Enable Supabase leaked-password protection before public signup.
+- Finalize SellerTray launcher/adaptive icon and splash/launch assets.
+- Obtain legal approval for website PR #2, then publish and verify `/sellertray/privacy` and `/sellertray/terms`.
+- Produce signed Android preview APK and pass the native smoke matrix.
+- Produce production AAB and record build/version identifiers.
+- Complete production SMTP/Auth email acceptance.
+- Complete relevant Meta WhatsApp, AI parser, outbound notification and Paystack activation gates for the intended paid pilot.
 
 ### Next bounded slice
-**S11D — production Auth + Android release contract**: freeze the SellerTray application identity, configure production deep-link/Auth redirect behavior, add signed Android build profiles and document release/rollback gates before store submission.
+**S11F — release acceptance preparation**: verify the final CI/security checkpoint, close any remaining code-only release gaps, then hold native/store acceptance on the explicit external configuration, branding and provider dependencies above.
 
 ## Commercial launch gate
 
-OrderDesk is ready for a paid pilot only when S11 passes and the relevant external services are activation-accepted. PR #1 remains draft until the production E2E/release gate is explicitly approved.
+SellerTray is ready for a paid pilot only when S11 passes and the relevant external services are activation-accepted. PR #1 remains draft until the production E2E/release gate is explicitly approved.
