@@ -8,11 +8,25 @@ export type OrderStatus =
   | 'completed'
   | 'cancelled';
 
+export type ParserSource = 'legacy' | 'external' | 'fallback' | 'manual';
+
+export type MatchSource =
+  | 'legacy'
+  | 'catalogue_name'
+  | 'catalogue_alias'
+  | 'normalized_name'
+  | 'normalized_alias'
+  | 'unmatched'
+  | 'manual';
+
 export type OrderItem = {
   id: string;
   name: string;
+  originalName: string | null;
   quantity: number;
   unitPrice: number | null;
+  matchSource: MatchSource;
+  matchConfidence: number | null;
 };
 
 export type MerchantOrder = {
@@ -24,6 +38,9 @@ export type MerchantOrder = {
   source: 'whatsapp' | 'manual';
   customerMessage: string;
   confidence: number | null;
+  parserSource: ParserSource;
+  parserVersion: string | null;
+  reviewReasons: string[];
   items: OrderItem[];
 };
 
