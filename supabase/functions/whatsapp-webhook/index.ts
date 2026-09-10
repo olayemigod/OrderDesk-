@@ -60,7 +60,7 @@ const configuredParserUrl = Deno.env.get('ORDER_PARSER_URL')?.trim() ?? '';
 const ORDER_PARSER_URL = configuredParserUrl || (SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/order-parser` : '');
 const ORDER_PARSER_TOKEN = Deno.env.get('ORDER_PARSER_TOKEN') ?? '';
 
-Deno.serve(async (request) => {
+Deno.serve(withObservability('whatsapp-webhook', async (request) => {
   if (request.method === 'GET') {
     return verifyWebhookSubscription(request);
   }
@@ -99,7 +99,7 @@ Deno.serve(async (request) => {
   }
 
   return new Response('OK', { status: 200 });
-});
+}));
 
 function verifyWebhookSubscription(request: Request): Response {
   const url = new URL(request.url);
@@ -548,3 +548,117 @@ function toNumber(value: number | string | null): number | null {
   const parsed = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
+
+type ObservabilityHandler = (request: Request) => Response | Promise<Response>;
+
+function withObservability(service: string, handler: ObservabilityHandler): ObservabilityHandler {
+  return async (request: Request) => {
+    const requestId = observabilityRequestId(request);
+    const startedAt = Date.now();
+    const path = observabilityPath(request.url);
+
+    emitObservability('info', {
+      service,
+      event: 'request_started',
+      request_id: requestId,
+      method: request.method,
+      path,
+    });
+
+    try {
+      const response = await handler(request);
+      const durationMs = Math.max(0, Date.now() - startedAt);
+      const level = response.status >= 500 ? 'error' : response.status >= 400 ? 'warn' : 'info';
+
+      emitObservability(level, {
+        service,
+        event: 'request_finished',
+        request_id: requestId,
+        method: request.method,
+        path,
+        status: response.status,
+        duration_ms: durationMs,
+      });
+
+      const headers = new Headers(response.headers);
+      headers.set('x-orderdesk-request-id', requestId);
+      if (headers.has('access-control-allow-origin')) {
+        const existing = headers.get('access-control-expose-headers');
+        const exposed = new Set(
+          (existing ?? '')
+            .split(',')
+            .map((value) => value.trim())
+            .filter(Boolean),
+        );
+        exposed.add('x-orderdesk-request-id');
+        headers.set('access-control-expose-headers', [...exposed].join(', '));
+      }
+
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      });
+    } catch (error) {
+      emitObservability('error', {
+        service,
+        event: 'request_exception',
+        request_id: requestId,
+        method: request.method,
+        path,
+        duration_ms: Math.max(0, Date.now() - startedAt),
+        error: sanitizeObservabilityError(error),
+      });
+      throw error;
+    }
+  };
+}
+
+function observabilityRequestId(request: Request): string {
+  const incoming = request.headers.get('x-request-id')?.trim() ?? '';
+  if (/^[A-Za-z0-9._:-]{1,128}$/.test(incoming)) return incoming;
+  return crypto.randomUUID();
+}
+
+function observabilityPath(urlValue: string): string {
+  try {
+    return new URL(urlValue).pathname;
+  } catch {
+    return '/';
+  }
+}
+
+function sanitizeObservabilityError(error: unknown): Record<string, string> {
+  if (!(error instanceof Error)) return { name: 'UnknownError', message: 'Unhandled server error' };
+
+  const message = error.message
+    .replace(/Bearer\s+[A-Za-z0-9._~+\/-=]+/gi, 'Bearer [redacted]')
+    .replace(/\b(?:sk|sb_secret)_[A-Za-z0-9_-]+\b/g, '[redacted]')
+    .replace(/\s+/g, ' ')
+    .slice(0, 300);
+
+  return {
+    name: error.name || 'Error',
+    message: message || 'Unhandled server error',
+  };
+}
+
+function emitObservability(
+  level: 'info' | 'warn' | 'error',
+  fields: Record<string, unknown>,
+): void {
+  const line = JSON.stringify({
+    ts: new Date().toISOString(),
+    level,
+    ...fields,
+  });
+
+  if (level === 'error') {
+    console.error(line);
+  } else if (level === 'warn') {
+    console.warn(line);
+  } else {
+    console.info(line);
+  }
+}
+

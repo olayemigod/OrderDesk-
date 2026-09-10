@@ -10,7 +10,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const PAYSTACK_SECRET_KEY = Deno.env.get('PAYSTACK_SECRET_KEY') ?? '';
 
-Deno.serve(async (request) => {
+Deno.serve(withObservability('paystack-webhook', async (request) => {
   if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 });
   if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !PAYSTACK_SECRET_KEY) {
     return new Response('Billing webhook not configured', { status: 503 });
@@ -58,7 +58,7 @@ Deno.serve(async (request) => {
     console.error('Paystack webhook processing failed', eventType, message);
     return new Response('Webhook processing failed', { status: 500 });
   }
-});
+}));
 
 async function resolveTenant(eventType: string, data: JsonRecord): Promise<TenantResolution | null> {
   const reference = asString(data.reference) ?? nestedString(data, ['transaction', 'reference']);
@@ -318,3 +318,117 @@ function isRecord(value: unknown): value is JsonRecord {
 function asString(value: unknown): string | null {
   return typeof value === 'string' && value ? value : null;
 }
+
+type ObservabilityHandler = (request: Request) => Response | Promise<Response>;
+
+function withObservability(service: string, handler: ObservabilityHandler): ObservabilityHandler {
+  return async (request: Request) => {
+    const requestId = observabilityRequestId(request);
+    const startedAt = Date.now();
+    const path = observabilityPath(request.url);
+
+    emitObservability('info', {
+      service,
+      event: 'request_started',
+      request_id: requestId,
+      method: request.method,
+      path,
+    });
+
+    try {
+      const response = await handler(request);
+      const durationMs = Math.max(0, Date.now() - startedAt);
+      const level = response.status >= 500 ? 'error' : response.status >= 400 ? 'warn' : 'info';
+
+      emitObservability(level, {
+        service,
+        event: 'request_finished',
+        request_id: requestId,
+        method: request.method,
+        path,
+        status: response.status,
+        duration_ms: durationMs,
+      });
+
+      const headers = new Headers(response.headers);
+      headers.set('x-orderdesk-request-id', requestId);
+      if (headers.has('access-control-allow-origin')) {
+        const existing = headers.get('access-control-expose-headers');
+        const exposed = new Set(
+          (existing ?? '')
+            .split(',')
+            .map((value) => value.trim())
+            .filter(Boolean),
+        );
+        exposed.add('x-orderdesk-request-id');
+        headers.set('access-control-expose-headers', [...exposed].join(', '));
+      }
+
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      });
+    } catch (error) {
+      emitObservability('error', {
+        service,
+        event: 'request_exception',
+        request_id: requestId,
+        method: request.method,
+        path,
+        duration_ms: Math.max(0, Date.now() - startedAt),
+        error: sanitizeObservabilityError(error),
+      });
+      throw error;
+    }
+  };
+}
+
+function observabilityRequestId(request: Request): string {
+  const incoming = request.headers.get('x-request-id')?.trim() ?? '';
+  if (/^[A-Za-z0-9._:-]{1,128}$/.test(incoming)) return incoming;
+  return crypto.randomUUID();
+}
+
+function observabilityPath(urlValue: string): string {
+  try {
+    return new URL(urlValue).pathname;
+  } catch {
+    return '/';
+  }
+}
+
+function sanitizeObservabilityError(error: unknown): Record<string, string> {
+  if (!(error instanceof Error)) return { name: 'UnknownError', message: 'Unhandled server error' };
+
+  const message = error.message
+    .replace(/Bearer\s+[A-Za-z0-9._~+\/-=]+/gi, 'Bearer [redacted]')
+    .replace(/\b(?:sk|sb_secret)_[A-Za-z0-9_-]+\b/g, '[redacted]')
+    .replace(/\s+/g, ' ')
+    .slice(0, 300);
+
+  return {
+    name: error.name || 'Error',
+    message: message || 'Unhandled server error',
+  };
+}
+
+function emitObservability(
+  level: 'info' | 'warn' | 'error',
+  fields: Record<string, unknown>,
+): void {
+  const line = JSON.stringify({
+    ts: new Date().toISOString(),
+    level,
+    ...fields,
+  });
+
+  if (level === 'error') {
+    console.error(line);
+  } else if (level === 'warn') {
+    console.warn(line);
+  } else {
+    console.info(line);
+  }
+}
+
