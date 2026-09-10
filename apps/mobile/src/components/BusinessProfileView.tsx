@@ -6,6 +6,7 @@ import type {
   MerchantBusiness,
 } from '../data/businessRepository';
 import { CatalogueView } from './CatalogueView';
+import { CustomerNotificationSettings } from './CustomerNotificationSettings';
 
 type Props = {
   business: MerchantBusiness;
@@ -189,6 +190,7 @@ export function BusinessProfileView({ business, onSave }: Props) {
       </View>
 
       <CatalogueView business={business} />
+      <CustomerNotificationSettings business={business} />
 
       <View style={styles.platformCard}>
         <Text style={styles.platformTitle}>OrderDesk account</Text>
