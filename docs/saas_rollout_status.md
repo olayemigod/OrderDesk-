@@ -226,11 +226,18 @@ These are implemented but must not be described as production-accepted yet:
 - SellerTray preflight verifies lockfile name/version/root identity against `package.json`.
 - Mobile CI #174 passed locked install, production dependency audit, typecheck and SellerTray preflight on commit `a2394ed`.
 
-### S11N — Android permission minimization — CODE READY / CI PENDING
+### S11N — Android permission minimization — PASS
 - Added an explicit Expo `android.blockedPermissions` deny-list for sensitive device capabilities SellerTray does not use.
 - The deny-list covers location, contacts, camera/microphone, calendar, SMS/call logs, broad media/storage, phone state/numbers, sensors/activity, Bluetooth scan/connect, notifications, exact alarms, package installation, system overlays and Google advertising ID.
 - SellerTray preflight now fails if any required blocked permission is silently removed from the release contract.
 - This is a preventative manifest-merge guardrail: future features that genuinely require a blocked capability must explicitly revise the product/privacy/Play contract rather than inheriting it transitively.
+- Mobile CI #175 passed the full deny-list preflight on commit `4fab718`.
+
+### S11O — Android local-backup boundary — CODE READY / CI PENDING
+- Expo `android.allowBackup` is now explicitly false for SellerTray 1.0.0.
+- This prevents Android Auto Backup/restore from copying SellerTray application-local state through the normal Google Drive/device backup mechanism.
+- The preflight gate now fails if Auto Backup is re-enabled silently.
+- This is intentionally separate from SellerTray's explicit business-data export and server disaster-recovery backup contracts.
 
 ### Remaining S11 release gates
 - Configure/verify Supabase Auth redirects for `sellertray://auth-confirm`, `sellertray://reset-password` and the two temporary legacy equivalents.

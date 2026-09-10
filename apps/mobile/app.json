@@ -46,7 +46,8 @@
         "android.permission.REQUEST_INSTALL_PACKAGES",
         "android.permission.SYSTEM_ALERT_WINDOW",
         "com.google.android.gms.permission.AD_ID"
-      ]
+      ],
+      "allowBackup": false
     },
     "ios": {
       "bundleIdentifier": "ng.processedge.sellertray",

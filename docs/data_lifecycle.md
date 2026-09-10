@@ -54,3 +54,10 @@ A destructive restore must never be initiated merely to correct a single merchan
 ## External deletion resource
 
 Google Play requires an external web resource in addition to the in-app deletion path for apps that support account creation. The public deletion resource is live at `https://processedge.com.ng/sellertray/account-deletion` with `https://processedge.com.ng/orderdesk/account-deletion` retained as a beta-name alias. The canonical SellerTray URL must be entered in Play Console before production release.
+
+
+## Mobile device backup boundary
+
+SellerTray 1.0.0 explicitly sets Expo `android.allowBackup = false`. Android must not automatically back up or restore SellerTray application-local data through Google Drive/device backup. This reduces the chance that persisted authenticated session material or other app-local state survives through an OS backup/restore path outside SellerTray's governed account/data lifecycle.
+
+This setting does not replace server-side export, retention or disaster-recovery controls. Business-data export remains an explicit Owner action, while server infrastructure backup/recovery is governed separately.

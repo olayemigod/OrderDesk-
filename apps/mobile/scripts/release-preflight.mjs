@@ -117,6 +117,7 @@ requireValue(Array.isArray(app.scheme), 'Expo scheme must be an array during bet
 requireValue(app.scheme?.[0] === 'sellertray', 'sellertray must be the canonical first scheme');
 requireValue(app.scheme?.includes('orderdesk'), 'legacy orderdesk scheme must remain during the beta compatibility window');
 requireValue(app.android?.package === 'ng.processedge.sellertray', 'Android package must be ng.processedge.sellertray');
+requireValue(app.android?.allowBackup === false, 'Android Auto Backup must remain disabled for SellerTray');
 const requiredBlockedAndroidPermissions = [
   "android.permission.ACCESS_COARSE_LOCATION",
   "android.permission.ACCESS_FINE_LOCATION",
@@ -256,3 +257,4 @@ console.log('- legal/deletion URL contracts: present');
 console.log('- release acceptance manifest integrity: pass');
 console.log('- committed dependency lockfile integrity: pass');
 console.log('- sensitive Android permission deny-list: pass');
+console.log('- Android Auto Backup disabled: pass');

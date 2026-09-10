@@ -210,6 +210,10 @@ Google's Data Safety definition excludes certain transfers from "sharing", inclu
 
 ## 5. Security/deletion answers
 
+### Android local backup
+
+Android Auto Backup is explicitly disabled in the SellerTray Expo configuration. This is a device-side privacy/security control so app-local session/state is not automatically backed up to Google Drive through Android Auto Backup.
+
 ### Encryption in transit
 
 Draft: **Yes**
