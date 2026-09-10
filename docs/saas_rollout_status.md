@@ -102,17 +102,27 @@ These are implemented but must not be described as production-accepted yet:
 - Mobile CI #146 passed on commit `4d7904d`.
 - Direct external HTTP correlation smoke could not be run from the current execution environment because outbound DNS resolution is unavailable; production/provider E2E remains an explicit acceptance gate rather than being silently assumed.
 
+### S11B — security regression + bounded abuse controls — PASS CODE / DEPLOYED
+- Re-audited every exposed `public` table: RLS is enabled throughout and `anon` has no direct table CRUD privileges.
+- Re-audited the ProcessEdge admin boundary: `platform_admins`, `platform_admin_audit` and `tenant_admin_notes` remain unavailable to authenticated clients directly.
+- Re-audited every current `SECURITY DEFINER` function: each uses an empty `search_path`, denies `anon` / `authenticated` execution and is executable only by `service_role`.
+- Added streaming request-body limits before JSON/signature processing: WhatsApp webhook 1 MiB; Paystack webhook 512 KiB; AI parser 2 MiB; billing checkout 64 KiB; platform admin 64 KiB.
+- Limits enforce both declared `Content-Length` and actual streamed bytes, returning HTTP 413 when exceeded.
+- The notification worker remains token-gated and does not consume an inbound request body, so no redundant body parser was added.
+- All five patched functions were redeployed ACTIVE without changing their prior JWT verification boundaries.
+- Mobile CI #148 passed on commit `1c40263`.
+- Security advisor remains clear except for the existing project-level leaked-password-protection warning. Performance advisor reports only informational unused-index notices on the new/low-traffic schema.
+- Full production/provider abuse smoke remains part of external acceptance because direct public-host invocation is unavailable from the current execution environment.
+
 ### Remaining S11 hardening
-- Security/RLS regression checks and platform-admin boundary checks.
 - Data backup/recovery verification and retention policy.
-- Rate/abuse controls on public and authenticated server boundaries.
 - Production Auth URL/deep-link configuration and leaked-password protection where available.
 - Privacy policy, Terms of Service and account/data deletion/export operating contract.
 - Signed Android production build configuration and native smoke test.
 - Release/versioning and rollback runbook.
 
 ### Next bounded slice
-**S11B — security regression + abuse-control foundation**: rerun tenant/RLS/admin boundary tests, review public Edge Function abuse surfaces, then add the smallest server-side controls needed before external pilot traffic.
+**S11C — data lifecycle + recovery contract**: define pilot-grade backup/recovery, data retention, merchant export and account/business deletion behavior before public onboarding.
 
 ## Commercial launch gate
 
