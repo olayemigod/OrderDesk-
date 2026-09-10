@@ -40,7 +40,7 @@ SellerTray uses this sequence:
 2. Paystack `charge.success` activates the base subscription.
 3. If Paystack supplies a reusable authorization and the billing encryption key is configured, SellerTray encrypts the authorization with AES-GCM and stores it in the server-only `billing_payment_authorizations` table.
 4. Paid-period AI activity records `usage_unit_price`, `billing_period_start` and `billing_period_end`.
-5. ProcessEdge prepares one idempotent `usage_settlements` record for the closed period.
+5. Supabase Cron runs `prepare_due_orderdesk_usage_settlements()` daily at 01:15 UTC and prepares one idempotent `usage_settlements` record for each newly closed priced period. Manual preparation remains safe and idempotent.
 6. The usage-settlement worker may submit the variable amount through Paystack's charge-authorization endpoint only when `USAGE_BILLING_LIVE=true`.
 7. The Paystack webhook reconciles `charge.success` only when the provider reference, expected amount and currency match the prepared settlement exactly.
 8. The settlement becomes `paid`; ambiguous or failed attempts are never automatically recharged.
@@ -56,6 +56,8 @@ SellerTray uses this sequence:
 - ProcessEdge Admin receives only safe readiness/amount/failure indicators, never the authorization ciphertext.
 - Business data export includes usage events and safe settlement history but excludes reusable charge credentials.
 - Failed or uncertain charge attempts are not automatically retried. ProcessEdge must reconcile provider state before another debit attempt.
+- Self-service account deletion is blocked while any priced AI usage remains unsettled; a paid settlement clears the block.
+- Automatic Cron work prepares database settlement records only. It never calls Paystack and never moves money.
 
 ## Activation checklist
 
@@ -70,14 +72,15 @@ Keep live charging disabled until all items below are complete:
 7. Keep `USAGE_BILLING_LIVE` disabled.
 8. In Paystack test mode, complete one base subscription checkout and confirm a reusable authorization is captured.
 9. Confirm one active-period external-AI order creates exactly one priced usage event with exact billing-period bounds.
-10. Prepare that closed-period settlement twice and prove the second call returns the existing settlement rather than duplicating it.
-11. Submit one test usage charge and verify the Paystack webhook marks the exact settlement paid.
-12. Verify amount/currency mismatch is rejected.
-13. Verify ProcessEdge Admin shows authorization readiness, outstanding amount and failures without exposing charge credentials.
-14. Only then set `USAGE_BILLING_LIVE=true` for production.
+10. Confirm the active `sellertray-prepare-usage-settlements` Cron job prepares the closed period once; manually prepare it again and prove the existing settlement is returned rather than duplicated.
+11. Confirm account deletion is blocked before settlement and allowed by the usage-billing guard after the settlement is paid.
+12. Submit one test usage charge and verify the Paystack webhook marks the exact settlement paid.
+13. Verify amount/currency mismatch is rejected.
+14. Verify ProcessEdge Admin shows authorization readiness, outstanding amount and failures without exposing charge credentials.
+15. Only then set `USAGE_BILLING_LIVE=true` for production.
 
 ## Current rollout state
 
-The database schema, secure authorization capture path, idempotent settlement preparation, fail-closed settlement worker, webhook reconciliation, merchant usage visibility, business export coverage and ProcessEdge operational indicators are implemented.
+The database schema, secure authorization capture path, idempotent settlement preparation, daily preparation Cron, unsettled-usage deletion guard, fail-closed settlement worker, webhook reconciliation, merchant usage visibility, business export coverage and ProcessEdge operational indicators are implemented.
 
 Commercial prices remain unset and no live reusable authorization or usage settlement exists yet. Therefore SellerTray cannot currently debit AI usage.
