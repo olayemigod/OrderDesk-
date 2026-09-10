@@ -87,16 +87,19 @@ This document records the governed rollout state for SellerTray. SellerTray rema
 - Added server-only `billing_payment_authorizations`, `usage_settlements` and `usage_settlement_items`.
 - Reusable Paystack authorization codes are AES-GCM encrypted before storage when `BILLING_AUTH_ENCRYPTION_KEY` is configured.
 - Merchant clients have no direct table privileges on authorization or settlement records.
-- Paid usage requires valid subscription period boundaries; missing/invalid period data fails free rather than guessing a charge.
-- Settlement preparation is idempotent by tenant/event/period and a usage event can belong to only one settlement.
+- Paid usage requires valid closed subscription period boundaries; missing/invalid/future period data fails free rather than guessing a charge.
+- Usage events snapshot ISO currency with price/period; mixed-currency settlement data is rejected instead of using the tenant's later plan currency.
+- Settlement preparation is concurrency-safe/idempotent by tenant/event/period and a usage event can belong to only one settlement.
 - Supabase Cron job `sellertray-prepare-usage-settlements` is ACTIVE at 01:15 UTC daily and prepares closed-period settlements only; it never invokes Paystack or moves money.
 - Self-service account deletion now blocks while any priced AI usage remains unsettled and clears only after settlement is paid.
 - New `usage-settlement` Edge Function is ACTIVE with custom server-token auth and an explicit `USAGE_BILLING_LIVE=true` money-movement kill switch.
 - Failed or ambiguous provider attempts are never automatically retried.
 - Paystack webhook recognizes settlement references separately from base checkout and verifies expected amount/currency before marking a settlement paid.
+- `usage-settlement` v3 adds non-debiting Paystack Verify Transaction reconciliation by the existing provider reference; failed/ambiguous attempts are never blindly retried.
 - ProcessEdge Admin exposes authorization readiness, outstanding usage amount and failed-settlement count without exposing encrypted payment credentials.
 - Owner business export includes safe settlement history but deliberately excludes reusable charge credentials.
-- `docs/usage_billing.md` is now CI-gated; Mobile CI #200 passed the settlement safety preflight.
+- `docs/usage_billing.md` is CI-gated; backend function/migration paths now trigger release CI as well as mobile/document changes.
+- Mobile CI #200 passed the first settlement safety preflight; a final post-reconciliation checkpoint is pending below.
 - Commercial prices, reusable authorization capture, and real/test Paystack usage debit acceptance remain pending.
 
 ### S10A — ProcessEdge SaaS operations console — PASS AUTOMATED / VISUAL SMOKE PENDING
