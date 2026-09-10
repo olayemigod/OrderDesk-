@@ -30,6 +30,7 @@ export type SubscriptionAccess = {
   usageEventCode: 'AI_ORDER_ACTIVITY';
   usageUnitPrice: number | null;
   usagePricingActive: boolean;
+  usageBillableNow: boolean;
   usageUnitsThisPeriod: number;
   usageAmountThisPeriod: number;
 };
@@ -69,6 +70,7 @@ export async function loadSubscriptionAccess(tenantId: string): Promise<Subscrip
     usageEventCode: 'AI_ORDER_ACTIVITY',
     usageUnitPrice: numberValue(value.usageUnitPrice),
     usagePricingActive: value.usagePricingActive === true,
+    usageBillableNow: value.usageBillableNow === true,
     usageUnitsThisPeriod: integerValue(value.usageUnitsThisPeriod),
     usageAmountThisPeriod: numberValue(value.usageAmountThisPeriod) ?? 0,
   };
