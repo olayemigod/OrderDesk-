@@ -222,6 +222,10 @@ requireValue(
   'Usage settlement worker must remain protected by a server-only worker token',
 );
 requireValue(
+  usageSettlementWorker.includes("orderdesk_usage_charging_enabled"),
+  'Usage settlement worker must retain the independent database charging interlock',
+);
+requireValue(
   usageSettlementWorker.includes("BILLING_AUTH_ENCRYPTION_KEY"),
   'Usage settlement worker must require the billing authorization encryption key',
 );
