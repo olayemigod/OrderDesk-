@@ -4,12 +4,16 @@ on:
   pull_request:
     paths:
       - 'apps/mobile/**'
+      - 'docs/release_runbook.md'
+      - 'docs/data_lifecycle.md'
       - '.github/workflows/mobile-ci.yml'
   push:
     branches:
       - main
     paths:
       - 'apps/mobile/**'
+      - 'docs/release_runbook.md'
+      - 'docs/data_lifecycle.md'
       - '.github/workflows/mobile-ci.yml'
 
 jobs:
@@ -33,3 +37,6 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: SellerTray release preflight
+        run: npm run preflight
