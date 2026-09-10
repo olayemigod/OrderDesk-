@@ -1,0 +1,110 @@
+import { supabase } from '../lib/supabase';
+
+export type OnboardingStatus = 'profile' | 'catalogue' | 'whatsapp' | 'test_order' | 'ready';
+export type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'grace' | 'suspended' | 'cancelled';
+export type WhatsAppConnectionStatus = 'not_connected' | 'pending' | 'connected' | 'error';
+export type MerchantRole = 'owner' | 'manager' | 'staff';
+
+export type MerchantBusiness = {
+  id: string;
+  name: string;
+  slug: string;
+  role: MerchantRole;
+  businessEmail: string | null;
+  businessPhone: string | null;
+  businessType: string | null;
+  logoUrl: string | null;
+  currency: string;
+  timezone: string;
+  onboardingStatus: OnboardingStatus;
+  subscriptionStatus: SubscriptionStatus;
+  whatsappConnectionStatus: WhatsAppConnectionStatus;
+};
+
+type MembershipRow = {
+  role: MerchantRole;
+  tenants:
+    | {
+        id: string;
+        name: string;
+        slug: string;
+        business_email: string | null;
+        business_phone: string | null;
+        business_type: string | null;
+        logo_url: string | null;
+        currency: string;
+        timezone: string;
+        onboarding_status: OnboardingStatus;
+        subscription_status: SubscriptionStatus;
+        whatsapp_connection_status: WhatsAppConnectionStatus;
+      }
+    | Array<{
+        id: string;
+        name: string;
+        slug: string;
+        business_email: string | null;
+        business_phone: string | null;
+        business_type: string | null;
+        logo_url: string | null;
+        currency: string;
+        timezone: string;
+        onboarding_status: OnboardingStatus;
+        subscription_status: SubscriptionStatus;
+        whatsapp_connection_status: WhatsAppConnectionStatus;
+      }>
+    | null;
+};
+
+function one<T>(value: T | T[] | null): T | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value;
+}
+
+export async function loadBusinesses(): Promise<MerchantBusiness[]> {
+  const { data, error } = await supabase
+    .from('tenant_members')
+    .select(`
+      role,
+      created_at,
+      tenants(
+        id,
+        name,
+        slug,
+        business_email,
+        business_phone,
+        business_type,
+        logo_url,
+        currency,
+        timezone,
+        onboarding_status,
+        subscription_status,
+        whatsapp_connection_status
+      )
+    `)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+
+  return ((data ?? []) as unknown as MembershipRow[])
+    .map((membership) => {
+      const tenant = one(membership.tenants);
+      if (!tenant) return null;
+
+      return {
+        id: tenant.id,
+        name: tenant.name,
+        slug: tenant.slug,
+        role: membership.role,
+        businessEmail: tenant.business_email,
+        businessPhone: tenant.business_phone,
+        businessType: tenant.business_type,
+        logoUrl: tenant.logo_url,
+        currency: tenant.currency,
+        timezone: tenant.timezone,
+        onboardingStatus: tenant.onboarding_status,
+        subscriptionStatus: tenant.subscription_status,
+        whatsappConnectionStatus: tenant.whatsapp_connection_status,
+      } satisfies MerchantBusiness;
+    })
+    .filter((business): business is MerchantBusiness => business !== null);
+}
