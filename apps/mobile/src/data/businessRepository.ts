@@ -130,16 +130,24 @@ export async function createInitialBusiness(input: InitialBusinessInput): Promis
   const name = input.name.trim();
   if (!name) throw new Error('Business name is required.');
 
-  const { data, error } = await supabase.rpc('create_my_business', {
-    p_name: name,
-    p_business_email: cleanOptional(input.businessEmail),
-    p_business_phone: cleanOptional(input.businessPhone),
-    p_business_type: cleanOptional(input.businessType),
+  const { data, error } = await supabase.functions.invoke('provision-business', {
+    body: {
+      name,
+      businessEmail: cleanOptional(input.businessEmail),
+      businessPhone: cleanOptional(input.businessPhone),
+      businessType: cleanOptional(input.businessType),
+    },
   });
 
   if (error) throw error;
-  if (typeof data !== 'string' || !data) throw new Error('OrderDesk could not create the business workspace.');
-  return data;
+
+  const tenantId =
+    data && typeof data === 'object' && 'tenantId' in data && typeof data.tenantId === 'string'
+      ? data.tenantId
+      : null;
+
+  if (!tenantId) throw new Error('OrderDesk could not create the business workspace.');
+  return tenantId;
 }
 
 export async function updateBusinessProfile(
