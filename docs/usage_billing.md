@@ -49,6 +49,7 @@ SellerTray uses this sequence:
 ## Fail-closed controls
 
 - `USAGE_BILLING_LIVE` is opt-in. Anything other than the exact string `true` disables money movement.
+- `subscription_plans.usage_charging_enabled` is a second independent database interlock and defaults to `false`; both gates must be enabled before a debit can reach Paystack.
 - `USAGE_SETTLEMENT_TOKEN` is required for settlement-worker access.
 - `BILLING_AUTH_ENCRYPTION_KEY` must be a server-only base64-encoded 32-byte key.
 - `PAYSTACK_SECRET_KEY` remains server-only.
@@ -70,7 +71,7 @@ Keep live charging disabled until all items below are complete:
 4. Configure `PAYSTACK_SECRET_KEY`.
 5. Generate and configure a strong random 32-byte `BILLING_AUTH_ENCRYPTION_KEY` encoded as base64.
 6. Generate and configure a strong random `USAGE_SETTLEMENT_TOKEN`.
-7. Keep `USAGE_BILLING_LIVE` disabled.
+7. Keep `USAGE_BILLING_LIVE` disabled and keep `subscription_plans.usage_charging_enabled = false`.
 8. In Paystack test mode, complete one base subscription checkout and confirm a reusable authorization is captured.
 9. Confirm one active-period external-AI order creates exactly one priced usage event with exact billing-period bounds.
 10. Confirm the active `sellertray-prepare-usage-settlements` Cron job prepares the closed period once; manually prepare it again and prove the existing settlement is returned rather than duplicated.
