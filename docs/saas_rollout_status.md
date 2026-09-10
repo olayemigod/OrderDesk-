@@ -192,6 +192,14 @@ These are implemented but must not be described as production-accepted yet:
 - SellerTray AI parsing is documented as a bounded productivity transformation rather than a general content-generation product, while third-party AI User Data obligations remain in scope.
 - Added required release-manifest gates for Data Safety, App Content and Play reviewer access. These remain pending until Play Console evidence exists.
 
+### S11J — Google Play store-listing package — PASS COPY / ASSETS & CONSOLE PENDING
+- Added `docs/google_play_store_listing.md` with Play-length SellerTray name, 78-character short description, bounded full description, category recommendation, contact details and metadata guardrails.
+- Primary category is Business; tag candidates are suggestions only and must be selected from tags actually available in Play Console.
+- Prepared an eight-screen screenshot narrative using synthetic/demo data only; real customer WhatsApp data must never appear in store assets.
+- Added app-icon/feature-graphic requirements and a SellerTray icon creative brief without copying WhatsApp/Meta trade dress.
+- Added two-account Play reviewer access pattern: one stable walkthrough tenant and one disposable deletion-test tenant; credentials must live only in Play Console.
+- Added `google_play_store_listing` to the release manifest. It remains pending until approved graphics, signed-candidate screenshots, working reviewer credentials and Play Console entry exist.
+
 ### Remaining S11 release gates
 - Configure/verify Supabase Auth redirects for `sellertray://auth-confirm`, `sellertray://reset-password` and the two temporary legacy equivalents.
 - Enable Supabase leaked-password protection before public signup.

@@ -145,6 +145,14 @@
       "owner": "ProcessEdge",
       "evidence": null,
       "acceptance": "Create a stable non-admin SellerTray review tenant and enter credentials/instructions only in Play Console App access."
+    },
+    {
+      "id": "google_play_store_listing",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": "docs/google_play_store_listing.md prepared; Play listing/assets not yet submitted",
+      "acceptance": "Enter approved store copy/category/contact details, upload approved icon/graphics/screenshots from the signed candidate, and verify reviewer credentials."
     }
   ]
 }
