@@ -5,6 +5,7 @@ import type {
   BusinessProfileInput,
   MerchantBusiness,
 } from '../data/businessRepository';
+import { CatalogueView } from './CatalogueView';
 
 type Props = {
   business: MerchantBusiness;
@@ -85,7 +86,7 @@ export function BusinessProfileView({ business, onSave }: Props) {
       {!canEdit ? (
         <View style={styles.readOnlyNotice}>
           <Text style={styles.readOnlyTitle}>View only</Text>
-          <Text style={styles.readOnlyText}>Only an Owner or Manager can change business profile details.</Text>
+          <Text style={styles.readOnlyText}>Only an Owner or Manager can change business profile and catalogue details.</Text>
         </View>
       ) : null}
 
@@ -170,7 +171,7 @@ export function BusinessProfileView({ business, onSave }: Props) {
             placeholder="https://..."
             style={[styles.input, !canEdit && styles.inputDisabled]}
           />
-          <Text style={styles.help}>Direct logo upload will replace this field in the onboarding slice.</Text>
+          <Text style={styles.help}>Direct logo upload will replace this field in a later onboarding polish slice.</Text>
         </Field>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -186,6 +187,8 @@ export function BusinessProfileView({ business, onSave }: Props) {
           </Pressable>
         ) : null}
       </View>
+
+      <CatalogueView business={business} />
 
       <View style={styles.platformCard}>
         <Text style={styles.platformTitle}>OrderDesk account</Text>
@@ -225,7 +228,7 @@ function formatLabel(value: string): string {
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: 14 },
+  wrap: { gap: 18 },
   heading: { gap: 5 },
   eyebrow: { color: '#98A2B3', fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
   title: { color: '#101828', fontSize: 25, fontWeight: '900' },
