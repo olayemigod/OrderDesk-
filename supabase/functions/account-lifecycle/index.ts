@@ -156,6 +156,7 @@ async function buildBusinessExport(tenantId: string, requestedByUserId: string):
     tenantInvitations,
     tenantSubscriptions,
     usageEvents,
+    usageSettlements,
     checkoutSessions,
   ] = await Promise.all([
     loadTenantRows('catalog_items', tenantId),
@@ -171,6 +172,7 @@ async function buildBusinessExport(tenantId: string, requestedByUserId: string):
     loadTenantRows('tenant_invitations', tenantId),
     loadTenantRows('tenant_subscriptions', tenantId),
     loadTenantRows('usage_events', tenantId),
+    loadTenantRows('usage_settlements', tenantId),
     loadTenantRows('billing_checkout_sessions', tenantId),
   ]);
 
@@ -201,6 +203,7 @@ async function buildBusinessExport(tenantId: string, requestedByUserId: string):
     subscription: {
       records: tenantSubscriptions,
       usageEvents,
+      usageSettlements: usageSettlements.map(sanitizeUsageSettlement),
       checkoutSessions: checkoutSessions.map(sanitizeCheckoutSession),
     },
   };
@@ -229,6 +232,11 @@ async function loadTenantRows(table: string, tenantId: string): Promise<JsonReco
   }
 
   return rows;
+}
+
+function sanitizeUsageSettlement(row: JsonRecord): JsonRecord {
+  const { last_error: _lastError, ...safe } = row;
+  return safe;
 }
 
 function sanitizeCheckoutSession(row: JsonRecord): JsonRecord {
