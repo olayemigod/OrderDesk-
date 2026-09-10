@@ -195,6 +195,9 @@ requireValue(accountControls.includes('https://processedge.com.ng/sellertray/ter
 const usageSettlementWorker = read(join(repoRoot, 'supabase/functions/usage-settlement/index.ts'));
 const paystackWebhook = read(join(repoRoot, 'supabase/functions/paystack-webhook/index.ts'));
 const usageSettlementMigration = read(join(repoRoot, 'supabase/migrations/20260910230000_usage_settlement_foundation.sql'));
+const usageScheduleMigration = read(join(repoRoot, 'supabase/migrations/20260910234500_schedule_usage_settlement_preparation.sql'));
+const deletionUsageGuardMigration = read(join(repoRoot, 'supabase/migrations/20260910233000_block_deletion_with_unsettled_usage.sql'));
+const accountLifecycleFunction = read(join(repoRoot, 'supabase/functions/account-lifecycle/index.ts'));
 const usageBillingContract = read(join(repoRoot, 'docs/usage_billing.md'));
 
 requireValue(
@@ -233,6 +236,23 @@ requireValue(
   usageBillingContract.includes('No percentage-of-sales'),
   'Usage billing contract must preserve the no-GMV-fee commercial rule',
 );
+requireValue(
+  usageScheduleMigration.includes('sellertray-prepare-usage-settlements'),
+  'Closed-period usage settlement preparation Cron contract is missing',
+);
+requireValue(
+  usageScheduleMigration.includes('prepare_due_orderdesk_usage_settlements'),
+  'Usage settlement preparation Cron must call the bounded database preparation function',
+);
+requireValue(
+  deletionUsageGuardMigration.includes('orderdesk_has_unsettled_usage'),
+  'Outstanding usage deletion guard migration is missing',
+);
+requireValue(
+  accountLifecycleFunction.includes("rpc('orderdesk_has_unsettled_usage'"),
+  'Self-service account deletion must check unsettled priced usage',
+);
+
 
 const releaseRunbook = read(join(repoRoot, 'docs/release_runbook.md'));
 const lifecycle = read(join(repoRoot, 'docs/data_lifecycle.md'));
