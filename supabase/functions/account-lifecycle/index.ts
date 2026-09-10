@@ -287,6 +287,15 @@ async function deleteAccount(userId: string): Promise<JsonRecord> {
     .map((row) => String(row.tenant_id));
 
   if (ownedTenantIds.length > 0) {
+    for (const tenantId of ownedTenantIds) {
+      const { data: hasUnsettledUsage, error: usageSettlementError } = await admin!
+        .rpc('orderdesk_has_unsettled_usage', { p_tenant_id: tenantId });
+      if (usageSettlementError) throw usageSettlementError;
+      if (hasUnsettledUsage === true) {
+        throw new Error('Settle outstanding AI usage charges before deleting this account');
+      }
+    }
+
     const { data: paidSubscriptions, error: subscriptionError } = await admin!
       .from('tenant_subscriptions')
       .select('tenant_id,status,provider_subscription_ref')
