@@ -47,11 +47,20 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Check committed dependency lockfile
+        id: lockfile
+        run: |
+          if test -f package-lock.json; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
       - name: Bootstrap committed dependency lockfile
-        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && hashFiles('apps/mobile/package-lock.json') == '' }}
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.lockfile.outputs.present == 'false' }}
         run: |
           test -f package-lock.json
           git config user.name "github-actions[bot]"
