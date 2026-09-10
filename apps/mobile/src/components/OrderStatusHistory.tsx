@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import type { MerchantOrder, OrderStatus, OrderStatusEvent } from '../domain/order';
+import { OrderNotificationHistory } from './OrderNotificationHistory';
 
 const statusLabels: Record<OrderStatus, string> = {
   draft: 'Draft',
@@ -14,24 +15,25 @@ const statusLabels: Record<OrderStatus, string> = {
 };
 
 export function OrderStatusHistory({ order }: { order: MerchantOrder }) {
-  if (order.statusHistory.length === 0) {
-    return (
+  return (
+    <View style={styles.wrap}>
       <View style={styles.section}>
         <Text style={styles.title}>Order history</Text>
-        <Text style={styles.empty}>No recorded workflow events yet.</Text>
+        {order.statusHistory.length === 0 ? (
+          <Text style={styles.empty}>No recorded workflow events yet.</Text>
+        ) : (
+          <>
+            <Text style={styles.subtitle}>Server-recorded workflow events for this order.</Text>
+            <View style={styles.timeline}>
+              {order.statusHistory.map((event) => (
+                <HistoryEvent key={event.id} event={event} />
+              ))}
+            </View>
+          </>
+        )}
       </View>
-    );
-  }
 
-  return (
-    <View style={styles.section}>
-      <Text style={styles.title}>Order history</Text>
-      <Text style={styles.subtitle}>Server-recorded workflow events for this order.</Text>
-      <View style={styles.timeline}>
-        {order.statusHistory.map((event) => (
-          <HistoryEvent key={event.id} event={event} />
-        ))}
-      </View>
+      <OrderNotificationHistory order={order} />
     </View>
   );
 }
@@ -78,6 +80,7 @@ function formatTime(value: string): string {
 }
 
 const styles = StyleSheet.create({
+  wrap: { gap: 15 },
   section: { gap: 7 },
   title: { color: '#101828', fontSize: 15, fontWeight: '900' },
   subtitle: { color: '#667085', fontSize: 11, lineHeight: 16 },
