@@ -94,6 +94,7 @@ This document records the governed rollout state for SellerTray. SellerTray rema
 - Self-service account deletion now blocks while any priced AI usage remains unsettled and clears only after settlement is paid.
 - New `usage-settlement` Edge Function is ACTIVE with custom server-token auth and an explicit `USAGE_BILLING_LIVE=true` money-movement kill switch.
 - A second database commercial charging interlock, `subscription_plans.usage_charging_enabled`, defaults to `false`; the worker requires both gates before any Paystack debit.
+- `usage-settlement` v5 atomically claims a pending settlement before the Paystack request; concurrent charge calls stop locally and cannot issue a second provider request.
 - Failed or ambiguous provider attempts are never automatically retried.
 - Paystack webhook recognizes settlement references separately from base checkout and verifies expected amount/currency before marking a settlement paid.
 - `usage-settlement` v4 retains non-debiting Paystack Verify Transaction reconciliation by the existing provider reference; failed/ambiguous attempts are never blindly retried.
