@@ -2,9 +2,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
+  createInitialBusiness,
   loadBusinesses,
   updateBusinessProfile,
   type BusinessProfileInput,
+  type InitialBusinessInput,
   type MerchantBusiness,
 } from '../data/businessRepository';
 
@@ -49,6 +51,22 @@ export function useBusinesses() {
     await AsyncStorage.setItem(ACTIVE_BUSINESS_KEY, businessId);
   }, []);
 
+  const createBusiness = useCallback(
+    async (input: InitialBusinessInput) => {
+      try {
+        const businessId = await createInitialBusiness(input);
+        await AsyncStorage.setItem(ACTIVE_BUSINESS_KEY, businessId);
+        await refresh();
+        setError(null);
+        return businessId;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unable to create the business workspace.');
+        throw err;
+      }
+    },
+    [refresh],
+  );
+
   const saveProfile = useCallback(
     async (businessId: string, input: BusinessProfileInput) => {
       try {
@@ -70,6 +88,7 @@ export function useBusinesses() {
     error,
     refresh,
     selectBusiness,
+    createBusiness,
     saveProfile,
   };
 }
