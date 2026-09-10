@@ -53,4 +53,4 @@ A destructive restore must never be initiated merely to correct a single merchan
 
 ## External deletion resource
 
-Google Play requires an external web resource in addition to the in-app deletion path for apps that support account creation. The public SellerTray/OrderDesk account-deletion page must be published on a ProcessEdge-controlled domain and entered in Play Console before production release.
+Google Play requires an external web resource in addition to the in-app deletion path for apps that support account creation. The public deletion resource is live at `https://processedge.com.ng/sellertray/account-deletion` with `https://processedge.com.ng/orderdesk/account-deletion` retained as a beta-name alias. The canonical SellerTray URL must be entered in Play Console before production release.

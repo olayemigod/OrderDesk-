@@ -114,15 +114,28 @@ These are implemented but must not be described as production-accepted yet:
 - Security advisor remains clear except for the existing project-level leaked-password-protection warning. Performance advisor reports only informational unused-index notices on the new/low-traffic schema.
 - Full production/provider abuse smoke remains part of external acceptance because direct public-host invocation is unavailable from the current execution environment.
 
+### S11C — data lifecycle, export, deletion and recovery — PASS CODE / DEPLOYED
+- Added JWT-protected `account-lifecycle` Edge Function with structured observability and a 64 KiB request-body cap.
+- Business Owners can export a bounded JSON copy of the tenant profile, catalogue, customers, inbound WhatsApp messages, orders/items/status history, outbound notification history, team records and subscription state.
+- Self-service export fails closed above 5,000 rows per collection instead of silently truncating.
+- Every authenticated merchant can access in-app account deletion, including a signed-in user with no business workspace.
+- Deletion requires the current password and the exact `DELETE MY ORDERDESK ACCOUNT` confirmation phrase.
+- Owned businesses and their tenant-scoped operational data are removed before the Auth user; memberships in other businesses are removed. User-owned Storage objects are removed through the Storage API within the bounded self-service contract.
+- Active provider subscriptions, ProcessEdge platform-admin identities/audit history and oversized Storage cleanup fail closed to controlled support handling.
+- Added `docs/data_lifecycle.md` covering retention, access-token expiry considerations, backup/recovery and destructive-restore controls.
+- `account-lifecycle` is ACTIVE in the OrderDesk Supabase project with JWT verification enabled.
+- Initial Mobile CI #150 exposed one TypeScript-only cast issue; the smallest correction was applied and Mobile CI #151 passed on commit `86e4151`.
+- Published the required external deletion resource at `https://processedge.com.ng/sellertray/account-deletion` with legacy `/orderdesk/account-deletion` alias. ProcessEdge website production deployment `6cf677c5` is READY and the canonical route returns HTTP 200.
+- Full destructive account-deletion smoke is intentionally not run against the current working merchant account; first disposable-account E2E remains part of release acceptance.
+
 ### Remaining S11 hardening
-- Data backup/recovery verification and retention policy.
 - Production Auth URL/deep-link configuration and leaked-password protection where available.
-- Privacy policy, Terms of Service and account/data deletion/export operating contract.
+- SellerTray-specific Privacy Policy / Terms alignment and legal review.
 - Signed Android production build configuration and native smoke test.
 - Release/versioning and rollback runbook.
 
 ### Next bounded slice
-**S11C — data lifecycle + recovery contract**: define pilot-grade backup/recovery, data retention, merchant export and account/business deletion behavior before public onboarding.
+**S11D — production Auth + Android release contract**: freeze the SellerTray application identity, configure production deep-link/Auth redirect behavior, add signed Android build profiles and document release/rollback gates before store submission.
 
 ## Commercial launch gate
 
