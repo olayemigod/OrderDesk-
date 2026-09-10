@@ -54,6 +54,7 @@ const requiredGateIds = [
   'meta_whatsapp_production',
   'ai_parser_production',
   'outbound_whatsapp_worker',
+  'usage_billing_settlement_foundation',
   'paystack_commercial_activation',
   'google_play_data_safety',
   'google_play_app_content',
