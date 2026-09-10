@@ -28,9 +28,16 @@ function collectFiles(dir, output = []) {
 }
 
 const pkg = readJson(join(mobileRoot, 'package.json'));
+const lock = readJson(join(mobileRoot, 'package-lock.json'));
 const app = readJson(join(mobileRoot, 'app.json')).expo;
 const eas = readJson(join(mobileRoot, 'eas.json'));
 const releaseAcceptance = readJson(join(repoRoot, 'docs/release_acceptance.json'));
+
+requireValue(lock.lockfileVersion === 3, 'package-lock.json must use npm lockfileVersion 3');
+requireValue(lock.name === pkg.name, 'package-lock.json package name must match package.json');
+requireValue(lock.version === pkg.version, 'package-lock.json package version must match package.json');
+requireValue(lock.packages?.['']?.name === pkg.name, 'package-lock root package name must match package.json');
+requireValue(lock.packages?.['']?.version === pkg.version, 'package-lock root package version must match package.json');
 
 const allowedGateStatuses = new Set(['pending', 'accepted', 'waived']);
 const requiredGateIds = [
@@ -208,3 +215,4 @@ console.log('- production artifact: AAB');
 console.log('- client secret-boundary checks: pass');
 console.log('- legal/deletion URL contracts: present');
 console.log('- release acceptance manifest integrity: pass');
+console.log('- committed dependency lockfile integrity: pass');

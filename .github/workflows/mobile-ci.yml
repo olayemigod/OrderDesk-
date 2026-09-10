@@ -1,7 +1,7 @@
 name: Mobile CI
 
 permissions:
-  contents: write
+  contents: read
 
 on:
   pull_request:
@@ -47,31 +47,11 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Check committed dependency lockfile
-        id: lockfile
-        run: |
-          if test -f package-lock.json; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-          fi
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
 
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
-
-      - name: Bootstrap committed dependency lockfile
-        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.lockfile.outputs.present == 'false' }}
-        run: |
-          test -f package-lock.json
-          cp package-lock.json /tmp/sellertray-package-lock.json
-          git fetch origin "${{ github.head_ref }}"
-          git checkout -B sellertray-lockfile-bootstrap "origin/${{ github.head_ref }}"
-          cp /tmp/sellertray-package-lock.json package-lock.json
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json
-          git commit -m "Commit SellerTray mobile dependency lockfile"
-          git push origin HEAD:${{ github.head_ref }}
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Typecheck
         run: npm run typecheck
