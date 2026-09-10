@@ -2,13 +2,31 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { OrderItemInput } from '../data/ordersRepository';
-import type { MerchantOrder, OrderItem } from '../domain/order';
+import type { MatchSource, MerchantOrder, OrderItem } from '../domain/order';
 
 const money = new Intl.NumberFormat('en-NG', {
   style: 'currency',
   currency: 'NGN',
   maximumFractionDigits: 0,
 });
+
+const reviewReasonLabels: Record<string, string> = {
+  no_items: 'No order items could be identified',
+  fallback_parser: 'Fallback parser was used',
+  low_parser_confidence: 'Order interpretation confidence is low',
+  unmatched_catalogue_item: 'One or more products are not in your catalogue',
+  missing_price: 'One or more products need a selling price',
+};
+
+const matchLabels: Record<MatchSource, string> = {
+  legacy: 'Earlier order',
+  catalogue_name: 'Matched catalogue name',
+  catalogue_alias: 'Matched product alias',
+  normalized_name: 'Matched normalized catalogue name',
+  normalized_alias: 'Matched normalized alias',
+  unmatched: 'Not matched to catalogue',
+  manual: 'Merchant-entered item',
+};
 
 type Props = {
   order: MerchantOrder;
@@ -23,6 +41,8 @@ export function OrderItemsEditor({ order, editable, onAdd, onEdit, onRemove }: P
 
   return (
     <View style={styles.wrap}>
+      <ReviewDiagnostics order={order} />
+
       {order.items.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyTitle}>No items parsed</Text>
@@ -64,6 +84,37 @@ export function OrderItemsEditor({ order, editable, onAdd, onEdit, onRemove }: P
   );
 }
 
+function ReviewDiagnostics({ order }: { order: MerchantOrder }) {
+  const confidence = order.confidence === null ? null : Math.round(order.confidence * 100);
+  const showParser = order.parserSource !== 'legacy' || order.parserVersion;
+
+  if (!showParser && order.reviewReasons.length === 0) return null;
+
+  return (
+    <View style={styles.reviewCard}>
+      <Text style={styles.reviewTitle}>Why OrderDesk wants a review</Text>
+      {showParser ? (
+        <Text style={styles.reviewMeta}>
+          {formatParserSource(order.parserSource)}
+          {order.parserVersion ? ` · ${order.parserVersion}` : ''}
+          {confidence === null ? '' : ` · ${confidence}% confidence`}
+        </Text>
+      ) : null}
+      {order.reviewReasons.length > 0 ? (
+        <View style={styles.reasonList}>
+          {order.reviewReasons.map((reason) => (
+            <Text key={reason} style={styles.reasonText}>
+              • {reviewReasonLabels[reason] ?? formatReason(reason)}
+            </Text>
+          ))}
+        </View>
+      ) : (
+        <Text style={styles.reviewMeta}>Review the customer message and order lines before accepting.</Text>
+      )}
+    </View>
+  );
+}
+
 function ReadOnlyLineItem({ item }: { item: OrderItem }) {
   return (
     <View style={styles.lineItem}>
@@ -75,6 +126,7 @@ function ReadOnlyLineItem({ item }: { item: OrderItem }) {
         <Text style={styles.lineItemPrice}>
           {item.unitPrice === null ? 'Price not set' : `${money.format(item.unitPrice)} each`}
         </Text>
+        <MatchDetail item={item} />
       </View>
       <Text style={styles.lineTotal}>
         {item.unitPrice === null ? '—' : money.format(item.unitPrice * item.quantity)}
@@ -136,6 +188,7 @@ function EditableLineItem({
 
   return (
     <View style={styles.editorCard}>
+      <MatchDetail item={item} />
       <TextInput
         placeholder="Item name"
         value={name}
@@ -167,6 +220,25 @@ function EditableLineItem({
           <Text style={styles.saveButtonText}>{submitting ? 'Saving…' : 'Save item'}</Text>
         </Pressable>
       </View>
+    </View>
+  );
+}
+
+function MatchDetail({ item }: { item: OrderItem }) {
+  const originalDiffers =
+    item.originalName && item.originalName.trim().toLocaleLowerCase() !== item.name.trim().toLocaleLowerCase();
+  const confidence = item.matchConfidence === null ? '' : ` · ${Math.round(item.matchConfidence * 100)}%`;
+
+  if (item.matchSource === 'legacy' && !originalDiffers) return null;
+
+  return (
+    <View style={styles.matchWrap}>
+      <Text style={[styles.matchText, item.matchSource === 'unmatched' && styles.matchWarning]}>
+        {matchLabels[item.matchSource]}{confidence}
+      </Text>
+      {originalDiffers ? (
+        <Text style={styles.originalText}>Customer wording: “{item.originalName}”</Text>
+      ) : null}
     </View>
   );
 }
@@ -264,8 +336,27 @@ function parseInput(
   };
 }
 
+function formatParserSource(source: MerchantOrder['parserSource']): string {
+  if (source === 'external') return 'AI parser';
+  if (source === 'fallback') return 'Fallback parser';
+  if (source === 'manual') return 'Manual order';
+  return 'Earlier parser';
+}
+
+function formatReason(value: string): string {
+  return value
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
 const styles = StyleSheet.create({
   wrap: { gap: 10 },
+  reviewCard: { backgroundColor: '#F9FAFB', borderRadius: 12, padding: 12, gap: 5, borderWidth: 1, borderColor: '#EAECF0' },
+  reviewTitle: { color: '#344054', fontWeight: '900', fontSize: 12 },
+  reviewMeta: { color: '#667085', fontSize: 11, lineHeight: 16 },
+  reasonList: { gap: 3, marginTop: 2 },
+  reasonText: { color: '#475467', fontSize: 11, lineHeight: 16 },
   emptyState: { backgroundColor: '#FFF8E7', borderRadius: 12, padding: 12 },
   emptyTitle: { color: '#7A2E0E', fontWeight: '800', fontSize: 13 },
   emptyText: { color: '#854A0E', marginTop: 4, fontSize: 12, lineHeight: 18 },
@@ -289,6 +380,10 @@ const styles = StyleSheet.create({
   lineItemName: { color: '#101828', fontWeight: '700', fontSize: 14 },
   lineItemPrice: { color: '#98A2B3', marginTop: 2, fontSize: 12 },
   lineTotal: { color: '#101828', fontWeight: '800', fontSize: 13 },
+  matchWrap: { gap: 2, marginTop: 3 },
+  matchText: { color: '#027A48', fontSize: 10, fontWeight: '700' },
+  matchWarning: { color: '#B54708' },
+  originalText: { color: '#667085', fontSize: 10, lineHeight: 14 },
   editorCard: { borderWidth: 1, borderColor: '#EAECF0', borderRadius: 14, padding: 12, gap: 9 },
   newItemCard: { backgroundColor: '#F9FAFB' },
   newItemTitle: { color: '#344054', fontWeight: '800', fontSize: 13 },
