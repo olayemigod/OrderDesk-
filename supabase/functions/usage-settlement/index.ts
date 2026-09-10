@@ -73,6 +73,10 @@ Deno.serve(withObservability('usage-settlement', async (request) => {
     if (settlement.status === 'paid' || settlement.status === 'submitted') {
       return json({ settlement: sanitizeSettlement(settlement), duplicateChargePrevented: true });
     }
+    const settlementPeriodEnd = cleanTimestamp(settlement.period_end);
+    if (!settlementPeriodEnd || new Date(settlementPeriodEnd) > new Date()) {
+      return json({ error: 'Usage settlement period is not closed' }, 409);
+    }
     if (settlement.status !== 'pending') {
       return json({ error: 'Only a pending usage settlement can be charged' }, 409);
     }
