@@ -60,13 +60,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
     void bootstrapAuth();
 
     const handleUrl = ({ url }: { url: string }) => {
-      if (url.startsWith('orderdesk://')) void consumeAuthUrl(url);
+      if (isSellerTrayAuthUrl(url)) void consumeAuthUrl(url);
     };
 
     const subscription = Linking.addEventListener('url', handleUrl);
     if (Platform.OS !== 'web') {
       void Linking.getInitialURL().then((url) => {
-        if (url?.startsWith('orderdesk://')) void consumeAuthUrl(url);
+        if (url && isSellerTrayAuthUrl(url)) void consumeAuthUrl(url);
       });
     }
 
@@ -136,7 +136,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     setConfirmPassword('');
     setMode('sign-in');
     setNotice(
-      'Account created. Check your email and confirm your address, then return to OrderDesk and sign in with the password you chose.',
+      'Account created. Check your email and confirm your address, then return to SellerTray and sign in with the password you chose.',
     );
   }
 
@@ -161,15 +161,15 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
     setNotice(
       Platform.OS === 'web'
-        ? 'Recovery email sent. Open the link in this browser to return to OrderDesk and set a new password.'
-        : 'Recovery email sent. Open the link. If Expo Go cannot open OrderDesk automatically, copy the final recovery URL and paste it below.',
+        ? 'Recovery email sent. Open the link in this browser to return to SellerTray and set a new password.'
+        : 'Recovery email sent. Open the link. If Expo Go cannot open SellerTray automatically, copy the final recovery URL and paste it below.',
     );
   }
 
   async function consumeAuthUrl(url: string) {
     const parsed = parseAuthTokens(url);
     if (!parsed) {
-      setError('That authentication URL does not contain a valid OrderDesk session. Request a fresh email and try again.');
+      setError('That authentication URL does not contain a valid SellerTray session. Request a fresh email and try again.');
       return;
     }
 
@@ -240,14 +240,14 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return (
       <SafeAreaView style={styles.centered}>
         <ActivityIndicator size="large" />
-        <Text style={styles.muted}>Opening OrderDesk…</Text>
+        <Text style={styles.muted}>Opening SellerTray…</Text>
       </SafeAreaView>
     );
   }
 
   if (mode === 'reset-password') {
     return (
-      <AuthCard title="Set a new password" subtitle="Choose the password you will use to sign in to OrderDesk.">
+      <AuthCard title="Set a new password" subtitle="Choose the password you will use to sign in to SellerTray.">
         <PasswordInputs
           password={password}
           confirmPassword={confirmPassword}
@@ -272,7 +272,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
           <View style={styles.manualRecovery}>
             <Text style={styles.manualTitle}>Expo Go fallback</Text>
             <Text style={styles.note}>
-              If the recovery link opens in a browser instead of OrderDesk, paste the complete final URL here. It is processed only on this device.
+              If the recovery link opens in a browser instead of SellerTray, paste the complete final URL here. It is processed only on this device.
             </Text>
             <TextInput
               autoCapitalize="none"
@@ -302,7 +302,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   if (!session && mode === 'sign-up') {
     return (
-      <AuthCard title="Create your OrderDesk account" subtitle="Start with your email. Your business workspace comes next.">
+      <AuthCard title="Create your SellerTray account" subtitle="Start with your email. Your business workspace comes next.">
         <EmailInput email={email} onChange={setEmail} />
         <PasswordInputs
           password={password}
@@ -342,7 +342,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
             <Text style={styles.linkText}>Forgot password?</Text>
           </Pressable>
           <Pressable onPress={() => showMode('sign-up')} style={styles.linkButton}>
-            <Text style={styles.linkText}>Create an OrderDesk account</Text>
+            <Text style={styles.linkText}>Create an SellerTray account</Text>
           </Pressable>
         </View>
       </AuthCard>
@@ -405,7 +405,7 @@ function AuthCard({ title, subtitle, children }: { title: string; subtitle: stri
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.card}>
-        <Text style={styles.eyebrow}>ORDERDESK</Text>
+        <Text style={styles.eyebrow}>SELLERTRAY</Text>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.subtitle}>{subtitle}</Text>
         {children}
@@ -426,9 +426,13 @@ function PrimaryButton({ label, submitting, onPress }: { label: string; submitti
   );
 }
 
+function isSellerTrayAuthUrl(url: string): boolean {
+  return url.startsWith('sellertray://') || url.startsWith('orderdesk://');
+}
+
 function authRedirectUrl(path: string): string {
   if (Platform.OS === 'web' && typeof window !== 'undefined') return window.location.origin;
-  return `orderdesk://${path}`;
+  return `sellertray://${path}`;
 }
 
 function parseAuthTokens(url: string): {

@@ -64,8 +64,11 @@ Deno.serve(withObservability('account-lifecycle', async (request) => {
 
     const confirmation = typeof body.confirmation === 'string' ? body.confirmation.trim() : '';
     const password = typeof body.password === 'string' ? body.password : '';
-    if (confirmation !== 'DELETE MY ORDERDESK ACCOUNT') {
-      return json({ error: 'Type DELETE MY ORDERDESK ACCOUNT exactly to confirm' }, 400);
+    const confirmationAccepted =
+      confirmation === 'DELETE MY SELLERTRAY ACCOUNT' ||
+      confirmation === 'DELETE MY ORDERDESK ACCOUNT';
+    if (!confirmationAccepted) {
+      return json({ error: 'Type DELETE MY SELLERTRAY ACCOUNT exactly to confirm' }, 400);
     }
     if (!password) return json({ error: 'Enter your current password to confirm account deletion' }, 400);
 

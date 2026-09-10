@@ -1,16 +1,21 @@
 {
   "expo": {
-    "name": "OrderDesk",
-    "slug": "orderdesk",
-    "scheme": "orderdesk",
-    "version": "0.1.0",
+    "name": "SellerTray",
+    "slug": "sellertray",
+    "scheme": [
+      "sellertray",
+      "orderdesk"
+    ],
+    "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "android": {
-      "package": "ng.processedge.orderdesk"
+      "package": "ng.processedge.sellertray",
+      "versionCode": 1
     },
     "ios": {
-      "bundleIdentifier": "ng.processedge.orderdesk"
+      "bundleIdentifier": "ng.processedge.sellertray",
+      "buildNumber": "1"
     }
   }
 }

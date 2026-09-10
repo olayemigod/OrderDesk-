@@ -11,7 +11,7 @@ import {
 
 import type { MerchantBusiness } from '../data/businessRepository';
 import {
-  deleteOrderDeskAccount,
+  deleteSellerTrayAccount,
   exportBusinessData,
 } from '../data/accountLifecycleRepository';
 import { supabase } from '../lib/supabase';
@@ -20,7 +20,7 @@ type Props = {
   business?: MerchantBusiness | null;
 };
 
-const DELETE_PHRASE = 'DELETE MY ORDERDESK ACCOUNT';
+const DELETE_PHRASE = 'DELETE MY SELLERTRAY ACCOUNT';
 
 export function AccountDataControls({ business = null }: Props) {
   const [exporting, setExporting] = useState(false);
@@ -42,7 +42,7 @@ export function AccountDataControls({ business = null }: Props) {
     try {
       const payload = await exportBusinessData(business.id);
       const content = JSON.stringify(payload, null, 2);
-      const filename = `orderdesk-${safeFilename(business.slug || business.name)}-${new Date().toISOString().slice(0, 10)}.json`;
+      const filename = `sellertray-${safeFilename(business.slug || business.name)}-${new Date().toISOString().slice(0, 10)}.json`;
 
       if (Platform.OS === 'web' && typeof document !== 'undefined') {
         const blob = new Blob([content], { type: 'application/json' });
@@ -80,12 +80,12 @@ export function AccountDataControls({ business = null }: Props) {
     setError(null);
     setNotice(null);
     try {
-      await deleteOrderDeskAccount(password);
+      await deleteSellerTrayAccount(password);
       setPassword('');
       setPhrase('');
       await supabase.auth.signOut({ scope: 'local' });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to delete this OrderDesk account.');
+      setError(err instanceof Error ? err.message : 'Unable to delete this SellerTray account.');
     } finally {
       setDeleting(false);
     }
@@ -97,7 +97,7 @@ export function AccountDataControls({ business = null }: Props) {
         <Text style={styles.eyebrow}>DATA & ACCOUNT</Text>
         <Text style={styles.title}>Your data and account</Text>
         <Text style={styles.description}>
-          Export business records or permanently close your OrderDesk account.
+          Export business records or permanently close your SellerTray account.
         </Text>
       </View>
 
@@ -130,7 +130,7 @@ export function AccountDataControls({ business = null }: Props) {
       <View style={styles.dangerBlock}>
         <Text style={styles.dangerTitle}>Delete my account</Text>
         <Text style={styles.actionText}>
-          This permanently deletes businesses you own and their OrderDesk operational data. Memberships in businesses you do not own are removed. Active paid subscriptions must be cancelled first.
+          This permanently deletes businesses you own and their SellerTray operational data. Memberships in businesses you do not own are removed. Active paid subscriptions must be cancelled first.
         </Text>
 
         {!showDelete ? (

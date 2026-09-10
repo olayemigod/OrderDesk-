@@ -9,23 +9,23 @@ export async function exportBusinessData(tenantId: string): Promise<BusinessExpo
 
   if (error) throw new Error(await functionError(error, 'Unable to export business data.'));
   if (!isRecord(data) || !isRecord(data.export)) {
-    throw new Error('OrderDesk returned an invalid business export.');
+    throw new Error('SellerTray returned an invalid business export.');
   }
   return data.export;
 }
 
-export async function deleteOrderDeskAccount(password: string): Promise<void> {
+export async function deleteSellerTrayAccount(password: string): Promise<void> {
   const { data, error } = await supabase.functions.invoke('account-lifecycle', {
     body: {
       action: 'delete_account',
       password,
-      confirmation: 'DELETE MY ORDERDESK ACCOUNT',
+      confirmation: 'DELETE MY SELLERTRAY ACCOUNT',
     },
   });
 
-  if (error) throw new Error(await functionError(error, 'Unable to delete this OrderDesk account.'));
+  if (error) throw new Error(await functionError(error, 'Unable to delete this SellerTray account.'));
   if (!isRecord(data) || data.deleted !== true) {
-    throw new Error('OrderDesk did not confirm account deletion.');
+    throw new Error('SellerTray did not confirm account deletion.');
   }
 }
 
