@@ -26,6 +26,12 @@ export type SubscriptionAccess = {
   currency: string;
   priceAmount: number | null;
   billingInterval: 'month';
+  checkoutReady: boolean;
+};
+
+export type BillingCheckout = {
+  authorizationUrl: string;
+  reference: string;
 };
 
 export async function loadSubscriptionAccess(tenantId: string): Promise<SubscriptionAccess> {
@@ -54,7 +60,28 @@ export async function loadSubscriptionAccess(tenantId: string): Promise<Subscrip
     currency: stringValue(value.currency, 'NGN'),
     priceAmount: numberValue(value.priceAmount),
     billingInterval: 'month',
+    checkoutReady: value.checkoutReady === true,
   };
+}
+
+export async function startBillingCheckout(tenantId: string): Promise<BillingCheckout> {
+  const { data, error } = await supabase.functions.invoke('billing-checkout', {
+    body: { tenantId },
+  });
+
+  if (error) throw error;
+  if (!data || typeof data !== 'object') {
+    throw new Error('OrderDesk could not start billing checkout.');
+  }
+
+  const value = data as Record<string, unknown>;
+  const authorizationUrl = optionalString(value.authorizationUrl);
+  const reference = optionalString(value.reference);
+  if (!authorizationUrl || !reference) {
+    throw new Error('Billing provider returned an incomplete checkout session.');
+  }
+
+  return { authorizationUrl, reference };
 }
 
 function optionalString(value: unknown): string | null {
