@@ -7,6 +7,7 @@ import type {
 } from '../data/businessRepository';
 import { usePlatformAdmin } from '../hooks/usePlatformAdmin';
 import { useSubscriptionAccess } from '../hooks/useSubscriptionAccess';
+import { AccountDataControls } from './AccountDataControls';
 import { CatalogueView } from './CatalogueView';
 import { CustomerNotificationSettings } from './CustomerNotificationSettings';
 import { PlatformAdminView } from './PlatformAdminView';
@@ -216,6 +217,8 @@ export function BusinessProfileView({ business, onSave }: Props) {
         <SettingRow label="Setup stage" value={formatLabel(business.onboardingStatus)} />
         <SettingRow label="Workspace" value={business.slug} />
       </View>
+
+      <AccountDataControls business={business} />
 
       {platformAdmin.overview ? (
         <View style={styles.adminSection}>

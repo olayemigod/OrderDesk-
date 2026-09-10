@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 
+import { AccountDataControls } from './components/AccountDataControls';
 import { BusinessInsightsPanel } from './components/BusinessInsightsPanel';
 import { BusinessProfileView } from './components/BusinessProfileView';
 import { OrderItemsEditor } from './components/OrderItemsEditor';
@@ -116,6 +117,9 @@ function Workspace() {
         <Pressable onPress={() => void refreshBusinesses()} style={styles.primaryButton}>
           <Text style={styles.primaryButtonText}>Retry</Text>
         </Pressable>
+        <View style={styles.noWorkspaceAccount}>
+          <AccountDataControls />
+        </View>
         <Pressable onPress={() => void supabase.auth.signOut()}>
           <Text style={styles.linkText}>Sign out</Text>
         </Pressable>
@@ -729,6 +733,7 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F6F7F9' },
   appFrame: { flex: 1 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 12, backgroundColor: '#F6F7F9' },
+  noWorkspaceAccount: { width: '100%', maxWidth: 620 },
   page: { padding: 18, paddingBottom: 34, gap: 15 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14 },
   headerCopy: { flex: 1 },
