@@ -9,7 +9,23 @@ create table public.tenants (
   name text not null,
   slug text not null unique,
   whatsapp_phone_number_id text unique,
-  created_at timestamptz not null default now()
+  business_email text,
+  business_phone text,
+  business_type text,
+  logo_url text,
+  currency text not null default 'NGN' check (char_length(currency) = 3),
+  timezone text not null default 'Africa/Lagos',
+  onboarding_status text not null default 'profile' check (
+    onboarding_status in ('profile', 'catalogue', 'whatsapp', 'test_order', 'ready')
+  ),
+  subscription_status text not null default 'trial' check (
+    subscription_status in ('trial', 'active', 'past_due', 'grace', 'suspended', 'cancelled')
+  ),
+  whatsapp_connection_status text not null default 'not_connected' check (
+    whatsapp_connection_status in ('not_connected', 'pending', 'connected', 'error')
+  ),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create table public.tenant_members (
