@@ -31,6 +31,13 @@ export type BusinessProfileInput = {
   timezone: string;
 };
 
+export type InitialBusinessInput = {
+  name: string;
+  businessEmail: string | null;
+  businessPhone: string | null;
+  businessType: string | null;
+};
+
 type MembershipRow = {
   role: MerchantRole;
   tenants:
@@ -117,6 +124,22 @@ export async function loadBusinesses(): Promise<MerchantBusiness[]> {
       } satisfies MerchantBusiness;
     })
     .filter((business): business is MerchantBusiness => business !== null);
+}
+
+export async function createInitialBusiness(input: InitialBusinessInput): Promise<string> {
+  const name = input.name.trim();
+  if (!name) throw new Error('Business name is required.');
+
+  const { data, error } = await supabase.rpc('create_my_business', {
+    p_name: name,
+    p_business_email: cleanOptional(input.businessEmail),
+    p_business_phone: cleanOptional(input.businessPhone),
+    p_business_type: cleanOptional(input.businessType),
+  });
+
+  if (error) throw error;
+  if (typeof data !== 'string' || !data) throw new Error('OrderDesk could not create the business workspace.');
+  return data;
 }
 
 export async function updateBusinessProfile(
