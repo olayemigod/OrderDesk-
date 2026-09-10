@@ -25,6 +25,10 @@ export type PlatformTenantSummary = {
   lastInboundAt: string | null;
   notificationExceptions: number;
   teamMembers: number;
+  usageUnitsPeriod: number;
+  usageAmountPeriod: number;
+  usageUnitPrice: number | null;
+  currency: string;
   supportNote: string | null;
   supportNoteUpdatedAt: string | null;
 };
@@ -74,7 +78,7 @@ export async function mutatePlatformTenant(
     body: { action, tenantId, value },
   });
 
-  if (error) throw new Error(functionError(error, 'Unable to update this OrderDesk business.'));
+  if (error) throw new Error(functionError(error, 'Unable to update this SellerTray business.'));
   const raw = isRecord(data) && isRecord(data.overview) ? data.overview : null;
   if (!raw) throw new Error('Platform admin update returned no refreshed overview.');
   return normalizeOverview(raw);
@@ -136,6 +140,10 @@ function normalizeTenant(value: Record<string, unknown>): PlatformTenantSummary 
     lastInboundAt: optionalString(value.lastInboundAt),
     notificationExceptions: numberValue(value.notificationExceptions),
     teamMembers: numberValue(value.teamMembers),
+    usageUnitsPeriod: numberValue(value.usageUnitsPeriod),
+    usageAmountPeriod: numberValue(value.usageAmountPeriod),
+    usageUnitPrice: optionalNumber(value.usageUnitPrice),
+    currency: stringValue(value.currency) || 'NGN',
     supportNote: optionalString(value.supportNote),
     supportNoteUpdatedAt: optionalString(value.supportNoteUpdatedAt),
   };
@@ -168,6 +176,12 @@ function httpStatus(error: unknown): number | null {
 function numberValue(value: unknown): number {
   const parsed = typeof value === 'number' ? value : Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function optionalNumber(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function stringValue(value: unknown): string {
