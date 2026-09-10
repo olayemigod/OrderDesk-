@@ -204,6 +204,7 @@ requireValue(accountControls.includes('DELETE MY SELLERTRAY ACCOUNT'), 'Account 
 requireValue(accountControls.includes('https://processedge.com.ng/sellertray/privacy'), 'In-app SellerTray privacy URL is missing');
 requireValue(accountControls.includes('https://processedge.com.ng/sellertray/terms'), 'In-app SellerTray terms URL is missing');
 
+const orderParserFunction = read(join(repoRoot, 'supabase/functions/order-parser/index.ts'));
 const usageSettlementWorker = read(join(repoRoot, 'supabase/functions/usage-settlement/index.ts'));
 const paystackWebhook = read(join(repoRoot, 'supabase/functions/paystack-webhook/index.ts'));
 const usageSettlementMigration = read(join(repoRoot, 'supabase/migrations/20260910230000_usage_settlement_foundation.sql'));
@@ -213,6 +214,10 @@ const usagePeriodCurrencyMigration = read(join(repoRoot, 'supabase/migrations/20
 const accountLifecycleFunction = read(join(repoRoot, 'supabase/functions/account-lifecycle/index.ts'));
 const usageBillingContract = read(join(repoRoot, 'docs/usage_billing.md'));
 
+requireValue(
+  orderParserFunction.includes("reasoning: { effort: 'none' }"),
+  'Parser reasoning effort must remain none for bounded SellerTray order extraction',
+);
 requireValue(
   usageSettlementWorker.includes("Deno.env.get('USAGE_BILLING_LIVE') === 'true'"),
   'Usage settlement worker must keep an explicit opt-in live charging flag',
