@@ -64,6 +64,13 @@ Deno.serve(async (request) => {
       return json({ team });
     }
 
+    const canWrite = await rpc<boolean>('orderdesk_subscription_can_write', {
+      p_tenant_id: tenantId,
+    });
+    if (canWrite !== true) {
+      return json({ error: 'OrderDesk subscription is read-only. Reactivate the business to change team access.' }, 403);
+    }
+
     if (action === 'invite') {
       const email = cleanEmail(body.email);
       const role = cleanTeamRole(body.role);
@@ -120,9 +127,9 @@ Deno.serve(async (request) => {
     return json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Team management request failed';
-    const status = /not a member|only an owner|only an Owner|Managers can|protected|cannot change your own/i.test(message)
+    const status = /not a member|only an owner|only an Owner|Managers can|protected|cannot change your own|read-only/i.test(message)
       ? 403
-      : /already a member|already a member|already/i.test(message)
+      : /already a member|already/i.test(message)
         ? 409
         : /not found/i.test(message)
           ? 404
