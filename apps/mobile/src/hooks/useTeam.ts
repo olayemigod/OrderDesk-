@@ -53,14 +53,22 @@ export function useTeam(tenantId: string | null) {
     }
   }, [tenantId]);
 
-  const invite = useCallback(async (email: string, role: TeamInviteRole) => {
+  const invite = useCallback(async (email: string, role: TeamInviteRole): Promise<'joined' | 'invited'> => {
     if (!tenantId) throw new Error('No active business selected.');
-    let outcome: 'joined' | 'invited' = 'invited';
-    await run(async () => {
-      outcome = await inviteTeamMember(tenantId, email, role);
-    });
-    return outcome;
-  }, [run, tenantId]);
+
+    setBusy(true);
+    setError(null);
+    try {
+      const outcome = await inviteTeamMember(tenantId, email, role);
+      setTeam(await loadTeam(tenantId));
+      return outcome;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to invite the team member.');
+      throw err;
+    } finally {
+      setBusy(false);
+    }
+  }, [tenantId]);
 
   const setRole = useCallback(async (targetUserId: string, role: TeamInviteRole) => {
     if (!tenantId) throw new Error('No active business selected.');
