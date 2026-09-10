@@ -262,7 +262,7 @@ async function applyUsageSettlementSuccess(
     expectedAmount === null ||
     providerAmountSubunit === null ||
     Math.round(expectedAmount * 100) !== Math.round(providerAmountSubunit) ||
-    (providerCurrency && providerCurrency !== settlement.currency)
+    providerCurrency !== settlement.currency
   ) {
     throw new Error('Usage settlement charge does not match the prepared amount/currency');
   }
