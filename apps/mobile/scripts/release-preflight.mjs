@@ -209,6 +209,7 @@ const paystackWebhook = read(join(repoRoot, 'supabase/functions/paystack-webhook
 const usageSettlementMigration = read(join(repoRoot, 'supabase/migrations/20260910230000_usage_settlement_foundation.sql'));
 const usageScheduleMigration = read(join(repoRoot, 'supabase/migrations/20260910234500_schedule_usage_settlement_preparation.sql'));
 const deletionUsageGuardMigration = read(join(repoRoot, 'supabase/migrations/20260910233000_block_deletion_with_unsettled_usage.sql'));
+const usagePeriodCurrencyMigration = read(join(repoRoot, 'supabase/migrations/20260910235500_harden_usage_settlement_period_currency.sql'));
 const accountLifecycleFunction = read(join(repoRoot, 'supabase/functions/account-lifecycle/index.ts'));
 const usageBillingContract = read(join(repoRoot, 'docs/usage_billing.md'));
 
@@ -267,6 +268,22 @@ requireValue(
 requireValue(
   accountLifecycleFunction.includes("rpc('orderdesk_has_unsettled_usage'"),
   'Self-service account deletion must check unsettled priced usage',
+);
+requireValue(
+  usagePeriodCurrencyMigration.includes('Usage settlement period must be closed'),
+  'Usage settlement preparation must reject open/future billing periods',
+);
+requireValue(
+  usagePeriodCurrencyMigration.includes('usage_events_currency_check'),
+  'Usage events must snapshot and validate billing currency',
+);
+requireValue(
+  usageSettlementWorker.includes("action === 'reconcile'"),
+  'Usage settlement worker must expose non-debiting provider reconciliation',
+);
+requireValue(
+  usageSettlementWorker.includes('/transaction/verify/'),
+  'Usage settlement reconciliation must verify Paystack by provider reference',
 );
 
 
