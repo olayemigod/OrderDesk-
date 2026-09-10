@@ -6,6 +6,8 @@ permissions:
 on:
   pull_request:
     paths:
+      - 'supabase/functions/**'
+      - 'supabase/migrations/**'
       - 'apps/mobile/**'
       - 'docs/release_runbook.md'
       - 'docs/data_lifecycle.md'
@@ -21,6 +23,8 @@ on:
     branches:
       - main
     paths:
+      - 'supabase/functions/**'
+      - 'supabase/migrations/**'
       - 'apps/mobile/**'
       - 'docs/release_runbook.md'
       - 'docs/data_lifecycle.md'
