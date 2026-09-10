@@ -103,7 +103,7 @@ function Workspace() {
     return (
       <SafeAreaView style={styles.centered}>
         <ActivityIndicator size="large" />
-        <Text style={styles.muted}>Opening OrderDesk…</Text>
+        <Text style={styles.muted}>Opening SellerTray…</Text>
       </SafeAreaView>
     );
   }
@@ -112,7 +112,7 @@ function Workspace() {
     return (
       <SafeAreaView style={styles.centered}>
         <Text style={styles.emptyTitle}>No business workspace yet</Text>
-        <Text style={styles.emptyText}>Your account is not attached to an OrderDesk business.</Text>
+        <Text style={styles.emptyText}>Your account is not attached to an SellerTray business.</Text>
         {businessesError ? <Text style={styles.errorText}>{businessesError}</Text> : null}
         <Pressable onPress={() => void refreshBusinesses()} style={styles.primaryButton}>
           <Text style={styles.primaryButtonText}>Retry</Text>
@@ -229,7 +229,7 @@ function WorkspaceHeader({
     <>
       <View style={styles.header}>
         <View style={styles.headerCopy}>
-          <Text style={styles.eyebrow}>ORDERDESK</Text>
+          <Text style={styles.eyebrow}>SELLERTRAY</Text>
           <Text style={styles.businessName}>{business.name}</Text>
           <Text style={styles.workspaceMeta}>
             {business.role.toUpperCase()} · {subscriptionLabels[business.subscriptionStatus]}

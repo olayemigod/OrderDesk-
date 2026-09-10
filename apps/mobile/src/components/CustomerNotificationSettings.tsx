@@ -59,7 +59,7 @@ export function CustomerNotificationSettings({ business }: Props) {
         <Text style={styles.eyebrow}>WHATSAPP AUTOMATION</Text>
         <Text style={styles.title}>Customer notifications</Text>
         <Text style={styles.helper}>
-          Choose which order updates OrderDesk should queue for customers. Delivery still depends on WhatsApp availability and Meta policy.
+          Choose which order updates SellerTray should queue for customers. Delivery still depends on WhatsApp availability and Meta policy.
         </Text>
       </View>
 
@@ -124,7 +124,7 @@ export function CustomerNotificationSettings({ business }: Props) {
       ) : null}
 
       <Text style={styles.policyNote}>
-        OrderDesk does not send free-form WhatsApp messages outside the active customer-service window. Those events are held as “Template required” until an approved template path is configured.
+        SellerTray does not send free-form WhatsApp messages outside the active customer-service window. Those events are held as “Template required” until an approved template path is configured.
       </Text>
     </View>
   );

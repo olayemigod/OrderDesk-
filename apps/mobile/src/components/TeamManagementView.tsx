@@ -36,8 +36,8 @@ export function TeamManagementView({ business }: Props) {
       setEmail('');
       setNotice(
         outcome === 'joined'
-          ? 'Existing OrderDesk user added to the team.'
-          : 'Invitation saved. Ask this person to create/sign in to OrderDesk with the same email; the business will attach automatically.',
+          ? 'Existing SellerTray user added to the team.'
+          : 'Invitation saved. Ask this person to create/sign in to SellerTray with the same email; the business will attach automatically.',
       );
     } catch {
       // Hook exposes the server error below.
@@ -129,7 +129,7 @@ export function TeamManagementView({ business }: Props) {
             <Text style={styles.primaryButtonText}>{busy ? 'Working…' : 'Add / invite member'}</Text>
           </Pressable>
           <Text style={styles.inviteHelper}>
-            If the email already belongs to an OrderDesk account, access is added immediately. Otherwise a 7-day pending invitation is created. Automatic invitation email delivery will be enabled with production SMTP.
+            If the email already belongs to an SellerTray account, access is added immediately. Otherwise a 7-day pending invitation is created. Automatic invitation email delivery will be enabled with production SMTP.
           </Text>
         </View>
       ) : (

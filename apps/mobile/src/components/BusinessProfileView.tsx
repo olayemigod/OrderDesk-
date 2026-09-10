@@ -88,7 +88,7 @@ export function BusinessProfileView({ business, onSave }: Props) {
         <Text style={styles.eyebrow}>BUSINESS SETTINGS</Text>
         <Text style={styles.title}>Business profile</Text>
         <Text style={styles.subtitle}>
-          This information identifies your OrderDesk workspace. Plan, onboarding and WhatsApp connection state are controlled by OrderDesk.
+          This information identifies your SellerTray workspace. Plan, onboarding and WhatsApp connection state are controlled by SellerTray.
         </Text>
       </View>
 
@@ -210,7 +210,7 @@ export function BusinessProfileView({ business, onSave }: Props) {
       <TeamManagementView business={business} />
 
       <View style={styles.platformCard}>
-        <Text style={styles.platformTitle}>OrderDesk account</Text>
+        <Text style={styles.platformTitle}>SellerTray account</Text>
         <SettingRow label="Role" value={business.role.toUpperCase()} />
         <SettingRow label="Plan status" value={formatLabel(business.subscriptionStatus)} />
         <SettingRow label="WhatsApp" value={formatLabel(business.whatsappConnectionStatus)} />

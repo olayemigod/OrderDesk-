@@ -31,7 +31,7 @@ export function CreateBusinessView({ onCreate }: Props) {
         businessPhone: phone || null,
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to create your OrderDesk workspace.');
+      setError(err instanceof Error ? err.message : 'Unable to create your SellerTray workspace.');
     } finally {
       setSubmitting(false);
     }
@@ -40,10 +40,10 @@ export function CreateBusinessView({ onCreate }: Props) {
   return (
     <View style={styles.wrap}>
       <View style={styles.hero}>
-        <Text style={styles.eyebrow}>WELCOME TO ORDERDESK</Text>
+        <Text style={styles.eyebrow}>WELCOME TO SELLERTRAY</Text>
         <Text style={styles.title}>Create your business workspace</Text>
         <Text style={styles.subtitle}>
-          This becomes your private OrderDesk account for WhatsApp orders. You will be the Owner and start on the trial plan.
+          This becomes your private SellerTray account for WhatsApp orders. You will be the Owner and start on the trial plan.
         </Text>
       </View>
 
@@ -99,7 +99,7 @@ export function CreateBusinessView({ onCreate }: Props) {
           onPress={() => void create()}
           style={({ pressed }) => [styles.button, pressed && styles.pressed, submitting && styles.disabled]}
         >
-          <Text style={styles.buttonText}>{submitting ? 'Creating workspace…' : 'Create my OrderDesk'}</Text>
+          <Text style={styles.buttonText}>{submitting ? 'Creating workspace…' : 'Create my SellerTray'}</Text>
         </Pressable>
       </View>
 

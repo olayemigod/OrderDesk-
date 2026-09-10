@@ -30,7 +30,7 @@ function ProvisioningGate() {
     return (
       <SafeAreaView style={styles.centered}>
         <ActivityIndicator size="large" />
-        <Text style={styles.muted}>Preparing your OrderDesk account…</Text>
+        <Text style={styles.muted}>Preparing your SellerTray account…</Text>
       </SafeAreaView>
     );
   }

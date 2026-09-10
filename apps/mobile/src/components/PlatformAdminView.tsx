@@ -81,7 +81,7 @@ export function PlatformAdminView({
     <View style={styles.wrap}>
       <View style={styles.heading}>
         <Text style={styles.eyebrow}>PROCESSEDGE OPERATIONS</Text>
-        <Text style={styles.title}>{standalone ? 'OrderDesk Admin' : 'SaaS Admin'}</Text>
+        <Text style={styles.title}>{standalone ? 'SellerTray Admin' : 'SaaS Admin'}</Text>
         <Text style={styles.subtitle}>
           Tenant health, subscriptions, WhatsApp readiness and support controls. Merchant roles cannot access this console.
         </Text>
