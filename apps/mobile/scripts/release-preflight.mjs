@@ -30,6 +30,76 @@ function collectFiles(dir, output = []) {
 const pkg = readJson(join(mobileRoot, 'package.json'));
 const app = readJson(join(mobileRoot, 'app.json')).expo;
 const eas = readJson(join(mobileRoot, 'eas.json'));
+const releaseAcceptance = readJson(join(repoRoot, 'docs/release_acceptance.json'));
+
+const allowedGateStatuses = new Set(['pending', 'accepted', 'waived']);
+const requiredGateIds = [
+  'public_account_deletion_resource',
+  'in_app_legal_acceptance',
+  'supabase_auth_redirects',
+  'supabase_leaked_password_protection',
+  'sellertray_brand_assets',
+  'sellertray_legal_policy',
+  'production_auth_email',
+  'android_preview_apk',
+  'android_native_smoke',
+  'android_production_aab',
+  'meta_whatsapp_production',
+  'ai_parser_production',
+  'outbound_whatsapp_worker',
+  'paystack_commercial_activation',
+  'google_play_data_safety',
+  'google_play_app_content',
+  'play_review_access',
+  'google_play_store_listing',
+  'provider_data_sharing_classification',
+];
+
+requireValue(releaseAcceptance.schemaVersion === 1, 'release_acceptance.json schemaVersion must be 1');
+requireValue(releaseAcceptance.product === 'SellerTray', 'release_acceptance.json product must be SellerTray');
+requireValue(releaseAcceptance.version === pkg.version, 'release_acceptance.json version must match package.json');
+requireValue(releaseAcceptance.version === app.version, 'release_acceptance.json version must match Expo app version');
+requireValue(
+  releaseAcceptance.androidPackage === app.android?.package,
+  'release_acceptance.json androidPackage must match Expo Android package',
+);
+requireValue(Array.isArray(releaseAcceptance.gates), 'release_acceptance.json gates must be an array');
+
+const releaseGates = Array.isArray(releaseAcceptance.gates) ? releaseAcceptance.gates : [];
+const gateIds = new Set();
+
+for (const gate of releaseGates) {
+  requireValue(gate && typeof gate === 'object' && !Array.isArray(gate), 'Every release gate must be an object');
+  if (!gate || typeof gate !== 'object' || Array.isArray(gate)) continue;
+
+  const id = typeof gate.id === 'string' ? gate.id.trim() : '';
+  requireValue(Boolean(id), 'Every release gate must have a non-empty id');
+  if (id) {
+    requireValue(!gateIds.has(id), 'Duplicate release gate id: '+id);
+    gateIds.add(id);
+  }
+
+  requireValue(typeof gate.required === 'boolean', 'Release gate '+(id || '<missing-id>')+' must define required as boolean');
+  requireValue(allowedGateStatuses.has(gate.status), 'Release gate '+(id || '<missing-id>')+' has invalid status: '+String(gate.status));
+
+  const evidence = typeof gate.evidence === 'string' ? gate.evidence.trim() : '';
+  if (gate.status === 'accepted' || gate.status === 'waived') {
+    requireValue(Boolean(evidence), 'Release gate '+(id || '<missing-id>')+' marked '+gate.status+' must include evidence');
+  }
+}
+
+for (const id of requiredGateIds) {
+  requireValue(gateIds.has(id), 'Required release gate missing from manifest: '+id);
+}
+
+const codeCheckpoint = releaseAcceptance.codeCheckpoint;
+requireValue(codeCheckpoint && typeof codeCheckpoint === 'object' && !Array.isArray(codeCheckpoint), 'release_acceptance.json codeCheckpoint must be an object');
+if (codeCheckpoint && typeof codeCheckpoint === 'object' && !Array.isArray(codeCheckpoint)) {
+  requireValue(codeCheckpoint.status === 'accepted', 'Release code checkpoint status must remain accepted');
+  requireValue(typeof codeCheckpoint.commit === 'string' && /^[0-9a-f]{40}$/.test(codeCheckpoint.commit), 'Release code checkpoint commit must be a full Git SHA');
+  requireValue(Number.isInteger(codeCheckpoint.ciRun) && codeCheckpoint.ciRun > 0, 'Release code checkpoint ciRun must be a positive integer');
+  requireValue(typeof codeCheckpoint.evidence === 'string' && Boolean(codeCheckpoint.evidence.trim()), 'Release code checkpoint must include evidence');
+}
 
 requireValue(pkg.name === '@sellertray/mobile', 'package.json name must be @sellertray/mobile');
 requireValue(pkg.version === '1.0.0', 'package.json version must be 1.0.0');
@@ -137,3 +207,4 @@ console.log('- preview artifact: APK');
 console.log('- production artifact: AAB');
 console.log('- client secret-boundary checks: pass');
 console.log('- legal/deletion URL contracts: present');
+console.log('- release acceptance manifest integrity: pass');

@@ -6,6 +6,12 @@ on:
       - 'apps/mobile/**'
       - 'docs/release_runbook.md'
       - 'docs/data_lifecycle.md'
+      - 'docs/release_acceptance.json'
+      - 'docs/saas_rollout_status.md'
+      - 'docs/google_play_data_safety.md'
+      - 'docs/google_play_submission.md'
+      - 'docs/google_play_store_listing.md'
+      - 'docs/data_processor_review.md'
       - '.github/workflows/mobile-ci.yml'
   push:
     branches:
@@ -14,6 +20,12 @@ on:
       - 'apps/mobile/**'
       - 'docs/release_runbook.md'
       - 'docs/data_lifecycle.md'
+      - 'docs/release_acceptance.json'
+      - 'docs/saas_rollout_status.md'
+      - 'docs/google_play_data_safety.md'
+      - 'docs/google_play_submission.md'
+      - 'docs/google_play_store_listing.md'
+      - 'docs/data_processor_review.md'
       - '.github/workflows/mobile-ci.yml'
 
 jobs:
