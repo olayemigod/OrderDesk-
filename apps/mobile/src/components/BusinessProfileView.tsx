@@ -89,6 +89,8 @@ export function BusinessProfileView({ business, onSave }: Props) {
       </View>
 
       <SubscriptionStatusCard
+        tenantId={business.id}
+        role={business.role}
         subscription={subscription}
         loading={subscriptionLoading}
         error={subscriptionError}
