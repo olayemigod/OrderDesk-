@@ -3,9 +3,16 @@ type ParsedItem = {
   quantity: number;
 };
 
-type ParsedOrder = {
+type ParsedPayload = {
   items: ParsedItem[];
   confidence: number;
+};
+
+type ParserSource = 'external' | 'fallback';
+
+type ParsedOrder = ParsedPayload & {
+  source: ParserSource;
+  version: string;
 };
 
 type CatalogueRow = {
@@ -15,10 +22,26 @@ type CatalogueRow = {
   catalog_item_aliases: Array<{ alias: string }> | null;
 };
 
+type MatchSource =
+  | 'catalogue_name'
+  | 'catalogue_alias'
+  | 'normalized_name'
+  | 'normalized_alias'
+  | 'unmatched';
+
+type CatalogueMatch = {
+  item: CatalogueRow;
+  source: Exclude<MatchSource, 'unmatched'>;
+  confidence: number;
+};
+
 type EnrichedItem = ParsedItem & {
+  originalName: string;
   catalogItemId: string | null;
   canonicalName: string;
   unitPrice: number | null;
+  matchSource: MatchSource;
+  matchConfidence: number;
 };
 
 type JsonRecord = Record<string, unknown>;
@@ -234,6 +257,7 @@ async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[nu
 
   const parsed = await parseOrder(event.text);
   const enrichedItems = await enrichFromCatalogue(tenantId, parsed.items);
+  const reviewReasons = buildReviewReasons(parsed, enrichedItems);
 
   const createdOrders = await rest<Array<{ id: string }>>('/rest/v1/orders?select=id', {
     method: 'POST',
@@ -246,6 +270,9 @@ async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[nu
       source: 'whatsapp',
       customer_note: event.text,
       parser_confidence: parsed.confidence,
+      parser_source: parsed.source,
+      parser_version: parsed.version,
+      review_reasons: reviewReasons,
       currency: tenant.currency || 'NGN',
     }),
   });
@@ -263,8 +290,11 @@ async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[nu
           order_id: orderId,
           catalog_item_id: item.catalogItemId,
           item_name: item.canonicalName,
+          original_item_name: item.originalName,
           quantity: item.quantity,
           unit_price: item.unitPrice,
+          match_source: item.matchSource,
+          match_confidence: item.matchConfidence,
         })),
       ),
     });
@@ -283,33 +313,58 @@ async function enrichFromCatalogue(tenantId: string, parsedItems: ParsedItem[]):
     if (!match) {
       return {
         ...item,
+        originalName: item.name,
         catalogItemId: null,
         canonicalName: item.name,
         unitPrice: null,
+        matchSource: 'unmatched',
+        matchConfidence: 0,
       };
     }
 
     return {
       ...item,
-      catalogItemId: match.id,
-      canonicalName: match.name,
-      unitPrice: toNumber(match.price_ngn),
+      originalName: item.name,
+      catalogItemId: match.item.id,
+      canonicalName: match.item.name,
+      unitPrice: toNumber(match.item.price_ngn),
+      matchSource: match.source,
+      matchConfidence: match.confidence,
     };
   });
 }
 
-function findCatalogueMatch(parsedName: string, catalogue: CatalogueRow[]): CatalogueRow | null {
-  const parsedVariants = phraseVariants(parsedName);
+function findCatalogueMatch(parsedName: string, catalogue: CatalogueRow[]): CatalogueMatch | null {
+  const normalizedParsed = normalizePhrase(parsedName);
 
-  // Canonical product names take precedence over aliases.
   for (const item of catalogue) {
-    const canonical = normalizePhrase(item.name);
-    if (parsedVariants.has(canonical)) return item;
+    if (normalizedParsed === normalizePhrase(item.name)) {
+      return { item, source: 'catalogue_name', confidence: 1 };
+    }
   }
 
   for (const item of catalogue) {
     for (const alias of item.catalog_item_aliases ?? []) {
-      if (parsedVariants.has(normalizePhrase(alias.alias))) return item;
+      if (normalizedParsed === normalizePhrase(alias.alias)) {
+        return { item, source: 'catalogue_alias', confidence: 0.99 };
+      }
+    }
+  }
+
+  const variants = phraseVariants(parsedName);
+  variants.delete(normalizedParsed);
+
+  for (const item of catalogue) {
+    if (variants.has(normalizePhrase(item.name))) {
+      return { item, source: 'normalized_name', confidence: 0.95 };
+    }
+  }
+
+  for (const item of catalogue) {
+    for (const alias of item.catalog_item_aliases ?? []) {
+      if (variants.has(normalizePhrase(alias.alias))) {
+        return { item, source: 'normalized_alias', confidence: 0.94 };
+      }
     }
   }
 
@@ -338,6 +393,18 @@ function normalizePhrase(value: string): string {
     .trim();
 }
 
+function buildReviewReasons(parsed: ParsedOrder, items: EnrichedItem[]): string[] {
+  const reasons = new Set<string>();
+
+  if (parsed.items.length === 0) reasons.add('no_items');
+  if (parsed.source === 'fallback') reasons.add('fallback_parser');
+  if (parsed.confidence < 0.7) reasons.add('low_parser_confidence');
+  if (items.some((item) => item.matchSource === 'unmatched')) reasons.add('unmatched_catalogue_item');
+  if (items.some((item) => item.unitPrice === null)) reasons.add('missing_price');
+
+  return Array.from(reasons);
+}
+
 async function parseOrder(text: string): Promise<ParsedOrder> {
   if (ORDER_PARSER_URL) {
     try {
@@ -353,7 +420,13 @@ async function parseOrder(text: string): Promise<ParsedOrder> {
       if (response.ok) {
         const candidate = await response.json();
         const validated = validateParsedOrder(candidate);
-        if (validated) return validated;
+        if (validated) {
+          return {
+            ...validated,
+            source: 'external',
+            version: 'external-v1',
+          };
+        }
       }
     } catch (error) {
       console.warn('External order parser unavailable; using fallback parser.', error);
@@ -383,10 +456,12 @@ function fallbackParseOrder(text: string): ParsedOrder {
   return {
     items,
     confidence: items.length > 0 ? 0.4 : 0.1,
+    source: 'fallback',
+    version: 'fallback-v1',
   };
 }
 
-function validateParsedOrder(value: unknown): ParsedOrder | null {
+function validateParsedOrder(value: unknown): ParsedPayload | null {
   if (!isRecord(value) || !Array.isArray(value.items)) return null;
 
   const items: ParsedItem[] = [];
