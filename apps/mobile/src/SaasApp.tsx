@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 
-import { AuthGate } from './components/AuthGate';
+import { BusinessInsightsPanel } from './components/BusinessInsightsPanel';
 import { BusinessProfileView } from './components/BusinessProfileView';
 import { OrderItemsEditor } from './components/OrderItemsEditor';
 import { OrderStatusHistory } from './components/OrderStatusHistory';
@@ -62,11 +62,7 @@ const onboardingLabels: Record<MerchantBusiness['onboardingStatus'], string> = {
 };
 
 export default function SaasApp() {
-  return (
-    <AuthGate>
-      <Workspace />
-    </AuthGate>
-  );
+  return <Workspace />;
 }
 
 function Workspace() {
@@ -96,17 +92,6 @@ function Workspace() {
   );
 
   const reviewCount = orders.filter((order) => order.status === 'needs_review' || order.status === 'draft').length;
-  const inProgressCount = orders.filter((order) =>
-    ['accepted', 'processing', 'ready'].includes(order.status),
-  ).length;
-  const completedCount = orders.filter((order) => order.status === 'completed').length;
-  const todayCount = orders.filter(
-    (order) => new Date(order.receivedAt).toDateString() === new Date().toDateString(),
-  ).length;
-  const orderValue = orders.reduce((sum, order) => {
-    if (order.status === 'rejected' || order.status === 'cancelled') return sum;
-    return sum + (orderTotal(order) ?? 0);
-  }, 0);
 
   async function refreshAll() {
     await refreshBusinesses();
@@ -184,11 +169,6 @@ function Workspace() {
               business={activeBusiness}
               orders={orders}
               loading={loading}
-              todayCount={todayCount}
-              reviewCount={reviewCount}
-              inProgressCount={inProgressCount}
-              completedCount={completedCount}
-              orderValue={orderValue}
               onOpenOrders={() => {
                 setSelectedOrderId('');
                 setView('orders');
@@ -299,22 +279,12 @@ function HomeView({
   business,
   orders,
   loading,
-  todayCount,
-  reviewCount,
-  inProgressCount,
-  completedCount,
-  orderValue,
   onOpenOrders,
   onSelectOrder,
 }: {
   business: MerchantBusiness;
   orders: MerchantOrder[];
   loading: boolean;
-  todayCount: number;
-  reviewCount: number;
-  inProgressCount: number;
-  completedCount: number;
-  orderValue: number;
   onOpenOrders: () => void;
   onSelectOrder: (orderId: string) => void;
 }) {
@@ -326,18 +296,7 @@ function HomeView({
         <Text style={styles.pageSubtitle}>Activity shown here belongs only to {business.name}.</Text>
       </View>
 
-      <View style={styles.statsGrid}>
-        <Metric label="Today" value={todayCount} helper="orders received" />
-        <Metric label="Needs review" value={reviewCount} helper="waiting for action" />
-        <Metric label="In progress" value={inProgressCount} helper="accepted to ready" />
-        <Metric label="Completed" value={completedCount} helper="all completed" />
-      </View>
-
-      <View style={styles.valueCard}>
-        <Text style={styles.valueLabel}>KNOWN ORDER VALUE</Text>
-        <Text style={styles.valueAmount}>{formatMoney(orderValue, business.currency)}</Text>
-        <Text style={styles.valueHelper}>Excludes rejected and cancelled orders.</Text>
-      </View>
+      <BusinessInsightsPanel business={business} />
 
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Recent orders</Text>
@@ -738,16 +697,6 @@ function Badge({ label, positive = false }: { label: string; positive?: boolean 
   );
 }
 
-function Metric({ label, value, helper }: { label: string; value: number; helper: string }) {
-  return (
-    <View style={styles.metricCard}>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={styles.metricValue}>{value}</Text>
-      <Text style={styles.metricHelper}>{helper}</Text>
-    </View>
-  );
-}
-
 function StatusPill({ status }: { status: OrderStatus }) {
   return (
     <View style={[styles.statusPill, status === 'needs_review' && styles.statusReview]}>
@@ -810,15 +759,6 @@ const styles = StyleSheet.create({
   sectionEyebrow: { color: '#98A2B3', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
   pageTitle: { color: '#101828', fontSize: 24, lineHeight: 30, fontWeight: '900', marginTop: 3 },
   pageSubtitle: { color: '#667085', fontSize: 12, lineHeight: 18, marginTop: 3 },
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 9 },
-  metricCard: { flexGrow: 1, flexBasis: '46%', minWidth: 140, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EAECF0', borderRadius: 15, padding: 14 },
-  metricLabel: { color: '#667085', fontSize: 10, fontWeight: '800' },
-  metricValue: { color: '#101828', fontSize: 26, fontWeight: '900', marginTop: 4 },
-  metricHelper: { color: '#98A2B3', fontSize: 10, marginTop: 2 },
-  valueCard: { backgroundColor: '#EEF4FF', borderRadius: 17, padding: 16 },
-  valueLabel: { color: '#175CD3', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
-  valueAmount: { color: '#101828', fontSize: 27, fontWeight: '900', marginTop: 5 },
-  valueHelper: { color: '#667085', fontSize: 10, marginTop: 3 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   sectionTitle: { color: '#101828', fontSize: 15, fontWeight: '900' },
   linkText: { color: '#246BFD', fontSize: 12, fontWeight: '800' },
