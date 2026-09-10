@@ -6,9 +6,9 @@
   "updatedAt": "2026-09-10",
   "codeCheckpoint": {
     "status": "accepted",
-    "commit": "7d3edba333f7be2ffbfbdc70d0aad2f98e43e330",
-    "ciRun": 162,
-    "evidence": "Mobile CI #162: typecheck + SellerTray release preflight passed after auditable legal-acceptance gate"
+    "commit": "19c561a765e241cac9bb73ab35cd3b2a6e1560b2",
+    "ciRun": 168,
+    "evidence": "Mobile CI #168 passed typecheck, SellerTray release preflight and release-manifest integrity validation"
   },
   "gates": [
     {
