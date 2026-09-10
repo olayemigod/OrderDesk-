@@ -12,15 +12,22 @@ import {
 } from '../data/ordersRepository';
 import type { MerchantOrder, OrderStatus } from '../domain/order';
 
-export function useOrders() {
+export function useOrders(tenantId: string | null) {
   const [orders, setOrders] = useState<MerchantOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
+    if (!tenantId) {
+      setOrders([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
     setLoading(true);
     try {
-      const next = await loadOrders();
+      const next = await loadOrders(tenantId);
       setOrders(next);
       setError(null);
     } catch (err) {
@@ -28,18 +35,20 @@ export function useOrders() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [tenantId]);
 
   useEffect(() => {
     void refresh();
-    const channel = subscribeToOrderChanges(() => {
+    if (!tenantId) return undefined;
+
+    const channel = subscribeToOrderChanges(tenantId, () => {
       void refresh();
     });
 
     return () => {
       void unsubscribeFromOrderChanges(channel);
     };
-  }, [refresh]);
+  }, [refresh, tenantId]);
 
   const setStatus = useCallback(
     async (orderId: string, status: OrderStatus) => {
