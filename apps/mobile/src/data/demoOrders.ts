@@ -15,6 +15,7 @@ export const demoOrders: MerchantOrder[] = [
     parserVersion: 'external-v1',
     reviewReasons: [],
     statusHistory: [],
+    notifications: [],
     items: [
       {
         id: '1',
@@ -50,6 +51,7 @@ export const demoOrders: MerchantOrder[] = [
     parserVersion: 'external-v1',
     reviewReasons: [],
     statusHistory: [],
+    notifications: [],
     items: [
       {
         id: '3',
@@ -76,6 +78,7 @@ export const demoOrders: MerchantOrder[] = [
     parserVersion: 'external-v1',
     reviewReasons: [],
     statusHistory: [],
+    notifications: [],
     items: [
       {
         id: '4',
