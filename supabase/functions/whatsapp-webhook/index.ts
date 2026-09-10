@@ -44,6 +44,11 @@ type EnrichedItem = ParsedItem & {
   matchConfidence: number;
 };
 
+type SubscriptionAccess = {
+  accessMode?: string;
+  effectiveStatus?: string;
+};
+
 type JsonRecord = Record<string, unknown>;
 
 const encoder = new TextEncoder();
@@ -256,6 +261,16 @@ async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[nu
     return; // Media/status handling is intentionally outside the current MVP slice.
   }
 
+  const subscription = await getSubscriptionAccess(tenantId);
+  if (subscription.accessMode !== 'full') {
+    console.warn(
+      'WhatsApp order creation skipped because tenant subscription is read-only',
+      tenantId,
+      subscription.effectiveStatus ?? 'unknown',
+    );
+    return;
+  }
+
   const catalogue = await loadCatalogue(tenantId);
   const parsed = await parseOrder(event.text, catalogue);
   const enrichedItems = enrichFromCatalogue(parsed.items, catalogue);
@@ -301,6 +316,14 @@ async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[nu
       ),
     });
   }
+}
+
+async function getSubscriptionAccess(tenantId: string): Promise<SubscriptionAccess> {
+  const access = await rest<SubscriptionAccess>('/rest/v1/rpc/get_orderdesk_subscription_access', {
+    method: 'POST',
+    body: JSON.stringify({ p_tenant_id: tenantId }),
+  });
+  return access ?? {};
 }
 
 async function loadCatalogue(tenantId: string): Promise<CatalogueRow[]> {
@@ -378,8 +401,6 @@ function phraseVariants(value: string): Set<string> {
   const variants = new Set<string>([normalized]);
   const words = normalized.split(' ');
 
-  // Common WhatsApp quantity phrases vary only by plural container:
-  // "bags of rice" ↔ "bag of rice", "bottles of oil" ↔ "bottle of oil".
   if (words.length >= 3 && words[1] === 'of' && words[0].endsWith('s') && words[0].length > 2) {
     variants.add([words[0].slice(0, -1), ...words.slice(1)].join(' '));
   }
