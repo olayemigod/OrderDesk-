@@ -135,9 +135,6 @@ Deno.serve(withObservability('usage-settlement', async (request) => {
     if (!USAGE_BILLING_LIVE) {
       return json({ error: 'Usage billing live charging is disabled' }, 409);
     }
-    if (!PAYSTACK_SECRET_KEY || !BILLING_AUTH_ENCRYPTION_KEY) {
-      return json({ error: 'Usage billing provider secrets are not configured' }, 503);
-    }
 
     const settlement = await loadSettlement(settlementId);
     if (!settlement) return json({ error: 'Usage settlement not found' }, 404);
@@ -150,6 +147,16 @@ Deno.serve(withObservability('usage-settlement', async (request) => {
     }
     if (settlement.status !== 'pending') {
       return json({ error: 'Only a pending usage settlement can be charged' }, 409);
+    }
+
+    const databaseChargingEnabled = await rpc<boolean>('orderdesk_usage_charging_enabled', {
+      p_tenant_id: settlement.tenant_id,
+    });
+    if (databaseChargingEnabled !== true) {
+      return json({ error: 'Usage billing database charging gate is disabled' }, 409);
+    }
+    if (!PAYSTACK_SECRET_KEY || !BILLING_AUTH_ENCRYPTION_KEY) {
+      return json({ error: 'Usage billing provider secrets are not configured' }, 503);
     }
 
     const paymentAuthorization = await loadPaymentAuthorization(settlement.tenant_id);
