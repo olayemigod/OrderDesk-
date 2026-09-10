@@ -1,6 +1,14 @@
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
-import type { MatchSource, MerchantOrder, OrderStatus, ParserSource } from '../domain/order';
+import type {
+  MatchSource,
+  MerchantOrder,
+  NotificationDeliveryStatus,
+  NotificationEventKey,
+  OrderNotification,
+  OrderStatus,
+  ParserSource,
+} from '../domain/order';
 import { supabase } from '../lib/supabase';
 
 type OrderStatusEventRow = {
@@ -11,6 +19,16 @@ type OrderStatusEventRow = {
   actor_kind: 'system' | 'merchant';
   reason: string | null;
   created_at: string;
+};
+
+type OrderNotificationRow = {
+  id: string;
+  order_id: string;
+  event_key: NotificationEventKey;
+  delivery_status: NotificationDeliveryStatus;
+  message_body: string;
+  created_at: string;
+  sent_at: string | null;
 };
 
 type OrderRow = {
@@ -60,7 +78,7 @@ function toNumber(value: number | string | null): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function mapOrder(row: OrderRow): MerchantOrder {
+function mapOrder(row: OrderRow, notifications: OrderNotification[]): MerchantOrder {
   const customer = one(row.customers);
   const sourceMessage = one(row.inbound_messages);
 
@@ -88,6 +106,9 @@ function mapOrder(row: OrderRow): MerchantOrder {
         createdAt: event.created_at,
       }))
       .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()),
+    notifications: notifications
+      .slice()
+      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()),
     items: (row.order_items ?? []).map((item) => ({
       id: item.id,
       name: item.item_name,
@@ -103,28 +124,54 @@ function mapOrder(row: OrderRow): MerchantOrder {
 export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
   if (!tenantId) return [];
 
-  const { data, error } = await supabase
-    .from('orders')
-    .select(`
-      id,
-      status,
-      status_reason,
-      source,
-      parser_confidence,
-      parser_source,
-      parser_version,
-      review_reasons,
-      created_at,
-      customers(display_name, phone, wa_id),
-      inbound_messages(text_body),
-      order_items(id, item_name, original_item_name, quantity, unit_price, match_source, match_confidence),
-      order_status_events(id, event_type, from_status, to_status, actor_kind, reason, created_at)
-    `)
-    .eq('tenant_id', tenantId)
-    .order('created_at', { ascending: false });
+  const [ordersResult, notificationsResult] = await Promise.all([
+    supabase
+      .from('orders')
+      .select(`
+        id,
+        status,
+        status_reason,
+        source,
+        parser_confidence,
+        parser_source,
+        parser_version,
+        review_reasons,
+        created_at,
+        customers(display_name, phone, wa_id),
+        inbound_messages(text_body),
+        order_items(id, item_name, original_item_name, quantity, unit_price, match_source, match_confidence),
+        order_status_events(id, event_type, from_status, to_status, actor_kind, reason, created_at)
+      `)
+      .eq('tenant_id', tenantId)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('outbound_notifications')
+      .select('id, order_id, event_key, delivery_status, message_body, created_at, sent_at')
+      .eq('tenant_id', tenantId)
+      .order('created_at', { ascending: false }),
+  ]);
 
-  if (error) throw error;
-  return ((data ?? []) as unknown as OrderRow[]).map(mapOrder);
+  if (ordersResult.error) throw ordersResult.error;
+  if (notificationsResult.error) throw notificationsResult.error;
+
+  const notificationsByOrder = new Map<string, OrderNotification[]>();
+  for (const row of (notificationsResult.data ?? []) as OrderNotificationRow[]) {
+    const notification: OrderNotification = {
+      id: row.id,
+      eventKey: row.event_key,
+      deliveryStatus: row.delivery_status,
+      messageBody: row.message_body,
+      createdAt: row.created_at,
+      sentAt: row.sent_at,
+    };
+    const bucket = notificationsByOrder.get(row.order_id) ?? [];
+    bucket.push(notification);
+    notificationsByOrder.set(row.order_id, bucket);
+  }
+
+  return ((ordersResult.data ?? []) as unknown as OrderRow[]).map((row) =>
+    mapOrder(row, notificationsByOrder.get(row.id) ?? []),
+  );
 }
 
 export async function updateOrderStatus(
@@ -199,6 +246,11 @@ export function subscribeToOrderChanges(tenantId: string, onChange: () => void):
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'order_status_events', filter: `tenant_id=eq.${tenantId}` },
+      onChange,
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'outbound_notifications', filter: `tenant_id=eq.${tenantId}` },
       onChange,
     )
     .subscribe();
