@@ -58,14 +58,16 @@ function ProvisioningGate() {
   }
 
   if (!activeBusiness) {
+    const setupError = error || platformAdmin.error;
+
     return (
       <SafeAreaView style={styles.safeArea}>
         <ScrollView contentContainerStyle={styles.page}>
-          {error ? (
+          {setupError ? (
             <View style={styles.errorCard}>
               <Text style={styles.errorTitle}>Account setup problem</Text>
-              <Text style={styles.errorText}>{error}</Text>
-              <Pressable onPress={() => void refresh()}>
+              <Text style={styles.errorText}>{setupError}</Text>
+              <Pressable onPress={() => void Promise.all([refresh(), platformAdmin.refresh()])}>
                 <Text style={styles.retryText}>Retry</Text>
               </Pressable>
             </View>
