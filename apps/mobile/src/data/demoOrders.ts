@@ -7,12 +7,14 @@ export const demoOrders: MerchantOrder[] = [
     customerPhone: '+234 803 555 0142',
     receivedAt: '2026-09-08T15:38:00+01:00',
     status: 'needs_review',
+    statusReason: null,
     source: 'whatsapp',
     customerMessage: 'Please send 2 bags of 5kg rice and 1 vegetable oil. Same address as last time.',
     confidence: 0.92,
     parserSource: 'external',
     parserVersion: 'external-v1',
     reviewReasons: [],
+    statusHistory: [],
     items: [
       {
         id: '1',
@@ -40,12 +42,14 @@ export const demoOrders: MerchantOrder[] = [
     customerPhone: '+234 805 444 2180',
     receivedAt: '2026-09-08T15:21:00+01:00',
     status: 'accepted',
+    statusReason: null,
     source: 'whatsapp',
     customerMessage: 'I need 3 cartons of bottled water.',
     confidence: 0.97,
     parserSource: 'external',
     parserVersion: 'external-v1',
     reviewReasons: [],
+    statusHistory: [],
     items: [
       {
         id: '3',
@@ -64,12 +68,14 @@ export const demoOrders: MerchantOrder[] = [
     customerPhone: '+234 807 220 7711',
     receivedAt: '2026-09-08T14:50:00+01:00',
     status: 'processing',
+    statusReason: null,
     source: 'whatsapp',
     customerMessage: 'One crate malt and two packs tissue please.',
     confidence: 0.88,
     parserSource: 'external',
     parserVersion: 'external-v1',
     reviewReasons: [],
+    statusHistory: [],
     items: [
       {
         id: '4',
