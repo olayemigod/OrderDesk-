@@ -6,9 +6,9 @@
   "updatedAt": "2026-09-10",
   "codeCheckpoint": {
     "status": "accepted",
-    "commit": "19c561a765e241cac9bb73ab35cd3b2a6e1560b2",
-    "ciRun": 168,
-    "evidence": "Mobile CI #168 passed typecheck, SellerTray release preflight and release-manifest integrity validation"
+    "commit": "a2394ed2bc7dd2e706abcc8336a66595d76aba33",
+    "ciRun": 174,
+    "evidence": "Mobile CI #174 passed npm ci, high/critical production dependency audit, typecheck and SellerTray release preflight"
   },
   "gates": [
     {

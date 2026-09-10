@@ -9,7 +9,7 @@ This worksheet maps the current SellerTray Android application and backend data 
 
 ## 1. Current Android data/SDK baseline
 
-Current mobile dependencies are limited to Expo/React Native, Supabase JS and AsyncStorage. The current app does **not** contain an advertising SDK, mobile analytics SDK or mobile crash-reporting SDK, and does not request location, contacts, camera, microphone, SMS/call-log, calendar or file-library permissions.
+Current mobile dependencies are limited to Expo/React Native, Supabase JS and AsyncStorage. The current app does **not** contain an advertising SDK, mobile analytics SDK or mobile crash-reporting SDK. SellerTray now also uses Expo `android.blockedPermissions` as a release guardrail to remove sensitive permissions it does not use, including location, contacts, camera/microphone, SMS/call-log, calendar, broad media/storage, advertising ID, activity/sensor, Bluetooth scan/connect, notification, exact-alarm, package-install and overlay permissions.
 
 Current server-side data domains include merchant authentication, merchant business profile/team/catalogue, customer WhatsApp/order records, workflow history, notifications, subscription/payment references and legal acceptance.
 
@@ -158,7 +158,7 @@ However, the SellerTray Privacy Policy must still disclose that the SellerTray s
 
 ## 3. Categories currently expected to be No
 
-Unless the exact release binary introduces a new SDK/permission or behavior, do **not** select:
+Unless a future release deliberately changes the governed permission contract and the Data Safety declaration is updated first, do **not** select:
 
 - Approximate location
 - Precise location
@@ -192,6 +192,7 @@ Notes:
 - The JSON export is explicitly user-initiated; using the native Share sheet does not itself mean SellerTray uploads files to a third-party storage provider.
 - A logo **URL** is text; direct image upload is not in this release.
 - Reassess crash/diagnostic categories if Sentry, Crashlytics or another mobile observability SDK is added.
+- CI preflight now enforces the sensitive Android permission deny-list; adding a feature that genuinely needs one of those permissions requires an explicit contract change rather than a silent dependency-side manifest addition.
 
 ## 4. Data sharing classification — do not guess in Play Console
 

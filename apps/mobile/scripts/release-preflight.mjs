@@ -117,6 +117,45 @@ requireValue(Array.isArray(app.scheme), 'Expo scheme must be an array during bet
 requireValue(app.scheme?.[0] === 'sellertray', 'sellertray must be the canonical first scheme');
 requireValue(app.scheme?.includes('orderdesk'), 'legacy orderdesk scheme must remain during the beta compatibility window');
 requireValue(app.android?.package === 'ng.processedge.sellertray', 'Android package must be ng.processedge.sellertray');
+const requiredBlockedAndroidPermissions = [
+  "android.permission.ACCESS_COARSE_LOCATION",
+  "android.permission.ACCESS_FINE_LOCATION",
+  "android.permission.ACCESS_BACKGROUND_LOCATION",
+  "android.permission.READ_CONTACTS",
+  "android.permission.WRITE_CONTACTS",
+  "android.permission.CAMERA",
+  "android.permission.RECORD_AUDIO",
+  "android.permission.READ_CALENDAR",
+  "android.permission.WRITE_CALENDAR",
+  "android.permission.READ_MEDIA_IMAGES",
+  "android.permission.READ_MEDIA_VIDEO",
+  "android.permission.READ_EXTERNAL_STORAGE",
+  "android.permission.WRITE_EXTERNAL_STORAGE",
+  "android.permission.READ_PHONE_STATE",
+  "android.permission.READ_PHONE_NUMBERS",
+  "android.permission.CALL_PHONE",
+  "android.permission.READ_CALL_LOG",
+  "android.permission.WRITE_CALL_LOG",
+  "android.permission.READ_SMS",
+  "android.permission.RECEIVE_SMS",
+  "android.permission.SEND_SMS",
+  "android.permission.BODY_SENSORS",
+  "android.permission.BODY_SENSORS_BACKGROUND",
+  "android.permission.ACTIVITY_RECOGNITION",
+  "android.permission.BLUETOOTH_SCAN",
+  "android.permission.BLUETOOTH_CONNECT",
+  "android.permission.POST_NOTIFICATIONS",
+  "android.permission.SCHEDULE_EXACT_ALARM",
+  "android.permission.USE_EXACT_ALARM",
+  "android.permission.MANAGE_EXTERNAL_STORAGE",
+  "android.permission.REQUEST_INSTALL_PACKAGES",
+  "android.permission.SYSTEM_ALERT_WINDOW",
+  "com.google.android.gms.permission.AD_ID"
+];
+const blockedAndroidPermissions = new Set(app.android?.blockedPermissions ?? []);
+for (const permission of requiredBlockedAndroidPermissions) {
+  requireValue(blockedAndroidPermissions.has(permission), 'Sensitive Android permission must remain blocked: '+permission);
+}
 requireValue(app.android?.versionCode === 1, 'Initial Android versionCode must be 1');
 requireValue(app.ios?.bundleIdentifier === 'ng.processedge.sellertray', 'iOS bundle ID must match SellerTray identity');
 requireValue(eas.build?.preview?.android?.buildType === 'apk', 'EAS preview profile must build an APK');
@@ -216,3 +255,4 @@ console.log('- client secret-boundary checks: pass');
 console.log('- legal/deletion URL contracts: present');
 console.log('- release acceptance manifest integrity: pass');
 console.log('- committed dependency lockfile integrity: pass');
+console.log('- sensitive Android permission deny-list: pass');
