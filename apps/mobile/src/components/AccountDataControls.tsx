@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  Linking,
   Platform,
   Pressable,
   Share,
@@ -21,6 +22,8 @@ type Props = {
 };
 
 const DELETE_PHRASE = 'DELETE MY SELLERTRAY ACCOUNT';
+const PRIVACY_URL = 'https://processedge.com.ng/sellertray/privacy';
+const TERMS_URL = 'https://processedge.com.ng/sellertray/terms';
 
 export function AccountDataControls({ business = null }: Props) {
   const [exporting, setExporting] = useState(false);
@@ -127,6 +130,27 @@ export function AccountDataControls({ business = null }: Props) {
         </View>
       ) : null}
 
+      <View style={styles.legalBlock}>
+        <Text style={styles.actionTitle}>Legal & privacy</Text>
+        <Text style={styles.actionText}>
+          Review how SellerTray handles merchant and customer order data and the terms that govern the service.
+        </Text>
+        <View style={styles.buttonRow}>
+          <Pressable
+            onPress={() => void Linking.openURL(PRIVACY_URL)}
+            style={({ pressed }) => [styles.legalButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.secondaryButtonText}>Privacy Policy</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => void Linking.openURL(TERMS_URL)}
+            style={({ pressed }) => [styles.legalButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.secondaryButtonText}>Terms</Text>
+          </Pressable>
+        </View>
+      </View>
+
       <View style={styles.dangerBlock}>
         <Text style={styles.dangerTitle}>Delete my account</Text>
         <Text style={styles.actionText}>
@@ -217,6 +241,8 @@ const styles = StyleSheet.create({
   actionText: { color: '#667085', fontSize: 12, lineHeight: 18 },
   secondaryButton: { minHeight: 44, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 11, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
   secondaryButtonText: { color: '#344054', fontSize: 13, fontWeight: '800' },
+  legalBlock: { gap: 10, borderTopWidth: 1, borderTopColor: '#EAECF0', paddingTop: 16 },
+  legalButton: { flex: 1, minHeight: 44, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 11, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
   dangerBlock: { gap: 10, borderTopWidth: 1, borderTopColor: '#EAECF0', paddingTop: 16 },
   dangerTitle: { color: '#B42318', fontSize: 14, fontWeight: '900' },
   dangerOutlineButton: { minHeight: 44, borderWidth: 1, borderColor: '#FDA29B', borderRadius: 11, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
