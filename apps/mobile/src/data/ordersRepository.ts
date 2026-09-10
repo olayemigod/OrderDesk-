@@ -64,7 +64,9 @@ function mapOrder(row: OrderRow): MerchantOrder {
   };
 }
 
-export async function loadOrders(): Promise<MerchantOrder[]> {
+export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
+  if (!tenantId) return [];
+
   const { data, error } = await supabase
     .from('orders')
     .select(`
@@ -77,6 +79,7 @@ export async function loadOrders(): Promise<MerchantOrder[]> {
       inbound_messages(text_body),
       order_items(id, item_name, quantity, unit_price)
     `)
+    .eq('tenant_id', tenantId)
     .order('created_at', { ascending: false });
 
   if (error) throw error;
@@ -131,17 +134,17 @@ export async function deleteOrderItem(itemId: string): Promise<void> {
   if (error) throw error;
 }
 
-export function subscribeToOrderChanges(onChange: () => void): RealtimeChannel {
+export function subscribeToOrderChanges(tenantId: string, onChange: () => void): RealtimeChannel {
   return supabase
-    .channel('merchant-orders')
+    .channel(`merchant-orders-${tenantId}`)
     .on(
       'postgres_changes',
-      { event: '*', schema: 'public', table: 'orders' },
+      { event: '*', schema: 'public', table: 'orders', filter: `tenant_id=eq.${tenantId}` },
       onChange,
     )
     .on(
       'postgres_changes',
-      { event: '*', schema: 'public', table: 'order_items' },
+      { event: '*', schema: 'public', table: 'order_items', filter: `tenant_id=eq.${tenantId}` },
       onChange,
     )
     .subscribe();
