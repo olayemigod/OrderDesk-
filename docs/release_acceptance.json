@@ -6,9 +6,9 @@
   "updatedAt": "2026-09-10",
   "codeCheckpoint": {
     "status": "accepted",
-    "commit": "e20e4ee08f712925d295819d48625c8ec9c02292",
-    "ciRun": 187,
-    "evidence": "Mobile CI #187 passed locked dependency install, production dependency audit, typecheck, SellerTray release preflight and manifest integrity after free-trial usage guard and ProcessEdge admin usage visibility"
+    "commit": "1d8d382f0529d677e89b9c8efa607d38c050383a",
+    "ciRun": 200,
+    "evidence": "Mobile CI #200 passed locked install, production dependency audit, TypeScript and SellerTray release preflight including postpaid usage-billing safety invariants"
   },
   "gates": [
     {
@@ -115,12 +115,20 @@
       "acceptance": "Configure worker/Meta credentials and prove pending notification delivery plus delivery/failure reconciliation."
     },
     {
+      "id": "usage_billing_settlement_foundation",
+      "required": true,
+      "status": "accepted",
+      "owner": "ProcessEdge",
+      "evidence": "S9C/S9D deployed; paystack-webhook v4, usage-settlement v1, account-lifecycle v5, billing-checkout v5; Mobile CI #200 passed settlement safety preflight",
+      "acceptance": "AI_ORDER_ACTIVITY metering is idempotent and trial-free; reusable authorization storage is encrypted/server-only; settlement preparation is idempotent; live charging is explicitly gated; safe settlement history is exportable and ProcessEdge sees only non-secret health indicators."
+    },
+    {
       "id": "paystack_commercial_activation",
       "required": true,
       "status": "pending",
       "owner": "ProcessEdge",
-      "evidence": "AI_ORDER_ACTIVITY usage metering, free-trial guard, merchant usage display and ProcessEdge admin usage visibility are deployed; commercial base price and usage rate remain unset",
-      "acceptance": "Approve SellerTray base subscription and flat AI-assisted activity price, decide/record the pilot usage collection method, configure Paystack plan/secret, and pass test checkout/webhook lifecycle acceptance."
+      "evidence": "S9C metering and S9D postpaid settlement foundation are deployed; usage-settlement worker is fail-closed, but base price, usage rate, reusable authorization and Paystack acceptance remain unset/pending",
+      "acceptance": "Approve SellerTray monthly base price and flat AI-assisted activity price; configure Paystack plan/secret, BILLING_AUTH_ENCRYPTION_KEY and USAGE_SETTLEMENT_TOKEN; capture a reusable authorization in test mode; pass base checkout, idempotent usage settlement, exact amount/currency webhook reconciliation and failed-charge handling; then explicitly enable USAGE_BILLING_LIVE."
     },
     {
       "id": "google_play_data_safety",
