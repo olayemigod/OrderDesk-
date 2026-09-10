@@ -70,9 +70,36 @@ This document records the governed rollout state for SellerTray. SellerTray rema
 - Billing remains deliberately inactive until an approved monthly price, Paystack plan reference and server secret are configured.
 - Current `checkout_ready = false`; no billing event has charged or activated a tenant.
 
+### S9C — AI-assisted usage metering — PASS / DEPLOYED
+- Frozen billable event: `AI_ORDER_ACTIVITY`.
+- Exactly one usage event is recorded only when the external AI parser successfully structures a WhatsApp order.
+- Fallback parsing, manual entry and duplicate Meta deliveries do not create billable AI usage.
+- Trial usage is explicitly free even if a future paid usage rate is configured.
+- Unpriced activity is never repriced retroactively.
+- Paid usage snapshots the exact flat unit rate and valid subscription billing-period boundaries at event time.
+- Same-tenant composite FK enforcement prevents cross-tenant source-message/usage linkage.
+- Merchant subscription view shows current-period AI activity, flat rate state and accrued amount.
+- Owner business export includes usage events.
+- Rollback/smoke validation proved external=1, fallback=0, duplicate=1, free trial, paid-period rate snapshot and cross-tenant rejection.
+
+### S9D — postpaid usage settlement foundation — PASS CODE / DEPLOYED; COMMERCIAL ACTIVATION PENDING
+- Monthly base fee remains a fixed Paystack subscription; variable AI usage is settled separately.
+- Added server-only `billing_payment_authorizations`, `usage_settlements` and `usage_settlement_items`.
+- Reusable Paystack authorization codes are AES-GCM encrypted before storage when `BILLING_AUTH_ENCRYPTION_KEY` is configured.
+- Merchant clients have no direct table privileges on authorization or settlement records.
+- Paid usage requires valid subscription period boundaries; missing/invalid period data fails free rather than guessing a charge.
+- Settlement preparation is idempotent by tenant/event/period and a usage event can belong to only one settlement.
+- New `usage-settlement` Edge Function is ACTIVE with custom server-token auth and an explicit `USAGE_BILLING_LIVE=true` money-movement kill switch.
+- Failed or ambiguous provider attempts are never automatically retried.
+- Paystack webhook recognizes settlement references separately from base checkout and verifies expected amount/currency before marking a settlement paid.
+- ProcessEdge Admin exposes authorization readiness, outstanding usage amount and failed-settlement count without exposing encrypted payment credentials.
+- Owner business export includes safe settlement history but deliberately excludes reusable charge credentials.
+- `docs/usage_billing.md` is now CI-gated; Mobile CI #200 passed the settlement safety preflight.
+- Commercial prices, reusable authorization capture, and real/test Paystack usage debit acceptance remain pending.
+
 ### S10A — ProcessEdge SaaS operations console — PASS AUTOMATED / VISUAL SMOKE PENDING
 - Separate `platform_admins` role space; merchant Owner/Manager roles do not confer platform access.
-- ProcessEdge admin overview for tenant health, subscription state, WhatsApp state, order activity, notification exceptions and team size.
+- ProcessEdge admin overview for tenant health, subscription state, AI usage/settlement readiness, WhatsApp state, order activity, notification exceptions and team size.
 - Controlled subscription, trial-extension, WhatsApp-state and internal-support-note actions.
 - Suspension/cancellation requires explicit confirmation in UI.
 - Immutable platform-admin audit trail and audit viewer.
@@ -88,7 +115,7 @@ These are implemented but must not be described as production-accepted yet:
 1. **Meta production WhatsApp** — business/app verification and one real production inbound/outbound E2E are still required.
 2. **AI parser** — configure server-only `OPENAI_API_KEY` and `ORDER_PARSER_TOKEN`, then run live AI acceptance. Do not put secrets in the mobile app, repository or chat.
 3. **Outbound WhatsApp worker** — configure server-only worker/Meta credentials after Meta production approval and acceptance-test delivery.
-4. **Paystack billing** — approve commercial monthly price, create/configure Paystack plan reference and server secret, then run test-mode checkout/webhook acceptance before live mode.
+4. **Paystack billing** — approve the monthly base price and flat AI-activity price; configure the Paystack plan/secret plus billing-encryption/settlement secrets; capture one reusable authorization; then pass base checkout and usage-settlement acceptance in test mode before enabling live usage charging.
 5. **Production email** — configure production SMTP/Auth email delivery.
 
 ## S11 — production hardening — CODE PASS / RELEASE ACCEPTANCE PENDING
