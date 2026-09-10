@@ -32,6 +32,18 @@ const lock = readJson(join(mobileRoot, 'package-lock.json'));
 const app = readJson(join(mobileRoot, 'app.json')).expo;
 const eas = readJson(join(mobileRoot, 'eas.json'));
 const releaseAcceptance = readJson(join(repoRoot, 'docs/release_acceptance.json'));
+const migrationDir = join(repoRoot, 'supabase/migrations');
+const migrationFiles = readdirSync(migrationDir).filter((name) => name.endsWith('.sql'));
+const migrationVersions = new Map();
+for (const name of migrationFiles) {
+  const match = name.match(/^(\\d{14})_/);
+  requireValue(Boolean(match), 'Supabase migration must start with a 14-digit version: '+name);
+  if (!match) continue;
+  const version = match[1];
+  const previous = migrationVersions.get(version);
+  requireValue(!previous, 'Duplicate Supabase migration version '+version+': '+previous+' and '+name);
+  migrationVersions.set(version, name);
+}
 
 requireValue(lock.lockfileVersion === 3, 'package-lock.json must use npm lockfileVersion 3');
 requireValue(lock.name === pkg.name, 'package-lock.json package name must match package.json');
@@ -223,6 +235,10 @@ requireValue(
 requireValue(
   paystackWebhook.includes("AES-GCM"),
   'Paystack reusable authorization capture must remain encrypted with AES-GCM',
+);
+requireValue(
+  paystackWebhook.includes('providerCurrency !== settlement.currency'),
+  'Usage settlement webhook must require an explicit exact currency match',
 );
 requireValue(
   usageSettlementMigration.includes('revoke all on table public.billing_payment_authorizations from public, anon, authenticated'),
