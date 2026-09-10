@@ -191,6 +191,48 @@ requireValue(accountControls.includes('DELETE MY SELLERTRAY ACCOUNT'), 'Account 
 requireValue(accountControls.includes('https://processedge.com.ng/sellertray/privacy'), 'In-app SellerTray privacy URL is missing');
 requireValue(accountControls.includes('https://processedge.com.ng/sellertray/terms'), 'In-app SellerTray terms URL is missing');
 
+const usageSettlementWorker = read(join(repoRoot, 'supabase/functions/usage-settlement/index.ts'));
+const paystackWebhook = read(join(repoRoot, 'supabase/functions/paystack-webhook/index.ts'));
+const usageSettlementMigration = read(join(repoRoot, 'supabase/migrations/20260910230000_usage_settlement_foundation.sql'));
+const usageBillingContract = read(join(repoRoot, 'docs/usage_billing.md'));
+
+requireValue(
+  usageSettlementWorker.includes("Deno.env.get('USAGE_BILLING_LIVE') === 'true'"),
+  'Usage settlement worker must keep an explicit opt-in live charging flag',
+);
+requireValue(
+  usageSettlementWorker.includes("USAGE_SETTLEMENT_TOKEN"),
+  'Usage settlement worker must remain protected by a server-only worker token',
+);
+requireValue(
+  usageSettlementWorker.includes("BILLING_AUTH_ENCRYPTION_KEY"),
+  'Usage settlement worker must require the billing authorization encryption key',
+);
+requireValue(
+  usageSettlementWorker.includes('/transaction/charge_authorization'),
+  'Usage settlement worker must use Paystack reusable authorization charging',
+);
+requireValue(
+  paystackWebhook.includes('billing_payment_authorizations'),
+  'Paystack webhook must retain reusable authorizations only in the server-only authorization store',
+);
+requireValue(
+  paystackWebhook.includes("AES-GCM"),
+  'Paystack reusable authorization capture must remain encrypted with AES-GCM',
+);
+requireValue(
+  usageSettlementMigration.includes('revoke all on table public.billing_payment_authorizations from public, anon, authenticated'),
+  'Reusable billing authorization table must remain inaccessible to merchant clients',
+);
+requireValue(
+  usageSettlementMigration.includes('revoke all on table public.usage_settlements from public, anon, authenticated'),
+  'Usage settlement table must remain inaccessible to merchant clients',
+);
+requireValue(
+  usageBillingContract.includes('No percentage-of-sales'),
+  'Usage billing contract must preserve the no-GMV-fee commercial rule',
+);
+
 const releaseRunbook = read(join(repoRoot, 'docs/release_runbook.md'));
 const lifecycle = read(join(repoRoot, 'docs/data_lifecycle.md'));
 requireValue(releaseRunbook.includes('ng.processedge.sellertray'), 'Release runbook must record the frozen Android package');
