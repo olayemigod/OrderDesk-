@@ -147,6 +147,9 @@ function normalizeTenant(value: Record<string, unknown>): PlatformTenantSummary 
     usageAmountPeriod: numberValue(value.usageAmountPeriod),
     usageUnitPrice: optionalNumber(value.usageUnitPrice),
     currency: stringValue(value.currency) || 'NGN',
+    usageAuthorizationReady: value.usageAuthorizationReady === true,
+    usageOutstandingAmount: numberValue(value.usageOutstandingAmount),
+    usageFailedSettlements: numberValue(value.usageFailedSettlements),
     supportNote: optionalString(value.supportNote),
     supportNoteUpdatedAt: optionalString(value.supportNoteUpdatedAt),
   };
