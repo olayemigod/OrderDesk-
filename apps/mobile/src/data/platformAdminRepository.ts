@@ -29,6 +29,9 @@ export type PlatformTenantSummary = {
   usageAmountPeriod: number;
   usageUnitPrice: number | null;
   currency: string;
+  usageAuthorizationReady: boolean;
+  usageOutstandingAmount: number;
+  usageFailedSettlements: number;
   supportNote: string | null;
   supportNoteUpdatedAt: string | null;
 };
