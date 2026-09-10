@@ -252,7 +252,7 @@ function TenantAdminCard({
         <View style={styles.controls}>
           <Text style={styles.controlTitle}>Subscription</Text>
           <View style={styles.buttonRow}>
-            {(['trial', 'active', 'past_due', 'suspended', 'cancelled'] as PlatformSubscriptionStatus[]).map((status) => (
+            {(['active', 'past_due', 'suspended', 'cancelled'] as PlatformSubscriptionStatus[]).map((status) => (
               <Pressable
                 key={status}
                 disabled={busy}
