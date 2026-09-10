@@ -121,6 +121,30 @@
       "owner": "ProcessEdge",
       "evidence": null,
       "acceptance": "Approve SellerTray price/usage commercial values, configure Paystack plan/secret, and pass test checkout/webhook lifecycle acceptance."
+    },
+    {
+      "id": "google_play_data_safety",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": "docs/google_play_data_safety.md prepared from current mobile/backend data flows",
+      "acceptance": "Verify provider sharing classifications, enter the final Data Safety answers in Play Console, and confirm they match the approved SellerTray Privacy Policy."
+    },
+    {
+      "id": "google_play_app_content",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": "docs/google_play_submission.md prepared",
+      "acceptance": "Complete App access, ads, target audience, IARC content rating, Financial features, privacy/deletion and any applicable Play declarations."
+    },
+    {
+      "id": "play_review_access",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": null,
+      "acceptance": "Create a stable non-admin SellerTray review tenant and enter credentials/instructions only in Play Console App access."
     }
   ]
 }

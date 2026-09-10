@@ -182,6 +182,16 @@ These are implemented but must not be described as production-accepted yet:
 - Mobile CI #162 passed Typecheck and SellerTray release preflight on commit `7d3edba`.
 - Legal acceptance version is `2026-09-10`; if legal review materially changes the draft before publication, the acceptance version must be bumped before release.
 
+### S11I — Google Play declaration preparation — PASS DOCUMENTATION / CONSOLE ACCEPTANCE PENDING
+- Added `docs/google_play_data_safety.md` mapping current SellerTray data fields, SDK behavior, purposes, collection status, provider transfers and exclusions to Google's Data Safety model.
+- Current conservative collection set is Name, Email address, User IDs, Phone number, Purchase history, Other user-generated content and Other actions; final "shared" selections remain gated on provider/service-provider classification review.
+- Explicitly records that Paystack-hosted card/bank credentials are not SellerTray-collected while SellerTray cannot access them.
+- Current release has no ads SDK, mobile analytics/crash SDK, device-ID use, contacts/location/camera/microphone/SMS/calendar permissions or direct photo/file upload.
+- Added `docs/google_play_submission.md` covering Privacy, deletion, App access, target audience, IARC rating, Financial features, Data Safety, review tenant and binary/provider gates.
+- SellerTray's Expo SDK 57 baseline targets API 36, matching the Google Play requirement effective August 31, 2026; final acceptance remains tied to the signed AAB/Play upload.
+- SellerTray AI parsing is documented as a bounded productivity transformation rather than a general content-generation product, while third-party AI User Data obligations remain in scope.
+- Added required release-manifest gates for Data Safety, App Content and Play reviewer access. These remain pending until Play Console evidence exists.
+
 ### Remaining S11 release gates
 - Configure/verify Supabase Auth redirects for `sellertray://auth-confirm`, `sellertray://reset-password` and the two temporary legacy equivalents.
 - Enable Supabase leaked-password protection before public signup.
