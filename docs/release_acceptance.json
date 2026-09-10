@@ -6,9 +6,9 @@
   "updatedAt": "2026-09-10",
   "codeCheckpoint": {
     "status": "accepted",
-    "commit": "fdac49b9c0eeae9affa2109f94e8b85eeb95cde6",
-    "ciRun": 180,
-    "evidence": "Mobile CI #180 passed locked dependency install, production dependency audit, typecheck, SellerTray release preflight and release-manifest integrity after AI-assisted usage metering and same-tenant ledger hardening"
+    "commit": "e20e4ee08f712925d295819d48625c8ec9c02292",
+    "ciRun": 187,
+    "evidence": "Mobile CI #187 passed locked dependency install, production dependency audit, typecheck, SellerTray release preflight and manifest integrity after free-trial usage guard and ProcessEdge admin usage visibility"
   },
   "gates": [
     {
@@ -23,7 +23,7 @@
       "required": true,
       "status": "accepted",
       "owner": "ProcessEdge",
-      "evidence": "Migration user_legal_acceptances applied; account-lifecycle v4 ACTIVE; Mobile CI #180 passed",
+      "evidence": "Migration user_legal_acceptances applied; account-lifecycle v4 ACTIVE; usage ledger included in Owner export",
       "acceptance": "Authenticated sessions are gated on current Terms/Privacy acceptance and the server records version/timestamp; Owner business export includes the usage ledger."
     },
     {
@@ -103,7 +103,7 @@
       "required": true,
       "status": "pending",
       "owner": "ProcessEdge",
-      "evidence": null,
+      "evidence": "AI_ORDER_ACTIVITY metering and free-trial guard are deployed; no live external-AI order has yet been accepted",
       "acceptance": "Configure server-only parser credentials and pass live AI parse, deterministic price matching, AI_ORDER_ACTIVITY metering and safe-fallback acceptance."
     },
     {
@@ -119,7 +119,7 @@
       "required": true,
       "status": "pending",
       "owner": "ProcessEdge",
-      "evidence": "AI_ORDER_ACTIVITY usage metering is deployed; commercial base price and usage rate remain unset",
+      "evidence": "AI_ORDER_ACTIVITY usage metering, free-trial guard, merchant usage display and ProcessEdge admin usage visibility are deployed; commercial base price and usage rate remain unset",
       "acceptance": "Approve SellerTray base subscription and flat AI-assisted activity price, decide/record the pilot usage collection method, configure Paystack plan/secret, and pass test checkout/webhook lifecycle acceptance."
     },
     {
