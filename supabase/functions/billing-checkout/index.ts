@@ -69,7 +69,7 @@ Deno.serve(withObservability('billing-checkout', async (request) => {
   const priceAmount = toNumber(plan?.price_amount ?? null);
 
   if (!plan || plan.provider !== 'paystack' || !plan.provider_plan_ref || priceAmount === null || priceAmount <= 0) {
-    return json({ error: 'OrderDesk Business billing is not activated yet' }, 409);
+    return json({ error: 'SellerTray Business billing is not activated yet' }, 409);
   }
 
   const reference = makeReference(tenantId);

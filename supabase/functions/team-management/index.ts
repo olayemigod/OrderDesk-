@@ -21,7 +21,7 @@ Deno.serve(async (request) => {
   }
 
   if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
-    console.error('OrderDesk team management is missing server configuration.');
+    console.error('SellerTray team management is missing server configuration.');
     return json({ error: 'Server configuration error' }, 500);
   }
 
@@ -68,7 +68,7 @@ Deno.serve(async (request) => {
       p_tenant_id: tenantId,
     });
     if (canWrite !== true) {
-      return json({ error: 'OrderDesk subscription is read-only. Reactivate the business to change team access.' }, 403);
+      return json({ error: 'SellerTray subscription is read-only. Reactivate the business to change team access.' }, 403);
     }
 
     if (action === 'invite') {

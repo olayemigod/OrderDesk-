@@ -17,7 +17,7 @@ Deno.serve(async (request) => {
   }
 
   if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
-    console.error('OrderDesk provisioning is missing server configuration.');
+    console.error('SellerTray provisioning is missing server configuration.');
     return json({ error: 'Server configuration error' }, 500);
   }
 

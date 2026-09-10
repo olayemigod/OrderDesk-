@@ -70,7 +70,7 @@ Deno.serve(withObservability('whatsapp-webhook', async (request) => {
   }
 
   if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !META_APP_SECRET) {
-    console.error('OrderDesk webhook is missing required server secrets.');
+    console.error('SellerTray webhook is missing required server secrets.');
     return new Response('Server configuration error', { status: 500 });
   }
 
@@ -218,7 +218,7 @@ async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[nu
   const tenantId = tenant?.id;
 
   if (!tenantId) {
-    console.warn('No OrderDesk tenant mapped to WhatsApp phone number', event.phoneNumberId);
+    console.warn('No SellerTray tenant mapped to WhatsApp phone number', event.phoneNumberId);
     return;
   }
 

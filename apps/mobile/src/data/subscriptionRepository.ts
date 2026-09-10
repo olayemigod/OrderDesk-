@@ -47,7 +47,7 @@ export async function loadSubscriptionAccess(tenantId: string): Promise<Subscrip
   const value = data as Record<string, unknown>;
   return {
     planCode: stringValue(value.planCode, 'business'),
-    planName: stringValue(value.planName, 'OrderDesk Business'),
+    planName: stringValue(value.planName, 'SellerTray Business'),
     baseStatus: baseStatus(value.baseStatus),
     effectiveStatus: effectiveStatus(value.effectiveStatus),
     accessMode: value.accessMode === 'read_only' ? 'read_only' : 'full',

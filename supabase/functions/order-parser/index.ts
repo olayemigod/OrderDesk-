@@ -168,7 +168,7 @@ async function extractOrder(input: ParserRequest): Promise<ParsedOrder> {
 
   const validated = validateParsedOrder(candidate);
   if (!validated) {
-    throw new Error('Structured parser output failed OrderDesk validation.');
+    throw new Error('Structured parser output failed SellerTray validation.');
   }
 
   return validated;
