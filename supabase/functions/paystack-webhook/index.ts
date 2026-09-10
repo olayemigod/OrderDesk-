@@ -3,12 +3,15 @@ type JsonRecord = Record<string, unknown>;
 type TenantResolution = {
   tenantId: string;
   checkoutReference?: string | null;
+  usageSettlementReference?: string | null;
+  billingEmail?: string | null;
 };
 
 const encoder = new TextEncoder();
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const PAYSTACK_SECRET_KEY = Deno.env.get('PAYSTACK_SECRET_KEY') ?? '';
+const BILLING_AUTH_ENCRYPTION_KEY = Deno.env.get('BILLING_AUTH_ENCRYPTION_KEY') ?? '';
 
 Deno.serve(withObservability('paystack-webhook', async (request) => {
   if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 });
@@ -68,10 +71,26 @@ async function resolveTenant(eventType: string, data: JsonRecord): Promise<Tenan
   const reference = asString(data.reference) ?? nestedString(data, ['transaction', 'reference']);
 
   if (eventType === 'charge.success' && reference) {
-    const sessions = await rest<Array<{ tenant_id: string; reference: string }>>(
-      `/rest/v1/billing_checkout_sessions?select=tenant_id,reference&reference=eq.${encodeURIComponent(reference)}&limit=1`,
+    const sessions = await rest<Array<{ tenant_id: string; reference: string; billing_email: string }>>(
+      `/rest/v1/billing_checkout_sessions?select=tenant_id,reference,billing_email&reference=eq.${encodeURIComponent(reference)}&limit=1`,
     );
-    if (sessions[0]) return { tenantId: sessions[0].tenant_id, checkoutReference: sessions[0].reference };
+    if (sessions[0]) {
+      return {
+        tenantId: sessions[0].tenant_id,
+        checkoutReference: sessions[0].reference,
+        billingEmail: sessions[0].billing_email,
+      };
+    }
+
+    const settlements = await rest<Array<{ tenant_id: string; provider_reference: string }>>(
+      `/rest/v1/usage_settlements?select=tenant_id,provider_reference&provider_reference=eq.${encodeURIComponent(reference)}&limit=1`,
+    );
+    if (settlements[0]) {
+      return {
+        tenantId: settlements[0].tenant_id,
+        usageSettlementReference: settlements[0].provider_reference,
+      };
+    }
     return null;
   }
 
@@ -112,7 +131,14 @@ async function applyEvent(eventType: string, data: JsonRecord, resolution: Tenan
 
   if (eventType === 'charge.success') {
     const reference = asString(data.reference);
-    if (!reference || reference !== resolution.checkoutReference) return;
+    if (!reference) return;
+
+    if (resolution.usageSettlementReference && reference === resolution.usageSettlementReference) {
+      await applyUsageSettlementSuccess(tenantId, reference, data);
+      return;
+    }
+
+    if (reference !== resolution.checkoutReference) return;
 
     await rest(`/rest/v1/billing_checkout_sessions?reference=eq.${encodeURIComponent(reference)}`, {
       method: 'PATCH',
@@ -134,6 +160,8 @@ async function applyEvent(eventType: string, data: JsonRecord, resolution: Tenan
       grace_ends_at: null,
       cancel_at_period_end: false,
     });
+
+    await captureReusableAuthorization(tenantId, data, resolution.billingEmail ?? null);
     return;
   }
 
@@ -208,6 +236,139 @@ async function applyEvent(eventType: string, data: JsonRecord, resolution: Tenan
       cancel_at_period_end: true,
     });
   }
+}
+
+async function applyUsageSettlementSuccess(
+  tenantId: string,
+  reference: string,
+  data: JsonRecord,
+): Promise<void> {
+  const settlements = await rest<Array<{
+    id: string;
+    amount: number | string;
+    currency: string;
+    status: string;
+  }>>(
+    `/rest/v1/usage_settlements?select=id,amount,currency,status&tenant_id=eq.${encodeURIComponent(tenantId)}&provider_reference=eq.${encodeURIComponent(reference)}&limit=1`,
+  );
+  const settlement = settlements[0];
+  if (!settlement) return;
+  if (settlement.status === 'paid') return;
+
+  const expectedAmount = toNumber(settlement.amount);
+  const providerAmountSubunit = toNumber(data.amount);
+  const providerCurrency = asString(data.currency);
+  if (
+    expectedAmount === null ||
+    providerAmountSubunit === null ||
+    Math.round(expectedAmount * 100) !== Math.round(providerAmountSubunit) ||
+    (providerCurrency && providerCurrency !== settlement.currency)
+  ) {
+    throw new Error('Usage settlement charge does not match the prepared amount/currency');
+  }
+
+  await rest(`/rest/v1/usage_settlements?id=eq.${encodeURIComponent(settlement.id)}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      status: 'paid',
+      provider_transaction_ref: providerTransactionRef(data),
+      last_error: null,
+      paid_at: asString(data.paid_at) ?? new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }),
+  });
+}
+
+async function captureReusableAuthorization(
+  tenantId: string,
+  data: JsonRecord,
+  fallbackBillingEmail: string | null,
+): Promise<void> {
+  const authorization = isRecord(data.authorization)
+    ? data.authorization
+    : isRecord(data.transaction) && isRecord(data.transaction.authorization)
+      ? data.transaction.authorization
+      : null;
+  if (!authorization) return;
+
+  const authorizationCode = asString(authorization.authorization_code);
+  if (!authorizationCode || authorization.reusable !== true) return;
+
+  const billingEmail = (customerEmail(data) ?? fallbackBillingEmail)?.toLowerCase() ?? null;
+  if (!billingEmail) {
+    console.warn('Reusable Paystack authorization not captured because billing email is unavailable');
+    return;
+  }
+
+  const key = await importBillingAuthorizationKey();
+  if (!key) {
+    console.warn('Reusable Paystack authorization not captured because billing encryption key is not configured');
+    return;
+  }
+
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const cipherBuffer = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    encoder.encode(authorizationCode),
+  );
+
+  await rest('/rest/v1/billing_payment_authorizations?on_conflict=tenant_id,provider', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({
+      tenant_id: tenantId,
+      provider: 'paystack',
+      billing_email: billingEmail,
+      provider_customer_ref: customerRef(data),
+      authorization_ciphertext: bytesToBase64(new Uint8Array(cipherBuffer)),
+      authorization_iv: bytesToBase64(iv),
+      encryption_key_version: 1,
+      channel: asString(authorization.channel),
+      reusable: true,
+      status: 'active',
+      captured_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }),
+  });
+}
+
+async function importBillingAuthorizationKey(): Promise<CryptoKey | null> {
+  if (!BILLING_AUTH_ENCRYPTION_KEY) return null;
+  try {
+    const raw = base64ToBytes(BILLING_AUTH_ENCRYPTION_KEY);
+    if (raw.byteLength !== 32) return null;
+    return await crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt']);
+  } catch {
+    return null;
+  }
+}
+
+function base64ToBytes(value: string): Uint8Array {
+  const raw = atob(value);
+  return Uint8Array.from(raw, (char) => char.charCodeAt(0));
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let value = '';
+  for (const byte of bytes) value += String.fromCharCode(byte);
+  return btoa(value);
+}
+
+function providerTransactionRef(data: JsonRecord): string | null {
+  const id = data.id;
+  if (typeof id === 'number' && Number.isFinite(id)) return String(id);
+  return asString(id) ?? asString(data.reference);
+}
+
+function toNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
 }
 
 async function updateSubscription(tenantId: string, patch: JsonRecord): Promise<void> {
