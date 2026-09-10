@@ -6,9 +6,9 @@
   "updatedAt": "2026-09-10",
   "codeCheckpoint": {
     "status": "accepted",
-    "commit": "1d8d382f0529d677e89b9c8efa607d38c050383a",
-    "ciRun": 200,
-    "evidence": "Mobile CI #200 passed locked install, production dependency audit, TypeScript and SellerTray release preflight including postpaid usage-billing safety invariants"
+    "commit": "36bd53ee904ad1ed69c3ea8c56ada9f3b0c1645c",
+    "ciRun": 235,
+    "evidence": "Mobile CI #235 passed locked dependency install, production dependency audit, TypeScript, duplicate migration-version validation, dual usage charging interlocks, atomic pending-settlement charge claim and SellerTray release preflight"
   },
   "gates": [
     {
@@ -119,7 +119,7 @@
       "required": true,
       "status": "accepted",
       "owner": "ProcessEdge",
-      "evidence": "S9C/S9D deployed; paystack-webhook v5, usage-settlement v5, account-lifecycle v6, billing-checkout v5; settlement Cron ACTIVE; closed-period/currency/deletion/concurrency guards smoke-tested; dual charging interlock defaults off; pending settlement is atomically claimed before provider debit",
+      "evidence": "S9C/S9D deployed; paystack-webhook v5, usage-settlement v5, account-lifecycle v6, billing-checkout v5; settlement Cron ACTIVE; closed-period/currency/deletion/concurrency guards smoke-tested; dual charging interlock defaults off; atomic pending-settlement claim proved first claim=1 and second claim=0; Mobile CI #235 passed",
       "acceptance": "AI_ORDER_ACTIVITY metering is idempotent and trial-free; price/currency/period are snapshotted; only closed single-currency periods settle; reusable authorization storage is encrypted/server-only; closed periods are prepared automatically without money movement; self-service deletion blocks unsettled priced usage; debit requires both the server live flag and database commercial flag; a pending settlement is atomically claimed before contacting Paystack so concurrent charge calls cannot issue duplicate provider requests; ambiguous provider state can be reconciled by reference without another debit; safe settlement history is exportable and ProcessEdge sees only non-secret health indicators."
     },
     {
