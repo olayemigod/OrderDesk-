@@ -26,7 +26,7 @@ The following are not billable AI usage:
 - activity recorded before a commercial usage rate is active;
 - activity that cannot be tied safely to a valid paid billing period.
 
-Usage events snapshot their unit price and paid-period boundaries at event time. A later price change must never retroactively reprice an earlier event.
+Usage events snapshot their unit price, ISO currency and paid-period boundaries at event time. A later price or plan-currency change must never retroactively reprice or recurrency an earlier event. Settlement preparation rejects future/open periods and mixed-currency period data.
 
 ## Collection model
 
@@ -43,7 +43,8 @@ SellerTray uses this sequence:
 5. Supabase Cron runs `prepare_due_orderdesk_usage_settlements()` daily at 01:15 UTC and prepares one idempotent `usage_settlements` record for each newly closed priced period. Manual preparation remains safe and idempotent.
 6. The usage-settlement worker may submit the variable amount through Paystack's charge-authorization endpoint only when `USAGE_BILLING_LIVE=true`.
 7. The Paystack webhook reconciles `charge.success` only when the provider reference, expected amount and currency match the prepared settlement exactly.
-8. The settlement becomes `paid`; ambiguous or failed attempts are never automatically recharged.
+8. A non-debiting `reconcile` action can call Paystack Verify Transaction by the existing provider reference; successful verified amount/currency marks the settlement paid, while failed/abandoned/reversed states are recorded without issuing another debit.
+9. The settlement becomes `paid`; ambiguous or failed attempts are never automatically recharged.
 
 ## Fail-closed controls
 
@@ -55,7 +56,7 @@ SellerTray uses this sequence:
 - Merchant clients have no SELECT/INSERT/UPDATE/DELETE grants on payment authorizations, settlements or settlement-item mappings.
 - ProcessEdge Admin receives only safe readiness/amount/failure indicators, never the authorization ciphertext.
 - Business data export includes usage events and safe settlement history but excludes reusable charge credentials.
-- Failed or uncertain charge attempts are not automatically retried. ProcessEdge must reconcile provider state before another debit attempt.
+- Failed or uncertain charge attempts are not automatically retried. ProcessEdge must first use provider-reference reconciliation and confirm the Paystack transaction state before considering any later debit attempt.
 - Self-service account deletion is blocked while any priced AI usage remains unsettled; a paid settlement clears the block.
 - Automatic Cron work prepares database settlement records only. It never calls Paystack and never moves money.
 
@@ -75,12 +76,13 @@ Keep live charging disabled until all items below are complete:
 10. Confirm the active `sellertray-prepare-usage-settlements` Cron job prepares the closed period once; manually prepare it again and prove the existing settlement is returned rather than duplicated.
 11. Confirm account deletion is blocked before settlement and allowed by the usage-billing guard after the settlement is paid.
 12. Submit one test usage charge and verify the Paystack webhook marks the exact settlement paid.
-13. Verify amount/currency mismatch is rejected.
-14. Verify ProcessEdge Admin shows authorization readiness, outstanding amount and failures without exposing charge credentials.
-15. Only then set `USAGE_BILLING_LIVE=true` for production.
+13. Simulate or inspect an unresolved/failed settlement and use the non-debiting `reconcile` action to verify Paystack by reference before any retry.
+14. Verify future/open periods and amount/currency mismatch are rejected.
+15. Verify ProcessEdge Admin shows authorization readiness, outstanding amount and failures without exposing charge credentials.
+16. Only then set `USAGE_BILLING_LIVE=true` for production.
 
 ## Current rollout state
 
-The database schema, secure authorization capture path, idempotent settlement preparation, daily preparation Cron, unsettled-usage deletion guard, fail-closed settlement worker, webhook reconciliation, merchant usage visibility, business export coverage and ProcessEdge operational indicators are implemented.
+The database schema, secure authorization capture path, idempotent closed-period settlement preparation, usage currency snapshotting, daily preparation Cron, unsettled-usage deletion guard, fail-closed settlement worker, provider-reference reconciliation, webhook reconciliation, merchant usage visibility, business export coverage and ProcessEdge operational indicators are implemented.
 
 Commercial prices remain unset and no live reusable authorization or usage settlement exists yet. Therefore SellerTray cannot currently debit AI usage.
