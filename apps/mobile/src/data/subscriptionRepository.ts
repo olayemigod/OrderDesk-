@@ -27,6 +27,11 @@ export type SubscriptionAccess = {
   priceAmount: number | null;
   billingInterval: 'month';
   checkoutReady: boolean;
+  usageEventCode: 'AI_ORDER_ACTIVITY';
+  usageUnitPrice: number | null;
+  usagePricingActive: boolean;
+  usageUnitsThisPeriod: number;
+  usageAmountThisPeriod: number;
 };
 
 export type BillingCheckout = {
@@ -41,7 +46,7 @@ export async function loadSubscriptionAccess(tenantId: string): Promise<Subscrip
 
   if (error) throw error;
   if (!data || typeof data !== 'object') {
-    throw new Error('OrderDesk subscription state is unavailable.');
+    throw new Error('SellerTray subscription state is unavailable.');
   }
 
   const value = data as Record<string, unknown>;
@@ -61,6 +66,11 @@ export async function loadSubscriptionAccess(tenantId: string): Promise<Subscrip
     priceAmount: numberValue(value.priceAmount),
     billingInterval: 'month',
     checkoutReady: value.checkoutReady === true,
+    usageEventCode: 'AI_ORDER_ACTIVITY',
+    usageUnitPrice: numberValue(value.usageUnitPrice),
+    usagePricingActive: value.usagePricingActive === true,
+    usageUnitsThisPeriod: integerValue(value.usageUnitsThisPeriod),
+    usageAmountThisPeriod: numberValue(value.usageAmountThisPeriod) ?? 0,
   };
 }
 
@@ -71,7 +81,7 @@ export async function startBillingCheckout(tenantId: string): Promise<BillingChe
 
   if (error) throw error;
   if (!data || typeof data !== 'object') {
-    throw new Error('OrderDesk could not start billing checkout.');
+    throw new Error('SellerTray could not start billing checkout.');
   }
 
   const value = data as Record<string, unknown>;
@@ -96,6 +106,11 @@ function numberValue(value: unknown): number | null {
   if (value === null || value === undefined) return null;
   const parsed = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function integerValue(value: unknown): number {
+  const parsed = numberValue(value);
+  return parsed === null ? 0 : Math.max(0, Math.trunc(parsed));
 }
 
 function baseStatus(value: unknown): SubscriptionBaseStatus {

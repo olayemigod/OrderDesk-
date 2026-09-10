@@ -101,13 +101,37 @@ export function SubscriptionStatusCard({ tenantId, role, subscription, loading, 
         </View>
       ) : null}
 
-      {subscription.priceAmount === null ? (
-        <Text style={styles.helper}>Commercial price has not been activated yet. No checkout can be started.</Text>
-      ) : (
-        <Text style={styles.helper}>
-          {formatMoney(subscription.priceAmount, subscription.currency)} / {subscription.billingInterval}
+      <View style={styles.chargeBox}>
+        <Text style={styles.chargeTitle}>Base subscription</Text>
+        {subscription.priceAmount === null ? (
+          <Text style={styles.helper}>Commercial base price has not been activated yet. No checkout can be started.</Text>
+        ) : (
+          <Text style={styles.chargeValue}>
+            {formatMoney(subscription.priceAmount, subscription.currency)} / {subscription.billingInterval}
+          </Text>
+        )}
+      </View>
+
+      <View style={styles.chargeBox}>
+        <Text style={styles.chargeTitle}>AI-assisted order activity</Text>
+        <Text style={styles.usageCount}>
+          {subscription.usageUnitsThisPeriod} activit{subcriptionPlural(subscription.usageUnitsThisPeriod)} this period
         </Text>
-      )}
+        {subscription.usageUnitPrice === null ? (
+          <Text style={styles.helper}>
+            Usage is being metered, but the flat activity charge has not been activated. Unpriced activity is not charged retroactively.
+          </Text>
+        ) : (
+          <>
+            <Text style={styles.helper}>
+              {formatMoney(subscription.usageUnitPrice, subscription.currency)} per AI-assisted order activity
+            </Text>
+            <Text style={styles.chargeValue}>
+              Usage so far: {formatMoney(subscription.usageAmountThisPeriod, subscription.currency)}
+            </Text>
+          </>
+        )}
+      </View>
 
       {subscription.checkoutReady && role !== 'owner' && subscription.baseStatus !== 'active' ? (
         <Text style={styles.helper}>Only the business Owner can start or change subscription billing.</Text>
@@ -126,6 +150,10 @@ export function SubscriptionStatusCard({ tenantId, role, subscription, loading, 
       {checkoutError ? <Text style={styles.checkoutError}>{checkoutError}</Text> : null}
     </View>
   );
+}
+
+function subcriptionPlural(value: number): string {
+  return value === 1 ? 'y' : 'ies';
 }
 
 function daysUntil(value: string): number | null {
@@ -192,6 +220,10 @@ const styles = StyleSheet.create({
   readOnlyBox: { backgroundColor: '#FEF3F2', borderRadius: 12, padding: 11, gap: 4 },
   readOnlyTitle: { color: '#B42318', fontSize: 11, fontWeight: '900' },
   readOnlyText: { color: '#912018', fontSize: 10, lineHeight: 16 },
+  chargeBox: { backgroundColor: '#F8FAFC', borderRadius: 12, padding: 11, gap: 4 },
+  chargeTitle: { color: '#344054', fontSize: 10, fontWeight: '900' },
+  chargeValue: { color: '#101828', fontSize: 12, fontWeight: '900' },
+  usageCount: { color: '#475467', fontSize: 11, fontWeight: '800' },
   helper: { color: '#98A2B3', fontSize: 10, lineHeight: 15 },
   checkoutButton: { minHeight: 44, borderRadius: 11, backgroundColor: '#246BFD', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
   checkoutButtonText: { color: '#FFFFFF', fontWeight: '900', fontSize: 12 },
