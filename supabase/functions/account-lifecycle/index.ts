@@ -155,6 +155,7 @@ async function buildBusinessExport(tenantId: string, requestedByUserId: string):
     tenantMembers,
     tenantInvitations,
     tenantSubscriptions,
+    usageEvents,
     checkoutSessions,
   ] = await Promise.all([
     loadTenantRows('catalog_items', tenantId),
@@ -169,6 +170,7 @@ async function buildBusinessExport(tenantId: string, requestedByUserId: string):
     loadTenantRows('tenant_members', tenantId),
     loadTenantRows('tenant_invitations', tenantId),
     loadTenantRows('tenant_subscriptions', tenantId),
+    loadTenantRows('usage_events', tenantId),
     loadTenantRows('billing_checkout_sessions', tenantId),
   ]);
 
@@ -198,6 +200,7 @@ async function buildBusinessExport(tenantId: string, requestedByUserId: string):
     },
     subscription: {
       records: tenantSubscriptions,
+      usageEvents,
       checkoutSessions: checkoutSessions.map(sanitizeCheckoutSession),
     },
   };
