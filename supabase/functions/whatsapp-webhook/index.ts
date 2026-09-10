@@ -74,7 +74,11 @@ Deno.serve(withObservability('whatsapp-webhook', async (request) => {
     return new Response('Server configuration error', { status: 500 });
   }
 
-  const rawBody = await request.text();
+  const bodyRead = await readRequestTextLimited(request, 1_048_576);
+  if (!bodyRead.ok) {
+    return new Response('Payload too large', { status: 413 });
+  }
+  const rawBody = bodyRead.text;
   const signature = request.headers.get('x-hub-signature-256') ?? '';
 
   if (!(await verifyMetaSignature(rawBody, signature, META_APP_SECRET))) {
@@ -659,6 +663,48 @@ function emitObservability(
     console.warn(line);
   } else {
     console.info(line);
+  }
+}
+
+async function readRequestTextLimited(
+  request: Request,
+  maxBytes: number,
+): Promise<{ ok: true; text: string } | { ok: false }> {
+  const declaredLength = request.headers.get('content-length');
+  if (declaredLength) {
+    const parsedLength = Number(declaredLength);
+    if (Number.isFinite(parsedLength) && parsedLength > maxBytes) {
+      return { ok: false };
+    }
+  }
+
+  if (!request.body) return { ok: true, text: '' };
+
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  const parts: string[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        return { ok: false };
+      }
+      parts.push(decoder.decode(value, { stream: true }));
+    }
+
+    parts.push(decoder.decode());
+    return { ok: true, text: parts.join('') };
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      // The reader may already be released after cancellation.
+    }
   }
 }
 

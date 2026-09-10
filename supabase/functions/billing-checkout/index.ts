@@ -27,9 +27,14 @@ Deno.serve(withObservability('billing-checkout', async (request) => {
     return json({ error: 'Authentication required' }, 401);
   }
 
+  const bodyRead = await readRequestTextLimited(request, 65_536);
+  if (!bodyRead.ok) {
+    return json({ error: 'Payload too large' }, 413);
+  }
+
   let body: JsonRecord;
   try {
-    body = await request.json() as JsonRecord;
+    body = JSON.parse(bodyRead.text) as JsonRecord;
   } catch {
     return json({ error: 'Invalid JSON' }, 400);
   }
@@ -309,6 +314,48 @@ function emitObservability(
     console.warn(line);
   } else {
     console.info(line);
+  }
+}
+
+async function readRequestTextLimited(
+  request: Request,
+  maxBytes: number,
+): Promise<{ ok: true; text: string } | { ok: false }> {
+  const declaredLength = request.headers.get('content-length');
+  if (declaredLength) {
+    const parsedLength = Number(declaredLength);
+    if (Number.isFinite(parsedLength) && parsedLength > maxBytes) {
+      return { ok: false };
+    }
+  }
+
+  if (!request.body) return { ok: true, text: '' };
+
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  const parts: string[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        await reader.cancel();
+        return { ok: false };
+      }
+      parts.push(decoder.decode(value, { stream: true }));
+    }
+
+    parts.push(decoder.decode());
+    return { ok: true, text: parts.join('') };
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      // The reader may already be released after cancellation.
+    }
   }
 }
 
