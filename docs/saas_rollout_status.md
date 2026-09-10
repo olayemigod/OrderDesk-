@@ -147,7 +147,7 @@ These are implemented but must not be described as production-accepted yet:
 ### S11E — SellerTray legal-policy alignment — PREVIEW READY / LEGAL APPROVAL PENDING
 - Prepared SellerTray-specific Privacy Policy and Terms covering merchant/customer order data, WhatsApp, AI-assisted parsing, subscriptions, service providers, retention/export/deletion, security, acceptable use and merchant responsibilities.
 - Draft website PR #2 remains deliberately unmerged.
-- Vercel preview for legal commit `836089d` is READY.
+- Vercel preview for the initial legal commit `836089d` is READY; the red-team legal refinement is `a437797` and its preview is also READY.
 - Privacy wording is aligned to the current SellerTray data contract and the Nigeria Data Protection Act rights baseline.
 - The account-deletion page links to the product-specific Privacy/Terms routes on the legal branch.
 - Google Play requires a comprehensive privacy policy accessible in the app plus the separate account-deletion resource; mobile links are implemented but production legal URLs must not be considered accepted until PR #2 is legally approved and published.
@@ -169,6 +169,18 @@ These are implemented but must not be described as production-accepted yet:
 - Root README and current architecture/activation documentation are aligned to SellerTray rather than the obsolete early OrderDesk/S4 checkpoint.
 - Mobile CI #160 passed both Typecheck and SellerTray release preflight on commit `08f8395`.
 - Added machine-readable `docs/release_acceptance.json` and `npm run release:check`; the latter intentionally fails while any required external gate remains unaccepted.
+
+### S11H — auditable Terms/Privacy acceptance — PASS CODE / DEPLOYED
+- Signup now requires explicit acknowledgement of the SellerTray Terms of Service and Privacy Policy.
+- Every authenticated session is gated by `LegalAcceptanceGate` before merchant/admin workspace access.
+- Added append-only `user_legal_acceptances` with Auth-user cascade deletion, current document versions and server timestamp.
+- RLS is enabled; anonymous access is denied; authenticated clients may read their own acceptance but cannot insert/update/delete acceptance records directly.
+- Existing JWT-protected `account-lifecycle` now owns `legal_status` and `accept_legal` actions; no additional privileged public endpoint was introduced.
+- `account-lifecycle` v3 is ACTIVE with JWT verification.
+- Live DB audit confirmed authenticated INSERT is denied while own-row SELECT is policy-gated.
+- Supabase security advisor shows no new application-schema warning; leaked-password protection remains the only Auth warning.
+- Mobile CI #162 passed Typecheck and SellerTray release preflight on commit `7d3edba`.
+- Legal acceptance version is `2026-09-10`; if legal review materially changes the draft before publication, the acceptance version must be bumped before release.
 
 ### Remaining S11 release gates
 - Configure/verify Supabase Auth redirects for `sellertray://auth-confirm`, `sellertray://reset-password` and the two temporary legacy equivalents.

@@ -6,9 +6,9 @@
   "updatedAt": "2026-09-10",
   "codeCheckpoint": {
     "status": "accepted",
-    "commit": "08f8395cd1bb5cd0e873f54e7a177fde5be243b8",
-    "ciRun": 160,
-    "evidence": "Mobile CI #160: typecheck + SellerTray release preflight passed"
+    "commit": "7d3edba333f7be2ffbfbdc70d0aad2f98e43e330",
+    "ciRun": 162,
+    "evidence": "Mobile CI #162: typecheck + SellerTray release preflight passed after auditable legal-acceptance gate"
   },
   "gates": [
     {
@@ -17,6 +17,14 @@
       "status": "accepted",
       "owner": "ProcessEdge",
       "evidence": "https://processedge.com.ng/sellertray/account-deletion returns HTTP 200"
+    },
+    {
+      "id": "in_app_legal_acceptance",
+      "required": true,
+      "status": "accepted",
+      "owner": "ProcessEdge",
+      "evidence": "Migration user_legal_acceptances applied; account-lifecycle v3 ACTIVE; Mobile CI #162 passed",
+      "acceptance": "Authenticated sessions are gated on current Terms/Privacy acceptance and the server records version/timestamp."
     },
     {
       "id": "supabase_auth_redirects",
