@@ -1,7 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { loadBusinesses, type MerchantBusiness } from '../data/businessRepository';
+import {
+  loadBusinesses,
+  updateBusinessProfile,
+  type BusinessProfileInput,
+  type MerchantBusiness,
+} from '../data/businessRepository';
 
 const ACTIVE_BUSINESS_KEY = 'orderdesk.activeBusinessId';
 
@@ -44,6 +49,20 @@ export function useBusinesses() {
     await AsyncStorage.setItem(ACTIVE_BUSINESS_KEY, businessId);
   }, []);
 
+  const saveProfile = useCallback(
+    async (businessId: string, input: BusinessProfileInput) => {
+      try {
+        await updateBusinessProfile(businessId, input);
+        await refresh();
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unable to update the business profile.');
+        throw err;
+      }
+    },
+    [refresh],
+  );
+
   return {
     businesses,
     activeBusiness,
@@ -51,5 +70,6 @@ export function useBusinesses() {
     error,
     refresh,
     selectBusiness,
+    saveProfile,
   };
 }
