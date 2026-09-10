@@ -75,6 +75,7 @@ export function PlatformAdminView({
   const readOnlyTenants = overview.tenants.filter((tenant) => tenant.accessMode === 'read_only').length;
   const reviewOrders = overview.tenants.reduce((sum, tenant) => sum + tenant.needsReview, 0);
   const notificationIssues = overview.tenants.reduce((sum, tenant) => sum + tenant.notificationExceptions, 0);
+  const aiUsage = overview.tenants.reduce((sum, tenant) => sum + tenant.usageUnitsPeriod, 0);
   const canMutate = overview.actorRole === 'admin';
 
   return (
@@ -83,7 +84,7 @@ export function PlatformAdminView({
         <Text style={styles.eyebrow}>PROCESSEDGE OPERATIONS</Text>
         <Text style={styles.title}>{standalone ? 'SellerTray Admin' : 'SaaS Admin'}</Text>
         <Text style={styles.subtitle}>
-          Tenant health, subscriptions, WhatsApp readiness and support controls. Merchant roles cannot access this console.
+          Tenant health, subscriptions, AI usage, WhatsApp readiness and support controls. Merchant roles cannot access this console.
         </Text>
         <View style={styles.rolePill}>
           <Text style={styles.rolePillText}>{overview.actorRole.toUpperCase()}</Text>
@@ -105,6 +106,7 @@ export function PlatformAdminView({
         <Metric label="Read only" value={readOnlyTenants} />
         <Metric label="Need review" value={reviewOrders} />
         <Metric label="WA issues" value={notificationIssues} />
+        <Metric label="AI usage" value={aiUsage} />
       </View>
 
       {!canMutate ? (
@@ -236,6 +238,7 @@ function TenantAdminCard({
       <View style={styles.healthGrid}>
         <SmallMetric label="30d orders" value={tenant.orders30d} />
         <SmallMetric label="Need review" value={tenant.needsReview} />
+        <SmallMetric label="AI usage" value={tenant.usageUnitsPeriod} />
         <SmallMetric label="WA issues" value={tenant.notificationExceptions} />
         <SmallMetric label="Team" value={tenant.teamMembers} />
       </View>
@@ -244,6 +247,11 @@ function TenantAdminCard({
         <DetailRow label="Access" value={tenant.accessMode === 'full' ? 'Full access' : 'Read only'} />
         <DetailRow label="Setup" value={humanize(tenant.onboardingStatus)} />
         <DetailRow label="Trial ends" value={formatOptionalDate(tenant.trialEndsAt)} />
+        <DetailRow
+          label="AI usage rate"
+          value={tenant.usageUnitPrice === null ? 'Not active' : `${formatMoney(tenant.usageUnitPrice, tenant.currency)} / activity`}
+        />
+        <DetailRow label="AI usage amount" value={formatMoney(tenant.usageAmountPeriod, tenant.currency)} />
         <DetailRow label="Last order" value={formatOptionalDateTime(tenant.lastOrderAt)} />
         <DetailRow label="Last WhatsApp" value={formatOptionalDateTime(tenant.lastInboundAt)} />
       </View>
@@ -396,6 +404,14 @@ function formatDateTime(value: string): string {
     hour: '2-digit',
     minute: '2-digit',
   }).format(date);
+}
+
+function formatMoney(value: number, currency: string): string {
+  return new Intl.NumberFormat('en-NG', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 0,
+  }).format(value);
 }
 
 const styles = StyleSheet.create({
