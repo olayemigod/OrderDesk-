@@ -61,6 +61,14 @@ requireValue(authGate.includes('return `sellertray://'), 'Auth redirects must be
 requireValue(authGate.includes("url.startsWith('sellertray://')"), 'AuthGate must accept sellertray://');
 requireValue(authGate.includes("url.startsWith('orderdesk://')"), 'AuthGate must retain legacy orderdesk:// compatibility');
 
+const provisionedApp = read(join(mobileRoot, 'src/ProvisionedApp.tsx'));
+const legalGate = read(join(mobileRoot, 'src/components/LegalAcceptanceGate.tsx'));
+requireValue(provisionedApp.includes('<LegalAcceptanceGate>'), 'Authenticated SellerTray sessions must pass through LegalAcceptanceGate');
+requireValue(legalGate.includes('acceptSellerTrayLegal'), 'LegalAcceptanceGate must record acceptance through the lifecycle repository');
+requireValue(legalGate.includes('https://processedge.com.ng/sellertray/privacy'), 'LegalAcceptanceGate privacy URL is missing');
+requireValue(legalGate.includes('https://processedge.com.ng/sellertray/terms'), 'LegalAcceptanceGate terms URL is missing');
+requireValue(authGate.includes('signupLegalAccepted'), 'SellerTray signup must require legal acknowledgement');
+
 const accountControls = read(join(mobileRoot, 'src/components/AccountDataControls.tsx'));
 requireValue(accountControls.includes('DELETE MY SELLERTRAY ACCOUNT'), 'Account deletion confirmation must use SellerTray');
 requireValue(accountControls.includes('https://processedge.com.ng/sellertray/privacy'), 'In-app SellerTray privacy URL is missing');

@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Tex
 import SaasApp from './SaasApp';
 import { AuthGate } from './components/AuthGate';
 import { CreateBusinessView } from './components/CreateBusinessView';
+import { LegalAcceptanceGate } from './components/LegalAcceptanceGate';
 import { PlatformAdminView } from './components/PlatformAdminView';
 import { useBusinesses } from './hooks/useBusinesses';
 import { usePlatformAdmin } from './hooks/usePlatformAdmin';
@@ -11,7 +12,9 @@ import { supabase } from './lib/supabase';
 export default function ProvisionedApp() {
   return (
     <AuthGate>
-      <ProvisioningGate />
+      <LegalAcceptanceGate>
+        <ProvisioningGate />
+      </LegalAcceptanceGate>
     </AuthGate>
   );
 }

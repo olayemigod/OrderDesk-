@@ -1,12 +1,14 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.115.0';
 
 type JsonRecord = Record<string, unknown>;
-type LifecycleAction = 'export_business' | 'delete_account';
+type LifecycleAction = 'legal_status' | 'accept_legal' | 'export_business' | 'delete_account';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const MAX_BODY_BYTES = 65_536;
 const MAX_EXPORT_ROWS_PER_COLLECTION = 5_000;
+const SELLERTRAY_TERMS_VERSION = '2026-09-10';
+const SELLERTRAY_PRIVACY_VERSION = '2026-09-10';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -50,6 +52,26 @@ Deno.serve(withObservability('account-lifecycle', async (request) => {
   if (!action) return json({ error: 'Unsupported account action' }, 400);
 
   try {
+    if (action === 'legal_status') {
+      return json(await legalAcceptanceStatus(identity.userId));
+    }
+
+    if (action === 'accept_legal') {
+      const { error: acceptanceError } = await admin
+        .from('user_legal_acceptances')
+        .upsert({
+          user_id: identity.userId,
+          terms_version: SELLERTRAY_TERMS_VERSION,
+          privacy_version: SELLERTRAY_PRIVACY_VERSION,
+          accepted_via: 'sellertray_mobile',
+        }, {
+          onConflict: 'user_id,terms_version,privacy_version',
+          ignoreDuplicates: true,
+        });
+      if (acceptanceError) throw acceptanceError;
+      return json(await legalAcceptanceStatus(identity.userId));
+    }
+
     if (action === 'export_business') {
       const tenantId = cleanUuid(body.tenantId);
       if (!tenantId) return json({ error: 'tenantId is required' }, 400);
@@ -92,6 +114,24 @@ Deno.serve(withObservability('account-lifecycle', async (request) => {
     return json({ error: message }, status);
   }
 }));
+
+async function legalAcceptanceStatus(userId: string): Promise<JsonRecord> {
+  const { data, error } = await admin!
+    .from('user_legal_acceptances')
+    .select('accepted_at')
+    .eq('user_id', userId)
+    .eq('terms_version', SELLERTRAY_TERMS_VERSION)
+    .eq('privacy_version', SELLERTRAY_PRIVACY_VERSION)
+    .maybeSingle();
+  if (error) throw error;
+
+  return {
+    accepted: Boolean(data),
+    termsVersion: SELLERTRAY_TERMS_VERSION,
+    privacyVersion: SELLERTRAY_PRIVACY_VERSION,
+    acceptedAt: typeof data?.accepted_at === 'string' ? data.accepted_at : null,
+  };
+}
 
 async function buildBusinessExport(tenantId: string, requestedByUserId: string): Promise<JsonRecord> {
   const { data: tenant, error: tenantError } = await admin!
@@ -334,7 +374,12 @@ function getJwtIdentity(authorization: string): { userId: string | null; email: 
 }
 
 function cleanAction(value: unknown): LifecycleAction | null {
-  return value === 'export_business' || value === 'delete_account' ? value : null;
+  return value === 'legal_status' ||
+      value === 'accept_legal' ||
+      value === 'export_business' ||
+      value === 'delete_account'
+    ? value
+    : null;
 }
 
 function cleanUuid(value: unknown): string | null {

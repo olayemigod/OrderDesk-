@@ -16,6 +16,9 @@ import { supabase } from '../lib/supabase';
 
 type AuthMode = 'sign-in' | 'sign-up' | 'forgot-password' | 'reset-password';
 
+const SELLERTRAY_PRIVACY_URL = 'https://processedge.com.ng/sellertray/privacy';
+const SELLERTRAY_TERMS_URL = 'https://processedge.com.ng/sellertray/terms';
+
 export function AuthGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [booting, setBooting] = useState(true);
@@ -27,6 +30,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [signupLegalAccepted, setSignupLegalAccepted] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -108,6 +112,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
       setError('The passwords do not match.');
       return;
     }
+    if (!signupLegalAccepted) {
+      setError('Review and accept the SellerTray Terms of Service and acknowledge the Privacy Policy.');
+      return;
+    }
 
     setSubmitting(true);
     setError(null);
@@ -134,6 +142,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
     setPassword('');
     setConfirmPassword('');
+    setSignupLegalAccepted(false);
     setMode('sign-in');
     setNotice(
       'Account created. Check your email and confirm your address, then return to SellerTray and sign in with the password you chose.',
@@ -232,6 +241,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     setPassword('');
     setConfirmPassword('');
     setRecoveryUrl('');
+    setSignupLegalAccepted(false);
     setError(null);
     setNotice(null);
   }
@@ -310,6 +320,28 @@ export function AuthGate({ children }: { children: ReactNode }) {
           onPassword={setPassword}
           onConfirmPassword={setConfirmPassword}
         />
+        <View style={styles.legalConsentRow}>
+          <Pressable
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: signupLegalAccepted }}
+            onPress={() => setSignupLegalAccepted((value) => !value)}
+            style={({ pressed }) => [styles.checkboxButton, pressed && styles.buttonPressed]}
+          >
+            <View style={[styles.checkbox, signupLegalAccepted && styles.checkboxChecked]}>
+              <Text style={styles.checkboxMark}>{signupLegalAccepted ? '✓' : ''}</Text>
+            </View>
+          </Pressable>
+          <Text style={styles.legalConsentText}>
+            I agree to the{' '}
+            <Text style={styles.inlineLink} onPress={() => void Linking.openURL(SELLERTRAY_TERMS_URL)}>
+              SellerTray Terms of Service
+            </Text>{' '}
+            and acknowledge the{' '}
+            <Text style={styles.inlineLink} onPress={() => void Linking.openURL(SELLERTRAY_PRIVACY_URL)}>
+              Privacy Policy
+            </Text>.
+          </Text>
+        </View>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <PrimaryButton label="Create account" submitting={submitting} onPress={() => void signUp()} />
         <Text style={styles.note}>You may need to confirm your email before your first sign in.</Text>
@@ -342,7 +374,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
             <Text style={styles.linkText}>Forgot password?</Text>
           </Pressable>
           <Pressable onPress={() => showMode('sign-up')} style={styles.linkButton}>
-            <Text style={styles.linkText}>Create an SellerTray account</Text>
+            <Text style={styles.linkText}>Create a SellerTray account</Text>
           </Pressable>
         </View>
       </AuthCard>
@@ -478,5 +510,12 @@ const styles = StyleSheet.create({
   note: { color: '#98A2B3', fontSize: 12, lineHeight: 18, marginTop: 4 },
   manualRecovery: { borderTopWidth: 1, borderTopColor: '#EAECF0', marginTop: 4, paddingTop: 12, gap: 10 },
   manualTitle: { color: '#344054', fontWeight: '800', fontSize: 13 },
+  legalConsentRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginTop: 2 },
+  checkboxButton: { paddingTop: 1 },
+  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: '#98A2B3', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' },
+  checkboxChecked: { backgroundColor: '#246BFD', borderColor: '#246BFD' },
+  checkboxMark: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
+  legalConsentText: { flex: 1, color: '#667085', fontSize: 12, lineHeight: 18 },
+  inlineLink: { color: '#246BFD', fontWeight: '800' },
   muted: { color: '#667085' },
 });
