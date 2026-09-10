@@ -5,8 +5,10 @@ import type {
   BusinessProfileInput,
   MerchantBusiness,
 } from '../data/businessRepository';
+import { useSubscriptionAccess } from '../hooks/useSubscriptionAccess';
 import { CatalogueView } from './CatalogueView';
 import { CustomerNotificationSettings } from './CustomerNotificationSettings';
+import { SubscriptionStatusCard } from './SubscriptionStatusCard';
 import { TeamManagementView } from './TeamManagementView';
 
 type Props = {
@@ -16,6 +18,7 @@ type Props = {
 
 export function BusinessProfileView({ business, onSave }: Props) {
   const canEdit = business.role === 'owner' || business.role === 'manager';
+  const { subscription, loading: subscriptionLoading, error: subscriptionError } = useSubscriptionAccess(business.id);
   const [name, setName] = useState(business.name);
   const [businessType, setBusinessType] = useState(business.businessType ?? '');
   const [email, setEmail] = useState(business.businessEmail ?? '');
@@ -84,6 +87,12 @@ export function BusinessProfileView({ business, onSave }: Props) {
           This information identifies your OrderDesk workspace. Plan, onboarding and WhatsApp connection state are controlled by OrderDesk.
         </Text>
       </View>
+
+      <SubscriptionStatusCard
+        subscription={subscription}
+        loading={subscriptionLoading}
+        error={subscriptionError}
+      />
 
       {!canEdit ? (
         <View style={styles.readOnlyNotice}>
