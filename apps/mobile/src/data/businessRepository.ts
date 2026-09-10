@@ -21,6 +21,16 @@ export type MerchantBusiness = {
   whatsappConnectionStatus: WhatsAppConnectionStatus;
 };
 
+export type BusinessProfileInput = {
+  name: string;
+  businessEmail: string | null;
+  businessPhone: string | null;
+  businessType: string | null;
+  logoUrl: string | null;
+  currency: string;
+  timezone: string;
+};
+
 type MembershipRow = {
   role: MerchantRole;
   tenants:
@@ -107,4 +117,37 @@ export async function loadBusinesses(): Promise<MerchantBusiness[]> {
       } satisfies MerchantBusiness;
     })
     .filter((business): business is MerchantBusiness => business !== null);
+}
+
+export async function updateBusinessProfile(
+  businessId: string,
+  input: BusinessProfileInput,
+): Promise<void> {
+  const name = input.name.trim();
+  const currency = input.currency.trim().toUpperCase();
+  const timezone = input.timezone.trim();
+
+  if (!name) throw new Error('Business name is required.');
+  if (currency.length !== 3) throw new Error('Currency must be a 3-letter code.');
+  if (!timezone) throw new Error('Timezone is required.');
+
+  const { error } = await supabase
+    .from('tenants')
+    .update({
+      name,
+      business_email: cleanOptional(input.businessEmail),
+      business_phone: cleanOptional(input.businessPhone),
+      business_type: cleanOptional(input.businessType),
+      logo_url: cleanOptional(input.logoUrl),
+      currency,
+      timezone,
+    })
+    .eq('id', businessId);
+
+  if (error) throw error;
+}
+
+function cleanOptional(value: string | null): string | null {
+  const clean = value?.trim() ?? '';
+  return clean || null;
 }
