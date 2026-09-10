@@ -86,8 +86,8 @@ Deno.serve(withObservability('billing-checkout', async (request) => {
       plan: plan.provider_plan_ref,
       reference,
       metadata: JSON.stringify({
-        orderdeskTenantId: tenantId,
-        orderdeskPlanCode: plan.code,
+        sellertrayTenantId: tenantId,
+        sellertrayPlanCode: plan.code,
         requestedByUserId: identity.userId,
       }),
     }),
@@ -176,7 +176,7 @@ function cleanUuid(value: unknown): string | null {
 function makeReference(tenantId: string): string {
   const tenant = tenantId.replace(/-/g, '').slice(0, 10);
   const random = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
-  return `od-${tenant}-${Date.now()}-${random}`;
+  return `st-${tenant}-${Date.now()}-${random}`;
 }
 
 function toNumber(value: number | string | null): number | null {
