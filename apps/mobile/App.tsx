@@ -1,1 +1,1 @@
-export { default } from './src/SaasApp';
+export { default } from './src/ProvisionedApp';
