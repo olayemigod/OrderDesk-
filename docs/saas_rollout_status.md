@@ -233,11 +233,19 @@ These are implemented but must not be described as production-accepted yet:
 - This is a preventative manifest-merge guardrail: future features that genuinely require a blocked capability must explicitly revise the product/privacy/Play contract rather than inheriting it transitively.
 - Mobile CI #175 passed the full deny-list preflight on commit `4fab718`.
 
-### S11O — Android local-backup boundary — CODE READY / CI PENDING
+### S11O — Android local-backup boundary — PASS
 - Expo `android.allowBackup` is now explicitly false for SellerTray 1.0.0.
 - This prevents Android Auto Backup/restore from copying SellerTray application-local state through the normal Google Drive/device backup mechanism.
 - The preflight gate now fails if Auto Backup is re-enabled silently.
 - This is intentionally separate from SellerTray's explicit business-data export and server disaster-recovery backup contracts.
+- Mobile CI #176 passed locked install, production dependency audit, typecheck and the Auto Backup preflight on commit `2de6742`.
+
+### S11P — legal-acceptance version evolution — DB FIX READY / VERIFICATION PENDING
+- Audit found the original `user_legal_acceptances` migration incorrectly constrained Terms/Privacy versions to exactly `2026-09-10`.
+- That would prevent preserving historical acceptance rows when SellerTray publishes a future policy version.
+- The fix removes current-version equality constraints and replaces them with non-empty, trimmed, maximum-64-character version constraints.
+- Current-version enforcement remains in the JWT-protected lifecycle service, where it belongs: a session must accept the service's current Terms/Privacy constants, while older acceptance rows remain valid audit history.
+- The unique key `(user_id, terms_version, privacy_version)` continues to permit one auditable acceptance per version pair.
 
 ### Remaining S11 release gates
 - Configure/verify Supabase Auth redirects for `sellertray://auth-confirm`, `sellertray://reset-password` and the two temporary legacy equivalents.

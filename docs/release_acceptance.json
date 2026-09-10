@@ -6,9 +6,9 @@
   "updatedAt": "2026-09-10",
   "codeCheckpoint": {
     "status": "accepted",
-    "commit": "4fab718c202f720e706dea557793e54abea8b9b8",
-    "ciRun": 175,
-    "evidence": "Mobile CI #175 passed npm ci, production dependency audit, typecheck, release-manifest integrity and the sensitive Android permission deny-list"
+    "commit": "2de6742d2d415c686e923a0b3a414932e9785207",
+    "ciRun": 176,
+    "evidence": "Mobile CI #176 passed npm ci, production dependency audit, typecheck, release-manifest integrity, Android sensitive-permission deny-list and Auto Backup disabled preflight"
   },
   "gates": [
     {
