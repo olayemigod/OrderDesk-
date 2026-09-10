@@ -91,10 +91,18 @@ These are implemented but must not be described as production-accepted yet:
 4. **Paystack billing** — approve commercial monthly price, create/configure Paystack plan reference and server secret, then run test-mode checkout/webhook acceptance before live mode.
 5. **Production email** — configure production SMTP/Auth email delivery.
 
-## S11 — production hardening — NEXT
+## S11 — production hardening — IN PROGRESS
 
-The hardening gate must cover at minimum:
-- Error/health observability for webhook, parser, notification, billing and admin functions.
+### S11A — structured Edge Function observability — PASS CODE / DEPLOYED; RUNTIME CORRELATION SMOKE PENDING
+- Standardized structured request-start, request-finish and uncaught-exception logs across `whatsapp-webhook`, `order-parser`, `send-whatsapp-notifications`, `billing-checkout`, `paystack-webhook` and `platform-admin`.
+- Every function-generated response receives an `x-orderdesk-request-id` correlation header.
+- Logs include only service, request ID, method, pathname, status and duration by default; query strings, request bodies, customer message text and authorization headers are not logged by the wrapper.
+- Uncaught error messages are length-limited and redact common bearer/secret-key patterns before logging.
+- All six target functions were redeployed ACTIVE to the OrderDesk Supabase project without changing their existing JWT verification boundaries.
+- Mobile CI #146 passed on commit `4d7904d`.
+- Direct external HTTP correlation smoke could not be run from the current execution environment because outbound DNS resolution is unavailable; production/provider E2E remains an explicit acceptance gate rather than being silently assumed.
+
+### Remaining S11 hardening
 - Security/RLS regression checks and platform-admin boundary checks.
 - Data backup/recovery verification and retention policy.
 - Rate/abuse controls on public and authenticated server boundaries.
@@ -102,6 +110,9 @@ The hardening gate must cover at minimum:
 - Privacy policy, Terms of Service and account/data deletion/export operating contract.
 - Signed Android production build configuration and native smoke test.
 - Release/versioning and rollback runbook.
+
+### Next bounded slice
+**S11B — security regression + abuse-control foundation**: rerun tenant/RLS/admin boundary tests, review public Edge Function abuse surfaces, then add the smallest server-side controls needed before external pilot traffic.
 
 ## Commercial launch gate
 
