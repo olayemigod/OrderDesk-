@@ -226,6 +226,11 @@ requireValue(
   'Usage settlement worker must retain the independent database charging interlock',
 );
 requireValue(
+  usageSettlementWorker.includes("status=eq.pending&select=id,status") &&
+    usageSettlementWorker.includes("chargeClaimedByAnotherRequest"),
+  'Usage settlement worker must atomically claim pending settlements before Paystack debit',
+);
+requireValue(
   usageSettlementWorker.includes("BILLING_AUTH_ENCRYPTION_KEY"),
   'Usage settlement worker must require the billing authorization encryption key',
 );
