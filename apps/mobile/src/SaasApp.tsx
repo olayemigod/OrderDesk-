@@ -14,6 +14,7 @@ import {
 import { AuthGate } from './components/AuthGate';
 import { BusinessProfileView } from './components/BusinessProfileView';
 import { OrderItemsEditor } from './components/OrderItemsEditor';
+import { OrderWorkflowPanel } from './components/OrderWorkflowPanel';
 import type { MerchantBusiness } from './data/businessRepository';
 import type { OrderItemInput } from './data/ordersRepository';
 import { orderTotal, type MerchantOrder, type OrderStatus } from './domain/order';
@@ -602,7 +603,7 @@ function OrderList({
               {order.customerMessage || 'No customer message captured.'}
             </Text>
             <Text style={styles.orderMeta}>
-              {order.items.length} item{order.items.length === 1 ? '' : 's'} · {order.source === 'whatsapp' ? 'WhatsApp' : 'Manual'} · {order.confidence === null ? 'Unscored' : `${Math.round(order.confidence * 100)}% parsed`}{reviewChecks > 0 ? ` · ${reviewChecks} review check${reviewChecks === 1 ? '' : 's'}` : ''}
+              {order.items.length} item{order.items.length === 1 ? '' : 's'} · {order.source === 'whatsapp' ? 'WhatsApp' : 'Manual'} · {order.confidence === null ? 'Unscored' : `${Math.round(order.confidence * 100)}% parsed`}{reviewChecks > 0 ? ` · ${reviewChecks} initial review check${reviewChecks === 1 ? '' : 's'}` : ''}
             </Text>
           </Pressable>
         );
@@ -636,7 +637,6 @@ function OrderDetail({
 }) {
   const total = orderTotal(order);
   const editable = order.status === 'needs_review' || order.status === 'draft';
-  const canAccept = order.items.length > 0 && order.items.every((item) => item.unitPrice !== null);
 
   return (
     <View style={styles.detailCard}>
@@ -644,6 +644,7 @@ function OrderDetail({
         <View style={styles.orderIdentity}>
           <Text style={styles.detailTitle}>{order.customerName}</Text>
           <Text style={styles.orderMeta}>{order.customerPhone}</Text>
+          <Text style={styles.orderMeta}>{formatReceivedAt(order.receivedAt)} · {order.source === 'whatsapp' ? 'WhatsApp' : 'Manual'}</Text>
         </View>
         <StatusPill status={order.status} />
       </View>
@@ -655,7 +656,7 @@ function OrderDetail({
 
       <View>
         <Text style={styles.sectionTitle}>{editable ? 'Review order items' : 'Order items'}</Text>
-        {editable ? <Text style={styles.pageSubtitle}>Correct AI parsing and prices before acceptance.</Text> : null}
+        {editable ? <Text style={styles.pageSubtitle}>Correct AI interpretation and prices before acceptance.</Text> : null}
       </View>
 
       <OrderItemsEditor
@@ -671,16 +672,8 @@ function OrderDetail({
         <Text style={styles.totalValue}>{total === null ? 'Needs pricing' : formatMoney(total, currency)}</Text>
       </View>
 
-      {editable && !canAccept ? (
-        <View style={styles.noticeCard}>
-          <Text style={styles.noticeTitle}>Complete the order before accepting</Text>
-          <Text style={styles.noticeText}>Every accepted order needs at least one item and a selling price for every line.</Text>
-        </View>
-      ) : null}
-
-      <OrderActions
-        status={order.status}
-        canAccept={canAccept}
+      <OrderWorkflowPanel
+        order={order}
         onAccept={onAccept}
         onReject={onReject}
         onStart={onStart}
@@ -688,64 +681,6 @@ function OrderDetail({
         onComplete={onComplete}
       />
     </View>
-  );
-}
-
-function OrderActions({
-  status,
-  canAccept,
-  onAccept,
-  onReject,
-  onStart,
-  onReady,
-  onComplete,
-}: {
-  status: OrderStatus;
-  canAccept: boolean;
-  onAccept: () => Promise<void>;
-  onReject: () => Promise<void>;
-  onStart: () => Promise<void>;
-  onReady: () => Promise<void>;
-  onComplete: () => Promise<void>;
-}) {
-  if (status === 'needs_review' || status === 'draft') {
-    return (
-      <View style={styles.actionRow}>
-        <ActionButton label="Reject" secondary onPress={() => void onReject()} />
-        <ActionButton label="Accept order" disabled={!canAccept} onPress={() => void onAccept()} />
-      </View>
-    );
-  }
-  if (status === 'accepted') return <ActionButton label="Start processing" onPress={() => void onStart()} />;
-  if (status === 'processing') return <ActionButton label="Mark ready" onPress={() => void onReady()} />;
-  if (status === 'ready') return <ActionButton label="Complete order" onPress={() => void onComplete()} />;
-  return null;
-}
-
-function ActionButton({
-  label,
-  onPress,
-  secondary = false,
-  disabled = false,
-}: {
-  label: string;
-  onPress: () => void;
-  secondary?: boolean;
-  disabled?: boolean;
-}) {
-  return (
-    <Pressable
-      disabled={disabled}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.actionButton,
-        secondary && styles.actionButtonSecondary,
-        disabled && styles.disabled,
-        pressed && !disabled && styles.pressed,
-      ]}
-    >
-      <Text style={[styles.actionButtonText, secondary && styles.actionButtonSecondaryText]}>{label}</Text>
-    </Pressable>
   );
 }
 
@@ -910,14 +845,6 @@ const styles = StyleSheet.create({
   totalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingTop: 2 },
   totalLabel: { color: '#667085', fontWeight: '800', fontSize: 12 },
   totalValue: { color: '#101828', fontWeight: '900', fontSize: 19 },
-  noticeCard: { backgroundColor: '#FFF8E7', borderRadius: 12, padding: 12 },
-  noticeTitle: { color: '#7A2E0E', fontWeight: '900', fontSize: 12 },
-  noticeText: { color: '#854A0E', fontSize: 11, lineHeight: 17, marginTop: 3 },
-  actionRow: { flexDirection: 'row', gap: 9 },
-  actionButton: { flex: 1, minHeight: 46, backgroundColor: '#246BFD', borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, marginTop: 2 },
-  actionButtonSecondary: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D0D5DD' },
-  actionButtonText: { color: '#FFFFFF', fontWeight: '900', fontSize: 13 },
-  actionButtonSecondaryText: { color: '#344054' },
   bottomNav: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#EAECF0', backgroundColor: '#FFFFFF', paddingHorizontal: 10, paddingVertical: 8, gap: 6 },
   navButton: { flex: 1, minHeight: 44, borderRadius: 11, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 },
   navButtonActive: { backgroundColor: '#EEF4FF' },
@@ -935,6 +862,4 @@ const styles = StyleSheet.create({
   muted: { color: '#667085', fontSize: 11 },
   primaryButton: { minHeight: 44, borderRadius: 11, backgroundColor: '#246BFD', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
   primaryButtonText: { color: '#FFFFFF', fontWeight: '900' },
-  pressed: { opacity: 0.8 },
-  disabled: { opacity: 0.35 },
 });
