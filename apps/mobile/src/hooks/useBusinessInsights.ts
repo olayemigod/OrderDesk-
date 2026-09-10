@@ -4,6 +4,7 @@ import {
   loadBusinessInsights,
   type BusinessInsights,
 } from '../data/insightsRepository';
+import { supabase } from '../lib/supabase';
 
 export function useBusinessInsights(tenantId: string | null) {
   const [insights, setInsights] = useState<BusinessInsights | null>(null);
@@ -31,7 +32,26 @@ export function useBusinessInsights(tenantId: string | null) {
 
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+    if (!tenantId) return undefined;
+
+    const channel = supabase
+      .channel(`business-insights-${tenantId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders', filter: `tenant_id=eq.${tenantId}` },
+        () => void refresh(),
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'order_items', filter: `tenant_id=eq.${tenantId}` },
+        () => void refresh(),
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [refresh, tenantId]);
 
   return { insights, loading, error, refresh };
 }
