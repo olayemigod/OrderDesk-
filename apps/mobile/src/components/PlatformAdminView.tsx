@@ -76,6 +76,7 @@ export function PlatformAdminView({
   const reviewOrders = overview.tenants.reduce((sum, tenant) => sum + tenant.needsReview, 0);
   const notificationIssues = overview.tenants.reduce((sum, tenant) => sum + tenant.notificationExceptions, 0);
   const aiUsage = overview.tenants.reduce((sum, tenant) => sum + tenant.usageUnitsPeriod, 0);
+  const failedUsageSettlements = overview.tenants.reduce((sum, tenant) => sum + tenant.usageFailedSettlements, 0);
   const canMutate = overview.actorRole === 'admin';
 
   return (
@@ -107,6 +108,7 @@ export function PlatformAdminView({
         <Metric label="Need review" value={reviewOrders} />
         <Metric label="WA issues" value={notificationIssues} />
         <Metric label="AI usage" value={aiUsage} />
+        <Metric label="Usage failures" value={failedUsageSettlements} />
       </View>
 
       {!canMutate ? (
@@ -252,6 +254,12 @@ function TenantAdminCard({
           value={tenant.usageUnitPrice === null ? 'Not active' : `${formatMoney(tenant.usageUnitPrice, tenant.currency)} / activity`}
         />
         <DetailRow label="AI usage amount" value={formatMoney(tenant.usageAmountPeriod, tenant.currency)} />
+        <DetailRow
+          label="Usage payment"
+          value={tenant.usageAuthorizationReady ? 'Reusable authorization ready' : 'Authorization not ready'}
+        />
+        <DetailRow label="Usage outstanding" value={formatMoney(tenant.usageOutstandingAmount, tenant.currency)} />
+        <DetailRow label="Usage failures" value={String(tenant.usageFailedSettlements)} />
         <DetailRow label="Last order" value={formatOptionalDateTime(tenant.lastOrderAt)} />
         <DetailRow label="Last WhatsApp" value={formatOptionalDateTime(tenant.lastInboundAt)} />
       </View>
