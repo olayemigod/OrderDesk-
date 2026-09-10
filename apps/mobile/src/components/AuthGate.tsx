@@ -14,10 +14,7 @@ import type { Session } from '@supabase/supabase-js';
 
 import { supabase } from '../lib/supabase';
 
-type AuthMode = 'sign-in' | 'forgot-password' | 'reset-password';
-
-const recoveryRedirectUrl =
-  Platform.OS === 'web' ? 'http://localhost:3000' : 'orderdesk://reset-password';
+type AuthMode = 'sign-in' | 'sign-up' | 'forgot-password' | 'reset-password';
 
 export function AuthGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -37,19 +34,15 @@ export function AuthGate({ children }: { children: ReactNode }) {
     const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (!active) return;
       setSession(nextSession);
-      if (event === 'PASSWORD_RECOVERY') {
-        setMode('reset-password');
-      }
+      if (event === 'PASSWORD_RECOVERY') setMode('reset-password');
       setBooting(false);
     });
 
     async function bootstrapAuth() {
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         const currentUrl = window.location.href;
-        const tokens = parseRecoveryTokens(currentUrl);
-
-        if (tokens) {
-          await consumeRecoveryUrl(currentUrl);
+        if (parseAuthTokens(currentUrl)) {
+          await consumeAuthUrl(currentUrl);
           if (active) {
             window.history.replaceState(null, '', window.location.pathname || '/');
             setBooting(false);
@@ -67,15 +60,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
     void bootstrapAuth();
 
     const handleUrl = ({ url }: { url: string }) => {
-      void consumeRecoveryUrl(url);
+      if (url.startsWith('orderdesk://')) void consumeAuthUrl(url);
     };
 
     const subscription = Linking.addEventListener('url', handleUrl);
     if (Platform.OS !== 'web') {
       void Linking.getInitialURL().then((url) => {
-        if (url?.startsWith('orderdesk://reset-password')) {
-          void consumeRecoveryUrl(url);
-        }
+        if (url?.startsWith('orderdesk://')) void consumeAuthUrl(url);
       });
     }
 
@@ -104,6 +95,51 @@ export function AuthGate({ children }: { children: ReactNode }) {
     if (signInError) setError(signInError.message);
   }
 
+  async function signUp() {
+    if (!email.trim()) {
+      setError('Enter your email address.');
+      return;
+    }
+    if (password.length < 8) {
+      setError('Use a password with at least 8 characters.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('The passwords do not match.');
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+    setNotice(null);
+
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        emailRedirectTo: authRedirectUrl('auth-confirm'),
+      },
+    });
+
+    setSubmitting(false);
+    if (signUpError) {
+      setError(signUpError.message);
+      return;
+    }
+
+    if (data.session) {
+      setSession(data.session);
+      return;
+    }
+
+    setPassword('');
+    setConfirmPassword('');
+    setMode('sign-in');
+    setNotice(
+      'Account created. Check your email and confirm your address, then return to OrderDesk and sign in with the password you chose.',
+    );
+  }
+
   async function requestPasswordReset() {
     if (!email.trim()) {
       setError('Enter your merchant email first.');
@@ -114,7 +150,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     setError(null);
     setNotice(null);
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: recoveryRedirectUrl,
+      redirectTo: authRedirectUrl('reset-password'),
     });
     setSubmitting(false);
 
@@ -125,34 +161,40 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
     setNotice(
       Platform.OS === 'web'
-        ? 'Recovery email sent. Open the link on this PC to return to OrderDesk and set a new password.'
+        ? 'Recovery email sent. Open the link in this browser to return to OrderDesk and set a new password.'
         : 'Recovery email sent. Open the link. If Expo Go cannot open OrderDesk automatically, copy the final recovery URL and paste it below.',
     );
   }
 
-  async function consumeRecoveryUrl(url: string) {
-    const tokens = parseRecoveryTokens(url);
-    if (!tokens) {
-      setError('That recovery URL does not contain a valid recovery session. Request a fresh email and try again.');
+  async function consumeAuthUrl(url: string) {
+    const parsed = parseAuthTokens(url);
+    if (!parsed) {
+      setError('That authentication URL does not contain a valid OrderDesk session. Request a fresh email and try again.');
       return;
     }
 
     setSubmitting(true);
     setError(null);
     setNotice(null);
-    const { data, error: sessionError } = await supabase.auth.setSession(tokens);
+    const { data, error: sessionError } = await supabase.auth.setSession({
+      access_token: parsed.accessToken,
+      refresh_token: parsed.refreshToken,
+    });
     setSubmitting(false);
 
     if (sessionError || !data.session) {
-      setError(sessionError?.message ?? 'Could not open the recovery session. Request a fresh recovery email.');
+      setError(sessionError?.message ?? 'Could not open the authentication session. Request a fresh email.');
       return;
     }
 
     setSession(data.session);
     setRecoveryUrl('');
-    setPassword('');
-    setConfirmPassword('');
-    setMode('reset-password');
+
+    if (parsed.type === 'recovery') {
+      setPassword('');
+      setConfirmPassword('');
+      setMode('reset-password');
+    }
   }
 
   async function updatePassword() {
@@ -185,19 +227,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
     setNotice('Password set successfully. Sign in with your new password.');
   }
 
-  function showForgotPassword() {
-    setMode('forgot-password');
-    setPassword('');
-    setError(null);
-    setNotice(null);
-  }
-
-  function showSignIn() {
-    setMode('sign-in');
+  function showMode(nextMode: AuthMode) {
+    setMode(nextMode);
     setPassword('');
     setConfirmPassword('');
     setRecoveryUrl('');
     setError(null);
+    setNotice(null);
   }
 
   if (booting) {
@@ -211,64 +247,26 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   if (mode === 'reset-password') {
     return (
-      <AuthCard
-        title="Set a new password"
-        subtitle="Choose the password you will use to sign in to OrderDesk."
-      >
-        <TextInput
-          autoCapitalize="none"
-          autoComplete="new-password"
-          placeholder="New password"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-          style={styles.input}
+      <AuthCard title="Set a new password" subtitle="Choose the password you will use to sign in to OrderDesk.">
+        <PasswordInputs
+          password={password}
+          confirmPassword={confirmPassword}
+          onPassword={setPassword}
+          onConfirmPassword={setConfirmPassword}
         />
-        <TextInput
-          autoCapitalize="none"
-          autoComplete="new-password"
-          placeholder="Confirm new password"
-          secureTextEntry
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-          style={styles.input}
-        />
-
         {error ? <Text style={styles.error}>{error}</Text> : null}
-
-        <PrimaryButton
-          label="Set password"
-          submitting={submitting}
-          onPress={() => void updatePassword()}
-        />
+        <PrimaryButton label="Set password" submitting={submitting} onPress={() => void updatePassword()} />
       </AuthCard>
     );
   }
 
   if (!session && mode === 'forgot-password') {
     return (
-      <AuthCard
-        title="Reset password"
-        subtitle="We will send a recovery link to your provisioned merchant email."
-      >
-        <TextInput
-          autoCapitalize="none"
-          autoComplete="email"
-          keyboardType="email-address"
-          placeholder="Email"
-          value={email}
-          onChangeText={setEmail}
-          style={styles.input}
-        />
-
+      <AuthCard title="Reset password" subtitle="We will send a recovery link to your merchant email.">
+        <EmailInput email={email} onChange={setEmail} />
         {notice ? <Text style={styles.notice}>{notice}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
-
-        <PrimaryButton
-          label="Send recovery email"
-          submitting={submitting}
-          onPress={() => void requestPasswordReset()}
-        />
+        <PrimaryButton label="Send recovery email" submitting={submitting} onPress={() => void requestPasswordReset()} />
 
         {Platform.OS !== 'web' ? (
           <View style={styles.manualRecovery}>
@@ -287,7 +285,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
             />
             <Pressable
               disabled={submitting || !recoveryUrl.trim()}
-              onPress={() => void consumeRecoveryUrl(recoveryUrl.trim())}
+              onPress={() => void consumeAuthUrl(recoveryUrl.trim())}
               style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
             >
               <Text style={styles.secondaryButtonText}>Continue with recovery URL</Text>
@@ -295,8 +293,28 @@ export function AuthGate({ children }: { children: ReactNode }) {
           </View>
         ) : null}
 
-        <Pressable onPress={showSignIn} style={styles.linkButton}>
+        <Pressable onPress={() => showMode('sign-in')} style={styles.linkButton}>
           <Text style={styles.linkText}>Back to sign in</Text>
+        </Pressable>
+      </AuthCard>
+    );
+  }
+
+  if (!session && mode === 'sign-up') {
+    return (
+      <AuthCard title="Create your OrderDesk account" subtitle="Start with your email. Your business workspace comes next.">
+        <EmailInput email={email} onChange={setEmail} />
+        <PasswordInputs
+          password={password}
+          confirmPassword={confirmPassword}
+          onPassword={setPassword}
+          onConfirmPassword={setConfirmPassword}
+        />
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <PrimaryButton label="Create account" submitting={submitting} onPress={() => void signUp()} />
+        <Text style={styles.note}>You may need to confirm your email before your first sign in.</Text>
+        <Pressable onPress={() => showMode('sign-in')} style={styles.linkButton}>
+          <Text style={styles.linkText}>Already have an account? Sign in</Text>
         </Pressable>
       </AuthCard>
     );
@@ -304,19 +322,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   if (!session) {
     return (
-      <AuthCard
-        title="Merchant sign in"
-        subtitle="Manage WhatsApp orders from one mobile inbox."
-      >
-        <TextInput
-          autoCapitalize="none"
-          autoComplete="email"
-          keyboardType="email-address"
-          placeholder="Email"
-          value={email}
-          onChangeText={setEmail}
-          style={styles.input}
-        />
+      <AuthCard title="Merchant sign in" subtitle="Turn WhatsApp messages into organised orders.">
+        <EmailInput email={email} onChange={setEmail} />
         <TextInput
           autoCapitalize="none"
           autoComplete="password"
@@ -326,19 +333,18 @@ export function AuthGate({ children }: { children: ReactNode }) {
           onChangeText={setPassword}
           style={styles.input}
         />
-
         {notice ? <Text style={styles.notice}>{notice}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
-
         <PrimaryButton label="Sign in" submitting={submitting} onPress={() => void signIn()} />
 
-        <Pressable onPress={showForgotPassword} style={styles.linkButton}>
-          <Text style={styles.linkText}>Forgot password?</Text>
-        </Pressable>
-
-        <Text style={styles.note}>
-          Merchant accounts are provisioned to an OrderDesk business before sign-in.
-        </Text>
+        <View style={styles.authLinks}>
+          <Pressable onPress={() => showMode('forgot-password')} style={styles.linkButton}>
+            <Text style={styles.linkText}>Forgot password?</Text>
+          </Pressable>
+          <Pressable onPress={() => showMode('sign-up')} style={styles.linkButton}>
+            <Text style={styles.linkText}>Create an OrderDesk account</Text>
+          </Pressable>
+        </View>
       </AuthCard>
     );
   }
@@ -346,15 +352,56 @@ export function AuthGate({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-function AuthCard({
-  title,
-  subtitle,
-  children,
+function EmailInput({ email, onChange }: { email: string; onChange: (value: string) => void }) {
+  return (
+    <TextInput
+      autoCapitalize="none"
+      autoComplete="email"
+      keyboardType="email-address"
+      placeholder="Email"
+      value={email}
+      onChangeText={onChange}
+      style={styles.input}
+    />
+  );
+}
+
+function PasswordInputs({
+  password,
+  confirmPassword,
+  onPassword,
+  onConfirmPassword,
 }: {
-  title: string;
-  subtitle: string;
-  children: ReactNode;
+  password: string;
+  confirmPassword: string;
+  onPassword: (value: string) => void;
+  onConfirmPassword: (value: string) => void;
 }) {
+  return (
+    <>
+      <TextInput
+        autoCapitalize="none"
+        autoComplete="new-password"
+        placeholder="Password (8+ characters)"
+        secureTextEntry
+        value={password}
+        onChangeText={onPassword}
+        style={styles.input}
+      />
+      <TextInput
+        autoCapitalize="none"
+        autoComplete="new-password"
+        placeholder="Confirm password"
+        secureTextEntry
+        value={confirmPassword}
+        onChangeText={onConfirmPassword}
+        style={styles.input}
+      />
+    </>
+  );
+}
+
+function AuthCard({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.card}>
@@ -367,118 +414,65 @@ function AuthCard({
   );
 }
 
-function PrimaryButton({
-  label,
-  submitting,
-  onPress,
-}: {
-  label: string;
-  submitting: boolean;
-  onPress: () => void;
-}) {
+function PrimaryButton({ label, submitting, onPress }: { label: string; submitting: boolean; onPress: () => void }) {
   return (
     <Pressable
       disabled={submitting}
       onPress={onPress}
-      style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+      style={({ pressed }) => [styles.button, pressed && styles.buttonPressed, submitting && styles.buttonDisabled]}
     >
-      {submitting ? (
-        <ActivityIndicator color="#FFFFFF" />
-      ) : (
-        <Text style={styles.buttonText}>{label}</Text>
-      )}
+      {submitting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.buttonText}>{label}</Text>}
     </Pressable>
   );
 }
 
-function parseRecoveryTokens(url: string): { access_token: string; refresh_token: string } | null {
+function authRedirectUrl(path: string): string {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') return window.location.origin;
+  return `orderdesk://${path}`;
+}
+
+function parseAuthTokens(url: string): {
+  accessToken: string;
+  refreshToken: string;
+  type: string | null;
+} | null {
   const hashIndex = url.indexOf('#');
   if (hashIndex < 0) return null;
 
   const params = new URLSearchParams(url.slice(hashIndex + 1));
   const accessToken = params.get('access_token');
   const refreshToken = params.get('refresh_token');
-  const type = params.get('type');
-
-  if (!accessToken || !refreshToken || (type && type !== 'recovery')) return null;
+  if (!accessToken || !refreshToken) return null;
 
   return {
-    access_token: accessToken,
-    refresh_token: refreshToken,
+    accessToken,
+    refreshToken,
+    type: params.get('type'),
   };
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: '#F6F7F9',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  centered: {
-    flex: 1,
-    gap: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F6F7F9',
-  },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#EAECF0',
-    padding: 22,
-    gap: 12,
-  },
+  screen: { flex: 1, backgroundColor: '#F6F7F9', justifyContent: 'center', padding: 24 },
+  centered: { flex: 1, gap: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F6F7F9' },
+  card: { backgroundColor: '#FFFFFF', borderRadius: 20, borderWidth: 1, borderColor: '#EAECF0', padding: 22, gap: 12 },
   eyebrow: { color: '#246BFD', fontSize: 12, fontWeight: '800', letterSpacing: 1.4 },
   title: { color: '#101828', fontSize: 28, fontWeight: '900' },
   subtitle: { color: '#667085', fontSize: 14, lineHeight: 20, marginBottom: 8 },
-  input: {
-    minHeight: 50,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#D0D5DD',
-    paddingHorizontal: 14,
-    backgroundColor: '#FFFFFF',
-    color: '#101828',
-  },
-  urlInput: {
-    minHeight: 84,
-    paddingTop: 12,
-    textAlignVertical: 'top',
-  },
-  button: {
-    minHeight: 50,
-    borderRadius: 12,
-    backgroundColor: '#246BFD',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 4,
-  },
-  secondaryButton: {
-    minHeight: 46,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#D0D5DD',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 14,
-  },
+  input: { minHeight: 50, borderRadius: 12, borderWidth: 1, borderColor: '#D0D5DD', paddingHorizontal: 14, backgroundColor: '#FFFFFF', color: '#101828' },
+  urlInput: { minHeight: 84, paddingTop: 12, textAlignVertical: 'top' },
+  button: { minHeight: 50, borderRadius: 12, backgroundColor: '#246BFD', alignItems: 'center', justifyContent: 'center', marginTop: 4 },
+  buttonDisabled: { opacity: 0.5 },
+  secondaryButton: { minHeight: 46, borderRadius: 12, borderWidth: 1, borderColor: '#D0D5DD', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
   buttonPressed: { opacity: 0.8 },
   buttonText: { color: '#FFFFFF', fontWeight: '800', fontSize: 15 },
   secondaryButtonText: { color: '#344054', fontWeight: '800', fontSize: 14 },
+  authLinks: { gap: 2, marginTop: 2 },
   linkButton: { alignSelf: 'center', paddingVertical: 4 },
   linkText: { color: '#246BFD', fontWeight: '800', fontSize: 13 },
   error: { color: '#B42318', fontSize: 13, lineHeight: 18 },
   notice: { color: '#027A48', fontSize: 13, lineHeight: 18 },
   note: { color: '#98A2B3', fontSize: 12, lineHeight: 18, marginTop: 4 },
-  manualRecovery: {
-    borderTopWidth: 1,
-    borderTopColor: '#EAECF0',
-    marginTop: 4,
-    paddingTop: 12,
-    gap: 10,
-  },
+  manualRecovery: { borderTopWidth: 1, borderTopColor: '#EAECF0', marginTop: 4, paddingTop: 12, gap: 10 },
   manualTitle: { color: '#344054', fontWeight: '800', fontSize: 13 },
   muted: { color: '#667085' },
 });
