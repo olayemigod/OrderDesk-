@@ -1,6 +1,6 @@
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
-import type { MerchantOrder, OrderStatus } from '../domain/order';
+import type { MatchSource, MerchantOrder, OrderStatus, ParserSource } from '../domain/order';
 import { supabase } from '../lib/supabase';
 
 type OrderRow = {
@@ -8,6 +8,9 @@ type OrderRow = {
   status: OrderStatus;
   source: 'whatsapp' | 'manual';
   parser_confidence: number | string | null;
+  parser_source: ParserSource;
+  parser_version: string | null;
+  review_reasons: string[] | null;
   created_at: string;
   customers:
     | { display_name: string | null; phone: string | null; wa_id: string }
@@ -20,8 +23,11 @@ type OrderRow = {
   order_items: Array<{
     id: string;
     item_name: string;
+    original_item_name: string | null;
     quantity: number | string;
     unit_price: number | string | null;
+    match_source: MatchSource;
+    match_confidence: number | string | null;
   }> | null;
 };
 
@@ -55,11 +61,17 @@ function mapOrder(row: OrderRow): MerchantOrder {
     source: row.source,
     customerMessage: sourceMessage?.text_body || '',
     confidence: toNumber(row.parser_confidence),
+    parserSource: row.parser_source,
+    parserVersion: row.parser_version,
+    reviewReasons: row.review_reasons ?? [],
     items: (row.order_items ?? []).map((item) => ({
       id: item.id,
       name: item.item_name,
+      originalName: item.original_item_name,
       quantity: toNumber(item.quantity) ?? 1,
       unitPrice: toNumber(item.unit_price),
+      matchSource: item.match_source,
+      matchConfidence: toNumber(item.match_confidence),
     })),
   };
 }
@@ -74,10 +86,13 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
       status,
       source,
       parser_confidence,
+      parser_source,
+      parser_version,
+      review_reasons,
       created_at,
       customers(display_name, phone, wa_id),
       inbound_messages(text_body),
-      order_items(id, item_name, quantity, unit_price)
+      order_items(id, item_name, original_item_name, quantity, unit_price, match_source, match_confidence)
     `)
     .eq('tenant_id', tenantId)
     .order('created_at', { ascending: false });
