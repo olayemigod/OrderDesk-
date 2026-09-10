@@ -109,6 +109,7 @@ async function extractOrder(input: ParserRequest): Promise<ParsedOrder> {
     body: JSON.stringify({
       model: OPENAI_PARSER_MODEL,
       store: false,
+      reasoning: { effort: 'none' },
       max_output_tokens: 1200,
       input: [
         {
