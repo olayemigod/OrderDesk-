@@ -19,6 +19,16 @@ export type MatchSource =
   | 'unmatched'
   | 'manual';
 
+export type OrderStatusEvent = {
+  id: string;
+  eventType: 'created' | 'transition' | 'snapshot';
+  fromStatus: OrderStatus | null;
+  toStatus: OrderStatus;
+  actorKind: 'system' | 'merchant';
+  reason: string | null;
+  createdAt: string;
+};
+
 export type OrderItem = {
   id: string;
   name: string;
@@ -35,12 +45,14 @@ export type MerchantOrder = {
   customerPhone: string;
   receivedAt: string;
   status: OrderStatus;
+  statusReason: string | null;
   source: 'whatsapp' | 'manual';
   customerMessage: string;
   confidence: number | null;
   parserSource: ParserSource;
   parserVersion: string | null;
   reviewReasons: string[];
+  statusHistory: OrderStatusEvent[];
   items: OrderItem[];
 };
 
