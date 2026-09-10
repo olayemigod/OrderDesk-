@@ -96,7 +96,7 @@
       "status": "pending",
       "owner": "ProcessEdge",
       "evidence": null,
-      "acceptance": "Complete Meta verification and pass one real production inbound order plus outbound status-message E2E."
+      "acceptance": "Complete Meta verification, recheck the effective WhatsApp Business terms if acceptance is on/after September 23, 2026, and pass one real production inbound order plus outbound status-message E2E."
     },
     {
       "id": "ai_parser_production",
@@ -159,8 +159,8 @@
       "required": true,
       "status": "pending",
       "owner": "ProcessEdge",
-      "evidence": "docs/data_processor_review.md: Supabase/Paystack provisionally resolved; OpenAI conditional; Meta/WhatsApp unresolved",
-      "acceptance": "Resolve Meta/WhatsApp classification, record OpenAI production data controls and Paystack payload scope, then freeze provider sharing treatment consistent with Play Data Safety and the approved Privacy Policy."
+      "evidence": "docs/data_processor_review.md: Supabase/Paystack processor treatment supported; OpenAI conditional on production data controls; WhatsApp processor treatment supported for Customer Data but September 23, 2026 effective-terms check remains",
+      "acceptance": "On/after the applicable Meta terms effective date, recheck WhatsApp Business terms; record OpenAI production data controls and Paystack payload scope; then freeze Play shared/not-shared treatment consistent with the approved Privacy Policy."
     }
   ]
 }

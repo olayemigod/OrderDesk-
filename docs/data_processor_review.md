@@ -78,27 +78,31 @@ Release controls:
 - verify production billing payload contains no unnecessary merchant/customer data;
 - final Privacy Policy identifies payment processing provider/category.
 
-## Meta / WhatsApp — CLASSIFICATION OPEN
+## Meta / WhatsApp — PARTIALLY RESOLVED / EFFECTIVE-TERMS CHECK REQUIRED
 
 SellerTray use:
-- customer WhatsApp messages arrive from Meta to SellerTray server-side;
+- customer WhatsApp messages arrive from Meta/WhatsApp to SellerTray server-side;
 - SellerTray sends order-status notifications through WhatsApp;
 - merchant business name and transaction/order information can appear in outbound status messages.
 
-Why this remains open:
-- Meta's general public privacy/business pages do not provide enough unambiguous evidence in the current review to classify all WhatsApp Business Platform processing as solely a Play "service provider" transfer for ProcessEdge.
-- Some transfers may separately qualify as user-initiated/expected messaging, but SellerTray can also automatically queue notifications after workflow events.
-- Meta may process some data under its own platform/legal obligations.
+Current public contract evidence:
+- the WhatsApp Business Terms incorporate the WhatsApp Business Data Processing Terms;
+- for Customer Data such as customer contact information, the business is the Controller and instructs WhatsApp to process that Personal Information on its behalf as Processor;
+- the Data Processing Terms say WhatsApp processes that Personal Information according to the business's instructions and can use subprocessors subject to those terms;
+- the same Business Terms separately state that WhatsApp collects business-account, usage, log, performance, diagnostics/support and related information and may use/share some of that information with other Meta Companies for its own stated business-service purposes.
+
+Google Play implication:
+- Customer Data processed by WhatsApp solely as processor has strong support for the Play service-provider exception.
+- Do **not** generalize that exception to every Meta/WhatsApp data flow. Business-account/usage information processed for Meta's independent purposes may require a different Play classification if it includes a SellerTray Data Safety type transmitted by the Android app.
+- SellerTray itself should minimize mobile-to-Meta merchant account data; WhatsApp/WABA configuration remains server/admin-side.
+
+Time-sensitive contract gate:
+- Meta has announced updated Meta Terms for WhatsApp Business effective **September 23, 2026**.
+- If SellerTray's final Play submission/provider acceptance occurs on or after September 23, 2026, re-read the then-effective WhatsApp Business Solution Terms and Data Processing Terms before freezing the Data Safety "shared" answers.
+- Therefore this provider is not release-accepted yet despite the current processor language.
 
 Conservative Play rule:
-- **Do not submit "No data shared" until the production WhatsApp contractual/data-processing terms have been reviewed.**
-- If the service-provider/user-initiated exceptions cannot be cleanly established, mark the affected data types as shared for **App functionality**.
-
-Likely affected types if conservative sharing is required:
-- Name/business identifier where included in customer messages;
-- Phone number/WhatsApp identifier where relevant;
-- Purchase history/order transaction information;
-- Other user-generated content where included in notification/customer context.
+- If the production terms/data flow do not clearly fit a service-provider or other Google exception, declare the affected type as shared for **App functionality** rather than under-declare it.
 
 ## Vercel / ProcessEdge website
 
@@ -114,7 +118,7 @@ Current treatment:
 | Supabase | Processor/service provider for covered app data | No, provisional service-provider exception |
 | OpenAI API | Server-side AI processor/service candidate | No provisionally, **only after production contract/data-control verification** |
 | Paystack | Processor/payment service for SellerTray subscription | No provisionally for covered processing; payment credentials not SellerTray-collected |
-| Meta / WhatsApp | Messaging platform; contractual classification incomplete | **Pending — conservative Yes if exception cannot be established** |
+| Meta / WhatsApp | Processor for covered Customer Data; separate independent business/usage processing exists | **Pending final effective-terms/data-flow check; conservative Yes where exception is not established** |
 | Vercel public legal pages | External public website, no intentional account payload | No app-data sharing expected |
 
 ## Release rule
