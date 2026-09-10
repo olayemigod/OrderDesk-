@@ -36,7 +36,7 @@ const migrationDir = join(repoRoot, 'supabase/migrations');
 const migrationFiles = readdirSync(migrationDir).filter((name) => name.endsWith('.sql'));
 const migrationVersions = new Map();
 for (const name of migrationFiles) {
-  const match = name.match(/^(\\d{14})_/);
+  const match = name.match(/^(\d{14})_/);
   requireValue(Boolean(match), 'Supabase migration must start with a 14-digit version: '+name);
   if (!match) continue;
   const version = match[1];
