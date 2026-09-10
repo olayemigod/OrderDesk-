@@ -1,14 +1,24 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import type { SubscriptionAccess } from '../data/subscriptionRepository';
+import {
+  startBillingCheckout,
+  type SubscriptionAccess,
+} from '../data/subscriptionRepository';
+import type { MerchantRole } from '../data/businessRepository';
 
 type Props = {
+  tenantId: string;
+  role: MerchantRole;
   subscription: SubscriptionAccess | null;
   loading: boolean;
   error: string | null;
 };
 
-export function SubscriptionStatusCard({ subscription, loading, error }: Props) {
+export function SubscriptionStatusCard({ tenantId, role, subscription, loading, error }: Props) {
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+
   if (loading && !subscription) {
     return (
       <View style={styles.card}>
@@ -34,6 +44,23 @@ export function SubscriptionStatusCard({ subscription, loading, error }: Props) 
   const trialDays = subscription.trialEndsAt ? daysUntil(subscription.trialEndsAt) : null;
   const periodEnd = subscription.currentPeriodEnd ? formatDate(subscription.currentPeriodEnd) : null;
   const graceEnd = subscription.graceEndsAt ? formatDate(subscription.graceEndsAt) : null;
+  const canStartCheckout = role === 'owner' && subscription.checkoutReady && subscription.baseStatus !== 'active';
+
+  async function openCheckout() {
+    if (!canStartCheckout || checkoutBusy) return;
+    setCheckoutBusy(true);
+    setCheckoutError(null);
+    try {
+      const checkout = await startBillingCheckout(tenantId);
+      const supported = await Linking.canOpenURL(checkout.authorizationUrl);
+      if (!supported) throw new Error('This device could not open the secure billing page.');
+      await Linking.openURL(checkout.authorizationUrl);
+    } catch (err) {
+      setCheckoutError(err instanceof Error ? err.message : 'Unable to start secure billing.');
+    } finally {
+      setCheckoutBusy(false);
+    }
+  }
 
   return (
     <View style={[styles.card, readOnly && styles.blockedCard]}>
@@ -75,12 +102,28 @@ export function SubscriptionStatusCard({ subscription, loading, error }: Props) 
       ) : null}
 
       {subscription.priceAmount === null ? (
-        <Text style={styles.helper}>Commercial checkout pricing will be activated in the billing-provider slice.</Text>
+        <Text style={styles.helper}>Commercial price has not been activated yet. No checkout can be started.</Text>
       ) : (
         <Text style={styles.helper}>
           {formatMoney(subscription.priceAmount, subscription.currency)} / {subscription.billingInterval}
         </Text>
       )}
+
+      {subscription.checkoutReady && role !== 'owner' && subscription.baseStatus !== 'active' ? (
+        <Text style={styles.helper}>Only the business Owner can start or change subscription billing.</Text>
+      ) : null}
+
+      {canStartCheckout ? (
+        <Pressable
+          disabled={checkoutBusy}
+          onPress={() => void openCheckout()}
+          style={({ pressed }) => [styles.checkoutButton, pressed && styles.pressed, checkoutBusy && styles.disabled]}
+        >
+          <Text style={styles.checkoutButtonText}>{checkoutBusy ? 'Opening secure checkout…' : 'Subscribe with Paystack'}</Text>
+        </Pressable>
+      ) : null}
+
+      {checkoutError ? <Text style={styles.checkoutError}>{checkoutError}</Text> : null}
     </View>
   );
 }
@@ -150,4 +193,9 @@ const styles = StyleSheet.create({
   readOnlyTitle: { color: '#B42318', fontSize: 11, fontWeight: '900' },
   readOnlyText: { color: '#912018', fontSize: 10, lineHeight: 16 },
   helper: { color: '#98A2B3', fontSize: 10, lineHeight: 15 },
+  checkoutButton: { minHeight: 44, borderRadius: 11, backgroundColor: '#246BFD', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  checkoutButtonText: { color: '#FFFFFF', fontWeight: '900', fontSize: 12 },
+  checkoutError: { color: '#B42318', fontSize: 10, lineHeight: 15 },
+  pressed: { opacity: 0.8 },
+  disabled: { opacity: 0.5 },
 });
