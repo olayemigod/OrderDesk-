@@ -63,6 +63,10 @@ jobs:
         if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.lockfile.outputs.present == 'false' }}
         run: |
           test -f package-lock.json
+          cp package-lock.json /tmp/sellertray-package-lock.json
+          git fetch origin "${{ github.head_ref }}"
+          git checkout -B sellertray-lockfile-bootstrap "origin/${{ github.head_ref }}"
+          cp /tmp/sellertray-package-lock.json package-lock.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add package-lock.json
