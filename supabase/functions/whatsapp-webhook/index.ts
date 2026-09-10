@@ -51,7 +51,8 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const META_VERIFY_TOKEN = Deno.env.get('META_WEBHOOK_VERIFY_TOKEN') ?? '';
 const META_APP_SECRET = Deno.env.get('META_APP_SECRET') ?? '';
-const ORDER_PARSER_URL = Deno.env.get('ORDER_PARSER_URL') ?? '';
+const configuredParserUrl = Deno.env.get('ORDER_PARSER_URL')?.trim() ?? '';
+const ORDER_PARSER_URL = configuredParserUrl || (SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/order-parser` : '');
 const ORDER_PARSER_TOKEN = Deno.env.get('ORDER_PARSER_TOKEN') ?? '';
 
 Deno.serve(async (request) => {
@@ -255,8 +256,9 @@ async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[nu
     return; // Media/status handling is intentionally outside the current MVP slice.
   }
 
-  const parsed = await parseOrder(event.text);
-  const enrichedItems = await enrichFromCatalogue(tenantId, parsed.items);
+  const catalogue = await loadCatalogue(tenantId);
+  const parsed = await parseOrder(event.text, catalogue);
+  const enrichedItems = enrichFromCatalogue(parsed.items, catalogue);
   const reviewReasons = buildReviewReasons(parsed, enrichedItems);
 
   const createdOrders = await rest<Array<{ id: string }>>('/rest/v1/orders?select=id', {
@@ -301,15 +303,15 @@ async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[nu
   }
 }
 
-async function enrichFromCatalogue(tenantId: string, parsedItems: ParsedItem[]): Promise<EnrichedItem[]> {
-  if (parsedItems.length === 0) return [];
-
-  const rows = await rest<CatalogueRow[]>(
+async function loadCatalogue(tenantId: string): Promise<CatalogueRow[]> {
+  return rest<CatalogueRow[]>(
     `/rest/v1/catalog_items?select=id,name,price_ngn,catalog_item_aliases(alias)&tenant_id=eq.${encodeURIComponent(tenantId)}&is_active=eq.true`,
   );
+}
 
+function enrichFromCatalogue(parsedItems: ParsedItem[], catalogue: CatalogueRow[]): EnrichedItem[] {
   return parsedItems.map((item) => {
-    const match = findCatalogueMatch(item.name, rows);
+    const match = findCatalogueMatch(item.name, catalogue);
     if (!match) {
       return {
         ...item,
@@ -405,16 +407,24 @@ function buildReviewReasons(parsed: ParsedOrder, items: EnrichedItem[]): string[
   return Array.from(reasons);
 }
 
-async function parseOrder(text: string): Promise<ParsedOrder> {
-  if (ORDER_PARSER_URL) {
+async function parseOrder(text: string, catalogue: CatalogueRow[]): Promise<ParsedOrder> {
+  if (ORDER_PARSER_URL && ORDER_PARSER_TOKEN) {
     try {
       const response = await fetch(ORDER_PARSER_URL, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          ...(ORDER_PARSER_TOKEN ? { authorization: `Bearer ${ORDER_PARSER_TOKEN}` } : {}),
+          authorization: `Bearer ${ORDER_PARSER_TOKEN}`,
         },
-        body: JSON.stringify({ text }),
+        signal: AbortSignal.timeout(8000),
+        body: JSON.stringify({
+          text,
+          catalogue: catalogue.map((item) => ({
+            id: item.id,
+            name: item.name,
+            aliases: (item.catalog_item_aliases ?? []).map((alias) => alias.alias),
+          })),
+        }),
       });
 
       if (response.ok) {
@@ -424,9 +434,12 @@ async function parseOrder(text: string): Promise<ParsedOrder> {
           return {
             ...validated,
             source: 'external',
-            version: 'external-v1',
+            version: 'external-v2-catalogue',
           };
         }
+        console.warn('External order parser returned an invalid structured payload; using fallback parser.');
+      } else {
+        console.warn(`External order parser returned HTTP ${response.status}; using fallback parser.`);
       }
     } catch (error) {
       console.warn('External order parser unavailable; using fallback parser.', error);
