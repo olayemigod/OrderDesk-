@@ -207,7 +207,7 @@ async function applyEvent(eventType: string, data: JsonRecord, resolution: Tenan
 }
 
 async function updateSubscription(tenantId: string, patch: JsonRecord): Promise<void> {
-  const clean = Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== null && value !== undefined));
+  const clean = Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined));
   await rest(`/rest/v1/tenant_subscriptions?tenant_id=eq.${encodeURIComponent(tenantId)}`, {
     method: 'PATCH',
     headers: { Prefer: 'return=minimal' },
