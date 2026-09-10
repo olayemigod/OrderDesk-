@@ -3,9 +3,20 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import type { MatchSource, MerchantOrder, OrderStatus, ParserSource } from '../domain/order';
 import { supabase } from '../lib/supabase';
 
+type OrderStatusEventRow = {
+  id: string;
+  event_type: 'created' | 'transition' | 'snapshot';
+  from_status: OrderStatus | null;
+  to_status: OrderStatus;
+  actor_kind: 'system' | 'merchant';
+  reason: string | null;
+  created_at: string;
+};
+
 type OrderRow = {
   id: string;
   status: OrderStatus;
+  status_reason: string | null;
   source: 'whatsapp' | 'manual';
   parser_confidence: number | string | null;
   parser_source: ParserSource;
@@ -29,6 +40,7 @@ type OrderRow = {
     match_source: MatchSource;
     match_confidence: number | string | null;
   }> | null;
+  order_status_events: OrderStatusEventRow[] | null;
 };
 
 export type OrderItemInput = {
@@ -58,12 +70,24 @@ function mapOrder(row: OrderRow): MerchantOrder {
     customerPhone: customer?.phone || customer?.wa_id || '',
     receivedAt: row.created_at,
     status: row.status,
+    statusReason: row.status_reason,
     source: row.source,
     customerMessage: sourceMessage?.text_body || '',
     confidence: toNumber(row.parser_confidence),
     parserSource: row.parser_source,
     parserVersion: row.parser_version,
     reviewReasons: row.review_reasons ?? [],
+    statusHistory: (row.order_status_events ?? [])
+      .map((event) => ({
+        id: event.id,
+        eventType: event.event_type,
+        fromStatus: event.from_status,
+        toStatus: event.to_status,
+        actorKind: event.actor_kind,
+        reason: event.reason,
+        createdAt: event.created_at,
+      }))
+      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()),
     items: (row.order_items ?? []).map((item) => ({
       id: item.id,
       name: item.item_name,
@@ -84,6 +108,7 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
     .select(`
       id,
       status,
+      status_reason,
       source,
       parser_confidence,
       parser_source,
@@ -92,7 +117,8 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
       created_at,
       customers(display_name, phone, wa_id),
       inbound_messages(text_body),
-      order_items(id, item_name, original_item_name, quantity, unit_price, match_source, match_confidence)
+      order_items(id, item_name, original_item_name, quantity, unit_price, match_source, match_confidence),
+      order_status_events(id, event_type, from_status, to_status, actor_kind, reason, created_at)
     `)
     .eq('tenant_id', tenantId)
     .order('created_at', { ascending: false });
@@ -101,10 +127,18 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
   return ((data ?? []) as unknown as OrderRow[]).map(mapOrder);
 }
 
-export async function updateOrderStatus(orderId: string, status: OrderStatus): Promise<void> {
+export async function updateOrderStatus(
+  orderId: string,
+  status: OrderStatus,
+  reason?: string | null,
+): Promise<void> {
   const { error } = await supabase
     .from('orders')
-    .update({ status, updated_at: new Date().toISOString() })
+    .update({
+      status,
+      status_reason: reason?.trim() || null,
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', orderId);
 
   if (error) throw error;
@@ -160,6 +194,11 @@ export function subscribeToOrderChanges(tenantId: string, onChange: () => void):
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'order_items', filter: `tenant_id=eq.${tenantId}` },
+      onChange,
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'order_status_events', filter: `tenant_id=eq.${tenantId}` },
       onChange,
     )
     .subscribe();
