@@ -309,7 +309,7 @@ This is the conservative working set for Play Console review:
 | Other user-generated content | Yes | No | App functionality |
 | Other actions | Yes | Yes | App functionality; Security/compliance |
 
-**Sharing selections remain pending provider-classification review.** If there is doubt, select sharing for the affected type rather than rely on an unverified service-provider exemption.
+**Sharing selections remain pending final provider classification.** The detailed review is in `docs/data_processor_review.md`. Supabase and Paystack have public processor/service-provider language supporting the service-provider exception for covered processing. OpenAI is provisionally treated as a service provider subject to production API data-control verification. Meta/WhatsApp remains unresolved; if its applicable exception cannot be established, use the conservative shared declaration for affected types.
 
 ## 9. Change-control triggers
 

@@ -153,6 +153,14 @@
       "owner": "ProcessEdge",
       "evidence": "docs/google_play_store_listing.md prepared; Play listing/assets not yet submitted",
       "acceptance": "Enter approved store copy/category/contact details, upload approved icon/graphics/screenshots from the signed candidate, and verify reviewer credentials."
+    },
+    {
+      "id": "provider_data_sharing_classification",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": "docs/data_processor_review.md: Supabase/Paystack provisionally resolved; OpenAI conditional; Meta/WhatsApp unresolved",
+      "acceptance": "Resolve Meta/WhatsApp classification, record OpenAI production data controls and Paystack payload scope, then freeze provider sharing treatment consistent with Play Data Safety and the approved Privacy Policy."
     }
   ]
 }

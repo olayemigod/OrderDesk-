@@ -200,6 +200,15 @@ These are implemented but must not be described as production-accepted yet:
 - Added two-account Play reviewer access pattern: one stable walkthrough tenant and one disposable deletion-test tenant; credentials must live only in Play Console.
 - Added `google_play_store_listing` to the release manifest. It remains pending until approved graphics, signed-candidate screenshots, working reviewer credentials and Play Console entry exist.
 
+### S11K — provider data-sharing classification review — PARTIAL / META PENDING
+- Added `docs/data_processor_review.md` to separate Google Play "collection" from "sharing" decisions provider by provider.
+- Supabase's current DPA expressly positions Supabase as processor/service provider for covered data, supporting the Play service-provider exception for the current infrastructure flow.
+- Paystack's Nigerian DPA expressly positions Paystack as processor for merchant personal data used to provide payment processing; SellerTray still must never receive hosted card/bank credentials.
+- OpenAI API is provisionally treated as a service provider for the bounded parser, but production project data controls must be recorded before final Play classification. API/business data is not used for training by default; default abuse-monitoring retention may be up to 30 days unless approved retention controls apply.
+- Meta/WhatsApp remains the unresolved provider. Current public evidence is not sufficient to assert that every SellerTray WhatsApp transfer qualifies for Google's service-provider/user-initiated sharing exception.
+- Release rule is conservative: if Meta's applicable exception cannot be established from the production terms/data-processing relationship, declare affected types as shared for App functionality.
+- Added `provider_data_sharing_classification` as a required release-manifest gate.
+
 ### Remaining S11 release gates
 - Configure/verify Supabase Auth redirects for `sellertray://auth-confirm`, `sellertray://reset-password` and the two temporary legacy equivalents.
 - Enable Supabase leaked-password protection before public signup.
