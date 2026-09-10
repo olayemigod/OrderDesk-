@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "product": "SellerTray",
+  "version": "1.0.0",
+  "androidPackage": "ng.processedge.sellertray",
+  "updatedAt": "2026-09-10",
+  "codeCheckpoint": {
+    "status": "accepted",
+    "commit": "08f8395cd1bb5cd0e873f54e7a177fde5be243b8",
+    "ciRun": 160,
+    "evidence": "Mobile CI #160: typecheck + SellerTray release preflight passed"
+  },
+  "gates": [
+    {
+      "id": "public_account_deletion_resource",
+      "required": true,
+      "status": "accepted",
+      "owner": "ProcessEdge",
+      "evidence": "https://processedge.com.ng/sellertray/account-deletion returns HTTP 200"
+    },
+    {
+      "id": "supabase_auth_redirects",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": null,
+      "acceptance": "Configure and verify sellertray://auth-confirm, sellertray://reset-password and the two temporary orderdesk:// equivalents."
+    },
+    {
+      "id": "supabase_leaked_password_protection",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": null,
+      "acceptance": "Enable leaked-password protection and rerun the Supabase security advisor with no remaining Auth warning."
+    },
+    {
+      "id": "sellertray_brand_assets",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": null,
+      "acceptance": "Commit approved launcher icon, Android adaptive icon and splash/launch branding and reference them from Expo config."
+    },
+    {
+      "id": "sellertray_legal_policy",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": "ProcessEdge website draft PR #2; Vercel preview READY",
+      "acceptance": "Obtain legal approval, merge PR #2, and verify live /sellertray/privacy and /sellertray/terms."
+    },
+    {
+      "id": "production_auth_email",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": null,
+      "acceptance": "Production signup confirmation and password-reset emails deliver successfully and return through SellerTray deep links."
+    },
+    {
+      "id": "android_preview_apk",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": null,
+      "acceptance": "Create a signed preview APK from the exact release candidate and record the EAS build identifier."
+    },
+    {
+      "id": "android_native_smoke",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": null,
+      "acceptance": "Pass the native smoke matrix in docs/release_runbook.md on a physical Android device, including disposable account deletion."
+    },
+    {
+      "id": "android_production_aab",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": null,
+      "acceptance": "Create the signed production AAB after preview acceptance and record versionCode/build identifier."
+    },
+    {
+      "id": "meta_whatsapp_production",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": null,
+      "acceptance": "Complete Meta verification and pass one real production inbound order plus outbound status-message E2E."
+    },
+    {
+      "id": "ai_parser_production",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": null,
+      "acceptance": "Configure server-only parser credentials and pass live AI parse, deterministic price matching and safe-fallback acceptance."
+    },
+    {
+      "id": "outbound_whatsapp_worker",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": null,
+      "acceptance": "Configure worker/Meta credentials and prove pending notification delivery plus delivery/failure reconciliation."
+    },
+    {
+      "id": "paystack_commercial_activation",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": null,
+      "acceptance": "Approve SellerTray price/usage commercial values, configure Paystack plan/secret, and pass test checkout/webhook lifecycle acceptance."
+    }
+  ]
+}

@@ -1,86 +1,118 @@
-# OrderDesk MVP Architecture
+# SellerTray MVP Architecture
 
 ## Product boundary
 
-OrderDesk solves one narrow merchant problem: turn WhatsApp order messages into an organised order workflow without forcing the customer into another app.
+SellerTray turns conversational WhatsApp buying requests into an organised merchant order workflow without forcing customers into another app.
 
-Customers stay on WhatsApp. Merchants use the OrderDesk mobile app.
+Customers stay on WhatsApp. Merchants operate from the SellerTray mobile application.
 
-OrderDesk is not intended to become an ERP, POS, inventory suite, accounting package or CRM.
+SellerTray is intentionally not an ERP, POS, accounting package, inventory-valuation system or general CRM. Additional sales channels are future paid modules rather than bundled MVP scope.
 
-## Core flow
+Historical repository/database/RPC names containing `orderdesk` are internal compatibility identifiers. The production identity is SellerTray.
 
-1. Customer sends a WhatsApp message to a merchant number.
-2. Meta WhatsApp Cloud API sends the webhook to the OrderDesk Edge Function.
-3. The function verifies the request signature before parsing it.
-4. The WhatsApp phone-number ID resolves the correct OrderDesk tenant.
-5. The inbound provider message is stored idempotently.
-6. The customer is upserted within that tenant.
-7. A parser converts message text into structured order lines. A provider-neutral AI parser may be configured; otherwise a conservative fallback parser is used.
-8. The order is created as `needs_review`.
-9. The authenticated merchant sees the order through tenant-scoped RLS.
-10. The merchant corrects AI/parser output where necessary: line name, quantity and selling price; lines may also be added or removed.
-11. The order cannot be accepted unless it has at least one line and every line is priced.
-12. The merchant progresses the accepted order through `processing`, `ready` and `completed`.
+## Runtime components
+
+- **SellerTray mobile app** — Expo / React Native merchant client.
+- **Supabase Auth** — merchant identity and sessions.
+- **Postgres + RLS** — tenant-scoped operational data and integrity rules.
+- **WhatsApp webhook Edge Function** — public Meta webhook protected by HMAC signature.
+- **Order parser Edge Function** — private shared-token AI parser with deterministic fallback.
+- **Notification worker Edge Function** — token-gated outbound WhatsApp queue worker.
+- **Provisioning / Team / Billing / Platform Admin / Account Lifecycle functions** — JWT-protected server boundaries.
+- **Paystack webhook** — provider-signed billing reconciliation endpoint.
+- **ProcessEdge web resources** — public account-deletion resource and SellerTray legal pages.
+
+## Core order flow
+
+1. Customer sends a WhatsApp message to the merchant.
+2. Meta sends the signed webhook to SellerTray.
+3. SellerTray verifies the Meta signature and resolves the merchant tenant by phone-number ID.
+4. The provider message is stored idempotently.
+5. Customer identity is upserted inside that tenant.
+6. The parser extracts product wording and quantities. External AI is optional; conservative fallback remains available.
+7. Catalogue names/aliases are matched deterministically and merchant-controlled prices are applied. SellerTray does not ask AI to invent selling prices.
+8. The order is stored as `needs_review` when human review is required.
+9. Merchant corrects lines/quantity/pricing and accepts or rejects.
+10. Accepted orders progress through `processing -> ready -> completed`; active orders may be cancelled with a reason.
+11. Status transitions are recorded in immutable order history.
+12. Configured customer notifications enter the outbound queue and are sent only when the WhatsApp conversation/template policy allows.
+
+## Main data domains
+
+- `tenants` — merchant businesses and product state.
+- `tenant_members` / `tenant_invitations` — Owner, Manager and Staff access.
+- `catalog_items` / aliases — merchant product names and prices.
+- `customers` — tenant-scoped WhatsApp customers.
+- `inbound_messages` — provider message audit/idempotency.
+- `orders` / `order_items` — merchant order workflow and lines.
+- `order_status_events` — immutable workflow history.
+- `tenant_notification_settings` / `outbound_notifications` — notification preferences and delivery queue/history.
+- `subscription_plans` / `tenant_subscriptions` — trial and subscription lifecycle.
+- `billing_checkout_sessions` / provider-event ledger — billing reconciliation.
+- `platform_admins` / platform audit / support notes — ProcessEdge operations boundary.
+
+Composite tenant foreign keys and Row Level Security protect tenant isolation even if client logic is faulty.
 
 ## Trust boundaries
 
-### Public WhatsApp webhook
+### Mobile client
 
-The Meta webhook is intentionally public and does not rely on a Supabase user JWT. It is protected by Meta's `X-Hub-Signature-256` HMAC signature using the app secret stored only in Edge Function secret storage.
+The client receives only public client configuration: Supabase URL and publishable key. It never contains Supabase service-role keys, Meta secrets, AI keys, Paystack secrets, parser tokens or worker tokens.
 
-The webhook verification token and Meta app secret must never be stored in the mobile client or committed to source control.
+UI permissions are convenience; server/database rules remain authoritative.
 
-### Merchant client
+### Public provider endpoints
 
-The Expo/React Native client uses only the Supabase publishable key and an authenticated merchant session.
+- WhatsApp webhook: Meta HMAC signature.
+- Paystack webhook: Paystack signature/secret validation.
+- Order parser: custom server bearer token.
+- Notification worker: server worker token.
 
-All merchant data access is filtered by Row Level Security through `tenant_members`. The client never receives or uses a Supabase server/service credential.
+Every body-consuming server endpoint has a streamed request-size limit. All nine current Edge Functions have structured request observability and request correlation.
 
-Merchant UI rules are convenience and guidance, not the final integrity boundary. Supported status transitions and acceptance prerequisites are also enforced in Postgres.
+### Authenticated server endpoints
 
-## Data model
+Provisioning, team management, billing checkout, platform administration and account lifecycle require authenticated JWTs. Elevated database functions are service-role-only where required.
 
-- `tenants` — OrderDesk businesses and WhatsApp phone-number mapping.
-- `tenant_members` — authenticated merchant membership and role.
-- `customers` — tenant-scoped WhatsApp customers.
-- `catalog_items` — optional tenant catalogue and selling prices.
-- `inbound_messages` — source-message record used for idempotency/audit.
-- `orders` — merchant workflow state and parser confidence.
-- `order_items` — structured/corrected order lines with generated line totals.
+## Order integrity
 
-Composite foreign keys prevent cross-tenant customer, message, order and catalogue references even if application logic is faulty.
-
-## Status integrity
-
-The supported normal workflow is:
+Normal progression:
 
 `draft / needs_review -> accepted -> processing -> ready -> completed`
 
-Review orders may instead become `rejected`. Accepted/processing/ready orders may be cancelled.
+Alternative terminal states:
 
-A database trigger prevents unsupported transitions, prevents terminal states from regressing, and prevents acceptance of empty or unpriced orders. This protects the workflow even if a modified client bypasses UI controls.
+- review order -> `rejected`
+- accepted / processing / ready -> `cancelled`
 
-## Merchant correction boundary
+Server-side guards reject unsupported transitions and prevent acceptance of an empty or unpriced order.
 
-OD-03 keeps correction deliberately narrow. During `draft` / `needs_review`, a merchant may:
+## AI contract
 
-- correct the parsed item name;
-- correct quantity;
-- set the selling price;
-- add a missing line;
-- remove an incorrect line.
+AI may extract likely item wording, quantity and confidence. It must not be authoritative for merchant price, stock availability, discount, delivery charge or payment confirmation. Catalogue matching/pricing remains deterministic, and ambiguous output remains reviewable by the merchant.
 
-Once an order is accepted, line editing is removed from the ordinary merchant flow. This keeps the order record stable after operational commitment without introducing inventory, quotation, invoicing or ERP concepts.
+## Subscription contract
 
-Catalogue matching can later assist this review flow, but it must not remove the merchant's final acceptance step.
+SellerTray uses a low base subscription plus separately metered/chargeable activity as the commercial direction. The current provider-neutral subscription lifecycle supports trial, active, past-due/grace, suspended and cancelled/read-only states. Paystack activation remains gated until final commercial values and provider acceptance are approved.
 
-## Realtime
+## Data lifecycle
 
-For the small MVP, Supabase Postgres Changes subscriptions refresh the merchant inbox when `orders` or `order_items` change. This keeps implementation deliberately small. If scale later requires it, Realtime Broadcast can replace the subscription mechanism without changing the product workflow.
+Business Owners can export the workspace dataset. Authenticated users have a governed password-confirmed deletion path. Owned tenant data and memberships are removed before Auth deletion so a stale access token has no remaining tenant authorization.
 
-## Parser contract
+See `docs/data_lifecycle.md`.
 
-The webhook accepts an optional external parser endpoint. The parser is expected to return structured order lines conservatively. It must not auto-accept an order. The merchant remains the final reviewer before an order enters processing.
+## Production identity
 
-Catalogue matching and stronger AI extraction can be added later behind the same review boundary.
+- Name: SellerTray
+- Version: 1.0.0
+- Android package: `ng.processedge.sellertray`
+- Canonical deep link: `sellertray://`
+- Temporary beta compatibility: `orderdesk://`
+- Android preview: APK
+- Google Play artifact: AAB
+
+## Release governance
+
+Repository-level release invariants are enforced by `npm run preflight` in Mobile CI.
+
+External acceptance is tracked in `docs/release_acceptance.json` and checked with `npm run release:check`. That command must remain a release hold until all required external gates have accepted evidence.

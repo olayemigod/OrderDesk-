@@ -162,6 +162,14 @@ These are implemented but must not be described as production-accepted yet:
 - Mobile CI #158 passed on hardening commit `0a1d136`.
 - No further code-side MVP release blocker was identified in this hardening pass.
 
+### S11G — automated release governance — PASS
+- Added repository-level SellerTray release preflight and made it a required Mobile CI step after TypeScript checking.
+- Preflight enforces SellerTray 1.0.0 identity, Android package, canonical/legacy deep-link contract, APK/AAB EAS profiles, client secret boundaries, deletion phrase and legal/deletion URL contracts.
+- Mobile package identity is now `@sellertray/mobile` version `1.0.0`.
+- Root README and current architecture/activation documentation are aligned to SellerTray rather than the obsolete early OrderDesk/S4 checkpoint.
+- Mobile CI #160 passed both Typecheck and SellerTray release preflight on commit `08f8395`.
+- Added machine-readable `docs/release_acceptance.json` and `npm run release:check`; the latter intentionally fails while any required external gate remains unaccepted.
+
 ### Remaining S11 release gates
 - Configure/verify Supabase Auth redirects for `sellertray://auth-confirm`, `sellertray://reset-password` and the two temporary legacy equivalents.
 - Enable Supabase leaked-password protection before public signup.

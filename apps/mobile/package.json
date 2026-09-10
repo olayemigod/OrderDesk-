@@ -9,7 +9,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "preflight": "node scripts/release-preflight.mjs"
+    "preflight": "node scripts/release-preflight.mjs",
+    "release:check": "node scripts/release-readiness.mjs"
   },
   "dependencies": {
     "@expo/metro-runtime": "57.0.15",
