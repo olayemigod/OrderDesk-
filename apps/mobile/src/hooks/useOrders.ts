@@ -51,14 +51,19 @@ export function useOrders(tenantId: string | null) {
   }, [refresh, tenantId]);
 
   const setStatus = useCallback(
-    async (orderId: string, status: OrderStatus) => {
+    async (orderId: string, status: OrderStatus, reason?: string | null) => {
       const previous = orders;
+      const normalizedReason = reason?.trim() || null;
       setOrders((current) =>
-        current.map((order) => (order.id === orderId ? { ...order, status } : order)),
+        current.map((order) =>
+          order.id === orderId
+            ? { ...order, status, statusReason: normalizedReason }
+            : order,
+        ),
       );
 
       try {
-        await updateOrderStatus(orderId, status);
+        await updateOrderStatus(orderId, status, normalizedReason);
         setError(null);
       } catch (err) {
         setOrders(previous);
