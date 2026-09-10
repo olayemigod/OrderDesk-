@@ -29,6 +29,30 @@ export type OrderStatusEvent = {
   createdAt: string;
 };
 
+export type NotificationEventKey =
+  | 'order_received'
+  | 'order_accepted'
+  | 'order_ready'
+  | 'order_rejected'
+  | 'order_cancelled';
+
+export type NotificationDeliveryStatus =
+  | 'pending'
+  | 'sending'
+  | 'sent'
+  | 'failed'
+  | 'template_required'
+  | 'skipped';
+
+export type OrderNotification = {
+  id: string;
+  eventKey: NotificationEventKey;
+  deliveryStatus: NotificationDeliveryStatus;
+  messageBody: string;
+  createdAt: string;
+  sentAt: string | null;
+};
+
 export type OrderItem = {
   id: string;
   name: string;
@@ -53,6 +77,7 @@ export type MerchantOrder = {
   parserVersion: string | null;
   reviewReasons: string[];
   statusHistory: OrderStatusEvent[];
+  notifications: OrderNotification[];
   items: OrderItem[];
 };
 
