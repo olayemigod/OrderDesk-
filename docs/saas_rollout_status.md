@@ -89,6 +89,8 @@ This document records the governed rollout state for SellerTray. SellerTray rema
 - Merchant clients have no direct table privileges on authorization or settlement records.
 - Paid usage requires valid subscription period boundaries; missing/invalid period data fails free rather than guessing a charge.
 - Settlement preparation is idempotent by tenant/event/period and a usage event can belong to only one settlement.
+- Supabase Cron job `sellertray-prepare-usage-settlements` is ACTIVE at 01:15 UTC daily and prepares closed-period settlements only; it never invokes Paystack or moves money.
+- Self-service account deletion now blocks while any priced AI usage remains unsettled and clears only after settlement is paid.
 - New `usage-settlement` Edge Function is ACTIVE with custom server-token auth and an explicit `USAGE_BILLING_LIVE=true` money-movement kill switch.
 - Failed or ambiguous provider attempts are never automatically retried.
 - Paystack webhook recognizes settlement references separately from base checkout and verifies expected amount/currency before marking a settlement paid.
