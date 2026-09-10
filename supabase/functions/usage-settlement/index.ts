@@ -1,5 +1,5 @@
 type JsonRecord = Record<string, unknown>;
-type SettlementAction = 'prepare' | 'status' | 'charge';
+type SettlementAction = 'prepare' | 'status' | 'reconcile' | 'charge';
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -59,6 +59,77 @@ Deno.serve(withObservability('usage-settlement', async (request) => {
       const settlement = await loadSettlement(settlementId);
       if (!settlement) return json({ error: 'Usage settlement not found' }, 404);
       return json({ settlement: sanitizeSettlement(settlement), liveChargingEnabled: USAGE_BILLING_LIVE });
+    }
+
+    if (action === 'reconcile') {
+      if (!PAYSTACK_SECRET_KEY) {
+        return json({ error: 'Paystack secret is not configured for settlement reconciliation' }, 503);
+      }
+
+      const settlement = await loadSettlement(settlementId);
+      if (!settlement) return json({ error: 'Usage settlement not found' }, 404);
+      if (settlement.status === 'paid') {
+        return json({ settlement: sanitizeSettlement(settlement), providerStatus: 'success', alreadyPaid: true });
+      }
+
+      const verifyResponse = await fetch(
+        `https://api.paystack.co/transaction/verify/${encodeURIComponent(String(settlement.provider_reference ?? ''))}`,
+        {
+          method: 'GET',
+          headers: { authorization: `Bearer ${PAYSTACK_SECRET_KEY}` },
+        },
+      );
+
+      let verifyPayload: JsonRecord | null = null;
+      try {
+        verifyPayload = await verifyResponse.json() as JsonRecord;
+      } catch {
+        verifyPayload = null;
+      }
+
+      if (!verifyResponse.ok || verifyPayload?.status !== true || !isRecord(verifyPayload.data)) {
+        return json({
+          settlement: sanitizeSettlement(settlement),
+          providerStatus: 'unverified',
+          verificationHttpStatus: verifyResponse.status,
+        }, verifyResponse.status === 404 ? 200 : 502);
+      }
+
+      const providerStatus = asString(verifyPayload.data.status) ?? 'unknown';
+      if (providerStatus === 'success') {
+        const mismatch = settlementProviderMismatch(settlement, verifyPayload.data);
+        if (mismatch) {
+          return json({ error: mismatch, providerStatus }, 409);
+        }
+
+        await rest(`/rest/v1/usage_settlements?id=eq.${encodeURIComponent(settlement.id)}&status=neq.paid`, {
+          method: 'PATCH',
+          headers: { Prefer: 'return=minimal' },
+          body: JSON.stringify({
+            status: 'paid',
+            provider_transaction_ref: providerTransactionRef(verifyPayload.data),
+            last_error: null,
+            paid_at: asString(verifyPayload.data.paid_at) ?? new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }),
+        });
+      } else if (['failed', 'abandoned', 'reversed'].includes(providerStatus)) {
+        await rest(`/rest/v1/usage_settlements?id=eq.${encodeURIComponent(settlement.id)}&status=neq.paid`, {
+          method: 'PATCH',
+          headers: { Prefer: 'return=minimal' },
+          body: JSON.stringify({
+            status: 'failed',
+            last_error: `Paystack verified transaction status: ${providerStatus}`,
+            updated_at: new Date().toISOString(),
+          }),
+        });
+      }
+
+      const refreshed = await loadSettlement(settlement.id);
+      return json({
+        settlement: refreshed ? sanitizeSettlement(refreshed) : sanitizeSettlement(settlement),
+        providerStatus,
+      });
     }
 
     if (!USAGE_BILLING_LIVE) {
@@ -270,7 +341,7 @@ async function rest<T = unknown>(path: string, init: RequestInit = {}): Promise<
 }
 
 function cleanAction(value: unknown): SettlementAction | null {
-  return value === 'prepare' || value === 'status' || value === 'charge'
+  return value === 'prepare' || value === 'status' || value === 'reconcile' || value === 'charge'
     ? value
     : null;
 }
@@ -294,6 +365,24 @@ function toNumber(value: unknown): number | null {
   if (typeof value === 'string' && value.trim()) {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function settlementProviderMismatch(settlement: JsonRecord, providerData: JsonRecord): string | null {
+  const expectedAmount = toNumber(settlement.amount);
+  const providerAmountSubunit = toNumber(providerData.amount);
+  const expectedCurrency = asString(settlement.currency);
+  const providerCurrency = asString(providerData.currency);
+
+  if (expectedAmount === null || providerAmountSubunit === null) {
+    return 'Usage settlement amount could not be verified';
+  }
+  if (Math.round(expectedAmount * 100) !== Math.round(providerAmountSubunit)) {
+    return 'Verified Paystack transaction amount does not match the prepared usage settlement';
+  }
+  if (!expectedCurrency || !providerCurrency || expectedCurrency !== providerCurrency) {
+    return 'Verified Paystack transaction currency does not match the prepared usage settlement';
   }
   return null;
 }
