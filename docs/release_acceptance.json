@@ -6,9 +6,9 @@
   "updatedAt": "2026-09-10",
   "codeCheckpoint": {
     "status": "accepted",
-    "commit": "2de6742d2d415c686e923a0b3a414932e9785207",
-    "ciRun": 176,
-    "evidence": "Mobile CI #176 passed npm ci, production dependency audit, typecheck, release-manifest integrity, Android sensitive-permission deny-list and Auto Backup disabled preflight"
+    "commit": "fdac49b9c0eeae9affa2109f94e8b85eeb95cde6",
+    "ciRun": 180,
+    "evidence": "Mobile CI #180 passed locked dependency install, production dependency audit, typecheck, SellerTray release preflight and release-manifest integrity after AI-assisted usage metering and same-tenant ledger hardening"
   },
   "gates": [
     {
@@ -23,8 +23,8 @@
       "required": true,
       "status": "accepted",
       "owner": "ProcessEdge",
-      "evidence": "Migration user_legal_acceptances applied; account-lifecycle v3 ACTIVE; Mobile CI #162 passed",
-      "acceptance": "Authenticated sessions are gated on current Terms/Privacy acceptance and the server records version/timestamp."
+      "evidence": "Migration user_legal_acceptances applied; account-lifecycle v4 ACTIVE; Mobile CI #180 passed",
+      "acceptance": "Authenticated sessions are gated on current Terms/Privacy acceptance and the server records version/timestamp; Owner business export includes the usage ledger."
     },
     {
       "id": "supabase_auth_redirects",
@@ -104,7 +104,7 @@
       "status": "pending",
       "owner": "ProcessEdge",
       "evidence": null,
-      "acceptance": "Configure server-only parser credentials and pass live AI parse, deterministic price matching and safe-fallback acceptance."
+      "acceptance": "Configure server-only parser credentials and pass live AI parse, deterministic price matching, AI_ORDER_ACTIVITY metering and safe-fallback acceptance."
     },
     {
       "id": "outbound_whatsapp_worker",
@@ -119,8 +119,8 @@
       "required": true,
       "status": "pending",
       "owner": "ProcessEdge",
-      "evidence": null,
-      "acceptance": "Approve SellerTray price/usage commercial values, configure Paystack plan/secret, and pass test checkout/webhook lifecycle acceptance."
+      "evidence": "AI_ORDER_ACTIVITY usage metering is deployed; commercial base price and usage rate remain unset",
+      "acceptance": "Approve SellerTray base subscription and flat AI-assisted activity price, decide/record the pilot usage collection method, configure Paystack plan/secret, and pass test checkout/webhook lifecycle acceptance."
     },
     {
       "id": "google_play_data_safety",
