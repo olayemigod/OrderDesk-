@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 
@@ -21,6 +22,7 @@ import { useOrders } from './hooks/useOrders';
 import { supabase } from './lib/supabase';
 
 type ViewName = 'home' | 'orders' | 'business';
+type OrderFilter = 'attention' | 'active' | 'done' | 'all';
 
 const statusLabels: Record<OrderStatus, string> = {
   draft: 'Draft',
@@ -91,7 +93,7 @@ function Workspace() {
     [orders, selectedOrderId],
   );
 
-  const reviewCount = orders.filter((order) => order.status === 'needs_review').length;
+  const reviewCount = orders.filter((order) => order.status === 'needs_review' || order.status === 'draft').length;
   const inProgressCount = orders.filter((order) =>
     ['accepted', 'processing', 'ready'].includes(order.status),
   ).length;
@@ -336,6 +338,7 @@ function HomeView({
         orders={orders.slice(0, 3)}
         loading={loading}
         selectedOrderId=""
+        currency={business.currency}
         onSelect={onSelectOrder}
         emptyText="No WhatsApp orders have arrived for this business yet."
       />
@@ -364,6 +367,59 @@ function OrdersView({
   editItem: (itemId: string, item: OrderItemInput) => Promise<void>;
   removeItem: (itemId: string) => Promise<void>;
 }) {
+  const [filter, setFilter] = useState<OrderFilter>('attention');
+  const [query, setQuery] = useState('');
+
+  const filterCounts = useMemo(
+    () => ({
+      attention: orders.filter((order) => order.status === 'needs_review' || order.status === 'draft').length,
+      active: orders.filter((order) => ['accepted', 'processing', 'ready'].includes(order.status)).length,
+      done: orders.filter((order) => order.status === 'completed').length,
+      all: orders.length,
+    }),
+    [orders],
+  );
+
+  const visibleOrders = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+
+    return orders.filter((order) => {
+      const matchesFilter =
+        filter === 'all' ||
+        (filter === 'attention' && (order.status === 'needs_review' || order.status === 'draft')) ||
+        (filter === 'active' && ['accepted', 'processing', 'ready'].includes(order.status)) ||
+        (filter === 'done' && order.status === 'completed');
+
+      if (!matchesFilter) return false;
+      if (!normalizedQuery) return true;
+
+      const searchable = [
+        order.id,
+        order.customerName,
+        order.customerPhone,
+        order.customerMessage,
+        ...order.items.flatMap((item) => [item.name, item.originalName ?? '']),
+      ]
+        .join(' ')
+        .toLocaleLowerCase();
+
+      return searchable.includes(normalizedQuery);
+    });
+  }, [filter, orders, query]);
+
+  const visibleSelectedOrder =
+    visibleOrders.find((order) => order.id === selectedOrder?.id) ?? visibleOrders[0];
+
+  const emptyText = query.trim()
+    ? 'No orders match this search inside the selected workflow view.'
+    : filter === 'attention'
+      ? 'No orders need review right now.'
+      : filter === 'active'
+        ? 'No accepted, processing or ready orders right now.'
+        : filter === 'done'
+          ? 'No completed orders yet.'
+          : 'No orders yet. New WhatsApp orders will appear here automatically.';
+
   return (
     <View style={styles.sectionStack}>
       <View>
@@ -372,24 +428,65 @@ function OrdersView({
         <Text style={styles.pageSubtitle}>Review and progress {business.name} orders.</Text>
       </View>
 
+      <View style={styles.inboxControls}>
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search customer, phone, message or product"
+          autoCorrect={false}
+          style={styles.searchInput}
+        />
+        <View style={styles.filterRow}>
+          <OrderFilterButton
+            label="Needs review"
+            count={filterCounts.attention}
+            active={filter === 'attention'}
+            onPress={() => setFilter('attention')}
+          />
+          <OrderFilterButton
+            label="In progress"
+            count={filterCounts.active}
+            active={filter === 'active'}
+            onPress={() => setFilter('active')}
+          />
+          <OrderFilterButton
+            label="Completed"
+            count={filterCounts.done}
+            active={filter === 'done'}
+            onPress={() => setFilter('done')}
+          />
+          <OrderFilterButton
+            label="All"
+            count={filterCounts.all}
+            active={filter === 'all'}
+            onPress={() => setFilter('all')}
+          />
+        </View>
+      </View>
+
+      <Text style={styles.resultMeta}>
+        Showing {visibleOrders.length} of {orders.length} order{orders.length === 1 ? '' : 's'}
+      </Text>
+
       <OrderList
-        orders={orders}
+        orders={visibleOrders}
         loading={loading}
-        selectedOrderId={selectedOrder?.id ?? ''}
+        selectedOrderId={visibleSelectedOrder?.id ?? ''}
+        currency={business.currency}
         onSelect={onSelectOrder}
-        emptyText="No orders yet. New WhatsApp orders will appear here automatically."
+        emptyText={emptyText}
       />
 
-      {selectedOrder ? (
+      {visibleSelectedOrder ? (
         <OrderDetail
-          order={selectedOrder}
+          order={visibleSelectedOrder}
           currency={business.currency}
-          onAccept={() => setStatus(selectedOrder.id, 'accepted')}
-          onReject={() => setStatus(selectedOrder.id, 'rejected')}
-          onStart={() => setStatus(selectedOrder.id, 'processing')}
-          onReady={() => setStatus(selectedOrder.id, 'ready')}
-          onComplete={() => setStatus(selectedOrder.id, 'completed')}
-          onAddItem={(item) => addItem(selectedOrder.id, item)}
+          onAccept={() => setStatus(visibleSelectedOrder.id, 'accepted')}
+          onReject={() => setStatus(visibleSelectedOrder.id, 'rejected')}
+          onStart={() => setStatus(visibleSelectedOrder.id, 'processing')}
+          onReady={() => setStatus(visibleSelectedOrder.id, 'ready')}
+          onComplete={() => setStatus(visibleSelectedOrder.id, 'completed')}
+          onAddItem={(item) => addItem(visibleSelectedOrder.id, item)}
           onEditItem={editItem}
           onRemoveItem={removeItem}
         />
@@ -398,16 +495,40 @@ function OrdersView({
   );
 }
 
+function OrderFilterButton({
+  label,
+  count,
+  active,
+  onPress,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[styles.filterButton, active && styles.filterButtonActive]}
+    >
+      <Text style={[styles.filterButtonText, active && styles.filterButtonTextActive]}>{label}</Text>
+      <Text style={[styles.filterCount, active && styles.filterCountActive]}>{count}</Text>
+    </Pressable>
+  );
+}
+
 function OrderList({
   orders,
   loading,
   selectedOrderId,
+  currency,
   onSelect,
   emptyText,
 }: {
   orders: MerchantOrder[];
   loading: boolean;
   selectedOrderId: string;
+  currency: string;
   onSelect: (orderId: string) => void;
   emptyText: string;
 }) {
@@ -423,7 +544,7 @@ function OrderList({
   if (!loading && orders.length === 0) {
     return (
       <View style={styles.emptyCard}>
-        <Text style={styles.emptyTitle}>No orders yet</Text>
+        <Text style={styles.emptyTitle}>Nothing here</Text>
         <Text style={styles.emptyText}>{emptyText}</Text>
       </View>
     );
@@ -431,27 +552,37 @@ function OrderList({
 
   return (
     <View style={styles.orderList}>
-      {orders.map((order) => (
-        <Pressable
-          key={order.id}
-          onPress={() => onSelect(order.id)}
-          style={[styles.orderCard, selectedOrderId === order.id && styles.orderCardSelected]}
-        >
-          <View style={styles.orderTopRow}>
-            <View style={styles.orderIdentity}>
-              <Text style={styles.customerName}>{order.customerName}</Text>
-              <Text numberOfLines={1} style={styles.orderId}>{order.id}</Text>
+      {orders.map((order) => {
+        const total = orderTotal(order);
+        const reviewChecks = order.reviewReasons.length;
+
+        return (
+          <Pressable
+            key={order.id}
+            onPress={() => onSelect(order.id)}
+            style={[styles.orderCard, selectedOrderId === order.id && styles.orderCardSelected]}
+          >
+            <View style={styles.orderTopRow}>
+              <View style={styles.orderIdentity}>
+                <Text style={styles.customerName}>{order.customerName}</Text>
+                <Text numberOfLines={1} style={styles.orderId}>{formatReceivedAt(order.receivedAt)} · {order.id}</Text>
+              </View>
+              <View style={styles.orderRight}>
+                <StatusPill status={order.status} />
+                <Text style={[styles.orderValue, total === null && styles.orderValuePending]}>
+                  {total === null ? 'Needs pricing' : formatMoney(total, currency)}
+                </Text>
+              </View>
             </View>
-            <StatusPill status={order.status} />
-          </View>
-          <Text numberOfLines={2} style={styles.orderMessage}>
-            {order.customerMessage || 'No customer message captured.'}
-          </Text>
-          <Text style={styles.orderMeta}>
-            {order.items.length} item{order.items.length === 1 ? '' : 's'} · {order.source === 'whatsapp' ? 'WhatsApp' : 'Manual'} · {order.confidence === null ? 'Unscored' : `${Math.round(order.confidence * 100)}% parsed`}
-          </Text>
-        </Pressable>
-      ))}
+            <Text numberOfLines={2} style={styles.orderMessage}>
+              {order.customerMessage || 'No customer message captured.'}
+            </Text>
+            <Text style={styles.orderMeta}>
+              {order.items.length} item{order.items.length === 1 ? '' : 's'} · {order.source === 'whatsapp' ? 'WhatsApp' : 'Manual'} · {order.confidence === null ? 'Unscored' : `${Math.round(order.confidence * 100)}% parsed`}{reviewChecks > 0 ? ` · ${reviewChecks} review check${reviewChecks === 1 ? '' : 's'}` : ''}
+            </Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -665,6 +796,18 @@ function formatMoney(value: number, currency: string) {
   }).format(value);
 }
 
+function formatReceivedAt(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unknown time';
+
+  return new Intl.DateTimeFormat('en-NG', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F6F7F9' },
   appFrame: { flex: 1 },
@@ -711,13 +854,26 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   sectionTitle: { color: '#101828', fontSize: 15, fontWeight: '900' },
   linkText: { color: '#246BFD', fontSize: 12, fontWeight: '800' },
+  inboxControls: { gap: 9 },
+  searchInput: { minHeight: 44, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 12, paddingHorizontal: 13, backgroundColor: '#FFFFFF', color: '#101828' },
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  filterButton: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 36, borderRadius: 999, borderWidth: 1, borderColor: '#D0D5DD', backgroundColor: '#FFFFFF', paddingHorizontal: 11 },
+  filterButtonActive: { borderColor: '#246BFD', backgroundColor: '#EEF4FF' },
+  filterButtonText: { color: '#667085', fontSize: 11, fontWeight: '800' },
+  filterButtonTextActive: { color: '#175CD3' },
+  filterCount: { minWidth: 18, borderRadius: 999, paddingHorizontal: 5, paddingVertical: 1, overflow: 'hidden', textAlign: 'center', backgroundColor: '#F2F4F7', color: '#475467', fontSize: 9, fontWeight: '900' },
+  filterCountActive: { backgroundColor: '#246BFD', color: '#FFFFFF' },
+  resultMeta: { color: '#98A2B3', fontSize: 10, fontWeight: '700' },
   orderList: { gap: 9 },
   orderCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EAECF0', borderRadius: 15, padding: 13 },
   orderCardSelected: { borderColor: '#246BFD', borderWidth: 2 },
   orderTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 },
   orderIdentity: { flex: 1 },
+  orderRight: { alignItems: 'flex-end', gap: 6 },
   customerName: { color: '#101828', fontSize: 15, fontWeight: '900' },
   orderId: { color: '#98A2B3', fontSize: 10, marginTop: 2 },
+  orderValue: { color: '#101828', fontSize: 11, fontWeight: '900' },
+  orderValuePending: { color: '#B54708' },
   orderMessage: { color: '#475467', fontSize: 13, lineHeight: 19, marginTop: 9 },
   orderMeta: { color: '#667085', fontSize: 10, marginTop: 8 },
   statusPill: { borderRadius: 999, backgroundColor: '#EAECF0', paddingVertical: 5, paddingHorizontal: 8 },
