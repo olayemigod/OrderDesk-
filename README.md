@@ -6,23 +6,23 @@ Customers remain on WhatsApp. Merchants use the OrderDesk mobile app to review, 
 
 OrderDesk is intentionally **not** an ERP, POS, inventory suite, accounting package or CRM.
 
-## MVP product boundary
-
-OrderDesk handles one narrow operational problem:
+## Product flow
 
 1. A customer sends an order on WhatsApp.
-2. OrderDesk receives and validates the webhook.
-3. The message is converted into a structured `needs_review` order.
-4. The merchant reviews the parsed lines, corrects item names/quantities and sets selling prices when needed.
-5. An order can only be accepted when it contains at least one fully priced line item.
-6. The merchant progresses the order through `accepted -> processing -> ready -> completed`.
+2. OrderDesk validates and ingests the Meta webhook.
+3. The message is parsed into structured order lines.
+4. Parsed wording is matched against the merchant's catalogue names and aliases.
+5. Recognized products inherit the merchant's saved selling price; OrderDesk never invents a price.
+6. The merchant sees why the order needs review, corrects any unresolved lines and accepts it.
+7. The merchant progresses the order through `accepted -> processing -> ready -> completed`.
 
 ## Repository layout
 
 - `apps/mobile` — Expo / React Native merchant client, including Expo Web acceptance support.
-- `supabase/schema.sql` — source schema for a fresh dedicated OrderDesk Supabase project.
-- `supabase/migrations` — incremental database migrations applied after the foundation schema.
+- `supabase/schema.sql` — foundation schema for a fresh dedicated OrderDesk Supabase project.
+- `supabase/migrations` — incremental SaaS, permissions, catalogue and parser-provenance migrations.
 - `supabase/functions/whatsapp-webhook` — WhatsApp Cloud API webhook ingestion Edge Function.
+- `supabase/functions/provision-business` — authenticated self-service initial business provisioning.
 - `docs/architecture.md` — product and technical architecture boundary.
 - `docs/live_activation.md` — live activation, acceptance evidence and remaining release-readiness checks.
 
@@ -30,11 +30,15 @@ OrderDesk handles one narrow operational problem:
 
 The client supports:
 
-- Supabase email/password authentication.
-- Password recovery for native/mobile and PC web acceptance.
-- Tenant-scoped live order inbox through RLS.
+- Public email/password signup, sign-in and password recovery.
+- Self-service creation of the merchant's first OrderDesk business.
+- Tenant-scoped Home, Orders and Business views.
+- Multi-business switching without data mixing.
 - Realtime order and line-item refresh.
-- WhatsApp message context and parser confidence.
+- Business profile editing for Owners/Managers.
+- Lightweight catalogue/pricing with aliases.
+- WhatsApp message context, parser confidence and review reasons.
+- Catalogue-match provenance including original customer wording.
 - Merchant correction of `draft` / `needs_review` line items.
 - Add, edit and remove order lines.
 - Quantity and selling-price correction.
@@ -63,16 +67,7 @@ EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
 
 Only the publishable client key belongs in the mobile application. Never place the Supabase secret/service key in the client.
 
-## Live backend
-
-The MVP schema provides tenant-scoped tables for:
-
-- tenants and merchant memberships
-- customers
-- catalog items
-- inbound messages
-- orders
-- order items
+## Backend security and integrity
 
 Security and integrity controls include:
 
@@ -84,9 +79,13 @@ Security and integrity controls include:
 - Foreign-key covering indexes.
 - Server-side order status transition guard.
 - Server-side rejection of empty or unpriced order acceptance.
+- Server-only inbound order creation.
+- Server-controlled parser and catalogue-match provenance.
+- Merchant order updates limited to status/timestamp.
+- Merchant order-item changes limited to name, quantity and selling price.
 - Realtime publication for orders and order items.
 
-## WhatsApp webhook
+## WhatsApp ingestion
 
 The Edge Function supports:
 
@@ -96,15 +95,17 @@ The Edge Function supports:
 - Customer upsert.
 - Idempotent inbound-message storage by provider message ID.
 - Structured `needs_review` order creation.
-- Optional provider-neutral AI parser integration.
-- Conservative fallback parsing when no AI parser is configured.
+- Catalogue-backed product matching and pricing.
+- Parser source/version and explicit review-reason recording.
+- Optional external AI parser integration.
+- Conservative fallback parsing when no AI parser is configured or available.
 
-Server secrets such as Meta app secrets, webhook verification tokens and Supabase server credentials must remain in Supabase/Edge Function secret storage and must never be committed to this repository or exposed in the merchant client.
+Server secrets such as Meta app secrets, webhook verification tokens, AI provider credentials and Supabase server credentials must remain in Supabase/Edge Function secret storage and must never be committed to this repository or exposed in the merchant client.
 
-## Current acceptance status
+## Current checkpoint
 
-The live backend and merchant workflow have passed the first E2E acceptance path using an isolated Meta sample tenant and the PC web client:
+OD-02 and OD-03 live merchant workflow acceptance are complete. S1-S3 SaaS context, self-service provisioning and catalogue matching are implemented. S4A parser/match provenance is deployed and Mobile CI #68 passed.
 
-`Meta webhook -> needs_review -> accepted -> processing -> ready -> completed`
+The next bounded slice is S4B: connect a production AI parser using catalogue context while retaining the deterministic matcher/pricer and safe fallback.
 
-OD-03 adds merchant order-line correction and server-side status hardening. Its implementation and database guard tests are complete; one merchant UI correction acceptance run remains. See `docs/live_activation.md` for the current checkpoint and release-readiness gaps.
+See `docs/live_activation.md` for current acceptance evidence and release-readiness gaps.
