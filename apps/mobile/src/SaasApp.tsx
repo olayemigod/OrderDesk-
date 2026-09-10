@@ -89,7 +89,7 @@ function Workspace() {
   }, [activeBusiness?.id]);
 
   const selectedOrder = useMemo(
-    () => orders.find((order) => order.id === selectedOrderId) ?? orders[0],
+    () => orders.find((order) => order.id === selectedOrderId),
     [orders, selectedOrderId],
   );
 
@@ -187,7 +187,10 @@ function Workspace() {
               inProgressCount={inProgressCount}
               completedCount={completedCount}
               orderValue={orderValue}
-              onOpenOrders={() => setView('orders')}
+              onOpenOrders={() => {
+                setSelectedOrderId('');
+                setView('orders');
+              }}
               onSelectOrder={(id) => {
                 setSelectedOrderId(id);
                 setView('orders');
@@ -214,7 +217,14 @@ function Workspace() {
           ) : null}
         </ScrollView>
 
-        <BottomNav view={view} reviewCount={reviewCount} onChange={setView} />
+        <BottomNav
+          view={view}
+          reviewCount={reviewCount}
+          onChange={(nextView) => {
+            if (nextView === 'orders' && view !== 'orders') setSelectedOrderId('');
+            setView(nextView);
+          }}
+        />
       </View>
     </SafeAreaView>
   );
@@ -369,6 +379,20 @@ function OrdersView({
 }) {
   const [filter, setFilter] = useState<OrderFilter>('attention');
   const [query, setQuery] = useState('');
+
+  useEffect(() => {
+    if (!selectedOrder) return;
+
+    if (selectedOrder.status === 'needs_review' || selectedOrder.status === 'draft') {
+      setFilter('attention');
+    } else if (['accepted', 'processing', 'ready'].includes(selectedOrder.status)) {
+      setFilter('active');
+    } else if (selectedOrder.status === 'completed') {
+      setFilter('done');
+    } else {
+      setFilter('all');
+    }
+  }, [selectedOrder?.id, selectedOrder?.status]);
 
   const filterCounts = useMemo(
     () => ({
