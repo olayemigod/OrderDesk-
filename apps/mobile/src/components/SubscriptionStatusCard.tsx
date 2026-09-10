@@ -115,16 +115,21 @@ export function SubscriptionStatusCard({ tenantId, role, subscription, loading, 
       <View style={styles.chargeBox}>
         <Text style={styles.chargeTitle}>AI-assisted order activity</Text>
         <Text style={styles.usageCount}>
-          {subscription.usageUnitsThisPeriod} activit{subcriptionPlural(subscription.usageUnitsThisPeriod)} this period
+          {subscription.usageUnitsThisPeriod} {activityLabel(subscription.usageUnitsThisPeriod)} this period
         </Text>
-        {subscription.usageUnitPrice === null ? (
+        {subscription.baseStatus === 'trial' ? (
+          <Text style={styles.helper}>
+            Trial AI-assisted activity is measured but free. Trial activity is not charged later when paid usage starts.
+          </Text>
+        ) : !subscription.usagePricingActive ? (
           <Text style={styles.helper}>
             Usage is being metered, but the flat activity charge has not been activated. Unpriced activity is not charged retroactively.
           </Text>
         ) : (
           <>
             <Text style={styles.helper}>
-              {formatMoney(subscription.usageUnitPrice, subscription.currency)} per AI-assisted order activity
+              {formatMoney(subscription.usageUnitPrice ?? 0, subscription.currency)} per AI-assisted order activity
+              {subscription.usageBillableNow ? '' : ' · not currently billable'}
             </Text>
             <Text style={styles.chargeValue}>
               Usage so far: {formatMoney(subscription.usageAmountThisPeriod, subscription.currency)}
@@ -152,8 +157,8 @@ export function SubscriptionStatusCard({ tenantId, role, subscription, loading, 
   );
 }
 
-function subcriptionPlural(value: number): string {
-  return value === 1 ? 'y' : 'ies';
+function activityLabel(value: number): string {
+  return value === 1 ? 'activity' : 'activities';
 }
 
 function daysUntil(value: string): number | null {
