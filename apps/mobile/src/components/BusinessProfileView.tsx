@@ -5,9 +5,11 @@ import type {
   BusinessProfileInput,
   MerchantBusiness,
 } from '../data/businessRepository';
+import { usePlatformAdmin } from '../hooks/usePlatformAdmin';
 import { useSubscriptionAccess } from '../hooks/useSubscriptionAccess';
 import { CatalogueView } from './CatalogueView';
 import { CustomerNotificationSettings } from './CustomerNotificationSettings';
+import { PlatformAdminView } from './PlatformAdminView';
 import { SubscriptionStatusCard } from './SubscriptionStatusCard';
 import { TeamManagementView } from './TeamManagementView';
 
@@ -19,6 +21,7 @@ type Props = {
 export function BusinessProfileView({ business, onSave }: Props) {
   const canEdit = business.role === 'owner' || business.role === 'manager';
   const { subscription, loading: subscriptionLoading, error: subscriptionError } = useSubscriptionAccess(business.id);
+  const platformAdmin = usePlatformAdmin();
   const [name, setName] = useState(business.name);
   const [businessType, setBusinessType] = useState(business.businessType ?? '');
   const [email, setEmail] = useState(business.businessEmail ?? '');
@@ -213,6 +216,20 @@ export function BusinessProfileView({ business, onSave }: Props) {
         <SettingRow label="Setup stage" value={formatLabel(business.onboardingStatus)} />
         <SettingRow label="Workspace" value={business.slug} />
       </View>
+
+      {platformAdmin.overview ? (
+        <View style={styles.adminSection}>
+          <PlatformAdminView
+            overview={platformAdmin.overview}
+            audit={platformAdmin.audit}
+            loading={platformAdmin.loading}
+            busy={platformAdmin.busy}
+            error={platformAdmin.error}
+            onRefresh={platformAdmin.refresh}
+            onMutate={platformAdmin.mutate}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -271,4 +288,5 @@ const styles = StyleSheet.create({
   settingRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, paddingVertical: 9, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#EAECF0' },
   settingLabel: { color: '#667085', fontSize: 12, fontWeight: '700' },
   settingValue: { color: '#101828', fontSize: 12, fontWeight: '800', flexShrink: 1, textAlign: 'right' },
+  adminSection: { borderTopWidth: 1, borderTopColor: '#D0D5DD', paddingTop: 20 },
 });
