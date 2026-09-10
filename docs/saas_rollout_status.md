@@ -93,9 +93,10 @@ This document records the governed rollout state for SellerTray. SellerTray rema
 - Supabase Cron job `sellertray-prepare-usage-settlements` is ACTIVE at 01:15 UTC daily and prepares closed-period settlements only; it never invokes Paystack or moves money.
 - Self-service account deletion now blocks while any priced AI usage remains unsettled and clears only after settlement is paid.
 - New `usage-settlement` Edge Function is ACTIVE with custom server-token auth and an explicit `USAGE_BILLING_LIVE=true` money-movement kill switch.
+- A second database commercial charging interlock, `subscription_plans.usage_charging_enabled`, defaults to `false`; the worker requires both gates before any Paystack debit.
 - Failed or ambiguous provider attempts are never automatically retried.
 - Paystack webhook recognizes settlement references separately from base checkout and verifies expected amount/currency before marking a settlement paid.
-- `usage-settlement` v3 adds non-debiting Paystack Verify Transaction reconciliation by the existing provider reference; failed/ambiguous attempts are never blindly retried.
+- `usage-settlement` v4 retains non-debiting Paystack Verify Transaction reconciliation by the existing provider reference; failed/ambiguous attempts are never blindly retried.
 - ProcessEdge Admin exposes authorization readiness, outstanding usage amount and failed-settlement count without exposing encrypted payment credentials.
 - Owner business export includes safe settlement history but deliberately excludes reusable charge credentials.
 - `docs/usage_billing.md` is CI-gated; backend function/migration paths now trigger release CI as well as mobile/document changes.
