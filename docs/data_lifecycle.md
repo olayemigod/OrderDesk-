@@ -16,7 +16,7 @@ SellerTray stores merchant workspace data needed to receive, review, fulfil and 
 ## Account deletion
 
 - Every authenticated user has an in-app account-deletion path, including users who currently have no workspace.
-- Deletion requires the current password and the exact confirmation phrase `DELETE MY ORDERDESK ACCOUNT`.
+- Deletion requires the current password and the exact confirmation phrase `DELETE MY SELLERTRAY ACCOUNT`.
 - A normal merchant account deletion removes user-owned Storage files through the Storage API, deletes businesses where the user is Owner and their tenant-scoped operational records, removes remaining team memberships/invitations and checkout-session records, then deletes the Supabase Auth user.
 - Tenant-specific billing-provider event rows and ProcessEdge tenant audit rows are deleted before an Owner tenant is deleted so they do not retain an indirect copy of tenant data.
 - Account deletion is blocked when an owned tenant still has an active provider subscription. The subscription must be cancelled first.

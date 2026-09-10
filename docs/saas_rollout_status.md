@@ -91,7 +91,7 @@ These are implemented but must not be described as production-accepted yet:
 4. **Paystack billing** — approve commercial monthly price, create/configure Paystack plan reference and server secret, then run test-mode checkout/webhook acceptance before live mode.
 5. **Production email** — configure production SMTP/Auth email delivery.
 
-## S11 — production hardening — IN PROGRESS
+## S11 — production hardening — CODE PASS / RELEASE ACCEPTANCE PENDING
 
 ### S11A — structured Edge Function observability — PASS CODE / DEPLOYED; RUNTIME CORRELATION SMOKE PENDING
 - Standardized structured request-start, request-finish and uncaught-exception logs across `whatsapp-webhook`, `order-parser`, `send-whatsapp-notifications`, `billing-checkout`, `paystack-webhook` and `platform-admin`.
@@ -119,7 +119,7 @@ These are implemented but must not be described as production-accepted yet:
 - Business Owners can export a bounded JSON copy of the tenant profile, catalogue, customers, inbound WhatsApp messages, orders/items/status history, outbound notification history, team records and subscription state.
 - Self-service export fails closed above 5,000 rows per collection instead of silently truncating.
 - Every authenticated merchant can access in-app account deletion, including a signed-in user with no business workspace.
-- Deletion requires the current password and the exact `DELETE MY ORDERDESK ACCOUNT` confirmation phrase.
+- Deletion requires the current password and the exact `DELETE MY SELLERTRAY ACCOUNT` confirmation phrase.
 - Owned businesses and their tenant-scoped operational data are removed before the Auth user; memberships in other businesses are removed. User-owned Storage objects are removed through the Storage API within the bounded self-service contract.
 - Active provider subscriptions, ProcessEdge platform-admin identities/audit history and oversized Storage cleanup fail closed to controlled support handling.
 - Added `docs/data_lifecycle.md` covering retention, access-token expiry considerations, backup/recovery and destructive-restore controls.
@@ -141,7 +141,7 @@ These are implemented but must not be described as production-accepted yet:
 - `account-lifecycle` v2 is ACTIVE with JWT verification enabled.
 - Live plan name changed from `OrderDesk Business` to `SellerTray Business`; stale user-facing subscription/team and Edge Function messages were corrected and deployed.
 - In-app Privacy Policy and Terms links now target the SellerTray-specific production URLs.
-- Mobile CI #154 passed the production-identity/UI change and CI #155 passed the in-app legal-link change. The final service-identity migration head is undergoing the same CI gate.
+- Mobile CI #154 passed the production-identity/UI change, CI #155 passed the in-app legal-link change, and CI #158 passed the final server-boundary hardening head.
 - **Not yet accepted:** Supabase Auth Additional Redirect URLs must be configured/verified; leaked-password protection remains disabled; SellerTray icon/adaptive-icon/splash assets do not yet exist; no signed EAS preview APK/native smoke or production AAB has been completed.
 
 ### S11E — SellerTray legal-policy alignment — PREVIEW READY / LEGAL APPROVAL PENDING
@@ -151,6 +151,16 @@ These are implemented but must not be described as production-accepted yet:
 - Privacy wording is aligned to the current SellerTray data contract and the Nigeria Data Protection Act rights baseline.
 - The account-deletion page links to the product-specific Privacy/Terms routes on the legal branch.
 - Google Play requires a comprehensive privacy policy accessible in the app plus the separate account-deletion resource; mobile links are implemented but production legal URLs must not be considered accepted until PR #2 is legally approved and published.
+
+### S11F — release acceptance preparation — PASS CODE / DEPLOYED
+- Closed the last two authenticated Edge Function hardening gaps: `provision-business` and `team-management` now have structured request observability, correlation IDs and 64 KiB streamed request-body limits.
+- Both functions remain JWT-verified and were redeployed ACTIVE after the hardening patch.
+- Full Edge Function matrix now shows all nine functions ACTIVE and instrumented.
+- Every function that consumes an inbound request body enforces a streamed byte limit; the notification worker consumes no request body and remains worker-token gated.
+- Public/custom-auth boundaries remain explicit: Meta webhook signature, parser token, notification worker token and Paystack signature/secret paths retain their intended controls.
+- Live security advisor still reports only the project-level leaked-password-protection warning. Performance advisor reports informational unused-index notices only.
+- Mobile CI #158 passed on hardening commit `0a1d136`.
+- No further code-side MVP release blocker was identified in this hardening pass.
 
 ### Remaining S11 release gates
 - Configure/verify Supabase Auth redirects for `sellertray://auth-confirm`, `sellertray://reset-password` and the two temporary legacy equivalents.
@@ -162,8 +172,8 @@ These are implemented but must not be described as production-accepted yet:
 - Complete production SMTP/Auth email acceptance.
 - Complete relevant Meta WhatsApp, AI parser, outbound notification and Paystack activation gates for the intended paid pilot.
 
-### Next bounded slice
-**S11F — release acceptance preparation**: verify the final CI/security checkpoint, close any remaining code-only release gaps, then hold native/store acceptance on the explicit external configuration, branding and provider dependencies above.
+### Next execution state
+**Release acceptance hold**: repository, database and Edge Function hardening are ready for the external release gates above. Do not merge PR #1 or call the product production-ready until those gates are explicitly passed.
 
 ## Commercial launch gate
 
