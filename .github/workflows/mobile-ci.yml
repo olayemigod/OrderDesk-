@@ -1,5 +1,8 @@
 name: Mobile CI
 
+permissions:
+  contents: write
+
 on:
   pull_request:
     paths:
@@ -46,6 +49,16 @@ jobs:
 
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+
+      - name: Bootstrap committed dependency lockfile
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && hashFiles('apps/mobile/package-lock.json') == '' }}
+        run: |
+          test -f package-lock.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "Commit SellerTray mobile dependency lockfile"
+          git push origin HEAD:${{ github.head_ref }}
 
       - name: Typecheck
         run: npm run typecheck
