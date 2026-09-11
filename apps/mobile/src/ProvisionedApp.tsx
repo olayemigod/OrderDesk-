@@ -1,4 +1,4 @@
-import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 
 import SaasApp from './SaasApp';
 import { AuthGate } from './components/AuthGate';
@@ -90,7 +90,7 @@ function ProvisioningGate() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F6F7F9' },
+  safeArea: { flex: 1, backgroundColor: '#F6F7F9', paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) : 0 },
   page: { paddingBottom: 36 },
   adminPage: { padding: 18, paddingBottom: 36, gap: 18 },
   centered: {
