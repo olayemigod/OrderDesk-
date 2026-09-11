@@ -65,7 +65,7 @@ export function OrderWorkflowPanel({
       setExceptionMode(null);
       setReason('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'OrderDesk could not complete that action.');
+      setError(err instanceof Error ? err.message : 'SellerTray could not complete that action.');
     } finally {
       setPending(null);
     }
