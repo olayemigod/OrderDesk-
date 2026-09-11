@@ -5,6 +5,7 @@ import {
   Pressable,
   RefreshControl,
   SafeAreaView,
+  StatusBar,
   ScrollView,
   StyleSheet,
   Text,
@@ -765,7 +766,7 @@ function formatReceivedAt(value: string): string {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F6F7F9' },
+  safeArea: { flex: 1, backgroundColor: '#F6F7F9', paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) : 0 },
   appFrame: { flex: 1 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 12, backgroundColor: '#F6F7F9' },
   noWorkspaceAccount: { width: '100%', maxWidth: 620 },
