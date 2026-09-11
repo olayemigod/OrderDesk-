@@ -52,7 +52,7 @@ function ProvisioningGate() {
             onMutate={platformAdmin.mutate}
             standalone
           />
-          <Pressable onPress={() => void supabase.auth.signOut()} style={styles.signOutButton}>
+          <Pressable onPress={() => void supabase.auth.signOut({ scope: 'local' })} style={styles.signOutButton}>
             <Text style={styles.signOutText}>Sign out</Text>
           </Pressable>
         </ScrollView>
@@ -78,7 +78,7 @@ function ProvisioningGate() {
 
           <CreateBusinessView onCreate={createBusiness} />
 
-          <Pressable onPress={() => void supabase.auth.signOut()} style={styles.signOutButton}>
+          <Pressable onPress={() => void supabase.auth.signOut({ scope: 'local' })} style={styles.signOutButton}>
             <Text style={styles.signOutText}>Sign out</Text>
           </Pressable>
         </ScrollView>
