@@ -40,6 +40,9 @@ export type PlatformTenantSummary = {
   aiOutputTokensPeriod: number;
   aiReasoningTokensPeriod: number;
   aiTotalTokensPeriod: number;
+  aiCatalogueItemsTotalMax: number;
+  aiCatalogueItemsSentAvg: number;
+  aiCatalogueAliasesSentAvg: number;
   aiParserModel: string | null;
   supportNote: string | null;
   supportNoteUpdatedAt: string | null;
@@ -167,6 +170,9 @@ function normalizeTenant(value: Record<string, unknown>): PlatformTenantSummary 
     aiOutputTokensPeriod: numberValue(value.aiOutputTokensPeriod),
     aiReasoningTokensPeriod: numberValue(value.aiReasoningTokensPeriod),
     aiTotalTokensPeriod: numberValue(value.aiTotalTokensPeriod),
+    aiCatalogueItemsTotalMax: numberValue(value.aiCatalogueItemsTotalMax),
+    aiCatalogueItemsSentAvg: numberValue(value.aiCatalogueItemsSentAvg),
+    aiCatalogueAliasesSentAvg: numberValue(value.aiCatalogueAliasesSentAvg),
     aiParserModel: optionalString(value.aiParserModel),
     supportNote: optionalString(value.supportNote),
     supportNoteUpdatedAt: optionalString(value.supportNoteUpdatedAt),
