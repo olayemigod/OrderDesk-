@@ -6,9 +6,9 @@
   "updatedAt": "2026-09-10",
   "codeCheckpoint": {
     "status": "accepted",
-    "commit": "36bd53ee904ad1ed69c3ea8c56ada9f3b0c1645c",
-    "ciRun": 235,
-    "evidence": "Mobile CI #235 passed locked dependency install, production dependency audit, TypeScript, duplicate migration-version validation, dual usage charging interlocks, atomic pending-settlement charge claim and SellerTray release preflight"
+    "commit": "a431d8664a2b7260d4e8b2de10493a2915ad9557",
+    "ciRun": 265,
+    "evidence": "Mobile CI #265 passed locked dependency install, production dependency audit, TypeScript, migration uniqueness, AI telemetry/cached-token integrity and SellerTray release preflight"
   },
   "gates": [
     {
