@@ -36,6 +36,7 @@ export type PlatformTenantSummary = {
   aiParserSuccessesPeriod: number;
   aiParserNonSuccessPeriod: number;
   aiInputTokensPeriod: number;
+  aiCachedInputTokensPeriod: number;
   aiOutputTokensPeriod: number;
   aiReasoningTokensPeriod: number;
   aiTotalTokensPeriod: number;
@@ -162,6 +163,7 @@ function normalizeTenant(value: Record<string, unknown>): PlatformTenantSummary 
     aiParserSuccessesPeriod: numberValue(value.aiParserSuccessesPeriod),
     aiParserNonSuccessPeriod: numberValue(value.aiParserNonSuccessPeriod),
     aiInputTokensPeriod: numberValue(value.aiInputTokensPeriod),
+    aiCachedInputTokensPeriod: numberValue(value.aiCachedInputTokensPeriod),
     aiOutputTokensPeriod: numberValue(value.aiOutputTokensPeriod),
     aiReasoningTokensPeriod: numberValue(value.aiReasoningTokensPeriod),
     aiTotalTokensPeriod: numberValue(value.aiTotalTokensPeriod),
