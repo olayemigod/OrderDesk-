@@ -61,3 +61,26 @@ Google Play requires an external web resource in addition to the in-app deletion
 SellerTray 1.0.0 explicitly sets Expo `android.allowBackup = false`. Android must not automatically back up or restore SellerTray application-local data through Google Drive/device backup. This reduces the chance that persisted authenticated session material or other app-local state survives through an OS backup/restore path outside SellerTray's governed account/data lifecycle.
 
 This setting does not replace server-side export, retention or disaster-recovery controls. Business-data export remains an explicit Owner action, while server infrastructure backup/recovery is governed separately.
+
+
+## AI parser cost telemetry
+
+SellerTray stores a bounded server-only record for each attempted external AI parse so ProcessEdge can validate real unit economics before commercial pricing is activated.
+
+Stored fields are limited to:
+- tenant and source-message identifiers;
+- provider/model identifier;
+- outcome and provider HTTP status;
+- input, output, reasoning and total token counts;
+- timestamp.
+
+SellerTray does **not** store the customer message, catalogue payload, prompt, model response, authorization data or provider error body in this telemetry table.
+
+Controls:
+- `ai_parser_attempts` has RLS enabled and no direct anon/authenticated table privileges.
+- Only server-side service-role paths can write/read the table operationally.
+- The composite tenant/source-message foreign key prevents cross-tenant linkage.
+- One OpenAI attempt row is retained per source message/provider, so webhook retries do not duplicate cost records.
+- Deleting the source inbound message or tenant cascades the telemetry row.
+- Owner business export includes these non-content telemetry records.
+- ProcessEdge Admin sees period aggregates/token totals, not customer text.
