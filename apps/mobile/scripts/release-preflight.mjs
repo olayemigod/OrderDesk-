@@ -213,8 +213,8 @@ requireValue(!authEmailConfirmation.includes('OrderDesk') && !authEmailRecovery.
 requireValue(authEmailTemplateReadme.includes('Send Email Auth Hook'), 'Auth email deployment notes must retain the Send Email Hook contract');
 const sendAuthEmailFunction = read(join(repoRoot, 'supabase/functions/send-auth-email/index.ts'));
 requireValue(sendAuthEmailFunction.includes("standardwebhooks@1.0.0"), 'Auth email hook must verify Standard Webhooks signatures');
-const merchantOrderFunction = readFileSync(join(repoRoot, 'supabase/functions/merchant-order/index.ts'), 'utf8');
-requireValue(!merchantOrderFunction.includes('line_total:'), 'merchant-order must not write generated line_total');
+const merchantOrderGeneratedTotalGuard = readFileSync(join(repoRoot, 'supabase/functions/merchant-order/index.ts'), 'utf8');
+requireValue(!merchantOrderGeneratedTotalGuard.includes('line_total:'), 'merchant-order must not write generated line_total');
 requireValue(sendAuthEmailFunction.includes('RESEND_API_KEY'), 'Auth email hook must read the Resend provider key server-side');
 requireValue(sendAuthEmailFunction.includes('AUTH_EMAIL_FROM'), 'Auth email hook must read the sender identity server-side');
 requireValue(sendAuthEmailFunction.includes('SEND_EMAIL_HOOK_SECRET'), 'Auth email hook must read the hook verification secret server-side');
