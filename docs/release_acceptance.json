@@ -81,8 +81,8 @@
       "required": true,
       "status": "pending",
       "owner": "ProcessEdge",
-      "evidence": null,
-      "acceptance": "Pass the native smoke matrix in docs/release_runbook.md on a physical Android device, including disposable account deletion."
+      "evidence": "Physical Android QA in progress on standalone SellerTray QA APK. Password-recovery email deep link tested on 11 September 2026 and successfully opened the installed SellerTray app via sellertray://reset-password.",
+      "acceptance": "Complete remaining physical-device smoke: signup confirmation deep link, sign-in, merchant provisioning, tenant-scoped catalogue, order lifecycle, data export, disposable account deletion/relaunch, and visible-secret check."
     },
     {
       "id": "android_production_aab",
