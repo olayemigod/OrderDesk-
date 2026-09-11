@@ -210,6 +210,8 @@ const paystackWebhook = read(join(repoRoot, 'supabase/functions/paystack-webhook
 const usageSettlementMigration = read(join(repoRoot, 'supabase/migrations/20260910230000_usage_settlement_foundation.sql'));
 const aiTelemetryMigration = read(join(repoRoot, 'supabase/migrations/20260911000500_ai_parser_cost_telemetry.sql'));
 const aiAdminTelemetryMigration = read(join(repoRoot, 'supabase/migrations/20260911000600_platform_admin_ai_parser_telemetry.sql'));
+const aiCachedTokenMigration = read(join(repoRoot, 'supabase/migrations/20260911000800_ai_parser_cached_token_telemetry.sql'));
+const aiTokenIntegrityMigration = read(join(repoRoot, 'supabase/migrations/20260911000900_ai_parser_token_integrity.sql'));
 const whatsappWebhookFunction = read(join(repoRoot, 'supabase/functions/whatsapp-webhook/index.ts'));
 const usageScheduleMigration = read(join(repoRoot, 'supabase/migrations/20260910234500_schedule_usage_settlement_preparation.sql'));
 const deletionUsageGuardMigration = read(join(repoRoot, 'supabase/migrations/20260910233000_block_deletion_with_unsettled_usage.sql'));
@@ -223,6 +225,7 @@ requireValue(
 );
 requireValue(
   orderParserFunction.includes('x-sellertray-ai-input-tokens') &&
+    orderParserFunction.includes('x-sellertray-ai-cached-input-tokens') &&
     orderParserFunction.includes('x-sellertray-ai-output-tokens') &&
     orderParserFunction.includes('x-sellertray-ai-reasoning-tokens'),
   'Order parser must expose bounded internal token telemetry headers',
@@ -253,6 +256,13 @@ requireValue(
   aiAdminTelemetryMigration.includes('"aiParserAttemptsPeriod"') &&
     aiAdminTelemetryMigration.includes('"aiTotalTokensPeriod"'),
   'ProcessEdge admin overview must retain AI unit-economics telemetry',
+);
+requireValue(
+  aiCachedTokenMigration.includes('cached_input_tokens') &&
+    aiCachedTokenMigration.includes('"aiCachedInputTokensPeriod"') &&
+    aiTokenIntegrityMigration.includes('cached_input_tokens <= input_tokens') &&
+    aiTokenIntegrityMigration.includes('reasoning_tokens <= output_tokens'),
+  'AI cached-input telemetry integrity contract is missing',
 );
 requireValue(
   usageSettlementWorker.includes("Deno.env.get('USAGE_BILLING_LIVE') === 'true'"),
