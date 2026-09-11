@@ -17,6 +17,7 @@ on:
       - 'docs/google_play_submission.md'
       - 'docs/google_play_store_listing.md'
       - 'docs/data_processor_review.md'
+      - 'docs/commercial_pricing_proposal.md'
       - 'docs/usage_billing.md'
       - '.github/workflows/mobile-ci.yml'
   push:
@@ -34,6 +35,7 @@ on:
       - 'docs/google_play_submission.md'
       - 'docs/google_play_store_listing.md'
       - 'docs/data_processor_review.md'
+      - 'docs/commercial_pricing_proposal.md'
       - 'docs/usage_billing.md'
       - '.github/workflows/mobile-ci.yml'
 
