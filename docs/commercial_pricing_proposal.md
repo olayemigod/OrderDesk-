@@ -114,3 +114,17 @@ Before numeric pricing activation, ProcessEdge should record a representative li
 3. fallback/error rate;
 4. variable AI cost per successful billable activity;
 5. contribution margin at the proposed ₦5 activity charge.
+
+
+## AI catalogue context budget
+
+To keep the founding usage price viable as merchants grow, SellerTray does not send an unbounded merchant catalogue to the AI parser.
+
+Current production contract:
+- the full active catalogue remains server-side for deterministic post-parse item/price matching;
+- AI receives at most **160** lexically ranked catalogue items per order;
+- AI receives at most **6 aliases per selected item**;
+- merchants with small catalogues continue to send the complete active catalogue;
+- context telemetry records total catalogue size, items sent and aliases sent without storing catalogue content in the telemetry row.
+
+The 160/6 limits are release-gated. Pricing review must compare fallback/error rate and successful-order token cost against catalogue size before changing them.
