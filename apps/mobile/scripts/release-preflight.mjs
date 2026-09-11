@@ -218,6 +218,7 @@ const usageScheduleMigration = read(join(repoRoot, 'supabase/migrations/20260910
 const deletionUsageGuardMigration = read(join(repoRoot, 'supabase/migrations/20260910233000_block_deletion_with_unsettled_usage.sql'));
 const usagePeriodCurrencyMigration = read(join(repoRoot, 'supabase/migrations/20260910235500_harden_usage_settlement_period_currency.sql'));
 const accountLifecycleFunction = read(join(repoRoot, 'supabase/functions/account-lifecycle/index.ts'));
+const accountLifecycleRepository = read(join(mobileRoot, 'src/data/accountLifecycleRepository.ts'));
 const usageBillingContract = read(join(repoRoot, 'docs/usage_billing.md'));
 
 requireValue(
@@ -340,6 +341,13 @@ requireValue(
 requireValue(
   accountLifecycleFunction.includes("rpc('orderdesk_has_unsettled_usage'"),
   'Self-service account deletion must check unsettled priced usage',
+);
+requireValue(
+  accountLifecycleRepository.includes("SELLERTRAY_TERMS_VERSION = '2026-09-11'") &&
+    accountLifecycleRepository.includes("SELLERTRAY_PRIVACY_VERSION = '2026-09-11'") &&
+    accountLifecycleFunction.includes("SELLERTRAY_TERMS_VERSION = '2026-09-11'") &&
+    accountLifecycleFunction.includes("SELLERTRAY_PRIVACY_VERSION = '2026-09-11'"),
+  'SellerTray mobile/server legal acceptance versions must remain aligned at 2026-09-11',
 );
 requireValue(
   usagePeriodCurrencyMigration.includes('Usage settlement period must be closed'),
