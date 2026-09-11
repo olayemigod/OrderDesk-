@@ -2,14 +2,17 @@ import { useCallback, useEffect, useState } from 'react';
 
 import {
   addOrderItem,
+  completeOrderFulfillment,
   createManualOrder,
   deleteOrderItem,
   loadOrders,
+  startOrderDelivery,
   subscribeToOrderChanges,
   unsubscribeFromOrderChanges,
   updateOrderItem,
   updateOrderStatus,
   type ManualOrderInput,
+  type OrderFulfillmentInput,
   type OrderItemInput,
 } from '../data/ordersRepository';
 import type { MerchantOrder, OrderStatus } from '../domain/order';
@@ -92,6 +95,34 @@ export function useOrders(tenantId: string | null) {
     [orders],
   );
 
+  const startDelivery = useCallback(
+    async (orderId: string, input: OrderFulfillmentInput) => {
+      try {
+        await startOrderDelivery(orderId, input);
+        await refresh();
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unable to start delivery.');
+        throw err;
+      }
+    },
+    [refresh],
+  );
+
+  const completeFulfillment = useCallback(
+    async (orderId: string, input: OrderFulfillmentInput) => {
+      try {
+        await completeOrderFulfillment(orderId, input);
+        await refresh();
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unable to complete fulfillment.');
+        throw err;
+      }
+    },
+    [refresh],
+  );
+
   const addItem = useCallback(
     async (orderId: string, item: OrderItemInput) => {
       try {
@@ -131,5 +162,17 @@ export function useOrders(tenantId: string | null) {
     [refresh],
   );
 
-  return { orders, loading, error, refresh, createOrder, setStatus, addItem, editItem, removeItem };
+  return {
+    orders,
+    loading,
+    error,
+    refresh,
+    createOrder,
+    setStatus,
+    startDelivery,
+    completeFulfillment,
+    addItem,
+    editItem,
+    removeItem,
+  };
 }
