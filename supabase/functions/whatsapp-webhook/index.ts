@@ -60,6 +60,12 @@ type SubscriptionAccess = {
   effectiveStatus?: string;
 };
 
+type ReceiptCandidateOrder = {
+  id: string;
+  fulfillment_method: 'merchant_delivery' | 'third_party_delivery' | null;
+  fulfillment_status: 'out_for_delivery' | string;
+};
+
 type JsonRecord = Record<string, unknown>;
 
 const encoder = new TextEncoder();
@@ -276,6 +282,16 @@ async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[nu
 
   if (!event.text) {
     return; // Media/status handling is intentionally outside the current MVP slice.
+  }
+
+  if (await maybeConfirmCustomerReceipt({
+    tenantId,
+    customerId,
+    customerWaId: event.waId,
+    sourceMessageId,
+    text: event.text,
+  })) {
+    return;
   }
 
   const subscription = await getSubscriptionAccess(tenantId);
@@ -722,6 +738,119 @@ function validateParsedOrder(value: unknown): ParsedPayload | null {
     : 0.5;
 
   return { items, confidence };
+}
+
+function isReceiptConfirmationText(value: string): boolean {
+  const normalized = value
+    .trim()
+    .toLocaleLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ');
+
+  return new Set([
+    'received',
+    'order received',
+    'received thanks',
+    'received thank you',
+    'i received it',
+    'i have received it',
+    'got it',
+    'i got it',
+  ]).has(normalized);
+}
+
+async function maybeConfirmCustomerReceipt({
+  tenantId,
+  customerId,
+  customerWaId,
+  sourceMessageId,
+  text,
+}: {
+  tenantId: string;
+  customerId: string;
+  customerWaId: string;
+  sourceMessageId: string;
+  text: string;
+}): Promise<boolean> {
+  if (!isReceiptConfirmationText(text)) return false;
+
+  const possibleCustomers = await rest<Array<{ id: string }>>(
+    '/rest/v1/customers?select=id' +
+      '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+      '&or=(wa_id.eq.' + encodeURIComponent(customerWaId) +
+      ',phone.eq.' + encodeURIComponent(customerWaId) +
+      ',phone.eq.' + encodeURIComponent('+' + customerWaId) +
+      ',wa_id.eq.' + encodeURIComponent('manual:' + customerWaId) + ')' +
+      '&limit=10',
+  );
+
+  const customerIds = [...new Set([customerId, ...possibleCustomers.map((row) => row.id)])];
+  const candidateFilter = customerIds.join(',');
+
+  const candidates = await rest<ReceiptCandidateOrder[]>(
+    '/rest/v1/orders?select=id,fulfillment_method,fulfillment_status' +
+      '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+      '&customer_id=in.(' + candidateFilter + ')' +
+      '&status=eq.ready' +
+      '&fulfillment_status=eq.out_for_delivery' +
+      '&order=updated_at.desc' +
+      '&limit=2',
+  );
+
+  if (candidates.length !== 1) {
+    console.info(JSON.stringify({
+      event: 'customer_receipt_confirmation_ignored',
+      tenantId,
+      reason: candidates.length === 0 ? 'no_out_for_delivery_order' : 'ambiguous_out_for_delivery_orders',
+      candidateCount: candidates.length,
+    }));
+    return true;
+  }
+
+  const order = candidates[0];
+  if (!order.fulfillment_method) {
+    console.info(JSON.stringify({
+      event: 'customer_receipt_confirmation_ignored',
+      tenantId,
+      orderId: order.id,
+      reason: 'missing_fulfillment_method',
+    }));
+    return true;
+  }
+
+  const confirmedAt = new Date().toISOString();
+  const updated = await rest<Array<{ id: string }>>(
+    '/rest/v1/orders?id=eq.' + encodeURIComponent(order.id) +
+      '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+      '&status=eq.ready' +
+      '&fulfillment_status=eq.out_for_delivery' +
+      '&select=id',
+    {
+      method: 'PATCH',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({
+        status: 'completed',
+        status_reason: null,
+        fulfillment_status: 'delivered',
+        fulfilled_at: confirmedAt,
+        fulfillment_confirmed_by: 'customer_whatsapp',
+        customer_confirmed_at: confirmedAt,
+        customer_confirmation_message_id: sourceMessageId,
+        updated_at: confirmedAt,
+      }),
+    },
+  );
+
+  if (updated.length === 1) {
+    console.info(JSON.stringify({
+      event: 'customer_receipt_confirmed',
+      tenantId,
+      orderId: order.id,
+      channel: 'whatsapp',
+    }));
+  }
+
+  return true;
 }
 
 async function rest<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
