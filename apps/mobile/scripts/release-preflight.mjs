@@ -208,6 +208,9 @@ const orderParserFunction = read(join(repoRoot, 'supabase/functions/order-parser
 const usageSettlementWorker = read(join(repoRoot, 'supabase/functions/usage-settlement/index.ts'));
 const paystackWebhook = read(join(repoRoot, 'supabase/functions/paystack-webhook/index.ts'));
 const usageSettlementMigration = read(join(repoRoot, 'supabase/migrations/20260910230000_usage_settlement_foundation.sql'));
+const aiTelemetryMigration = read(join(repoRoot, 'supabase/migrations/20260911000500_ai_parser_cost_telemetry.sql'));
+const aiAdminTelemetryMigration = read(join(repoRoot, 'supabase/migrations/20260911000600_platform_admin_ai_parser_telemetry.sql'));
+const whatsappWebhookFunction = read(join(repoRoot, 'supabase/functions/whatsapp-webhook/index.ts'));
 const usageScheduleMigration = read(join(repoRoot, 'supabase/migrations/20260910234500_schedule_usage_settlement_preparation.sql'));
 const deletionUsageGuardMigration = read(join(repoRoot, 'supabase/migrations/20260910233000_block_deletion_with_unsettled_usage.sql'));
 const usagePeriodCurrencyMigration = read(join(repoRoot, 'supabase/migrations/20260910235500_harden_usage_settlement_period_currency.sql'));
@@ -217,6 +220,39 @@ const usageBillingContract = read(join(repoRoot, 'docs/usage_billing.md'));
 requireValue(
   orderParserFunction.includes("reasoning: { effort: 'none' }"),
   'Parser reasoning effort must remain none for bounded SellerTray order extraction',
+);
+requireValue(
+  orderParserFunction.includes('x-sellertray-ai-input-tokens') &&
+    orderParserFunction.includes('x-sellertray-ai-output-tokens') &&
+    orderParserFunction.includes('x-sellertray-ai-reasoning-tokens'),
+  'Order parser must expose bounded internal token telemetry headers',
+);
+requireValue(
+  aiTelemetryMigration.includes('revoke all on table public.ai_parser_attempts from public, anon, authenticated') &&
+    aiTelemetryMigration.includes('foreign key (tenant_id, source_message_id)') &&
+    aiTelemetryMigration.includes('on delete cascade'),
+  'AI parser telemetry must remain server-only, same-tenant and deletion-safe',
+);
+requireValue(
+  !aiTelemetryMigration.includes('text_body') &&
+    !aiTelemetryMigration.includes('raw_payload') &&
+    !aiTelemetryMigration.includes('prompt') &&
+    !aiTelemetryMigration.includes('output_text'),
+  'AI parser telemetry schema must not persist customer content or model output',
+);
+requireValue(
+  whatsappWebhookFunction.includes('recordParserAttempt') &&
+    whatsappWebhookFunction.includes('/rest/v1/ai_parser_attempts?on_conflict=source_message_id,provider'),
+  'WhatsApp ingestion must persist idempotent AI parser telemetry',
+);
+requireValue(
+  accountLifecycleFunction.includes("loadTenantRows('ai_parser_attempts'"),
+  'Owner data export must include AI parser telemetry records',
+);
+requireValue(
+  aiAdminTelemetryMigration.includes('"aiParserAttemptsPeriod"') &&
+    aiAdminTelemetryMigration.includes('"aiTotalTokensPeriod"'),
+  'ProcessEdge admin overview must retain AI unit-economics telemetry',
 );
 requireValue(
   usageSettlementWorker.includes("Deno.env.get('USAGE_BILLING_LIVE') === 'true'"),
