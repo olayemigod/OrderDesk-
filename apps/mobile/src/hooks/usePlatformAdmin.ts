@@ -50,7 +50,7 @@ export function usePlatformAdmin() {
       setOverview(next);
       setAudit(await loadPlatformAdminAudit(null, 30));
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unable to update this OrderDesk business.';
+      const message = err instanceof Error ? err.message : 'Unable to update this SellerTray business.';
       setError(message);
       throw err;
     } finally {
