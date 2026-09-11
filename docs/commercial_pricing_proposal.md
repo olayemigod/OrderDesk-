@@ -102,14 +102,14 @@ The unit-economics measurement infrastructure is now deployed:
 - `order-parser` uses `reasoning.effort = none`;
 - parser responses expose internal token-count metadata only;
 - `whatsapp-webhook` persists one non-content `ai_parser_attempts` row per external attempt;
-- ProcessEdge Admin aggregates attempts, successes/fallback-errors and token totals by current period;
+- ProcessEdge Admin aggregates attempts, successes/fallback-errors and token totals by current period, including cached input separately;
 - Owner export includes the non-content telemetry;
 - merchant clients cannot access the telemetry table directly.
 
 **Current live sample remains zero** because production external-AI acceptance has not yet been completed. Therefore the proposed ₦2,000 + ₦5 founding price remains a commercial proposal, not validated production pricing.
 
 Before numeric pricing activation, ProcessEdge should record a representative live/test sample and review:
-1. average input/output tokens per successful order;
+1. average uncached input, cached input and output tokens per successful order;
 2. attempts per successful billable order;
 3. fallback/error rate;
 4. variable AI cost per successful billable activity;
