@@ -72,6 +72,7 @@ Stored fields are limited to:
 - provider/model identifier;
 - outcome and provider HTTP status;
 - input, cached-input, output, reasoning and total token counts;
+- total catalogue size plus catalogue item/alias counts sent to the parser;
 - timestamp.
 
 SellerTray does **not** store the customer message, catalogue payload, prompt, model response, authorization data or provider error body in this telemetry table.
