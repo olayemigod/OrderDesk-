@@ -61,10 +61,10 @@
     {
       "id": "production_auth_email",
       "required": true,
-      "status": "pending_live_smoke",
+      "status": "partial_pass_recovery_pending",
       "owner": "ProcessEdge",
-      "evidence": "Verified from Supabase Auth Hooks screen on 11 September 2026: Send Email hook is ENABLED and endpoint now points to the SellerTray Supabase Edge Function at https://eujxswjspolugrzlsjnn.supabase.co/functions/v1/send-auth-email. Resend domain and required Edge Function secrets were previously configured.",
-      "acceptance": "Run two live end-to-end tests: (1) fresh signup receives SellerTray confirmation email and returns through sellertray://auth-confirm; (2) forgot-password receives SellerTray recovery email and returns through sellertray://reset-password. Accept only when both succeed."
+      "evidence": "Live signup smoke passed on 11 September 2026: POST /auth/v1/signup created user 78843c8a-cbfb-4bb8-a255-96d3e530ae2b for cashpothub@gmail.com, Supabase reported confirmation_sent_at, and the SellerTray confirmation email was received through the Send Email Hook/Resend path. Recovery email delivery remains to be tested. Native sellertray:// deep-link return remains a device acceptance item until a signed preview build is installed.",
+      "acceptance": "Run password-recovery email smoke successfully. Treat email transport/branding as accepted when recovery also arrives. Prove sellertray://auth-confirm and sellertray://reset-password return separately during signed preview APK device acceptance."
     },
     {
       "id": "android_preview_apk",
