@@ -26,10 +26,20 @@ const admin = SUPABASE_URL && SERVICE_ROLE_KEY
     })
   : null;
 
+const passwordVerifier = SUPABASE_URL && SERVICE_ROLE_KEY
+  ? createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
+      },
+    })
+  : null;
+
 Deno.serve(withObservability('account-lifecycle', async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
-  if (!admin || !SUPABASE_URL || !SERVICE_ROLE_KEY) {
+  if (!admin || !passwordVerifier || !SUPABASE_URL || !SERVICE_ROLE_KEY) {
     return json({ error: 'Server configuration error' }, 500);
   }
 
@@ -102,7 +112,7 @@ Deno.serve(withObservability('account-lifecycle', async (request) => {
     }
     if (!password) return json({ error: 'Enter your current password to confirm account deletion' }, 400);
 
-    const { data: passwordCheck, error: passwordError } = await admin.auth.signInWithPassword({
+    const { data: passwordCheck, error: passwordError } = await passwordVerifier.auth.signInWithPassword({
       email: identity.email,
       password,
     });
