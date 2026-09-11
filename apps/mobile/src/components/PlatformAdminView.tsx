@@ -271,7 +271,7 @@ function TenantAdminCard({
         />
         <DetailRow
           label="AI parser tokens"
-          value={`${tenant.aiInputTokensPeriod} input · ${tenant.aiOutputTokensPeriod} output · ${tenant.aiReasoningTokensPeriod} reasoning · ${tenant.aiTotalTokensPeriod} total`}
+          value={`${tenant.aiInputTokensPeriod} input · ${tenant.aiCachedInputTokensPeriod} cached · ${tenant.aiOutputTokensPeriod} output · ${tenant.aiReasoningTokensPeriod} reasoning · ${tenant.aiTotalTokensPeriod} total`}
         />
         <DetailRow label="Last order" value={formatOptionalDateTime(tenant.lastOrderAt)} />
         <DetailRow label="Last WhatsApp" value={formatOptionalDateTime(tenant.lastInboundAt)} />
