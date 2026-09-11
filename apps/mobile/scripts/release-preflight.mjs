@@ -234,6 +234,12 @@ requireValue(legalGate.includes('https://processedge.com.ng/sellertray/terms'), 
 requireValue(authGate.includes('signupLegalAccepted'), 'SellerTray signup must require legal acknowledgement');
 
 const accountControls = read(join(mobileRoot, 'src/components/AccountDataControls.tsx'));
+requireValue(accountControls.includes("supabase.auth.signOut({ scope: 'local' })"), 'Account controls must expose device-local SellerTray sign-out');
+requireValue(accountControls.includes('Sign out of this device'), 'Account controls must render a visible sign-out action');
+requireValue(provisionedApp.includes("supabase.auth.signOut({ scope: 'local' })"), 'Provisioning sign-out must be device-local');
+const saasApp = read(join(mobileRoot, 'src/SaasApp.tsx'));
+requireValue(saasApp.includes('<AccountDataControls business={activeBusiness} />'), 'Active merchants must have reachable AccountDataControls');
+requireValue(saasApp.includes("supabase.auth.signOut({ scope: 'local' })"), 'Workspace quick sign-out must be device-local');
 requireValue(accountControls.includes('DELETE MY SELLERTRAY ACCOUNT'), 'Account deletion confirmation must use SellerTray');
 requireValue(accountControls.includes('https://processedge.com.ng/sellertray/privacy'), 'In-app SellerTray privacy URL is missing');
 requireValue(accountControls.includes('https://processedge.com.ng/sellertray/terms'), 'In-app SellerTray terms URL is missing');
