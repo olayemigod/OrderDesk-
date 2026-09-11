@@ -2,12 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 
 import {
   addOrderItem,
+  createManualOrder,
   deleteOrderItem,
   loadOrders,
   subscribeToOrderChanges,
   unsubscribeFromOrderChanges,
   updateOrderItem,
   updateOrderStatus,
+  type ManualOrderInput,
   type OrderItemInput,
 } from '../data/ordersRepository';
 import type { MerchantOrder, OrderStatus } from '../domain/order';
@@ -49,6 +51,22 @@ export function useOrders(tenantId: string | null) {
       void unsubscribeFromOrderChanges(channel);
     };
   }, [refresh, tenantId]);
+
+  const createOrder = useCallback(
+    async (input: Omit<ManualOrderInput, 'tenantId'>) => {
+      if (!tenantId) throw new Error('No active business selected.');
+      try {
+        const orderId = await createManualOrder({ ...input, tenantId });
+        await refresh();
+        setError(null);
+        return orderId;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unable to create order.');
+        throw err;
+      }
+    },
+    [refresh, tenantId],
+  );
 
   const setStatus = useCallback(
     async (orderId: string, status: OrderStatus, reason?: string | null) => {
@@ -113,5 +131,5 @@ export function useOrders(tenantId: string | null) {
     [refresh],
   );
 
-  return { orders, loading, error, refresh, setStatus, addItem, editItem, removeItem };
+  return { orders, loading, error, refresh, createOrder, setStatus, addItem, editItem, removeItem };
 }
