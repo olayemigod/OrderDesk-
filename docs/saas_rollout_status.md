@@ -193,7 +193,7 @@ These are implemented but must not be described as production-accepted yet:
 ### S11E — SellerTray legal-policy alignment — PREVIEW READY / LEGAL APPROVAL PENDING
 - Prepared SellerTray-specific Privacy Policy and Terms covering merchant/customer order data, WhatsApp, AI-assisted parsing, subscriptions, service providers, retention/export/deletion, security, acceptable use and merchant responsibilities.
 - Draft website PR #2 remains deliberately unmerged.
-- Vercel preview for the initial legal commit `836089d` is READY; the red-team legal refinement is `a437797` and its preview is also READY.
+- Vercel preview for the initial legal commit `836089d` is READY; the red-team legal refinement is `a437797`; the AI-telemetry privacy alignment is `7aab2e0` and its preview is READY.
 - Privacy wording is aligned to the current SellerTray data contract and the Nigeria Data Protection Act rights baseline.
 - The account-deletion page links to the product-specific Privacy/Terms routes on the legal branch.
 - Google Play requires a comprehensive privacy policy accessible in the app plus the separate account-deletion resource; mobile links are implemented but production legal URLs must not be considered accepted until PR #2 is legally approved and published.
