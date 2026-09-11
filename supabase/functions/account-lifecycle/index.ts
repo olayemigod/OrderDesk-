@@ -7,8 +7,8 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const MAX_BODY_BYTES = 65_536;
 const MAX_EXPORT_ROWS_PER_COLLECTION = 5_000;
-const SELLERTRAY_TERMS_VERSION = '2026-09-10';
-const SELLERTRAY_PRIVACY_VERSION = '2026-09-10';
+const SELLERTRAY_TERMS_VERSION = '2026-09-11';
+const SELLERTRAY_PRIVACY_VERSION = '2026-09-11';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
