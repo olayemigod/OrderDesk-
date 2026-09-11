@@ -145,6 +145,8 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
         />
       </View>
 
+      <Text style={styles.buildStamp}>SellerTray 1.0.0 · Android build 2</Text>
+
       {platformAdmin.overview ? (
         <View style={styles.adminGroup}>
           <Text style={styles.groupLabel}>PROCESSEDGE ADMIN</Text>
@@ -217,6 +219,7 @@ const styles = StyleSheet.create({
   chevron: { color: '#98A2B3', fontSize: 27, fontWeight: '400' },
   backButton: { alignSelf: 'flex-start', minHeight: 38, justifyContent: 'center', paddingRight: 12 },
   backText: { color: '#246BFD', fontSize: 13, fontWeight: '900' },
+  buildStamp: { color: '#98A2B3', fontSize: 10, fontWeight: '700', textAlign: 'center', marginTop: 2 },
   adminGroup: { gap: 7 },
   groupLabel: { color: '#98A2B3', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
   pressed: { opacity: 0.72 },
