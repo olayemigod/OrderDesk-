@@ -87,7 +87,7 @@ async function invokeTeam(body: Record<string, unknown>): Promise<Record<string,
 
 function parseRole(value: unknown): MerchantRole {
   if (value === 'owner' || value === 'manager' || value === 'staff') return value;
-  throw new Error('OrderDesk returned an invalid team role.');
+  throw new Error('SellerTray returned an invalid team role.');
 }
 
 function parseMembers(value: unknown): TeamMember[] {
