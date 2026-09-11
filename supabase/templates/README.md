@@ -1,24 +1,30 @@
-# SellerTray Supabase Auth email templates
+# SellerTray Supabase Auth email baseline
 
-These files are the source-controlled release baseline for SellerTray authentication email copy.
+SellerTray production authentication email delivery uses the Supabase **Send Email Auth Hook** rather than Supabase's built-in SMTP/template editor.
 
-## Hosted Supabase deployment
+## Production contract
 
-The production Supabase project is hosted, so these repository files are **not** deployed automatically by a database migration.
+- Site URL: `https://processedge.com.ng/sellertray`
+- Hook endpoint: `https://eujxswjspolugrzlsjnn.supabase.co/functions/v1/send-auth-email`
+- Provider: Resend
+- Sending domain: `processedge.com.ng`
+- Required Edge Function secrets:
+  - `SEND_EMAIL_HOOK_SECRET`
+  - `RESEND_API_KEY`
+  - `AUTH_EMAIL_FROM`
+- Canonical native redirects:
+  - `sellertray://auth-confirm`
+  - `sellertray://reset-password`
+- Temporary compatibility redirects:
+  - `orderdesk://auth-confirm`
+  - `orderdesk://reset-password`
 
-In Supabase Dashboard:
+The HTML files in this directory remain the governed copy baseline for confirmation and recovery wording. The deployed `send-auth-email` Edge Function implements the live SellerTray-branded messages and signed-hook verification.
 
-1. Set **Authentication → URL Configuration → Site URL** to `https://processedge.com.ng/sellertray`.
-2. Open **Authentication → Email Templates**.
-3. Set the confirmation email subject to **Confirm your SellerTray email** and copy `confirmation.html` into the confirmation template.
-4. Set the recovery email subject to **Reset your SellerTray password** and copy `recovery.html` into the recovery template.
-5. Preserve Supabase's `{{ .ConfirmationURL }}` variable exactly.
-6. Configure production custom SMTP before release acceptance.
-7. Send a real signup-confirmation email and a real password-reset email to a controlled test account.
-8. Verify the resulting links return to the installed app through:
-   - `sellertray://auth-confirm`
-   - `sellertray://reset-password`
+Live acceptance completed on 11 September 2026 for:
+- signup confirmation delivery;
+- password recovery delivery.
 
-The temporary `orderdesk://` redirect URLs remain allow-listed only for beta-link compatibility; new emails must originate from SellerTray flows.
+Native deep-link return is tested separately during signed Android preview acceptance.
 
-Do not place SMTP credentials, service-role keys, provider secrets, or test-user passwords in these files.
+Do not commit hook secrets, Resend keys, SMTP credentials, service-role keys, or test-user passwords.
