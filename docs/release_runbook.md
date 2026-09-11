@@ -18,6 +18,8 @@ The Android application ID is release identity. Do not change it after the Googl
 
 ## Auth redirect contract
 
+Use `https://processedge.com.ng/sellertray` as the SellerTray production **Site URL** in Supabase Auth.
+
 Before native release acceptance, Supabase Auth Additional Redirect URLs must include:
 
 - `sellertray://auth-confirm`
@@ -27,7 +29,7 @@ Before native release acceptance, Supabase Auth Additional Redirect URLs must in
 
 SellerTray generates new native Auth links with `sellertray://`. The legacy `orderdesk://` scheme remains registered temporarily so beta confirmation/recovery links do not break.
 
-The current Supabase connector used by the governed build does not expose Auth URL configuration. This setting must therefore be verified in Supabase Dashboard before native acceptance; do not mark the redirect gate passed from repository code alone.
+The current Supabase connector used by the governed build does not expose Auth URL configuration. Verify the production Site URL is `https://processedge.com.ng/sellertray` and the four redirects are configured in Supabase Dashboard before native acceptance; do not mark the redirect gate passed from repository code alone.
 
 ## Auth email delivery contract
 
