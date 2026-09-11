@@ -9,7 +9,7 @@ const supabasePublishableKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
 if (!supabaseUrl || !supabasePublishableKey) {
   throw new Error(
-    'Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY. Copy .env.example to .env and configure the dedicated OrderDesk Supabase project.',
+    'Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY. Copy .env.example to .env and configure the dedicated SellerTray Supabase project.',
   );
 }
 
@@ -18,7 +18,7 @@ export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
     ...(Platform.OS !== 'web' ? { storage: AsyncStorage } : {}),
     autoRefreshToken: true,
     persistSession: true,
-    // OrderDesk handles recovery URLs explicitly in AuthGate so the
+    // SellerTray handles recovery URLs explicitly in AuthGate so the
     // PASSWORD_RECOVERY state cannot be consumed before the UI mounts.
     detectSessionInUrl: false,
   },
