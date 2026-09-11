@@ -37,7 +37,7 @@ export function OrderNotificationHistory({ order }: Props) {
         <Text style={styles.eyebrow}>CUSTOMER UPDATES</Text>
         <Text style={styles.title}>WhatsApp notifications</Text>
         <Text style={styles.helper}>
-          Delivery state is read-only. OrderDesk controls provider delivery on the server.
+          Delivery state is read-only. SellerTray controls provider delivery on the server.
         </Text>
       </View>
 
@@ -99,7 +99,7 @@ function NotificationRow({ notification }: { notification: OrderNotification }) 
       ) : null}
       {status === 'failed' ? (
         <Text style={styles.attentionText}>
-          OrderDesk will retry within the governed delivery policy when the notification is eligible.
+          SellerTray will retry within the governed delivery policy when the notification is eligible.
         </Text>
       ) : null}
     </View>
