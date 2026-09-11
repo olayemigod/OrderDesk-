@@ -32,6 +32,14 @@ export type PlatformTenantSummary = {
   usageAuthorizationReady: boolean;
   usageOutstandingAmount: number;
   usageFailedSettlements: number;
+  aiParserAttemptsPeriod: number;
+  aiParserSuccessesPeriod: number;
+  aiParserNonSuccessPeriod: number;
+  aiInputTokensPeriod: number;
+  aiOutputTokensPeriod: number;
+  aiReasoningTokensPeriod: number;
+  aiTotalTokensPeriod: number;
+  aiParserModel: string | null;
   supportNote: string | null;
   supportNoteUpdatedAt: string | null;
 };
@@ -150,6 +158,14 @@ function normalizeTenant(value: Record<string, unknown>): PlatformTenantSummary 
     usageAuthorizationReady: value.usageAuthorizationReady === true,
     usageOutstandingAmount: numberValue(value.usageOutstandingAmount),
     usageFailedSettlements: numberValue(value.usageFailedSettlements),
+    aiParserAttemptsPeriod: numberValue(value.aiParserAttemptsPeriod),
+    aiParserSuccessesPeriod: numberValue(value.aiParserSuccessesPeriod),
+    aiParserNonSuccessPeriod: numberValue(value.aiParserNonSuccessPeriod),
+    aiInputTokensPeriod: numberValue(value.aiInputTokensPeriod),
+    aiOutputTokensPeriod: numberValue(value.aiOutputTokensPeriod),
+    aiReasoningTokensPeriod: numberValue(value.aiReasoningTokensPeriod),
+    aiTotalTokensPeriod: numberValue(value.aiTotalTokensPeriod),
+    aiParserModel: optionalString(value.aiParserModel),
     supportNote: optionalString(value.supportNote),
     supportNoteUpdatedAt: optionalString(value.supportNoteUpdatedAt),
   };
