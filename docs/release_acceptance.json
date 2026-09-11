@@ -61,10 +61,10 @@
     {
       "id": "production_auth_email",
       "required": true,
-      "status": "blocked_hook_endpoint_mismatch",
+      "status": "pending_live_smoke",
       "owner": "ProcessEdge",
-      "evidence": "Resend domain verified and Edge Function secrets RESEND_API_KEY, AUTH_EMAIL_FROM and SEND_EMAIL_HOOK_SECRET are configured. Supabase Auth Send Email Hook is enabled, but dashboard screenshot shows endpoint set to https://processedge.com.ng instead of the deployed send-auth-email Edge Function URL.",
-      "acceptance": "Edit the enabled Send Email Hook endpoint to https://eujxswjspolugrzlsjnn.supabase.co/functions/v1/send-auth-email while preserving the existing generated secret, then run signup-confirmation and recovery live delivery/deep-link smoke tests."
+      "evidence": "Verified from Supabase Auth Hooks screen on 11 September 2026: Send Email hook is ENABLED and endpoint now points to the SellerTray Supabase Edge Function at https://eujxswjspolugrzlsjnn.supabase.co/functions/v1/send-auth-email. Resend domain and required Edge Function secrets were previously configured.",
+      "acceptance": "Run two live end-to-end tests: (1) fresh signup receives SellerTray confirmation email and returns through sellertray://auth-confirm; (2) forgot-password receives SellerTray recovery email and returns through sellertray://reset-password. Accept only when both succeed."
     },
     {
       "id": "android_preview_apk",
