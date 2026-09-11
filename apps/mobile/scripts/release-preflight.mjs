@@ -186,6 +186,18 @@ for (const profileName of ['preview', 'production']) {
   }
 }
 
+const authEmailConfirmation = read(join(repoRoot, 'supabase/templates/confirmation.html'));
+const authEmailRecovery = read(join(repoRoot, 'supabase/templates/recovery.html'));
+const authEmailTemplateReadme = read(join(repoRoot, 'supabase/templates/README.md'));
+requireValue(authEmailConfirmation.includes('SellerTray'), 'Signup confirmation template must use SellerTray branding');
+requireValue(authEmailConfirmation.includes('{{ .ConfirmationURL }}'), 'Signup confirmation template must preserve Supabase ConfirmationURL');
+requireValue(authEmailRecovery.includes('SellerTray'), 'Password recovery template must use SellerTray branding');
+requireValue(authEmailRecovery.includes('{{ .ConfirmationURL }}'), 'Password recovery template must preserve Supabase ConfirmationURL');
+requireValue(authEmailConfirmation.includes('https://processedge.com.ng/sellertray/privacy'), 'Signup confirmation template must link the SellerTray Privacy Policy');
+requireValue(authEmailRecovery.includes('https://processedge.com.ng/sellertray/privacy'), 'Password recovery template must link the SellerTray Privacy Policy');
+requireValue(!authEmailConfirmation.includes('OrderDesk') && !authEmailRecovery.includes('OrderDesk'), 'Production Auth email templates must not expose the OrderDesk beta name');
+requireValue(authEmailTemplateReadme.includes('custom SMTP'), 'Auth email template deployment notes must retain the production SMTP gate');
+
 const authGate = read(join(mobileRoot, 'src/components/AuthGate.tsx'));
 requireValue(authGate.includes('return `sellertray://'), 'Auth redirects must be generated with sellertray://');
 requireValue(authGate.includes("url.startsWith('sellertray://')"), 'AuthGate must accept sellertray://');
@@ -430,6 +442,7 @@ console.log('- preview artifact: APK');
 console.log('- production artifact: AAB');
 console.log('- client secret-boundary checks: pass');
 console.log('- legal/deletion URL contracts: present');
+console.log('- SellerTray Auth email template contracts: present');
 console.log('- release acceptance manifest integrity: pass');
 console.log('- committed dependency lockfile integrity: pass');
 console.log('- sensitive Android permission deny-list: pass');
