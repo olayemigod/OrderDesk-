@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 
 import type { MerchantOrder, OrderStatus } from '../domain/order';
 
-type WorkflowAction = 'reject' | 'accept' | 'start' | 'ready' | 'complete' | 'cancel';
+type WorkflowAction = 'reject' | 'accept' | 'start' | 'ready' | 'cancel';
 type ExceptionMode = 'reject' | 'cancel' | null;
 
 type Props = {
@@ -12,7 +12,6 @@ type Props = {
   onAccept: () => Promise<void>;
   onStart: () => Promise<void>;
   onReady: () => Promise<void>;
-  onComplete: () => Promise<void>;
   onCancel: (reason: string) => Promise<void>;
 };
 
@@ -21,7 +20,6 @@ const actionSuccess: Record<WorkflowAction, string> = {
   accept: 'Order accepted. It is ready to move into processing.',
   start: 'Processing started.',
   ready: 'Order marked ready.',
-  complete: 'Order completed.',
   cancel: 'Order cancelled.',
 };
 
@@ -31,7 +29,6 @@ export function OrderWorkflowPanel({
   onAccept,
   onStart,
   onReady,
-  onComplete,
   onCancel,
 }: Props) {
   const [pending, setPending] = useState<WorkflowAction | null>(null);
@@ -148,7 +145,6 @@ export function OrderWorkflowPanel({
           onAccept={() => void run('accept', onAccept)}
           onStart={() => void run('start', onStart)}
           onReady={() => void run('ready', onReady)}
-          onComplete={() => void run('complete', onComplete)}
           onRequestCancel={() => {
             setSuccess(null);
             setError(null);
@@ -226,7 +222,6 @@ function WorkflowActions({
   onAccept,
   onStart,
   onReady,
-  onComplete,
   onRequestCancel,
   showCancel,
 }: {
@@ -237,7 +232,6 @@ function WorkflowActions({
   onAccept: () => void;
   onStart: () => void;
   onReady: () => void;
-  onComplete: () => void;
   onRequestCancel: () => void;
   showCancel: boolean;
 }) {
@@ -276,12 +270,11 @@ function WorkflowActions({
   }
 
   if (status === 'ready') {
-    return (
+    return showCancel ? (
       <View style={styles.stackActions}>
-        <ActionButton label={pending === 'complete' ? 'Completing…' : 'Complete order'} disabled={busy} loading={pending === 'complete'} onPress={onComplete} />
-        {showCancel ? <ActionButton label="Cancel order" secondary disabled={busy} onPress={onRequestCancel} /> : null}
+        <ActionButton label="Cancel order" secondary disabled={busy} onPress={onRequestCancel} />
       </View>
-    );
+    ) : null;
   }
 
   return null;
@@ -333,7 +326,7 @@ function workflowHeadline(status: OrderStatus): string {
 function workflowHelper(status: OrderStatus): string {
   if (status === 'accepted') return 'Next action: start processing when fulfilment begins.';
   if (status === 'processing') return 'Next action: mark the order ready when fulfilment is complete.';
-  if (status === 'ready') return 'Next action: complete the order after customer handover or delivery.';
+  if (status === 'ready') return 'Next action: record customer pickup or delivery below before completing the order.';
   if (status === 'completed') return 'No further workflow action is required.';
   if (status === 'rejected') return 'This order is closed and cannot be progressed.';
   if (status === 'cancelled') return 'This order is closed and cannot be progressed.';
