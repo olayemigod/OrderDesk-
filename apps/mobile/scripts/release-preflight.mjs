@@ -260,10 +260,11 @@ const orderFulfillmentPanel = read(join(mobileRoot, 'src/components/OrderFulfill
 requireValue(orderFulfillmentPanel.includes('Customer pickup') && orderFulfillmentPanel.includes('Merchant / own rider') && orderFulfillmentPanel.includes('Third-party dispatch'), 'Order fulfillment tracking UI must remain wired');
 requireValue(orderFulfillmentPanel.includes('Mark delivered & complete') && orderFulfillmentPanel.includes('Mark collected & complete'), 'Order completion must retain fulfillment evidence');
 requireValue(orderFulfillmentPanel.includes('Customer confirmed receipt on WhatsApp'), 'Completed orders must show customer receipt-confirmation provenance');
+const whatsappWebhookReceiptFunction = read(join(repoRoot, 'supabase/functions/whatsapp-webhook/index.ts'));
 requireValue(
-  whatsappWebhookFunction.includes('maybeConfirmCustomerReceipt') &&
-    whatsappWebhookFunction.includes("fulfillment_confirmed_by: 'customer_whatsapp'") &&
-    whatsappWebhookFunction.includes("fulfillment_status: 'delivered'"),
+  whatsappWebhookReceiptFunction.includes('maybeConfirmCustomerReceipt') &&
+    whatsappWebhookReceiptFunction.includes("fulfillment_confirmed_by: 'customer_whatsapp'") &&
+    whatsappWebhookReceiptFunction.includes("fulfillment_status: 'delivered'"),
   'Customers must be able to confirm delivery receipt on WhatsApp',
 );
 requireValue(accountControls.includes('DELETE MY SELLERTRAY ACCOUNT'), 'Account deletion confirmation must use SellerTray');
