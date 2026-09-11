@@ -24,6 +24,7 @@ type ParsedOrder = {
 type ProviderUsage = {
   model: string;
   inputTokens: number | null;
+  cachedInputTokens: number | null;
   outputTokens: number | null;
   reasoningTokens: number | null;
   totalTokens: number | null;
@@ -254,6 +255,7 @@ async function extractOrder(input: ParserRequest): Promise<{ parsed: ParsedOrder
     usage: usage ?? {
       model: OPENAI_PARSER_MODEL,
       inputTokens: null,
+      cachedInputTokens: null,
       outputTokens: null,
       reasoningTokens: null,
       totalTokens: null,
@@ -348,11 +350,13 @@ function extractProviderUsage(value: unknown): ProviderUsage | null {
   if (!isRecord(value)) return null;
   const usage = isRecord(value.usage) ? value.usage : null;
   if (!usage) return null;
+  const inputDetails = isRecord(usage.input_tokens_details) ? usage.input_tokens_details : null;
   const outputDetails = isRecord(usage.output_tokens_details) ? usage.output_tokens_details : null;
 
   return {
     model: cleanString(value.model, 120) ?? OPENAI_PARSER_MODEL,
     inputTokens: nonNegativeInteger(usage.input_tokens),
+    cachedInputTokens: inputDetails ? nonNegativeInteger(inputDetails.cached_tokens) : null,
     outputTokens: nonNegativeInteger(usage.output_tokens),
     reasoningTokens: outputDetails ? nonNegativeInteger(outputDetails.reasoning_tokens) : null,
     totalTokens: nonNegativeInteger(usage.total_tokens),
@@ -374,6 +378,9 @@ function parserTelemetryHeaders(
   }
   if (usage?.inputTokens !== null && usage?.inputTokens !== undefined) {
     headers['x-sellertray-ai-input-tokens'] = String(usage.inputTokens);
+  }
+  if (usage?.cachedInputTokens !== null && usage?.cachedInputTokens !== undefined) {
+    headers['x-sellertray-ai-cached-input-tokens'] = String(usage.cachedInputTokens);
   }
   if (usage?.outputTokens !== null && usage?.outputTokens !== undefined) {
     headers['x-sellertray-ai-output-tokens'] = String(usage.outputTokens);
