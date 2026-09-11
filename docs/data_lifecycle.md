@@ -71,7 +71,7 @@ Stored fields are limited to:
 - tenant and source-message identifiers;
 - provider/model identifier;
 - outcome and provider HTTP status;
-- input, output, reasoning and total token counts;
+- input, cached-input, output, reasoning and total token counts;
 - timestamp.
 
 SellerTray does **not** store the customer message, catalogue payload, prompt, model response, authorization data or provider error body in this telemetry table.
@@ -84,3 +84,4 @@ Controls:
 - Deleting the source inbound message or tenant cascades the telemetry row.
 - Owner business export includes these non-content telemetry records.
 - ProcessEdge Admin sees period aggregates/token totals, not customer text.
+- Cached-input counts are recorded separately from total input so AI cost estimates can apply the provider's discounted cache-read rate accurately.
