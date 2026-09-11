@@ -4,6 +4,8 @@ import type {
   MatchSource,
   MerchantOrder,
   NotificationDeliveryStatus,
+  FulfillmentMethod,
+  FulfillmentStatus,
   NotificationEventKey,
   OrderNotification,
   OrderStatus,
@@ -35,6 +37,13 @@ type OrderRow = {
   id: string;
   status: OrderStatus;
   status_reason: string | null;
+  fulfillment_method: FulfillmentMethod | null;
+  fulfillment_status: FulfillmentStatus;
+  delivery_provider: string | null;
+  delivery_reference: string | null;
+  delivery_note: string | null;
+  dispatched_at: string | null;
+  fulfilled_at: string | null;
   source: 'whatsapp' | 'manual';
   customer_note: string | null;
   parser_confidence: number | string | null;
@@ -104,6 +113,13 @@ function mapOrder(row: OrderRow, notifications: OrderNotification[]): MerchantOr
     receivedAt: row.created_at,
     status: row.status,
     statusReason: row.status_reason,
+    fulfillmentMethod: row.fulfillment_method,
+    fulfillmentStatus: row.fulfillment_status,
+    deliveryProvider: row.delivery_provider,
+    deliveryReference: row.delivery_reference,
+    deliveryNote: row.delivery_note,
+    dispatchedAt: row.dispatched_at,
+    fulfilledAt: row.fulfilled_at,
     source: row.source,
     customerMessage: sourceMessage?.text_body || row.customer_note || '',
     confidence: toNumber(row.parser_confidence),
@@ -146,6 +162,13 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
         id,
         status,
         status_reason,
+        fulfillment_method,
+        fulfillment_status,
+        delivery_provider,
+        delivery_reference,
+        delivery_note,
+        dispatched_at,
+        fulfilled_at,
         source,
         customer_note,
         parser_confidence,
@@ -221,6 +244,67 @@ export async function createManualOrder(input: ManualOrderInput): Promise<string
 
   if (!orderId) throw new Error('SellerTray returned an invalid order id.');
   return orderId;
+}
+
+export type OrderFulfillmentInput = {
+  method: FulfillmentMethod;
+  provider?: string | null;
+  reference?: string | null;
+  note?: string | null;
+};
+
+export async function startOrderDelivery(
+  orderId: string,
+  input: OrderFulfillmentInput,
+): Promise<void> {
+  if (input.method === 'customer_pickup') {
+    throw new Error('Customer pickup does not require a delivery start.');
+  }
+
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from('orders')
+    .update({
+      fulfillment_method: input.method,
+      fulfillment_status: 'out_for_delivery',
+      delivery_provider: input.provider?.trim() || null,
+      delivery_reference: input.reference?.trim() || null,
+      delivery_note: input.note?.trim() || null,
+      dispatched_at: now,
+      fulfilled_at: null,
+      updated_at: now,
+    })
+    .eq('id', orderId)
+    .eq('status', 'ready');
+
+  if (error) throw error;
+}
+
+export async function completeOrderFulfillment(
+  orderId: string,
+  input: OrderFulfillmentInput,
+): Promise<void> {
+  const now = new Date().toISOString();
+  const fulfillmentStatus: FulfillmentStatus =
+    input.method === 'customer_pickup' ? 'collected' : 'delivered';
+
+  const { error } = await supabase
+    .from('orders')
+    .update({
+      status: 'completed',
+      status_reason: null,
+      fulfillment_method: input.method,
+      fulfillment_status: fulfillmentStatus,
+      delivery_provider: input.provider?.trim() || null,
+      delivery_reference: input.reference?.trim() || null,
+      delivery_note: input.note?.trim() || null,
+      fulfilled_at: now,
+      updated_at: now,
+    })
+    .eq('id', orderId)
+    .eq('status', 'ready');
+
+  if (error) throw error;
 }
 
 export async function updateOrderStatus(
