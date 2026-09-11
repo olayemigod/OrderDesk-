@@ -18,7 +18,8 @@ This checklist complements `docs/release_acceptance.json`. It is not evidence th
 
 ## App content declarations
 
-- [ ] Privacy Policy — publish approved `/sellertray/privacy`
+- [x] Privacy Policy — published at `https://processedge.com.ng/sellertray/privacy`
+- [ ] Independent legal review/approval of the published SellerTray Privacy/Terms wording
 - [x] External account deletion resource — `https://processedge.com.ng/sellertray/account-deletion`
 - [ ] Data Safety — complete from `docs/google_play_data_safety.md`
 - [ ] Data deletion questions — answer from implemented account deletion contract
