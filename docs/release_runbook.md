@@ -52,7 +52,8 @@ Native return through `sellertray://auth-confirm` and `sellertray://reset-passwo
 
 `apps/mobile/eas.json` defines:
 
-- `preview`: internally distributed signed APK for installation on physical Android devices.
+- `qa`: internally distributed signed APK for native and deep-link QA before final brand approval. It does not close the release-candidate APK gate.
+- `preview`: internally distributed signed APK for the exact branded release candidate.
 - `production`: signed Android App Bundle (AAB) for Google Play.
 - Production version codes use EAS remote versioning and auto-increment after the initial version.
 
@@ -76,11 +77,21 @@ All of these must pass before creating a release candidate:
 
 From `apps/mobile`:
 
+For native/deep-link testing before final brand approval:
+
+```bash
+eas build --platform android --profile qa
+```
+
+The QA APK is test evidence only and does not satisfy `android_preview_apk`.
+
+After approved SellerTray brand assets are committed:
+
 ```bash
 eas build --platform android --profile preview
 ```
 
-Use the resulting APK for device QA.
+Use that exact preview APK for release-candidate device acceptance.
 
 After preview acceptance:
 
@@ -88,7 +99,7 @@ After preview acceptance:
 eas build --platform android --profile production
 ```
 
-The production artifact must be an AAB. Do not substitute the preview APK for Play Store submission.
+The production artifact must be an AAB. Do not substitute the QA or preview APK for Play Store submission.
 
 ## Native preview smoke
 
