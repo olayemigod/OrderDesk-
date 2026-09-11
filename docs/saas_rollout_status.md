@@ -105,6 +105,16 @@ This document records the governed rollout state for SellerTray. SellerTray rema
 - Mobile CI #235 passed the final S9D settlement-safety checkpoint, including locked install, dependency audit, TypeScript and release preflight.
 - Commercial prices, reusable authorization capture, and real/test Paystack usage debit acceptance remain pending.
 
+### S9E — AI unit-economics telemetry — PASS CODE / DEPLOYED; LIVE SAMPLE PENDING
+- `order-parser` v6 uses `gpt-5.6-luna`, `store: false`, strict JSON-schema extraction and `reasoning.effort = none`.
+- Internal parser response headers expose only model/outcome/status and token counts; customer text, prompts and model output are not persisted in cost telemetry.
+- `whatsapp-webhook` v11 persists one idempotent `ai_parser_attempts` record per source message/provider and falls back safely if telemetry persistence fails.
+- `ai_parser_attempts` is RLS-enabled, service-role-only, same-tenant constrained and cascades with inbound-message/tenant deletion.
+- ProcessEdge Admin exposes current-period attempts, successes, fallback/errors and input/output/reasoning/total token counts.
+- Owner business export includes the non-content parser-attempt records.
+- Rollback smoke proved idempotent count = 1, cross-tenant linkage rejected, and source-message deletion cascades telemetry.
+- Current live sample is zero because production external-AI acceptance has not yet occurred. The proposed founding price remains unapproved and must not be written to Supabase/Paystack solely from competitor benchmarks.
+
 ### S10A — ProcessEdge SaaS operations console — PASS AUTOMATED / VISUAL SMOKE PENDING
 - Separate `platform_admins` role space; merchant Owner/Manager roles do not confer platform access.
 - ProcessEdge admin overview for tenant health, subscription state, AI usage/settlement readiness, WhatsApp state, order activity, notification exceptions and team size.
