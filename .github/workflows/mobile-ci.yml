@@ -8,6 +8,7 @@ on:
     paths:
       - 'supabase/functions/**'
       - 'supabase/migrations/**'
+      - 'supabase/templates/**'
       - 'apps/mobile/**'
       - 'docs/release_runbook.md'
       - 'docs/data_lifecycle.md'
@@ -26,6 +27,7 @@ on:
     paths:
       - 'supabase/functions/**'
       - 'supabase/migrations/**'
+      - 'supabase/templates/**'
       - 'apps/mobile/**'
       - 'docs/release_runbook.md'
       - 'docs/data_lifecycle.md'
