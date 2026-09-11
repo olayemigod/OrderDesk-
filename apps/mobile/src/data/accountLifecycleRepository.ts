@@ -2,8 +2,8 @@ import { supabase } from '../lib/supabase';
 
 export type BusinessExport = Record<string, unknown>;
 
-export const SELLERTRAY_TERMS_VERSION = '2026-09-10';
-export const SELLERTRAY_PRIVACY_VERSION = '2026-09-10';
+export const SELLERTRAY_TERMS_VERSION = '2026-09-11';
+export const SELLERTRAY_PRIVACY_VERSION = '2026-09-11';
 
 export type LegalAcceptanceStatus = {
   accepted: boolean;
