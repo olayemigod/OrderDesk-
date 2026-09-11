@@ -42,7 +42,7 @@ export function useBusinesses() {
       if (nextActiveId) await AsyncStorage.setItem(ACTIVE_BUSINESS_KEY, nextActiveId);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to load your OrderDesk businesses.');
+      setError(err instanceof Error ? err.message : 'Unable to load your SellerTray businesses.');
     } finally {
       setLoading(false);
     }
