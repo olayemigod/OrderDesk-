@@ -44,6 +44,8 @@ type OrderRow = {
   delivery_note: string | null;
   dispatched_at: string | null;
   fulfilled_at: string | null;
+  fulfillment_confirmed_by: 'merchant' | 'customer_whatsapp' | null;
+  customer_confirmed_at: string | null;
   source: 'whatsapp' | 'manual';
   customer_note: string | null;
   parser_confidence: number | string | null;
@@ -120,6 +122,8 @@ function mapOrder(row: OrderRow, notifications: OrderNotification[]): MerchantOr
     deliveryNote: row.delivery_note,
     dispatchedAt: row.dispatched_at,
     fulfilledAt: row.fulfilled_at,
+    fulfillmentConfirmedBy: row.fulfillment_confirmed_by,
+    customerConfirmedAt: row.customer_confirmed_at,
     source: row.source,
     customerMessage: sourceMessage?.text_body || row.customer_note || '',
     confidence: toNumber(row.parser_confidence),
@@ -169,6 +173,8 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
         delivery_note,
         dispatched_at,
         fulfilled_at,
+        fulfillment_confirmed_by,
+        customer_confirmed_at,
         source,
         customer_note,
         parser_confidence,
@@ -295,6 +301,9 @@ export async function completeOrderFulfillment(
       status_reason: null,
       fulfillment_method: input.method,
       fulfillment_status: fulfillmentStatus,
+      fulfillment_confirmed_by: 'merchant',
+      customer_confirmed_at: null,
+      customer_confirmation_message_id: null,
       delivery_provider: input.provider?.trim() || null,
       delivery_reference: input.reference?.trim() || null,
       delivery_note: input.note?.trim() || null,
