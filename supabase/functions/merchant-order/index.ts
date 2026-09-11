@@ -148,7 +148,6 @@ Deno.serve(async (request) => {
       original_item_name: String(row.name),
       quantity: line.quantity,
       unit_price: price,
-      line_total: price * line.quantity,
       match_source: 'manual',
       match_confidence: 1,
     };
