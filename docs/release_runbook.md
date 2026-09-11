@@ -33,26 +33,20 @@ The current Supabase connector used by the governed build does not expose Auth U
 
 ## Auth email delivery contract
 
-SellerTray's production signup-confirmation and password-recovery copy is source-controlled in:
+SellerTray production Auth email delivery uses the Supabase **Send Email Auth Hook**.
 
-- `supabase/templates/confirmation.html`
-- `supabase/templates/recovery.html`
+- Hook endpoint: `https://eujxswjspolugrzlsjnn.supabase.co/functions/v1/send-auth-email`
+- Provider: Resend
+- Verified sending domain: `processedge.com.ng`
+- Required server-only secrets: `SEND_EMAIL_HOOK_SECRET`, `RESEND_API_KEY`, `AUTH_EMAIL_FROM`
+- Confirmation subject: **Confirm your SellerTray email**
+- Recovery subject: **Reset your SellerTray password**
 
-Use these production subjects:
+Live transport acceptance passed on 11 September 2026 for both signup confirmation and password recovery.
 
-- Confirmation: **Confirm your SellerTray email**
-- Recovery: **Reset your SellerTray password**
+The HTML files in `supabase/templates/` remain the governed copy baseline. The deployed `send-auth-email` Edge Function owns the live branded messages and verifies the signed Supabase hook payload.
 
-For the hosted Supabase project, the template files are a governed source baseline; they are not applied by a database migration. Copy the approved HTML into **Supabase Dashboard → Authentication → Email Templates** and preserve `{{ .ConfirmationURL }}` exactly. Configure a production custom SMTP provider rather than relying on Supabase's best-effort built-in sender.
-
-Before accepting the production Auth email gate, prove both flows with real delivery to a controlled test account:
-
-1. Signup confirmation email arrives with SellerTray branding and opens the installed app through `sellertray://auth-confirm`.
-2. Password-recovery email arrives with SellerTray branding and opens the installed app through `sellertray://reset-password`.
-3. Neither email exposes the OrderDesk beta name, secrets, credentials or internal service keys.
-4. Sender identity, reply/support address and delivery domain are the intended ProcessEdge production values.
-
-Repository presence and CI validation of the templates do **not** by themselves prove SMTP or deep-link delivery. Keep the release gate pending until the live delivery smoke passes.
+Native return through `sellertray://auth-confirm` and `sellertray://reset-password` is tested during signed Android preview acceptance, not as part of email transport acceptance.
 
 ## Android build profiles
 
@@ -69,10 +63,10 @@ Client builds receive only the Supabase project URL and publishable key. Server/
 All of these must pass before creating a release candidate:
 
 1. Mobile CI/typecheck green on the exact candidate commit.
-2. Supabase security advisor reviewed; leaked-password protection enabled before public signup.
+2. Supabase security advisor reviewed. Leaked-password protection is waived on the current Free plan and must be enabled when the project upgrades to Pro.
 3. Supabase native redirect URLs above are configured.
-4. Production SMTP/Auth email delivery works.
-5. SellerTray launcher icon, Android adaptive icon and splash/launch branding are committed and referenced from Expo config.
+4. SellerTray Send Email Hook/Auth email transport is accepted.
+5. Approved SellerTray launcher icon, Android adaptive icon and splash/launch branding are committed and referenced from Expo config.
 6. No production secrets exist in the mobile repository or client bundle.
 7. Account deletion resource is live at `https://processedge.com.ng/sellertray/account-deletion`.
 8. Privacy Policy and Terms have SellerTray-specific data/service coverage and legal approval.
