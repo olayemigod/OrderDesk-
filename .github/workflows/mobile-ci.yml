@@ -66,5 +66,16 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Production Android bundle smoke
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://eujxswjspolugrzlsjnn.supabase.co
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_NlNRn9grGvfwZ1cYP09OvA_XSHOA-3I
+        run: |
+          npx expo export --platform android --output-dir .ci-dist --clear
+          if grep -R -F "Expo Go fallback" .ci-dist; then
+            echo "Development-only recovery UI leaked into the production bundle"
+            exit 1
+          fi
+
       - name: SellerTray release preflight
         run: npm run preflight
