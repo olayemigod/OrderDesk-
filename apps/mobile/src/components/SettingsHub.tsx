@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { BackHandler, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { BusinessProfileInput, MerchantBusiness } from '../data/businessRepository';
 import { usePlatformAdmin } from '../hooks/usePlatformAdmin';
@@ -31,6 +31,17 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
   const [section, setSection] = useState<Section>('menu');
   const subscription = useSubscriptionAccess(business.id);
   const platformAdmin = usePlatformAdmin();
+
+  useEffect(() => {
+    if (Platform.OS !== 'android' || section === 'menu') return undefined;
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      setSection('menu');
+      return true;
+    });
+
+    return () => subscription.remove();
+  }, [section]);
 
   if (section !== 'menu') {
     return (
