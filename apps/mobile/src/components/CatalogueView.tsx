@@ -15,14 +15,14 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
       <View style={styles.headingRow}>
         <View style={styles.headingCopy}>
           <Text style={styles.eyebrow}>CATALOGUE & PRICING</Text>
-          <Text style={styles.title}>Products OrderDesk can recognise</Text>
+          <Text style={styles.title}>Products customers can order</Text>
           <Text style={styles.subtitle}>
-            Keep this lightweight: product name, selling price and the words customers commonly use on WhatsApp.
+            Keep this lightweight: Add clear product details and the words customers commonly use on WhatsApp.
           </Text>
         </View>
         {canEdit && editing === null ? (
           <Pressable onPress={() => setEditing('new')} style={styles.addButton}>
-            <Text style={styles.addButtonText}>+ Add</Text>
+            <Text style={styles.addButtonText}>+ Add product</Text>
           </Pressable>
         ) : null}
       </View>
@@ -56,7 +56,7 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
         <View style={styles.emptyCard}>
           <Text style={styles.emptyTitle}>Your catalogue is empty</Text>
           <Text style={styles.emptyText}>
-            Add your first priced product. OrderDesk will then move setup forward to WhatsApp connection.
+            Add your first priced product. SellerTray will then guide you to WhatsApp connection.
           </Text>
           {canEdit ? (
             <Pressable onPress={() => setEditing('new')} style={styles.primaryButton}>
@@ -150,26 +150,46 @@ function CatalogueEditor({
   return (
     <View style={styles.editorCard}>
       <Text style={styles.editorTitle}>{item ? 'Edit product' : 'Add product'}</Text>
-      <TextInput value={name} onChangeText={setName} placeholder="Product name" style={styles.input} />
-      <View style={styles.row}>
-        <TextInput value={sku} onChangeText={setSku} placeholder="SKU (optional)" style={[styles.input, styles.flex]} />
-        <TextInput value={category} onChangeText={setCategory} placeholder="Category" style={[styles.input, styles.flex]} />
-      </View>
-      <TextInput
-        value={price}
-        onChangeText={setPrice}
-        keyboardType="decimal-pad"
-        placeholder={`Selling price (${currency})`}
-        style={styles.input}
-      />
-      <TextInput
-        value={aliases}
-        onChangeText={setAliases}
-        placeholder="Aliases: bag of rice, rice 50kg, big rice"
-        style={styles.input}
-      />
-      <Text style={styles.help}>Separate aliases with commas. These help OrderDesk match natural WhatsApp wording.</Text>
-      <TextInput value={imageUrl} onChangeText={setImageUrl} autoCapitalize="none" placeholder="Image URL (optional)" style={styles.input} />
+      <Field label="Product name" required hint="Use the name customers and staff will easily recognise.">
+        <TextInput value={name} onChangeText={setName} placeholder="e.g. Golden Penny Semovita 5kg" style={styles.input} />
+      </Field>
+
+      <Field label="Selling price" required hint={`Amount charged to the customer in ${currency}.`}>
+        <TextInput
+          value={price}
+          onChangeText={setPrice}
+          keyboardType="decimal-pad"
+          placeholder="e.g. 12500"
+          style={styles.input}
+        />
+      </Field>
+
+      <Field label="Category" hint="Optional. Helps organise your product list.">
+        <TextInput value={category} onChangeText={setCategory} placeholder="e.g. Groceries" style={styles.input} />
+      </Field>
+
+      <Field label="SKU / product code" hint="Optional internal product code.">
+        <TextInput value={sku} onChangeText={setSku} placeholder="e.g. SEM-5KG" style={styles.input} />
+      </Field>
+
+      <Field label="Customer words / aliases" hint="Optional. Add other names customers may type on WhatsApp, separated by commas.">
+        <TextInput
+          value={aliases}
+          onChangeText={setAliases}
+          placeholder="e.g. semo 5kg, big semovita, semo bag"
+          style={styles.input}
+        />
+      </Field>
+
+      <Field label="Product image URL" hint="Optional for now. Direct photo upload will replace this field later.">
+        <TextInput
+          value={imageUrl}
+          onChangeText={setImageUrl}
+          autoCapitalize="none"
+          placeholder="https://..."
+          style={styles.input}
+        />
+      </Field>
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
       <View style={styles.editorActions}>
         <Pressable disabled={submitting} onPress={onCancel} style={styles.secondaryButton}><Text style={styles.secondaryText}>Cancel</Text></Pressable>
@@ -177,6 +197,26 @@ function CatalogueEditor({
           <Text style={styles.primaryButtonText}>{submitting ? 'Saving…' : 'Save product'}</Text>
         </Pressable>
       </View>
+    </View>
+  );
+}
+
+function Field({
+  label,
+  required = false,
+  hint,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel}>{label}{required ? ' *' : ''}</Text>
+      {hint ? <Text style={styles.help}>{hint}</Text> : null}
+      {children}
     </View>
   );
 }
@@ -213,9 +253,9 @@ const styles = StyleSheet.create({
   editorCard: { backgroundColor: '#F9FAFB', borderRadius: 15, borderWidth: 1, borderColor: '#EAECF0', padding: 13, gap: 10 },
   editorTitle: { color: '#101828', fontSize: 15, fontWeight: '900' },
   input: { minHeight: 44, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 10, paddingHorizontal: 11, backgroundColor: '#FFFFFF', color: '#101828' },
-  row: { flexDirection: 'row', gap: 8 },
-  flex: { flex: 1 },
-  help: { color: '#98A2B3', fontSize: 10, lineHeight: 15 },
+  field: { gap: 6 },
+  fieldLabel: { color: '#344054', fontSize: 12, fontWeight: '900' },
+  help: { color: '#667085', fontSize: 10, lineHeight: 15 },
   editorActions: { flexDirection: 'row', gap: 8 },
   primaryButton: { flex: 1, minHeight: 43, borderRadius: 10, backgroundColor: '#246BFD', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
   primaryButtonText: { color: '#FFFFFF', fontWeight: '900', fontSize: 12 },
