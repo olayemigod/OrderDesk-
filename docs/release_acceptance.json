@@ -190,6 +190,8 @@
     "artifactId": 10280815039,
     "artifactName": "sellertray-qa-302d1641d275e928cc2a973376b48f34f6e7d4c0",
     "artifactArchiveDigest": "sha256:4f8dcffaa8f4d34f94de641d7a954c2b926ce0398104df987fd611531866f72c",
-    "note": "Latest consolidated QA-only standalone APK. GitHub Actions completed successfully. The current branch head contains no apps/mobile changes after this source commit, so this is the correct APK for physical-device retest. It still uses the temporary QA signing path and does not satisfy the branded android_preview_apk or production AAB gates."
+    "note": "Latest consolidated QA-only standalone APK. GitHub Actions #34 completed successfully and the staged APK SHA-256 was independently rechecked after artifact extraction. The current branch contains no apps/mobile changes after this source commit, so this is the correct APK for physical-device retest. It still uses the temporary QA signing path and does not satisfy the branded android_preview_apk or production AAB gates.",
+    "apkSha256": "f8829990c1d62614e2545fc2a633a3cb63fb835b4e65d9bc1923d88d9fcdbb7f",
+    "apkSizeBytes": 69198401
   }
 }
