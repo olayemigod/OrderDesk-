@@ -37,10 +37,11 @@
     {
       "id": "supabase_leaked_password_protection",
       "required": true,
-      "status": "deferred_plan",
+      "status": "waived",
       "owner": "ProcessEdge",
       "evidence": "Attempted in Supabase Dashboard on 11 September 2026. Supabase rejected the change with: leaked password protection via HaveIBeenPwned.org is available on Pro plans and up. Current project plan does not support the feature.",
-      "acceptance": "Do not block the current SellerTray MVP solely on this plan-gated feature. Keep email confirmation, minimum password length, rate limiting and existing Auth controls in force. Re-enable this gate when the Supabase project is upgraded to Pro, then turn leaked-password protection on and rerun the security advisor."
+      "acceptance": "Do not block the current SellerTray MVP solely on this plan-gated feature. Keep email confirmation, minimum password length, rate limiting and existing Auth controls in force. Re-enable this gate when the Supabase project is upgraded to Pro, then turn leaked-password protection on and rerun the security advisor.",
+      "disposition": "Plan-gated on current Supabase tier; re-open when upgraded to Pro."
     },
     {
       "id": "sellertray_brand_assets",
@@ -61,10 +62,11 @@
     {
       "id": "production_auth_email",
       "required": true,
-      "status": "accepted_transport",
+      "status": "accepted",
       "owner": "ProcessEdge",
       "evidence": "Live Auth email transport accepted on 11 September 2026. Signup confirmation email and password-recovery email were both received successfully for the controlled test account through Supabase Auth Send Email Hook -> SellerTray send-auth-email Edge Function -> Resend using the verified processedge.com.ng domain.",
-      "acceptance": "Email transport/branding path accepted. Native return through sellertray://auth-confirm and sellertray://reset-password remains part of signed preview APK device acceptance and does not block this transport gate."
+      "acceptance": "Email transport/branding path accepted. Native return through sellertray://auth-confirm and sellertray://reset-password remains part of signed preview APK device acceptance and does not block this transport gate.",
+      "disposition": "Transport and SellerTray branding accepted; native deep-link return is covered by android_native_smoke."
     },
     {
       "id": "android_preview_apk",
