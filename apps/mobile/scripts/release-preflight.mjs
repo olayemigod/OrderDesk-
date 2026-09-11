@@ -172,6 +172,7 @@ for (const permission of requiredBlockedAndroidPermissions) {
 }
 requireValue(app.android?.versionCode === 1, 'Initial Android versionCode must be 1');
 requireValue(app.ios?.bundleIdentifier === 'ng.processedge.sellertray', 'iOS bundle ID must match SellerTray identity');
+requireValue(eas.build?.qa?.android?.buildType === 'apk', 'EAS QA profile must build an APK');
 requireValue(eas.build?.preview?.android?.buildType === 'apk', 'EAS preview profile must build an APK');
 requireValue(eas.build?.production?.android?.buildType === 'app-bundle', 'EAS production profile must build an AAB');
 
@@ -188,7 +189,7 @@ if (brandGate?.status === 'accepted') {
   }
 }
 
-for (const profileName of ['preview', 'production']) {
+for (const profileName of ['qa', 'preview', 'production']) {
   const env = eas.build?.[profileName]?.env ?? {};
   for (const key of Object.keys(env)) {
     requireValue(key.startsWith('EXPO_PUBLIC_'), 'EAS '+profileName+' env may contain public client variables only: '+key);
