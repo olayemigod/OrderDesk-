@@ -77,6 +77,8 @@ export function PlatformAdminView({
   const notificationIssues = overview.tenants.reduce((sum, tenant) => sum + tenant.notificationExceptions, 0);
   const aiUsage = overview.tenants.reduce((sum, tenant) => sum + tenant.usageUnitsPeriod, 0);
   const failedUsageSettlements = overview.tenants.reduce((sum, tenant) => sum + tenant.usageFailedSettlements, 0);
+  const aiParserAttempts = overview.tenants.reduce((sum, tenant) => sum + tenant.aiParserAttemptsPeriod, 0);
+  const aiParserFailures = overview.tenants.reduce((sum, tenant) => sum + tenant.aiParserNonSuccessPeriod, 0);
   const canMutate = overview.actorRole === 'admin';
 
   return (
@@ -108,6 +110,8 @@ export function PlatformAdminView({
         <Metric label="Need review" value={reviewOrders} />
         <Metric label="WA issues" value={notificationIssues} />
         <Metric label="AI usage" value={aiUsage} />
+        <Metric label="AI attempts" value={aiParserAttempts} />
+        <Metric label="AI fallbacks/errors" value={aiParserFailures} />
         <Metric label="Usage failures" value={failedUsageSettlements} />
       </View>
 
@@ -260,6 +264,15 @@ function TenantAdminCard({
         />
         <DetailRow label="Usage outstanding" value={formatMoney(tenant.usageOutstandingAmount, tenant.currency)} />
         <DetailRow label="Usage failures" value={String(tenant.usageFailedSettlements)} />
+        <DetailRow label="AI parser model" value={tenant.aiParserModel ?? 'No external AI attempt yet'} />
+        <DetailRow
+          label="AI parser attempts"
+          value={`${tenant.aiParserAttemptsPeriod} attempts · ${tenant.aiParserSuccessesPeriod} success · ${tenant.aiParserNonSuccessPeriod} fallback/error`}
+        />
+        <DetailRow
+          label="AI parser tokens"
+          value={`${tenant.aiInputTokensPeriod} input · ${tenant.aiOutputTokensPeriod} output · ${tenant.aiReasoningTokensPeriod} reasoning · ${tenant.aiTotalTokensPeriod} total`}
+        />
         <DetailRow label="Last order" value={formatOptionalDateTime(tenant.lastOrderAt)} />
         <DetailRow label="Last WhatsApp" value={formatOptionalDateTime(tenant.lastInboundAt)} />
       </View>
