@@ -28,6 +28,7 @@ const TERMS_URL = 'https://processedge.com.ng/sellertray/terms';
 export function AccountDataControls({ business = null }: Props) {
   const [exporting, setExporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [password, setPassword] = useState('');
   const [phrase, setPhrase] = useState('');
@@ -66,6 +67,19 @@ export function AccountDataControls({ business = null }: Props) {
       setError(err instanceof Error ? err.message : 'Unable to export business data.');
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function signOut() {
+    setSigningOut(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const { error: signOutError } = await supabase.auth.signOut({ scope: 'local' });
+      if (signOutError) throw signOutError;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to sign out of SellerTray.');
+      setSigningOut(false);
     }
   }
 
@@ -129,6 +143,24 @@ export function AccountDataControls({ business = null }: Props) {
           ) : null}
         </View>
       ) : null}
+
+      <View style={styles.sessionBlock}>
+        <Text style={styles.actionTitle}>Signed-in session</Text>
+        <Text style={styles.actionText}>
+          Sign out of SellerTray on this device. Your business and order data remain safely stored.
+        </Text>
+        <Pressable
+          disabled={signingOut || deleting || exporting}
+          onPress={() => void signOut()}
+          style={({ pressed }) => [
+            styles.signOutButton,
+            pressed && styles.pressed,
+            (signingOut || deleting || exporting) && styles.disabled,
+          ]}
+        >
+          <Text style={styles.signOutButtonText}>{signingOut ? 'Signing out…' : 'Sign out of this device'}</Text>
+        </Pressable>
+      </View>
 
       <View style={styles.legalBlock}>
         <Text style={styles.actionTitle}>Legal & privacy</Text>
@@ -241,6 +273,9 @@ const styles = StyleSheet.create({
   actionText: { color: '#667085', fontSize: 12, lineHeight: 18 },
   secondaryButton: { minHeight: 44, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 11, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
   secondaryButtonText: { color: '#344054', fontSize: 13, fontWeight: '800' },
+  sessionBlock: { gap: 10, borderTopWidth: 1, borderTopColor: '#EAECF0', paddingTop: 16 },
+  signOutButton: { minHeight: 46, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 11, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, backgroundColor: '#FFFFFF' },
+  signOutButtonText: { color: '#344054', fontSize: 13, fontWeight: '900' },
   legalBlock: { gap: 10, borderTopWidth: 1, borderTopColor: '#EAECF0', paddingTop: 16 },
   legalButton: { flex: 1, minHeight: 44, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 11, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
   dangerBlock: { gap: 10, borderTopWidth: 1, borderTopColor: '#EAECF0', paddingTop: 16 },
