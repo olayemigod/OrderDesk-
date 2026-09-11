@@ -103,8 +103,8 @@
       "required": true,
       "status": "pending",
       "owner": "ProcessEdge",
-      "evidence": "AI_ORDER_ACTIVITY metering and free-trial guard are deployed; no live external-AI order has yet been accepted",
-      "acceptance": "Configure server-only parser credentials and pass live AI parse, deterministic price matching, AI_ORDER_ACTIVITY metering and safe-fallback acceptance."
+      "evidence": "order-parser v6 and whatsapp-webhook v11 deploy non-content token/outcome telemetry; ProcessEdge overview and Owner export are wired; live external-AI sample remains zero because production parser acceptance is still pending",
+      "acceptance": "Configure server-only parser credentials and pass live AI parse, deterministic price matching, AI_ORDER_ACTIVITY metering, safe-fallback acceptance and ai_parser_attempts capture with model/token/outcome evidence."
     },
     {
       "id": "outbound_whatsapp_worker",
@@ -127,8 +127,8 @@
       "required": true,
       "status": "pending",
       "owner": "ProcessEdge",
-      "evidence": "S9C metering and S9D postpaid settlement foundation are deployed; usage-settlement v4 requires two independent charging gates, both currently disabled; base price, usage rate, reusable authorization and Paystack acceptance remain unset/pending",
-      "acceptance": "Approve SellerTray monthly base price and flat AI-assisted activity price; configure Paystack plan/secret, BILLING_AUTH_ENCRYPTION_KEY and USAGE_SETTLEMENT_TOKEN; capture a reusable authorization in test mode; pass base checkout, closed-period/currency-safe idempotent usage settlement, exact amount/currency webhook reconciliation and Verify Transaction reconciliation; then explicitly enable both USAGE_BILLING_LIVE and subscription_plans.usage_charging_enabled."
+      "evidence": "S9C metering and S9D postpaid settlement foundation are deployed; usage-settlement v5 requires dual charging gates and atomic debit claim; both charging gates remain disabled; base price, usage rate, reusable authorization and Paystack acceptance remain unset/pending",
+      "acceptance": "Approve SellerTray monthly base price and flat AI-assisted activity price after reviewing representative AI telemetry; configure Paystack plan/secret, BILLING_AUTH_ENCRYPTION_KEY and USAGE_SETTLEMENT_TOKEN; capture a reusable authorization in test mode; pass base checkout, closed-period/currency-safe idempotent usage settlement, exact amount/currency webhook reconciliation and Verify Transaction reconciliation; then explicitly enable both USAGE_BILLING_LIVE and subscription_plans.usage_charging_enabled."
     },
     {
       "id": "google_play_data_safety",
