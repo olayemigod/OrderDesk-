@@ -10,6 +10,17 @@ export type OrderStatus =
 
 export type ParserSource = 'legacy' | 'external' | 'fallback' | 'manual';
 
+export type FulfillmentMethod =
+  | 'customer_pickup'
+  | 'merchant_delivery'
+  | 'third_party_delivery';
+
+export type FulfillmentStatus =
+  | 'unassigned'
+  | 'out_for_delivery'
+  | 'delivered'
+  | 'collected';
+
 export type MatchSource =
   | 'legacy'
   | 'catalogue_name'
@@ -70,6 +81,13 @@ export type MerchantOrder = {
   receivedAt: string;
   status: OrderStatus;
   statusReason: string | null;
+  fulfillmentMethod: FulfillmentMethod | null;
+  fulfillmentStatus: FulfillmentStatus;
+  deliveryProvider: string | null;
+  deliveryReference: string | null;
+  deliveryNote: string | null;
+  dispatchedAt: string | null;
+  fulfilledAt: string | null;
   source: 'whatsapp' | 'manual';
   customerMessage: string;
   confidence: number | null;
