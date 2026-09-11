@@ -1,0 +1,72 @@
+name: Android QA APK
+
+on:
+  push:
+    branches:
+      - feat/mvp-foundation
+    paths:
+      - 'apps/mobile/**'
+      - '.github/workflows/android-qa-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-qa-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: apps/mobile
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: https://eujxswjspolugrzlsjnn.supabase.co
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_NlNRn9grGvfwZ1cYP09OvA_XSHOA-3I
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Generate Android native project
+        run: npx expo prebuild --platform android --clean --no-install
+
+      - name: Build standalone QA release APK
+        run: |
+          chmod +x android/gradlew
+          cd android
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Stage QA APK
+        run: |
+          mkdir -p qa-artifact
+          cp android/app/build/outputs/apk/release/app-release.apk qa-artifact/sellertray-qa.apk
+          sha256sum qa-artifact/sellertray-qa.apk > qa-artifact/sellertray-qa.apk.sha256
+
+      - name: Upload QA APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: sellertray-qa-${{ github.sha }}
+          path: |
+            apps/mobile/qa-artifact/sellertray-qa.apk
+            apps/mobile/qa-artifact/sellertray-qa.apk.sha256
+          if-no-files-found: error
+          retention-days: 14
