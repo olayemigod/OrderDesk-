@@ -61,10 +61,10 @@
     {
       "id": "production_auth_email",
       "required": true,
-      "status": "pending_provider_verification",
+      "status": "pending_provider_key_and_hook_secrets",
       "owner": "ProcessEdge",
-      "evidence": "SellerTray send-auth-email Edge Function is ACTIVE. Resend DNS records for processedge.com.ng were configured on 11 September 2026. Resend domain verification, scoped sending API key, Edge Function secrets and live auth-email smoke remain pending.",
-      "acceptance": "Verify processedge.com.ng in Resend, create a sending-only API key restricted to the verified domain, configure SEND_EMAIL_HOOK_SECRET, RESEND_API_KEY and AUTH_EMAIL_FROM for the Edge Function, enable the Supabase Send Email Hook, then prove signup confirmation and recovery delivery with sellertray:// return."
+      "evidence": "Resend domain processedge.com.ng verified on 11 September 2026. SellerTray send-auth-email Edge Function remains ACTIVE. Scoped Resend sending key, Edge Function secrets and live Auth email smoke remain pending.",
+      "acceptance": "Create a sending-only Resend API key restricted to processedge.com.ng, configure SEND_EMAIL_HOOK_SECRET, RESEND_API_KEY and AUTH_EMAIL_FROM for send-auth-email, enable the Supabase Send Email Hook, then prove signup confirmation and recovery delivery with sellertray:// return."
     },
     {
       "id": "android_preview_apk",
