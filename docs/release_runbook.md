@@ -29,6 +29,29 @@ SellerTray generates new native Auth links with `sellertray://`. The legacy `ord
 
 The current Supabase connector used by the governed build does not expose Auth URL configuration. This setting must therefore be verified in Supabase Dashboard before native acceptance; do not mark the redirect gate passed from repository code alone.
 
+## Auth email delivery contract
+
+SellerTray's production signup-confirmation and password-recovery copy is source-controlled in:
+
+- `supabase/templates/confirmation.html`
+- `supabase/templates/recovery.html`
+
+Use these production subjects:
+
+- Confirmation: **Confirm your SellerTray email**
+- Recovery: **Reset your SellerTray password**
+
+For the hosted Supabase project, the template files are a governed source baseline; they are not applied by a database migration. Copy the approved HTML into **Supabase Dashboard → Authentication → Email Templates** and preserve `{{ .ConfirmationURL }}` exactly. Configure a production custom SMTP provider rather than relying on Supabase's best-effort built-in sender.
+
+Before accepting the production Auth email gate, prove both flows with real delivery to a controlled test account:
+
+1. Signup confirmation email arrives with SellerTray branding and opens the installed app through `sellertray://auth-confirm`.
+2. Password-recovery email arrives with SellerTray branding and opens the installed app through `sellertray://reset-password`.
+3. Neither email exposes the OrderDesk beta name, secrets, credentials or internal service keys.
+4. Sender identity, reply/support address and delivery domain are the intended ProcessEdge production values.
+
+Repository presence and CI validation of the templates do **not** by themselves prove SMTP or deep-link delivery. Keep the release gate pending until the live delivery smoke passes.
+
 ## Android build profiles
 
 `apps/mobile/eas.json` defines:
