@@ -29,10 +29,10 @@
     {
       "id": "supabase_auth_redirects",
       "required": true,
-      "status": "pending",
+      "status": "accepted",
       "owner": "ProcessEdge",
-      "evidence": "SellerTray canonical product URL created at https://processedge.com.ng/sellertray and adopted as the intended Supabase Auth production Site URL; dashboard configuration still requires verification.",
-      "acceptance": "Set Supabase Auth Site URL to https://processedge.com.ng/sellertray and configure/verify sellertray://auth-confirm, sellertray://reset-password plus the two temporary orderdesk:// equivalents."
+      "evidence": "Verified in Supabase Dashboard on 11 September 2026: Site URL is https://processedge.com.ng/sellertray and Redirect URLs include sellertray://auth-confirm, sellertray://reset-password, orderdesk://auth-confirm and orderdesk://reset-password.",
+      "acceptance": "Accepted. Preserve these values through native release; orderdesk:// entries are temporary compatibility redirects and should be removed only after beta-link migration is complete."
     },
     {
       "id": "supabase_leaked_password_protection",
