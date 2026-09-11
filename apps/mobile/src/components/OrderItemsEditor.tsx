@@ -92,7 +92,7 @@ function ReviewDiagnostics({ order }: { order: MerchantOrder }) {
 
   return (
     <View style={styles.reviewCard}>
-      <Text style={styles.reviewTitle}>Why OrderDesk wants a review</Text>
+      <Text style={styles.reviewTitle}>Why SellerTray wants a review</Text>
       {showParser ? (
         <Text style={styles.reviewMeta}>
           {formatParserSource(order.parserSource)}
