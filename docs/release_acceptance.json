@@ -69,6 +69,14 @@
       "disposition": "Transport and SellerTray branding accepted; native deep-link return is covered by android_native_smoke."
     },
     {
+      "id": "mobile_experience_hardening",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": "Physical-device QA identified discoverability and mobile UX gaps: no obvious order creation, no guided WhatsApp connection page, duplicated/prominent account deletion, unlabeled product fields, Products buried under Business, Business/settings mixed into one long page, Android system navigation overlapping bottom tabs, legacy OrderDesk copy, and account deletion failure. Experience-hardening implementation is committed on feat/mvp-foundation and awaits rebuilt APK retest.",
+      "acceptance": "On a current-head QA APK, verify Home/Orders/Products/More navigation, Android-safe tab interaction, labelled product creation, guided setup, manual order creation, segmented More settings, non-prominent single account-closure path, no user-facing OrderDesk copy, working sign-out, and successful disposable-account deletion."
+    },
+    {
       "id": "android_preview_apk",
       "required": true,
       "status": "pending",
@@ -81,7 +89,7 @@
       "required": true,
       "status": "pending",
       "owner": "ProcessEdge",
-      "evidence": "Physical Android QA in progress on standalone SellerTray QA APK. Password-recovery email deep link tested on 11 September 2026 and successfully opened the installed SellerTray app via sellertray://reset-password. QA found that authenticated merchants had no sufficiently discoverable sign-out path. Fix committed through 71cbe6d121d5dcce89435e3a01d135d747a87b9a: active Business view now renders AccountDataControls with an explicit 'Sign out of this device' action; workspace/provisioning sign-outs use local-session scope. Mobile CI #324 passed. Physical Android QA passed signup confirmation deep-link return into SellerTray, successful sign-in, and merchant/business provisioning on 11 September 2026.",
+      "evidence": "Physical Android QA in progress on standalone SellerTray QA APK. Password-recovery email deep link tested on 11 September 2026 and successfully opened the installed SellerTray app via sellertray://reset-password. QA found that authenticated merchants had no sufficiently discoverable sign-out path. Fix committed through 71cbe6d121d5dcce89435e3a01d135d747a87b9a: active Business view now renders AccountDataControls with an explicit 'Sign out of this device' action; workspace/provisioning sign-outs use local-session scope. Mobile CI #324 passed. Physical Android QA passed signup confirmation deep-link return into SellerTray, successful sign-in, and merchant/business provisioning on 11 September 2026. Experience-hardening QA is now required before this gate can close.",
       "acceptance": "Complete remaining physical-device smoke: catalogue tenant-scope, full order lifecycle, business data export, permanent sign-out on rebuilt APK, disposable account deletion/relaunch, and visible-secret/error-message check."
     },
     {
