@@ -13,8 +13,9 @@ if (invalid.length) {
   process.exit(2);
 }
 
-const requiredPending = manifest.gates.filter((gate) => gate.required && gate.status !== 'accepted');
+const requiredPending = manifest.gates.filter((gate) => gate.required && !['accepted', 'waived'].includes(gate.status));
 const accepted = manifest.gates.filter((gate) => gate.status === 'accepted');
+const waived = manifest.gates.filter((gate) => gate.status === 'waived');
 
 console.log('SellerTray '+manifest.version+' release acceptance');
 console.log('Code checkpoint: '+manifest.codeCheckpoint.status+' — '+manifest.codeCheckpoint.evidence);
@@ -22,6 +23,9 @@ console.log('');
 console.log('Accepted gates: '+accepted.length+'/'+manifest.gates.length);
 for (const gate of accepted) {
   console.log('  PASS  '+gate.id+(gate.evidence ? ' — '+gate.evidence : ''));
+}
+for (const gate of waived) {
+  console.log('  WAIVE '+gate.id+(gate.disposition ? ' — '+gate.disposition : ''));
 }
 
 if (requiredPending.length) {
