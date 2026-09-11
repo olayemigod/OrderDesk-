@@ -61,10 +61,10 @@
     {
       "id": "production_auth_email",
       "required": true,
-      "status": "pending_hook_provider",
+      "status": "pending_hook_configuration",
       "owner": "ProcessEdge",
-      "evidence": "Supabase Dashboard on 11 September 2026 shows Custom SMTP/template editing requires Pro on the current project plan. Supabase Auth Send Email Hook is documented as available on Free and Pro, so SellerTray will use the Send Email Hook path instead of requiring a plan upgrade.",
-      "acceptance": "Configure a Supabase Send Email Auth Hook backed by a production transactional email provider, deploy SellerTray-branded confirmation and recovery emails, then prove real signup-confirmation and password-reset delivery with sellertray:// deep-link return."
+      "evidence": "SellerTray send-auth-email Edge Function deployed ACTIVE as version 1 at https://eujxswjspolugrzlsjnn.supabase.co/functions/v1/send-auth-email with Standard Webhooks signature verification and Resend delivery path. Supabase Auth Send Email Hook configuration plus hook/provider secrets and live delivery smoke remain pending.",
+      "acceptance": "Configure the Supabase Send Email Hook to the deployed HTTPS endpoint, set SEND_EMAIL_HOOK_SECRET, RESEND_API_KEY and AUTH_EMAIL_FROM as Edge Function secrets, verify the sending domain, then prove signup confirmation and recovery delivery with sellertray:// return."
     },
     {
       "id": "android_preview_apk",
