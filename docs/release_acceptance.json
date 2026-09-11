@@ -3,7 +3,7 @@
   "product": "SellerTray",
   "version": "1.0.0",
   "androidPackage": "ng.processedge.sellertray",
-  "updatedAt": "2026-09-10",
+  "updatedAt": "2026-09-11",
   "codeCheckpoint": {
     "status": "accepted",
     "commit": "a431d8664a2b7260d4e8b2de10493a2915ad9557",
@@ -55,8 +55,8 @@
       "required": true,
       "status": "pending",
       "owner": "ProcessEdge",
-      "evidence": "ProcessEdge website draft PR #2; Vercel preview READY",
-      "acceptance": "Obtain legal approval, merge PR #2, and verify live /sellertray/privacy and /sellertray/terms."
+      "evidence": "SellerTray-ready Privacy/Terms published to ProcessEdge production main; routes https://processedge.com.ng/sellertray/privacy and https://processedge.com.ng/sellertray/terms added in website commit f346842392160d0f0f4c58033de0d0a5220169c6; Vercel production deployment dpl_4azGjgMEfPFNX7de32pUv2L4HDCw READY; privacy/terms copy published by commits 19d4fd941d02bfeee11def1e72f2360104458dc1 and a1924566d42813064d9aefe1ed4bb6c94fdc4c85; external legal review remains pending",
+      "acceptance": "Production publication and SellerTray-specific routes are complete. Obtain independent legal review/approval of the published wording, then record approval evidence before marking this gate accepted."
     },
     {
       "id": "production_auth_email",
