@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   RefreshControl,
   SafeAreaView,
@@ -13,18 +14,22 @@ import {
 
 import { AccountDataControls } from './components/AccountDataControls';
 import { BusinessInsightsPanel } from './components/BusinessInsightsPanel';
-import { BusinessProfileView } from './components/BusinessProfileView';
+import { CatalogueView } from './components/CatalogueView';
+import { ManualOrderComposer } from './components/ManualOrderComposer';
 import { OrderItemsEditor } from './components/OrderItemsEditor';
 import { OrderStatusHistory } from './components/OrderStatusHistory';
 import { OrderWorkflowPanel } from './components/OrderWorkflowPanel';
+import { SettingsHub } from './components/SettingsHub';
+import { SetupGuideCard } from './components/SetupGuideCard';
 import type { MerchantBusiness } from './data/businessRepository';
 import type { OrderItemInput } from './data/ordersRepository';
 import { orderTotal, type MerchantOrder, type OrderStatus } from './domain/order';
 import { useBusinesses } from './hooks/useBusinesses';
+import { useCatalogue } from './hooks/useCatalogue';
 import { useOrders } from './hooks/useOrders';
 import { supabase } from './lib/supabase';
 
-type ViewName = 'home' | 'orders' | 'business';
+type ViewName = 'home' | 'orders' | 'products' | 'more';
 type OrderFilter = 'attention' | 'active' | 'done' | 'all';
 
 const statusLabels: Record<OrderStatus, string> = {
@@ -76,9 +81,10 @@ function Workspace() {
     selectBusiness,
     saveProfile,
   } = useBusinesses();
-  const { orders, loading, error, refresh, setStatus, addItem, editItem, removeItem } = useOrders(
+  const { orders, loading, error, refresh, createOrder, setStatus, addItem, editItem, removeItem } = useOrders(
     activeBusiness?.id ?? null,
   );
+  const catalogue = useCatalogue(activeBusiness?.id ?? null);
   const [view, setView] = useState<ViewName>('home');
   const [selectedOrderId, setSelectedOrderId] = useState('');
 
@@ -147,17 +153,6 @@ function Workspace() {
             onSelectBusiness={selectBusiness}
           />
 
-          {activeBusiness.onboardingStatus !== 'ready' ? (
-            <Pressable onPress={() => setView('business')} style={styles.setupCard}>
-              <View style={styles.setupCopy}>
-                <Text style={styles.setupEyebrow}>FINISH SETUP</Text>
-                <Text style={styles.setupTitle}>{onboardingLabels[activeBusiness.onboardingStatus]}</Text>
-                <Text style={styles.setupText}>Finish setup to automate more of your WhatsApp ordering workflow.</Text>
-              </View>
-              <Text style={styles.setupArrow}>→</Text>
-            </Pressable>
-          ) : null}
-
           {pageError ? (
             <View style={styles.errorCard}>
               <Text style={styles.errorTitle}>Workspace sync problem</Text>
@@ -173,10 +168,13 @@ function Workspace() {
               business={activeBusiness}
               orders={orders}
               loading={loading}
+              productCount={catalogue.items.filter((item) => item.isActive).length}
               onOpenOrders={() => {
                 setSelectedOrderId('');
                 setView('orders');
               }}
+              onOpenProducts={() => setView('products')}
+              onOpenMore={() => setView('more')}
               onSelectOrder={(id) => {
                 setSelectedOrderId(id);
                 setView('orders');
@@ -195,14 +193,16 @@ function Workspace() {
               addItem={addItem}
               editItem={editItem}
               removeItem={removeItem}
+              createOrder={createOrder}
             />
           ) : null}
 
-          {view === 'business' ? (
-            <View style={styles.sectionStack}>
-              <BusinessProfileView business={activeBusiness} onSave={saveProfile} />
-              <AccountDataControls business={activeBusiness} />
-            </View>
+          {view === 'products' ? (
+            <CatalogueView business={activeBusiness} />
+          ) : null}
+
+          {view === 'more' ? (
+            <SettingsHub business={activeBusiness} onSaveBusiness={saveProfile} />
           ) : null}
         </ScrollView>
 
@@ -286,13 +286,19 @@ function HomeView({
   business,
   orders,
   loading,
+  productCount,
   onOpenOrders,
+  onOpenProducts,
+  onOpenMore,
   onSelectOrder,
 }: {
   business: MerchantBusiness;
   orders: MerchantOrder[];
   loading: boolean;
+  productCount: number;
   onOpenOrders: () => void;
+  onOpenProducts: () => void;
+  onOpenMore: () => void;
   onSelectOrder: (orderId: string) => void;
 }) {
   return (
@@ -302,6 +308,15 @@ function HomeView({
         <Text style={styles.pageTitle}>WhatsApp orders at a glance.</Text>
         <Text style={styles.pageSubtitle}>Activity shown here belongs only to {business.name}.</Text>
       </View>
+
+      <SetupGuideCard
+        business={business}
+        productCount={productCount}
+        orderCount={orders.length}
+        onProducts={onOpenProducts}
+        onOrders={onOpenOrders}
+        onMore={onOpenMore}
+      />
 
       <BusinessInsightsPanel business={business} />
 
@@ -334,6 +349,7 @@ function OrdersView({
   addItem,
   editItem,
   removeItem,
+  createOrder,
 }: {
   business: MerchantBusiness;
   orders: MerchantOrder[];
@@ -344,6 +360,12 @@ function OrdersView({
   addItem: (orderId: string, item: OrderItemInput) => Promise<void>;
   editItem: (itemId: string, item: OrderItemInput) => Promise<void>;
   removeItem: (itemId: string) => Promise<void>;
+  createOrder: (input: {
+    customerName: string;
+    customerPhone: string;
+    note?: string | null;
+    items: Array<{ catalogItemId: string; quantity: number }>;
+  }) => Promise<string>;
 }) {
   const [filter, setFilter] = useState<OrderFilter>('attention');
   const [query, setQuery] = useState('');
@@ -420,6 +442,15 @@ function OrdersView({
         <Text style={styles.pageTitle}>Orders</Text>
         <Text style={styles.pageSubtitle}>Review and progress {business.name} orders.</Text>
       </View>
+
+      <ManualOrderComposer
+        business={business}
+        onCreate={createOrder}
+        onCreated={(orderId) => {
+          onSelectOrder(orderId);
+          setFilter('all');
+        }}
+      />
 
       <View style={styles.inboxControls}>
         <TextInput
@@ -672,7 +703,8 @@ function BottomNav({
     <View style={styles.bottomNav}>
       <NavButton label="Home" active={view === 'home'} onPress={() => onChange('home')} />
       <NavButton label="Orders" active={view === 'orders'} count={reviewCount} onPress={() => onChange('orders')} />
-      <NavButton label="Business" active={view === 'business'} onPress={() => onChange('business')} />
+      <NavButton label="Products" active={view === 'products'} onPress={() => onChange('products')} />
+      <NavButton label="More" active={view === 'more'} onPress={() => onChange('more')} />
     </View>
   );
 }
@@ -803,10 +835,10 @@ const styles = StyleSheet.create({
   totalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingTop: 2 },
   totalLabel: { color: '#667085', fontWeight: '800', fontSize: 12 },
   totalValue: { color: '#101828', fontWeight: '900', fontSize: 19 },
-  bottomNav: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#EAECF0', backgroundColor: '#FFFFFF', paddingHorizontal: 10, paddingVertical: 8, gap: 6 },
-  navButton: { flex: 1, minHeight: 44, borderRadius: 11, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 },
+  bottomNav: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#EAECF0', backgroundColor: '#FFFFFF', paddingHorizontal: 8, paddingTop: 8, paddingBottom: Platform.OS === 'android' ? 46 : 10, gap: 4 },
+  navButton: { flex: 1, minHeight: 48, borderRadius: 11, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4, paddingHorizontal: 2 },
   navButtonActive: { backgroundColor: '#EEF4FF' },
-  navText: { color: '#667085', fontSize: 12, fontWeight: '800' },
+  navText: { color: '#667085', fontSize: 11, fontWeight: '800' },
   navTextActive: { color: '#175CD3' },
   navCount: { minWidth: 18, borderRadius: 999, backgroundColor: '#246BFD', color: '#FFFFFF', fontSize: 10, fontWeight: '900', textAlign: 'center', overflow: 'hidden', paddingHorizontal: 5 },
   errorCard: { backgroundColor: '#FEF3F2', borderRadius: 13, padding: 13, gap: 5 },
