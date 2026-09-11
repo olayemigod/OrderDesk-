@@ -37,10 +37,10 @@
     {
       "id": "supabase_leaked_password_protection",
       "required": true,
-      "status": "pending",
+      "status": "deferred_plan",
       "owner": "ProcessEdge",
-      "evidence": "Supabase security advisor rerun on 11 September 2026: the only security lint is auth_leaked_password_protection (WARN), confirming leaked-password protection remains disabled.",
-      "acceptance": "Enable Supabase Auth leaked-password protection, then rerun the security advisor and require no remaining security lint before public signup acceptance."
+      "evidence": "Attempted in Supabase Dashboard on 11 September 2026. Supabase rejected the change with: leaked password protection via HaveIBeenPwned.org is available on Pro plans and up. Current project plan does not support the feature.",
+      "acceptance": "Do not block the current SellerTray MVP solely on this plan-gated feature. Keep email confirmation, minimum password length, rate limiting and existing Auth controls in force. Re-enable this gate when the Supabase project is upgraded to Pro, then turn leaked-password protection on and rerun the security advisor."
     },
     {
       "id": "sellertray_brand_assets",
