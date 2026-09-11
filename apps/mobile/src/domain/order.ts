@@ -44,6 +44,7 @@ export type NotificationEventKey =
   | 'order_received'
   | 'order_accepted'
   | 'order_ready'
+  | 'order_out_for_delivery'
   | 'order_rejected'
   | 'order_cancelled';
 
