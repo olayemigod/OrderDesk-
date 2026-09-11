@@ -67,7 +67,16 @@ export function OrderFulfillmentPanel({
         {order.deliveryProvider ? <Text style={styles.summaryLine}>Delivery by: {order.deliveryProvider}</Text> : null}
         {order.deliveryReference ? <Text style={styles.summaryLine}>Reference / phone: {order.deliveryReference}</Text> : null}
         {order.deliveryNote ? <Text style={styles.summaryLine}>Note: {order.deliveryNote}</Text> : null}
-        {order.fulfilledAt ? <Text style={styles.timeText}>{formatDateTime(order.fulfilledAt)}</Text> : null}
+        {order.fulfillmentConfirmedBy === 'customer_whatsapp' ? (
+          <Text style={styles.customerConfirmed}>Customer confirmed receipt on WhatsApp</Text>
+        ) : order.fulfillmentConfirmedBy === 'merchant' ? (
+          <Text style={styles.merchantConfirmed}>Confirmed by merchant</Text>
+        ) : null}
+        {order.customerConfirmedAt ? (
+          <Text style={styles.timeText}>Customer confirmed {formatDateTime(order.customerConfirmedAt)}</Text>
+        ) : order.fulfilledAt ? (
+          <Text style={styles.timeText}>{formatDateTime(order.fulfilledAt)}</Text>
+        ) : null}
       </View>
     );
   }
@@ -295,6 +304,8 @@ const styles = StyleSheet.create({
   input: { minHeight: 44, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 10, paddingHorizontal: 11, backgroundColor: '#FFFFFF', color: '#101828' },
   noteInput: { minHeight: 72, paddingTop: 10, textAlignVertical: 'top' },
   summaryLine: { color: '#344054', fontSize: 11, lineHeight: 17, fontWeight: '700' },
+  customerConfirmed: { color: '#027A48', fontSize: 11, lineHeight: 17, fontWeight: '900', marginTop: 3 },
+  merchantConfirmed: { color: '#344054', fontSize: 11, lineHeight: 17, fontWeight: '800', marginTop: 3 },
   timeText: { color: '#667085', fontSize: 10, marginTop: 2 },
   error: { color: '#B42318', backgroundColor: '#FEF3F2', borderRadius: 8, padding: 9, fontSize: 10, lineHeight: 15 },
   primaryButton: { minHeight: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: '#246BFD', paddingHorizontal: 12 },
