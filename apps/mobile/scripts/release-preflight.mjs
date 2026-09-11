@@ -196,7 +196,14 @@ requireValue(authEmailRecovery.includes('{{ .ConfirmationURL }}'), 'Password rec
 requireValue(authEmailConfirmation.includes('https://processedge.com.ng/sellertray/privacy'), 'Signup confirmation template must link the SellerTray Privacy Policy');
 requireValue(authEmailRecovery.includes('https://processedge.com.ng/sellertray/privacy'), 'Password recovery template must link the SellerTray Privacy Policy');
 requireValue(!authEmailConfirmation.includes('OrderDesk') && !authEmailRecovery.includes('OrderDesk'), 'Production Auth email templates must not expose the OrderDesk beta name');
-requireValue(authEmailTemplateReadme.includes('custom SMTP'), 'Auth email template deployment notes must retain the production SMTP gate');
+requireValue(authEmailTemplateReadme.includes('Send Email Auth Hook'), 'Auth email deployment notes must retain the Send Email Hook contract');
+const sendAuthEmailFunction = read(join(repoRoot, 'supabase/functions/send-auth-email/index.ts'));
+requireValue(sendAuthEmailFunction.includes("standardwebhooks@1.0.0"), 'Auth email hook must verify Standard Webhooks signatures');
+requireValue(sendAuthEmailFunction.includes('RESEND_API_KEY'), 'Auth email hook must read the Resend provider key server-side');
+requireValue(sendAuthEmailFunction.includes('AUTH_EMAIL_FROM'), 'Auth email hook must read the sender identity server-side');
+requireValue(sendAuthEmailFunction.includes('SEND_EMAIL_HOOK_SECRET'), 'Auth email hook must read the hook verification secret server-side');
+requireValue(sendAuthEmailFunction.includes('Confirm your SellerTray email'), 'Auth email hook signup subject must be SellerTray-branded');
+requireValue(sendAuthEmailFunction.includes('Reset your SellerTray password'), 'Auth email hook recovery subject must be SellerTray-branded');
 
 const authGate = read(join(mobileRoot, 'src/components/AuthGate.tsx'));
 requireValue(authGate.includes('return `sellertray://'), 'Auth redirects must be generated with sellertray://');
