@@ -185,7 +185,7 @@ These are implemented but must not be described as production-accepted yet:
 - Added `docs/release_runbook.md` with preview QA, AAB release, rollback/forward-fix and release-record contracts.
 - Completed visible SellerTray UI rebrand across auth, workspace, provisioning, business settings, notifications, teams and ProcessEdge SaaS Admin surfaces.
 - Account deletion now asks for `DELETE MY SELLERTRAY ACCOUNT`; the server temporarily accepts the former beta phrase for compatibility.
-- `account-lifecycle` v2 is ACTIVE with JWT verification enabled.
+- The original S11D checkpoint used `account-lifecycle` v2; the current governed deployment is **v8 ACTIVE** with JWT verification enabled and exact source parity with the repository.
 - Live plan name changed from `OrderDesk Business` to `SellerTray Business`; stale user-facing subscription/team and Edge Function messages were corrected and deployed.
 - In-app Privacy Policy and Terms links now target the SellerTray-specific production URLs.
 - Mobile CI #154 passed the production-identity/UI change, CI #155 passed the in-app legal-link change, and CI #158 passed the final server-boundary hardening head.
@@ -194,7 +194,7 @@ These are implemented but must not be described as production-accepted yet:
 ### S11E — SellerTray legal-policy alignment — PREVIEW READY / LEGAL APPROVAL PENDING
 - Prepared SellerTray-specific Privacy Policy and Terms covering merchant/customer order data, WhatsApp, AI-assisted parsing, subscriptions, service providers, retention/export/deletion, security, acceptable use and merchant responsibilities.
 - Draft website PR #2 remains deliberately unmerged.
-- Vercel preview for the initial legal commit `836089d` is READY; the red-team legal refinement is `a437797`; the AI-telemetry privacy alignment is `7aab2e0` and its preview is READY.
+- Vercel preview for the initial legal commit `836089d` is READY; the red-team legal refinement is `a437797`; the AI-telemetry privacy alignment is `7aab2e0`; and the unified **11 September 2026** legal-version head `275c47d` is READY on Vercel.
 - Privacy wording is aligned to the current SellerTray data contract and the Nigeria Data Protection Act rights baseline.
 - The account-deletion page links to the product-specific Privacy/Terms routes on the legal branch.
 - Google Play requires a comprehensive privacy policy accessible in the app plus the separate account-deletion resource; mobile links are implemented but production legal URLs must not be considered accepted until PR #2 is legally approved and published.
@@ -223,11 +223,11 @@ These are implemented but must not be described as production-accepted yet:
 - Added append-only `user_legal_acceptances` with Auth-user cascade deletion, current document versions and server timestamp.
 - RLS is enabled; anonymous access is denied; authenticated clients may read their own acceptance but cannot insert/update/delete acceptance records directly.
 - Existing JWT-protected `account-lifecycle` now owns `legal_status` and `accept_legal` actions; no additional privileged public endpoint was introduced.
-- `account-lifecycle` v3 is ACTIVE with JWT verification.
+- The original S11H acceptance deployment was `account-lifecycle` v3; the current governed deployment is **v8 ACTIVE** with JWT verification and the same `2026-09-11` legal-version constants as the mobile client.
 - Live DB audit confirmed authenticated INSERT is denied while own-row SELECT is policy-gated.
 - Supabase security advisor shows no new application-schema warning; leaked-password protection remains the only Auth warning.
 - Mobile CI #162 passed Typecheck and SellerTray release preflight on commit `7d3edba`.
-- Legal acceptance version is `2026-09-10`; if legal review materially changes the draft before publication, the acceptance version must be bumped before release.
+- Legal acceptance version is now **`2026-09-11`** for both Terms and Privacy. Any later material legal change must bump the version again before release.
 
 ### S11I — Google Play declaration preparation — PASS DOCUMENTATION / CONSOLE ACCEPTANCE PENDING
 - Added `docs/google_play_data_safety.md` mapping current SellerTray data fields, SDK behavior, purposes, collection status, provider transfers and exclusions to Google's Data Safety model.
@@ -287,12 +287,15 @@ These are implemented but must not be described as production-accepted yet:
 - This is intentionally separate from SellerTray's explicit business-data export and server disaster-recovery backup contracts.
 - Mobile CI #176 passed locked install, production dependency audit, typecheck and the Auto Backup preflight on commit `2de6742`.
 
-### S11P — legal-acceptance version evolution — DB FIX READY / VERIFICATION PENDING
+### S11P — legal-acceptance version evolution — PASS / VERIFIED
 - Audit found the original `user_legal_acceptances` migration incorrectly constrained Terms/Privacy versions to exactly `2026-09-10`.
 - That would prevent preserving historical acceptance rows when SellerTray publishes a future policy version.
 - The fix removes current-version equality constraints and replaces them with non-empty, trimmed, maximum-64-character version constraints.
 - Current-version enforcement remains in the JWT-protected lifecycle service, where it belongs: a session must accept the service's current Terms/Privacy constants, while older acceptance rows remain valid audit history.
 - The unique key `(user_id, terms_version, privacy_version)` continues to permit one auditable acceptance per version pair.
+- Live database verification confirms the obsolete exact-`2026-09-10` checks are gone; Terms/Privacy versions now use non-empty, trimmed, maximum-64-character checks while the Auth-user FK and unique audit key remain intact.
+- `account-lifecycle` **v8** is ACTIVE, JWT-verified, and its deployed `index.ts` exactly matches repository blob `9a36692`; server and mobile constants are both `2026-09-11`.
+- Mobile CI #281 passed on the September 11 legal-acceptance branch checkpoint `759f4bf` before this documentation reconciliation.
 
 ### Remaining S11 release gates
 - Configure/verify Supabase Auth redirects for `sellertray://auth-confirm`, `sellertray://reset-password` and the two temporary legacy equivalents.
