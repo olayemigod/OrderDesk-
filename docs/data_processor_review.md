@@ -49,6 +49,7 @@ SellerTray treatment:
 - If that cannot be established for the final production setup, mark the relevant Data Safety types as shared.
 
 Release controls:
+- SellerTray's local AI cost telemetry stores model/outcome/status and token counts only; it does not duplicate the customer prompt or model output in the telemetry record.
 - API key remains server-only.
 - Do not opt SellerTray production data into model training.
 - Record the production OpenAI project/data-control setting before Play submission.
