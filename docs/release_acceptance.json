@@ -6,9 +6,9 @@
   "updatedAt": "2026-09-11",
   "codeCheckpoint": {
     "status": "accepted",
-    "commit": "837a3a7071059566f23ff9c9833bd2281fc5ea96",
-    "ciRun": 292,
-    "evidence": "Mobile CI #292 passed locked dependency install, production dependency audit, TypeScript, production Android Expo export/bundle smoke, development-only recovery UI leak check, migration uniqueness, SellerTray Auth email template contracts and full release preflight"
+    "commit": "a44219eb001bb020abddf6633179f0510bb5f3fb",
+    "ciRun": 315,
+    "evidence": "Mobile CI #315 passed locked dependency install, production dependency audit, TypeScript, production Android Expo export/bundle smoke, SellerTray Send Email Hook contracts, release preflight, governed QA APK profile and brand-gate enforcement."
   },
   "gates": [
     {
