@@ -33,8 +33,16 @@ Deno.serve(withObservability('account-lifecycle', async (request) => {
     return json({ error: 'Server configuration error' }, 500);
   }
 
-  const identity = getJwtIdentity(request.headers.get('authorization') ?? '');
-  if (!identity.userId || !identity.email) {
+  const authorization = request.headers.get('authorization') ?? '';
+  const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+  if (!token) return json({ error: 'Authentication required' }, 401);
+
+  const { data: authData, error: authError } = await admin.auth.getUser(token);
+  const identity = {
+    userId: authData.user?.id ?? null,
+    email: authData.user?.email?.toLowerCase() ?? null,
+  };
+  if (authError || !identity.userId || !identity.email) {
     return json({ error: 'Authentication required' }, 401);
   }
 
@@ -270,16 +278,9 @@ async function deleteAccount(userId: string): Promise<JsonRecord> {
     throw new Error('This account has platform-administration audit history; ProcessEdge support is required to close it safely');
   }
 
-  const { data: ownedObjects, error: storageLookupError } = await admin!
-    .schema('storage')
-    .from('objects')
-    .select('bucket_id,name')
-    .eq('owner_id', userId)
-    .limit(101);
-  if (storageLookupError) throw storageLookupError;
-  if ((ownedObjects?.length ?? 0) > 100) {
-    throw new Error('This account owns more than 100 stored files; ProcessEdge support is required to remove them safely');
-  }
+  // SellerTray MVP does not currently create user-owned Supabase Storage objects.
+  // Avoid querying the private storage schema through PostgREST during self-service deletion.
+  // When first-party uploads are introduced, add a dedicated server-side storage cleanup contract.
 
   const { data: memberships, error: membershipError } = await admin!
     .from('tenant_members')
@@ -313,23 +314,6 @@ async function deleteAccount(userId: string): Promise<JsonRecord> {
     }
   }
 
-  if ((ownedObjects?.length ?? 0) > 0) {
-    const byBucket = new Map<string, string[]>();
-    for (const row of ownedObjects ?? []) {
-      const bucket = String(row.bucket_id ?? '');
-      const name = String(row.name ?? '');
-      if (!bucket || !name) continue;
-      const names = byBucket.get(bucket) ?? [];
-      names.push(name);
-      byBucket.set(bucket, names);
-    }
-
-    for (const [bucket, names] of byBucket) {
-      const { error } = await admin!.storage.from(bucket).remove(names);
-      if (error) throw new Error(`Unable to remove stored files: ${error.message}`);
-    }
-  }
-
   for (const tenantId of ownedTenantIds) {
     const { error: billingAuditError } = await admin!
       .from('billing_provider_events')
@@ -360,7 +344,7 @@ async function deleteAccount(userId: string): Promise<JsonRecord> {
 
   const { error: deleteUserError } = await admin!.auth.admin.deleteUser(userId);
   if (deleteUserError) {
-    throw new Error(`Business data was removed but Auth account closure failed: ${deleteUserError.message}. ProcessEdge support is required.`);
+    throw new Error(`Business data was removed but account closure could not finish: ${deleteUserError.message}. Contact ProcessEdge support so the remaining Auth account can be closed safely.`);
   }
 
   return {
@@ -378,24 +362,6 @@ async function membershipRole(userId: string, tenantId: string): Promise<string 
     .maybeSingle();
   if (error) throw error;
   return typeof data?.role === 'string' ? data.role : null;
-}
-
-function getJwtIdentity(authorization: string): { userId: string | null; email: string | null } {
-  const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
-  const payloadSegment = token.split('.')[1];
-  if (!payloadSegment) return { userId: null, email: null };
-
-  try {
-    const normalized = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
-    const payload = JSON.parse(atob(padded)) as JsonRecord;
-    return {
-      userId: typeof payload.sub === 'string' && payload.sub ? payload.sub : null,
-      email: typeof payload.email === 'string' && payload.email ? payload.email.toLowerCase() : null,
-    };
-  } catch {
-    return { userId: null, email: null };
-  }
 }
 
 function cleanAction(value: unknown): LifecycleAction | null {
@@ -477,11 +443,11 @@ function withObservability(service: string, handler: ObservabilityHandler): Obse
       });
 
       const headers = new Headers(response.headers);
-      headers.set('x-orderdesk-request-id', requestId);
+      headers.set('x-sellertray-request-id', requestId);
       if (headers.has('access-control-allow-origin')) {
         const existing = headers.get('access-control-expose-headers');
         const exposed = new Set((existing ?? '').split(',').map((value) => value.trim()).filter(Boolean));
-        exposed.add('x-orderdesk-request-id');
+        exposed.add('x-sellertray-request-id');
         headers.set('access-control-expose-headers', [...exposed].join(', '));
       }
       return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
