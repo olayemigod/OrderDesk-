@@ -15,6 +15,7 @@ const eventLabels: Record<NotificationEventKey, string> = {
   order_received: 'Order received',
   order_accepted: 'Order accepted',
   order_ready: 'Order ready',
+  order_out_for_delivery: 'Out for delivery',
   order_rejected: 'Order rejected',
   order_cancelled: 'Order cancelled',
 };
