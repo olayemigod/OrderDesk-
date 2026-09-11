@@ -70,6 +70,8 @@ const META_APP_SECRET = Deno.env.get('META_APP_SECRET') ?? '';
 const configuredParserUrl = Deno.env.get('ORDER_PARSER_URL')?.trim() ?? '';
 const ORDER_PARSER_URL = configuredParserUrl || (SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/order-parser` : '');
 const ORDER_PARSER_TOKEN = Deno.env.get('ORDER_PARSER_TOKEN') ?? '';
+const AI_CATALOGUE_CONTEXT_LIMIT = 160;
+const AI_ALIAS_CONTEXT_LIMIT = 6;
 
 Deno.serve(withObservability('whatsapp-webhook', async (request) => {
   if (request.method === 'GET') {
@@ -443,6 +445,96 @@ function buildReviewReasons(parsed: ParsedOrder, items: EnrichedItem[]): string[
   return Array.from(reasons);
 }
 
+function selectParserCatalogue(
+  text: string,
+  catalogue: CatalogueRow[],
+): {
+  items: Array<{ id: string; name: string; aliases: string[] }>;
+  totalItems: number;
+  aliasesSent: number;
+} {
+  const normalizedText = normalizePhrase(text);
+  const messageTokens = new Set(
+    normalizedText.split(' ').filter((token) => token.length >= 2),
+  );
+
+  const ranked = catalogue.map((item, index) => ({
+    item,
+    index,
+    score: catalogueContextScore(normalizedText, messageTokens, item),
+  }));
+
+  if (ranked.length > AI_CATALOGUE_CONTEXT_LIMIT) {
+    ranked.sort((left, right) => right.score - left.score || left.index - right.index);
+    ranked.length = AI_CATALOGUE_CONTEXT_LIMIT;
+  }
+
+  let aliasesSent = 0;
+  const items = ranked.map(({ item }) => {
+    const aliases = (item.catalog_item_aliases ?? [])
+      .map((alias) => alias.alias)
+      .filter(Boolean)
+      .slice(0, AI_ALIAS_CONTEXT_LIMIT);
+    aliasesSent += aliases.length;
+    return { id: item.id, name: item.name, aliases };
+  });
+
+  return {
+    items,
+    totalItems: catalogue.length,
+    aliasesSent,
+  };
+}
+
+function catalogueContextScore(
+  normalizedText: string,
+  messageTokens: Set<string>,
+  item: CatalogueRow,
+): number {
+  let best = phraseContextScore(normalizedText, messageTokens, item.name);
+  for (const alias of item.catalog_item_aliases ?? []) {
+    best = Math.max(best, phraseContextScore(normalizedText, messageTokens, alias.alias));
+  }
+  return best;
+}
+
+function phraseContextScore(
+  normalizedText: string,
+  messageTokens: Set<string>,
+  value: string,
+): number {
+  const phrase = normalizePhrase(value);
+  if (!phrase) return 0;
+  if (normalizedText.includes(phrase)) return 100 + Math.min(20, phrase.length / 5);
+
+  const phraseTokens = phrase.split(' ').filter(Boolean);
+  const tokenMatches = phraseTokens.filter((token) => messageTokens.has(token)).length;
+  const tokenScore = phraseTokens.length > 0 ? (tokenMatches / phraseTokens.length) * 30 : 0;
+  const bigramScore = diceCoefficient(normalizedText, phrase) * 20;
+  return tokenScore + bigramScore;
+}
+
+function diceCoefficient(left: string, right: string): number {
+  const leftBigrams = stringBigrams(left);
+  const rightBigrams = stringBigrams(right);
+  if (leftBigrams.size === 0 || rightBigrams.size === 0) return 0;
+
+  let intersection = 0;
+  for (const value of leftBigrams) {
+    if (rightBigrams.has(value)) intersection += 1;
+  }
+  return (2 * intersection) / (leftBigrams.size + rightBigrams.size);
+}
+
+function stringBigrams(value: string): Set<string> {
+  const compact = value.replace(/\s+/g, ' ').trim();
+  const result = new Set<string>();
+  for (let index = 0; index < compact.length - 1; index += 1) {
+    result.add(compact.slice(index, index + 2));
+  }
+  return result;
+}
+
 async function parseOrder(
   text: string,
   catalogue: CatalogueRow[],
@@ -450,6 +542,7 @@ async function parseOrder(
   sourceMessageId: string,
 ): Promise<ParsedOrder> {
   if (ORDER_PARSER_URL && ORDER_PARSER_TOKEN) {
+    const parserCatalogue = selectParserCatalogue(text, catalogue);
     try {
       const response = await fetch(ORDER_PARSER_URL, {
         method: 'POST',
@@ -460,11 +553,7 @@ async function parseOrder(
         signal: AbortSignal.timeout(8000),
         body: JSON.stringify({
           text,
-          catalogue: catalogue.map((item) => ({
-            id: item.id,
-            name: item.name,
-            aliases: (item.catalog_item_aliases ?? []).map((alias) => alias.alias),
-          })),
+          catalogue: parserCatalogue.items,
         }),
       });
 
@@ -474,7 +563,7 @@ async function parseOrder(
         const candidate = await response.json();
         const validated = validateParsedOrder(candidate);
         if (validated) {
-          await recordParserAttempt(tenantId, sourceMessageId, {
+          await recordParserAttempt(tenantId, sourceMessageId, parserCatalogue, {
             ...responseTelemetry,
             outcome: 'success',
           });
@@ -485,7 +574,7 @@ async function parseOrder(
           };
         }
 
-        await recordParserAttempt(tenantId, sourceMessageId, {
+        await recordParserAttempt(tenantId, sourceMessageId, parserCatalogue, {
           ...responseTelemetry,
           outcome: 'invalid_output',
         });
@@ -495,7 +584,7 @@ async function parseOrder(
         console.warn(`External order parser returned HTTP ${response.status}; using fallback parser.`);
       }
     } catch (error) {
-      await recordParserAttempt(tenantId, sourceMessageId, {
+      await recordParserAttempt(tenantId, sourceMessageId, parserCatalogue, {
         model: null,
         outcome: 'network_error',
         providerHttpStatus: null,
@@ -542,6 +631,11 @@ function parserAttemptTelemetryFromHeaders(
 async function recordParserAttempt(
   tenantId: string,
   sourceMessageId: string,
+  parserCatalogue: {
+    items: Array<{ id: string; name: string; aliases: string[] }>;
+    totalItems: number;
+    aliasesSent: number;
+  },
   telemetry: ParserAttemptTelemetry,
 ): Promise<void> {
   try {
@@ -562,6 +656,9 @@ async function recordParserAttempt(
           output_tokens: telemetry.outputTokens,
           reasoning_tokens: telemetry.reasoningTokens,
           total_tokens: telemetry.totalTokens,
+          catalogue_items_total: parserCatalogue.totalItems,
+          catalogue_items_sent: parserCatalogue.items.length,
+          catalogue_aliases_sent: parserCatalogue.aliasesSent,
         }),
       },
     );
