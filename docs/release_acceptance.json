@@ -31,8 +31,8 @@
       "required": true,
       "status": "pending",
       "owner": "ProcessEdge",
-      "evidence": null,
-      "acceptance": "Configure and verify sellertray://auth-confirm, sellertray://reset-password and the two temporary orderdesk:// equivalents."
+      "evidence": "SellerTray canonical product URL created at https://processedge.com.ng/sellertray and adopted as the intended Supabase Auth production Site URL; dashboard configuration still requires verification.",
+      "acceptance": "Set Supabase Auth Site URL to https://processedge.com.ng/sellertray and configure/verify sellertray://auth-confirm, sellertray://reset-password plus the two temporary orderdesk:// equivalents."
     },
     {
       "id": "supabase_leaked_password_protection",
