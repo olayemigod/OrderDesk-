@@ -184,9 +184,9 @@ export function AccountDataControls({ business = null }: Props) {
       </View>
 
       <View style={styles.dangerBlock}>
-        <Text style={styles.dangerTitle}>Delete my account</Text>
+        <Text style={styles.actionTitle}>Danger zone</Text>
         <Text style={styles.actionText}>
-          This permanently deletes businesses you own and their SellerTray operational data. Memberships in businesses you do not own are removed. Active paid subscriptions must be cancelled first.
+          Account closure is intentionally kept here, away from everyday settings. Closing the account permanently deletes businesses you own and removes memberships in other businesses. Active paid subscriptions must be cancelled first.
         </Text>
 
         {!showDelete ? (
@@ -199,7 +199,7 @@ export function AccountDataControls({ business = null }: Props) {
             }}
             style={({ pressed }) => [styles.dangerOutlineButton, pressed && styles.pressed]}
           >
-            <Text style={styles.dangerOutlineText}>Start account deletion</Text>
+            <Text style={styles.secondaryButtonText}>Account closure options</Text>
           </Pressable>
         ) : (
           <View style={styles.confirmation}>
@@ -280,7 +280,7 @@ const styles = StyleSheet.create({
   legalButton: { flex: 1, minHeight: 44, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 11, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
   dangerBlock: { gap: 10, borderTopWidth: 1, borderTopColor: '#EAECF0', paddingTop: 16 },
   dangerTitle: { color: '#B42318', fontSize: 14, fontWeight: '900' },
-  dangerOutlineButton: { minHeight: 44, borderWidth: 1, borderColor: '#FDA29B', borderRadius: 11, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
+  dangerOutlineButton: { minHeight: 44, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 11, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, backgroundColor: '#FFFFFF' },
   dangerOutlineText: { color: '#B42318', fontSize: 13, fontWeight: '900' },
   confirmation: { backgroundColor: '#FFF5F4', borderRadius: 12, padding: 12, gap: 10 },
   confirmTitle: { color: '#B42318', fontSize: 13, fontWeight: '900' },
