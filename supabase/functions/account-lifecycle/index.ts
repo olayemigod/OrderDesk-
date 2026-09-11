@@ -157,6 +157,7 @@ async function buildBusinessExport(tenantId: string, requestedByUserId: string):
     tenantSubscriptions,
     usageEvents,
     usageSettlements,
+    aiParserAttempts,
     checkoutSessions,
   ] = await Promise.all([
     loadTenantRows('catalog_items', tenantId),
@@ -173,6 +174,7 @@ async function buildBusinessExport(tenantId: string, requestedByUserId: string):
     loadTenantRows('tenant_subscriptions', tenantId),
     loadTenantRows('usage_events', tenantId),
     loadTenantRows('usage_settlements', tenantId),
+    loadTenantRows('ai_parser_attempts', tenantId),
     loadTenantRows('billing_checkout_sessions', tenantId),
   ]);
 
@@ -205,6 +207,9 @@ async function buildBusinessExport(tenantId: string, requestedByUserId: string):
       usageEvents,
       usageSettlements: usageSettlements.map(sanitizeUsageSettlement),
       checkoutSessions: checkoutSessions.map(sanitizeCheckoutSession),
+    },
+    aiProcessing: {
+      parserAttempts: aiParserAttempts,
     },
   };
 }
