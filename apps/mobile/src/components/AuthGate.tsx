@@ -171,7 +171,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
     setNotice(
       Platform.OS === 'web'
         ? 'Recovery email sent. Open the link in this browser to return to SellerTray and set a new password.'
-        : 'Recovery email sent. Open the link. If Expo Go cannot open SellerTray automatically, copy the final recovery URL and paste it below.',
+        : __DEV__
+          ? 'Recovery email sent. Open the link. If Expo Go cannot open SellerTray automatically, copy the final recovery URL and paste it below.'
+          : 'Recovery email sent. Open the link to return to SellerTray and set a new password.',
     );
   }
 
@@ -278,7 +280,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <PrimaryButton label="Send recovery email" submitting={submitting} onPress={() => void requestPasswordReset()} />
 
-        {Platform.OS !== 'web' ? (
+        {__DEV__ && Platform.OS !== 'web' ? (
           <View style={styles.manualRecovery}>
             <Text style={styles.manualTitle}>Expo Go fallback</Text>
             <Text style={styles.note}>
