@@ -181,6 +181,25 @@
     "artifactId": 10275037241,
     "artifactName": "sellertray-qa-d7bf4ade0f047e157659f1f57bdb38db060c695a",
     "apkSha256": "f1a6a339083f9afbbb6bfabc9b5ebbbad67042c85752c09b5b9a3518b97bc5f0",
-    "note": "QA-only standalone APK using temporary non-Play signing. It may be installed for native/deep-link testing but does not satisfy the branded android_preview_apk or production AAB gates."
+    "note": "QA-only standalone APK using temporary non-Play signing. It may be installed for native/deep-link testing but does not satisfy the branded android_preview_apk or production AAB gates.",
+    "binaryInspection": {
+      "bundledJs": true,
+      "expectedIdentity": [
+        "SellerTray",
+        "sellertray://",
+        "auth-confirm",
+        "reset-password",
+        "orderdesk://"
+      ],
+      "publicBackendUrlPresent": true,
+      "checkedForbiddenSecretIdentifiersAbsent": [
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "OPENAI_API_KEY",
+        "PAYSTACK_SECRET_KEY",
+        "WHATSAPP_ACCESS_TOKEN",
+        "SEND_EMAIL_HOOK_SECRET",
+        "RESEND_API_KEY"
+      ]
+    }
   }
 }
