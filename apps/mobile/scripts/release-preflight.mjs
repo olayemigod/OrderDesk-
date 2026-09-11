@@ -238,13 +238,22 @@ requireValue(accountControls.includes("supabase.auth.signOut({ scope: 'local' })
 requireValue(accountControls.includes('Sign out of this device'), 'Account controls must render a visible sign-out action');
 requireValue(provisionedApp.includes("supabase.auth.signOut({ scope: 'local' })"), 'Provisioning sign-out must be device-local');
 const saasApp = read(join(mobileRoot, 'src/SaasApp.tsx'));
-requireValue(saasApp.includes('<AccountDataControls business={activeBusiness} />'), 'Active merchants must have reachable AccountDataControls');
+const settingsHub = read(join(mobileRoot, 'src/components/SettingsHub.tsx'));
+const catalogueView = read(join(mobileRoot, 'src/components/CatalogueView.tsx'));
+const manualOrderComposer = read(join(mobileRoot, 'src/components/ManualOrderComposer.tsx'));
+requireValue(settingsHub.includes('<AccountDataControls business={business} />'), 'Active merchants must reach AccountDataControls through More > Account & privacy');
 requireValue(saasApp.includes("supabase.auth.signOut({ scope: 'local' })"), 'Workspace quick sign-out must be device-local');
+requireValue(saasApp.includes('label="Products"') && saasApp.includes("onChange('products')"), 'Products must have a first-class bottom tab');
+requireValue(saasApp.includes('label="More"') && saasApp.includes("onChange('more')"), 'Business/settings must be separated behind More');
+requireValue(saasApp.includes("paddingBottom: Platform.OS === 'android' ? 46 : 10"), 'Android bottom navigation must retain system-navigation clearance');
+requireValue(catalogueView.includes('Product name') && catalogueView.includes('Selling price') && catalogueView.includes('Customer words / aliases'), 'Product editor must retain visible field labels and guidance');
+requireValue(manualOrderComposer.includes('Create an order') && manualOrderComposer.includes('Customer name') && manualOrderComposer.includes('Products *'), 'Orders must expose guided manual order creation');
 requireValue(accountControls.includes('DELETE MY SELLERTRAY ACCOUNT'), 'Account deletion confirmation must use SellerTray');
 requireValue(accountControls.includes('https://processedge.com.ng/sellertray/privacy'), 'In-app SellerTray privacy URL is missing');
 requireValue(accountControls.includes('https://processedge.com.ng/sellertray/terms'), 'In-app SellerTray terms URL is missing');
 
 const orderParserFunction = read(join(repoRoot, 'supabase/functions/order-parser/index.ts'));
+const merchantOrderFunction = read(join(repoRoot, 'supabase/functions/merchant-order/index.ts'));
 const usageSettlementWorker = read(join(repoRoot, 'supabase/functions/usage-settlement/index.ts'));
 const paystackWebhook = read(join(repoRoot, 'supabase/functions/paystack-webhook/index.ts'));
 const usageSettlementMigration = read(join(repoRoot, 'supabase/migrations/20260910230000_usage_settlement_foundation.sql'));
@@ -254,6 +263,12 @@ const aiCachedTokenMigration = read(join(repoRoot, 'supabase/migrations/20260911
 const aiTokenIntegrityMigration = read(join(repoRoot, 'supabase/migrations/20260911000900_ai_parser_token_integrity.sql'));
 const aiContextBudgetMigration = read(join(repoRoot, 'supabase/migrations/20260911001000_ai_parser_context_budget.sql'));
 const whatsappWebhookFunction = read(join(repoRoot, 'supabase/functions/whatsapp-webhook/index.ts'));
+requireValue(
+  merchantOrderFunction.includes("source: 'manual'") &&
+    merchantOrderFunction.includes("admin.auth.getUser(token)") &&
+    merchantOrderFunction.includes("tenant_members"),
+  'Manual order creation must remain a trusted authenticated server flow',
+);
 const usageScheduleMigration = read(join(repoRoot, 'supabase/migrations/20260910234500_schedule_usage_settlement_preparation.sql'));
 const deletionUsageGuardMigration = read(join(repoRoot, 'supabase/migrations/20260910233000_block_deletion_with_unsettled_usage.sql'));
 const usagePeriodCurrencyMigration = read(join(repoRoot, 'supabase/migrations/20260910235500_harden_usage_settlement_period_currency.sql'));
