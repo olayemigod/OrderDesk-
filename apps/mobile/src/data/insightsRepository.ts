@@ -40,7 +40,7 @@ export async function loadBusinessInsights(tenantId: string): Promise<BusinessIn
   });
 
   if (error) throw error;
-  if (!isRecord(data)) throw new Error('OrderDesk returned invalid business insights.');
+  if (!isRecord(data)) throw new Error('SellerTray returned invalid business insights.');
 
   return {
     today: parseToday(data.today),
