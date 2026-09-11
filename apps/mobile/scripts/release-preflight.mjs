@@ -424,6 +424,11 @@ const legacyUiPhrases = [
 ];
 for (const filePath of collectFiles(join(mobileRoot, 'src')).filter((item) => /\.(ts|tsx)$/.test(item))) {
   const source = read(filePath);
+  requireValue(!source.includes('OrderDesk'), 'Legacy OrderDesk product name remains in mobile source: '+filePath.replace(repoRoot + '/', ''));
+}
+
+for (const filePath of collectFiles(join(mobileRoot, 'src')).filter((item) => /\.(ts|tsx)$/.test(item))) {
+  const source = read(filePath);
   for (const phrase of legacyUiPhrases) {
     requireValue(!source.includes(phrase), 'Legacy user-facing phrase "'+phrase+'" remains in '+filePath.replace(repoRoot + '/', ''));
   }
