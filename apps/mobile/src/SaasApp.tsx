@@ -17,13 +17,14 @@ import { AccountDataControls } from './components/AccountDataControls';
 import { BusinessInsightsPanel } from './components/BusinessInsightsPanel';
 import { CatalogueView } from './components/CatalogueView';
 import { ManualOrderComposer } from './components/ManualOrderComposer';
+import { OrderFulfillmentPanel } from './components/OrderFulfillmentPanel';
 import { OrderItemsEditor } from './components/OrderItemsEditor';
 import { OrderStatusHistory } from './components/OrderStatusHistory';
 import { OrderWorkflowPanel } from './components/OrderWorkflowPanel';
 import { SettingsHub } from './components/SettingsHub';
 import { SetupGuideCard } from './components/SetupGuideCard';
 import type { MerchantBusiness } from './data/businessRepository';
-import type { OrderItemInput } from './data/ordersRepository';
+import type { OrderFulfillmentInput, OrderItemInput } from './data/ordersRepository';
 import { orderTotal, type MerchantOrder, type OrderStatus } from './domain/order';
 import { useBusinesses } from './hooks/useBusinesses';
 import { useCatalogue } from './hooks/useCatalogue';
@@ -82,9 +83,19 @@ function Workspace() {
     selectBusiness,
     saveProfile,
   } = useBusinesses();
-  const { orders, loading, error, refresh, createOrder, setStatus, addItem, editItem, removeItem } = useOrders(
-    activeBusiness?.id ?? null,
-  );
+  const {
+    orders,
+    loading,
+    error,
+    refresh,
+    createOrder,
+    setStatus,
+    startDelivery,
+    completeFulfillment,
+    addItem,
+    editItem,
+    removeItem,
+  } = useOrders(activeBusiness?.id ?? null);
   const catalogue = useCatalogue(activeBusiness?.id ?? null);
   const [view, setView] = useState<ViewName>('home');
   const [selectedOrderId, setSelectedOrderId] = useState('');
@@ -191,6 +202,8 @@ function Workspace() {
               selectedOrder={selectedOrder}
               onSelectOrder={setSelectedOrderId}
               setStatus={setStatus}
+              startDelivery={startDelivery}
+              completeFulfillment={completeFulfillment}
               addItem={addItem}
               editItem={editItem}
               removeItem={removeItem}
@@ -347,6 +360,8 @@ function OrdersView({
   selectedOrder,
   onSelectOrder,
   setStatus,
+  startDelivery,
+  completeFulfillment,
   addItem,
   editItem,
   removeItem,
@@ -358,6 +373,8 @@ function OrdersView({
   selectedOrder: MerchantOrder | undefined;
   onSelectOrder: (orderId: string) => void;
   setStatus: (orderId: string, status: OrderStatus, reason?: string | null) => Promise<void>;
+  startDelivery: (orderId: string, input: OrderFulfillmentInput) => Promise<void>;
+  completeFulfillment: (orderId: string, input: OrderFulfillmentInput) => Promise<void>;
   addItem: (orderId: string, item: OrderItemInput) => Promise<void>;
   editItem: (itemId: string, item: OrderItemInput) => Promise<void>;
   removeItem: (itemId: string) => Promise<void>;
@@ -510,8 +527,9 @@ function OrdersView({
           onReject={(reason) => setStatus(visibleSelectedOrder.id, 'rejected', reason)}
           onStart={() => setStatus(visibleSelectedOrder.id, 'processing')}
           onReady={() => setStatus(visibleSelectedOrder.id, 'ready')}
-          onComplete={() => setStatus(visibleSelectedOrder.id, 'completed')}
           onCancel={(reason) => setStatus(visibleSelectedOrder.id, 'cancelled', reason)}
+          onStartDelivery={(input) => startDelivery(visibleSelectedOrder.id, input)}
+          onCompleteFulfillment={(input) => completeFulfillment(visibleSelectedOrder.id, input)}
           onAddItem={(item) => addItem(visibleSelectedOrder.id, item)}
           onEditItem={editItem}
           onRemoveItem={removeItem}
@@ -621,8 +639,9 @@ function OrderDetail({
   onReject,
   onStart,
   onReady,
-  onComplete,
   onCancel,
+  onStartDelivery,
+  onCompleteFulfillment,
   onAddItem,
   onEditItem,
   onRemoveItem,
@@ -633,8 +652,9 @@ function OrderDetail({
   onReject: (reason: string) => Promise<void>;
   onStart: () => Promise<void>;
   onReady: () => Promise<void>;
-  onComplete: () => Promise<void>;
   onCancel: (reason: string) => Promise<void>;
+  onStartDelivery: (input: OrderFulfillmentInput) => Promise<void>;
+  onCompleteFulfillment: (input: OrderFulfillmentInput) => Promise<void>;
   onAddItem: (item: OrderItemInput) => Promise<void>;
   onEditItem: (itemId: string, item: OrderItemInput) => Promise<void>;
   onRemoveItem: (itemId: string) => Promise<void>;
@@ -682,8 +702,13 @@ function OrderDetail({
         onReject={onReject}
         onStart={onStart}
         onReady={onReady}
-        onComplete={onComplete}
         onCancel={onCancel}
+      />
+
+      <OrderFulfillmentPanel
+        order={order}
+        onStartDelivery={onStartDelivery}
+        onCompleteFulfillment={onCompleteFulfillment}
       />
 
       <OrderStatusHistory order={order} />
