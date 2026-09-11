@@ -15,6 +15,16 @@ type ParsedOrder = ParsedPayload & {
   version: string;
 };
 
+type ParserAttemptTelemetry = {
+  model: string | null;
+  outcome: 'success' | 'provider_error' | 'invalid_output' | 'network_error';
+  providerHttpStatus: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  reasoningTokens: number | null;
+  totalTokens: number | null;
+};
+
 type CatalogueRow = {
   id: string;
   name: string;
@@ -276,7 +286,7 @@ async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[nu
   }
 
   const catalogue = await loadCatalogue(tenantId);
-  const parsed = await parseOrder(event.text, catalogue);
+  const parsed = await parseOrder(event.text, catalogue, tenantId, sourceMessageId);
   const enrichedItems = enrichFromCatalogue(parsed.items, catalogue);
   const reviewReasons = buildReviewReasons(parsed, enrichedItems);
 
@@ -432,7 +442,12 @@ function buildReviewReasons(parsed: ParsedOrder, items: EnrichedItem[]): string[
   return Array.from(reasons);
 }
 
-async function parseOrder(text: string, catalogue: CatalogueRow[]): Promise<ParsedOrder> {
+async function parseOrder(
+  text: string,
+  catalogue: CatalogueRow[],
+  tenantId: string,
+  sourceMessageId: string,
+): Promise<ParsedOrder> {
   if (ORDER_PARSER_URL && ORDER_PARSER_TOKEN) {
     try {
       const response = await fetch(ORDER_PARSER_URL, {
@@ -452,26 +467,115 @@ async function parseOrder(text: string, catalogue: CatalogueRow[]): Promise<Pars
         }),
       });
 
+      const responseTelemetry = parserAttemptTelemetryFromHeaders(response.headers, response.status);
+
       if (response.ok) {
         const candidate = await response.json();
         const validated = validateParsedOrder(candidate);
         if (validated) {
+          await recordParserAttempt(tenantId, sourceMessageId, {
+            ...responseTelemetry,
+            outcome: 'success',
+          });
           return {
             ...validated,
             source: 'external',
-            version: 'external-v2-catalogue',
+            version: 'external-v3-cost-telemetry',
           };
         }
+
+        await recordParserAttempt(tenantId, sourceMessageId, {
+          ...responseTelemetry,
+          outcome: 'invalid_output',
+        });
         console.warn('External order parser returned an invalid structured payload; using fallback parser.');
       } else {
+        await recordParserAttempt(tenantId, sourceMessageId, responseTelemetry);
         console.warn(`External order parser returned HTTP ${response.status}; using fallback parser.`);
       }
     } catch (error) {
+      await recordParserAttempt(tenantId, sourceMessageId, {
+        model: null,
+        outcome: 'network_error',
+        providerHttpStatus: null,
+        inputTokens: null,
+        outputTokens: null,
+        reasoningTokens: null,
+        totalTokens: null,
+      });
       console.warn('External order parser unavailable; using fallback parser.', error);
     }
   }
 
   return fallbackParseOrder(text);
+}
+
+function parserAttemptTelemetryFromHeaders(
+  headers: Headers,
+  responseStatus: number,
+): ParserAttemptTelemetry {
+  const outcomeValue = headers.get('x-sellertray-ai-outcome');
+  const outcome: ParserAttemptTelemetry['outcome'] =
+    outcomeValue === 'success' ||
+      outcomeValue === 'provider_error' ||
+      outcomeValue === 'invalid_output' ||
+      outcomeValue === 'network_error'
+      ? outcomeValue
+      : responseStatus >= 200 && responseStatus < 300
+        ? 'success'
+        : 'provider_error';
+
+  return {
+    model: headerString(headers, 'x-sellertray-ai-model'),
+    outcome,
+    providerHttpStatus: headerNonNegativeInteger(headers, 'x-sellertray-ai-provider-status') ?? responseStatus,
+    inputTokens: headerNonNegativeInteger(headers, 'x-sellertray-ai-input-tokens'),
+    outputTokens: headerNonNegativeInteger(headers, 'x-sellertray-ai-output-tokens'),
+    reasoningTokens: headerNonNegativeInteger(headers, 'x-sellertray-ai-reasoning-tokens'),
+    totalTokens: headerNonNegativeInteger(headers, 'x-sellertray-ai-total-tokens'),
+  };
+}
+
+async function recordParserAttempt(
+  tenantId: string,
+  sourceMessageId: string,
+  telemetry: ParserAttemptTelemetry,
+): Promise<void> {
+  try {
+    await rest(
+      '/rest/v1/ai_parser_attempts?on_conflict=source_message_id,provider',
+      {
+        method: 'POST',
+        headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
+        body: JSON.stringify({
+          tenant_id: tenantId,
+          source_message_id: sourceMessageId,
+          provider: 'openai',
+          model: telemetry.model,
+          outcome: telemetry.outcome,
+          provider_http_status: telemetry.providerHttpStatus,
+          input_tokens: telemetry.inputTokens,
+          output_tokens: telemetry.outputTokens,
+          reasoning_tokens: telemetry.reasoningTokens,
+          total_tokens: telemetry.totalTokens,
+        }),
+      },
+    );
+  } catch (error) {
+    console.warn('SellerTray AI parser telemetry could not be persisted.', error);
+  }
+}
+
+function headerString(headers: Headers, name: string): string | null {
+  const value = headers.get(name)?.trim() ?? '';
+  return value ? value.slice(0, 120) : null;
+}
+
+function headerNonNegativeInteger(headers: Headers, name: string): number | null {
+  const value = headers.get(name);
+  if (value === null) return null;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
 function fallbackParseOrder(text: string): ParsedOrder {
