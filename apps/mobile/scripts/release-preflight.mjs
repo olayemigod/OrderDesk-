@@ -202,6 +202,7 @@ const authGate = read(join(mobileRoot, 'src/components/AuthGate.tsx'));
 requireValue(authGate.includes('return `sellertray://'), 'Auth redirects must be generated with sellertray://');
 requireValue(authGate.includes("url.startsWith('sellertray://')"), 'AuthGate must accept sellertray://');
 requireValue(authGate.includes("url.startsWith('orderdesk://')"), 'AuthGate must retain legacy orderdesk:// compatibility');
+requireValue(authGate.includes("__DEV__ && Platform.OS !== 'web'"), 'Manual recovery URL fallback must remain development-only');
 
 const provisionedApp = read(join(mobileRoot, 'src/ProvisionedApp.tsx'));
 const legalGate = read(join(mobileRoot, 'src/components/LegalAcceptanceGate.tsx'));
@@ -392,6 +393,7 @@ const legacyUiPhrases = [
   'Create my OrderDesk',
   'OrderDesk account',
   'private OrderDesk account',
+  'dedicated OrderDesk Supabase project',
 ];
 for (const filePath of collectFiles(join(mobileRoot, 'src')).filter((item) => /\.(ts|tsx)$/.test(item))) {
   const source = read(filePath);
