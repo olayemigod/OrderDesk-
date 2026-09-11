@@ -1,5 +1,9 @@
 name: Mobile CI
 
+concurrency:
+  group: mobile-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
