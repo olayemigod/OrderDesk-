@@ -110,7 +110,8 @@ This document records the governed rollout state for SellerTray. SellerTray rema
 - Internal parser response headers expose only model/outcome/status and token counts; customer text, prompts and model output are not persisted in cost telemetry.
 - `whatsapp-webhook` v11 persists one idempotent `ai_parser_attempts` record per source message/provider and falls back safely if telemetry persistence fails.
 - `ai_parser_attempts` is RLS-enabled, service-role-only, same-tenant constrained and cascades with inbound-message/tenant deletion.
-- ProcessEdge Admin exposes current-period attempts, successes, fallback/errors and input/cached-input/output/reasoning/total token counts.
+- ProcessEdge Admin exposes current-period attempts, successes, fallback/errors, input/cached-input/output/reasoning/total token counts and catalogue-context size.
+- AI context is capped at 160 lexically ranked catalogue items and 6 aliases per selected item while the full catalogue remains available locally for deterministic price matching.
 - Owner business export includes the non-content parser-attempt records.
 - Rollback smoke proved idempotent count = 1, cross-tenant linkage rejected, and source-message deletion cascades telemetry.
 - Cached-token integrity smoke proved ProcessEdge aggregation and rejected cached>input and reasoning>output telemetry; all synthetic rows rolled back.
