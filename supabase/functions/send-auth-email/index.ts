@@ -44,7 +44,7 @@ function verifyUrl(data: EmailData, tokenHash?: string) {
 }
 
 function emailCopy(action: string, data: EmailData, user: HookPayload['user']) {
-  const link = verifyUrl(data, data.token_hash)
+  const link = verifyUrl(data, action === 'email_change' && data.token_hash_new ? data.token_hash_new : data.token_hash)
   const safeLink = link ? escapeHtml(link) : ''
   const newEmail = escapeHtml(user?.new_email || '')
 
@@ -142,16 +142,25 @@ Deno.serve(async (req) => {
     const secret = hookSecret.replace(/^v1,whsec_/, '')
     const verified = new Webhook(secret).verify(payloadText, headers) as HookPayload
 
-    const email = verified.user?.email
     const data = verified.email_data
     const action = data?.email_action_type || ''
+    const secureEmailChange = Boolean(
+      action === 'email_change' &&
+      verified.user?.email &&
+      verified.user?.new_email &&
+      data?.token_hash &&
+      data?.token_hash_new
+    )
+    const email = action === 'email_change' && !secureEmailChange && verified.user?.new_email
+      ? verified.user.new_email
+      : verified.user?.email
 
     if (!email || !data) {
       return new Response(JSON.stringify({ error: 'invalid_hook_payload' }), { status: 400, headers: jsonHeaders })
     }
 
     const copy = emailCopy(action, data, verified.user)
-    const shell = `
+    const shell = (content: string) => `
       <!doctype html>
       <html>
         <body style="margin:0;padding:0;background:#f6f8fb;font-family:Arial,sans-serif;color:#17202a">
@@ -160,7 +169,7 @@ Deno.serve(async (req) => {
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:32px">
                 <tr><td>
                   <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#0056A6">SellerTray by ProcessEdge</p>
-                  <div style="font-size:15px;line-height:1.65">${copy.html}</div>
+                  <div style="font-size:15px;line-height:1.65">${content}</div>
                   <p style="margin:28px 0 0;font-size:12px;line-height:1.6;color:#7b8794">
                     <a href="https://processedge.com.ng/sellertray/privacy">Privacy</a> ·
                     <a href="https://processedge.com.ng/sellertray/terms">Terms</a>
@@ -173,23 +182,45 @@ Deno.serve(async (req) => {
       </html>
     `
 
-    const providerResponse = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${resendApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from,
-        to: [email],
-        subject: copy.subject,
-        html: shell,
-      }),
-      signal: AbortSignal.timeout(3500),
-    })
+    const messages = [{ to: email, subject: copy.subject, html: shell(copy.html) }]
 
-    if (!providerResponse.ok) {
-      const providerStatus = providerResponse.status
+    if (secureEmailChange && verified.user?.new_email) {
+      const newEmailLink = verifyUrl(data, data.token_hash)
+      if (!newEmailLink) {
+        return new Response(JSON.stringify({ error: 'invalid_email_change_payload' }), { status: 400, headers: jsonHeaders })
+      }
+
+      messages.push({
+        to: verified.user.new_email,
+        subject: 'Confirm your new SellerTray email',
+        html: shell(
+          '<h2>Confirm your new email address</h2>' +
+          '<p>Confirm <strong>' + escapeHtml(verified.user.new_email) + '</strong> as the new sign-in email for your SellerTray account.</p>' +
+          '<p><a href="' + escapeHtml(newEmailLink) + '">Confirm new email address</a></p>'
+        ),
+      })
+    }
+
+    const providerResponses = await Promise.all(messages.map((message) =>
+      fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${resendApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from,
+          to: [message.to],
+          subject: message.subject,
+          html: message.html,
+        }),
+        signal: AbortSignal.timeout(3500),
+      })
+    ))
+
+    const failedResponse = providerResponses.find((response) => !response.ok)
+    if (failedResponse) {
+      const providerStatus = failedResponse.status
       console.error(JSON.stringify({ event: 'auth_email_provider_error', provider: 'resend', action, providerStatus }))
       return new Response(
         JSON.stringify({ error: 'email_provider_failure' }),
@@ -197,7 +228,7 @@ Deno.serve(async (req) => {
       )
     }
 
-    console.log(JSON.stringify({ event: 'auth_email_sent', provider: 'resend', action }))
+    console.log(JSON.stringify({ event: 'auth_email_sent', provider: 'resend', action, messageCount: messages.length }))
     return new Response(JSON.stringify({}), { status: 200, headers: jsonHeaders })
   } catch (error) {
     console.error(JSON.stringify({ event: 'auth_email_hook_error', message: error instanceof Error ? error.message : 'unknown_error' }))
