@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { MerchantBusiness } from '../data/businessRepository';
 
@@ -49,6 +49,11 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
           <Step number="1" title="Use a WhatsApp Business number" text="Choose the number customers already use or a dedicated sales number." />
           <Step number="2" title="Connect through SellerTray" text="SellerTray will launch Meta's approved WhatsApp onboarding flow from this screen." />
           <Step number="3" title="Send a test order" text="After connection, send a real test message from another phone and confirm it appears in Orders." />
+
+          <Pressable disabled style={styles.connectButton}>
+            <Text style={styles.connectButtonText}>Connect WhatsApp</Text>
+            <Text style={styles.connectButtonHint}>Available after Meta production approval</Text>
+          </Pressable>
 
           <View style={styles.pendingNotice}>
             <Text style={styles.pendingTitle}>Connection activation pending</Text>
@@ -110,6 +115,9 @@ const styles = StyleSheet.create({
   stepCopy: { flex: 1 },
   stepTitle: { color: '#344054', fontSize: 12, fontWeight: '900' },
   stepText: { color: '#667085', fontSize: 11, lineHeight: 17, marginTop: 2 },
+  connectButton: { minHeight: 52, borderRadius: 12, backgroundColor: '#E4E7EC', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, opacity: 0.8 },
+  connectButtonText: { color: '#475467', fontSize: 13, fontWeight: '900' },
+  connectButtonHint: { color: '#667085', fontSize: 9, fontWeight: '700', marginTop: 2 },
   pendingNotice: { backgroundColor: '#F9FAFB', borderRadius: 12, padding: 12, gap: 4 },
   pendingTitle: { color: '#344054', fontSize: 12, fontWeight: '900' },
   pendingText: { color: '#667085', fontSize: 11, lineHeight: 17 },
