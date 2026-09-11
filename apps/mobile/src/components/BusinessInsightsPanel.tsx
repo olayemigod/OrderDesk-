@@ -25,7 +25,7 @@ export function BusinessInsightsPanel({ business }: Props) {
     return (
       <View style={styles.errorCard}>
         <Text style={styles.errorTitle}>Business insights unavailable</Text>
-        <Text style={styles.errorText}>{error ?? 'OrderDesk could not load the business summary.'}</Text>
+        <Text style={styles.errorText}>{error ?? 'SellerTray could not load the business summary.'}</Text>
         <Pressable onPress={() => void refresh()}>
           <Text style={styles.retry}>Retry</Text>
         </Pressable>
