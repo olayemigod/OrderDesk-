@@ -232,6 +232,9 @@ requireValue(legalGate.includes('acceptSellerTrayLegal'), 'LegalAcceptanceGate m
 requireValue(legalGate.includes('https://processedge.com.ng/sellertray/privacy'), 'LegalAcceptanceGate privacy URL is missing');
 requireValue(legalGate.includes('https://processedge.com.ng/sellertray/terms'), 'LegalAcceptanceGate terms URL is missing');
 requireValue(authGate.includes('signupLegalAccepted'), 'SellerTray signup must require legal acknowledgement');
+requireValue(authGate.includes('Email address') && authGate.includes('Confirm password'), 'Authentication forms must retain visible field labels');
+requireValue(authGate.includes("keyboardShouldPersistTaps=\"handled\""), 'Authentication forms must remain keyboard-safe and scrollable');
+requireValue(authGate.includes("visible ? 'Hide' : 'Show'"), 'Password fields must retain a show/hide control');
 
 const accountControls = read(join(mobileRoot, 'src/components/AccountDataControls.tsx'));
 requireValue(accountControls.includes("supabase.auth.signOut({ scope: 'local' })"), 'Account controls must expose device-local SellerTray sign-out');
