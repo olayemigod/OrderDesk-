@@ -36,6 +36,7 @@ type OrderRow = {
   status: OrderStatus;
   status_reason: string | null;
   source: 'whatsapp' | 'manual';
+  customer_note: string | null;
   parser_confidence: number | string | null;
   parser_source: ParserSource;
   parser_version: string | null;
@@ -104,7 +105,7 @@ function mapOrder(row: OrderRow, notifications: OrderNotification[]): MerchantOr
     status: row.status,
     statusReason: row.status_reason,
     source: row.source,
-    customerMessage: sourceMessage?.text_body || '',
+    customerMessage: sourceMessage?.text_body || row.customer_note || '',
     confidence: toNumber(row.parser_confidence),
     parserSource: row.parser_source,
     parserVersion: row.parser_version,
@@ -146,6 +147,7 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
         status,
         status_reason,
         source,
+        customer_note,
         parser_confidence,
         parser_source,
         parser_version,
