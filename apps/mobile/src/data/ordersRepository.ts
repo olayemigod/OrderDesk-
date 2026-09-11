@@ -67,6 +67,20 @@ export type OrderItemInput = {
   unitPrice: number | null;
 };
 
+export type ManualOrderLineInput = {
+  catalogItemId: string;
+  quantity: number;
+};
+
+export type ManualOrderInput = {
+  tenantId: string;
+  customerName: string;
+  customerPhone: string;
+  note?: string | null;
+  items: ManualOrderLineInput[];
+};
+
+
 function one<T>(value: T | T[] | null): T | null {
   if (Array.isArray(value)) return value[0] ?? null;
   return value;
@@ -172,6 +186,39 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
   return ((ordersResult.data ?? []) as unknown as OrderRow[]).map((row) =>
     mapOrder(row, notificationsByOrder.get(row.id) ?? []),
   );
+}
+
+export async function createManualOrder(input: ManualOrderInput): Promise<string> {
+  const { data, error } = await supabase.functions.invoke('merchant-order', {
+    body: {
+      tenantId: input.tenantId,
+      customerName: input.customerName,
+      customerPhone: input.customerPhone,
+      note: input.note ?? null,
+      items: input.items,
+    },
+  });
+
+  if (error) {
+    let message = error.message || 'Unable to create order.';
+    if (error.context && typeof error.context === 'object' && 'clone' in error.context) {
+      try {
+        const payload = await (error.context as Response).clone().json() as { error?: string };
+        if (payload?.error) message = payload.error;
+      } catch {
+        // Keep the SDK message.
+      }
+    }
+    throw new Error(message);
+  }
+
+  const orderId =
+    data && typeof data === 'object' && 'orderId' in data && typeof data.orderId === 'string'
+      ? data.orderId
+      : null;
+
+  if (!orderId) throw new Error('SellerTray returned an invalid order id.');
+  return orderId;
 }
 
 export async function updateOrderStatus(
