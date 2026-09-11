@@ -146,7 +146,7 @@ export async function createInitialBusiness(input: InitialBusinessInput): Promis
       ? data.tenantId
       : null;
 
-  if (!tenantId) throw new Error('OrderDesk could not create the business workspace.');
+  if (!tenantId) throw new Error('SellerTray could not create the business workspace.');
   return tenantId;
 }
 
