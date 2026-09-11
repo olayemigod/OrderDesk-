@@ -63,8 +63,8 @@
       "required": true,
       "status": "pending",
       "owner": "ProcessEdge",
-      "evidence": null,
-      "acceptance": "Production signup confirmation and password-reset emails deliver successfully and return through SellerTray deep links."
+      "evidence": "Source-controlled SellerTray signup-confirmation and password-recovery templates committed under supabase/templates; Mobile CI preflight validates SellerTray branding, canonical legal URL and Supabase ConfirmationURL contracts. Hosted Supabase Dashboard template copy, custom SMTP configuration and live delivery/deep-link smoke remain pending.",
+      "acceptance": "Copy the governed templates into hosted Supabase Auth Email Templates, configure production custom SMTP, then prove real signup-confirmation and password-reset delivery to a controlled account with return through sellertray://auth-confirm and sellertray://reset-password."
     },
     {
       "id": "android_preview_apk",
