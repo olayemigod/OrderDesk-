@@ -20,6 +20,7 @@ type ParserAttemptTelemetry = {
   outcome: 'success' | 'provider_error' | 'invalid_output' | 'network_error';
   providerHttpStatus: number | null;
   inputTokens: number | null;
+  cachedInputTokens: number | null;
   outputTokens: number | null;
   reasoningTokens: number | null;
   totalTokens: number | null;
@@ -499,6 +500,7 @@ async function parseOrder(
         outcome: 'network_error',
         providerHttpStatus: null,
         inputTokens: null,
+        cachedInputTokens: null,
         outputTokens: null,
         reasoningTokens: null,
         totalTokens: null,
@@ -530,6 +532,7 @@ function parserAttemptTelemetryFromHeaders(
     outcome,
     providerHttpStatus: headerNonNegativeInteger(headers, 'x-sellertray-ai-provider-status') ?? responseStatus,
     inputTokens: headerNonNegativeInteger(headers, 'x-sellertray-ai-input-tokens'),
+    cachedInputTokens: headerNonNegativeInteger(headers, 'x-sellertray-ai-cached-input-tokens'),
     outputTokens: headerNonNegativeInteger(headers, 'x-sellertray-ai-output-tokens'),
     reasoningTokens: headerNonNegativeInteger(headers, 'x-sellertray-ai-reasoning-tokens'),
     totalTokens: headerNonNegativeInteger(headers, 'x-sellertray-ai-total-tokens'),
@@ -555,6 +558,7 @@ async function recordParserAttempt(
           outcome: telemetry.outcome,
           provider_http_status: telemetry.providerHttpStatus,
           input_tokens: telemetry.inputTokens,
+          cached_input_tokens: telemetry.cachedInputTokens,
           output_tokens: telemetry.outputTokens,
           reasoning_tokens: telemetry.reasoningTokens,
           total_tokens: telemetry.totalTokens,
