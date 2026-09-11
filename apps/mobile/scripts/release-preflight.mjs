@@ -212,6 +212,7 @@ const aiTelemetryMigration = read(join(repoRoot, 'supabase/migrations/2026091100
 const aiAdminTelemetryMigration = read(join(repoRoot, 'supabase/migrations/20260911000600_platform_admin_ai_parser_telemetry.sql'));
 const aiCachedTokenMigration = read(join(repoRoot, 'supabase/migrations/20260911000800_ai_parser_cached_token_telemetry.sql'));
 const aiTokenIntegrityMigration = read(join(repoRoot, 'supabase/migrations/20260911000900_ai_parser_token_integrity.sql'));
+const aiContextBudgetMigration = read(join(repoRoot, 'supabase/migrations/20260911001000_ai_parser_context_budget.sql'));
 const whatsappWebhookFunction = read(join(repoRoot, 'supabase/functions/whatsapp-webhook/index.ts'));
 const usageScheduleMigration = read(join(repoRoot, 'supabase/migrations/20260910234500_schedule_usage_settlement_preparation.sql'));
 const deletionUsageGuardMigration = read(join(repoRoot, 'supabase/migrations/20260910233000_block_deletion_with_unsettled_usage.sql'));
@@ -247,6 +248,17 @@ requireValue(
   whatsappWebhookFunction.includes('recordParserAttempt') &&
     whatsappWebhookFunction.includes('/rest/v1/ai_parser_attempts?on_conflict=source_message_id,provider'),
   'WhatsApp ingestion must persist idempotent AI parser telemetry',
+);
+requireValue(
+  whatsappWebhookFunction.includes('AI_CATALOGUE_CONTEXT_LIMIT = 160') &&
+    whatsappWebhookFunction.includes('AI_ALIAS_CONTEXT_LIMIT = 6') &&
+    whatsappWebhookFunction.includes('selectParserCatalogue'),
+  'WhatsApp ingestion must retain the bounded AI catalogue context contract',
+);
+requireValue(
+  aiContextBudgetMigration.includes('catalogue_items_sent <= catalogue_items_total') &&
+    aiContextBudgetMigration.includes('"aiCatalogueItemsSentAvg"'),
+  'AI catalogue context telemetry/budget integrity contract is missing',
 );
 requireValue(
   accountLifecycleFunction.includes("loadTenantRows('ai_parser_attempts'"),
