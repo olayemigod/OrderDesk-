@@ -88,6 +88,8 @@ export type MerchantOrder = {
   deliveryNote: string | null;
   dispatchedAt: string | null;
   fulfilledAt: string | null;
+  fulfillmentConfirmedBy: 'merchant' | 'customer_whatsapp' | null;
+  customerConfirmedAt: string | null;
   source: 'whatsapp' | 'manual';
   customerMessage: string;
   confidence: number | null;
