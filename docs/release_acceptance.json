@@ -61,10 +61,10 @@
     {
       "id": "production_auth_email",
       "required": true,
-      "status": "partial_pass_recovery_pending",
+      "status": "accepted_transport",
       "owner": "ProcessEdge",
-      "evidence": "Live signup smoke passed on 11 September 2026: POST /auth/v1/signup created user 78843c8a-cbfb-4bb8-a255-96d3e530ae2b for cashpothub@gmail.com, Supabase reported confirmation_sent_at, and the SellerTray confirmation email was received through the Send Email Hook/Resend path. Recovery email delivery remains to be tested. Native sellertray:// deep-link return remains a device acceptance item until a signed preview build is installed.",
-      "acceptance": "Run password-recovery email smoke successfully. Treat email transport/branding as accepted when recovery also arrives. Prove sellertray://auth-confirm and sellertray://reset-password return separately during signed preview APK device acceptance."
+      "evidence": "Live Auth email transport accepted on 11 September 2026. Signup confirmation email and password-recovery email were both received successfully for the controlled test account through Supabase Auth Send Email Hook -> SellerTray send-auth-email Edge Function -> Resend using the verified processedge.com.ng domain.",
+      "acceptance": "Email transport/branding path accepted. Native return through sellertray://auth-confirm and sellertray://reset-password remains part of signed preview APK device acceptance and does not block this transport gate."
     },
     {
       "id": "android_preview_apk",
