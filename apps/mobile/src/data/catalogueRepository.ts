@@ -88,7 +88,7 @@ export async function createCatalogueItem(
     .single();
 
   if (error) throw error;
-  if (!data?.id) throw new Error('OrderDesk could not create the catalogue item.');
+  if (!data?.id) throw new Error('SellerTray could not create the catalogue item.');
 
   await replaceAliases(tenantId, data.id, clean.aliases);
   return data.id;
