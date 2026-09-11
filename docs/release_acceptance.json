@@ -172,5 +172,15 @@
       "evidence": "docs/data_processor_review.md: Supabase/Paystack processor treatment supported; OpenAI conditional on production data controls; WhatsApp processor treatment supported for Customer Data but September 23, 2026 effective-terms check remains",
       "acceptance": "On/after the applicable Meta terms effective date, recheck WhatsApp Business terms; record OpenAI production data controls and Paystack payload scope; then freeze Play shared/not-shared treatment consistent with the approved Privacy Policy."
     }
-  ]
+  ],
+  "qaBuild": {
+    "status": "accepted_for_device_qa",
+    "sourceCommit": "d7bf4ade0f047e157659f1f57bdb38db060c695a",
+    "workflow": "Android QA APK #1",
+    "workflowRunId": 34626889971,
+    "artifactId": 10275037241,
+    "artifactName": "sellertray-qa-d7bf4ade0f047e157659f1f57bdb38db060c695a",
+    "apkSha256": "f1a6a339083f9afbbb6bfabc9b5ebbbad67042c85752c09b5b9a3518b97bc5f0",
+    "note": "QA-only standalone APK using temporary non-Play signing. It may be installed for native/deep-link testing but does not satisfy the branded android_preview_apk or production AAB gates."
+  }
 }
