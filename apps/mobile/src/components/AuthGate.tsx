@@ -1,10 +1,12 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Linking,
   Platform,
   Pressable,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -229,7 +231,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
       return;
     }
 
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'local' });
     setSubmitting(false);
     setSession(null);
     setPassword('');
@@ -286,15 +288,17 @@ export function AuthGate({ children }: { children: ReactNode }) {
             <Text style={styles.note}>
               If the recovery link opens in a browser instead of SellerTray, paste the complete final URL here. It is processed only on this device.
             </Text>
-            <TextInput
-              autoCapitalize="none"
-              autoCorrect={false}
-              multiline
-              placeholder="Paste recovery URL"
-              value={recoveryUrl}
-              onChangeText={setRecoveryUrl}
-              style={[styles.input, styles.urlInput]}
-            />
+            <AuthField label="Recovery URL" hint="Paste the complete URL only when using the development fallback.">
+              <TextInput
+                autoCapitalize="none"
+                autoCorrect={false}
+                multiline
+                placeholder="Paste recovery URL"
+                value={recoveryUrl}
+                onChangeText={setRecoveryUrl}
+                style={[styles.input, styles.urlInput]}
+              />
+            </AuthField>
             <Pressable
               disabled={submitting || !recoveryUrl.trim()}
               onPress={() => void consumeAuthUrl(recoveryUrl.trim())}
@@ -358,14 +362,12 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return (
       <AuthCard title="Merchant sign in" subtitle="Turn WhatsApp messages into organised orders.">
         <EmailInput email={email} onChange={setEmail} />
-        <TextInput
-          autoCapitalize="none"
-          autoComplete="password"
-          placeholder="Password"
-          secureTextEntry
+        <PasswordField
+          label="Password"
           value={password}
-          onChangeText={setPassword}
-          style={styles.input}
+          onChange={setPassword}
+          autoComplete="password"
+          placeholder="Enter your password"
         />
         {notice ? <Text style={styles.notice}>{notice}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -388,15 +390,17 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
 function EmailInput({ email, onChange }: { email: string; onChange: (value: string) => void }) {
   return (
-    <TextInput
-      autoCapitalize="none"
-      autoComplete="email"
-      keyboardType="email-address"
-      placeholder="Email"
-      value={email}
-      onChangeText={onChange}
-      style={styles.input}
-    />
+    <AuthField label="Email address" hint="Use the email address for your SellerTray merchant account.">
+      <TextInput
+        autoCapitalize="none"
+        autoComplete="email"
+        keyboardType="email-address"
+        placeholder="you@business.com"
+        value={email}
+        onChangeText={onChange}
+        style={styles.input}
+      />
+    </AuthField>
   );
 }
 
@@ -413,37 +417,113 @@ function PasswordInputs({
 }) {
   return (
     <>
-      <TextInput
-        autoCapitalize="none"
-        autoComplete="new-password"
-        placeholder="Password (8+ characters)"
-        secureTextEntry
+      <PasswordField
+        label="Password"
+        hint="Use at least 8 characters."
         value={password}
-        onChangeText={onPassword}
-        style={styles.input}
-      />
-      <TextInput
-        autoCapitalize="none"
+        onChange={onPassword}
         autoComplete="new-password"
-        placeholder="Confirm password"
-        secureTextEntry
+        placeholder="Create a password"
+      />
+      <PasswordField
+        label="Confirm password"
         value={confirmPassword}
-        onChangeText={onConfirmPassword}
-        style={styles.input}
+        onChange={onConfirmPassword}
+        autoComplete="new-password"
+        placeholder="Re-enter your password"
       />
     </>
+  );
+}
+
+function PasswordField({
+  label,
+  hint,
+  value,
+  onChange,
+  autoComplete,
+  placeholder,
+}: {
+  label: string;
+  hint?: string;
+  value: string;
+  onChange: (value: string) => void;
+  autoComplete: 'password' | 'new-password';
+  placeholder: string;
+}) {
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <AuthField
+      label={label}
+      hint={hint}
+      action={
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={visible ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
+          onPress={() => setVisible((current) => !current)}
+          style={({ pressed }) => [styles.fieldAction, pressed && styles.buttonPressed]}
+        >
+          <Text style={styles.fieldActionText}>{visible ? 'Hide' : 'Show'}</Text>
+        </Pressable>
+      }
+    >
+      <TextInput
+        autoCapitalize="none"
+        autoComplete={autoComplete}
+        placeholder={placeholder}
+        secureTextEntry={!visible}
+        value={value}
+        onChangeText={onChange}
+        style={styles.input}
+      />
+    </AuthField>
+  );
+}
+
+function AuthField({
+  label,
+  hint,
+  action,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <View style={styles.field}>
+      <View style={styles.fieldHeader}>
+        <Text style={styles.fieldLabel}>{label}</Text>
+        {action}
+      </View>
+      {hint ? <Text style={styles.fieldHint}>{hint}</Text> : null}
+      {children}
+    </View>
   );
 }
 
 function AuthCard({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
   return (
     <SafeAreaView style={styles.screen}>
-      <View style={styles.card}>
-        <Text style={styles.eyebrow}>SELLERTRAY</Text>
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.subtitle}>{subtitle}</Text>
-        {children}
-      </View>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.keyboardArea}
+      >
+        <ScrollView
+          contentContainerStyle={styles.authScroll}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.card}>
+            <Text style={styles.eyebrow}>SELLERTRAY</Text>
+            <Text style={styles.title}>{title}</Text>
+            <Text style={styles.subtitle}>{subtitle}</Text>
+            {children}
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -490,12 +570,20 @@ function parseAuthTokens(url: string): {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F6F7F9', justifyContent: 'center', padding: 24 },
+  screen: { flex: 1, backgroundColor: '#F6F7F9' },
+  keyboardArea: { flex: 1 },
+  authScroll: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 22, paddingTop: 24, paddingBottom: Platform.OS === 'android' ? 48 : 24 },
   centered: { flex: 1, gap: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F6F7F9' },
   card: { backgroundColor: '#FFFFFF', borderRadius: 20, borderWidth: 1, borderColor: '#EAECF0', padding: 22, gap: 12 },
   eyebrow: { color: '#246BFD', fontSize: 12, fontWeight: '800', letterSpacing: 1.4 },
   title: { color: '#101828', fontSize: 28, fontWeight: '900' },
   subtitle: { color: '#667085', fontSize: 14, lineHeight: 20, marginBottom: 8 },
+  field: { gap: 6 },
+  fieldHeader: { minHeight: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  fieldLabel: { color: '#344054', fontSize: 12, fontWeight: '900' },
+  fieldHint: { color: '#667085', fontSize: 10, lineHeight: 15 },
+  fieldAction: { minHeight: 32, minWidth: 46, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+  fieldActionText: { color: '#246BFD', fontSize: 11, fontWeight: '900' },
   input: { minHeight: 50, borderRadius: 12, borderWidth: 1, borderColor: '#D0D5DD', paddingHorizontal: 14, backgroundColor: '#FFFFFF', color: '#101828' },
   urlInput: { minHeight: 84, paddingTop: 12, textAlignVertical: 'top' },
   button: { minHeight: 50, borderRadius: 12, backgroundColor: '#246BFD', alignItems: 'center', justifyContent: 'center', marginTop: 4 },
@@ -505,7 +593,7 @@ const styles = StyleSheet.create({
   buttonText: { color: '#FFFFFF', fontWeight: '800', fontSize: 15 },
   secondaryButtonText: { color: '#344054', fontWeight: '800', fontSize: 14 },
   authLinks: { gap: 2, marginTop: 2 },
-  linkButton: { alignSelf: 'center', paddingVertical: 4 },
+  linkButton: { alignSelf: 'center', minHeight: 44, justifyContent: 'center', paddingHorizontal: 10 },
   linkText: { color: '#246BFD', fontWeight: '800', fontSize: 13 },
   error: { color: '#B42318', fontSize: 13, lineHeight: 18 },
   notice: { color: '#027A48', fontSize: 13, lineHeight: 18 },
