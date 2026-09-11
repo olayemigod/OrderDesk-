@@ -6,9 +6,9 @@
   "updatedAt": "2026-09-11",
   "codeCheckpoint": {
     "status": "accepted",
-    "commit": "a44219eb001bb020abddf6633179f0510bb5f3fb",
-    "ciRun": 315,
-    "evidence": "Mobile CI #315 passed locked dependency install, production dependency audit, TypeScript, production Android Expo export/bundle smoke, SellerTray Send Email Hook contracts, release preflight, governed QA APK profile and brand-gate enforcement."
+    "commit": "3aa14582ea012dc4905f35ee5c450df89d85895d",
+    "ciRun": 361,
+    "evidence": "Mobile CI #361 passed locked dependency install, production dependency audit, TypeScript, production Android bundle smoke and SellerTray release preflight. The checkpoint also includes Send Email Hook v3 secure-email-change hardening."
   },
   "gates": [
     {
@@ -64,7 +64,7 @@
       "required": true,
       "status": "accepted",
       "owner": "ProcessEdge",
-      "evidence": "Live Auth email transport accepted on 11 September 2026. Signup confirmation email and password-recovery email were both received successfully for the controlled test account through Supabase Auth Send Email Hook -> SellerTray send-auth-email Edge Function -> Resend using the verified processedge.com.ng domain.",
+      "evidence": "Live Auth email transport accepted on 11 September 2026. Signup confirmation and password-recovery emails were received successfully through Supabase Auth Send Email Hook -> SellerTray send-auth-email Edge Function -> Resend on the verified processedge.com.ng domain. Post-acceptance hardening deployed send-auth-email v3 with the current Supabase Secure Email Change token-hash mapping; Mobile CI #361 passed.",
       "acceptance": "Email transport/branding path accepted. Native return through sellertray://auth-confirm and sellertray://reset-password remains part of signed preview APK device acceptance and does not block this transport gate.",
       "disposition": "Transport and SellerTray branding accepted; native deep-link return is covered by android_native_smoke."
     },
@@ -73,7 +73,7 @@
       "required": true,
       "status": "pending",
       "owner": "ProcessEdge",
-      "evidence": "Physical-device QA identified discoverability and mobile UX gaps: no obvious order creation, no guided WhatsApp connection page, duplicated/prominent account deletion, unlabeled product fields, Products buried under Business, Business/settings mixed into one long page, Android system navigation overlapping bottom tabs, legacy OrderDesk copy, and account deletion failure. Experience-hardening implementation is committed on feat/mvp-foundation and awaits rebuilt APK retest.",
+      "evidence": "Physical-device QA identified the original discoverability/mobile UX gaps. The consolidated hardening is now implemented: Home/Orders/Products/More IA, guided setup, labelled product/auth forms, manual order creation, segmented settings, Android navigation clearance/back behavior, de-emphasized single account-closure path, SellerTray identity cleanup, and hardened account lifecycle. Android QA APK #34 completed successfully from mobile commit 302d1641d275e928cc2a973376b48f34f6e7d4c0 and is ready for physical-device retest.",
       "acceptance": "On a current-head QA APK, verify Home/Orders/Products/More navigation, Android-safe tab interaction, labelled product creation, guided setup, manual order creation, segmented More settings, non-prominent single account-closure path, no user-facing OrderDesk copy, working sign-out, and successful disposable-account deletion."
     },
     {
@@ -89,7 +89,7 @@
       "required": true,
       "status": "pending",
       "owner": "ProcessEdge",
-      "evidence": "Physical Android QA in progress on standalone SellerTray QA APK. Password-recovery email deep link tested on 11 September 2026 and successfully opened the installed SellerTray app via sellertray://reset-password. QA found that authenticated merchants had no sufficiently discoverable sign-out path. Fix committed through 71cbe6d121d5dcce89435e3a01d135d747a87b9a: active Business view now renders AccountDataControls with an explicit 'Sign out of this device' action; workspace/provisioning sign-outs use local-session scope. Mobile CI #324 passed. Physical Android QA passed signup confirmation deep-link return into SellerTray, successful sign-in, and merchant/business provisioning on 11 September 2026. Experience-hardening QA is now required before this gate can close.",
+      "evidence": "Earlier device smoke passed password-recovery deep-link return, signup confirmation deep-link return, sign-in and merchant/business provisioning. The prior QA exposed UX/navigation/account-deletion issues, which have now been hardened. Android QA APK #34 succeeded from commit 302d1641d275e928cc2a973376b48f34f6e7d4c0; branch head 3aa14582ea012dc4905f35ee5c450df89d85895d differs only by docs/mobile_experience_standard.md and the server-side send-auth-email function, so APK #34 is mobile-source equivalent to current head and is the authoritative device-retest build.",
       "acceptance": "Complete remaining physical-device smoke: catalogue tenant-scope, full order lifecycle, business data export, permanent sign-out on rebuilt APK, disposable account deletion/relaunch, and visible-secret/error-message check."
     },
     {
@@ -182,32 +182,14 @@
     }
   ],
   "qaBuild": {
-    "status": "accepted_for_device_qa",
-    "sourceCommit": "d7bf4ade0f047e157659f1f57bdb38db060c695a",
-    "workflow": "Android QA APK #1",
-    "workflowRunId": 34626889971,
-    "artifactId": 10275037241,
-    "artifactName": "sellertray-qa-d7bf4ade0f047e157659f1f57bdb38db060c695a",
-    "apkSha256": "f1a6a339083f9afbbb6bfabc9b5ebbbad67042c85752c09b5b9a3518b97bc5f0",
-    "note": "QA-only standalone APK using temporary non-Play signing. It may be installed for native/deep-link testing but does not satisfy the branded android_preview_apk or production AAB gates.",
-    "binaryInspection": {
-      "bundledJs": true,
-      "expectedIdentity": [
-        "SellerTray",
-        "sellertray://",
-        "auth-confirm",
-        "reset-password",
-        "orderdesk://"
-      ],
-      "publicBackendUrlPresent": true,
-      "checkedForbiddenSecretIdentifiersAbsent": [
-        "SUPABASE_SERVICE_ROLE_KEY",
-        "OPENAI_API_KEY",
-        "PAYSTACK_SECRET_KEY",
-        "WHATSAPP_ACCESS_TOKEN",
-        "SEND_EMAIL_HOOK_SECRET",
-        "RESEND_API_KEY"
-      ]
-    }
+    "status": "ready_for_device_retest",
+    "sourceCommit": "302d1641d275e928cc2a973376b48f34f6e7d4c0",
+    "mobileEquivalentHead": "3aa14582ea012dc4905f35ee5c450df89d85895d",
+    "workflow": "Android QA APK #34",
+    "workflowRunId": 34639904042,
+    "artifactId": 10280815039,
+    "artifactName": "sellertray-qa-302d1641d275e928cc2a973376b48f34f6e7d4c0",
+    "artifactArchiveDigest": "sha256:4f8dcffaa8f4d34f94de641d7a954c2b926ce0398104df987fd611531866f72c",
+    "note": "Latest consolidated QA-only standalone APK. GitHub Actions completed successfully. The current branch head contains no apps/mobile changes after this source commit, so this is the correct APK for physical-device retest. It still uses the temporary QA signing path and does not satisfy the branded android_preview_apk or production AAB gates."
   }
 }
