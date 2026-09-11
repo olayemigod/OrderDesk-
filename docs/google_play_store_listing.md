@@ -85,7 +85,7 @@ Do not select Communications merely because WhatsApp is an integration; SellerTr
 Developer/company: **ProcessEdge Solutions Limited**  
 Support email: **support@processedge.com.ng**  
 Website: **https://processedge.com.ng**  
-Privacy Policy: **https://processedge.com.ng/sellertray/privacy** — pending legal approval/publication  
+Privacy Policy: **https://processedge.com.ng/sellertray/privacy** — published; independent legal review pending  
 Account deletion: **https://processedge.com.ng/sellertray/account-deletion** — live
 
 ## Screenshot package
@@ -194,7 +194,8 @@ This account must own only disposable sample data and must not be the main stabl
 - [ ] No price/promotion/ranking claims.
 - [ ] No misleading affiliation with WhatsApp/Meta.
 - [ ] Synthetic data only in screenshots.
-- [ ] Privacy URL is live and legally approved.
+- [x] Privacy URL is live.
+- [ ] Independent legal review/approval is recorded before release acceptance.
 - [x] Account-deletion URL is live.
 - [ ] Final icon/adaptive icon/splash approved.
 - [ ] Screenshots captured from signed Android preview/release candidate.
