@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const mobileRoot = process.cwd();
@@ -174,6 +174,19 @@ requireValue(app.android?.versionCode === 1, 'Initial Android versionCode must b
 requireValue(app.ios?.bundleIdentifier === 'ng.processedge.sellertray', 'iOS bundle ID must match SellerTray identity');
 requireValue(eas.build?.preview?.android?.buildType === 'apk', 'EAS preview profile must build an APK');
 requireValue(eas.build?.production?.android?.buildType === 'app-bundle', 'EAS production profile must build an AAB');
+
+const brandGate = releaseAcceptance.gates.find((gate) => gate.id === 'sellertray_brand_assets');
+if (brandGate?.status === 'accepted') {
+  requireValue(app.icon === './assets/brand/icon.png', 'Accepted brand gate requires SellerTray launcher icon in Expo config');
+  requireValue(app.android?.adaptiveIcon?.foregroundImage === './assets/brand/adaptive-icon.png', 'Accepted brand gate requires Android adaptive icon foreground');
+  requireValue(Boolean(app.android?.adaptiveIcon?.backgroundColor), 'Accepted brand gate requires Android adaptive icon background colour');
+  requireValue(app.splash?.image === './assets/brand/splash-icon.png', 'Accepted brand gate requires SellerTray splash icon');
+  requireValue(app.splash?.resizeMode === 'contain', 'Accepted brand gate requires contain splash resize mode');
+  requireValue(Boolean(app.splash?.backgroundColor), 'Accepted brand gate requires splash background colour');
+  for (const path of [app.icon, app.android?.adaptiveIcon?.foregroundImage, app.splash?.image]) {
+    if (path) requireValue(existsSync(join(mobileRoot, path)), 'Accepted brand asset file is missing: '+path);
+  }
+}
 
 for (const profileName of ['preview', 'production']) {
   const env = eas.build?.[profileName]?.env ?? {};
