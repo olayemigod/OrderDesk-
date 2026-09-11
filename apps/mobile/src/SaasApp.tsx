@@ -120,7 +120,7 @@ function Workspace() {
         <View style={styles.noWorkspaceAccount}>
           <AccountDataControls />
         </View>
-        <Pressable onPress={() => void supabase.auth.signOut()}>
+        <Pressable onPress={() => void supabase.auth.signOut({ scope: 'local' })}>
           <Text style={styles.linkText}>Sign out</Text>
         </Pressable>
       </SafeAreaView>
@@ -199,7 +199,10 @@ function Workspace() {
           ) : null}
 
           {view === 'business' ? (
-            <BusinessProfileView business={activeBusiness} onSave={saveProfile} />
+            <View style={styles.sectionStack}>
+              <BusinessProfileView business={activeBusiness} onSave={saveProfile} />
+              <AccountDataControls business={activeBusiness} />
+            </View>
           ) : null}
         </ScrollView>
 
