@@ -170,7 +170,7 @@ const blockedAndroidPermissions = new Set(app.android?.blockedPermissions ?? [])
 for (const permission of requiredBlockedAndroidPermissions) {
   requireValue(blockedAndroidPermissions.has(permission), 'Sensitive Android permission must remain blocked: '+permission);
 }
-requireValue(app.android?.versionCode === 2, 'Android versionCode must be 2 for the refreshed QA/release line');
+requireValue(app.android?.versionCode === 3, 'Android versionCode must be 3 for the Android safe-area QA line');
 requireValue(app.ios?.bundleIdentifier === 'ng.processedge.sellertray', 'iOS bundle ID must match SellerTray identity');
 requireValue(eas.build?.qa?.android?.buildType === 'apk', 'EAS QA profile must build an APK');
 requireValue(eas.build?.preview?.android?.buildType === 'apk', 'EAS preview profile must build an APK');
@@ -252,7 +252,8 @@ requireValue(saasApp.includes('label="Products"') && saasApp.includes("onChange(
 requireValue(saasApp.includes('label="More"') && saasApp.includes("onChange('more')"), 'Business/settings must be separated behind More');
 requireValue(saasApp.includes("paddingBottom: Platform.OS === 'android' ? 46 : 10"), 'Android bottom navigation must retain system-navigation clearance');
 requireValue(settingsHub.includes("BackHandler.addEventListener('hardwareBackPress'"), 'Android settings must support native back navigation');
-requireValue(settingsHub.includes('SellerTray 1.0.0 · Android build 2'), 'More screen must expose the current Android build marker');
+requireValue(settingsHub.includes('SellerTray 1.0.0 · Android build 3'), 'More screen must expose the current Android build marker');
+requireValue(saasApp.includes("StatusBar.currentHeight"), 'Android status-bar safe area must remain enforced in the merchant workspace');
 requireValue(catalogueView.includes('Product name') && catalogueView.includes('Selling price') && catalogueView.includes('Customer words / aliases'), 'Product editor must retain visible field labels and guidance');
 requireValue(manualOrderComposer.includes('Create an order') && manualOrderComposer.includes('Customer name') && manualOrderComposer.includes('Products *'), 'Orders must expose guided manual order creation');
 requireValue(accountControls.includes('DELETE MY SELLERTRAY ACCOUNT'), 'Account deletion confirmation must use SellerTray');
