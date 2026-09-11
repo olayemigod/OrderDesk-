@@ -103,8 +103,8 @@
       "required": true,
       "status": "pending",
       "owner": "ProcessEdge",
-      "evidence": "order-parser v7 and whatsapp-webhook v12 deploy non-content outcome/token telemetry including cached input; ProcessEdge overview and Owner export are wired; RLS/cross-tenant/cascade/token-integrity smokes passed; live external-AI sample remains zero because production parser acceptance is pending",
-      "acceptance": "Configure server-only parser credentials and pass live AI parse, deterministic price matching, AI_ORDER_ACTIVITY metering, safe-fallback acceptance and ai_parser_attempts capture with model/token/outcome evidence."
+      "evidence": "order-parser v7 and whatsapp-webhook v13 deploy non-content outcome/token/context telemetry including cached input; AI catalogue context is capped at 160 ranked items and 6 aliases/item; ProcessEdge overview and Owner export are wired; RLS/cross-tenant/cascade/token/context-integrity smokes passed; live external-AI sample remains zero because production parser acceptance is pending",
+      "acceptance": "Configure server-only parser credentials and pass live AI parse, deterministic full-catalogue price matching, bounded-context quality, AI_ORDER_ACTIVITY metering, safe-fallback acceptance and ai_parser_attempts capture with model/token/context/outcome evidence."
     },
     {
       "id": "outbound_whatsapp_worker",
