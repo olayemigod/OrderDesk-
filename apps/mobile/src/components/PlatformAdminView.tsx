@@ -273,6 +273,10 @@ function TenantAdminCard({
           label="AI parser tokens"
           value={`${tenant.aiInputTokensPeriod} input · ${tenant.aiCachedInputTokensPeriod} cached · ${tenant.aiOutputTokensPeriod} output · ${tenant.aiReasoningTokensPeriod} reasoning · ${tenant.aiTotalTokensPeriod} total`}
         />
+        <DetailRow
+          label="AI catalogue context"
+          value={`${tenant.aiCatalogueItemsSentAvg} avg sent / ${tenant.aiCatalogueItemsTotalMax} max catalogue · ${tenant.aiCatalogueAliasesSentAvg} avg aliases`}
+        />
         <DetailRow label="Last order" value={formatOptionalDateTime(tenant.lastOrderAt)} />
         <DetailRow label="Last WhatsApp" value={formatOptionalDateTime(tenant.lastInboundAt)} />
       </View>
