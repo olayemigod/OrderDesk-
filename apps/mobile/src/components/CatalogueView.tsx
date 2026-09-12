@@ -558,7 +558,7 @@ function CatalogueEditor({
       <Field label="Category" hint="Use a consistent category so sales and product reports group correctly.">
         <Pressable
           onPress={() => setShowCategoryPicker((value) => !value)}
-          style={styles.categorySelect}
+          style={[styles.categorySelect, appearance.dark && darkStyles.input]}
         >
           <Text style={[styles.categorySelectText, appearance.dark && darkStyles.inputText, !category && styles.categorySelectPlaceholder]}>
             {category || 'Choose category'}
@@ -581,14 +581,14 @@ function CatalogueEditor({
                 {category === option ? <Ionicons name="checkmark" size={18} color="#079455" /> : null}
               </Pressable>
             ))}
-            <View style={styles.customCategoryWrap}>
+            <View style={[styles.customCategoryWrap, appearance.dark && darkStyles.subtleCard]}>
               <Text style={styles.help}>Add a category not listed above</Text>
               <View style={styles.customCategoryRow}>
                 <TextInput
                   value={customCategory}
                   onChangeText={setCustomCategory}
                   placeholder="e.g. Pet Supplies"
-                  style={[styles.input, styles.customCategoryInput]}
+                  style={[styles.input, styles.customCategoryInput, appearance.dark && darkStyles.input, appearance.dark && darkStyles.inputText]}
                 />
                 <Pressable
                   disabled={!customCategory.trim()}
@@ -648,7 +648,7 @@ function CatalogueEditor({
       </Field>
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
       <View style={styles.editorActions}>
-        <Pressable disabled={submitting || imageUploading} onPress={onCancel} style={styles.secondaryButton}><Text style={styles.secondaryText}>Cancel</Text></Pressable>
+        <Pressable disabled={submitting || imageUploading} onPress={onCancel} style={[styles.secondaryButton, appearance.dark && darkStyles.outlineButton]}><Text style={[styles.secondaryText, appearance.dark && darkStyles.bodyText]}>Cancel</Text></Pressable>
         <Pressable disabled={submitting || imageUploading} onPress={() => void save()} style={[styles.primaryButton, imageUploading && styles.disabled]}>
           <Text style={styles.primaryButtonText}>{submitting ? 'Saving…' : 'Save product'}</Text>
         </Pressable>
@@ -668,10 +668,11 @@ function Field({
   hint?: string;
   children: React.ReactNode;
 }) {
+  const appearance = useSellerTrayAppearance();
   return (
     <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}{required ? ' *' : ''}</Text>
-      {hint ? <Text style={styles.help}>{hint}</Text> : null}
+      <Text style={[styles.fieldLabel, appearance.dark && darkStyles.titleText]}>{label}{required ? ' *' : ''}</Text>
+      {hint ? <Text style={[styles.help, appearance.dark && darkStyles.bodyText]}>{hint}</Text> : null}
       {children}
     </View>
   );
@@ -742,6 +743,7 @@ const styles = StyleSheet.create({
   headingCopy: { flex: 1 },
   eyebrow: { color: '#667085', fontSize: 11, fontWeight: '900', letterSpacing: 1.1 },
   title: { color: '#102A43', fontSize: 27, lineHeight: 33, fontWeight: '900', marginTop: 3 },
+  titleLarge: { fontSize: 30, lineHeight: 37 },
   subtitle: { color: '#667085', fontSize: 14, lineHeight: 21, marginTop: 4 },
   addButton: { backgroundColor: '#12B76A', borderRadius: 10, paddingVertical: 9, paddingHorizontal: 12 },
   addButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
@@ -825,4 +827,19 @@ const styles = StyleSheet.create({
   mappingSecondary: { flex: 1, minHeight: 38, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   mappingPrimary: { flex: 1, minHeight: 38, backgroundColor: '#12B76A', borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   disabled: { opacity: 0.45 },
+});
+
+const darkStyles = StyleSheet.create({
+  card: { backgroundColor: '#102A43', borderColor: '#344054' },
+  subtleCard: { backgroundColor: '#162F46', borderColor: '#344054' },
+  mintCard: { backgroundColor: '#12372C', borderColor: '#1C6B4A' },
+  infoCard: { backgroundColor: '#102D45', borderColor: '#344054' },
+  errorCard: { backgroundColor: '#3A1717', borderColor: '#7A271A' },
+  titleText: { color: '#F8FAFC' },
+  bodyText: { color: '#D0D5DD' },
+  mutedText: { color: '#98A2B3' },
+  input: { backgroundColor: '#102A43', borderColor: '#475467' },
+  inputText: { color: '#F8FAFC' },
+  outlineButton: { backgroundColor: '#102A43', borderColor: '#475467' },
+  rowBorder: { borderBottomColor: '#344054' },
 });
