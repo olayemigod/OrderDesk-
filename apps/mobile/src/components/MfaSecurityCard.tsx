@@ -146,9 +146,9 @@ export function MfaSecurityCard() {
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EAECF0', borderRadius: 18, padding: 16, gap: 12 },
-  eyebrow: { color: '#98A2B3', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
-  title: { color: '#101828', fontSize: 17, fontWeight: '900', marginTop: 3 },
+  card: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 18, padding: 16, gap: 12 },
+  eyebrow: { color: '#667085', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
+  title: { color: '#102A43', fontSize: 17, fontWeight: '900', marginTop: 3 },
   helper: { color: '#667085', fontSize: 10, lineHeight: 16, marginTop: 3 },
   statusBox: { borderRadius: 11, padding: 10 },
   statusGood: { backgroundColor: '#ECFDF3' },
@@ -157,13 +157,13 @@ const styles = StyleSheet.create({
   statusNeutralText: { color: '#475467', fontSize: 10, fontWeight: '900' },
   enrollmentBox: { backgroundColor: '#F9FAFB', borderRadius: 12, padding: 11, gap: 7 },
   stepTitle: { color: '#344054', fontSize: 10, fontWeight: '900' },
-  secret: { color: '#101828', fontSize: 13, fontWeight: '900', letterSpacing: 1, paddingVertical: 6 },
-  codeInput: { minHeight: 48, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 11, paddingHorizontal: 14, fontSize: 20, letterSpacing: 5, color: '#101828', backgroundColor: '#FFFFFF' },
-  primaryButton: { minHeight: 44, borderRadius: 11, backgroundColor: '#246BFD', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  secret: { color: '#102A43', fontSize: 13, fontWeight: '900', letterSpacing: 1, paddingVertical: 6 },
+  codeInput: { minHeight: 48, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 11, paddingHorizontal: 14, fontSize: 20, letterSpacing: 5, color: '#102A43', backgroundColor: '#FFFFFF' },
+  primaryButton: { minHeight: 44, borderRadius: 11, backgroundColor: '#12B76A', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
   primaryText: { color: '#FFFFFF', fontSize: 11, fontWeight: '900' },
   error: { color: '#B42318', fontSize: 10, lineHeight: 15 },
   notice: { color: '#027A48', fontSize: 10, fontWeight: '800', lineHeight: 15 },
-  policy: { color: '#98A2B3', fontSize: 9, lineHeight: 14 },
+  policy: { color: '#667085', fontSize: 9, lineHeight: 14 },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.5 },
 });
