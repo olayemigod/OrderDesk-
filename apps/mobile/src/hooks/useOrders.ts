@@ -36,7 +36,7 @@ export function useOrders(tenantId: string | null) {
       setOrders(next);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to load orders.');
+      setError(errorMessage(err, 'Unable to load orders.'));
     } finally {
       setLoading(false);
     }
@@ -64,7 +64,7 @@ export function useOrders(tenantId: string | null) {
         setError(null);
         return orderId;
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unable to create order.');
+        setError(errorMessage(err, 'Unable to create order.'));
         throw err;
       }
     },
@@ -88,7 +88,7 @@ export function useOrders(tenantId: string | null) {
         setError(null);
       } catch (err) {
         setOrders(previous);
-        setError(err instanceof Error ? err.message : 'Unable to update order.');
+        setError(errorMessage(err, 'Unable to update order.'));
         throw err;
       }
     },
@@ -102,7 +102,7 @@ export function useOrders(tenantId: string | null) {
         await refresh();
         setError(null);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unable to start delivery.');
+        setError(errorMessage(err, 'Unable to start delivery.'));
         throw err;
       }
     },
@@ -116,7 +116,7 @@ export function useOrders(tenantId: string | null) {
         await refresh();
         setError(null);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unable to complete fulfillment.');
+        setError(errorMessage(err, 'Unable to complete fulfillment.'));
         throw err;
       }
     },
@@ -129,7 +129,7 @@ export function useOrders(tenantId: string | null) {
         await addOrderItem(orderId, item);
         await refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unable to add order item.');
+        setError(errorMessage(err, 'Unable to add order item.'));
         throw err;
       }
     },
@@ -142,7 +142,7 @@ export function useOrders(tenantId: string | null) {
         await updateOrderItem(itemId, item);
         await refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unable to update order item.');
+        setError(errorMessage(err, 'Unable to update order item.'));
         throw err;
       }
     },
@@ -155,7 +155,7 @@ export function useOrders(tenantId: string | null) {
         await deleteOrderItem(itemId);
         await refresh();
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unable to remove order item.');
+        setError(errorMessage(err, 'Unable to remove order item.'));
         throw err;
       }
     },
@@ -175,4 +175,12 @@ export function useOrders(tenantId: string | null) {
     editItem,
     removeItem,
   };
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (error && typeof error === 'object' && 'message' in error && typeof (error as { message?: unknown }).message === 'string') {
+    return (error as { message: string }).message;
+  }
+  return fallback;
 }
