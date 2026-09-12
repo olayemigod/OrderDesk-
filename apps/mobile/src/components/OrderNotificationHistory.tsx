@@ -32,7 +32,7 @@ const statusLabels: Record<NotificationDeliveryStatus, string> = {
 };
 
 export function OrderNotificationHistory({ order }: Props) {
-  if (order.source !== 'whatsapp') return null;
+  if (order.source !== 'whatsapp' && order.notifications.length === 0) return null;
 
   return (
     <View style={styles.wrap}>
