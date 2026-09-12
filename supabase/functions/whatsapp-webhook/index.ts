@@ -371,46 +371,31 @@ async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[nu
   const enrichedItems = enrichFromCatalogue(parsed.items, catalogue);
   const reviewReasons = buildReviewReasons(parsed, enrichedItems);
 
-  const createdOrders = await rest<Array<{ id: string }>>('/rest/v1/orders?select=id', {
+  const orderId = await rest<string>('/rest/v1/rpc/create_sellertray_whatsapp_order_atomic', {
     method: 'POST',
-    headers: { Prefer: 'return=representation' },
     body: JSON.stringify({
-      tenant_id: tenantId,
-      customer_id: customerId,
-      source_message_id: sourceMessageId,
-      status: 'needs_review',
-      source: 'whatsapp',
-      customer_note: event.text,
-      parser_confidence: parsed.confidence,
-      parser_source: parsed.source,
-      parser_version: parsed.version,
-      review_reasons: reviewReasons,
-      currency: tenant.currency || 'NGN',
+      p_tenant_id: tenantId,
+      p_customer_id: customerId,
+      p_source_message_id: sourceMessageId,
+      p_customer_note: event.text,
+      p_parser_confidence: parsed.confidence,
+      p_parser_source: parsed.source,
+      p_parser_version: parsed.version,
+      p_review_reasons: reviewReasons,
+      p_currency: tenant.currency || 'NGN',
+      p_items: enrichedItems.map((item) => ({
+        catalog_item_id: item.catalogItemId,
+        item_name: item.canonicalName,
+        original_item_name: item.originalName,
+        quantity: item.quantity,
+        unit_price: item.unitPrice,
+        match_source: item.matchSource,
+        match_confidence: item.matchConfidence,
+      })),
     }),
   });
 
-  const orderId = createdOrders[0]?.id;
-  if (!orderId) throw new Error('Order insert returned no row.');
-
-  if (enrichedItems.length > 0) {
-    await rest('/rest/v1/order_items', {
-      method: 'POST',
-      headers: { Prefer: 'return=minimal' },
-      body: JSON.stringify(
-        enrichedItems.map((item) => ({
-          tenant_id: tenantId,
-          order_id: orderId,
-          catalog_item_id: item.catalogItemId,
-          item_name: item.canonicalName,
-          original_item_name: item.originalName,
-          quantity: item.quantity,
-          unit_price: item.unitPrice,
-          match_source: item.matchSource,
-          match_confidence: item.matchConfidence,
-        })),
-      ),
-    });
-  }
+  if (!orderId) throw new Error('Atomic order creation returned no order id.');
 }
 
 async function getSubscriptionAccess(tenantId: string): Promise<SubscriptionAccess> {

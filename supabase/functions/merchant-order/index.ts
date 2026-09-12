@@ -67,99 +67,22 @@ Deno.serve(async (request) => {
   if (membershipError) return json({ error: membershipError.message }, 400);
   if (!membership) return json({ error: 'You do not have access to this business' }, 403);
 
-  const ids = [...new Set(lines.map((line) => line.catalogItemId))];
-  const { data: catalogueRows, error: catalogueError } = await admin
-    .from('catalog_items')
-    .select('id,name,price_ngn,is_active')
-    .eq('tenant_id', tenantId)
-    .in('id', ids);
-
-  if (catalogueError) return json({ error: catalogueError.message }, 400);
-  const catalogue = new Map((catalogueRows ?? []).map((row) => [String(row.id), row]));
-
-  for (const line of lines) {
-    const item = catalogue.get(line.catalogItemId);
-    const price = Number(item?.price_ngn);
-    if (!item || item.is_active !== true) return json({ error: 'One selected product is no longer available' }, 409);
-    if (!Number.isFinite(price) || price < 0) return json({ error: 'Every selected product needs a valid selling price' }, 409);
-  }
-
-  const manualWaId = 'manual:' + customerPhone;
-  const { data: customer, error: customerError } = await admin
-    .from('customers')
-    .upsert({
-      tenant_id: tenantId,
-      wa_id: manualWaId,
-      display_name: customerName,
-      phone: customerPhone,
-      updated_at: new Date().toISOString(),
-    }, {
-      onConflict: 'tenant_id,wa_id',
-    })
-    .select('id')
-    .single();
-
-  if (customerError || !customer?.id) {
-    return json({ error: customerError?.message ?? 'Unable to create customer' }, 400);
-  }
-
-  const { data: tenant, error: tenantError } = await admin
-    .from('tenants')
-    .select('currency')
-    .eq('id', tenantId)
-    .single();
-  if (tenantError) return json({ error: tenantError.message }, 400);
-
-  const total = lines.reduce((sum, line) => {
-    const row = catalogue.get(line.catalogItemId)!;
-    return sum + (Number(row.price_ngn) * line.quantity);
-  }, 0);
-
-  const { data: order, error: orderError } = await admin
-    .from('orders')
-    .insert({
-      tenant_id: tenantId,
-      customer_id: customer.id,
-      status: 'needs_review',
-      source: 'manual',
-      customer_note: note,
-      parser_source: 'manual',
-      parser_version: null,
-      parser_confidence: null,
-      review_reasons: [],
-      currency: typeof tenant?.currency === 'string' ? tenant.currency : 'NGN',
-      total_amount: total,
-    })
-    .select('id')
-    .single();
-
-  if (orderError || !order?.id) {
-    return json({ error: orderError?.message ?? 'Unable to create order' }, 400);
-  }
-
-  const itemRows = lines.map((line) => {
-    const row = catalogue.get(line.catalogItemId)!;
-    const price = Number(row.price_ngn);
-    return {
-      tenant_id: tenantId,
-      order_id: order.id,
+  const { data: orderId, error: createError } = await admin.rpc('create_sellertray_manual_order_atomic', {
+    p_tenant_id: tenantId,
+    p_customer_name: customerName,
+    p_customer_phone: customerPhone,
+    p_note: note,
+    p_items: lines.map((line) => ({
       catalog_item_id: line.catalogItemId,
-      item_name: String(row.name),
-      original_item_name: String(row.name),
       quantity: line.quantity,
-      unit_price: price,
-      match_source: 'manual',
-      match_confidence: 1,
-    };
+    })),
   });
 
-  const { error: itemError } = await admin.from('order_items').insert(itemRows);
-  if (itemError) {
-    await admin.from('orders').delete().eq('id', order.id).eq('tenant_id', tenantId);
-    return json({ error: itemError.message }, 400);
+  if (createError || typeof orderId !== 'string') {
+    return json({ error: createError?.message ?? 'Unable to create order' }, 400);
   }
 
-  return json({ orderId: order.id }, 201);
+  return json({ orderId }, 201);
 });
 
 function parseLines(value: unknown): ManualLine[] {

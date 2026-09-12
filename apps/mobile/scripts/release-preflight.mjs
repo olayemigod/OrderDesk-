@@ -366,6 +366,7 @@ requireValue(accountControls.includes('https://processedge.com.ng/sellertray/ter
 
 const orderParserFunction = read(join(repoRoot, 'supabase/functions/order-parser/index.ts'));
 const merchantOrderFunction = read(join(repoRoot, 'supabase/functions/merchant-order/index.ts'));
+const atomicOrderMigration = read(join(repoRoot, 'supabase/migrations/20260912142500_atomic_order_creation.sql'));
 const usageSettlementWorker = read(join(repoRoot, 'supabase/functions/usage-settlement/index.ts'));
 const paystackWebhook = read(join(repoRoot, 'supabase/functions/paystack-webhook/index.ts'));
 const usageSettlementMigration = read(join(repoRoot, 'supabase/migrations/20260910230000_usage_settlement_foundation.sql'));
@@ -376,10 +377,17 @@ const aiTokenIntegrityMigration = read(join(repoRoot, 'supabase/migrations/20260
 const aiContextBudgetMigration = read(join(repoRoot, 'supabase/migrations/20260911001000_ai_parser_context_budget.sql'));
 const whatsappWebhookFunction = read(join(repoRoot, 'supabase/functions/whatsapp-webhook/index.ts'));
 requireValue(
-  merchantOrderFunction.includes("source: 'manual'") &&
-    merchantOrderFunction.includes("admin.auth.getUser(token)") &&
-    merchantOrderFunction.includes("tenant_members"),
-  'Manual order creation must remain a trusted authenticated server flow',
+  merchantOrderFunction.includes("admin.auth.getUser(token)") &&
+    merchantOrderFunction.includes("tenant_members") &&
+    merchantOrderFunction.includes("create_sellertray_manual_order_atomic"),
+  'Manual order creation must remain a trusted authenticated atomic server flow',
+);
+requireValue(
+  whatsappWebhookFunction.includes("create_sellertray_whatsapp_order_atomic") &&
+    atomicOrderMigration.includes("create or replace function public.create_sellertray_manual_order_atomic") &&
+    atomicOrderMigration.includes("create or replace function public.create_sellertray_whatsapp_order_atomic") &&
+    atomicOrderMigration.includes("to service_role"),
+  'Manual and WhatsApp order aggregates must remain transactional and service-role-only',
 );
 const usageScheduleMigration = read(join(repoRoot, 'supabase/migrations/20260910234500_schedule_usage_settlement_preparation.sql'));
 const deletionUsageGuardMigration = read(join(repoRoot, 'supabase/migrations/20260910233000_block_deletion_with_unsettled_usage.sql'));
