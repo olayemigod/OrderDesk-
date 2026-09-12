@@ -367,6 +367,105 @@ const usagePeriodCurrencyMigration = read(join(repoRoot, 'supabase/migrations/20
 const accountLifecycleFunction = read(join(repoRoot, 'supabase/functions/account-lifecycle/index.ts'));
 const accountLifecycleRepository = read(join(mobileRoot, 'src/data/accountLifecycleRepository.ts'));
 const usageBillingContract = read(join(repoRoot, 'docs/usage_billing.md'));
+const paymentCoreMigration = read(join(repoRoot, 'supabase/migrations/20260912072000_financial_document_contract_payment_core.sql'));
+const paymentMethodMigration = read(join(repoRoot, 'supabase/migrations/20260912075000_merchant_payment_method_settings.sql'));
+const paymentOrchestrationMigration = read(join(repoRoot, 'supabase/migrations/20260912084500_customer_payment_orchestration_foundation.sql'));
+const paymentSettingsFunction = read(join(repoRoot, 'supabase/functions/payment-settings/index.ts'));
+const paymentRuntimeFunction = read(join(repoRoot, 'supabase/functions/payment-runtime/index.ts'));
+const paystackPaymentWebhook = read(join(repoRoot, 'supabase/functions/paystack-payment-webhook/index.ts'));
+const flutterwavePaymentWebhook = read(join(repoRoot, 'supabase/functions/flutterwave-payment-webhook/index.ts'));
+const merchantPaymentOperations = read(join(repoRoot, 'supabase/functions/merchant-payment-operations/index.ts'));
+const financialDocumentFunction = read(join(repoRoot, 'supabase/functions/financial-document/index.ts'));
+const whatsappPaymentModule = read(join(repoRoot, 'supabase/functions/whatsapp-webhook/payment.ts'));
+const orderPaymentPanel = read(join(mobileRoot, 'src/components/OrderPaymentPanel.tsx'));
+const customerPaymentsContract = read(join(repoRoot, 'docs/customer_payments.md'));
+
+requireValue(
+  paymentCoreMigration.includes("'ST/' || split_part(v_order_ref,'/',1) || '/' || v_kind || '/' || split_part(v_order_ref,'/',2)") &&
+    paymentCoreMigration.includes("when 'invoice' then 'INV'") &&
+    paymentCoreMigration.includes("when 'receipt' then 'RCP'") &&
+    paymentCoreMigration.includes("document_type='receipt' and payment_id is not null") &&
+    paymentCoreMigration.includes("where status='confirmed'"),
+  'SellerTray financial document identity and one-confirmed-payment contract must remain intact',
+);
+requireValue(
+  paymentCoreMigration.includes("SellerTray MVP payment must exactly match invoice amount and currency") &&
+    paymentCoreMigration.includes("Paid SellerTray orders cannot be cancelled until refund support is available") &&
+    paymentCoreMigration.includes('guard_invoiced_order_items'),
+  'SellerTray exact-payment, paid-cancellation and invoiced-item lock contracts must remain intact',
+);
+requireValue(
+  paymentMethodMigration.includes('sellertray_private.merchant_gateway_credentials') &&
+    paymentMethodMigration.includes('revoke all on table sellertray_private.merchant_gateway_credentials from public,anon,authenticated') &&
+    paymentMethodMigration.includes("method_type in ('paystack','flutterwave')") &&
+    paymentMethodMigration.includes("configuration_status='configured'"),
+  'Merchant-owned gateway credentials must remain server-only and fail closed until configured',
+);
+requireValue(
+  paymentSettingsFunction.includes("SELLERTRAY_PAYMENT_ENCRYPTION_KEY") &&
+    paymentSettingsFunction.includes("AES-GCM") &&
+    paymentSettingsFunction.includes("Gateway credential storage is not activated yet") &&
+    !paymentSettingsFunction.includes("return reply({ secretKey"),
+  'Merchant gateway credentials must remain AES-GCM encrypted and never returned to the client',
+);
+requireValue(
+  paymentRuntimeFunction.includes('paystackMismatch') &&
+    paymentRuntimeFunction.includes('flutterwaveMismatch') &&
+    paymentRuntimeFunction.includes('Math.round(actualAmount * 100) !== Math.round(expectedAmount * 100)') &&
+    paymentRuntimeFunction.includes('Verified Paystack currency does not match SellerTray payment') &&
+    paymentRuntimeFunction.includes('Verified Flutterwave currency does not match SellerTray payment') &&
+    paymentRuntimeFunction.includes('Verified Paystack reference does not match SellerTray payment') &&
+    paymentRuntimeFunction.includes('Verified Flutterwave reference does not match SellerTray payment'),
+  'Both gateway adapters must require exact amount, currency and SellerTray reference verification',
+);
+requireValue(
+  paystackPaymentWebhook.includes("x-paystack-signature") &&
+    paystackPaymentWebhook.includes("SHA-512") &&
+    paystackPaymentWebhook.includes("paymentRuntimeVerify") &&
+    flutterwavePaymentWebhook.includes("flutterwave-signature") &&
+    flutterwavePaymentWebhook.includes("SHA-256") &&
+    flutterwavePaymentWebhook.includes("paymentRuntimeVerify"),
+  'Provider webhooks must authenticate payloads and re-verify provider transactions before confirming value',
+);
+requireValue(
+  paymentOrchestrationMigration.includes('order_payment_events_replay_key') &&
+    paymentOrchestrationMigration.includes('confirm_sellertray_offline_payment') &&
+    paymentOrchestrationMigration.includes("'payment_confirmed'::text") &&
+    paymentOrchestrationMigration.includes('zz_queue_sellertray_payment_confirmation'),
+  'Payment audit, offline confirmation and payment-confirmation notification contracts are missing',
+);
+requireValue(
+  financialDocumentFunction.includes("'PAYMENT RECEIPT'") &&
+    financialDocumentFunction.includes("'INVOICE'") &&
+    financialDocumentFunction.includes('not proof of payment') &&
+    financialDocumentFunction.includes('proof of payment') &&
+    financialDocumentFunction.includes("/financial/"),
+  'Invoice and financial payment receipt PDFs must remain distinct from the legacy order receipt',
+);
+requireValue(
+  whatsappPaymentModule.includes("PAYMENT RECEIPT ") &&
+    whatsappPaymentModule.includes("payment_claim_received") &&
+    whatsappPaymentModule.includes("pending_verification") &&
+    whatsappPaymentModule.includes("INVOICE ") &&
+    whatsappWebhookFunction.includes('maybeConfirmCustomerReceipt') &&
+    whatsappWebhookFunction.includes('ensureReceiptPdf'),
+  'WhatsApp payment self-service must coexist with the legacy order receipt and fulfilment-confirmation paths',
+);
+requireValue(
+  orderPaymentPanel.includes('Confirm payment received') &&
+    orderPaymentPanel.includes('Verify with provider') &&
+    orderPaymentPanel.includes('Confirming payment does not complete the order or delivery') &&
+    merchantPaymentOperations.includes('confirm_sellertray_offline_payment') &&
+    merchantPaymentOperations.includes("action === 'verify_gateway'"),
+  'Merchant payment verification UI must use governed server operations without coupling payment to fulfilment',
+);
+requireValue(
+  customerPaymentsContract.includes('No percentage-of-sales / GMV fee') &&
+    customerPaymentsContract.includes('SELLERTRAY_PAYMENT_ENCRYPTION_KEY') &&
+    customerPaymentsContract.includes('Legacy ORDER RECEIPT') &&
+    customerPaymentsContract.includes('external activation'),
+  'Customer payment governance documentation is incomplete',
+);
 
 requireValue(
   orderParserFunction.includes("reasoning: { effort: 'none' }"),
@@ -545,6 +644,9 @@ const forbiddenSecretPatterns = [
   /SUPABASE_SERVICE_ROLE_KEY/g,
   /OPENAI_API_KEY/g,
   /PAYSTACK_SECRET_KEY/g,
+  /FLUTTERWAVE_SECRET_KEY/g,
+  /FLUTTERWAVE_SECRET_HASH/g,
+  /SELLERTRAY_PAYMENT_ENCRYPTION_KEY/g,
   /WHATSAPP_ACCESS_TOKEN/g,
   /ORDER_PARSER_TOKEN/g,
   /WORKER_TOKEN/g,
@@ -582,6 +684,7 @@ console.log('- canonical scheme: sellertray://');
 console.log('- preview artifact: APK');
 console.log('- production artifact: AAB');
 console.log('- client secret-boundary checks: pass');
+console.log('- customer payment financial/provider contracts: pass');
 console.log('- legal/deletion URL contracts: present');
 console.log('- SellerTray Auth email template contracts: present');
 console.log('- release acceptance manifest integrity: pass');
