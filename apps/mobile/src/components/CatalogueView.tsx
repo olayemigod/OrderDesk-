@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { MerchantBusiness } from '../data/businessRepository';
 import { ChatCatalogueReviewSection } from './ChatCatalogueReviewSection';
@@ -321,6 +321,13 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
         {visibleItems.map((item) => (
           <View key={item.id} style={[styles.itemCard, !item.isActive && styles.itemInactive]}>
             <View style={styles.itemTop}>
+              {item.imageUrl ? (
+                <Image source={{ uri: item.imageUrl }} style={styles.itemImage} resizeMode="cover" />
+              ) : (
+                <View style={styles.itemImageFallback}>
+                  <Ionicons name="cube-outline" size={22} color="#079455" />
+                </View>
+              )}
               <View style={styles.itemIdentity}>
                 <Text style={styles.itemName}>{item.name}</Text>
                 <Text style={styles.itemMeta}>
@@ -470,10 +477,12 @@ function CatalogueEditor({
     if (imageUploading || submitting) return;
     setError(null);
 
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setError('Allow photo access to choose a product image.');
-      return;
+    if (Platform.OS === 'ios') {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setError('Allow photo access to choose a product image.');
+        return;
+      }
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -734,7 +743,9 @@ const styles = StyleSheet.create({
   list: { gap: 9 },
   itemCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 15, padding: 13, gap: 8 },
   itemInactive: { opacity: 0.58 },
-  itemTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  itemTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  itemImage: { width: 52, height: 52, borderRadius: 13, backgroundColor: '#F2F4F7' },
+  itemImageFallback: { width: 52, height: 52, borderRadius: 13, backgroundColor: '#ECFDF3', alignItems: 'center', justifyContent: 'center' },
   itemIdentity: { flex: 1 },
   itemName: { color: '#102A43', fontSize: 16, fontWeight: '900' },
   itemMeta: { color: '#667085', fontSize: 12, marginTop: 2 },
