@@ -1023,6 +1023,8 @@ function ConversationsView({
 }) {
   const [query, setQuery] = useState('');
   const [selectedPhone, setSelectedPhone] = useState('');
+  const [conversationFilter, setConversationFilter] = useState<'all' | 'new' | 'payment' | 'active'>('all');
+  const [showConversationFilters, setShowConversationFilters] = useState(false);
 
   const conversations = useMemo(() => {
     const whatsappOrders = orders
@@ -1045,8 +1047,34 @@ function ConversationsView({
     }));
   }, [orders]);
 
+  const conversationCounts = {
+    all: conversations.length,
+    new: conversations.filter((conversation) =>
+      conversation.orders.some((order) => order.status === 'needs_review' || order.status === 'draft'),
+    ).length,
+    payment: conversations.filter((conversation) =>
+      conversation.orders.some((order) =>
+        ['unpaid', 'pending', 'verification_required', 'payment_issue'].includes(order.paymentStatus) &&
+        !['rejected', 'cancelled'].includes(order.status),
+      ),
+    ).length,
+    active: conversations.filter((conversation) =>
+      conversation.orders.some((order) => ['accepted', 'processing', 'ready'].includes(order.status)),
+    ).length,
+  };
+
   const normalized = query.trim().toLowerCase();
   const visible = conversations.filter((conversation) => {
+    const matchesFilter =
+      conversationFilter === 'all' ||
+      (conversationFilter === 'new' && conversation.orders.some((order) => order.status === 'needs_review' || order.status === 'draft')) ||
+      (conversationFilter === 'payment' && conversation.orders.some((order) =>
+        ['unpaid', 'pending', 'verification_required', 'payment_issue'].includes(order.paymentStatus) &&
+        !['rejected', 'cancelled'].includes(order.status),
+      )) ||
+      (conversationFilter === 'active' && conversation.orders.some((order) => ['accepted', 'processing', 'ready'].includes(order.status)));
+
+    if (!matchesFilter) return false;
     if (!normalized) return true;
     return [conversation.name, conversation.phone, conversation.latest?.customerMessage ?? '']
       .join(' ')
@@ -1060,7 +1088,7 @@ function ConversationsView({
     return (
       <View style={styles.sectionStack}>
         <Pressable onPress={() => setSelectedPhone('')} style={styles.backToListButton}>
-          <Text style={styles.backToListText}>← Inbox</Text>
+          <Text style={styles.backToListText}>← Conversations</Text>
         </Pressable>
 
         <View style={styles.conversationHeader}>
@@ -1113,23 +1141,58 @@ function ConversationsView({
   return (
     <View style={styles.sectionStack}>
       <View>
-        <Text style={styles.sectionEyebrow}>CONVERSATIONS</Text>
-        <Text style={styles.pageTitle}>Inbox</Text>
-        <Text style={styles.pageSubtitle}>WhatsApp customers and the order messages SellerTray has captured.</Text>
+        <Text style={styles.sectionEyebrow}>WHATSAPP COMMERCE</Text>
+        <Text style={styles.pageTitle}>Conversations</Text>
+        <Text style={styles.pageSubtitle}>Customer chats linked to orders, payments and fulfilment activity.</Text>
       </View>
 
-      <TextInput
-        value={query}
-        onChangeText={setQuery}
-        placeholder="Search customer or message"
-        autoCorrect={false}
-        style={styles.searchInput}
-      />
+      <View style={styles.conversationStatsGrid}>
+        <ConversationStat icon="chatbubbles-outline" label="All" value={conversationCounts.all} active={conversationFilter === 'all'} onPress={() => setConversationFilter('all')} />
+        <ConversationStat icon="sparkles-outline" label="New orders" value={conversationCounts.new} active={conversationFilter === 'new'} onPress={() => setConversationFilter('new')} />
+        <ConversationStat icon="card-outline" label="Payment" value={conversationCounts.payment} active={conversationFilter === 'payment'} onPress={() => setConversationFilter('payment')} />
+        <ConversationStat icon="cube-outline" label="Active" value={conversationCounts.active} active={conversationFilter === 'active'} onPress={() => setConversationFilter('active')} />
+      </View>
+
+      <View style={styles.searchRow}>
+        <View style={styles.searchBox}>
+          <Ionicons name="search-outline" size={19} color={theme.colors.muted} />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search customer or message"
+            placeholderTextColor={theme.colors.subtle}
+            autoCorrect={false}
+            style={styles.searchInputEmbedded}
+          />
+        </View>
+        <Pressable
+          onPress={() => setShowConversationFilters((value) => !value)}
+          accessibilityLabel="More conversation filters"
+          style={[styles.filterIconButton, showConversationFilters && styles.filterIconButtonActive]}
+        >
+          <Ionicons name="options-outline" size={21} color={showConversationFilters ? theme.colors.white : theme.colors.navy} />
+        </Pressable>
+      </View>
+
+      {showConversationFilters ? (
+        <View style={styles.filterPanel}>
+          <Text style={styles.filterPanelTitle}>Inbox filters</Text>
+          <View style={styles.filterRow}>
+            <SimpleFilter label="All" active={conversationFilter === 'all'} onPress={() => setConversationFilter('all')} />
+            <SimpleFilter label="New orders" active={conversationFilter === 'new'} onPress={() => setConversationFilter('new')} />
+            <SimpleFilter label="Payment pending" active={conversationFilter === 'payment'} onPress={() => setConversationFilter('payment')} />
+            <SimpleFilter label="In progress" active={conversationFilter === 'active'} onPress={() => setConversationFilter('active')} />
+          </View>
+        </View>
+      ) : null}
 
       <View style={styles.inboxStatCard}>
-        <Text style={styles.inboxStatValue}>{conversations.length}</Text>
-        <View>
-          <Text style={styles.inboxStatTitle}>Customer conversations</Text>
+        <View style={styles.inboxStatIcon}>
+          <Ionicons name="logo-whatsapp" size={24} color={theme.colors.white} />
+        </View>
+        <View style={styles.conversationCopy}>
+          <Text style={styles.inboxStatValue}>{visible.length}</Text>
+          <Text style={styles.inboxStatTitle}>Conversations in this view</Text>
           <Text style={styles.inboxStatText}>Built from connected WhatsApp order activity.</Text>
         </View>
       </View>
@@ -1173,6 +1236,36 @@ function ConversationsView({
   );
 }
 
+function ConversationStat({
+  icon,
+  label,
+  value,
+  active,
+  onPress,
+}: {
+  icon: string;
+  label: string;
+  value: number;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={[styles.conversationStatCard, active && styles.conversationStatCardActive]}>
+      <Ionicons name={icon as never} size={19} color={active ? theme.colors.greenDark : theme.colors.navy} />
+      <Text style={styles.conversationStatValue}>{value}</Text>
+      <Text style={styles.conversationStatLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function SimpleFilter({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={[styles.filterButton, active && styles.filterButtonActive]}>
+      <Text style={[styles.filterButtonText, active && styles.filterButtonTextActive]}>{label}</Text>
+    </Pressable>
+  );
+}
+
 function BottomNav({
   view,
   reviewCount,
@@ -1186,21 +1279,23 @@ function BottomNav({
 }) {
   return (
     <View style={styles.bottomNav}>
-      <NavButton label="Home" active={view === 'home'} onPress={() => onChange('home')} />
-      <NavButton label="Orders" active={view === 'orders'} count={reviewCount} onPress={() => onChange('orders')} />
-      <NavButton label="Inbox" active={view === 'inbox'} count={inboxCount} onPress={() => onChange('inbox')} />
-      <NavButton label="Catalogue" active={view === 'products'} onPress={() => onChange('products')} />
-      <NavButton label="More" active={view === 'more'} onPress={() => onChange('more')} />
+      <NavButton icon="home-outline" label="Home" active={view === 'home'} onPress={() => onChange('home')} />
+      <NavButton icon="receipt-outline" label="Orders" active={view === 'orders'} count={reviewCount} onPress={() => onChange('orders')} />
+      <NavButton icon="chatbubbles-outline" label="Conversations" active={view === 'inbox'} count={inboxCount} onPress={() => onChange('inbox')} />
+      <NavButton icon="cube-outline" label="Catalogue" active={view === 'products'} onPress={() => onChange('products')} />
+      <NavButton icon="ellipsis-horizontal" label="More" active={view === 'more'} onPress={() => onChange('more')} />
     </View>
   );
 }
 
 function NavButton({
+  icon,
   label,
   active,
   count = 0,
   onPress,
 }: {
+  icon: string;
   label: string;
   active: boolean;
   count?: number;
@@ -1208,8 +1303,11 @@ function NavButton({
 }) {
   return (
     <Pressable onPress={onPress} style={[styles.navButton, active && styles.navButtonActive]}>
-      <Text style={[styles.navText, active && styles.navTextActive]}>{label}</Text>
-      {count > 0 ? <Text style={styles.navCount}>{count}</Text> : null}
+      <View style={styles.navIconWrap}>
+        <Ionicons name={icon as never} size={20} color={active ? theme.colors.greenDark : theme.colors.muted} />
+        {count > 0 ? <Text style={styles.navCount}>{count}</Text> : null}
+      </View>
+      <Text numberOfLines={1} style={[styles.navText, active && styles.navTextActive]}>{label}</Text>
     </Pressable>
   );
 }
