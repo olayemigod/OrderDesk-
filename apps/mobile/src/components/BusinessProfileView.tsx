@@ -91,6 +91,18 @@ export function BusinessProfileView({ business, onSave }: Props) {
           />
         </Field>
 
+        <Field
+          label="Merchant ID"
+          hint="Permanent customer reference prefix. Orders and receipts use this ID, for example ${business.merchantCode}/000001."
+        >
+          <TextInput
+            editable={false}
+            value={business.merchantCode}
+            autoCapitalize="characters"
+            style={[styles.input, styles.inputDisabled]}
+          />
+        </Field>
+
         <Field label="Business type" hint="Helps SellerTray tailor guidance to your business.">
           <TextInput
             editable={canEdit && !saving}
