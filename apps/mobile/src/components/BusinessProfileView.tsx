@@ -93,7 +93,7 @@ export function BusinessProfileView({ business, onSave }: Props) {
 
         <Field
           label="Merchant ID"
-          hint="Permanent customer reference prefix. Orders and receipts use this ID, for example ${business.merchantCode}/000001."
+          hint={`Permanent customer reference prefix. Orders and receipts use this ID, for example ${business.merchantCode}/000001.`}
         >
           <TextInput
             editable={false}
