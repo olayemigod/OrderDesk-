@@ -791,8 +791,8 @@ function validateParsedOrder(value: unknown): ParsedPayload | null {
 
 function detectCustomerSupportIntent(value: string): CustomerSupportIntent | null {
   const normalized = value.trim().toLocaleLowerCase().replace(/\s+/g, ' ');
-  const hasOrderId = /\bST-[0-9]{6}-[A-F0-9]{10}\b/i.test(value);
-  const onlyOrderId = /^ST-[0-9]{6}-[A-F0-9]{10}$/i.test(value.trim());
+  const hasOrderId = /\bST-[0-9]{6}-[A-F0-9]{16}\b/i.test(value);
+  const onlyOrderId = /^ST-[0-9]{6}-[A-F0-9]{16}$/i.test(value.trim());
 
   if (/\breceipt\b/i.test(normalized) || /\bproof of purchase\b/i.test(normalized)) return 'receipt';
 
@@ -813,7 +813,7 @@ function detectCustomerSupportIntent(value: string): CustomerSupportIntent | nul
 }
 
 function extractPublicOrderId(value: string): string | null {
-  const match = value.match(/\bST-[0-9]{6}-[A-F0-9]{10}\b/i);
+  const match = value.match(/\bST-[0-9]{6}-[A-F0-9]{16}\b/i);
   return match ? match[0].toUpperCase() : null;
 }
 
