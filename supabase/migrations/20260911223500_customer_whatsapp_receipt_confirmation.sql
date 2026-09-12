@@ -30,3 +30,8 @@ begin
       on delete set null;
   end if;
 end $$;
+
+
+create index if not exists orders_customer_confirmation_message_idx
+  on public.orders(customer_confirmation_message_id)
+  where customer_confirmation_message_id is not null;
