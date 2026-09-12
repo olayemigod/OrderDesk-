@@ -39,7 +39,7 @@ security invoker
 set search_path = ''
 as $$
 declare
-  v_claimed boolean := false;
+  v_rows integer := 0;
 begin
   update public.inbound_messages im
   set processing_status = 'processing',
@@ -60,8 +60,8 @@ begin
       )
     );
 
-  get diagnostics v_claimed = row_count;
-  return v_claimed;
+  get diagnostics v_rows = row_count;
+  return v_rows = 1;
 end;
 $$;
 
