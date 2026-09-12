@@ -23,7 +23,7 @@
       "required": true,
       "status": "accepted",
       "owner": "ProcessEdge",
-      "evidence": "Versioned user_legal_acceptances active; current Terms/Privacy version 2026-09-12; account-lifecycle v13 ACTIVE; channel-consent v2 requires current Terms/Privacy before Owner WhatsApp processing authorization.",
+      "evidence": "Versioned user_legal_acceptances active; current Terms/Privacy version 2026-09-12; account-lifecycle v14 ACTIVE; channel-consent v2 requires current Terms/Privacy before Owner WhatsApp processing authorization. Owner export now includes safe WhatsApp media/candidate/consent/catalogue-setting records and deletion removes SellerTray chat/catalogue image storage objects.",
       "acceptance": "Authenticated sessions are gated on current Terms/Privacy acceptance; the server records version/timestamp; material legal updates require renewed acceptance before WhatsApp channel authorization can be current."
     },
     {

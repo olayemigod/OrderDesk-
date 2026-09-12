@@ -707,6 +707,21 @@ requireValue(
   'Owner business export must include safe customer-payment and financial-document records',
 );
 requireValue(
+  accountLifecycleFunction.includes("loadTenantRows('inbound_message_media'") &&
+    accountLifecycleFunction.includes("loadTenantRows('catalogue_capture_candidates'") &&
+    accountLifecycleFunction.includes("loadTenantRows('tenant_channel_consents'") &&
+    accountLifecycleFunction.includes("loadTenantRows('tenant_whatsapp_catalog_settings'") &&
+    accountLifecycleFunction.includes('sanitizeInboundMedia'),
+  'Owner business export must include safe WhatsApp media, catalogue-candidate, consent and catalogue-settings records',
+);
+requireValue(
+  accountLifecycleFunction.includes('loadTenantMediaStorageObjects') &&
+    accountLifecycleFunction.includes("'sellertray-chat-captures'") &&
+    accountLifecycleFunction.includes("'sellertray-catalogue'") &&
+    accountLifecycleFunction.includes('removeTenantMediaStorageObjects'),
+  'Account deletion must remove SellerTray chat-capture and chat-derived catalogue image objects before tenant deletion',
+);
+requireValue(
   accountLifecycleFunction.includes("storage.from('receipts').remove") &&
     accountLifecycleFunction.includes('archive_sellertray_financial_records') &&
     financialRetentionMigration.includes('sellertray_private.financial_retention_records') &&

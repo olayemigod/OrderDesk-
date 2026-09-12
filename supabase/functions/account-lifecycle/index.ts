@@ -165,6 +165,10 @@ async function buildBusinessExport(tenantId: string, requestedByUserId: string):
     catalogAliases,
     customers,
     inboundMessages,
+    inboundMessageMedia,
+    catalogueCaptureCandidates,
+    channelConsents,
+    whatsappCatalogSettings,
     orders,
     orderItems,
     orderStatusEvents,
@@ -186,6 +190,10 @@ async function buildBusinessExport(tenantId: string, requestedByUserId: string):
     loadTenantRows('catalog_item_aliases', tenantId),
     loadTenantRows('customers', tenantId),
     loadTenantRows('inbound_messages', tenantId),
+    loadTenantRows('inbound_message_media', tenantId),
+    loadTenantRows('catalogue_capture_candidates', tenantId),
+    loadTenantRows('tenant_channel_consents', tenantId),
+    loadTenantRows('tenant_whatsapp_catalog_settings', tenantId),
     loadTenantRows('orders', tenantId),
     loadTenantRows('order_items', tenantId),
     loadTenantRows('order_status_events', tenantId),
@@ -212,12 +220,16 @@ async function buildBusinessExport(tenantId: string, requestedByUserId: string):
     catalogue: {
       items: catalogItems,
       aliases: catalogAliases,
+      whatsappSettings: whatsappCatalogSettings,
+      chatCaptureCandidates: catalogueCaptureCandidates,
     },
     customers,
     communications: {
       inboundMessages,
+      inboundMedia: inboundMessageMedia.map(sanitizeInboundMedia),
       outboundNotifications,
       notificationSettings,
+      channelConsents,
     },
     orders: {
       records: orders,
@@ -269,6 +281,17 @@ async function loadTenantRows(table: string, tenantId: string): Promise<JsonReco
   }
 
   return rows;
+}
+
+function sanitizeInboundMedia(row: JsonRecord): JsonRecord {
+  const {
+    provider_media_id: _providerMediaId,
+    media_sha256: _mediaSha256,
+    storage_bucket: _storageBucket,
+    storage_path: _storagePath,
+    ...safe
+  } = row;
+  return safe;
 }
 
 function sanitizeUsageSettlement(row: JsonRecord): JsonRecord {
@@ -358,6 +381,9 @@ async function deleteAccount(userId: string): Promise<JsonRecord> {
 
     const receiptPaths = await loadTenantReceiptStoragePaths(tenantId);
     await removeReceiptStorageObjects(receiptPaths);
+
+    const mediaObjects = await loadTenantMediaStorageObjects(tenantId);
+    await removeTenantMediaStorageObjects(mediaObjects);
 
     const { error: billingAuditError } = await admin!
       .from('billing_provider_events')
@@ -452,6 +478,68 @@ async function removeReceiptStorageObjects(paths: string[]): Promise<void> {
     const { error } = await admin!.storage.from('receipts').remove(chunk);
     if (error) {
       throw new Error(`Unable to delete SellerTray receipt files: ${error.message}`);
+    }
+  }
+}
+
+async function loadTenantMediaStorageObjects(
+  tenantId: string,
+): Promise<Array<{ bucket: 'sellertray-chat-captures' | 'sellertray-catalogue'; path: string }>> {
+  const output: Array<{ bucket: 'sellertray-chat-captures' | 'sellertray-catalogue'; path: string }> = [];
+  const pageSize = 500;
+  const maxObjects = 5000;
+
+  for (let from = 0; from < maxObjects; from += pageSize) {
+    const { data, error } = await admin!
+      .from('inbound_message_media')
+      .select('storage_bucket,storage_path')
+      .eq('tenant_id', tenantId)
+      .in('storage_bucket', ['sellertray-chat-captures', 'sellertray-catalogue'])
+      .not('storage_path', 'is', null)
+      .range(from, from + pageSize - 1);
+    if (error) throw new Error(`Unable to enumerate SellerTray media files: ${error.message}`);
+
+    const page = Array.isArray(data) ? data : [];
+    for (const row of page) {
+      const bucket = row.storage_bucket;
+      const path = typeof row.storage_path === 'string' ? row.storage_path.trim() : '';
+      if (
+        (bucket === 'sellertray-chat-captures' || bucket === 'sellertray-catalogue') &&
+        path
+      ) {
+        output.push({ bucket, path });
+      }
+    }
+
+    if (page.length < pageSize) break;
+    if (from + pageSize >= maxObjects) {
+      throw new Error('SellerTray media Storage cleanup exceeds the self-service limit; ProcessEdge support is required');
+    }
+  }
+
+  return output;
+}
+
+async function removeTenantMediaStorageObjects(
+  objects: Array<{ bucket: 'sellertray-chat-captures' | 'sellertray-catalogue'; path: string }>,
+): Promise<void> {
+  const grouped = new Map<string, string[]>();
+  for (const object of objects) {
+    const paths = grouped.get(object.bucket) ?? [];
+    paths.push(object.path);
+    grouped.set(object.bucket, paths);
+  }
+
+  const chunkSize = 100;
+  for (const [bucket, paths] of grouped) {
+    for (let index = 0; index < paths.length; index += chunkSize) {
+      const chunk = paths.slice(index, index + chunkSize);
+      const { error } = await admin!.storage.from(bucket).remove(chunk);
+      if (error) {
+        const message = error.message ?? '';
+        if (/bucket.*not found|does not exist/i.test(message)) continue;
+        throw new Error(`Unable to delete SellerTray media files from ${bucket}: ${message}`);
+      }
     }
   }
 }
