@@ -416,6 +416,7 @@ requireValue(
 );
 const usageScheduleMigration = read(join(repoRoot, 'supabase/migrations/20260910234500_schedule_usage_settlement_preparation.sql'));
 const deletionUsageGuardMigration = read(join(repoRoot, 'supabase/migrations/20260910233000_block_deletion_with_unsettled_usage.sql'));
+const financialRetentionMigration = read(join(repoRoot, 'supabase/migrations/20260912181000_financial_retention_and_storage_cleanup.sql'));
 const usagePeriodCurrencyMigration = read(join(repoRoot, 'supabase/migrations/20260910235500_harden_usage_settlement_period_currency.sql'));
 const accountLifecycleFunction = read(join(repoRoot, 'supabase/functions/account-lifecycle/index.ts'));
 const accountLifecycleRepository = read(join(mobileRoot, 'src/data/accountLifecycleRepository.ts'));
@@ -639,6 +640,22 @@ requireValue(
 requireValue(
   accountLifecycleFunction.includes("loadTenantRows('ai_parser_attempts'"),
   'Owner data export must include AI parser telemetry records',
+);
+requireValue(
+  accountLifecycleFunction.includes("loadTenantRows('merchant_payment_methods'") &&
+    accountLifecycleFunction.includes("loadTenantRows('order_payments'") &&
+    accountLifecycleFunction.includes("loadTenantRows('order_payment_events'") &&
+    accountLifecycleFunction.includes("loadTenantRows('order_financial_documents'"),
+  'Owner business export must include safe customer-payment and financial-document records',
+);
+requireValue(
+  accountLifecycleFunction.includes("storage.from('receipts').remove") &&
+    accountLifecycleFunction.includes('archive_sellertray_financial_records') &&
+    financialRetentionMigration.includes('sellertray_private.financial_retention_records') &&
+    financialRetentionMigration.includes("interval '6 years'") &&
+    !financialRetentionMigration.includes('customer_id') &&
+    !financialRetentionMigration.includes('message_body'),
+  'Account deletion must clean private PDF objects and retain only minimal non-chat financial audit evidence',
 );
 requireValue(
   aiAdminTelemetryMigration.includes('"aiParserAttemptsPeriod"') &&

@@ -177,6 +177,10 @@ async function buildBusinessExport(tenantId: string, requestedByUserId: string):
     usageSettlements,
     aiParserAttempts,
     checkoutSessions,
+    merchantPaymentMethods,
+    orderPayments,
+    orderPaymentEvents,
+    orderFinancialDocuments,
   ] = await Promise.all([
     loadTenantRows('catalog_items', tenantId),
     loadTenantRows('catalog_item_aliases', tenantId),
@@ -194,6 +198,10 @@ async function buildBusinessExport(tenantId: string, requestedByUserId: string):
     loadTenantRows('usage_settlements', tenantId),
     loadTenantRows('ai_parser_attempts', tenantId),
     loadTenantRows('billing_checkout_sessions', tenantId),
+    loadTenantRows('merchant_payment_methods', tenantId),
+    loadTenantRows('order_payments', tenantId),
+    loadTenantRows('order_payment_events', tenantId),
+    loadTenantRows('order_financial_documents', tenantId),
   ]);
 
   return {
@@ -215,6 +223,12 @@ async function buildBusinessExport(tenantId: string, requestedByUserId: string):
       records: orders,
       items: orderItems,
       statusHistory: orderStatusEvents,
+    },
+    payments: {
+      methods: merchantPaymentMethods,
+      attempts: orderPayments.map(sanitizeOrderPayment),
+      events: orderPaymentEvents.map(sanitizePaymentEvent),
+      financialDocuments: orderFinancialDocuments,
     },
     team: {
       members: tenantMembers,
@@ -267,6 +281,22 @@ function sanitizeCheckoutSession(row: JsonRecord): JsonRecord {
   return safe;
 }
 
+function sanitizeOrderPayment(row: JsonRecord): JsonRecord {
+  const {
+    checkout_url: _checkoutUrl,
+    ...safe
+  } = row;
+  return safe;
+}
+
+function sanitizePaymentEvent(row: JsonRecord): JsonRecord {
+  const {
+    payload_sha256: _payloadSha256,
+    ...safe
+  } = row;
+  return safe;
+}
+
 async function deleteAccount(userId: string): Promise<JsonRecord> {
   const { data: platformAdmin, error: adminLookupError } = await admin!
     .from('platform_admins')
@@ -288,9 +318,6 @@ async function deleteAccount(userId: string): Promise<JsonRecord> {
     throw new Error('This account has platform-administration audit history; ProcessEdge support is required to close it safely');
   }
 
-  // SellerTray MVP does not currently create user-owned Supabase Storage objects.
-  // Avoid querying the private storage schema through PostgREST during self-service deletion.
-  // When first-party uploads are introduced, add a dedicated server-side storage cleanup contract.
 
   const { data: memberships, error: membershipError } = await admin!
     .from('tenant_members')
@@ -325,6 +352,13 @@ async function deleteAccount(userId: string): Promise<JsonRecord> {
   }
 
   for (const tenantId of ownedTenantIds) {
+    const { error: archiveError } = await admin!
+      .rpc('archive_sellertray_financial_records', { p_tenant_id: tenantId });
+    if (archiveError) throw archiveError;
+
+    const receiptPaths = await loadTenantReceiptStoragePaths(tenantId);
+    await removeReceiptStorageObjects(receiptPaths);
+
     const { error: billingAuditError } = await admin!
       .from('billing_provider_events')
       .delete()
@@ -361,6 +395,65 @@ async function deleteAccount(userId: string): Promise<JsonRecord> {
     ownedBusinessesDeleted: ownedTenantIds.length,
     membershipsRemoved: Math.max(0, (memberships?.length ?? 0) - ownedTenantIds.length),
   };
+}
+
+async function loadTenantReceiptStoragePaths(tenantId: string): Promise<string[]> {
+  const paths = new Set<string>();
+  const pageSize = 500;
+  const maxObjects = 5000;
+
+  for (let from = 0; from < maxObjects; from += pageSize) {
+    const { data, error } = await admin!
+      .from('orders')
+      .select('receipt_storage_path')
+      .eq('tenant_id', tenantId)
+      .not('receipt_storage_path', 'is', null)
+      .range(from, from + pageSize - 1);
+    if (error) throw new Error(`Unable to enumerate order receipt files: ${error.message}`);
+    const page = Array.isArray(data) ? data : [];
+    for (const row of page) {
+      if (typeof row.receipt_storage_path === 'string' && row.receipt_storage_path.trim()) {
+        paths.add(row.receipt_storage_path.trim());
+      }
+    }
+    if (page.length < pageSize) break;
+    if (from + pageSize >= maxObjects) {
+      throw new Error('Receipt Storage cleanup exceeds the self-service limit; ProcessEdge support is required');
+    }
+  }
+
+  for (let from = 0; from < maxObjects; from += pageSize) {
+    const { data, error } = await admin!
+      .from('order_financial_documents')
+      .select('pdf_storage_path')
+      .eq('tenant_id', tenantId)
+      .not('pdf_storage_path', 'is', null)
+      .range(from, from + pageSize - 1);
+    if (error) throw new Error(`Unable to enumerate financial document files: ${error.message}`);
+    const page = Array.isArray(data) ? data : [];
+    for (const row of page) {
+      if (typeof row.pdf_storage_path === 'string' && row.pdf_storage_path.trim()) {
+        paths.add(row.pdf_storage_path.trim());
+      }
+    }
+    if (page.length < pageSize) break;
+    if (from + pageSize >= maxObjects) {
+      throw new Error('Financial PDF Storage cleanup exceeds the self-service limit; ProcessEdge support is required');
+    }
+  }
+
+  return [...paths];
+}
+
+async function removeReceiptStorageObjects(paths: string[]): Promise<void> {
+  const chunkSize = 100;
+  for (let index = 0; index < paths.length; index += chunkSize) {
+    const chunk = paths.slice(index, index + chunkSize);
+    const { error } = await admin!.storage.from('receipts').remove(chunk);
+    if (error) {
+      throw new Error(`Unable to delete SellerTray receipt files: ${error.message}`);
+    }
+  }
 }
 
 async function membershipRole(userId: string, tenantId: string): Promise<string | null> {
