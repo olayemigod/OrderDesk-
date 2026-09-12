@@ -33,6 +33,7 @@ export function PaymentMethodsSettings({ business }: Props) {
   const [flutterwaveKey, setFlutterwaveKey] = useState('');
   const [flutterwaveHash, setFlutterwaveHash] = useState('');
   const [success, setSuccess] = useState<string | null>(null);
+  const [view, setView] = useState<'transactions' | 'methods'>('transactions');
 
   const banks = useMemo(
     () => payment.methods.filter((method) => method.methodType === 'bank_transfer'),
@@ -177,11 +178,26 @@ export function PaymentMethodsSettings({ business }: Props) {
         </Text>
       </View>
 
-      <View style={styles.infoCard}>
-        <Text style={styles.infoTitle}>Direct merchant settlement</Text>
-        <Text style={styles.infoText}>
-          Bank transfers and connected gateways belong to this business. SellerTray does not collect card details or hold customer funds.
-        </Text>
+      <View style={styles.paymentSummaryRow}>
+        <View style={styles.paymentSummaryCard}>
+          <Text style={styles.paymentSummaryValue}>{payment.methods.filter((method) => method.isEnabled).length}</Text>
+          <Text style={styles.paymentSummaryLabel}>ACTIVE METHODS</Text>
+        </View>
+        <View style={styles.paymentSummaryCard}>
+          <Text numberOfLines={1} style={styles.paymentSummaryValueSmall}>
+            {payment.methods.find((method) => method.isDefault)?.displayName ?? 'None'}
+          </Text>
+          <Text style={styles.paymentSummaryLabel}>DEFAULT</Text>
+        </View>
+      </View>
+
+      <View style={styles.segmentedControl}>
+        <Pressable onPress={() => setView('transactions')} style={[styles.segmentButton, view === 'transactions' && styles.segmentButtonActive]}>
+          <Text style={[styles.segmentText, view === 'transactions' && styles.segmentTextActive]}>Transactions</Text>
+        </Pressable>
+        <Pressable onPress={() => setView('methods')} style={[styles.segmentButton, view === 'methods' && styles.segmentButtonActive]}>
+          <Text style={[styles.segmentText, view === 'methods' && styles.segmentTextActive]}>Payment methods</Text>
+        </Pressable>
       </View>
 
       {business.role === 'staff' ? (
@@ -207,7 +223,24 @@ export function PaymentMethodsSettings({ business }: Props) {
         </View>
       ) : null}
 
-      <PaymentReconciliationPanel tenantId={business.id} />
+      {view === 'transactions' ? (
+        <View style={styles.viewStack}>
+          <View style={styles.infoCard}>
+            <Text style={styles.infoTitle}>Payment activity & reconciliation</Text>
+            <Text style={styles.infoText}>
+              Review customer payment claims, confirmations and exceptions without changing how customers are allowed to pay.
+            </Text>
+          </View>
+          <PaymentReconciliationPanel tenantId={business.id} />
+        </View>
+      ) : (
+        <View style={styles.viewStack}>
+          <View style={styles.infoCard}>
+            <Text style={styles.infoTitle}>Direct merchant settlement</Text>
+            <Text style={styles.infoText}>
+              Bank transfers and connected gateways belong to this business. SellerTray does not collect card details or hold customer funds.
+            </Text>
+          </View>
 
       <Section title="BANK TRANSFER" helper="Add one or more merchant bank accounts.">
         {banks.length === 0 ? <Text style={styles.emptyText}>No bank account configured yet.</Text> : null}
@@ -311,6 +344,8 @@ export function PaymentMethodsSettings({ business }: Props) {
           onDefault={() => pickup && void updateMethod(pickup, { isEnabled: true, isDefault: true })}
         />
       </Section>
+        </View>
+      )}
     </View>
   );
 }
@@ -580,6 +615,17 @@ const styles = StyleSheet.create({
   subtitle: { color: '#667085', fontSize: 13, lineHeight: 19, marginTop: 5 },
   muted: { color: '#667085', fontSize: 12 },
   loadingCard: { minHeight: 120, alignItems: 'center', justifyContent: 'center', gap: 10 },
+  paymentSummaryRow: { flexDirection: 'row', gap: 8 },
+  paymentSummaryCard: { flex: 1, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 14, padding: 12 },
+  paymentSummaryValue: { color: '#102A43', fontSize: 21, fontWeight: '900' },
+  paymentSummaryValueSmall: { color: '#102A43', fontSize: 13, fontWeight: '900', marginTop: 4 },
+  paymentSummaryLabel: { color: '#667085', fontSize: 8, fontWeight: '900', letterSpacing: 0.5, marginTop: 3 },
+  segmentedControl: { flexDirection: 'row', backgroundColor: '#F2F4F7', borderRadius: 12, padding: 3, gap: 3 },
+  segmentButton: { flex: 1, minHeight: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  segmentButtonActive: { backgroundColor: '#FFFFFF' },
+  segmentText: { color: '#667085', fontSize: 10, fontWeight: '900' },
+  segmentTextActive: { color: '#079455' },
+  viewStack: { gap: 16 },
   infoCard: { backgroundColor: '#ECFDF3', borderRadius: 14, padding: 13, gap: 4 },
   infoTitle: { color: '#079455', fontSize: 12, fontWeight: '900' },
   infoText: { color: '#1849A9', fontSize: 11, lineHeight: 17 },
