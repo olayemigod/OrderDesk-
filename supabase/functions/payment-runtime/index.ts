@@ -339,6 +339,13 @@ Deno.serve(async (req: Request) => {
       p_payment_id: paymentId,
       p_provider_transaction_id: transactionId,
     });
+    const flutterwaveNetworkRef = stringValue(data.flw_ref);
+    if (flutterwaveNetworkRef) {
+      await rpc('set_sellertray_payment_secondary_reference', {
+        p_payment_id: paymentId,
+        p_reference: flutterwaveNetworkRef,
+      });
+    }
     await rpc('record_sellertray_payment_event', {
       p_tenant_id: payment.tenant_id,
       p_order_id: payment.order_id,
@@ -411,7 +418,7 @@ Deno.serve(async (req: Request) => {
 
 async function loadPayment(id: string): Promise<J | null> {
   const rows = await rest<J[]>(
-    '/rest/v1/order_payments?select=id,tenant_id,order_id,payment_method_id,method_type,provider,provider_mode,status,exception_state,amount,currency,provider_reference,provider_transaction_id,checkout_url,' +
+    '/rest/v1/order_payments?select=id,tenant_id,order_id,payment_method_id,method_type,provider,provider_mode,status,exception_state,amount,currency,provider_reference,provider_transaction_id,provider_secondary_reference,checkout_url,' +
     'orders(public_order_id,customer_id,payment_status,customers(display_name,phone,wa_id,email))' +
     '&id=eq.' + encodeURIComponent(id) + '&limit=1',
   );

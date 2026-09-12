@@ -414,6 +414,7 @@ const paymentMethodMigration = read(join(repoRoot, 'supabase/migrations/20260912
 const paymentOrchestrationMigration = read(join(repoRoot, 'supabase/migrations/20260912084500_customer_payment_orchestration_foundation.sql'));
 const paymentEnvironmentMigration = read(join(repoRoot, 'supabase/migrations/20260912152000_payment_provider_mode_binding.sql'));
 const paymentExceptionMigration = read(join(repoRoot, 'supabase/migrations/20260912161000_payment_exception_lifecycle.sql'));
+const flutterwaveNegativeMigration = read(join(repoRoot, 'supabase/migrations/20260912164000_flutterwave_negative_lifecycle.sql'));
 const paymentSettingsFunction = read(join(repoRoot, 'supabase/functions/payment-settings/index.ts'));
 const paymentRuntimeFunction = read(join(repoRoot, 'supabase/functions/payment-runtime/index.ts'));
 const paystackPaymentWebhook = read(join(repoRoot, 'supabase/functions/paystack-payment-webhook/index.ts'));
@@ -513,6 +514,15 @@ requireValue(
     paystackPaymentWebhook.includes("paystackReference") &&
     paystackPaymentWebhook.includes("paystackDomain"),
   'Paystack signed refund/dispute events must update SellerTray adverse payment lifecycle',
+);
+requireValue(
+  flutterwaveNegativeMigration.includes('provider_secondary_reference') &&
+    flutterwaveNegativeMigration.includes('set_sellertray_payment_secondary_reference') &&
+    paymentRuntimeFunction.includes('data.flw_ref') &&
+    flutterwavePaymentWebhook.includes("chargeback.initiated") &&
+    flutterwavePaymentWebhook.includes("refund.completed") &&
+    flutterwavePaymentWebhook.includes("apply_sellertray_payment_exception"),
+  'Flutterwave verified network references and signed refund/chargeback events must feed SellerTray payment exceptions',
 );
 requireValue(
   paystackPaymentWebhook.includes("x-paystack-signature") &&

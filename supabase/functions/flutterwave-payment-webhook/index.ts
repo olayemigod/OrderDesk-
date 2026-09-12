@@ -18,20 +18,30 @@ Deno.serve(async (req: Request) => {
   catch { return response('Invalid JSON', 400); }
 
   const data = isRecord(payload.data) ? payload.data : null;
-  const reference = stringValue(data?.reference) || stringValue(data?.tx_ref);
+  const references = flutterwaveReferences(data);
   const eventType = stringValue(payload.type) || stringValue(payload.event) || 'unknown';
   const eventId = stringValue(payload.id);
-  if (!reference) return response('OK', 200);
+  if (!references.primary && !references.secondary) return response('OK', 200);
 
   try {
-    const payment = await loadPayment(reference);
+    const payment = await loadPayment(references);
     if (!payment) return response('OK', 200);
 
     const credential = await loadCredential(String(payment.tenant_id), String(payment.payment_method_id));
     if (!credential) return response('Gateway unavailable', 503);
     const secrets = await decryptCredential(credential);
     const secretHash = stringValue(secrets.secretHash);
-    if (!secretHash) return response('Gateway unavailable', 503);
+    const secretKey = stringValue(secrets.secretKey);
+    if (!secretHash || !secretKey) return response('Gateway unavailable', 503);
+    const paymentMode = stringValue(payment.provider_mode);
+    if (
+      !paymentMode ||
+      stringValue(credential.credential_mode) !== paymentMode ||
+      stringValue(secrets.mode) !== paymentMode ||
+      !gatewayKeyMatchesMode(secretKey, paymentMode)
+    ) {
+      return response('Gateway environment mismatch', 409);
+    }
 
     const signature = req.headers.get('flutterwave-signature') || '';
     const legacyHash = req.headers.get('verif-hash') || '';
@@ -43,6 +53,7 @@ Deno.serve(async (req: Request) => {
     if (!validModern && !validLegacy) return response('Invalid signature', 401);
 
     const providerTransactionId = transactionIdValue(data?.id);
+    const reference = references.primary || references.secondary || String(payment.provider_reference || payment.id);
     const stableEventKey = 'webhook:' + (eventId || eventType + ':' + (providerTransactionId || reference));
     const payloadHash = await sha256Hex(raw);
 
@@ -71,6 +82,36 @@ Deno.serve(async (req: Request) => {
       stringValue(data?.status) === 'succeeded';
 
     if (!successLike) {
+      const exception = flutterwaveException(eventType, data, payment);
+      if (exception) {
+        await rpc('apply_sellertray_payment_exception', {
+          p_payment_id: payment.id,
+          p_state: exception.state,
+          p_provider_event_ref: exception.providerRef,
+          p_reason: exception.reason,
+        });
+
+        await rpc('record_sellertray_payment_event', {
+          p_tenant_id: payment.tenant_id,
+          p_order_id: payment.order_id,
+          p_payment_id: payment.id,
+          p_provider: 'flutterwave',
+          p_event_key: stableEventKey,
+          p_event_type: eventType,
+          p_source: 'webhook',
+          p_verification_status: 'verified',
+          p_provider_event_id: eventId,
+          p_provider_transaction_id: providerTransactionId,
+          p_payload_sha256: payloadHash,
+          p_verification_result: {
+            signatureVerified: true,
+            signatureMode: validModern ? 'hmac_sha256' : 'legacy_secret_hash',
+            exceptionState: exception.state,
+          },
+        });
+        return response('OK', 200);
+      }
+
       await rpc('record_sellertray_payment_event', {
         p_tenant_id: payment.tenant_id,
         p_order_id: payment.order_id,
@@ -85,7 +126,7 @@ Deno.serve(async (req: Request) => {
         p_payload_sha256: payloadHash,
         p_verification_result: {
           signatureVerified: true,
-          reason: 'non_success_event',
+          reason: 'unsupported_event',
         },
       });
       return response('OK', 200);
@@ -123,7 +164,7 @@ Deno.serve(async (req: Request) => {
       p_event_key: stableEventKey,
       p_event_type: eventType,
       p_source: 'webhook',
-      p_verification_status: sellertrayStatus === 'confirmed' ? 'verified' : 'rejected',
+      p_verification_status: sellertrayStatus === 'confirmed' || sellertrayStatus === 'payment_issue' ? 'verified' : 'rejected',
       p_provider_event_id: eventId,
       p_provider_transaction_id: providerTransactionId,
       p_payload_sha256: payloadHash,
@@ -134,7 +175,9 @@ Deno.serve(async (req: Request) => {
       },
     });
 
-    return sellertrayStatus === 'confirmed' ? response('OK', 200) : response('Verification incomplete', 409);
+    return sellertrayStatus === 'confirmed' || sellertrayStatus === 'payment_issue'
+      ? response('OK', 200)
+      : response('Verification incomplete', 409);
   } catch (error) {
     console.error(JSON.stringify({
       ts: new Date().toISOString(),
@@ -147,12 +190,26 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-async function loadPayment(reference: string): Promise<J | null> {
-  const rows = await rest<J[]>(
-    '/rest/v1/order_payments?select=id,tenant_id,order_id,payment_method_id,status,provider_reference' +
-    '&provider=eq.flutterwave&provider_reference=eq.' + encodeURIComponent(reference) + '&limit=1',
-  );
-  return rows[0] || null;
+async function loadPayment(
+  refs: { primary: string | null; secondary: string | null },
+): Promise<J | null> {
+  if (refs.primary) {
+    const rows = await rest<J[]>(
+      '/rest/v1/order_payments?select=id,tenant_id,order_id,payment_method_id,status,exception_state,provider_mode,provider_reference,provider_secondary_reference' +
+      '&provider=eq.flutterwave&provider_reference=eq.' + encodeURIComponent(refs.primary) + '&limit=1',
+    );
+    if (rows[0]) return rows[0];
+  }
+
+  if (refs.secondary) {
+    const rows = await rest<J[]>(
+      '/rest/v1/order_payments?select=id,tenant_id,order_id,payment_method_id,status,exception_state,provider_mode,provider_reference,provider_secondary_reference' +
+      '&provider=eq.flutterwave&provider_secondary_reference=eq.' + encodeURIComponent(refs.secondary) + '&limit=1',
+    );
+    if (rows[0]) return rows[0];
+  }
+
+  return null;
 }
 
 async function loadCredential(tenantId: string, methodId: string): Promise<J | null> {
@@ -227,6 +284,61 @@ async function hmacBase64(hash: 'SHA-256', secret: string, value: string): Promi
 async function sha256Hex(value: string): Promise<string> {
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(value)));
   return Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+
+function flutterwaveReferences(data: J | null): { primary: string | null; secondary: string | null } {
+  if (!data) return { primary: null, secondary: null };
+  const charge = isRecord(data.charge) ? data.charge : null;
+  const transaction = isRecord(data.transaction) ? data.transaction : null;
+  return {
+    primary:
+      stringValue(data.tx_ref) ||
+      stringValue(data.reference) ||
+      stringValue(charge?.tx_ref) ||
+      stringValue(transaction?.tx_ref),
+    secondary:
+      stringValue(data.flw_ref) ||
+      stringValue(charge?.flw_ref) ||
+      stringValue(transaction?.flw_ref),
+  };
+}
+
+function flutterwaveException(
+  eventType: string,
+  data: J | null,
+  payment: J,
+): { state: string; providerRef: string | null; reason: string } | null {
+  if (!data) return null;
+  const refs = flutterwaveReferences(data);
+  const providerRef = refs.secondary || refs.primary || transactionIdValue(data.id);
+
+  if (eventType === 'refund.completed') {
+    if (payment.status === 'confirmed') {
+      return { state: 'refunded', providerRef, reason: 'Flutterwave refund completed' };
+    }
+    if (payment.exception_state === 'duplicate_payment') {
+      return { state: 'none', providerRef: null, reason: 'Duplicate Flutterwave payment was refunded' };
+    }
+    return null;
+  }
+
+  if (eventType === 'chargeback.initiated' || eventType === 'chargeback.pending' || eventType === 'chargeback.declined') {
+    return { state: 'disputed', providerRef, reason: 'Flutterwave chargeback is open or awaiting final resolution' };
+  }
+  if (eventType === 'chargeback.accepted' || eventType === 'chargeback.lost') {
+    return { state: 'chargeback', providerRef, reason: 'Flutterwave chargeback removed or may remove the payment value' };
+  }
+  if (eventType === 'chargeback.won' || eventType === 'chargeback.reversed') {
+    return { state: 'none', providerRef: null, reason: 'Flutterwave chargeback resolved in the merchant payment path' };
+  }
+  return null;
+}
+
+function gatewayKeyMatchesMode(secretKey: string, mode: string): boolean {
+  const upper = secretKey.toUpperCase();
+  return mode === 'test'
+    ? upper.startsWith('FLWSECK_TEST-')
+    : mode === 'live' && upper.startsWith('FLWSECK-') && !upper.startsWith('FLWSECK_TEST-');
 }
 
 function fromBase64(v: string): Uint8Array {
