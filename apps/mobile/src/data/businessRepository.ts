@@ -150,7 +150,18 @@ export async function createInitialBusiness(input: InitialBusinessInput): Promis
     },
   });
 
-  if (error) throw error;
+  if (error) {
+    let message = error.message || 'Unable to create your SellerTray workspace.';
+    if (error.context && typeof error.context === 'object' && 'clone' in error.context) {
+      try {
+        const payload = await (error.context as Response).clone().json() as { error?: string };
+        if (payload?.error) message = payload.error;
+      } catch {
+        // Keep the SDK message.
+      }
+    }
+    throw new Error(message);
+  }
 
   const tenantId =
     data && typeof data === 'object' && 'tenantId' in data && typeof data.tenantId === 'string'
