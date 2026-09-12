@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 
 import type { MerchantBusiness } from '../data/businessRepository';
+import { PaymentReconciliationPanel } from './PaymentReconciliationPanel';
 import type {
   MerchantPaymentMethod,
   PaymentMethodType,
@@ -186,7 +187,7 @@ export function PaymentMethodsSettings({ business }: Props) {
       {business.role === 'staff' ? (
         <View style={styles.readOnlyCard}>
           <Text style={styles.readOnlyTitle}>View only</Text>
-          <Text style={styles.readOnlyText}>Owners and Managers configure payment methods. Staff can use enabled methods during order operations.</Text>
+          <Text style={styles.readOnlyText}>Payment method configuration is view-only for Staff. Staff can still review and verify existing payments from the reconciliation inbox where applicable.</Text>
         </View>
       ) : null}
 
@@ -205,6 +206,8 @@ export function PaymentMethodsSettings({ business }: Props) {
           <Text style={styles.successText}>{success}</Text>
         </View>
       ) : null}
+
+      <PaymentReconciliationPanel tenantId={business.id} />
 
       <Section title="BANK TRANSFER" helper="Add one or more merchant bank accounts.">
         {banks.length === 0 ? <Text style={styles.emptyText}>No bank account configured yet.</Text> : null}
