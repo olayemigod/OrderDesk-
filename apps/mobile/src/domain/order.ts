@@ -46,7 +46,9 @@ export type NotificationEventKey =
   | 'order_ready'
   | 'order_out_for_delivery'
   | 'order_rejected'
-  | 'order_cancelled';
+  | 'order_cancelled'
+  | 'order_status_reply'
+  | 'order_receipt';
 
 export type NotificationDeliveryStatus =
   | 'pending'
@@ -77,6 +79,7 @@ export type OrderItem = {
 
 export type MerchantOrder = {
   id: string;
+  publicOrderId: string;
   customerName: string;
   customerPhone: string;
   receivedAt: string;
