@@ -185,13 +185,13 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
 
           <Pressable disabled style={styles.connectButton}>
             <Text style={styles.connectButtonText}>Connect WhatsApp</Text>
-            <Text style={styles.connectButtonHint}>Available after Meta production approval</Text>
+            <Text style={styles.connectButtonHint}>Merchant self-service connection is being enabled</Text>
           </Pressable>
 
           <View style={styles.pendingNotice}>
-            <Text style={styles.pendingTitle}>Connection activation pending</Text>
+            <Text style={styles.pendingTitle}>Self-service onboarding is being enabled</Text>
             <Text style={styles.pendingText}>
-              Meta production verification is still being completed. The self-service Connect WhatsApp action will be enabled here when the Meta connection is approved; merchants should not be asked to configure webhooks or API credentials themselves.
+              SellerTray's WhatsApp integration can already operate for configured businesses. Meta Embedded Signup will be enabled here for additional merchants after the required app review, access and onboarding configuration are completed. Merchants should never be asked to configure SellerTray webhooks or API credentials themselves.
             </Text>
           </View>
         </View>
