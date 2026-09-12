@@ -312,13 +312,70 @@ async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[nu
     },
   );
 
-  const sourceMessageId = storedMessages[0]?.id;
+  let sourceMessageId = storedMessages[0]?.id ?? null;
   if (!sourceMessageId) {
-    return; // Meta retry: already ingested, so do not duplicate an order.
+    const existing = await rest<Array<{ id: string; tenant_id: string; customer_id: string }>>(
+      '/rest/v1/inbound_messages?select=id,tenant_id,customer_id' +
+        '&provider_message_id=eq.' + encodeURIComponent(event.providerMessageId) +
+        '&limit=1',
+    );
+    const row = existing[0];
+    if (!row) throw new Error('Duplicate WhatsApp message could not be reloaded.');
+    if (row.tenant_id !== tenantId || row.customer_id !== customerId) {
+      throw new Error('WhatsApp provider message id resolved to a different tenant/customer.');
+    }
+    sourceMessageId = row.id;
   }
 
+  const claimed = await rest<boolean>('/rest/v1/rpc/claim_sellertray_inbound_message', {
+    method: 'POST',
+    body: JSON.stringify({ p_message_id: sourceMessageId }),
+  });
+  if (claimed !== true) return;
+
+  try {
+    await processClaimedInboundMessage({
+      event,
+      tenant,
+      tenantId,
+      customerId,
+      sourceMessageId,
+    });
+    await finishInboundProcessing(sourceMessageId, 'completed', null);
+  } catch (error) {
+    const message = error instanceof Error ? error.message.replace(/\s+/g, ' ').slice(0, 500) : 'WhatsApp processing failed';
+    try {
+      await finishInboundProcessing(sourceMessageId, 'failed', message);
+    } catch (finishError) {
+      console.error('Unable to record failed WhatsApp processing state', finishError);
+    }
+    throw error;
+  }
+}
+
+async function processClaimedInboundMessage({
+  event,
+  tenant,
+  tenantId,
+  customerId,
+  sourceMessageId,
+}: {
+  event: ReturnType<typeof extractInboundMessages>[number];
+  tenant: { id: string; currency: string | null; name: string };
+  tenantId: string;
+  customerId: string;
+  sourceMessageId: string;
+}) {
+  const existingOrders = await rest<Array<{ id: string }>>(
+    '/rest/v1/orders?select=id' +
+      '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+      '&source_message_id=eq.' + encodeURIComponent(sourceMessageId) +
+      '&limit=1',
+  );
+  if (existingOrders[0]) return;
+
   if (!event.text) {
-    return; // Media/status handling is intentionally outside the current MVP slice.
+    return; // Media/status processing is introduced in the conversation-intelligence slice.
   }
 
   if (await maybeConfirmCustomerReceipt({
@@ -396,6 +453,29 @@ async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[nu
   });
 
   if (!orderId) throw new Error('Atomic order creation returned no order id.');
+}
+
+async function finishInboundProcessing(
+  sourceMessageId: string,
+  status: 'completed' | 'failed',
+  error: string | null,
+): Promise<void> {
+  const patch: JsonRecord = {
+    processing_status: status,
+    processing_error: error,
+    updated_at: new Date().toISOString(),
+  };
+  if (status === 'completed') patch.processing_completed_at = new Date().toISOString();
+
+  await rest(
+    '/rest/v1/inbound_messages?id=eq.' + encodeURIComponent(sourceMessageId) +
+      '&processing_status=eq.processing',
+    {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify(patch),
+    },
+  );
 }
 
 async function getSubscriptionAccess(tenantId: string): Promise<SubscriptionAccess> {

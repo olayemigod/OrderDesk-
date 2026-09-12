@@ -367,6 +367,7 @@ requireValue(accountControls.includes('https://processedge.com.ng/sellertray/ter
 const orderParserFunction = read(join(repoRoot, 'supabase/functions/order-parser/index.ts'));
 const merchantOrderFunction = read(join(repoRoot, 'supabase/functions/merchant-order/index.ts'));
 const atomicOrderMigration = read(join(repoRoot, 'supabase/migrations/20260912142500_atomic_order_creation.sql'));
+const inboundRetryMigration = read(join(repoRoot, 'supabase/migrations/20260912145000_whatsapp_processing_retry_state.sql'));
 const usageSettlementWorker = read(join(repoRoot, 'supabase/functions/usage-settlement/index.ts'));
 const paystackWebhook = read(join(repoRoot, 'supabase/functions/paystack-webhook/index.ts'));
 const usageSettlementMigration = read(join(repoRoot, 'supabase/migrations/20260910230000_usage_settlement_foundation.sql'));
@@ -388,6 +389,19 @@ requireValue(
     atomicOrderMigration.includes("create or replace function public.create_sellertray_whatsapp_order_atomic") &&
     atomicOrderMigration.includes("to service_role"),
   'Manual and WhatsApp order aggregates must remain transactional and service-role-only',
+);
+requireValue(
+  whatsappWebhookFunction.includes("claim_sellertray_inbound_message") &&
+    whatsappWebhookFunction.includes("finishInboundProcessing") &&
+    !whatsappWebhookFunction.includes("Meta retry: already ingested, so do not duplicate an order"),
+  'WhatsApp retries must use resumable processing state instead of suppressing every duplicate delivery',
+);
+requireValue(
+  inboundRetryMigration.includes("processing_status in ('received','processing','completed','failed')") &&
+    inboundRetryMigration.includes("orders_source_message_unique") &&
+    inboundRetryMigration.includes("interval '10 minutes'") &&
+    inboundRetryMigration.includes("when unique_violation"),
+  'Inbound retry state must support failed/stale reclaim and idempotent one-order-per-message creation',
 );
 const usageScheduleMigration = read(join(repoRoot, 'supabase/migrations/20260910234500_schedule_usage_settlement_preparation.sql'));
 const deletionUsageGuardMigration = read(join(repoRoot, 'supabase/migrations/20260910233000_block_deletion_with_unsettled_usage.sql'));
