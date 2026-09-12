@@ -120,10 +120,10 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
   return (
     <View style={styles.wrap}>
       <View>
-        <Text style={styles.eyebrow}>MORE</Text>
-        <Text style={styles.title}>Business & settings</Text>
+        <Text style={styles.eyebrow}>MERCHANT SETTINGS</Text>
+        <Text style={styles.title}>More</Text>
         <Text style={styles.subtitle}>
-          Each area is separated so common settings stay easy to find without one long configuration page.
+          Manage your business profile, payments, WhatsApp, catalogue, team and account preferences.
         </Text>
       </View>
 
@@ -235,13 +235,13 @@ const styles = StyleSheet.create({
   wrap: { gap: 16 },
   detailWrap: { gap: 14 },
   detailSection: { gap: 16 },
-  eyebrow: { color: '#98A2B3', fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
-  title: { color: '#101828', fontSize: 25, fontWeight: '900', marginTop: 3 },
+  eyebrow: { color: '#667085', fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
+  title: { color: '#102A43', fontSize: 25, fontWeight: '900', marginTop: 3 },
   subtitle: { color: '#667085', fontSize: 13, lineHeight: 19, marginTop: 5 },
-  summaryCard: { backgroundColor: '#101828', borderRadius: 17, padding: 16 },
+  summaryCard: { backgroundColor: '#102A43', borderRadius: 17, padding: 16 },
   summaryName: { color: '#FFFFFF', fontSize: 18, fontWeight: '900' },
   summaryMeta: { color: '#D0D5DD', fontSize: 11, fontWeight: '800', marginTop: 4 },
-  menuGroup: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EAECF0', borderRadius: 18, overflow: 'hidden' },
+  menuGroup: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 18, overflow: 'hidden' },
   menuRow: {
     minHeight: 70,
     flexDirection: 'row',
@@ -250,18 +250,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#EAECF0',
+    borderBottomColor: '#E4E7EC',
   },
   menuCopy: { flex: 1 },
   menuTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  menuTitle: { color: '#101828', fontSize: 14, fontWeight: '900', flexShrink: 1 },
+  menuTitle: { color: '#102A43', fontSize: 14, fontWeight: '900', flexShrink: 1 },
   menuText: { color: '#667085', fontSize: 11, lineHeight: 16, marginTop: 3 },
-  status: { color: '#175CD3', backgroundColor: '#EEF4FF', borderRadius: 999, paddingHorizontal: 7, paddingVertical: 3, fontSize: 9, fontWeight: '900' },
-  chevron: { color: '#98A2B3', fontSize: 27, fontWeight: '400' },
+  status: { color: '#079455', backgroundColor: '#ECFDF3', borderRadius: 999, paddingHorizontal: 7, paddingVertical: 3, fontSize: 9, fontWeight: '900' },
+  chevron: { color: '#667085', fontSize: 27, fontWeight: '400' },
   backButton: { alignSelf: 'flex-start', minHeight: 38, justifyContent: 'center', paddingRight: 12 },
-  backText: { color: '#246BFD', fontSize: 13, fontWeight: '900' },
-  buildStamp: { color: '#98A2B3', fontSize: 10, fontWeight: '700', textAlign: 'center', marginTop: 2 },
+  backText: { color: '#12B76A', fontSize: 13, fontWeight: '900' },
+  buildStamp: { color: '#667085', fontSize: 10, fontWeight: '700', textAlign: 'center', marginTop: 2 },
   adminGroup: { gap: 7 },
-  groupLabel: { color: '#98A2B3', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
+  groupLabel: { color: '#667085', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
   pressed: { opacity: 0.72 },
 });
