@@ -21,6 +21,12 @@ export type FulfillmentStatus =
   | 'delivered'
   | 'collected';
 
+export type PaymentStatus =
+  | 'unpaid'
+  | 'pending'
+  | 'verification_required'
+  | 'paid';
+
 export type MatchSource =
   | 'legacy'
   | 'catalogue_name'
@@ -48,7 +54,13 @@ export type NotificationEventKey =
   | 'order_rejected'
   | 'order_cancelled'
   | 'order_status_reply'
-  | 'order_receipt';
+  | 'order_receipt'
+  | 'payment_options'
+  | 'payment_instructions'
+  | 'payment_claim_received'
+  | 'payment_confirmed'
+  | 'payment_status_reply'
+  | 'financial_document';
 
 export type NotificationDeliveryStatus =
   | 'pending'
@@ -94,6 +106,9 @@ export type MerchantOrder = {
   fulfilledAt: string | null;
   fulfillmentConfirmedBy: 'merchant' | 'customer_whatsapp' | null;
   customerConfirmedAt: string | null;
+  paymentStatus: PaymentStatus;
+  amountPaid: number;
+  paymentConfirmedAt: string | null;
   source: 'whatsapp' | 'manual';
   customerMessage: string;
   confidence: number | null;
