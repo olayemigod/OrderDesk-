@@ -10,7 +10,7 @@ Customer WhatsApp self-service supports:
 - `I need receipt for my last order`
 - `I have not gotten my receipt`
 - `proof of purchase`
-- `receipt ST-YYMMDD-XXXXXXXXXX`
+- `receipt ST-YYMMDD-XXXXXXXXXXXXXXXX`
 
 When no public order ID is supplied, SellerTray resolves the latest order belonging to the WhatsApp customer. When an order ID is supplied, the lookup remains customer-scoped; another customer's order ID must not disclose data.
 
@@ -48,7 +48,7 @@ The generated PDF contains:
 
 For a completed order, SellerTray queues a short caption such as:
 
-`Your PDF receipt for order ST-260912-XXXXXXXXXX is attached. Total: NGN 55,000.00`
+`Your PDF receipt for order ST-260912-XXXXXXXXXXXXXXXX is attached. Total: NGN 55,000.00`
 
 The governed outbound worker:
 
