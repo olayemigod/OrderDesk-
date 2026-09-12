@@ -14,7 +14,7 @@
 - WhatsApp-first MVP only; future sales channels are separate paid add-ons rather than bundled into the base plan.
 - SellerTray SaaS payment-processing cost should be absorbed by ProcessEdge during the founding launch rather than added as a confusing surcharge. Customer-payment processing, if introduced later, must remain transparent and separate from SellerTray SaaS pricing.
 - Meta WhatsApp Business Platform charges are **not included** in SellerTray subscription or AI-activity pricing. Connecting a WABA/phone number to SellerTray is not itself a SellerTray usage charge.
-- Each merchant remains responsible for its own Meta WhatsApp Business Account payment method and any billable Meta messaging under Meta's then-current pricing, unless ProcessEdge later adopts a separately approved Solution Partner/credit-line billing model.
+- SellerTray does **not** require a merchant to add a Meta payment method merely to connect WhatsApp. Meta's current onboarding guidance treats the payment method as optional during account setup. If the merchant later uses chargeable WhatsApp Business Platform messaging, any billing setup required by Meta remains the merchant's responsibility unless ProcessEdge later adopts a separately approved Solution Partner/credit-line billing model.
 - SellerTray must not apply a percentage markup to Meta messaging charges in the MVP.
 
 ## WhatsApp provider billing boundary
@@ -24,7 +24,7 @@ SellerTray and Meta billing are separate commercial relationships for the MVP:
 1. **SellerTray bill** — monthly base subscription plus the approved flat AI-assisted activity charge.
 2. **Meta bill** — any WhatsApp Business Platform messaging charges assessed by Meta to the merchant's WABA under Meta's current rate card.
 3. **Connection itself** — connecting a WhatsApp Business number to SellerTray does not create a SellerTray usage charge and should not be represented as a paid SellerTray feature transaction.
-4. **Merchant payment method** — Meta may require the merchant to maintain a payment method on its WABA for Meta messaging. SellerTray must disclose this before Embedded Signup completion.
+4. **Merchant payment method** — do not make a Meta payment method a SellerTray connection prerequisite. Meta may request billing setup when the merchant uses chargeable messaging; SellerTray should disclose that possibility without blocking connection.
 5. **No hidden pass-through markup** — SellerTray MVP does not add a percentage-of-message-cost or percentage-of-sales fee to Meta charges.
 6. **Pricing changes** — SellerTray UI/Terms must avoid promising that WhatsApp messaging is permanently free because Meta pricing can change independently of SellerTray.
 
