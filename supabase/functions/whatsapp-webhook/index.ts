@@ -1,4 +1,5 @@
 import { PDFDocument, StandardFonts, rgb } from 'npm:pdf-lib@1.17.1';
+import { handleCustomerPaymentSelfService } from './payment.ts';
 
 type ParsedItem = {
   name: string;
@@ -325,6 +326,18 @@ async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[nu
     customerId,
     customerWaId: event.waId,
     sourceMessageId,
+    text: event.text,
+  })) {
+    return;
+  }
+
+  if (await handleCustomerPaymentSelfService({
+    tenantId,
+    businessName: tenant.name,
+    customerId,
+    customerWaId: event.waId,
+    sourceMessageId,
+    fromPhoneNumberId: event.phoneNumberId,
     text: event.text,
   })) {
     return;
