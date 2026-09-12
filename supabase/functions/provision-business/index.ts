@@ -22,7 +22,7 @@ Deno.serve(withObservability('provision-business', async (request) => {
   }
 
   const authorization = request.headers.get('authorization') ?? '';
-  const userId = getJwtSubject(authorization);
+  const userId = await getVerifiedUserId(authorization);
   if (!userId) {
     return json({ error: 'Authentication required' }, 401);
   }
@@ -44,6 +44,11 @@ Deno.serve(withObservability('provision-business', async (request) => {
     return json({ error: 'Business name is required' }, 400);
   }
 
+  const merchantCode = cleanMerchantCode(body.merchantCode);
+  if (body.merchantCode !== undefined && !merchantCode) {
+    return json({ error: 'Merchant ID must be exactly 3 letters or numbers' }, 400);
+  }
+
   const rpcResponse = await fetch(`${SUPABASE_URL}/rest/v1/rpc/provision_business_for_user`, {
     method: 'POST',
     headers: {
@@ -57,6 +62,7 @@ Deno.serve(withObservability('provision-business', async (request) => {
       p_business_email: cleanOptional(body.businessEmail),
       p_business_phone: cleanOptional(body.businessPhone),
       p_business_type: cleanOptional(body.businessType),
+      p_merchant_code: merchantCode,
     }),
   });
 
@@ -65,7 +71,11 @@ Deno.serve(withObservability('provision-business', async (request) => {
     const message = typeof details?.message === 'string'
       ? details.message
       : 'Unable to create business workspace';
-    const status = message.includes('only available when no workspace exists') ? 409 : 400;
+    const status =
+      message.includes('only available when no workspace exists') ||
+      message.includes('Merchant ID') && message.includes('already in use')
+        ? 409
+        : 400;
     return json({ error: message }, status);
   }
 
@@ -77,19 +87,32 @@ Deno.serve(withObservability('provision-business', async (request) => {
   return json({ tenantId }, 201);
 }));
 
-function getJwtSubject(authorization: string): string | null {
-  const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
-  const payloadSegment = token.split('.')[1];
-  if (!payloadSegment) return null;
+async function getVerifiedUserId(authorization: string): Promise<string | null> {
+  if (!authorization.startsWith('Bearer ')) return null;
+
+  const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    method: 'GET',
+    headers: {
+      apikey: SERVICE_ROLE_KEY,
+      authorization,
+    },
+  });
+
+  if (!response.ok) return null;
 
   try {
-    const normalized = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
-    const payload = JSON.parse(atob(padded)) as Record<string, unknown>;
-    return typeof payload.sub === 'string' && payload.sub ? payload.sub : null;
+    const user = await response.json() as Record<string, unknown>;
+    return typeof user.id === 'string' && user.id ? user.id : null;
   } catch {
     return null;
   }
+}
+
+function cleanMerchantCode(value: unknown): string | null {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'string') return null;
+  const clean = value.trim().toUpperCase();
+  return /^[A-Z0-9]{3}$/.test(clean) ? clean : null;
 }
 
 function cleanRequired(value: unknown): string | null {
