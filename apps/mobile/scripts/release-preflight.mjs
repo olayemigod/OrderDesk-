@@ -421,6 +421,10 @@ requireValue(
 requireValue(
   whatsappConnectionFunction.includes("META_APP_SECRET") &&
     whatsappConnectionFunction.includes('/oauth/access_token') &&
+    whatsappConnectionFunction.includes('/debug_token') &&
+    whatsappConnectionFunction.includes('different application') &&
+    whatsappConnectionFunction.includes('whatsapp_business_management') &&
+    whatsappConnectionFunction.includes('whatsapp_business_messaging') &&
     whatsappConnectionFunction.includes('/phone_numbers') &&
     whatsappConnectionFunction.includes('/subscribed_apps') &&
     whatsappConnectionFunction.includes('SELLERTRAY_WHATSAPP_ENCRYPTION_KEY') &&
