@@ -507,6 +507,14 @@ requireValue(
   'Both gateway adapters must require exact amount, currency and SellerTray reference verification',
 );
 requireValue(
+  paystackPaymentWebhook.includes("refund.processed") &&
+    paystackPaymentWebhook.includes("charge.dispute.create") &&
+    paystackPaymentWebhook.includes("apply_sellertray_payment_exception") &&
+    paystackPaymentWebhook.includes("paystackReference") &&
+    paystackPaymentWebhook.includes("paystackDomain"),
+  'Paystack signed refund/dispute events must update SellerTray adverse payment lifecycle',
+);
+requireValue(
   paystackPaymentWebhook.includes("x-paystack-signature") &&
     paystackPaymentWebhook.includes("SHA-512") &&
     paystackPaymentWebhook.includes("paymentRuntimeVerify") &&

@@ -18,7 +18,7 @@ Deno.serve(async (req: Request) => {
   catch { return response('Invalid JSON', 400); }
 
   const data = isRecord(payload.data) ? payload.data : null;
-  const reference = stringValue(data?.reference);
+  const reference = paystackReference(data);
   const eventType = stringValue(payload.event) || 'unknown';
   if (!reference) return response('OK', 200);
 
@@ -31,11 +31,27 @@ Deno.serve(async (req: Request) => {
     const secrets = await decryptCredential(credential);
     const secretKey = stringValue(secrets.secretKey);
     if (!secretKey) return response('Gateway unavailable', 503);
+    const paymentMode = stringValue(payment.provider_mode);
+    const credentialMode = stringValue(credential.credential_mode);
+    const encryptedMode = stringValue(secrets.mode);
+    if (
+      !paymentMode ||
+      credentialMode !== paymentMode ||
+      encryptedMode !== paymentMode ||
+      !gatewayKeyMatchesMode(secretKey, paymentMode)
+    ) {
+      return response('Gateway environment mismatch', 409);
+    }
 
     const signature = req.headers.get('x-paystack-signature') || '';
     const expected = await hmacHex('SHA-512', secretKey, raw);
     if (!constantTimeEqual(signature.toLowerCase(), expected.toLowerCase())) {
       return response('Invalid signature', 401);
+    }
+
+    const eventDomain = paystackDomain(data);
+    if (eventDomain && eventDomain !== paymentMode) {
+      return response('Webhook environment mismatch', 409);
     }
 
     const providerTransactionId = transactionIdValue(data?.id);
@@ -58,6 +74,36 @@ Deno.serve(async (req: Request) => {
     });
 
     if (eventType !== 'charge.success') {
+      const exception = paystackException(eventType, data);
+      if (exception && payment.status === 'confirmed') {
+        await rpc('apply_sellertray_payment_exception', {
+          p_payment_id: payment.id,
+          p_state: exception.state,
+          p_provider_event_ref: exception.providerRef,
+          p_reason: exception.reason,
+        });
+
+        await rpc('record_sellertray_payment_event', {
+          p_tenant_id: payment.tenant_id,
+          p_order_id: payment.order_id,
+          p_payment_id: payment.id,
+          p_provider: 'paystack',
+          p_event_key: eventKey,
+          p_event_type: eventType,
+          p_source: 'webhook',
+          p_verification_status: 'verified',
+          p_provider_event_id: providerTransactionId,
+          p_provider_transaction_id: null,
+          p_payload_sha256: payloadHash,
+          p_verification_result: {
+            signatureVerified: true,
+            environmentMatched: true,
+            exceptionState: exception.state,
+          },
+        });
+        return response('OK', 200);
+      }
+
       await rpc('record_sellertray_payment_event', {
         p_tenant_id: payment.tenant_id,
         p_order_id: payment.order_id,
@@ -68,9 +114,13 @@ Deno.serve(async (req: Request) => {
         p_source: 'webhook',
         p_verification_status: 'ignored',
         p_provider_event_id: providerTransactionId,
-        p_provider_transaction_id: providerTransactionId,
+        p_provider_transaction_id: null,
         p_payload_sha256: payloadHash,
-        p_verification_result: { signatureVerified: true, reason: 'non_success_event' },
+        p_verification_result: {
+          signatureVerified: true,
+          environmentMatched: true,
+          reason: exception ? 'payment_not_confirmed' : 'unsupported_event',
+        },
       });
       return response('OK', 200);
     }
@@ -86,7 +136,7 @@ Deno.serve(async (req: Request) => {
       p_event_key: eventKey,
       p_event_type: eventType,
       p_source: 'webhook',
-      p_verification_status: status === 'confirmed' ? 'verified' : 'rejected',
+      p_verification_status: status === 'confirmed' || status === 'payment_issue' ? 'verified' : 'rejected',
       p_provider_event_id: providerTransactionId,
       p_provider_transaction_id: providerTransactionId,
       p_payload_sha256: payloadHash,
@@ -97,7 +147,9 @@ Deno.serve(async (req: Request) => {
       },
     });
 
-    return status === 'confirmed' ? response('OK', 200) : response('Verification incomplete', 409);
+    return status === 'confirmed' || status === 'payment_issue'
+      ? response('OK', 200)
+      : response('Verification incomplete', 409);
   } catch (error) {
     console.error(JSON.stringify({
       ts: new Date().toISOString(),
@@ -112,7 +164,7 @@ Deno.serve(async (req: Request) => {
 
 async function loadPayment(reference: string): Promise<J | null> {
   const rows = await rest<J[]>(
-    '/rest/v1/order_payments?select=id,tenant_id,order_id,payment_method_id,status,provider_reference' +
+    '/rest/v1/order_payments?select=id,tenant_id,order_id,payment_method_id,status,exception_state,provider_mode,provider_reference' +
     '&provider=eq.paystack&provider_reference=eq.' + encodeURIComponent(reference) + '&limit=1',
   );
   return rows[0] || null;
@@ -188,6 +240,60 @@ async function hmacHex(hash: 'SHA-512', secret: string, value: string): Promise<
 async function sha256Hex(value: string): Promise<string> {
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(value)));
   return Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+
+function paystackReference(data: J | null): string | null {
+  if (!data) return null;
+  const transaction = isRecord(data.transaction) ? data.transaction : null;
+  return stringValue(data.reference)
+    || stringValue(data.transaction_reference)
+    || stringValue(data.merchant_transaction_reference)
+    || stringValue(transaction?.reference);
+}
+
+function paystackDomain(data: J | null): string | null {
+  if (!data) return null;
+  const transaction = isRecord(data.transaction) ? data.transaction : null;
+  return stringValue(data.domain) || stringValue(transaction?.domain);
+}
+
+function paystackException(
+  eventType: string,
+  data: J | null,
+): { state: string; providerRef: string | null; reason: string } | null {
+  if (!data) return null;
+  const providerRef =
+    stringValue(data.refund_reference) ||
+    transactionIdValue(data.id) ||
+    null;
+
+  if (eventType === 'refund.pending' || eventType === 'refund.processing' || eventType === 'refund.needs-attention') {
+    return { state: 'refund_pending', providerRef, reason: 'Paystack refund is pending or requires completion' };
+  }
+  if (eventType === 'refund.processed') {
+    return { state: 'refunded', providerRef, reason: 'Paystack refund was processed' };
+  }
+  if (eventType === 'refund.failed') {
+    return { state: 'none', providerRef: null, reason: 'Paystack refund failed and transaction value was restored' };
+  }
+  if (eventType === 'charge.dispute.create' || eventType === 'charge.dispute.remind') {
+    return { state: 'disputed', providerRef, reason: 'Paystack dispute is open against this payment' };
+  }
+  if (eventType === 'charge.dispute.resolve') {
+    const resolution = stringValue(data.resolution);
+    if (resolution === 'merchant-accepted') {
+      return { state: 'chargeback', providerRef, reason: 'Paystack dispute resolved with merchant acceptance/refund' };
+    }
+    if (resolution === 'declined') {
+      return { state: 'none', providerRef: null, reason: 'Paystack dispute resolved in merchant response path' };
+    }
+    return { state: 'disputed', providerRef, reason: 'Paystack dispute resolution needs review' };
+  }
+  return null;
+}
+
+function gatewayKeyMatchesMode(secretKey: string, mode: string): boolean {
+  return mode === 'test' ? secretKey.startsWith('sk_test_') : mode === 'live' && secretKey.startsWith('sk_live_');
 }
 
 function fromBase64(v: string): Uint8Array {
