@@ -293,6 +293,28 @@ requireValue(
     whatsappWebhookReceiptFunction.includes('extractPublicOrderId'),
   'WhatsApp customers must be able to query status or request the latest receipt',
 );
+const pdfReceiptMigration = read(join(repoRoot, 'supabase/migrations/20260912054500_pdf_receipt_delivery.sql'));
+const whatsappNotificationWorker = read(join(repoRoot, 'supabase/functions/send-whatsapp-notifications/index.ts'));
+requireValue(
+  pdfReceiptMigration.includes("'receipts', 'receipts', false") &&
+    pdfReceiptMigration.includes("media_type = 'document'") &&
+    pdfReceiptMigration.includes("media_mime_type = 'application/pdf'"),
+  'PDF receipt delivery migration contract is missing',
+);
+requireValue(
+  whatsappWebhookReceiptFunction.includes("npm:pdf-lib@1.17.1") &&
+    whatsappWebhookReceiptFunction.includes('ensureReceiptPdf') &&
+    whatsappWebhookReceiptFunction.includes('uploadPrivateReceipt') &&
+    whatsappWebhookReceiptFunction.includes("storageBucket: 'receipts'"),
+  'WhatsApp receipt requests must generate/cache a private deterministic PDF',
+);
+requireValue(
+  whatsappNotificationWorker.includes('sendDocumentNotification') &&
+    whatsappNotificationWorker.includes('/media') &&
+    whatsappNotificationWorker.includes("type: 'document'") &&
+    whatsappNotificationWorker.includes('/storage/v1/object/authenticated/'),
+  'WhatsApp notification worker must deliver private PDF receipts as documents',
+);
 requireValue(accountControls.includes('DELETE MY SELLERTRAY ACCOUNT'), 'Account deletion confirmation must use SellerTray');
 requireValue(accountControls.includes('https://processedge.com.ng/sellertray/privacy'), 'In-app SellerTray privacy URL is missing');
 requireValue(accountControls.includes('https://processedge.com.ng/sellertray/terms'), 'In-app SellerTray terms URL is missing');
