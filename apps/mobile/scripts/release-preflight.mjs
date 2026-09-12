@@ -377,6 +377,8 @@ const aiCachedTokenMigration = read(join(repoRoot, 'supabase/migrations/20260911
 const aiTokenIntegrityMigration = read(join(repoRoot, 'supabase/migrations/20260911000900_ai_parser_token_integrity.sql'));
 const aiContextBudgetMigration = read(join(repoRoot, 'supabase/migrations/20260911001000_ai_parser_context_budget.sql'));
 const whatsappWebhookFunction = read(join(repoRoot, 'supabase/functions/whatsapp-webhook/index.ts'));
+const whatsappNotificationWorker = read(join(repoRoot, 'supabase/functions/send-whatsapp-notifications/index.ts'));
+const whatsappTemplateMigration = read(join(repoRoot, 'supabase/migrations/20260912171500_whatsapp_template_dispatch.sql'));
 requireValue(
   merchantOrderFunction.includes("admin.auth.getUser(token)") &&
     merchantOrderFunction.includes("tenant_members") &&
@@ -389,6 +391,15 @@ requireValue(
     atomicOrderMigration.includes("create or replace function public.create_sellertray_whatsapp_order_atomic") &&
     atomicOrderMigration.includes("to service_role"),
   'Manual and WhatsApp order aggregates must remain transactional and service-role-only',
+);
+requireValue(
+  whatsappNotificationWorker.includes("type: 'template'") &&
+    whatsappNotificationWorker.includes('META_TEXT_TEMPLATE_NAME') &&
+    whatsappNotificationWorker.includes('META_DOCUMENT_TEMPLATE_NAME') &&
+    whatsappNotificationWorker.includes("type: 'document'") &&
+    whatsappTemplateMigration.includes("'template_required'") &&
+    whatsappTemplateMigration.includes("delivery_status in ('pending', 'failed', 'template_required')"),
+  'WhatsApp worker must actively dispatch approved text/document templates outside the 24-hour service window',
 );
 requireValue(
   whatsappWebhookFunction.includes("claim_sellertray_inbound_message") &&

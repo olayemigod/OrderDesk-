@@ -12,6 +12,7 @@ type ClaimedNotification = {
   storage_path: string | null;
   media_filename: string | null;
   media_mime_type: string | null;
+  conversation_window_expires_at: string | null;
 };
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
@@ -19,6 +20,9 @@ const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const WORKER_TOKEN = Deno.env.get('NOTIFICATION_WORKER_TOKEN') ?? '';
 const META_ACCESS_TOKEN = Deno.env.get('META_ACCESS_TOKEN') ?? '';
 const META_GRAPH_API_VERSION = Deno.env.get('META_GRAPH_API_VERSION') ?? '';
+const META_TEXT_TEMPLATE_NAME = Deno.env.get('META_TEXT_TEMPLATE_NAME')?.trim() ?? '';
+const META_DOCUMENT_TEMPLATE_NAME = Deno.env.get('META_DOCUMENT_TEMPLATE_NAME')?.trim() ?? '';
+const META_TEMPLATE_LANGUAGE_CODE = Deno.env.get('META_TEMPLATE_LANGUAGE_CODE')?.trim() || 'en_US';
 
 Deno.serve(withObservability('send-whatsapp-notifications', async (request) => {
   if (request.method !== 'POST') {
@@ -55,9 +59,14 @@ async function claimNotifications(limit: number): Promise<ClaimedNotification[]>
 
 async function deliver(notification: ClaimedNotification): Promise<string> {
   try {
-    const response = notification.media_type === 'document'
-      ? await sendDocumentNotification(notification)
-      : await sendTextNotification(notification);
+    const requiresTemplate = !notification.conversation_window_expires_at ||
+      new Date(notification.conversation_window_expires_at).getTime() <= Date.now();
+
+    const response = requiresTemplate
+      ? await sendTemplateNotification(notification)
+      : notification.media_type === 'document'
+        ? await sendDocumentNotification(notification)
+        : await sendTextNotification(notification);
 
     const raw = await response.text();
     if (!response.ok) {
@@ -95,6 +104,15 @@ async function deliver(notification: ClaimedNotification): Promise<string> {
     });
     return 'sent';
   } catch (error) {
+    if (error instanceof TemplateConfigurationError) {
+      await finish(notification.id, {
+        delivery_status: 'template_required',
+        last_error: error.message.slice(0, 500),
+        available_at: new Date(Date.now() + 60 * 60_000).toISOString(),
+      });
+      return 'template_required';
+    }
+
     const retryMinutes = Math.min(30, Math.max(2, notification.attempt_count * 5));
     await finish(notification.id, {
       delivery_status: 'failed',
@@ -103,6 +121,82 @@ async function deliver(notification: ClaimedNotification): Promise<string> {
     });
     return 'failed';
   }
+}
+
+class TemplateConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TemplateConfigurationError';
+  }
+}
+
+async function sendTemplateNotification(notification: ClaimedNotification): Promise<Response> {
+  const isDocument = notification.media_type === 'document';
+  const templateName = isDocument ? META_DOCUMENT_TEMPLATE_NAME : META_TEXT_TEMPLATE_NAME;
+
+  if (!templateName) {
+    throw new TemplateConfigurationError(
+      isDocument
+        ? 'Approved WhatsApp document template is not configured.'
+        : 'Approved WhatsApp text template is not configured.',
+    );
+  }
+
+  const components: JsonRecord[] = [];
+
+  if (isDocument) {
+    const bucket = notification.storage_bucket?.trim();
+    const storagePath = notification.storage_path?.trim();
+    const filename = notification.media_filename?.trim();
+    const mimeType = notification.media_mime_type?.trim() || 'application/pdf';
+
+    if (!bucket || !storagePath || !filename) {
+      throw new Error('Document notification is missing governed Storage metadata.');
+    }
+    if (mimeType !== 'application/pdf') {
+      throw new Error('SellerTray document delivery currently permits PDF receipts only.');
+    }
+
+    const document = await downloadPrivateDocument(bucket, storagePath, mimeType);
+    const mediaId = await uploadMetaDocument(notification.from_phone_number_id, document, filename, mimeType);
+    components.push({
+      type: 'header',
+      parameters: [{
+        type: 'document',
+        document: { id: mediaId, filename },
+      }],
+    });
+  }
+
+  components.push({
+    type: 'body',
+    parameters: [{
+      type: 'text',
+      text: notification.message_body.slice(0, 1024),
+    }],
+  });
+
+  return fetch(
+    `https://graph.facebook.com/${encodeURIComponent(META_GRAPH_API_VERSION)}/${encodeURIComponent(notification.from_phone_number_id)}/messages`,
+    {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${META_ACCESS_TOKEN}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: notification.to_wa_id,
+        type: 'template',
+        template: {
+          name: templateName,
+          language: { code: META_TEMPLATE_LANGUAGE_CODE },
+          components,
+        },
+      }),
+    },
+  );
 }
 
 async function sendTextNotification(notification: ClaimedNotification): Promise<Response> {

@@ -163,3 +163,14 @@ Every candidate must record:
 - Play testing track
 - known activation-pending providers
 - rollback/forward-fix decision if an incident occurs
+
+
+## WhatsApp business-initiated templates
+
+Before production WhatsApp activation, every merchant WABA must have approved utility templates matching the deployment configuration:
+
+- `META_TEXT_TEMPLATE_NAME`: one body variable (`{{1}}`) used for the SellerTray notification text.
+- `META_DOCUMENT_TEMPLATE_NAME`: a document header plus one body variable (`{{1}}`) used for invoice/receipt PDF delivery.
+- `META_TEMPLATE_LANGUAGE_CODE`: approved template language, default `en_US`.
+
+SellerTray free-form text/document messages are used only while the customer-service window is open. After that window, the worker sends the configured approved template. Missing or unapproved templates remain fail-closed as `template_required`; they must never be converted to unrestricted free-form delivery.
