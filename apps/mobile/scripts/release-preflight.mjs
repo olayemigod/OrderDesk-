@@ -685,6 +685,13 @@ requireValue(
   'WhatsApp ingestion must persist idempotent AI parser telemetry',
 );
 requireValue(
+  whatsappWebhookFunction.includes('resolveConsentedWebhookPhoneNumbers') &&
+    whatsappWebhookFunction.includes('extractWebhookPhoneNumberIds') &&
+    whatsappWebhookFunction.includes('extractInboundMessages(payload, consentedPhoneNumberIds)') &&
+    whatsappWebhookFunction.includes('active data-processing consent is absent'),
+  'WhatsApp webhook must verify current tenant consent from routing metadata before interpreting message content, media or native-order fields',
+);
+requireValue(
   whatsappWebhookFunction.includes('AI_CATALOGUE_CONTEXT_LIMIT = 160') &&
     whatsappWebhookFunction.includes('AI_ALIAS_CONTEXT_LIMIT = 6') &&
     whatsappWebhookFunction.includes('selectParserCatalogue'),

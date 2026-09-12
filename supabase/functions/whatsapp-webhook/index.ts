@@ -152,7 +152,15 @@ Deno.serve(withObservability('whatsapp-webhook', async (request) => {
   }
 
   try {
-    const events = extractInboundMessages(payload);
+    // Privacy-by-design boundary: inspect only webhook routing metadata first.
+    // Message content/media/order fields are not interpreted until the mapped
+    // business has an active consent for the current SellerTray legal versions.
+    const consentedPhoneNumberIds = await resolveConsentedWebhookPhoneNumbers(payload);
+    if (consentedPhoneNumberIds.size === 0) {
+      return new Response('OK', { status: 200 });
+    }
+
+    const events = extractInboundMessages(payload, consentedPhoneNumberIds);
     for (const event of events) {
       await ingestMessage(event);
     }
@@ -213,7 +221,63 @@ function constantTimeEqual(left: string, right: string): boolean {
   return result === 0;
 }
 
-function extractInboundMessages(payload: JsonRecord) {
+function extractWebhookPhoneNumberIds(payload: JsonRecord): string[] {
+  const ids = new Set<string>();
+  const entries = Array.isArray(payload.entry) ? payload.entry : [];
+
+  for (const entry of entries) {
+    if (!isRecord(entry) || !Array.isArray(entry.changes)) continue;
+    for (const change of entry.changes) {
+      if (!isRecord(change) || !isRecord(change.value)) continue;
+      const metadata = isRecord(change.value.metadata) ? change.value.metadata : null;
+      const phoneNumberId = metadata ? asString(metadata.phone_number_id) : null;
+      if (phoneNumberId) ids.add(phoneNumberId);
+    }
+  }
+
+  return [...ids];
+}
+
+async function resolveConsentedWebhookPhoneNumbers(
+  payload: JsonRecord,
+): Promise<Set<string>> {
+  const allowed = new Set<string>();
+
+  for (const phoneNumberId of extractWebhookPhoneNumberIds(payload)) {
+    const tenants = await rest<Array<{ id: string }>>(
+      '/rest/v1/tenants?select=id' +
+        '&whatsapp_phone_number_id=eq.' + encodeURIComponent(phoneNumberId) +
+        '&limit=1',
+    );
+    const tenantId = tenants[0]?.id ?? null;
+
+    if (!tenantId) {
+      console.warn('No SellerTray tenant mapped to WhatsApp phone number', phoneNumberId);
+      continue;
+    }
+
+    const consentActive = await rest<boolean>('/rest/v1/rpc/sellertray_whatsapp_consent_active', {
+      method: 'POST',
+      body: JSON.stringify({ p_tenant_id: tenantId }),
+    });
+
+    if (consentActive === true) {
+      allowed.add(phoneNumberId);
+    } else {
+      console.warn(
+        'SellerTray WhatsApp payload content skipped because active data-processing consent is absent',
+        tenantId,
+      );
+    }
+  }
+
+  return allowed;
+}
+
+function extractInboundMessages(
+  payload: JsonRecord,
+  allowedPhoneNumberIds: ReadonlySet<string>,
+) {
   const results: Array<{
     phoneNumberId: string;
     providerMessageId: string;
@@ -247,7 +311,7 @@ function extractInboundMessages(payload: JsonRecord) {
       const value = change.value;
       const metadata = isRecord(value.metadata) ? value.metadata : {};
       const phoneNumberId = asString(metadata.phone_number_id);
-      if (!phoneNumberId) continue;
+      if (!phoneNumberId || !allowedPhoneNumberIds.has(phoneNumberId)) continue;
 
       const contacts = Array.isArray(value.contacts) ? value.contacts : [];
       const contact = contacts.find(isRecord);
