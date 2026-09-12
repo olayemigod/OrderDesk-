@@ -9,7 +9,7 @@
 
 Enable independent SellerTray merchants to connect their own WhatsApp Business Account and phone number through Meta Embedded Signup without ProcessEdge manually entering Phone Number IDs or exposing Meta credentials to the Android app.
 
-SellerTray uses the **Meta Tech Provider** model for the MVP. The merchant remains the owner of its WhatsApp Business Account and is responsible for Meta WhatsApp Business Platform charges. SellerTray bills its own SaaS subscription and approved AI activity separately.
+SellerTray uses the **Meta Tech Provider** model for the MVP. The merchant remains the owner of its WhatsApp Business Account. SellerTray does not require a Meta payment method merely to connect WhatsApp; if the merchant later uses Meta-billable WhatsApp Business Platform messaging, Meta billing remains separate from SellerTray SaaS billing.
 
 Official partner reference:
 https://whatsappbusiness.com/partners/become-a-partner/
@@ -185,10 +185,11 @@ Record:
 
 SellerTray must disclose before connection:
 
-> Connecting WhatsApp to SellerTray does not itself create a SellerTray charge. Your WhatsApp Business Account may require a payment method, and billable WhatsApp Business Platform messaging is charged by Meta according to Meta's current pricing. SellerTray subscription and AI-usage charges are billed separately.
+> SellerTray does not require a Meta payment method just to connect WhatsApp. If you later use Meta-billable WhatsApp Business Platform messages, Meta may require billing setup and charges them according to Meta's current pricing. SellerTray subscription and AI-usage charges are billed separately.
 
 MVP rules:
 
+- SellerTray must not block WhatsApp connection because a Meta payment method has not been added.
 - ProcessEdge does not collect a merchant's card for Meta WhatsApp charges.
 - ProcessEdge does not share a Meta line of credit with merchants.
 - ProcessEdge does not add a percentage markup to Meta messaging charges.
