@@ -1,0 +1,14 @@
+🧾 {{business_name}}
+ORDER RECEIPT
+Order ID: {{public_order_id}}
+Date: {{order_date}}
+
+Items:
+{{item_lines}}
+
+Total: {{currency_total}}
+Order status: {{order_status}}
+{{fulfillment_line}}
+{{confirmation_line}}
+
+Thank you for your order.
