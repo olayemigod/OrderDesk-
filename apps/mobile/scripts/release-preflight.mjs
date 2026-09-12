@@ -260,7 +260,7 @@ const businessRepository = read(join(mobileRoot, 'src/data/businessRepository.ts
 const provisionBusinessFunction = read(join(repoRoot, 'supabase/functions/provision-business/index.ts'));
 requireValue(settingsHub.includes('<AccountDataControls business={business} />'), 'Active merchants must reach AccountDataControls through More > Account & privacy');
 requireValue(saasApp.includes("supabase.auth.signOut({ scope: 'local' })"), 'Workspace quick sign-out must be device-local');
-requireValue(saasApp.includes('label="Products"') && saasApp.includes("onChange('products')"), 'Products must have a first-class bottom tab');
+requireValue(saasApp.includes('label="Catalogue"') && saasApp.includes("onChange('products')"), 'Catalogue must have a first-class bottom tab');
 requireValue(saasApp.includes('label="More"') && saasApp.includes("onChange('more')"), 'Business/settings must be separated behind More');
 requireValue(saasApp.includes("paddingBottom: Platform.OS === 'android' ? 46 : 10"), 'Android bottom navigation must retain system-navigation clearance');
 requireValue(settingsHub.includes("BackHandler.addEventListener('hardwareBackPress'"), 'Android settings must support native back navigation');
