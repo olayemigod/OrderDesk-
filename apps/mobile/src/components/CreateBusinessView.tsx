@@ -156,10 +156,12 @@ function suggestMerchantCode(value: string): string {
     .split(/[^A-Z0-9]+/)
     .filter(Boolean);
 
-  if (words.length >= 3) return words.slice(0, 3).map((word) => word[0]).join('');
+  if (words.length >= 3) return words.slice(0, 3).map((word) => word.charAt(0)).join('');
   if (words.length === 2) {
-    if (words[0].length >= 3) return words[0].slice(0, 3);
-    return `${words[0]}${words[1]}`.slice(0, 3);
+    const first = words[0] ?? '';
+    const second = words[1] ?? '';
+    if (first.length >= 3) return first.slice(0, 3);
+    return `${first}${second}`.slice(0, 3);
   }
 
   return (words[0] ?? '').slice(0, 3);
