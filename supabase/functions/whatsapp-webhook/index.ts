@@ -66,6 +66,29 @@ type ReceiptCandidateOrder = {
   fulfillment_status: 'out_for_delivery' | string;
 };
 
+type CustomerSupportOrder = {
+  id: string;
+  customer_id: string;
+  public_order_id: string;
+  status: string;
+  currency: string;
+  total_amount: number | string | null;
+  created_at: string;
+  fulfillment_method: string | null;
+  fulfillment_status: string;
+  fulfillment_confirmed_by: string | null;
+  delivery_provider: string | null;
+  delivery_reference: string | null;
+  order_items: Array<{
+    item_name: string;
+    quantity: number | string;
+    unit_price: number | string | null;
+    line_total: number | string;
+  }> | null;
+};
+
+type CustomerSupportIntent = 'status' | 'receipt';
+
 type JsonRecord = Record<string, unknown>;
 
 const encoder = new TextEncoder();
@@ -230,8 +253,8 @@ function extractInboundMessages(payload: JsonRecord) {
 }
 
 async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[number]) {
-  const tenants = await rest<Array<{ id: string; currency: string | null }>>(
-    `/rest/v1/tenants?select=id,currency&whatsapp_phone_number_id=eq.${encodeURIComponent(event.phoneNumberId)}&limit=1`,
+  const tenants = await rest<Array<{ id: string; currency: string | null; name: string }>>(
+    `/rest/v1/tenants?select=id,currency,name&whatsapp_phone_number_id=eq.${encodeURIComponent(event.phoneNumberId)}&limit=1`,
   );
   const tenant = tenants[0];
   const tenantId = tenant?.id;
@@ -289,6 +312,18 @@ async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[nu
     customerId,
     customerWaId: event.waId,
     sourceMessageId,
+    text: event.text,
+  })) {
+    return;
+  }
+
+  if (await maybeHandleCustomerSelfService({
+    tenantId,
+    businessName: tenant.name,
+    customerId,
+    customerWaId: event.waId,
+    sourceMessageId,
+    fromPhoneNumberId: event.phoneNumberId,
     text: event.text,
   })) {
     return;
@@ -738,6 +773,321 @@ function validateParsedOrder(value: unknown): ParsedPayload | null {
     : 0.5;
 
   return { items, confidence };
+}
+
+function detectCustomerSupportIntent(value: string): CustomerSupportIntent | null {
+  const normalized = value.trim().toLocaleLowerCase().replace(/\s+/g, ' ');
+  const hasOrderId = /\bST-[0-9]{6}-[A-F0-9]{10}\b/i.test(value);
+
+  if (/\b(receipt|invoice)\b/i.test(normalized)) return 'receipt';
+
+  if (
+    /\b(track|tracking|status)\b/i.test(normalized) ||
+    /\bwhere\s+(?:is|are)\s+(?:my\s+)?order\b/i.test(normalized) ||
+    /\bwhat(?:'s| is)\s+happening\s+with\s+(?:my\s+)?order\b/i.test(normalized) ||
+    /\border\s+(?:id|number|no)\b/i.test(normalized) ||
+    (hasOrderId && /\border\b/i.test(normalized))
+  ) {
+    return 'status';
+  }
+
+  return null;
+}
+
+function extractPublicOrderId(value: string): string | null {
+  const match = value.match(/\bST-[0-9]{6}-[A-F0-9]{10}\b/i);
+  return match ? match[0].toUpperCase() : null;
+}
+
+async function resolveCustomerIdsForWhatsApp(
+  tenantId: string,
+  customerId: string,
+  customerWaId: string,
+): Promise<string[]> {
+  const possibleCustomers = await rest<Array<{ id: string }>>(
+    '/rest/v1/customers?select=id' +
+      '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+      '&or=(wa_id.eq.' + encodeURIComponent(customerWaId) +
+      ',phone.eq.' + encodeURIComponent(customerWaId) +
+      ',phone.eq.' + encodeURIComponent('+' + customerWaId) +
+      ',wa_id.eq.' + encodeURIComponent('manual:' + customerWaId) +
+      ',wa_id.eq.' + encodeURIComponent('manual:+' + customerWaId) + ')' +
+      '&limit=20',
+  );
+
+  return [...new Set([customerId, ...possibleCustomers.map((row) => row.id)])];
+}
+
+async function maybeHandleCustomerSelfService({
+  tenantId,
+  businessName,
+  customerId,
+  customerWaId,
+  sourceMessageId,
+  fromPhoneNumberId,
+  text,
+}: {
+  tenantId: string;
+  businessName: string;
+  customerId: string;
+  customerWaId: string;
+  sourceMessageId: string;
+  fromPhoneNumberId: string;
+  text: string;
+}): Promise<boolean> {
+  const intent = detectCustomerSupportIntent(text);
+  if (!intent) return false;
+
+  const customerIds = await resolveCustomerIdsForWhatsApp(tenantId, customerId, customerWaId);
+  const explicitOrderId = extractPublicOrderId(text);
+  const selected = await findCustomerSupportOrder({
+    tenantId,
+    customerIds,
+    publicOrderId: explicitOrderId,
+    completedOnly: intent === 'receipt' && !explicitOrderId,
+  });
+
+  if (!selected) {
+    const latest = intent === 'receipt'
+      ? await findCustomerSupportOrder({
+          tenantId,
+          customerIds,
+          publicOrderId: explicitOrderId,
+          completedOnly: false,
+        })
+      : null;
+
+    const body = latest && intent === 'receipt'
+      ? `Order ${latest.public_order_id} is currently ${humanOrderStatus(latest)}. A receipt is available after the order is completed.`
+      : explicitOrderId
+        ? `I could not find order ${explicitOrderId} for this WhatsApp customer. Check the order ID and try again.`
+        : `I could not find a matching SellerTray order for this WhatsApp customer yet.`;
+
+    if (latest) {
+      await queueCustomerSupportReply({
+        tenantId,
+        order: latest,
+        sourceMessageId,
+        fromPhoneNumberId,
+        toWaId: customerWaId,
+        eventKey: 'order_status_reply',
+        messageBody: body,
+      });
+    } else {
+      console.info(JSON.stringify({
+        event: 'customer_self_service_no_order',
+        tenantId,
+        intent,
+        explicitOrderId,
+      }));
+    }
+    return true;
+  }
+
+  const messageBody = intent === 'receipt'
+    ? renderOrderReceipt(businessName, selected)
+    : renderOrderStatus(businessName, selected);
+
+  await queueCustomerSupportReply({
+    tenantId,
+    order: selected,
+    sourceMessageId,
+    fromPhoneNumberId,
+    toWaId: customerWaId,
+    eventKey: intent === 'receipt' ? 'order_receipt' : 'order_status_reply',
+    messageBody,
+  });
+
+  return true;
+}
+
+async function findCustomerSupportOrder({
+  tenantId,
+  customerIds,
+  publicOrderId,
+  completedOnly,
+}: {
+  tenantId: string;
+  customerIds: string[];
+  publicOrderId: string | null;
+  completedOnly: boolean;
+}): Promise<CustomerSupportOrder | null> {
+  if (customerIds.length === 0) return null;
+
+  let path =
+    '/rest/v1/orders?select=id,customer_id,public_order_id,status,currency,total_amount,created_at,fulfillment_method,fulfillment_status,fulfillment_confirmed_by,delivery_provider,delivery_reference,order_items(item_name,quantity,unit_price,line_total)' +
+    '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+    '&customer_id=in.(' + customerIds.join(',') + ')';
+
+  if (publicOrderId) {
+    path += '&public_order_id=eq.' + encodeURIComponent(publicOrderId);
+  } else if (completedOnly) {
+    path += '&status=eq.completed';
+  }
+
+  path += '&order=created_at.desc&limit=1';
+  const rows = await rest<CustomerSupportOrder[]>(path);
+  return rows[0] ?? null;
+}
+
+async function queueCustomerSupportReply({
+  tenantId,
+  order,
+  sourceMessageId,
+  fromPhoneNumberId,
+  toWaId,
+  eventKey,
+  messageBody,
+}: {
+  tenantId: string;
+  order: CustomerSupportOrder;
+  sourceMessageId: string;
+  fromPhoneNumberId: string;
+  toWaId: string;
+  eventKey: 'order_status_reply' | 'order_receipt';
+  messageBody: string;
+}): Promise<void> {
+  await rest('/rest/v1/outbound_notifications', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
+    body: JSON.stringify({
+      tenant_id: tenantId,
+      order_id: order.id,
+      customer_id: order.customer_id,
+      source_inbound_message_id: sourceMessageId,
+      event_key: eventKey,
+      delivery_status: 'pending',
+      from_phone_number_id: fromPhoneNumberId,
+      to_wa_id: toWaId,
+      message_body: messageBody.slice(0, 2000),
+      conversation_window_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    }),
+  });
+}
+
+function renderOrderStatus(businessName: string, order: CustomerSupportOrder): string {
+  const total = calculateSupportOrderTotal(order);
+  const lines = [
+    `Order status — ${businessName}`,
+    `Order ID: ${order.public_order_id}`,
+    `Status: ${humanOrderStatus(order)}`,
+    `Order date: ${formatReceiptDate(order.created_at)}`,
+    `Total: ${formatReceiptMoney(total, order.currency)}`,
+  ];
+
+  if (order.delivery_provider) lines.push(`Delivery by: ${order.delivery_provider}`);
+  if (order.delivery_reference) lines.push(`Delivery ref/phone: ${order.delivery_reference}`);
+
+  if (order.fulfillment_status === 'out_for_delivery') {
+    lines.push('When it arrives, reply RECEIVED to confirm receipt.');
+  } else {
+    lines.push(`You can ask "receipt ${order.public_order_id}" when you need the receipt.`);
+  }
+
+  return lines.join('\n');
+}
+
+function renderOrderReceipt(businessName: string, order: CustomerSupportOrder): string {
+  const items = order.order_items ?? [];
+  const total = calculateSupportOrderTotal(order);
+  const fulfillment = humanFulfillment(order);
+
+  const lines = [
+    `🧾 ${businessName}`,
+    'ORDER RECEIPT',
+    `Order ID: ${order.public_order_id}`,
+    `Date: ${formatReceiptDate(order.created_at)}`,
+    '',
+    'Items:',
+  ];
+
+  if (items.length === 0) {
+    lines.push('- Order items unavailable');
+  } else {
+    items.forEach((item, index) => {
+      const quantity = Number(item.quantity) || 0;
+      const lineTotal = Number(item.line_total);
+      lines.push(
+        `${index + 1}. ${quantity} × ${item.item_name} — ${formatReceiptMoney(Number.isFinite(lineTotal) ? lineTotal : 0, order.currency)}`,
+      );
+    });
+  }
+
+  lines.push('');
+  lines.push(`Total: ${formatReceiptMoney(total, order.currency)}`);
+  lines.push(`Order status: ${humanOrderStatus(order)}`);
+  if (fulfillment) lines.push(`Fulfillment: ${fulfillment}`);
+  if (order.fulfillment_confirmed_by === 'customer_whatsapp') {
+    lines.push('Receipt of order confirmed by customer on WhatsApp.');
+  }
+  lines.push('');
+  lines.push('Thank you for your order.');
+
+  return lines.join('\n');
+}
+
+function calculateSupportOrderTotal(order: CustomerSupportOrder): number {
+  const stored = Number(order.total_amount);
+  if (Number.isFinite(stored) && stored >= 0) return stored;
+
+  return (order.order_items ?? []).reduce((sum, item) => {
+    const lineTotal = Number(item.line_total);
+    return sum + (Number.isFinite(lineTotal) ? lineTotal : 0);
+  }, 0);
+}
+
+function formatReceiptMoney(value: number, currency: string): string {
+  const safeCurrency = /^[A-Z]{3}$/.test(currency) ? currency : 'NGN';
+  try {
+    return new Intl.NumberFormat('en-NG', {
+      style: 'currency',
+      currency: safeCurrency,
+      maximumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    return `${safeCurrency} ${value.toFixed(2)}`;
+  }
+}
+
+function formatReceiptDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('en-NG', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(date);
+}
+
+function humanOrderStatus(order: CustomerSupportOrder): string {
+  if (order.status === 'completed') {
+    if (order.fulfillment_status === 'delivered') return 'Delivered / completed';
+    if (order.fulfillment_status === 'collected') return 'Collected / completed';
+    return 'Completed';
+  }
+  if (order.fulfillment_status === 'out_for_delivery') return 'Out for delivery';
+  if (order.status === 'needs_review') return 'Received — awaiting merchant review';
+  if (order.status === 'accepted') return 'Accepted';
+  if (order.status === 'processing') return 'Processing';
+  if (order.status === 'ready') return 'Ready';
+  if (order.status === 'rejected') return 'Rejected';
+  if (order.status === 'cancelled') return 'Cancelled';
+  return order.status.replace(/_/g, ' ');
+}
+
+function humanFulfillment(order: CustomerSupportOrder): string | null {
+  if (order.fulfillment_method === 'customer_pickup') return 'Customer pickup';
+  if (order.fulfillment_method === 'merchant_delivery') {
+    return order.delivery_provider
+      ? `Merchant delivery — ${order.delivery_provider}`
+      : 'Merchant / own rider';
+  }
+  if (order.fulfillment_method === 'third_party_delivery') {
+    return order.delivery_provider
+      ? `Third-party dispatch — ${order.delivery_provider}`
+      : 'Third-party dispatch';
+  }
+  return null;
 }
 
 function isReceiptConfirmationText(value: string): boolean {
