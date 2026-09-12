@@ -40,7 +40,22 @@ This document records the governed rollout state for SellerTray. SellerTray rema
 - WhatsApp 24-hour-window routing and `template_required` state.
 - Owner/Manager notification switches; Staff read-only.
 - Delivery state visible to merchants without exposing provider credentials.
-- Production sending remains activation-pending while Meta verification/credentials are incomplete.
+- Production sending is live for the currently configured platform-system-user test merchant. Independent-merchant self-service remains activation-pending until Meta Tech Provider/Embedded Signup approval/configuration is complete.
+
+### S6B — secure multi-merchant WhatsApp onboarding — PASS BACKEND / META APPROVAL PENDING
+- Added one canonical WhatsApp connection record per SellerTray tenant.
+- Phone Number ID is unique across merchants.
+- Safe WABA/phone/connection metadata is member-readable; provider credentials are private/server-only.
+- Embedded Signup authorization codes are exchanged only by the SellerTray backend.
+- BISU credentials are AES-GCM encrypted before private storage.
+- Meta token introspection verifies validity, SellerTray app ownership and required WhatsApp permissions before storage.
+- SellerTray verifies that the selected Phone Number ID belongs to the merchant-authorized WABA and subscribes the WABA to the SellerTray Meta app.
+- Outbound messages resolve credentials by Phone Number ID; WhatsApp media retrieval resolves credentials by tenant.
+- Existing manually configured merchants can remain on controlled platform-system-user mode while future merchants use tenant-scoped BISU mode.
+- Android/EAS release gates reject Meta access/verify tokens and other provider/server secrets.
+- Merchant UI now explicitly separates Meta WhatsApp charges from SellerTray subscription/AI charges.
+- Approval/evidence runbook: `docs/meta_tech_provider_approval.md`.
+- Remaining external gate: ProcessEdge Meta Tech Provider/app-review access and production Embedded Signup Configuration ID/redirect setup.
 
 ### S7 — team and permissions — PASS
 - Owner / Manager / Staff role model.
@@ -132,7 +147,7 @@ This document records the governed rollout state for SellerTray. SellerTray rema
 
 These are implemented but must not be described as production-accepted yet:
 
-1. **Meta production WhatsApp** — business/app verification and one real production inbound/outbound E2E are still required.
+1. **Meta independent-merchant WhatsApp onboarding** — current Naijalivemedia inbound webhook is proven, but ProcessEdge still needs the Meta Tech Provider/app-review access level required for independent merchants, a production Embedded Signup Configuration ID, merchant launcher wiring, second-merchant self-connect acceptance and final inbound/outbound E2E.
 2. **AI parser** — configure server-only `OPENAI_API_KEY` and `ORDER_PARSER_TOKEN`, then run live AI acceptance. Do not put secrets in the mobile app, repository or chat.
 3. **Outbound WhatsApp worker** — configure server-only worker/Meta credentials after Meta production approval and acceptance-test delivery.
 4. **Paystack billing** — approve the monthly base price and flat AI-activity price; configure the Paystack plan/secret plus billing-encryption/settlement secrets; capture one reusable authorization; then pass base checkout and usage-settlement acceptance in test mode before enabling live usage charging.
