@@ -196,7 +196,7 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
         review_reasons,
         created_at,
         customers(display_name, phone, wa_id),
-        inbound_messages(text_body),
+        inbound_messages!orders_source_message_same_tenant(text_body),
         order_items(id, item_name, original_item_name, quantity, unit_price, match_source, match_confidence),
         order_status_events(id, event_type, from_status, to_status, actor_kind, reason, created_at)
       `)
