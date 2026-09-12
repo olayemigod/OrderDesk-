@@ -76,6 +76,7 @@ Deno.serve(withObservability('usage-settlement', async (request) => {
         `https://api.paystack.co/transaction/verify/${encodeURIComponent(String(settlement.provider_reference ?? ''))}`,
         {
           method: 'GET',
+          signal: AbortSignal.timeout(10000),
           headers: { authorization: `Bearer ${PAYSTACK_SECRET_KEY}` },
         },
       );
@@ -196,6 +197,7 @@ Deno.serve(withObservability('usage-settlement', async (request) => {
 
     const paystackResponse = await fetch('https://api.paystack.co/transaction/charge_authorization', {
       method: 'POST',
+      signal: AbortSignal.timeout(10000),
       headers: {
         authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
         'content-type': 'application/json',
@@ -352,6 +354,7 @@ async function rpc<T>(name: string, body: JsonRecord): Promise<T> {
 async function rest<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${SUPABASE_URL}${path}`, {
     ...init,
+    signal: init.signal ?? AbortSignal.timeout(10000),
     headers: {
       apikey: SERVICE_ROLE_KEY,
       authorization: `Bearer ${SERVICE_ROLE_KEY}`,

@@ -211,3 +211,17 @@ SellerTray supports Supabase TOTP MFA from **More → Security & MFA**.
 - ProcessEdge platform administrators must enroll MFA before production operations acceptance.
 
 Physical-device QA must prove enrollment, AAL1→AAL2 verification, persistence through the intended session lifecycle and rejection of platform-admin calls at AAL1.
+
+
+## Provider timeouts and abuse budgets
+
+SellerTray Phase 1 hardening uses explicit provider deadlines and protective request budgets:
+
+- OpenAI order extraction: 6.5-second provider deadline; WhatsApp caller remains bounded at 8 seconds.
+- AI protective ceilings: 6/customer/minute, 60/tenant/minute and 2,000/tenant/day by default. These are abuse/cost ceilings, not purchased usage entitlements.
+- Customer Paystack/Flutterwave provider calls: 10-second deadline.
+- Merchant provider-verification operations: 30/user/minute and 90/tenant/minute.
+- Meta WhatsApp message/media delivery: 10-second provider deadline.
+- Usage-settlement Paystack verification/charge calls: 10-second provider deadline.
+
+The AI ceilings can be adjusted through `AI_CUSTOMER_MINUTE_LIMIT`, `AI_TENANT_MINUTE_LIMIT` and `AI_TENANT_DAILY_LIMIT` without a mobile release. If an AI protection ceiling is exhausted, SellerTray skips the paid model request and uses the non-AI fallback/review path. Revisit these defaults after Conversation-to-Order replaces per-message AI parsing.

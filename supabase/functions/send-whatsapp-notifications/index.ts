@@ -176,7 +176,7 @@ async function sendTemplateNotification(notification: ClaimedNotification): Prom
     }],
   });
 
-  return fetch(
+  return metaFetch(
     `https://graph.facebook.com/${encodeURIComponent(META_GRAPH_API_VERSION)}/${encodeURIComponent(notification.from_phone_number_id)}/messages`,
     {
       method: 'POST',
@@ -200,7 +200,7 @@ async function sendTemplateNotification(notification: ClaimedNotification): Prom
 }
 
 async function sendTextNotification(notification: ClaimedNotification): Promise<Response> {
-  return fetch(
+  return metaFetch(
     `https://graph.facebook.com/${encodeURIComponent(META_GRAPH_API_VERSION)}/${encodeURIComponent(notification.from_phone_number_id)}/messages`,
     {
       method: 'POST',
@@ -235,7 +235,7 @@ async function sendDocumentNotification(notification: ClaimedNotification): Prom
   const document = await downloadPrivateDocument(bucket, storagePath, mimeType);
   const mediaId = await uploadMetaDocument(notification.from_phone_number_id, document, filename, mimeType);
 
-  return fetch(
+  return metaFetch(
     `https://graph.facebook.com/${encodeURIComponent(META_GRAPH_API_VERSION)}/${encodeURIComponent(notification.from_phone_number_id)}/messages`,
     {
       method: 'POST',
@@ -269,6 +269,7 @@ async function downloadPrivateDocument(
     `${SUPABASE_URL}/storage/v1/object/authenticated/${encodedBucket}/${encodedPath}`,
     {
       method: 'GET',
+      signal: AbortSignal.timeout(10000),
       headers: {
         apikey: SERVICE_ROLE_KEY,
         authorization: `Bearer ${SERVICE_ROLE_KEY}`,
@@ -296,7 +297,7 @@ async function uploadMetaDocument(
   form.append('type', mimeType);
   form.append('file', document, filename);
 
-  const response = await fetch(
+  const response = await metaFetch(
     `https://graph.facebook.com/${encodeURIComponent(META_GRAPH_API_VERSION)}/${encodeURIComponent(phoneNumberId)}/media`,
     {
       method: 'POST',
@@ -338,9 +339,17 @@ async function finish(id: string, patch: JsonRecord): Promise<void> {
   });
 }
 
+async function metaFetch(input: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(input, {
+    ...init,
+    signal: init.signal ?? AbortSignal.timeout(10000),
+  });
+}
+
 async function rest<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${SUPABASE_URL}${path}`, {
     ...init,
+    signal: init.signal ?? AbortSignal.timeout(10000),
     headers: {
       apikey: SERVICE_ROLE_KEY,
       authorization: `Bearer ${SERVICE_ROLE_KEY}`,

@@ -613,6 +613,12 @@ requireValue(
   'High-cost AI parsing must retain server-side request budgets and an OpenAI provider deadline',
 );
 requireValue(
+  whatsappNotificationWorker.includes('metaFetch') &&
+    whatsappNotificationWorker.includes('AbortSignal.timeout(10000)') &&
+    usageSettlementWorker.includes('AbortSignal.timeout(10000)'),
+  'Meta WhatsApp delivery and usage-settlement provider calls must retain explicit 10-second deadlines',
+);
+requireValue(
   paymentRuntimeFunction.includes('providerFetch') &&
     paymentRuntimeFunction.includes('AbortSignal.timeout(10000)') &&
     merchantPaymentOperations.includes('Too many payment operations') &&
