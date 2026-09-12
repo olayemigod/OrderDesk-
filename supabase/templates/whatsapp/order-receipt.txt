@@ -1,6 +1,6 @@
 🧾 {{business_name}}
 ORDER RECEIPT
-Order ID: {{public_order_id}}
+Receipt Ref: {{public_order_id}}
 Date: {{order_date}}
 
 Items:
