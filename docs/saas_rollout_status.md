@@ -53,7 +53,7 @@ This document records the governed rollout state for SellerTray. SellerTray rema
 - Outbound messages resolve credentials by Phone Number ID; WhatsApp media retrieval resolves credentials by tenant.
 - Existing manually configured merchants can remain on controlled platform-system-user mode while future merchants use tenant-scoped BISU mode.
 - Android/EAS release gates reject Meta access/verify tokens and other provider/server secrets.
-- Merchant UI now explicitly separates Meta WhatsApp charges from SellerTray subscription/AI charges.
+- Merchant UI now explicitly separates Meta WhatsApp charges from SellerTray subscription/AI charges and does not require a Meta payment method merely to connect WhatsApp.
 - Approval/evidence runbook: `docs/meta_tech_provider_approval.md`.
 - Remaining external gate: ProcessEdge Meta Tech Provider/app-review access and production Embedded Signup Configuration ID/redirect setup.
 
