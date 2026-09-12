@@ -1044,6 +1044,7 @@ function ConversationsView({
   currency: string;
   onOpenOrder: (orderId: string) => void;
 }) {
+  const appearance = useSellerTrayAppearance();
   const [query, setQuery] = useState('');
   const [selectedPhone, setSelectedPhone] = useState('');
   const [conversationFilter, setConversationFilter] = useState<'all' | 'new' | 'payment' | 'active'>('all');
@@ -1111,7 +1112,7 @@ function ConversationsView({
     return (
       <View style={styles.sectionStack}>
         <Pressable onPress={() => setSelectedPhone('')} style={styles.backToListButton}>
-          <Text style={styles.backToListText}>← Conversations</Text>
+          <Text style={[styles.backToListText, appearance.dark && darkStyles.greenText]}>← Conversations</Text>
         </Pressable>
 
         <View style={styles.conversationHeader}>
@@ -1119,15 +1120,15 @@ function ConversationsView({
             <Text style={styles.customerAvatarText}>{customerInitials(selected.name)}</Text>
           </View>
           <View style={styles.orderIdentity}>
-            <Text style={styles.detailTitle}>{selected.name}</Text>
-            <Text style={styles.orderMeta}>{selected.phone}</Text>
+            <Text style={[styles.detailTitle, appearance.dark && darkStyles.titleText]}>{selected.name}</Text>
+            <Text style={[styles.orderMeta, appearance.dark && darkStyles.bodyText]}>{selected.phone}</Text>
           </View>
           <Badge label="WhatsApp" positive />
         </View>
 
-        <View style={styles.threadNotice}>
-          <Text style={styles.threadNoticeTitle}>Captured order messages</Text>
-          <Text style={styles.threadNoticeText}>
+        <View style={[styles.threadNotice, appearance.dark && darkStyles.infoCard]}>
+          <Text style={[styles.threadNoticeTitle, appearance.dark && darkStyles.titleText]}>Captured order messages</Text>
+          <Text style={[styles.threadNoticeText, appearance.dark && darkStyles.bodyText]}>
             SellerTray shows WhatsApp messages currently attached to orders. Full conversational history will populate through the approved WhatsApp message-history pipeline.
           </Text>
         </View>
@@ -1137,16 +1138,16 @@ function ConversationsView({
             .slice()
             .reverse()
             .map((order) => (
-              <View key={order.id} style={styles.customerBubble}>
-                <Text style={styles.bubbleText}>{order.customerMessage || 'Order message captured without text.'}</Text>
+              <View key={order.id} style={[styles.customerBubble, appearance.dark && darkStyles.mintCard]}>
+                <Text style={[styles.bubbleText, appearance.dark && darkStyles.titleText]}>{order.customerMessage || 'Order message captured without text.'}</Text>
                 <View style={styles.bubbleMetaRow}>
                   <Text style={styles.bubbleMeta}>{formatReceivedAt(order.receivedAt)}</Text>
                   <Text style={styles.bubbleOrderRef}>{order.publicOrderId}</Text>
                 </View>
-                <View style={styles.linkedOrderCard}>
+                <View style={[styles.linkedOrderCard, appearance.dark && darkStyles.card]}>
                   <View style={styles.linkedOrderCopy}>
-                    <Text style={styles.linkedOrderTitle}>Linked order</Text>
-                    <Text style={styles.linkedOrderMeta}>
+                    <Text style={[styles.linkedOrderTitle, appearance.dark && darkStyles.titleText]}>Linked order</Text>
+                    <Text style={[styles.linkedOrderMeta, appearance.dark && darkStyles.bodyText]}>
                       {order.items.length} item{order.items.length === 1 ? '' : 's'} · {orderTotal(order) === null ? 'Needs pricing' : formatMoney(orderTotal(order) ?? 0, currency)}
                     </Text>
                   </View>
@@ -1164,9 +1165,9 @@ function ConversationsView({
   return (
     <View style={styles.sectionStack}>
       <View>
-        <Text style={styles.sectionEyebrow}>WHATSAPP COMMERCE</Text>
-        <Text style={styles.pageTitle}>Conversations</Text>
-        <Text style={styles.pageSubtitle}>Customer chats linked to orders, payments and fulfilment activity.</Text>
+        <Text style={[styles.sectionEyebrow, appearance.dark && darkStyles.bodyText]}>WHATSAPP COMMERCE</Text>
+        <Text style={[styles.pageTitle, appearance.dark && darkStyles.titleText, appearance.textSize === 'large' && styles.pageTitleLarge]}>Conversations</Text>
+        <Text style={[styles.pageSubtitle, appearance.dark && darkStyles.bodyText]}>Customer chats linked to orders, payments and fulfilment activity.</Text>
       </View>
 
       <View style={styles.conversationStatsGrid}>
@@ -1177,7 +1178,7 @@ function ConversationsView({
       </View>
 
       <View style={styles.searchRow}>
-        <View style={styles.searchBox}>
+        <View style={[styles.searchBox, appearance.dark && darkStyles.input]}>
           <Ionicons name="search-outline" size={19} color={theme.colors.muted} />
           <TextInput
             value={query}
@@ -1185,21 +1186,21 @@ function ConversationsView({
             placeholder="Search customer or message"
             placeholderTextColor={theme.colors.subtle}
             autoCorrect={false}
-            style={styles.searchInputEmbedded}
+            style={[styles.searchInputEmbedded, appearance.dark && darkStyles.inputText]}
           />
         </View>
         <Pressable
           onPress={() => setShowConversationFilters((value) => !value)}
           accessibilityLabel="More conversation filters"
-          style={[styles.filterIconButton, showConversationFilters && styles.filterIconButtonActive]}
+          style={[styles.filterIconButton, appearance.dark && darkStyles.outlineButton, showConversationFilters && styles.filterIconButtonActive]}
         >
           <Ionicons name="options-outline" size={21} color={showConversationFilters ? theme.colors.white : theme.colors.navy} />
         </Pressable>
       </View>
 
       {showConversationFilters ? (
-        <View style={styles.filterPanel}>
-          <Text style={styles.filterPanelTitle}>Inbox filters</Text>
+        <View style={[styles.filterPanel, appearance.dark && darkStyles.card]}>
+          <Text style={[styles.filterPanelTitle, appearance.dark && darkStyles.titleText]}>Inbox filters</Text>
           <View style={styles.filterRow}>
             <SimpleFilter label="All" active={conversationFilter === 'all'} onPress={() => setConversationFilter('all')} />
             <SimpleFilter label="New orders" active={conversationFilter === 'new'} onPress={() => setConversationFilter('new')} />
@@ -1221,29 +1222,29 @@ function ConversationsView({
       </View>
 
       {visible.length === 0 ? (
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>No conversations yet</Text>
-          <Text style={styles.emptyText}>WhatsApp customers will appear here after SellerTray captures supported order messages.</Text>
+        <View style={[styles.emptyCard, appearance.dark && darkStyles.card]}>
+          <Text style={[styles.emptyTitle, appearance.dark && darkStyles.titleText]}>No conversations yet</Text>
+          <Text style={[styles.emptyText, appearance.dark && darkStyles.bodyText]}>WhatsApp customers will appear here after SellerTray captures supported order messages.</Text>
         </View>
       ) : (
-        <View style={styles.conversationList}>
+        <View style={[styles.conversationList, appearance.dark && darkStyles.card]}>
           {visible.map((conversation) => (
             <Pressable
               key={conversation.phone}
               onPress={() => setSelectedPhone(conversation.phone)}
-              style={styles.conversationRow}
+              style={[styles.conversationRow, appearance.dark && darkStyles.rowBorder]}
             >
               <View style={styles.customerAvatarSmall}>
                 <Text style={styles.customerAvatarSmallText}>{customerInitials(conversation.name)}</Text>
               </View>
               <View style={styles.conversationCopy}>
                 <View style={styles.conversationNameRow}>
-                  <Text style={styles.conversationName}>{conversation.name}</Text>
+                  <Text style={[styles.conversationName, appearance.dark && darkStyles.titleText]}>{conversation.name}</Text>
                   <Text style={styles.conversationTime}>
                     {conversation.latest ? formatReceivedAt(conversation.latest.receivedAt) : ''}
                   </Text>
                 </View>
-                <Text numberOfLines={1} style={styles.conversationPreview}>
+                <Text numberOfLines={1} style={[styles.conversationPreview, appearance.dark && darkStyles.bodyText]}>
                   {conversation.latest?.customerMessage || 'Order message captured'}
                 </Text>
                 <Text style={styles.conversationMeta}>
@@ -1371,19 +1372,21 @@ function ConversationStat({
   active: boolean;
   onPress: () => void;
 }) {
+  const appearance = useSellerTrayAppearance();
   return (
-    <Pressable onPress={onPress} style={[styles.conversationStatCard, active && styles.conversationStatCardActive]}>
+    <Pressable onPress={onPress} style={[styles.conversationStatCard, appearance.dark && darkStyles.card, active && styles.conversationStatCardActive]}>
       <Ionicons name={icon as never} size={19} color={active ? theme.colors.greenDark : theme.colors.navy} />
-      <Text style={styles.conversationStatValue}>{value}</Text>
-      <Text style={styles.conversationStatLabel}>{label}</Text>
+      <Text style={[styles.conversationStatValue, appearance.dark && darkStyles.titleText]}>{value}</Text>
+      <Text style={[styles.conversationStatLabel, appearance.dark && darkStyles.bodyText]}>{label}</Text>
     </Pressable>
   );
 }
 
 function SimpleFilter({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  const appearance = useSellerTrayAppearance();
   return (
-    <Pressable onPress={onPress} style={[styles.filterButton, active && styles.filterButtonActive]}>
-      <Text style={[styles.filterButtonText, active && styles.filterButtonTextActive]}>{label}</Text>
+    <Pressable onPress={onPress} style={[styles.filterButton, appearance.dark && darkStyles.outlineButton, active && styles.filterButtonActive]}>
+      <Text style={[styles.filterButtonText, appearance.dark && darkStyles.bodyText, active && styles.filterButtonTextActive]}>{label}</Text>
     </Pressable>
   );
 }
