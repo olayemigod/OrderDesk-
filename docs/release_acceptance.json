@@ -3,7 +3,7 @@
   "product": "SellerTray",
   "version": "1.0.0",
   "androidPackage": "ng.processedge.sellertray",
-  "updatedAt": "2026-09-12",
+  "updatedAt": "2026-09-13",
   "codeCheckpoint": {
     "status": "accepted",
     "commit": "3aa14582ea012dc4905f35ee5c450df89d85895d",
@@ -105,8 +105,8 @@
       "required": true,
       "status": "pending",
       "owner": "ProcessEdge",
-      "evidence": null,
-      "acceptance": "Complete Meta verification, recheck the effective WhatsApp Business terms if acceptance is on/after September 23, 2026, and pass one real production inbound order plus outbound status-message E2E."
+      "evidence": "Secure multi-merchant foundation implemented: unique tenant/Phone Number ID ownership; private encrypted BISU credential storage; server-only Embedded Signup authorization-code exchange; Meta token app/scope validation; WABA/phone verification; WABA subscribed_apps registration; per-phone outbound credential resolution; per-tenant WhatsApp media credential resolution. Live Naijalivemedia WABA 945806458591609 / Phone Number ID 1319301597937414 is connected and webhook-tested. Approval/runbook: docs/meta_tech_provider_approval.md.",
+      "acceptance": "Complete ProcessEdge Meta Business/Tech Provider requirements; obtain the access level/permissions required for independent-merchant Embedded Signup; create and record the production Embedded Signup Configuration ID/redirect configuration; wire the merchant launcher; prove a second merchant can self-connect without manual Phone Number ID entry; pass correct-tenant inbound plus outbound status-message E2E; disclose that Meta messaging charges are separate from SellerTray; and recheck effective WhatsApp Business terms/data-sharing classification before release."
     },
     {
       "id": "ai_parser_production",
