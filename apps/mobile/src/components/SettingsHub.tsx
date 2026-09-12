@@ -256,22 +256,23 @@ function AppearanceView({
   onMode: (mode: 'system' | 'light' | 'dark') => Promise<void>;
   onTextSize: (size: 'standard' | 'large') => Promise<void>;
 }) {
+  const appearance = useSellerTrayAppearance();
   return (
     <View style={styles.detailSection}>
       <View>
-        <Text style={styles.eyebrow}>APPEARANCE</Text>
-        <Text style={styles.title}>Make SellerTray comfortable</Text>
-        <Text style={styles.subtitle}>Choose the display mode and text size that works best for you.</Text>
+        <Text style={[styles.eyebrow, appearance.dark && darkStyles.bodyText]}>APPEARANCE</Text>
+        <Text style={[styles.title, appearance.dark && darkStyles.titleText]}>Make SellerTray comfortable</Text>
+        <Text style={[styles.subtitle, appearance.dark && darkStyles.bodyText]}>Choose the display mode and text size that works best for you.</Text>
       </View>
 
-      <View style={styles.preferenceCard}>
+      <View style={[styles.preferenceCard, appearance.dark && darkStyles.card]}>
         <View style={styles.preferenceHeading}>
           <View style={[styles.menuIcon, appearance.dark && darkStyles.mintCard]}>
             <Ionicons name="moon-outline" size={21} color="#079455" />
           </View>
           <View style={styles.menuCopy}>
-            <Text style={styles.menuTitle}>Display mode</Text>
-            <Text style={styles.menuText}>Follow your phone or choose light/dark explicitly.</Text>
+            <Text style={[styles.menuTitle, appearance.dark && darkStyles.titleText]}>Display mode</Text>
+            <Text style={[styles.menuText, appearance.dark && darkStyles.bodyText]}>Follow your phone or choose light/dark explicitly.</Text>
           </View>
         </View>
         <View style={styles.preferenceOptions}>
@@ -294,14 +295,14 @@ function AppearanceView({
         </View>
       </View>
 
-      <View style={styles.preferenceCard}>
+      <View style={[styles.preferenceCard, appearance.dark && darkStyles.card]}>
         <View style={styles.preferenceHeading}>
           <View style={styles.menuIcon}>
             <Ionicons name="text-outline" size={21} color="#079455" />
           </View>
           <View style={styles.menuCopy}>
-            <Text style={styles.menuTitle}>Text size</Text>
-            <Text style={styles.menuText}>SellerTray now uses a larger readable baseline; Large adds extra emphasis.</Text>
+            <Text style={[styles.menuTitle, appearance.dark && darkStyles.titleText]}>Text size</Text>
+            <Text style={[styles.menuText, appearance.dark && darkStyles.bodyText]}>SellerTray now uses a larger readable baseline; Large adds extra emphasis.</Text>
           </View>
         </View>
         <View style={styles.preferenceOptions}>
@@ -323,14 +324,15 @@ function AppearanceView({
 }
 
 function SupportView() {
+  const appearance = useSellerTrayAppearance();
   const chatUrl = process.env.EXPO_PUBLIC_SUPPORT_CHAT_URL?.trim() || 'https://processedge.com.ng/contact';
 
   return (
     <View style={styles.detailSection}>
       <View>
-        <Text style={styles.eyebrow}>HELP & SUPPORT</Text>
-        <Text style={styles.title}>Need help?</Text>
-        <Text style={styles.subtitle}>Choose the fastest way to reach the SellerTray support team.</Text>
+        <Text style={[styles.eyebrow, appearance.dark && darkStyles.bodyText]}>HELP & SUPPORT</Text>
+        <Text style={[styles.title, appearance.dark && darkStyles.titleText]}>Need help?</Text>
+        <Text style={[styles.subtitle, appearance.dark && darkStyles.bodyText]}>Choose the fastest way to reach the SellerTray support team.</Text>
       </View>
       <View style={styles.supportHero}>
         <View style={styles.supportHeroIcon}>
@@ -347,18 +349,19 @@ function SupportView() {
         <SupportRow icon="call-outline" title="Call support" text="+234 809 608 6857" url="tel:+2348096086857" />
         <SupportRow icon="mail-outline" title="Email" text="processedgeng@gmail.com" url="mailto:processedgeng@gmail.com?subject=SellerTray%20Support" />
       </View>
-      <View style={styles.supportNote}>
+      <View style={[styles.supportNote, appearance.dark && darkStyles.mintCard]}>
         <Ionicons name="information-circle-outline" size={20} color="#079455" />
-        <Text style={styles.supportNoteText}>Live chat is wired through a configurable support URL so ProcessEdge can use Chatwoot without rebuilding the app when the inbox URL changes.</Text>
+        <Text style={[styles.supportNoteText, appearance.dark && darkStyles.bodyText]}>Live chat is wired through a configurable support URL so ProcessEdge can use Chatwoot without rebuilding the app when the inbox URL changes.</Text>
       </View>
     </View>
   );
 }
 
 function SupportRow({ icon, title, text, url }: { icon: string; title: string; text: string; url: string }) {
+  const appearance = useSellerTrayAppearance();
   return (
     <Pressable onPress={() => void Linking.openURL(url)} style={({ pressed }) => [styles.menuRow, pressed && styles.pressed]}>
-      <View style={styles.menuIcon}>
+      <View style={[styles.menuIcon, appearance.dark && darkStyles.mintCard]}>
         <Ionicons name={icon as never} size={21} color="#079455" />
       </View>
       <View style={styles.menuCopy}>
@@ -391,10 +394,10 @@ function MenuRow({
       </View>
       <View style={styles.menuCopy}>
         <View style={styles.menuTitleRow}>
-          <Text style={styles.menuTitle}>{title}</Text>
+          <Text style={[styles.menuTitle, appearance.dark && darkStyles.titleText]}>{title}</Text>
           {status ? <Text style={styles.status}>{status}</Text> : null}
         </View>
-        <Text style={styles.menuText}>{text}</Text>
+        <Text style={[styles.menuText, appearance.dark && darkStyles.bodyText]}>{text}</Text>
       </View>
       <Ionicons name="chevron-forward" size={21} color="#667085" />
     </Pressable>
