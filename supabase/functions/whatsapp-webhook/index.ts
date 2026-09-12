@@ -221,6 +221,20 @@ function extractInboundMessages(payload: JsonRecord) {
     customerName: string | null;
     messageType: string;
     text: string | null;
+    mediaId: string | null;
+    mediaCaption: string | null;
+    mediaMimeType: string | null;
+    mediaSha256: string | null;
+    nativeOrder: {
+      catalogId: string;
+      text: string | null;
+      items: Array<{
+        retailerId: string;
+        quantity: number;
+        unitPrice: number | null;
+        currency: string | null;
+      }>;
+    } | null;
     rawMessage: JsonRecord;
   }> = [];
 
@@ -251,6 +265,39 @@ function extractInboundMessages(payload: JsonRecord) {
         const text = messageType === 'text' && isRecord(message.text)
           ? asString(message.text.body)
           : null;
+        const image = messageType === 'image' && isRecord(message.image) ? message.image : null;
+        const mediaId = image ? asString(image.id) : null;
+        const mediaCaption = image ? asString(image.caption) : null;
+        const mediaMimeType = image ? asString(image.mime_type) : null;
+        const mediaSha256 = image ? asString(image.sha256) : null;
+
+        const order = messageType === 'order' && isRecord(message.order) ? message.order : null;
+        const orderCatalogId = order ? asString(order.catalog_id) : null;
+        const orderText = order ? asString(order.text) : null;
+        const orderItems: Array<{
+          retailerId: string;
+          quantity: number;
+          unitPrice: number | null;
+          currency: string | null;
+        }> = [];
+        if (order && Array.isArray(order.product_items)) {
+          for (const item of order.product_items.slice(0, 40)) {
+            if (!isRecord(item)) continue;
+            const retailerId = asString(item.product_retailer_id);
+            const quantityValue = typeof item.quantity === 'number' ? item.quantity : Number(item.quantity);
+            const priceValue = typeof item.item_price === 'number' ? item.item_price : Number(item.item_price);
+            if (!retailerId || !Number.isFinite(quantityValue) || quantityValue <= 0) continue;
+            orderItems.push({
+              retailerId,
+              quantity: quantityValue,
+              unitPrice: Number.isFinite(priceValue) && priceValue >= 0 ? priceValue : null,
+              currency: asString(item.currency),
+            });
+          }
+        }
+        const nativeOrder = orderCatalogId
+          ? { catalogId: orderCatalogId, text: orderText, items: orderItems }
+          : null;
 
         if (!providerMessageId || !waId) continue;
         results.push({
@@ -260,6 +307,11 @@ function extractInboundMessages(payload: JsonRecord) {
           customerName: contactName,
           messageType,
           text,
+          mediaId,
+          mediaCaption,
+          mediaMimeType,
+          mediaSha256,
+          nativeOrder,
           rawMessage: message,
         });
       }
@@ -278,6 +330,15 @@ async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[nu
 
   if (!tenantId) {
     console.warn('No SellerTray tenant mapped to WhatsApp phone number', event.phoneNumberId);
+    return;
+  }
+
+  const consentActive = await rest<boolean>('/rest/v1/rpc/sellertray_whatsapp_consent_active', {
+    method: 'POST',
+    body: JSON.stringify({ p_tenant_id: tenantId }),
+  });
+  if (consentActive !== true) {
+    console.warn('SellerTray WhatsApp ingestion skipped because active data-processing consent is absent', tenantId);
     return;
   }
 
@@ -377,8 +438,32 @@ async function processClaimedInboundMessage({
   );
   if (existingOrders[0]) return;
 
+  if (event.messageType === 'order' && event.nativeOrder) {
+    await createNativeWhatsAppCatalogueOrder({
+      tenant,
+      tenantId,
+      customerId,
+      sourceMessageId,
+      nativeOrder: event.nativeOrder,
+    });
+    return;
+  }
+
+  if (event.messageType === 'image' && event.mediaId) {
+    await recordInboundImageMedia({
+      tenantId,
+      customerId,
+      sourceMessageId,
+      providerMediaId: event.mediaId,
+      caption: event.mediaCaption,
+      mimeType: event.mediaMimeType,
+      sha256: event.mediaSha256,
+    });
+    return;
+  }
+
   if (!event.text) {
-    return; // Media/status processing is introduced in the conversation-intelligence slice.
+    return;
   }
 
   if (await maybeConfirmCustomerReceipt({
@@ -456,6 +541,169 @@ async function processClaimedInboundMessage({
   });
 
   if (!orderId) throw new Error('Atomic order creation returned no order id.');
+}
+
+async function createNativeWhatsAppCatalogueOrder({
+  tenant,
+  tenantId,
+  customerId,
+  sourceMessageId,
+  nativeOrder,
+}: {
+  tenant: { id: string; currency: string | null; name: string };
+  tenantId: string;
+  customerId: string;
+  sourceMessageId: string;
+  nativeOrder: {
+    catalogId: string;
+    text: string | null;
+    items: Array<{
+      retailerId: string;
+      quantity: number;
+      unitPrice: number | null;
+      currency: string | null;
+    }>;
+  };
+}): Promise<void> {
+  const subscription = await getSubscriptionAccess(tenantId);
+  if (subscription.accessMode !== 'full') {
+    console.warn(
+      'Native WhatsApp catalogue order skipped because tenant subscription is read-only',
+      tenantId,
+      subscription.effectiveStatus ?? 'unknown',
+    );
+    return;
+  }
+
+  const retailerIds = Array.from(new Set(
+    nativeOrder.items.map((item) => item.retailerId).filter(Boolean),
+  ));
+
+  const mapped = retailerIds.length
+    ? await rest<Array<{
+        retailer_id: string;
+        catalog_item_id: string;
+        item_name: string;
+        price_ngn: number | string | null;
+      }>>('/rest/v1/rpc/resolve_sellertray_whatsapp_catalog_items', {
+        method: 'POST',
+        body: JSON.stringify({
+          p_tenant_id: tenantId,
+          p_catalog_id: nativeOrder.catalogId,
+          p_retailer_ids: retailerIds,
+        }),
+      })
+    : [];
+
+  const byRetailerId = new Map(
+    mapped.map((row) => [row.retailer_id, row]),
+  );
+
+  const settings = await rest<Array<{ catalog_id: string; is_enabled: boolean }>>(
+    '/rest/v1/tenant_whatsapp_catalog_settings?select=catalog_id,is_enabled' +
+      '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+      '&limit=1',
+  );
+  const configured = settings[0] ?? null;
+
+  const reviewReasons = new Set<string>();
+  if (!nativeOrder.items.length) reviewReasons.add('no_items');
+  if (configured && !configured.is_enabled) reviewReasons.add('whatsapp_catalog_mapping_disabled');
+  if (configured && configured.catalog_id !== nativeOrder.catalogId) {
+    reviewReasons.add('whatsapp_catalog_id_mismatch');
+  }
+
+  const currencies = new Set<string>();
+  let priceMismatch = false;
+
+  const items = nativeOrder.items.map((item) => {
+    if (item.currency) currencies.add(item.currency.toUpperCase());
+    const match = byRetailerId.get(item.retailerId) ?? null;
+    const localPrice = match ? toNumber(match.price_ngn) : null;
+    const unitPrice = item.unitPrice ?? localPrice;
+
+    if (!match) reviewReasons.add('unmatched_whatsapp_catalog_item');
+    if (unitPrice === null) reviewReasons.add('missing_price');
+    if (
+      match &&
+      item.unitPrice !== null &&
+      localPrice !== null &&
+      Math.abs(item.unitPrice - localPrice) > 0.009
+    ) {
+      priceMismatch = true;
+    }
+
+    return {
+      catalog_item_id: match?.catalog_item_id ?? null,
+      item_name: match?.item_name ?? ('WhatsApp catalogue item ' + item.retailerId),
+      original_item_name: item.retailerId,
+      quantity: item.quantity,
+      unit_price: unitPrice,
+      match_source: match ? 'whatsapp_catalog' : 'unmatched',
+      match_confidence: match ? 1 : 0,
+    };
+  });
+
+  if (currencies.size > 1) reviewReasons.add('mixed_currency');
+  if (priceMismatch) reviewReasons.add('whatsapp_price_differs_from_catalogue');
+
+  const orderCurrency = currencies.values().next().value || tenant.currency || 'NGN';
+  const note = nativeOrder.text ||
+    ('WhatsApp catalogue order from catalog ' + nativeOrder.catalogId);
+
+  const orderId = await rest<string>('/rest/v1/rpc/create_sellertray_whatsapp_order_atomic', {
+    method: 'POST',
+    body: JSON.stringify({
+      p_tenant_id: tenantId,
+      p_customer_id: customerId,
+      p_source_message_id: sourceMessageId,
+      p_customer_note: note,
+      p_parser_confidence: 1,
+      p_parser_source: 'native_catalog',
+      p_parser_version: 'meta-order-v1',
+      p_review_reasons: Array.from(reviewReasons),
+      p_currency: orderCurrency,
+      p_items: items,
+    }),
+  });
+
+  if (!orderId) throw new Error('Native WhatsApp catalogue order creation returned no order id.');
+}
+
+async function recordInboundImageMedia({
+  tenantId,
+  customerId,
+  sourceMessageId,
+  providerMediaId,
+  caption,
+  mimeType,
+  sha256,
+}: {
+  tenantId: string;
+  customerId: string;
+  sourceMessageId: string;
+  providerMediaId: string;
+  caption: string | null;
+  mimeType: string | null;
+  sha256: string | null;
+}): Promise<void> {
+  await rest(
+    '/rest/v1/inbound_message_media?on_conflict=tenant_id,inbound_message_id',
+    {
+      method: 'POST',
+      headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
+      body: JSON.stringify({
+        tenant_id: tenantId,
+        inbound_message_id: sourceMessageId,
+        customer_id: customerId,
+        media_type: 'image',
+        provider_media_id: providerMediaId,
+        media_caption: caption,
+        media_mime_type: mimeType,
+        media_sha256: sha256,
+      }),
+    },
+  );
 }
 
 async function finishInboundProcessing(
