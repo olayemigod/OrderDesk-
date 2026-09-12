@@ -10,20 +10,20 @@ Customer WhatsApp self-service supports:
 - `I need receipt for my last order`
 - `I have not gotten my receipt`
 - `proof of purchase`
-- `receipt ST-YYMMDD-XXXXXXXXXXXXXXXX`
+- `receipt NLM/000001`
 
-When no public order ID is supplied, SellerTray resolves the latest order belonging to the WhatsApp customer. When an order ID is supplied, the lookup remains customer-scoped; another customer's order ID must not disclose data.
+When no customer reference is supplied, SellerTray resolves the latest order belonging to the WhatsApp customer. When an order ID is supplied, the lookup remains customer-scoped; another customer's order ID must not disclose data.
 
 A PDF receipt is issued only for a completed order. If the resolved order is not completed, SellerTray returns its current status instead.
 
 ## Receipt identity and contents
 
-The receipt uses the immutable SellerTray public order ID as its traceable reference. SellerTray does not introduce a second receipt number for MVP.
+The receipt uses the immutable SellerTray customer reference as its traceable reference. SellerTray does not introduce a second receipt number for MVP.
 
 The generated PDF contains:
 
 - merchant/business name;
-- SellerTray public order ID;
+- SellerTray customer reference;
 - order date;
 - customer WhatsApp identity;
 - item description, quantity, unit price and line total;
@@ -39,7 +39,7 @@ The generated PDF contains:
 - Bucket visibility: private
 - MIME type: `application/pdf`
 - Per-object size limit enforced by bucket: 2 MB
-- Deterministic path: `<tenant>/<public-order-id>/receipt-v<version>.pdf`
+- Deterministic path: `<tenant>/<merchant-code>-<sequence>/receipt-v<version>.pdf`
 - The first successful generation is cached on the order through `receipt_storage_path` and `receipt_generated_at`.
 - Repeat receipt requests reuse the cached document instead of regenerating it.
 - Merchant/customer clients do not receive a public Storage URL. The server-side WhatsApp worker downloads the private object with server credentials, uploads it to Meta as WhatsApp media, then sends it as a document message.
@@ -48,7 +48,7 @@ The generated PDF contains:
 
 For a completed order, SellerTray queues a short caption such as:
 
-`Your PDF receipt for order ST-260912-XXXXXXXXXXXXXXXX is attached. Total: NGN 55,000.00`
+`Your PDF receipt for order NLM/000001 is attached. Total: NGN 55,000.00`
 
 The governed outbound worker:
 
@@ -67,7 +67,7 @@ PDF receipt handling is intentionally outside the AI billing path.
 The following consume **zero LLM tokens**:
 
 - receipt-intent detection for the governed phrases;
-- public order-ID extraction;
+- merchant/reference extraction;
 - latest-order resolution;
 - order lookup;
 - totals;
@@ -84,8 +84,8 @@ Only a future explicit AI fallback for unsupported free-form customer requests c
 Do not mark PDF receipt delivery production-accepted until Meta production credentials are active and a real WhatsApp E2E proves:
 
 1. customer requests latest receipt;
-2. customer requests a specific order by public ID;
-3. another customer's public ID is rejected by customer scope;
+2. customer requests a specific order by merchant/reference ID;
+3. another customer's reference is rejected by customer scope;
 4. incomplete order returns status rather than a receipt;
 5. completed order produces a readable PDF;
 6. repeated request reuses the cached PDF;
