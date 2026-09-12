@@ -47,7 +47,11 @@
         "android.permission.SYSTEM_ALERT_WINDOW",
         "com.google.android.gms.permission.AD_ID"
       ],
-      "allowBackup": false
+      "allowBackup": false,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F8FAFC"
+      }
     },
     "ios": {
       "bundleIdentifier": "ng.processedge.sellertray",
@@ -68,6 +72,7 @@
           "microphonePermission": false
         }
       ]
-    ]
+    ],
+    "icon": "./assets/icon.png"
   }
 }
