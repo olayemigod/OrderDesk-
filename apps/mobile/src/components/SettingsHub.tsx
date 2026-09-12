@@ -7,6 +7,7 @@ import { useSubscriptionAccess } from '../hooks/useSubscriptionAccess';
 import { AccountDataControls } from './AccountDataControls';
 import { BusinessProfileView } from './BusinessProfileView';
 import { CustomerNotificationSettings } from './CustomerNotificationSettings';
+import { PaymentMethodsSettings } from './PaymentMethodsSettings';
 import { PlatformAdminView } from './PlatformAdminView';
 import { SubscriptionStatusCard } from './SubscriptionStatusCard';
 import { TeamManagementView } from './TeamManagementView';
@@ -17,6 +18,7 @@ type Section =
   | 'business'
   | 'whatsapp'
   | 'notifications'
+  | 'payments'
   | 'team'
   | 'subscription'
   | 'account'
@@ -53,6 +55,7 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
         {section === 'business' ? <BusinessProfileView business={business} onSave={onSaveBusiness} /> : null}
         {section === 'whatsapp' ? <WhatsAppConnectionView business={business} /> : null}
         {section === 'notifications' ? <CustomerNotificationSettings business={business} /> : null}
+        {section === 'payments' ? <PaymentMethodsSettings business={business} /> : null}
         {section === 'team' ? <TeamManagementView business={business} /> : null}
         {section === 'subscription' ? (
           <View style={styles.detailSection}>
@@ -127,6 +130,11 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
           title="Customer notifications"
           text="Control automated SellerTray order updates"
           onPress={() => setSection('notifications')}
+        />
+        <MenuRow
+          title="Customer payments"
+          text="Bank transfer, Paystack, Flutterwave and pay-on-fulfilment options"
+          onPress={() => setSection('payments')}
         />
         <MenuRow
           title="Team & access"
