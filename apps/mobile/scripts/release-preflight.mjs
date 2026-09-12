@@ -446,7 +446,8 @@ requireValue(
   whatsappPaymentModule.includes("PAYMENT RECEIPT ") &&
     whatsappPaymentModule.includes("payment_claim_received") &&
     whatsappPaymentModule.includes("pending_verification") &&
-    whatsappPaymentModule.includes("INVOICE ") &&
+    whatsappPaymentModule.includes("kind: 'invoice'") &&
+    whatsappPaymentModule.includes('sendInvoiceDocument') &&
     whatsappWebhookFunction.includes('maybeConfirmCustomerReceipt') &&
     whatsappWebhookFunction.includes('ensureReceiptPdf'),
   'WhatsApp payment self-service must coexist with the legacy order receipt and fulfilment-confirmation paths',
