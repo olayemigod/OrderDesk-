@@ -9,6 +9,8 @@ type Props = {
 
 export function CreateBusinessView({ onCreate }: Props) {
   const [name, setName] = useState('');
+  const [merchantCode, setMerchantCode] = useState('');
+  const [merchantCodeTouched, setMerchantCodeTouched] = useState(false);
   const [businessType, setBusinessType] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -20,12 +22,18 @@ export function CreateBusinessView({ onCreate }: Props) {
       setError('Enter your business name.');
       return;
     }
+    const cleanMerchantCode = merchantCode.trim().toUpperCase();
+    if (!/^[A-Z0-9]{3}$/.test(cleanMerchantCode)) {
+      setError('Choose a 3-character Merchant ID using letters or numbers.');
+      return;
+    }
 
     setSubmitting(true);
     setError(null);
     try {
       await onCreate({
         name,
+        merchantCode: cleanMerchantCode,
         businessType: businessType || null,
         businessEmail: email || null,
         businessPhone: phone || null,
@@ -53,10 +61,38 @@ export function CreateBusinessView({ onCreate }: Props) {
             autoFocus
             editable={!submitting}
             value={name}
-            onChangeText={setName}
+            onChangeText={(value) => {
+              setName(value);
+              if (!merchantCodeTouched) setMerchantCode(suggestMerchantCode(value));
+            }}
             placeholder="e.g. Pisonmart Enterprises"
             style={styles.input}
           />
+        </Field>
+
+        <Field
+          label="Merchant ID"
+          required
+        >
+          <Text style={styles.help}>
+            A unique permanent 3-character code used in customer order and receipt references. Example: PIS/000001.
+          </Text>
+          <TextInput
+            editable={!submitting}
+            value={merchantCode}
+            onChangeText={(value) => {
+              setMerchantCodeTouched(true);
+              setMerchantCode(value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3));
+            }}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            maxLength={3}
+            placeholder="PIS"
+            style={styles.input}
+          />
+          {merchantCode.length === 3 ? (
+            <Text style={styles.referencePreview}>Your first order reference will look like {merchantCode}/000001</Text>
+          ) : null}
         </Field>
 
         <Field label="Business type">
@@ -113,6 +149,22 @@ export function CreateBusinessView({ onCreate }: Props) {
   );
 }
 
+function suggestMerchantCode(value: string): string {
+  const words = value
+    .trim()
+    .toUpperCase()
+    .split(/[^A-Z0-9]+/)
+    .filter(Boolean);
+
+  if (words.length >= 3) return words.slice(0, 3).map((word) => word[0]).join('');
+  if (words.length === 2) {
+    const combined = `${words[0].slice(0, 2)}${words[1][0]}`;
+    return combined.slice(0, 3);
+  }
+
+  return (words[0] ?? '').slice(0, 3);
+}
+
 function Field({
   label,
   required = false,
@@ -139,6 +191,8 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EAECF0', borderRadius: 18, padding: 16, gap: 14 },
   field: { gap: 6 },
   label: { color: '#344054', fontSize: 12, fontWeight: '800' },
+  help: { color: '#667085', fontSize: 10, lineHeight: 15 },
+  referencePreview: { color: '#175CD3', fontSize: 10, fontWeight: '800' },
   input: { minHeight: 47, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 11, paddingHorizontal: 12, backgroundColor: '#FFFFFF', color: '#101828' },
   error: { color: '#B42318', fontSize: 12, lineHeight: 17 },
   button: { minHeight: 50, borderRadius: 12, backgroundColor: '#246BFD', alignItems: 'center', justifyContent: 'center', marginTop: 2 },
