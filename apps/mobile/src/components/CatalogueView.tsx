@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { MerchantBusiness } from '../data/businessRepository';
@@ -17,6 +18,8 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
   const { items, loading, error, refresh, createItem, editItem, setActive } = useCatalogue(business.id);
   const [editing, setEditing] = useState<CatalogueItem | 'new' | null>(null);
   const [query, setQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [showFilters, setShowFilters] = useState(false);
   const [showWhatsAppTools, setShowWhatsAppTools] = useState(false);
   const [whatsappStatus, setWhatsappStatus] = useState<WhatsAppCatalogueStatus | null>(null);
   const [whatsappLoading, setWhatsappLoading] = useState(true);
@@ -30,17 +33,24 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
   const canEdit = business.role === 'owner' || business.role === 'manager';
   const activeCount = items.filter((item) => item.isActive).length;
   const mappedCount = items.filter((item) => Boolean(item.whatsappProductRetailerId)).length;
+  const categories = useMemo(
+    () => Array.from(new Set(
+      items.map((item) => item.category?.trim()).filter((value): value is string => Boolean(value)),
+    )).sort((a, b) => a.localeCompare(b)),
+    [items],
+  );
   const normalizedQuery = query.trim().toLowerCase();
-  const visibleItems = normalizedQuery
-    ? items.filter((item) =>
-        [
-          item.name,
-          item.sku ?? '',
-          item.category ?? '',
-          ...item.aliases,
-        ].join(' ').toLowerCase().includes(normalizedQuery),
-      )
-    : items;
+  const visibleItems = items.filter((item) => {
+    const matchesCategory = categoryFilter === 'all' || item.category?.toLowerCase() === categoryFilter.toLowerCase();
+    if (!matchesCategory) return false;
+    if (!normalizedQuery) return true;
+    return [
+      item.name,
+      item.sku ?? '',
+      item.category ?? '',
+      ...item.aliases,
+    ].join(' ').toLowerCase().includes(normalizedQuery);
+  });
 
   async function refreshWhatsAppCatalogue() {
     setWhatsappLoading(true);
@@ -132,27 +142,48 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
       </View>
 
       <View style={styles.catalogueSummaryRow}>
-        <View style={styles.catalogueSummaryCard}>
-          <Text style={styles.catalogueSummaryValue}>{items.length}</Text>
-          <Text style={styles.catalogueSummaryLabel}>PRODUCTS</Text>
-        </View>
-        <View style={styles.catalogueSummaryCard}>
-          <Text style={styles.catalogueSummaryValue}>{activeCount}</Text>
-          <Text style={styles.catalogueSummaryLabel}>ACTIVE</Text>
-        </View>
-        <View style={styles.catalogueSummaryCard}>
-          <Text style={styles.catalogueSummaryValue}>{mappedCount}</Text>
-          <Text style={styles.catalogueSummaryLabel}>WHATSAPP MAPPED</Text>
-        </View>
+        <CatalogueStat icon="cube-outline" label="Products" value={items.length} />
+        <CatalogueStat icon="checkmark-circle-outline" label="Active" value={activeCount} positive />
+        <CatalogueStat icon="logo-whatsapp" label="WA mapped" value={mappedCount} />
       </View>
 
-      <TextInput
-        value={query}
-        onChangeText={setQuery}
-        placeholder="Search products, SKU or customer words"
-        autoCorrect={false}
-        style={styles.searchInput}
-      />
+      <View style={styles.searchRow}>
+        <View style={styles.searchBox}>
+          <Ionicons name="search-outline" size={19} color="#667085" />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search products, categories or SKU"
+            placeholderTextColor="#98A2B3"
+            autoCorrect={false}
+            style={styles.searchInputEmbedded}
+          />
+        </View>
+        <Pressable
+          onPress={() => setShowFilters((value) => !value)}
+          style={[styles.filterIconButton, showFilters && styles.filterIconButtonActive]}
+          accessibilityLabel="Catalogue filters"
+        >
+          <Ionicons name="options-outline" size={21} color={showFilters ? '#FFFFFF' : '#102A43'} />
+        </Pressable>
+      </View>
+
+      {showFilters ? (
+        <View style={styles.filterPanel}>
+          <Text style={styles.filterTitle}>Filter by category</Text>
+          <View style={styles.categoryChips}>
+            <CategoryChip label="All" active={categoryFilter === 'all'} onPress={() => setCategoryFilter('all')} />
+            {categories.map((category) => (
+              <CategoryChip
+                key={category}
+                label={category}
+                active={categoryFilter === category}
+                onPress={() => setCategoryFilter(category)}
+              />
+            ))}
+          </View>
+        </View>
+      ) : null}
 
       <View style={styles.whatsappSummaryCard}>
         <View style={styles.whatsappSummaryCopy}>
@@ -255,6 +286,7 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
           key={editing === 'new' ? 'new' : editing.id}
           item={editing === 'new' ? null : editing}
           currency={business.currency}
+          categories={categories}
           onCancel={() => setEditing(null)}
           onSave={async (input) => {
             if (editing === 'new') await createItem(input);
@@ -382,20 +414,44 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
   );
 }
 
+function CatalogueStat({ icon, label, value, positive = false }: { icon: string; label: string; value: number; positive?: boolean }) {
+  return (
+    <View style={styles.catalogueSummaryCard}>
+      <View style={[styles.catalogueStatIcon, positive && styles.catalogueStatIconPositive]}>
+        <Ionicons name={icon as never} size={20} color={positive ? '#079455' : '#102A43'} />
+      </View>
+      <Text style={styles.catalogueSummaryValue}>{value}</Text>
+      <Text style={styles.catalogueSummaryLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function CategoryChip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={[styles.categoryChip, active && styles.categoryChipActive]}>
+      <Text style={[styles.categoryChipText, active && styles.categoryChipTextActive]}>{label}</Text>
+    </Pressable>
+  );
+}
+
 function CatalogueEditor({
   item,
   currency,
+  categories,
   onSave,
   onCancel,
 }: {
   item: CatalogueItem | null;
   currency: string;
+  categories: string[];
   onSave: (input: CatalogueItemInput) => Promise<void>;
   onCancel: () => void;
 }) {
   const [name, setName] = useState(item?.name ?? '');
   const [sku, setSku] = useState(item?.sku ?? '');
   const [category, setCategory] = useState(item?.category ?? '');
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [customCategory, setCustomCategory] = useState('');
   const [price, setPrice] = useState(item?.price === null || item?.price === undefined ? '' : String(item.price));
   const [aliases, setAliases] = useState(item?.aliases.join(', ') ?? '');
   const [imageUrl, setImageUrl] = useState(item?.imageUrl ?? '');
@@ -415,7 +471,7 @@ function CatalogueEditor({
       await onSave({
         name,
         sku: sku || null,
-        category: category || null,
+        category: category ? normalizeCategory(category) : null,
         imageUrl: imageUrl || null,
         price: parsedPrice,
         aliases: aliases.split(',').map((value) => value.trim()).filter(Boolean),
@@ -444,8 +500,57 @@ function CatalogueEditor({
         />
       </Field>
 
-      <Field label="Category" hint="Optional. Helps organise your product list.">
-        <TextInput value={category} onChangeText={setCategory} placeholder="e.g. Groceries" style={styles.input} />
+      <Field label="Category" hint="Use a consistent category so sales and product reports group correctly.">
+        <Pressable
+          onPress={() => setShowCategoryPicker((value) => !value)}
+          style={styles.categorySelect}
+        >
+          <Text style={[styles.categorySelectText, !category && styles.categorySelectPlaceholder]}>
+            {category || 'Choose category'}
+          </Text>
+          <Ionicons name={showCategoryPicker ? 'chevron-up' : 'chevron-down'} size={19} color="#667085" />
+        </Pressable>
+        {showCategoryPicker ? (
+          <View style={styles.categoryPicker}>
+            {catalogueCategoryOptions(categories).map((option) => (
+              <Pressable
+                key={option}
+                onPress={() => {
+                  setCategory(option);
+                  setCustomCategory('');
+                  setShowCategoryPicker(false);
+                }}
+                style={[styles.categoryOption, category === option && styles.categoryOptionActive]}
+              >
+                <Text style={[styles.categoryOptionText, category === option && styles.categoryOptionTextActive]}>{option}</Text>
+                {category === option ? <Ionicons name="checkmark" size={18} color="#079455" /> : null}
+              </Pressable>
+            ))}
+            <View style={styles.customCategoryWrap}>
+              <Text style={styles.help}>Add a category not listed above</Text>
+              <View style={styles.customCategoryRow}>
+                <TextInput
+                  value={customCategory}
+                  onChangeText={setCustomCategory}
+                  placeholder="e.g. Pet Supplies"
+                  style={[styles.input, styles.customCategoryInput]}
+                />
+                <Pressable
+                  disabled={!customCategory.trim()}
+                  onPress={() => {
+                    const next = normalizeCategory(customCategory);
+                    setCategory(next);
+                    setCustomCategory('');
+                    setShowCategoryPicker(false);
+                  }}
+                  style={[styles.customCategoryButton, !customCategory.trim() && styles.disabled]}
+                >
+                  <Text style={styles.customCategoryButtonText}>Use</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        ) : null}
       </Field>
 
       <Field label="SKU / product code" hint="Optional internal product code.">
@@ -499,6 +604,37 @@ function Field({
       {children}
     </View>
   );
+}
+
+const DEFAULT_CATEGORIES = [
+  'Apparel',
+  'Beauty',
+  'Electronics',
+  'Food & Drinks',
+  'Groceries',
+  'Health & Wellness',
+  'Home & Living',
+  'Pet Supplies',
+  'Services',
+  'Other',
+];
+
+function normalizeCategory(value: string): string {
+  return value
+    .trim()
+    .replace(/\s+/g, ' ')
+    .split(' ')
+    .map((part) => part ? part.charAt(0).toUpperCase() + part.slice(1).toLowerCase() : part)
+    .join(' ');
+}
+
+function catalogueCategoryOptions(existing: string[]): string[] {
+  const map = new Map<string, string>();
+  [...DEFAULT_CATEGORIES, ...existing].forEach((value) => {
+    const normalized = normalizeCategory(value);
+    map.set(normalized.toLowerCase(), normalized);
+  });
+  return Array.from(map.values()).sort((a, b) => a.localeCompare(b));
 }
 
 function money(value: number, currency: string) {
