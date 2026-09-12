@@ -27,6 +27,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [booting, setBooting] = useState(true);
   const [mode, setMode] = useState<AuthMode>('welcome');
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -104,6 +105,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }
 
   async function signUp() {
+    if (fullName.trim().length < 2) {
+      setError('Enter your name so SellerTray can personalise your workspace.');
+      return;
+    }
     if (!email.trim()) {
       setError('Enter your email address.');
       return;
@@ -130,6 +135,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
       password,
       options: {
         emailRedirectTo: authRedirectUrl('auth-confirm'),
+        data: {
+          full_name: normalisePersonName(fullName),
+          name: normalisePersonName(fullName),
+        },
       },
     });
 
@@ -144,6 +153,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
       return;
     }
 
+    setFullName('');
     setPassword('');
     setConfirmPassword('');
     setSignupLegalAccepted(false);
@@ -244,6 +254,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   function showMode(nextMode: AuthMode) {
     setMode(nextMode);
+    if (nextMode !== 'sign-up') setFullName('');
     setPassword('');
     setConfirmPassword('');
     setRecoveryUrl('');
@@ -357,7 +368,17 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   if (!session && mode === 'sign-up') {
     return (
-      <AuthCard title="Create your SellerTray account" subtitle="Start with your email. Your business workspace comes next.">
+      <AuthCard title="Create your SellerTray account" subtitle="Tell us who you are. Your business workspace comes next.">
+        <AuthField label="Your name" hint="Used for greetings and your personal SellerTray account.">
+          <TextInput
+            autoCapitalize="words"
+            autoComplete="name"
+            placeholder="e.g. Alex Johnson"
+            value={fullName}
+            onChangeText={setFullName}
+            style={styles.input}
+          />
+        </AuthField>
         <EmailInput email={email} onChange={setEmail} />
         <PasswordInputs
           password={password}
@@ -435,6 +456,15 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }
 
   return <>{children}</>;
+}
+
+function normalisePersonName(value: string): string {
+  return value
+    .trim()
+    .replace(/\s+/g, ' ')
+    .split(' ')
+    .map((part) => part ? part.charAt(0).toUpperCase() + part.slice(1) : part)
+    .join(' ');
 }
 
 function WelcomeBenefit({ icon, title, text }: { icon: string; title: string; text: string }) {
