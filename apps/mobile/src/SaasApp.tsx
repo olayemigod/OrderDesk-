@@ -1236,6 +1236,105 @@ function ConversationsView({
   );
 }
 
+function NotificationCenterView({
+  orders,
+  syncError,
+  onOpenOrder,
+  onBack,
+}: {
+  orders: MerchantOrder[];
+  syncError: string | null;
+  onOpenOrder: (orderId: string) => void;
+  onBack: () => void;
+}) {
+  const alerts = orders
+    .flatMap((order) => {
+      const rows: Array<{ key: string; title: string; text: string; icon: string; tone: 'warning' | 'info' | 'success'; orderId: string }> = [];
+      if (order.status === 'needs_review' || order.status === 'draft') {
+        rows.push({
+          key: order.id + '-review',
+          title: 'Order needs review',
+          text: `${order.publicOrderId} · ${order.customerName}`,
+          icon: 'alert-circle-outline',
+          tone: 'warning',
+          orderId: order.id,
+        });
+      }
+      if (['pending', 'verification_required', 'payment_issue'].includes(order.paymentStatus)) {
+        rows.push({
+          key: order.id + '-payment',
+          title: order.paymentStatus === 'payment_issue' ? 'Payment needs attention' : 'Payment update',
+          text: `${order.publicOrderId} · ${formatPaymentStatus(order.paymentStatus)}`,
+          icon: 'card-outline',
+          tone: 'warning',
+          orderId: order.id,
+        });
+      }
+      if (order.status === 'ready') {
+        rows.push({
+          key: order.id + '-ready',
+          title: 'Order ready',
+          text: `${order.publicOrderId} is ready for pickup or delivery.`,
+          icon: 'checkmark-circle-outline',
+          tone: 'success',
+          orderId: order.id,
+        });
+      }
+      return rows;
+    })
+    .slice(0, 30);
+
+  return (
+    <View style={styles.sectionStack}>
+      <Pressable onPress={onBack} style={styles.backToListButton}>
+        <Text style={styles.backToListText}>← Home</Text>
+      </Pressable>
+      <View>
+        <Text style={styles.sectionEyebrow}>ACTIVITY CENTER</Text>
+        <Text style={styles.pageTitle}>Notifications</Text>
+        <Text style={styles.pageSubtitle}>Orders, payments and important SellerTray activity that needs your attention.</Text>
+      </View>
+
+      {syncError ? (
+        <View style={styles.notificationSyncCard}>
+          <Ionicons name="cloud-offline-outline" size={22} color="#B42318" />
+          <View style={styles.conversationCopy}>
+            <Text style={styles.notificationAlertTitle}>Workspace sync problem</Text>
+            <Text style={styles.notificationAlertText}>{syncError}</Text>
+          </View>
+        </View>
+      ) : null}
+
+      {alerts.length === 0 ? (
+        <View style={styles.emptyCard}>
+          <Ionicons name="notifications-outline" size={28} color={theme.colors.greenDark} />
+          <Text style={styles.emptyTitle}>You are all caught up</Text>
+          <Text style={styles.emptyText}>New order, payment and fulfilment alerts will appear here.</Text>
+        </View>
+      ) : (
+        <View style={styles.notificationList}>
+          {alerts.map((alert) => (
+            <Pressable key={alert.key} onPress={() => onOpenOrder(alert.orderId)} style={styles.notificationAlertRow}>
+              <View style={[
+                styles.notificationAlertIcon,
+                alert.tone === 'warning' && styles.notificationAlertIconWarning,
+                alert.tone === 'success' && styles.notificationAlertIconSuccess,
+              ]}>
+                <Ionicons name={alert.icon as never} size={20} color={alert.tone === 'warning' ? '#B54708' : alert.tone === 'success' ? theme.colors.greenDark : theme.colors.navy} />
+              </View>
+              <View style={styles.conversationCopy}>
+                <Text style={styles.notificationAlertTitle}>{alert.title}</Text>
+                <Text style={styles.notificationAlertText}>{alert.text}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
+            </Pressable>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
 function ConversationStat({
   icon,
   label,
@@ -1326,6 +1425,20 @@ function StatusPill({ status }: { status: OrderStatus }) {
       <Text style={styles.statusText}>{statusLabels[status]}</Text>
     </View>
   );
+}
+
+function firstName(value: string): string {
+  const clean = value.trim();
+  if (!clean) return 'there';
+  const part = clean.split(/\s+/)[0] ?? clean;
+  return part.charAt(0).toUpperCase() + part.slice(1);
+}
+
+function timeGreeting(date = new Date()): string {
+  const hour = date.getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
 }
 
 function customerInitials(value: string): string {
