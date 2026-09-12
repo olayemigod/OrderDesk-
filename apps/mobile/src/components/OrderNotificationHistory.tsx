@@ -18,6 +18,8 @@ const eventLabels: Record<NotificationEventKey, string> = {
   order_out_for_delivery: 'Out for delivery',
   order_rejected: 'Order rejected',
   order_cancelled: 'Order cancelled',
+  order_status_reply: 'Status reply',
+  order_receipt: 'Receipt sent',
 };
 
 const statusLabels: Record<NotificationDeliveryStatus, string> = {
