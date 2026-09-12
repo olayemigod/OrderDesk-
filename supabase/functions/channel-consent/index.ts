@@ -92,14 +92,12 @@ Deno.serve(async (request) => {
         termsPrivacyAccepted = Boolean(acceptance);
       }
 
-      const currentWhatsappVersion = typeof current.whatsapp_data_processing === 'string'
-        ? current.whatsapp_data_processing
-        : null;
-      const consentActive = Boolean(
-        consent &&
-        currentWhatsappVersion &&
-        consent.policy_version === currentWhatsappVersion
+      const { data: consentActiveData, error: consentActiveError } = await admin.rpc(
+        'sellertray_whatsapp_consent_active',
+        { p_tenant_id: tenantId },
       );
+      if (consentActiveError) throw consentActiveError;
+      const consentActive = consentActiveData === true;
 
       return reply({
         role: membership.role,
