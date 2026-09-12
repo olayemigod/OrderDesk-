@@ -378,6 +378,9 @@ const merchantPaymentOperations = read(join(repoRoot, 'supabase/functions/mercha
 const financialDocumentFunction = read(join(repoRoot, 'supabase/functions/financial-document/index.ts'));
 const whatsappPaymentModule = read(join(repoRoot, 'supabase/functions/whatsapp-webhook/payment.ts'));
 const orderPaymentPanel = read(join(mobileRoot, 'src/components/OrderPaymentPanel.tsx'));
+const paymentReconciliationPanel = read(join(mobileRoot, 'src/components/PaymentReconciliationPanel.tsx'));
+const paymentReconciliationRepository = read(join(mobileRoot, 'src/data/paymentReconciliationRepository.ts'));
+const paymentMethodsSettings = read(join(mobileRoot, 'src/components/PaymentMethodsSettings.tsx'));
 const customerPaymentsContract = read(join(repoRoot, 'docs/customer_payments.md'));
 
 requireValue(
@@ -459,6 +462,17 @@ requireValue(
     merchantPaymentOperations.includes('confirm_sellertray_offline_payment') &&
     merchantPaymentOperations.includes("action === 'verify_gateway'"),
   'Merchant payment verification UI must use governed server operations without coupling payment to fulfilment',
+);
+requireValue(
+  paymentMethodsSettings.includes('<PaymentReconciliationPanel tenantId={business.id} />') &&
+    paymentReconciliationPanel.includes('Payment inbox') &&
+    paymentReconciliationPanel.includes("status === 'pending_verification'") &&
+    paymentReconciliationPanel.includes('Verify provider') &&
+    paymentReconciliationPanel.includes('Confirm received') &&
+    paymentReconciliationRepository.includes("from('order_payments')") &&
+    paymentReconciliationRepository.includes('confirmReconciliationPayment') &&
+    paymentReconciliationRepository.includes('verifyReconciliationGateway'),
+  'P8 tenant payment reconciliation inbox/report must remain wired to governed payment operations',
 );
 requireValue(
   customerPaymentsContract.includes('No percentage-of-sales / GMV fee') &&
