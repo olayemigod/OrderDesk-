@@ -34,6 +34,7 @@ import { useCatalogue } from './hooks/useCatalogue';
 import { useOrders } from './hooks/useOrders';
 import { supabase } from './lib/supabase';
 import { sellerTrayTheme as theme } from './theme/sellerTrayTheme';
+import { useSellerTrayAppearance } from './theme/AppearanceContext';
 
 type ViewName = 'home' | 'orders' | 'inbox' | 'products' | 'more' | 'notifications';
 type OrderFilter = 'attention' | 'payment' | 'paid' | 'active' | 'done' | 'all';
@@ -78,6 +79,7 @@ export default function SaasApp() {
 }
 
 function Workspace() {
+  const appearance = useSellerTrayAppearance();
   const {
     businesses,
     activeBusiness,
@@ -176,14 +178,22 @@ function Workspace() {
   const pageError = businessesError || error;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.appFrame}>
+    <SafeAreaView style={[styles.safeArea, appearance.dark && darkStyles.safeArea]}>
+      <StatusBar
+        barStyle={appearance.dark ? 'light-content' : 'dark-content'}
+        backgroundColor={appearance.dark ? '#081825' : '#F8FAFC'}
+      />
+      <View style={[styles.appFrame, appearance.dark && darkStyles.appFrame]}>
         <ScrollView
-          contentContainerStyle={styles.page}
+          style={appearance.dark ? darkStyles.scroll : undefined}
+          contentContainerStyle={[styles.page, appearance.dark && darkStyles.page]}
           refreshControl={
             <RefreshControl
               refreshing={businessesLoading || loading}
               onRefresh={() => void refreshAll()}
+              tintColor={appearance.dark ? theme.colors.mint : theme.colors.green}
+              colors={[theme.colors.green]}
+              progressBackgroundColor={appearance.dark ? theme.colors.navy : theme.colors.white}
             />
           }
         >
@@ -196,7 +206,7 @@ function Workspace() {
           />
 
           {pageError ? (
-            <View style={styles.errorCard}>
+            <View style={[styles.errorCard, appearance.dark && darkStyles.errorCard]}>
               <Text style={styles.errorTitle}>Workspace sync problem</Text>
               <Text style={styles.errorText}>{pageError}</Text>
               <Pressable onPress={() => void refreshAll()}>
