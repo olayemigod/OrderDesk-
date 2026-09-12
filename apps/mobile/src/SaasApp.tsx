@@ -1657,7 +1657,7 @@ const styles = StyleSheet.create({
   conversationPreview: { color: theme.colors.slate, fontSize: 12, lineHeight: 17, marginTop: 3 },
   conversationMeta: { color: theme.colors.greenDark, fontSize: 10, fontWeight: '800', marginTop: 3 },
   conversationChevron: { color: theme.colors.subtle, fontSize: 23 },
-  bottomNav: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#E4E7EC', backgroundColor: '#FFFFFF', paddingHorizontal: 4, paddingTop: 7, paddingBottom: Platform.OS === 'android' ? 44 : 9, gap: 1 },
+  bottomNav: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#E4E7EC', backgroundColor: '#FFFFFF', paddingHorizontal: 4, paddingTop: 7, paddingBottom: Platform.OS === 'android' ? 46 : 10, gap: 1 },
   navButton: { flex: 1, minHeight: 58, borderRadius: 11, alignItems: 'center', justifyContent: 'center', gap: 3, paddingHorizontal: 1 },
   navButtonActive: { backgroundColor: '#ECFDF3' },
   navIconWrap: { position: 'relative', minWidth: 28, alignItems: 'center' },
