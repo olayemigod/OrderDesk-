@@ -759,7 +759,15 @@ function OrderDetail({
   onRemoveItem: (itemId: string) => Promise<void>;
 }) {
   const total = orderTotal(order);
-  const editable = order.status === 'needs_review' || order.status === 'draft';
+  const editable =
+    order.status === 'needs_review' ||
+    order.status === 'draft' ||
+    (
+      order.source === 'manual' &&
+      order.status === 'accepted' &&
+      order.paymentStatus === 'unpaid' &&
+      order.fulfillmentStatus === 'unassigned'
+    );
 
   return (
     <View style={styles.detailCard}>
@@ -788,7 +796,13 @@ function OrderDetail({
 
       <View>
         <Text style={styles.sectionTitle}>{editable ? 'Review order items' : 'Order items'}</Text>
-        {editable ? <Text style={styles.pageSubtitle}>Correct AI interpretation and prices before acceptance.</Text> : null}
+        {editable ? (
+          <Text style={styles.pageSubtitle}>
+            {order.source === 'manual'
+              ? 'You can adjust quantities and selling prices while this manual order is unpaid and has not entered fulfilment.'
+              : 'Correct AI interpretation and prices before acceptance.'}
+          </Text>
+        ) : null}
       </View>
 
       <OrderItemsEditor
