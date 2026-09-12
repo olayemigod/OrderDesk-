@@ -2,6 +2,7 @@ type JsonRecord = Record<string, unknown>;
 type AdminAction =
   | 'overview'
   | 'audit'
+  | 'ai_parser_readiness'
   | 'set_subscription_status'
   | 'extend_trial_days'
   | 'set_whatsapp_status'
@@ -9,6 +10,9 @@ type AdminAction =
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+const OPENAI_API_KEY_CONFIGURED = Boolean(Deno.env.get('OPENAI_API_KEY')?.trim());
+const ORDER_PARSER_TOKEN_CONFIGURED = Boolean(Deno.env.get('ORDER_PARSER_TOKEN')?.trim());
+const OPENAI_PARSER_MODEL = Deno.env.get('OPENAI_PARSER_MODEL')?.trim() || 'gpt-5.6-luna';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -50,6 +54,13 @@ Deno.serve(withObservability('platform-admin', async (request) => {
         p_actor_user_id: userId,
       });
       return json({ overview });
+    }
+
+    if (action === 'ai_parser_readiness') {
+      const overview = await rpc<JsonRecord>('platform_admin_overview', {
+        p_actor_user_id: userId,
+      });
+      return json({ readiness: buildAiParserReadiness(overview) });
     }
 
     if (action === 'audit') {
@@ -180,6 +191,7 @@ function cleanAction(value: unknown): AdminAction | null {
   const supported: AdminAction[] = [
     'overview',
     'audit',
+    'ai_parser_readiness',
     'set_subscription_status',
     'extend_trial_days',
     'set_whatsapp_status',
@@ -188,6 +200,122 @@ function cleanAction(value: unknown): AdminAction | null {
   return typeof value === 'string' && supported.includes(value as AdminAction)
     ? value as AdminAction
     : null;
+}
+
+function buildAiParserReadiness(overview: JsonRecord): JsonRecord {
+  const tenants = Array.isArray(overview.tenants)
+    ? overview.tenants.filter(isRecord)
+    : [];
+
+  let attempts = 0;
+  let successes = 0;
+  let nonSuccess = 0;
+  let inputTokens = 0;
+  let cachedInputTokens = 0;
+  let outputTokens = 0;
+  let reasoningTokens = 0;
+  let totalTokens = 0;
+  let meteredExternalOrderUnits = 0;
+  let catalogueItemsTotalMax = 0;
+  let catalogueItemsSentWeighted = 0;
+  let catalogueAliasesSentWeighted = 0;
+  let tenantsWithAttempts = 0;
+  let latestModel: string | null = null;
+
+  for (const tenant of tenants) {
+    const tenantAttempts = nonNegativeNumber(tenant.aiParserAttemptsPeriod);
+    const tenantSuccesses = nonNegativeNumber(tenant.aiParserSuccessesPeriod);
+    const tenantNonSuccess = nonNegativeNumber(tenant.aiParserNonSuccessPeriod);
+    attempts += tenantAttempts;
+    successes += tenantSuccesses;
+    nonSuccess += tenantNonSuccess;
+    inputTokens += nonNegativeNumber(tenant.aiInputTokensPeriod);
+    cachedInputTokens += nonNegativeNumber(tenant.aiCachedInputTokensPeriod);
+    outputTokens += nonNegativeNumber(tenant.aiOutputTokensPeriod);
+    reasoningTokens += nonNegativeNumber(tenant.aiReasoningTokensPeriod);
+    totalTokens += nonNegativeNumber(tenant.aiTotalTokensPeriod);
+    meteredExternalOrderUnits += nonNegativeNumber(tenant.usageUnitsPeriod);
+    catalogueItemsTotalMax = Math.max(
+      catalogueItemsTotalMax,
+      nonNegativeNumber(tenant.aiCatalogueItemsTotalMax),
+    );
+
+    if (tenantAttempts > 0) {
+      tenantsWithAttempts += 1;
+      catalogueItemsSentWeighted +=
+        nonNegativeNumber(tenant.aiCatalogueItemsSentAvg) * tenantAttempts;
+      catalogueAliasesSentWeighted +=
+        nonNegativeNumber(tenant.aiCatalogueAliasesSentAvg) * tenantAttempts;
+      if (!latestModel && typeof tenant.aiParserModel === 'string' && tenant.aiParserModel.trim()) {
+        latestModel = tenant.aiParserModel.trim().slice(0, 120);
+      }
+    }
+  }
+
+  const configured = OPENAI_API_KEY_CONFIGURED && ORDER_PARSER_TOKEN_CONFIGURED;
+  const hasLiveAttempt = attempts > 0;
+  const hasSuccessfulParse = successes > 0;
+  const hasMeteredExternalOrder = meteredExternalOrderUnits > 0;
+
+  return {
+    configured,
+    configuration: {
+      openaiApiKeyConfigured: OPENAI_API_KEY_CONFIGURED,
+      parserTokenConfigured: ORDER_PARSER_TOKEN_CONFIGURED,
+      configuredModel: OPENAI_PARSER_MODEL,
+    },
+    currentPeriod: {
+      tenants: tenants.length,
+      tenantsWithAttempts,
+      attempts,
+      successes,
+      nonSuccess,
+      inputTokens,
+      cachedInputTokens,
+      outputTokens,
+      reasoningTokens,
+      totalTokens,
+      meteredExternalOrderUnits,
+      catalogueItemsTotalMax,
+      catalogueItemsSentAvg: attempts > 0
+        ? Math.round((catalogueItemsSentWeighted / attempts) * 10) / 10
+        : 0,
+      catalogueAliasesSentAvg: attempts > 0
+        ? Math.round((catalogueAliasesSentWeighted / attempts) * 10) / 10
+        : 0,
+      latestObservedModel: latestModel,
+    },
+    acceptanceEvidence: {
+      hasLiveAttempt,
+      hasSuccessfulParse,
+      hasMeteredExternalOrder,
+      outcomesReconcile: attempts === successes + nonSuccess,
+      meteredOrdersDoNotExceedSuccessfulParses: meteredExternalOrderUnits <= successes,
+      productionAcceptanceReady:
+        configured &&
+        hasLiveAttempt &&
+        hasSuccessfulParse &&
+        hasMeteredExternalOrder &&
+        attempts === successes + nonSuccess &&
+        meteredExternalOrderUnits <= successes,
+    },
+    generatedAt: typeof overview.generatedAt === 'string'
+      ? overview.generatedAt
+      : new Date().toISOString(),
+  };
+}
+
+function nonNegativeNumber(value: unknown): number {
+  const parsed = typeof value === 'number'
+    ? value
+    : typeof value === 'string'
+      ? Number(value)
+      : 0;
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+function isRecord(value: unknown): value is JsonRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function cleanEnum(value: unknown, supported: string[]): string | null {
