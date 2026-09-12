@@ -42,8 +42,10 @@ jobs:
             supabase init
           fi
 
-      - name: Start local Supabase
-        run: supabase start --debug
+      - name: Start database-only Supabase stack
+        run: >-
+          supabase start --debug
+          -x gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
 
       - name: Replay all migrations
         run: supabase db reset
