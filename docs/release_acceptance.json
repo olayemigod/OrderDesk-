@@ -3,7 +3,7 @@
   "product": "SellerTray",
   "version": "1.0.0",
   "androidPackage": "ng.processedge.sellertray",
-  "updatedAt": "2026-09-11",
+  "updatedAt": "2026-09-12",
   "codeCheckpoint": {
     "status": "accepted",
     "commit": "3aa14582ea012dc4905f35ee5c450df89d85895d",
@@ -23,8 +23,8 @@
       "required": true,
       "status": "accepted",
       "owner": "ProcessEdge",
-      "evidence": "Migration user_legal_acceptances applied; account-lifecycle v4 ACTIVE; usage ledger included in Owner export",
-      "acceptance": "Authenticated sessions are gated on current Terms/Privacy acceptance and the server records version/timestamp; Owner business export includes the usage ledger."
+      "evidence": "Versioned user_legal_acceptances active; current Terms/Privacy version 2026-09-12; account-lifecycle v13 ACTIVE; channel-consent v2 requires current Terms/Privacy before Owner WhatsApp processing authorization.",
+      "acceptance": "Authenticated sessions are gated on current Terms/Privacy acceptance; the server records version/timestamp; material legal updates require renewed acceptance before WhatsApp channel authorization can be current."
     },
     {
       "id": "supabase_auth_redirects",
@@ -56,8 +56,8 @@
       "required": true,
       "status": "pending",
       "owner": "ProcessEdge",
-      "evidence": "SellerTray-ready Privacy/Terms published to ProcessEdge production main; routes https://processedge.com.ng/sellertray/privacy and https://processedge.com.ng/sellertray/terms added in website commit f346842392160d0f0f4c58033de0d0a5220169c6; Vercel production deployment dpl_4azGjgMEfPFNX7de32pUv2L4HDCw READY; privacy/terms copy published by commits 19d4fd941d02bfeee11def1e72f2360104458dc1 and a1924566d42813064d9aefe1ed4bb6c94fdc4c85; external legal review remains pending",
-      "acceptance": "Production publication and SellerTray-specific routes are complete. Obtain independent legal review/approval of the published wording, then record approval evidence before marking this gate accepted."
+      "evidence": "SellerTray Terms/Privacy updated to legal version 2026-09-12 with explicit WhatsApp webhook message/content/metadata purposes, channel authorization and merchant-controlled chat-image catalogue capture. ProcessEdge production commits 83c08263f76cf61c0588c2f20ca012eca4d3c0eb and e4a6d7aff597b20613f6b53186718af629f6ca9a deployed READY on Vercel (latest production deployment dpl_EtPZ7BsPm7MWpUDES5N6bzYqpTFt). SellerTray database current Terms/Privacy versions are 2026-09-12; account-lifecycle v13 and channel-consent v2 enforce renewed acceptance. Independent legal review remains pending.",
+      "acceptance": "Production publication, explicit WhatsApp/webhook disclosure, versioned renewed acceptance and SellerTray-specific routes are complete. Obtain independent legal review/approval of the published wording, then record approval evidence before marking this gate accepted."
     },
     {
       "id": "production_auth_email",

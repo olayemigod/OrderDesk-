@@ -793,11 +793,11 @@ requireValue(
   'Self-service account deletion must check unsettled priced usage',
 );
 requireValue(
-  accountLifecycleRepository.includes("SELLERTRAY_TERMS_VERSION = '2026-09-11'") &&
-    accountLifecycleRepository.includes("SELLERTRAY_PRIVACY_VERSION = '2026-09-11'") &&
-    accountLifecycleFunction.includes("SELLERTRAY_TERMS_VERSION = '2026-09-11'") &&
-    accountLifecycleFunction.includes("SELLERTRAY_PRIVACY_VERSION = '2026-09-11'"),
-  'SellerTray mobile/server legal acceptance versions must remain aligned at 2026-09-11',
+  accountLifecycleRepository.includes("SELLERTRAY_TERMS_VERSION = '2026-09-12'") &&
+    accountLifecycleRepository.includes("SELLERTRAY_PRIVACY_VERSION = '2026-09-12'") &&
+    accountLifecycleFunction.includes("SELLERTRAY_TERMS_VERSION = '2026-09-12'") &&
+    accountLifecycleFunction.includes("SELLERTRAY_PRIVACY_VERSION = '2026-09-12'"),
+  'SellerTray mobile/server legal acceptance versions must remain aligned at 2026-09-12',
 );
 requireValue(
   usagePeriodCurrencyMigration.includes('Usage settlement period must be closed'),
