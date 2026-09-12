@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(35);
+select extensions.plan(38);
 
 select extensions.ok((select relrowsecurity from pg_class where oid='public.orders'::regclass),'orders keeps RLS enabled');
 select extensions.ok((select relrowsecurity from pg_class where oid='public.order_items'::regclass),'order_items keeps RLS enabled');
@@ -36,6 +36,10 @@ select extensions.ok(not has_function_privilege('authenticated','public.create_s
 select extensions.ok(not has_function_privilege('authenticated','public.claim_sellertray_inbound_message(uuid)','EXECUTE'),'inbound claim function is service-only');
 select extensions.ok(not has_function_privilege('authenticated','public.consume_sellertray_rate_limit(text,text,integer,integer)','EXECUTE'),'rate limiter is service-only');
 select extensions.ok(not has_function_privilege('authenticated','public.create_sellertray_order_payment_for_method(uuid,uuid,uuid,text,text,text,timestamptz)','EXECUTE'),'payment creation RPC is service-only');
+
+select extensions.ok(not has_function_privilege('anon','public.sync_sellertray_order_total_from_items()','EXECUTE'),'anonymous role cannot directly execute order-total trigger function');
+select extensions.ok(not has_function_privilege('authenticated','public.sync_sellertray_order_total_from_items()','EXECUTE'),'authenticated role cannot directly execute order-total trigger function');
+select extensions.ok(not has_function_privilege('service_role','public.sync_sellertray_order_total_from_items()','EXECUTE'),'service role cannot directly execute trigger-only order-total function');
 
 select extensions.ok(has_function_privilege('service_role','public.create_sellertray_manual_order_atomic(uuid,text,text,text,jsonb)','EXECUTE'),'service role can create manual atomic orders');
 select extensions.ok(has_function_privilege('service_role','public.create_sellertray_whatsapp_order_atomic(uuid,uuid,uuid,text,numeric,text,text,text[],text,jsonb)','EXECUTE'),'service role can create WhatsApp atomic orders');
