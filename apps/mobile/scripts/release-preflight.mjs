@@ -203,7 +203,7 @@ for (const profileName of ['qa', 'preview', 'production']) {
   for (const key of Object.keys(env)) {
     requireValue(key.startsWith('EXPO_PUBLIC_'), 'EAS '+profileName+' env may contain public client variables only: '+key);
     requireValue(
-      !/(SERVICE_ROLE|SECRET|OPENAI|PAYSTACK|WHATSAPP|WORKER_TOKEN|ORDER_PARSER_TOKEN)/i.test(key),
+      !/(SERVICE_ROLE|SECRET|OPENAI|PAYSTACK|WHATSAPP|META_ACCESS_TOKEN|META_WEBHOOK_VERIFY_TOKEN|WORKER_TOKEN|ORDER_PARSER_TOKEN)/i.test(key),
       'Forbidden server/provider secret variable in EAS '+profileName+': '+key,
     );
   }
@@ -907,6 +907,8 @@ const forbiddenSecretPatterns = [
   /FLUTTERWAVE_SECRET_HASH/g,
   /SELLERTRAY_PAYMENT_ENCRYPTION_KEY/g,
   /WHATSAPP_ACCESS_TOKEN/g,
+  /META_ACCESS_TOKEN/g,
+  /META_WEBHOOK_VERIFY_TOKEN/g,
   /ORDER_PARSER_TOKEN/g,
   /WORKER_TOKEN/g,
   /sb_secret_[A-Za-z0-9_-]+/g,
