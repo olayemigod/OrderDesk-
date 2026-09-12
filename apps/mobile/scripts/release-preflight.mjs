@@ -298,14 +298,16 @@ const whatsappNotificationWorker = read(join(repoRoot, 'supabase/functions/send-
 requireValue(
   pdfReceiptMigration.includes("'receipts', 'receipts', false") &&
     pdfReceiptMigration.includes("media_type = 'document'") &&
-    pdfReceiptMigration.includes("media_mime_type = 'application/pdf'"),
+    pdfReceiptMigration.includes("media_mime_type = 'application/pdf'") &&
+    pdfReceiptMigration.includes('guard_sellertray_receipt_cache'),
   'PDF receipt delivery migration contract is missing',
 );
 requireValue(
   whatsappWebhookReceiptFunction.includes("npm:pdf-lib@1.17.1") &&
     whatsappWebhookReceiptFunction.includes('ensureReceiptPdf') &&
     whatsappWebhookReceiptFunction.includes('uploadPrivateReceipt') &&
-    whatsappWebhookReceiptFunction.includes("storageBucket: 'receipts'"),
+    whatsappWebhookReceiptFunction.includes("storageBucket: 'receipts'") &&
+    whatsappWebhookReceiptFunction.includes('cachedPath === storagePath'),
   'WhatsApp receipt requests must generate/cache a private deterministic PDF',
 );
 requireValue(
