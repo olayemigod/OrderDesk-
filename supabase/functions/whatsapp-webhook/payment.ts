@@ -37,6 +37,7 @@ type Command =
   | { kind: 'select'; token: string }
   | { kind: 'claim' }
   | { kind: 'status' }
+  | { kind: 'invoice' }
   | { kind: 'financial_receipt' };
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
@@ -85,6 +86,10 @@ export async function handleCustomerPaymentSelfService(input: {
     await sendStatus(input, order);
     return true;
   }
+  if (command.kind === 'invoice') {
+    await sendInvoiceDocument(input, order);
+    return true;
+  }
 
   await sendFinancialReceiptReference(input, order);
   return true;
@@ -95,6 +100,7 @@ function detectCommand(value: string): Command | null {
   if (!extractOrderRef(normalized)) return null;
 
   if (/^payment\s+receipt\b/i.test(normalized)) return { kind: 'financial_receipt' };
+  if (/^invoice\b/i.test(normalized)) return { kind: 'invoice' };
   if (/^payment\s+status\b/i.test(normalized)) return { kind: 'status' };
   if (/^(?:paid|i\s+have\s+paid|payment\s+made)\b/i.test(normalized)) return { kind: 'claim' };
 
@@ -367,16 +373,103 @@ async function sendStatus(input: HandlerInput, order: OrderRow): Promise<void> {
   await queueReply(input, order, 'payment_status_reply', lines.join('\n'));
 }
 
+async function sendInvoiceDocument(input: HandlerInput, order: OrderRow): Promise<void> {
+  const snapshot = await financialSnapshot(input.tenantId, order.id);
+  if (!snapshot.invoice) {
+    await queueReply(
+      input,
+      order,
+      'financial_document',
+      'No invoice is available yet for order ' + order.public_order_id + '. The invoice is issued when the merchant accepts the order.',
+    );
+    return;
+  }
+
+  let attachment: FinancialAttachment | null = null;
+  try {
+    attachment = await renderFinancialDocument(snapshot.invoice.id);
+  } catch (error) {
+    console.error('SellerTray invoice PDF rendering failed; sending reference fallback.', error);
+  }
+
+  await queueReply(
+    input,
+    order,
+    'financial_document',
+    input.businessName + ' invoice\nOrder Ref: ' + order.public_order_id +
+      '\nInvoice: ' + snapshot.invoice.document_reference +
+      '\nAmount due: ' + formatMoney(Number(snapshot.invoice.amount) || 0, snapshot.invoice.currency) +
+      '\nThis invoice is not proof of payment.',
+    attachment,
+  );
+}
+
 async function sendFinancialReceiptReference(input: HandlerInput, order: OrderRow): Promise<void> {
   const snapshot = await financialSnapshot(input.tenantId, order.id);
-  const body = snapshot.paymentStatus === 'paid' && snapshot.receipt
-    ? input.businessName + ' financial receipt\nOrder Ref: ' + order.public_order_id +
-      '\nFinancial Receipt: ' + snapshot.receipt.document_reference +
-      '\nAmount: ' + formatMoney(Number(snapshot.receipt.amount) || 0, snapshot.receipt.currency)
-    : 'No financial payment receipt is available yet for order ' + order.public_order_id +
-      '. A financial receipt is issued only after payment is confirmed.';
+  if (snapshot.paymentStatus !== 'paid' || !snapshot.receipt) {
+    await queueReply(
+      input,
+      order,
+      'financial_document',
+      'No financial payment receipt is available yet for order ' + order.public_order_id +
+        '. A financial receipt is issued only after payment is confirmed.',
+    );
+    return;
+  }
 
-  await queueReply(input, order, 'financial_document', body);
+  let attachment: FinancialAttachment | null = null;
+  try {
+    attachment = await renderFinancialDocument(snapshot.receipt.id);
+  } catch (error) {
+    console.error('SellerTray payment receipt PDF rendering failed; sending reference fallback.', error);
+  }
+
+  await queueReply(
+    input,
+    order,
+    'financial_document',
+    input.businessName + ' financial receipt\nOrder Ref: ' + order.public_order_id +
+      '\nFinancial Receipt: ' + snapshot.receipt.document_reference +
+      '\nAmount: ' + formatMoney(Number(snapshot.receipt.amount) || 0, snapshot.receipt.currency),
+    attachment,
+  );
+}
+
+type FinancialAttachment = {
+  storageBucket: string;
+  storagePath: string;
+  filename: string;
+  mimeType: string;
+};
+
+async function renderFinancialDocument(documentId: string): Promise<FinancialAttachment> {
+  const response = await fetch(SUPABASE_URL + '/functions/v1/financial-document', {
+    method: 'POST',
+    headers: {
+      apikey: SERVICE_KEY,
+      authorization: 'Bearer ' + SERVICE_KEY,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ documentId }),
+  });
+  const payload = await safeJson(response) || {};
+  if (!response.ok) {
+    throw new Error(typeof payload.error === 'string' ? payload.error : 'Financial document rendering failed');
+  }
+  if (
+    typeof payload.storageBucket !== 'string' ||
+    typeof payload.storagePath !== 'string' ||
+    typeof payload.filename !== 'string' ||
+    typeof payload.mimeType !== 'string'
+  ) {
+    throw new Error('Financial document renderer returned an invalid attachment');
+  }
+  return {
+    storageBucket: payload.storageBucket,
+    storagePath: payload.storagePath,
+    filename: payload.filename,
+    mimeType: payload.mimeType,
+  };
 }
 
 type HandlerInput = {
@@ -391,20 +484,21 @@ type HandlerInput = {
 
 async function financialSnapshot(tenantId: string, orderId: string): Promise<{
   paymentStatus: string;
-  invoice: { document_reference: string; currency: string; amount: number | string } | null;
-  receipt: { document_reference: string; currency: string; amount: number | string } | null;
+  invoice: { id: string; document_reference: string; currency: string; amount: number | string } | null;
+  receipt: { id: string; document_reference: string; currency: string; amount: number | string } | null;
 }> {
   const orders = await rest<Array<{ payment_status: string }>>(
     '/rest/v1/orders?select=payment_status&tenant_id=eq.' + encodeURIComponent(tenantId) +
     '&id=eq.' + encodeURIComponent(orderId) + '&limit=1',
   );
   const docs = await rest<Array<{
+    id: string;
     document_type: string;
     document_reference: string;
     currency: string;
     amount: number | string;
   }>>(
-    '/rest/v1/order_financial_documents?select=document_type,document_reference,currency,amount' +
+    '/rest/v1/order_financial_documents?select=id,document_type,document_reference,currency,amount' +
     '&tenant_id=eq.' + encodeURIComponent(tenantId) +
     '&order_id=eq.' + encodeURIComponent(orderId) +
     '&status=eq.issued',
@@ -509,6 +603,7 @@ async function queueReply(
   order: OrderRow,
   eventKey: string,
   message: string,
+  attachment: FinancialAttachment | null = null,
 ): Promise<void> {
   await rest('/rest/v1/outbound_notifications', {
     method: 'POST',
@@ -523,6 +618,11 @@ async function queueReply(
       from_phone_number_id: input.fromPhoneNumberId,
       to_wa_id: input.customerWaId,
       message_body: message.slice(0, 2000),
+      media_type: attachment ? 'document' : null,
+      storage_bucket: attachment ? attachment.storageBucket : null,
+      storage_path: attachment ? attachment.storagePath : null,
+      media_filename: attachment ? attachment.filename : null,
+      media_mime_type: attachment ? attachment.mimeType : null,
       conversation_window_expires_at: new Date(Date.now() + 86400000).toISOString(),
     }),
   });
