@@ -412,8 +412,12 @@ function flutterwaveMismatch(payment: J, data: J): string | null {
   const expectedRef = stringValue(payment.provider_reference);
   const actualRef = stringValue(data.tx_ref);
 
-  if (expectedAmount === null || actualAmount === null || actualAmount < expectedAmount) {
-    return 'Verified Flutterwave amount is below SellerTray payment amount';
+  if (
+    expectedAmount === null ||
+    actualAmount === null ||
+    Math.round(actualAmount * 100) !== Math.round(expectedAmount * 100)
+  ) {
+    return 'Verified Flutterwave amount does not exactly match SellerTray payment';
   }
   if (!expectedCurrency || actualCurrency !== expectedCurrency) {
     return 'Verified Flutterwave currency does not match SellerTray payment';
