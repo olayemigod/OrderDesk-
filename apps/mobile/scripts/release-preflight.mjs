@@ -910,9 +910,30 @@ requireValue(
 
 const releaseRunbook = read(join(repoRoot, 'docs/release_runbook.md'));
 const lifecycle = read(join(repoRoot, 'docs/data_lifecycle.md'));
+const metaTechProviderRunbook = read(join(repoRoot, 'docs/meta_tech_provider_approval.md'));
+const commercialPricingProposal = read(join(repoRoot, 'docs/commercial_pricing_proposal.md'));
+const whatsappConnectionView = read(join(mobileRoot, 'src/components/WhatsAppConnectionView.tsx'));
 requireValue(releaseRunbook.includes('ng.processedge.sellertray'), 'Release runbook must record the frozen Android package');
 requireValue(releaseRunbook.includes('sellertray://auth-confirm'), 'Release runbook must record SellerTray Auth redirects');
 requireValue(lifecycle.includes('https://processedge.com.ng/sellertray/account-deletion'), 'Data lifecycle must record the public deletion resource');
+requireValue(
+  metaTechProviderRunbook.includes('Meta Tech Provider') &&
+    metaTechProviderRunbook.includes('Embedded Signup') &&
+    metaTechProviderRunbook.includes('whatsapp_business_management') &&
+    metaTechProviderRunbook.includes('whatsapp_business_messaging') &&
+    metaTechProviderRunbook.includes('Connecting WhatsApp to SellerTray does not itself create a SellerTray charge'),
+  'Meta Tech Provider approval/evidence runbook must remain complete',
+);
+requireValue(
+  commercialPricingProposal.includes('Meta WhatsApp Business Platform charges are **not included**') &&
+    commercialPricingProposal.includes('No hidden pass-through markup'),
+  'Commercial pricing must keep Meta messaging charges separate from SellerTray billing',
+);
+requireValue(
+  whatsappConnectionView.includes('Meta WhatsApp charges are separate') &&
+    whatsappConnectionView.includes('SellerTray subscription and AI-usage charges are billed separately'),
+  'WhatsApp onboarding must disclose Meta and SellerTray billing separation',
+);
 
 const legacyUiPhrases = [
   'Opening OrderDesk',
@@ -945,6 +966,8 @@ const forbiddenSecretPatterns = [
   /WHATSAPP_ACCESS_TOKEN/g,
   /META_ACCESS_TOKEN/g,
   /META_WEBHOOK_VERIFY_TOKEN/g,
+  /META_APP_SECRET/g,
+  /SELLERTRAY_WHATSAPP_ENCRYPTION_KEY/g,
   /ORDER_PARSER_TOKEN/g,
   /WORKER_TOKEN/g,
   /sb_secret_[A-Za-z0-9_-]+/g,
