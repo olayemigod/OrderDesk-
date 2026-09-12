@@ -877,25 +877,25 @@ function OrderList({
           <Pressable
             key={order.id}
             onPress={() => onSelect(order.id)}
-            style={[styles.orderCard, selectedOrderId === order.id && styles.orderCardSelected]}
+            style={[styles.orderCard, appearance.dark && darkStyles.card, selectedOrderId === order.id && styles.orderCardSelected]}
           >
             <View style={styles.orderTopRow}>
               <View style={styles.orderIdentity}>
-                <Text style={styles.customerName}>{order.customerName}</Text>
-                <Text numberOfLines={1} style={styles.orderId}>{order.publicOrderId} · {formatReceivedAt(order.receivedAt)}</Text>
+                <Text style={[styles.customerName, appearance.dark && darkStyles.titleText]}>{order.customerName}</Text>
+                <Text numberOfLines={1} style={[styles.orderId, appearance.dark && darkStyles.bodyText]}>{order.publicOrderId} · {formatReceivedAt(order.receivedAt)}</Text>
               </View>
               <View style={styles.orderRight}>
                 <StatusPill status={order.status} />
-                <Text style={[styles.orderValue, total === null && styles.orderValuePending]}>
+                <Text style={[styles.orderValue, appearance.dark && darkStyles.titleText, total === null && styles.orderValuePending]}>
                   {total === null ? 'Needs pricing' : formatMoney(total, currency)}
                 </Text>
               </View>
             </View>
-            <Text numberOfLines={2} style={styles.orderMessage}>
+            <Text numberOfLines={2} style={[styles.orderMessage, appearance.dark && darkStyles.bodyText]}>
               {order.customerMessage || 'No customer message captured.'}
             </Text>
             {order.statusReason ? <Text numberOfLines={1} style={styles.closureMeta}>Reason: {order.statusReason}</Text> : null}
-            <Text style={styles.orderMeta}>
+            <Text style={[styles.orderMeta, appearance.dark && darkStyles.mutedText]}>
               {order.items.length} item{order.items.length === 1 ? '' : 's'} · {order.source === 'whatsapp' ? 'WhatsApp' : 'Manual'} · {order.confidence === null ? 'Unscored' : `${Math.round(order.confidence * 100)}% parsed`}{reviewChecks > 0 ? ` · ${reviewChecks} initial review check${reviewChecks === 1 ? '' : 's'}` : ''}
             </Text>
           </Pressable>
@@ -934,6 +934,7 @@ function OrderDetail({
   onEditItem: (itemId: string, item: OrderItemInput) => Promise<void>;
   onRemoveItem: (itemId: string) => Promise<void>;
 }) {
+  const appearance = useSellerTrayAppearance();
   const total = orderTotal(order);
   const editable =
     order.status === 'needs_review' ||
@@ -946,15 +947,15 @@ function OrderDetail({
     );
 
   return (
-    <View style={styles.detailCard}>
+    <View style={[styles.detailCard, appearance.dark && darkStyles.card]}>
       <View style={styles.detailHero}>
         <View style={styles.customerAvatar}>
           <Text style={styles.customerAvatarText}>{customerInitials(order.customerName)}</Text>
         </View>
         <View style={styles.orderIdentity}>
-          <Text style={styles.detailTitle}>{order.customerName}</Text>
+          <Text style={[styles.detailTitle, appearance.dark && darkStyles.titleText]}>{order.customerName}</Text>
           <Text style={styles.publicOrderId}>{order.publicOrderId}</Text>
-          <Text style={styles.orderMeta}>{order.customerPhone} · {formatReceivedAt(order.receivedAt)}</Text>
+          <Text style={[styles.orderMeta, appearance.dark && darkStyles.bodyText]}>{order.customerPhone} · {formatReceivedAt(order.receivedAt)}</Text>
         </View>
         <StatusPill status={order.status} />
       </View>
@@ -965,15 +966,15 @@ function OrderDetail({
         <DetailSummary label="Source" value={order.source === 'whatsapp' ? 'WhatsApp' : 'Manual'} positive={order.source === 'whatsapp'} />
       </View>
 
-      <View style={styles.messageCard}>
-        <Text style={styles.sectionEyebrow}>CUSTOMER MESSAGE</Text>
-        <Text style={styles.messageText}>{order.customerMessage || 'No message captured.'}</Text>
+      <View style={[styles.messageCard, appearance.dark && darkStyles.subtleCard]}>
+        <Text style={[styles.sectionEyebrow, appearance.dark && darkStyles.bodyText]}>CUSTOMER MESSAGE</Text>
+        <Text style={[styles.messageText, appearance.dark && darkStyles.bodyText]}>{order.customerMessage || 'No message captured.'}</Text>
       </View>
 
       <View>
-        <Text style={styles.sectionTitle}>{editable ? 'Review order items' : 'Order items'}</Text>
+        <Text style={[styles.sectionTitle, appearance.dark && darkStyles.titleText]}>{editable ? 'Review order items' : 'Order items'}</Text>
         {editable ? (
-          <Text style={styles.pageSubtitle}>
+          <Text style={[styles.pageSubtitle, appearance.dark && darkStyles.bodyText]}>
             {order.source === 'manual'
               ? 'You can adjust quantities and selling prices while this manual order is unpaid and has not entered fulfilment.'
               : 'Correct AI interpretation and prices before acceptance.'}
@@ -990,8 +991,8 @@ function OrderDetail({
       />
 
       <View style={styles.totalRow}>
-        <Text style={styles.totalLabel}>Order total</Text>
-        <Text style={styles.totalValue}>{total === null ? 'Needs pricing' : formatMoney(total, currency)}</Text>
+        <Text style={[styles.totalLabel, appearance.dark && darkStyles.bodyText]}>Order total</Text>
+        <Text style={[styles.totalValue, appearance.dark && darkStyles.titleText]}>{total === null ? 'Needs pricing' : formatMoney(total, currency)}</Text>
       </View>
 
       <OrderPaymentPanel tenantId={tenantId} order={order} />
@@ -1025,10 +1026,11 @@ function DetailSummary({
   value: string;
   positive?: boolean;
 }) {
+  const appearance = useSellerTrayAppearance();
   return (
-    <View style={[styles.detailSummaryCard, positive && styles.detailSummaryCardPositive]}>
-      <Text style={styles.detailSummaryLabel}>{label}</Text>
-      <Text numberOfLines={1} style={[styles.detailSummaryValue, positive && styles.detailSummaryValuePositive]}>{value}</Text>
+    <View style={[styles.detailSummaryCard, appearance.dark && darkStyles.subtleCard, positive && styles.detailSummaryCardPositive, positive && appearance.dark && darkStyles.mintCard]}>
+      <Text style={[styles.detailSummaryLabel, appearance.dark && darkStyles.bodyText]}>{label}</Text>
+      <Text numberOfLines={1} style={[styles.detailSummaryValue, appearance.dark && darkStyles.titleText, positive && styles.detailSummaryValuePositive]}>{value}</Text>
     </View>
   );
 }
