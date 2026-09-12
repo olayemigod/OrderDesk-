@@ -791,8 +791,8 @@ function validateParsedOrder(value: unknown): ParsedPayload | null {
 
 function detectCustomerSupportIntent(value: string): CustomerSupportIntent | null {
   const normalized = value.trim().toLocaleLowerCase().replace(/\s+/g, ' ');
-  const hasOrderId = /\bST-[0-9]{6}-[A-F0-9]{16}\b/i.test(value);
-  const onlyOrderId = /^ST-[0-9]{6}-[A-F0-9]{16}$/i.test(value.trim());
+  const hasOrderId = /\b[A-Z0-9]{3}\/[0-9]{6,}\b/i.test(value);
+  const onlyOrderId = /^[A-Z0-9]{3}\/[0-9]{6,}$/i.test(value.trim());
 
   if (/\breceipt\b/i.test(normalized) || /\bproof of purchase\b/i.test(normalized)) return 'receipt';
 
@@ -813,7 +813,7 @@ function detectCustomerSupportIntent(value: string): CustomerSupportIntent | nul
 }
 
 function extractPublicOrderId(value: string): string | null {
-  const match = value.match(/\bST-[0-9]{6}-[A-F0-9]{16}\b/i);
+  const match = value.match(/\b[A-Z0-9]{3}\/[0-9]{6,}\b/i);
   return match ? match[0].toUpperCase() : null;
 }
 
@@ -1010,8 +1010,8 @@ async function ensureReceiptPdf({
   order: CustomerSupportOrder;
 }): Promise<ReceiptAttachment> {
   const version = Math.max(1, Number(order.receipt_version) || 1);
-  const filename = `Receipt-${order.public_order_id}.pdf`;
-  const storagePath = `${tenantId}/${order.public_order_id}/receipt-v${version}.pdf`;
+  const filename = `Receipt-${order.public_order_id.replace('/', '-')}.pdf`;
+  const storagePath = `${tenantId}/${order.public_order_id.replace('/', '-')}/receipt-v${version}.pdf`;
   const cachedPath = order.receipt_storage_path?.trim();
 
   if (cachedPath === storagePath) {
@@ -1154,7 +1154,7 @@ async function buildReceiptPdf({
   drawText('SellerTray', margin, 9, bold, green);
 
   const rightX = 340;
-  page.drawText(pdfSafeText('Order ID'), { x: rightX, y: pageHeight - 52, size: 8, font: bold, color: muted });
+  page.drawText(pdfSafeText('Receipt Ref'), { x: rightX, y: pageHeight - 52, size: 8, font: bold, color: muted });
   page.drawText(pdfSafeText(order.public_order_id), { x: rightX, y: pageHeight - 68, size: 11, font: bold, color: dark });
   page.drawText(pdfSafeText('Order date'), { x: rightX, y: pageHeight - 88, size: 8, font: bold, color: muted });
   page.drawText(pdfSafeText(formatReceiptDate(order.created_at)), { x: rightX, y: pageHeight - 104, size: 10, font: regular, color: dark });
@@ -1311,7 +1311,7 @@ function renderOrderStatus(businessName: string, order: CustomerSupportOrder): s
   const total = calculateSupportOrderTotal(order);
   const lines = [
     `Order status — ${businessName}`,
-    `Order ID: ${order.public_order_id}`,
+    `Order Ref: ${order.public_order_id}`,
     `Status: ${humanOrderStatus(order)}`,
     `Order date: ${formatReceiptDate(order.created_at)}`,
     `Total: ${formatReceiptMoney(total, order.currency)}`,
@@ -1337,7 +1337,7 @@ function renderOrderReceipt(businessName: string, order: CustomerSupportOrder): 
   const lines = [
     `🧾 ${businessName}`,
     'ORDER RECEIPT',
-    `Order ID: ${order.public_order_id}`,
+    `Order Ref: ${order.public_order_id}`,
     `Date: ${formatReceiptDate(order.created_at)}`,
     '',
     'Items:',
