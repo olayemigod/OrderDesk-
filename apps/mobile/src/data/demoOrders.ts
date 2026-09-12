@@ -3,6 +3,7 @@ import type { MerchantOrder } from '../domain/order';
 export const demoOrders: MerchantOrder[] = [
   {
     id: 'OD-1003',
+    publicOrderId: 'ST-260908-0000001003',
     customerName: 'Amina Yusuf',
     customerPhone: '+234 803 555 0142',
     receivedAt: '2026-09-08T15:38:00+01:00',
@@ -48,6 +49,7 @@ export const demoOrders: MerchantOrder[] = [
   },
   {
     id: 'OD-1002',
+    publicOrderId: 'ST-260908-0000001002',
     customerName: 'Tunde Bello',
     customerPhone: '+234 805 444 2180',
     receivedAt: '2026-09-08T15:21:00+01:00',
@@ -84,6 +86,7 @@ export const demoOrders: MerchantOrder[] = [
   },
   {
     id: 'OD-1001',
+    publicOrderId: 'ST-260908-0000001001',
     customerName: 'Chidinma Okeke',
     customerPhone: '+234 807 220 7711',
     receivedAt: '2026-09-08T14:50:00+01:00',
