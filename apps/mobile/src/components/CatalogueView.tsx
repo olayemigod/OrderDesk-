@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { MerchantBusiness } from '../data/businessRepository';
 import { ChatCatalogueReviewSection } from './ChatCatalogueReviewSection';
 import type { CatalogueItem, CatalogueItemInput } from '../data/catalogueRepository';
+import { uploadCatalogueImage } from '../data/catalogueRepository';
 import {
   configureWhatsAppCatalogue,
   loadWhatsAppCatalogueStatus,
@@ -286,6 +288,7 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
           key={editing === 'new' ? 'new' : editing.id}
           item={editing === 'new' ? null : editing}
           currency={business.currency}
+          tenantId={business.id}
           categories={categories}
           onCancel={() => setEditing(null)}
           onSave={async (input) => {
@@ -437,12 +440,14 @@ function CategoryChip({ label, active, onPress }: { label: string; active: boole
 function CatalogueEditor({
   item,
   currency,
+  tenantId,
   categories,
   onSave,
   onCancel,
 }: {
   item: CatalogueItem | null;
   currency: string;
+  tenantId: string;
   categories: string[];
   onSave: (input: CatalogueItemInput) => Promise<void>;
   onCancel: () => void;
@@ -455,10 +460,46 @@ function CatalogueEditor({
   const [price, setPrice] = useState(item?.price === null || item?.price === undefined ? '' : String(item.price));
   const [aliases, setAliases] = useState(item?.aliases.join(', ') ?? '');
   const [imageUrl, setImageUrl] = useState(item?.imageUrl ?? '');
+  const [imageUploading, setImageUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => setError(null), [item?.id]);
+
+  async function chooseProductImage() {
+    if (imageUploading || submitting) return;
+    setError(null);
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setError('Allow photo access to choose a product image.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.82,
+    });
+
+    if (result.canceled || !result.assets[0]) return;
+
+    const asset = result.assets[0];
+    setImageUploading(true);
+    try {
+      const url = await uploadCatalogueImage(
+        tenantId,
+        asset.uri,
+        asset.mimeType ?? 'image/jpeg',
+      );
+      setImageUrl(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to upload the selected product image.');
+    } finally {
+      setImageUploading(false);
+    }
+  }
 
   async function save() {
     const parsedPrice = Number(price);
@@ -566,19 +607,35 @@ function CatalogueEditor({
         />
       </Field>
 
-      <Field label="Product image URL" hint="Optional for now. Direct photo upload will replace this field later.">
-        <TextInput
-          value={imageUrl}
-          onChangeText={setImageUrl}
-          autoCapitalize="none"
-          placeholder="https://..."
-          style={styles.input}
-        />
+      <Field label="Product image" hint="Choose a clear square image from your phone gallery. JPEG, PNG and WebP up to 5 MB.">
+        {imageUrl ? (
+          <View style={styles.productImagePreviewWrap}>
+            <Image source={{ uri: imageUrl }} style={styles.productImagePreview} resizeMode="cover" />
+            <Pressable onPress={() => setImageUrl('')} style={styles.removeImageButton}>
+              <Ionicons name="trash-outline" size={18} color="#B42318" />
+              <Text style={styles.removeImageText}>Remove</Text>
+            </Pressable>
+          </View>
+        ) : null}
+        <Pressable
+          disabled={imageUploading || submitting}
+          onPress={() => void chooseProductImage()}
+          style={[styles.galleryButton, (imageUploading || submitting) && styles.disabled]}
+        >
+          {imageUploading ? (
+            <ActivityIndicator color="#079455" />
+          ) : (
+            <Ionicons name="images-outline" size={20} color="#079455" />
+          )}
+          <Text style={styles.galleryButtonText}>
+            {imageUploading ? 'Uploading image…' : imageUrl ? 'Choose another image' : 'Choose from gallery'}
+          </Text>
+        </Pressable>
       </Field>
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
       <View style={styles.editorActions}>
-        <Pressable disabled={submitting} onPress={onCancel} style={styles.secondaryButton}><Text style={styles.secondaryText}>Cancel</Text></Pressable>
-        <Pressable disabled={submitting} onPress={() => void save()} style={styles.primaryButton}>
+        <Pressable disabled={submitting || imageUploading} onPress={onCancel} style={styles.secondaryButton}><Text style={styles.secondaryText}>Cancel</Text></Pressable>
+        <Pressable disabled={submitting || imageUploading} onPress={() => void save()} style={[styles.primaryButton, imageUploading && styles.disabled]}>
           <Text style={styles.primaryButtonText}>{submitting ? 'Saving…' : 'Save product'}</Text>
         </Pressable>
       </View>
@@ -709,6 +766,12 @@ const styles = StyleSheet.create({
   customCategoryInput: { flex: 1 },
   customCategoryButton: { minHeight: 44, borderRadius: 10, backgroundColor: '#12B76A', paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center' },
   customCategoryButtonText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
+  productImagePreviewWrap: { gap: 8 },
+  productImagePreview: { width: 132, height: 132, borderRadius: 14, backgroundColor: '#F2F4F7' },
+  removeImageButton: { alignSelf: 'flex-start', minHeight: 38, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 10, backgroundColor: '#FEF3F2', paddingHorizontal: 10 },
+  removeImageText: { color: '#B42318', fontSize: 12, fontWeight: '900' },
+  galleryButton: { minHeight: 50, borderRadius: 12, borderWidth: 1, borderColor: '#ABEFC6', backgroundColor: '#ECFDF3', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 12 },
+  galleryButtonText: { color: '#079455', fontSize: 13, fontWeight: '900' },
   editorActions: { flexDirection: 'row', gap: 8 },
   primaryButton: { flex: 1, minHeight: 43, borderRadius: 10, backgroundColor: '#12B76A', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
   primaryButtonText: { color: '#FFFFFF', fontWeight: '900', fontSize: 12 },
