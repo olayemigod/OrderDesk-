@@ -911,6 +911,7 @@ requireValue(
 const releaseRunbook = read(join(repoRoot, 'docs/release_runbook.md'));
 const lifecycle = read(join(repoRoot, 'docs/data_lifecycle.md'));
 const metaTechProviderRunbook = read(join(repoRoot, 'docs/meta_tech_provider_approval.md'));
+const metaAppReviewSubmission = read(join(repoRoot, 'docs/meta_app_review_submission.md'));
 const commercialPricingProposal = read(join(repoRoot, 'docs/commercial_pricing_proposal.md'));
 const whatsappConnectionView = read(join(mobileRoot, 'src/components/WhatsAppConnectionView.tsx'));
 requireValue(releaseRunbook.includes('ng.processedge.sellertray'), 'Release runbook must record the frozen Android package');
@@ -923,6 +924,13 @@ requireValue(
     metaTechProviderRunbook.includes('whatsapp_business_messaging') &&
     metaTechProviderRunbook.includes('SellerTray does not require a Meta payment method just to connect WhatsApp'),
   'Meta Tech Provider approval/evidence runbook must remain complete',
+);
+requireValue(
+  metaAppReviewSubmission.includes('Permission: whatsapp_business_management') &&
+    metaAppReviewSubmission.includes('Permission: whatsapp_business_messaging') &&
+    metaAppReviewSubmission.includes('Reviewer test account') &&
+    metaAppReviewSubmission.includes('does not require a merchant to add a Meta payment method just to connect'),
+  'Meta App Review submission packet must remain reviewer-ready and secret-safe',
 );
 requireValue(
   commercialPricingProposal.includes('Meta WhatsApp Business Platform charges are **not included**') &&
