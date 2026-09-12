@@ -34,7 +34,7 @@ import { useOrders } from './hooks/useOrders';
 import { supabase } from './lib/supabase';
 import { sellerTrayTheme as theme } from './theme/sellerTrayTheme';
 
-type ViewName = 'home' | 'orders' | 'products' | 'more';
+type ViewName = 'home' | 'orders' | 'inbox' | 'products' | 'more';
 type OrderFilter = 'attention' | 'active' | 'done' | 'all';
 
 const statusLabels: Record<OrderStatus, string> = {
@@ -114,6 +114,9 @@ function Workspace() {
   );
 
   const reviewCount = orders.filter((order) => order.status === 'needs_review' || order.status === 'draft').length;
+  const inboxCount = new Set(
+    orders.filter((order) => order.source === 'whatsapp').map((order) => order.customerPhone),
+  ).size;
 
   async function refreshAll() {
     await refreshBusinesses();
@@ -214,6 +217,17 @@ function Workspace() {
             />
           ) : null}
 
+          {view === 'inbox' ? (
+            <ConversationsView
+              orders={orders}
+              currency={activeBusiness.currency}
+              onOpenOrder={(orderId) => {
+                setSelectedOrderId(orderId);
+                setView('orders');
+              }}
+            />
+          ) : null}
+
           {view === 'products' ? (
             <CatalogueView business={activeBusiness} />
           ) : null}
@@ -226,6 +240,7 @@ function Workspace() {
         <BottomNav
           view={view}
           reviewCount={reviewCount}
+          inboxCount={inboxCount}
           onChange={(nextView) => {
             if (nextView === 'orders' && view !== 'orders') setSelectedOrderId('');
             setView(nextView);
@@ -322,11 +337,20 @@ function HomeView({
 }) {
   const attentionCount = orders.filter((order) => order.status === 'needs_review' || order.status === 'draft').length;
   const inProgressCount = orders.filter((order) => ['accepted', 'processing', 'ready'].includes(order.status)).length;
-  const completedCount = orders.filter((order) => order.status === 'completed').length;
-  const knownOrderValue = orders.reduce((sum, order) => {
+  const now = new Date();
+  const todayKey = localDayKey(now);
+  const todayOrders = orders.filter((order) => localDayKey(new Date(order.receivedAt)) === todayKey);
+  const salesToday = todayOrders.reduce((sum, order) => {
+    if (order.status === 'rejected' || order.status === 'cancelled') return sum;
     const total = orderTotal(order);
     return total === null ? sum : sum + total;
   }, 0);
+  const awaitingPayment = orders.filter((order) =>
+    !['paid'].includes(order.paymentStatus) && !['rejected', 'cancelled'].includes(order.status),
+  ).length;
+  const newEnquiries = orders.filter((order) =>
+    order.source === 'whatsapp' && (order.status === 'needs_review' || order.status === 'draft'),
+  ).length;
 
   return (
     <View style={styles.sectionStack}>
@@ -339,10 +363,10 @@ function HomeView({
       </View>
 
       <View style={styles.homeMetricGrid}>
-        <HomeMetric label="Orders" value={String(orders.length)} hint="All orders" />
-        <HomeMetric label="Known value" value={formatMoney(knownOrderValue, business.currency)} hint="Priced orders" />
-        <HomeMetric label="In fulfilment" value={String(inProgressCount)} hint="Accepted to ready" />
-        <HomeMetric label="Needs attention" value={String(attentionCount)} hint={completedCount + ' completed'} attention={attentionCount > 0} />
+        <HomeMetric label="Orders today" value={String(todayOrders.length)} hint="Received today" />
+        <HomeMetric label="Sales today" value={formatMoney(salesToday, business.currency)} hint="Known order value" />
+        <HomeMetric label="Awaiting payment" value={String(awaitingPayment)} hint="Needs payment action" attention={awaitingPayment > 0} />
+        <HomeMetric label="New enquiries" value={String(newEnquiries)} hint="WhatsApp needs review" attention={newEnquiries > 0} />
       </View>
 
       <View style={styles.quickActionsCard}>
@@ -353,7 +377,7 @@ function HomeView({
         <View style={styles.quickActionRow}>
           <QuickAction label="Orders" onPress={onOpenOrders} />
           <QuickAction label="Catalogue" onPress={onOpenProducts} />
-          <QuickAction label="More" onPress={onOpenMore} />
+          <QuickAction label="Setup" onPress={onOpenMore} />
         </View>
       </View>
 
@@ -517,12 +541,43 @@ function OrdersView({
           ? 'No completed orders yet.'
           : 'No orders yet. New WhatsApp orders will appear here automatically.';
 
+  if (selectedOrder) {
+    return (
+      <View style={styles.sectionStack}>
+        <Pressable onPress={() => onSelectOrder('')} style={styles.backToListButton}>
+          <Text style={styles.backToListText}>← Orders</Text>
+        </Pressable>
+        <OrderDetail
+          order={selectedOrder}
+          tenantId={business.id}
+          currency={business.currency}
+          onAccept={() => setStatus(selectedOrder.id, 'accepted')}
+          onReject={(reason) => setStatus(selectedOrder.id, 'rejected', reason)}
+          onStart={() => setStatus(selectedOrder.id, 'processing')}
+          onReady={() => setStatus(selectedOrder.id, 'ready')}
+          onCancel={(reason) => setStatus(selectedOrder.id, 'cancelled', reason)}
+          onStartDelivery={(input) => startDelivery(selectedOrder.id, input)}
+          onCompleteFulfillment={(input) => completeFulfillment(selectedOrder.id, input)}
+          onAddItem={(item) => addItem(selectedOrder.id, item)}
+          onEditItem={editItem}
+          onRemoveItem={removeItem}
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.sectionStack}>
-      <View>
-        <Text style={styles.sectionEyebrow}>ORDER INBOX</Text>
-        <Text style={styles.pageTitle}>Orders</Text>
-        <Text style={styles.pageSubtitle}>Review and progress {business.name} orders.</Text>
+      <View style={styles.pageHeadingRow}>
+        <View style={styles.pageHeadingCopy}>
+          <Text style={styles.sectionEyebrow}>ORDER MANAGEMENT</Text>
+          <Text style={styles.pageTitle}>Orders</Text>
+          <Text style={styles.pageSubtitle}>Review, accept and fulfil {business.name} orders.</Text>
+        </View>
+        <View style={styles.orderSummaryBadge}>
+          <Text style={styles.orderSummaryValue}>{filterCounts.attention}</Text>
+          <Text style={styles.orderSummaryLabel}>NEEDS REVIEW</Text>
+        </View>
       </View>
 
       <ManualOrderComposer
@@ -538,13 +593,13 @@ function OrdersView({
         <TextInput
           value={query}
           onChangeText={setQuery}
-          placeholder="Search order ref, customer, phone, message or product"
+          placeholder="Search orders, customers or products"
           autoCorrect={false}
           style={styles.searchInput}
         />
         <View style={styles.filterRow}>
           <OrderFilterButton
-            label="Needs review"
+            label="New"
             count={filterCounts.attention}
             active={filter === 'attention'}
             onPress={() => setFilter('attention')}
@@ -571,35 +626,17 @@ function OrdersView({
       </View>
 
       <Text style={styles.resultMeta}>
-        Showing {visibleOrders.length} of {orders.length} order{orders.length === 1 ? '' : 's'}
+        {visibleOrders.length} order{visibleOrders.length === 1 ? '' : 's'} in this view
       </Text>
 
       <OrderList
         orders={visibleOrders}
         loading={loading}
-        selectedOrderId={visibleSelectedOrder?.id ?? ''}
+        selectedOrderId=""
         currency={business.currency}
         onSelect={onSelectOrder}
         emptyText={emptyText}
       />
-
-      {visibleSelectedOrder ? (
-        <OrderDetail
-          order={visibleSelectedOrder}
-          tenantId={business.id}
-          currency={business.currency}
-          onAccept={() => setStatus(visibleSelectedOrder.id, 'accepted')}
-          onReject={(reason) => setStatus(visibleSelectedOrder.id, 'rejected', reason)}
-          onStart={() => setStatus(visibleSelectedOrder.id, 'processing')}
-          onReady={() => setStatus(visibleSelectedOrder.id, 'ready')}
-          onCancel={(reason) => setStatus(visibleSelectedOrder.id, 'cancelled', reason)}
-          onStartDelivery={(input) => startDelivery(visibleSelectedOrder.id, input)}
-          onCompleteFulfillment={(input) => completeFulfillment(visibleSelectedOrder.id, input)}
-          onAddItem={(item) => addItem(visibleSelectedOrder.id, item)}
-          onEditItem={editItem}
-          onRemoveItem={removeItem}
-        />
-      ) : null}
     </View>
   );
 }
@@ -731,14 +768,22 @@ function OrderDetail({
 
   return (
     <View style={styles.detailCard}>
-      <View style={styles.orderTopRow}>
+      <View style={styles.detailHero}>
+        <View style={styles.customerAvatar}>
+          <Text style={styles.customerAvatarText}>{customerInitials(order.customerName)}</Text>
+        </View>
         <View style={styles.orderIdentity}>
           <Text style={styles.detailTitle}>{order.customerName}</Text>
-          <Text style={styles.publicOrderId}>Order Ref {order.publicOrderId}</Text>
-          <Text style={styles.orderMeta}>{order.customerPhone}</Text>
-          <Text style={styles.orderMeta}>{formatReceivedAt(order.receivedAt)} · {order.source === 'whatsapp' ? 'WhatsApp' : 'Manual'}</Text>
+          <Text style={styles.publicOrderId}>{order.publicOrderId}</Text>
+          <Text style={styles.orderMeta}>{order.customerPhone} · {formatReceivedAt(order.receivedAt)}</Text>
         </View>
         <StatusPill status={order.status} />
+      </View>
+
+      <View style={styles.detailSummaryRow}>
+        <DetailSummary label="Payment" value={formatPaymentStatus(order.paymentStatus)} positive={order.paymentStatus === 'paid'} />
+        <DetailSummary label="Fulfilment" value={formatFulfillmentStatus(order.fulfillmentStatus)} positive={order.fulfillmentStatus === 'delivered' || order.fulfillmentStatus === 'collected'} />
+        <DetailSummary label="Source" value={order.source === 'whatsapp' ? 'WhatsApp' : 'Manual'} positive={order.source === 'whatsapp'} />
       </View>
 
       <View style={styles.messageCard}>
@@ -786,19 +831,200 @@ function OrderDetail({
   );
 }
 
+function DetailSummary({
+  label,
+  value,
+  positive = false,
+}: {
+  label: string;
+  value: string;
+  positive?: boolean;
+}) {
+  return (
+    <View style={[styles.detailSummaryCard, positive && styles.detailSummaryCardPositive]}>
+      <Text style={styles.detailSummaryLabel}>{label}</Text>
+      <Text numberOfLines={1} style={[styles.detailSummaryValue, positive && styles.detailSummaryValuePositive]}>{value}</Text>
+    </View>
+  );
+}
+
+function ConversationsView({
+  orders,
+  currency,
+  onOpenOrder,
+}: {
+  orders: MerchantOrder[];
+  currency: string;
+  onOpenOrder: (orderId: string) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [selectedPhone, setSelectedPhone] = useState('');
+
+  const conversations = useMemo(() => {
+    const whatsappOrders = orders
+      .filter((order) => order.source === 'whatsapp')
+      .slice()
+      .sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime());
+
+    const byPhone = new Map<string, MerchantOrder[]>();
+    whatsappOrders.forEach((order) => {
+      const current = byPhone.get(order.customerPhone) ?? [];
+      current.push(order);
+      byPhone.set(order.customerPhone, current);
+    });
+
+    return Array.from(byPhone.entries()).map(([phone, customerOrders]) => ({
+      phone,
+      name: customerOrders[0]?.customerName ?? phone,
+      latest: customerOrders[0],
+      orders: customerOrders,
+    }));
+  }, [orders]);
+
+  const normalized = query.trim().toLowerCase();
+  const visible = conversations.filter((conversation) => {
+    if (!normalized) return true;
+    return [conversation.name, conversation.phone, conversation.latest?.customerMessage ?? '']
+      .join(' ')
+      .toLowerCase()
+      .includes(normalized);
+  });
+
+  const selected = conversations.find((conversation) => conversation.phone === selectedPhone);
+
+  if (selected) {
+    return (
+      <View style={styles.sectionStack}>
+        <Pressable onPress={() => setSelectedPhone('')} style={styles.backToListButton}>
+          <Text style={styles.backToListText}>← Inbox</Text>
+        </Pressable>
+
+        <View style={styles.conversationHeader}>
+          <View style={styles.customerAvatar}>
+            <Text style={styles.customerAvatarText}>{customerInitials(selected.name)}</Text>
+          </View>
+          <View style={styles.orderIdentity}>
+            <Text style={styles.detailTitle}>{selected.name}</Text>
+            <Text style={styles.orderMeta}>{selected.phone}</Text>
+          </View>
+          <Badge label="WhatsApp" positive />
+        </View>
+
+        <View style={styles.threadNotice}>
+          <Text style={styles.threadNoticeTitle}>Captured order messages</Text>
+          <Text style={styles.threadNoticeText}>
+            SellerTray shows WhatsApp messages currently attached to orders. Full conversational history will populate through the approved WhatsApp message-history pipeline.
+          </Text>
+        </View>
+
+        <View style={styles.conversationThread}>
+          {selected.orders
+            .slice()
+            .reverse()
+            .map((order) => (
+              <View key={order.id} style={styles.customerBubble}>
+                <Text style={styles.bubbleText}>{order.customerMessage || 'Order message captured without text.'}</Text>
+                <View style={styles.bubbleMetaRow}>
+                  <Text style={styles.bubbleMeta}>{formatReceivedAt(order.receivedAt)}</Text>
+                  <Text style={styles.bubbleOrderRef}>{order.publicOrderId}</Text>
+                </View>
+                <View style={styles.linkedOrderCard}>
+                  <View style={styles.linkedOrderCopy}>
+                    <Text style={styles.linkedOrderTitle}>Linked order</Text>
+                    <Text style={styles.linkedOrderMeta}>
+                      {order.items.length} item{order.items.length === 1 ? '' : 's'} · {orderTotal(order) === null ? 'Needs pricing' : formatMoney(orderTotal(order) ?? 0, currency)}
+                    </Text>
+                  </View>
+                  <Pressable onPress={() => onOpenOrder(order.id)} style={styles.openOrderButton}>
+                    <Text style={styles.openOrderButtonText}>Open</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ))}
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.sectionStack}>
+      <View>
+        <Text style={styles.sectionEyebrow}>CONVERSATIONS</Text>
+        <Text style={styles.pageTitle}>Inbox</Text>
+        <Text style={styles.pageSubtitle}>WhatsApp customers and the order messages SellerTray has captured.</Text>
+      </View>
+
+      <TextInput
+        value={query}
+        onChangeText={setQuery}
+        placeholder="Search customer or message"
+        autoCorrect={false}
+        style={styles.searchInput}
+      />
+
+      <View style={styles.inboxStatCard}>
+        <Text style={styles.inboxStatValue}>{conversations.length}</Text>
+        <View>
+          <Text style={styles.inboxStatTitle}>Customer conversations</Text>
+          <Text style={styles.inboxStatText}>Built from connected WhatsApp order activity.</Text>
+        </View>
+      </View>
+
+      {visible.length === 0 ? (
+        <View style={styles.emptyCard}>
+          <Text style={styles.emptyTitle}>No conversations yet</Text>
+          <Text style={styles.emptyText}>WhatsApp customers will appear here after SellerTray captures supported order messages.</Text>
+        </View>
+      ) : (
+        <View style={styles.conversationList}>
+          {visible.map((conversation) => (
+            <Pressable
+              key={conversation.phone}
+              onPress={() => setSelectedPhone(conversation.phone)}
+              style={styles.conversationRow}
+            >
+              <View style={styles.customerAvatarSmall}>
+                <Text style={styles.customerAvatarSmallText}>{customerInitials(conversation.name)}</Text>
+              </View>
+              <View style={styles.conversationCopy}>
+                <View style={styles.conversationNameRow}>
+                  <Text style={styles.conversationName}>{conversation.name}</Text>
+                  <Text style={styles.conversationTime}>
+                    {conversation.latest ? formatReceivedAt(conversation.latest.receivedAt) : ''}
+                  </Text>
+                </View>
+                <Text numberOfLines={1} style={styles.conversationPreview}>
+                  {conversation.latest?.customerMessage || 'Order message captured'}
+                </Text>
+                <Text style={styles.conversationMeta}>
+                  {conversation.orders.length} linked order{conversation.orders.length === 1 ? '' : 's'}
+                </Text>
+              </View>
+              <Text style={styles.conversationChevron}>›</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
 function BottomNav({
   view,
   reviewCount,
+  inboxCount,
   onChange,
 }: {
   view: ViewName;
   reviewCount: number;
+  inboxCount: number;
   onChange: (view: ViewName) => void;
 }) {
   return (
     <View style={styles.bottomNav}>
       <NavButton label="Home" active={view === 'home'} onPress={() => onChange('home')} />
       <NavButton label="Orders" active={view === 'orders'} count={reviewCount} onPress={() => onChange('orders')} />
+      <NavButton label="Inbox" active={view === 'inbox'} count={inboxCount} onPress={() => onChange('inbox')} />
       <NavButton label="Catalogue" active={view === 'products'} onPress={() => onChange('products')} />
       <NavButton label="More" active={view === 'more'} onPress={() => onChange('more')} />
     </View>
@@ -838,6 +1064,27 @@ function StatusPill({ status }: { status: OrderStatus }) {
       <Text style={styles.statusText}>{statusLabels[status]}</Text>
     </View>
   );
+}
+
+function customerInitials(value: string): string {
+  const parts = value.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'ST';
+  if (parts.length === 1) return (parts[0] ?? 'ST').slice(0, 2).toUpperCase();
+  return `${parts[0]?.charAt(0) ?? ''}${parts[1]?.charAt(0) ?? ''}`.toUpperCase();
+}
+
+function formatPaymentStatus(value: MerchantOrder['paymentStatus']): string {
+  return value.split('_').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+}
+
+function formatFulfillmentStatus(value: MerchantOrder['fulfillmentStatus']): string {
+  if (value === 'unassigned') return 'Not started';
+  return value.split('_').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+}
+
+function localDayKey(date: Date): string {
+  if (Number.isNaN(date.getTime())) return '';
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
 function formatMoney(value: number, currency: string) {
@@ -909,6 +1156,13 @@ const styles = StyleSheet.create({
   sectionEyebrow: { color: '#667085', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
   pageTitle: { color: '#102A43', fontSize: 24, lineHeight: 30, fontWeight: '900', marginTop: 3 },
   pageSubtitle: { color: '#667085', fontSize: 12, lineHeight: 18, marginTop: 3 },
+  pageHeadingRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  pageHeadingCopy: { flex: 1 },
+  orderSummaryBadge: { minWidth: 78, borderRadius: 14, backgroundColor: theme.colors.warningSoft, borderWidth: 1, borderColor: '#FEDF89', paddingHorizontal: 10, paddingVertical: 9, alignItems: 'center' },
+  orderSummaryValue: { color: theme.colors.navy, fontSize: 19, fontWeight: '900' },
+  orderSummaryLabel: { color: '#B54708', fontSize: 7, fontWeight: '900', letterSpacing: 0.7, marginTop: 2 },
+  backToListButton: { alignSelf: 'flex-start', minHeight: 38, justifyContent: 'center', paddingRight: 12 },
+  backToListText: { color: theme.colors.greenDark, fontSize: 13, fontWeight: '900' },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   sectionTitle: { color: '#102A43', fontSize: 15, fontWeight: '900' },
   linkText: { color: '#12B76A', fontSize: 12, fontWeight: '800' },
@@ -939,17 +1193,57 @@ const styles = StyleSheet.create({
   statusPill: { borderRadius: 999, backgroundColor: '#E4E7EC', paddingVertical: 5, paddingHorizontal: 8 },
   statusReview: { backgroundColor: '#FFF3D6' },
   statusText: { color: '#344054', fontSize: 10, fontWeight: '900' },
-  detailCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 18, padding: 16, gap: 14 },
+  detailCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 18, padding: 16, gap: 14, ...theme.shadow.card },
+  detailHero: { flexDirection: 'row', alignItems: 'center', gap: 11 },
+  customerAvatar: { width: 48, height: 48, borderRadius: 16, backgroundColor: theme.colors.mint, alignItems: 'center', justifyContent: 'center' },
+  customerAvatarText: { color: theme.colors.navy, fontSize: 14, fontWeight: '900' },
   detailTitle: { color: '#102A43', fontSize: 19, fontWeight: '900' },
+  detailSummaryRow: { flexDirection: 'row', gap: 7 },
+  detailSummaryCard: { flex: 1, minWidth: 0, borderRadius: 12, backgroundColor: '#F9FAFB', paddingHorizontal: 9, paddingVertical: 9 },
+  detailSummaryCardPositive: { backgroundColor: theme.colors.mintSoft },
+  detailSummaryLabel: { color: theme.colors.muted, fontSize: 8, fontWeight: '800' },
+  detailSummaryValue: { color: theme.colors.navy, fontSize: 10, fontWeight: '900', marginTop: 3 },
+  detailSummaryValuePositive: { color: theme.colors.greenDark },
   messageCard: { backgroundColor: '#F9FAFB', borderRadius: 13, padding: 13 },
   messageText: { color: '#344054', fontSize: 13, lineHeight: 20, marginTop: 6 },
   totalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingTop: 2 },
   totalLabel: { color: '#667085', fontWeight: '800', fontSize: 12 },
   totalValue: { color: '#102A43', fontWeight: '900', fontSize: 19 },
-  bottomNav: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#E4E7EC', backgroundColor: '#FFFFFF', paddingHorizontal: 8, paddingTop: 8, paddingBottom: Platform.OS === 'android' ? 46 : 10, gap: 4 },
+  conversationHeader: { flexDirection: 'row', alignItems: 'center', gap: 11 },
+  threadNotice: { backgroundColor: theme.colors.infoSoft, borderRadius: 13, padding: 12, gap: 3 },
+  threadNoticeTitle: { color: theme.colors.navy, fontSize: 11, fontWeight: '900' },
+  threadNoticeText: { color: theme.colors.slate, fontSize: 10, lineHeight: 15 },
+  conversationThread: { gap: 10 },
+  customerBubble: { alignSelf: 'stretch', backgroundColor: theme.colors.mintSoft, borderRadius: 16, borderTopLeftRadius: 5, padding: 12, gap: 8 },
+  bubbleText: { color: theme.colors.navy, fontSize: 12, lineHeight: 18 },
+  bubbleMetaRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
+  bubbleMeta: { color: theme.colors.muted, fontSize: 9 },
+  bubbleOrderRef: { color: theme.colors.greenDark, fontSize: 9, fontWeight: '900' },
+  linkedOrderCard: { backgroundColor: theme.colors.white, borderRadius: 12, padding: 10, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  linkedOrderCopy: { flex: 1 },
+  linkedOrderTitle: { color: theme.colors.navy, fontSize: 10, fontWeight: '900' },
+  linkedOrderMeta: { color: theme.colors.muted, fontSize: 9, marginTop: 2 },
+  openOrderButton: { minHeight: 34, borderRadius: 9, backgroundColor: theme.colors.green, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
+  openOrderButtonText: { color: theme.colors.white, fontSize: 10, fontWeight: '900' },
+  inboxStatCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.colors.navy, borderRadius: 16, padding: 14 },
+  inboxStatValue: { color: theme.colors.white, fontSize: 26, fontWeight: '900', minWidth: 40 },
+  inboxStatTitle: { color: theme.colors.white, fontSize: 12, fontWeight: '900' },
+  inboxStatText: { color: theme.colors.mint, fontSize: 9, marginTop: 2 },
+  conversationList: { backgroundColor: theme.colors.white, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 18, overflow: 'hidden' },
+  conversationRow: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
+  customerAvatarSmall: { width: 40, height: 40, borderRadius: 14, backgroundColor: theme.colors.mint, alignItems: 'center', justifyContent: 'center' },
+  customerAvatarSmallText: { color: theme.colors.navy, fontSize: 11, fontWeight: '900' },
+  conversationCopy: { flex: 1 },
+  conversationNameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  conversationName: { color: theme.colors.navy, fontSize: 12, fontWeight: '900', flex: 1 },
+  conversationTime: { color: theme.colors.subtle, fontSize: 8 },
+  conversationPreview: { color: theme.colors.slate, fontSize: 10, marginTop: 3 },
+  conversationMeta: { color: theme.colors.greenDark, fontSize: 8, fontWeight: '800', marginTop: 3 },
+  conversationChevron: { color: theme.colors.subtle, fontSize: 23 },
+  bottomNav: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#E4E7EC', backgroundColor: '#FFFFFF', paddingHorizontal: 5, paddingTop: 8, paddingBottom: Platform.OS === 'android' ? 46 : 10, gap: 2 },
   navButton: { flex: 1, minHeight: 48, borderRadius: 11, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4, paddingHorizontal: 2 },
   navButtonActive: { backgroundColor: '#ECFDF3' },
-  navText: { color: '#667085', fontSize: 11, fontWeight: '800' },
+  navText: { color: '#667085', fontSize: 9.5, fontWeight: '800' },
   navTextActive: { color: '#079455' },
   navCount: { minWidth: 18, borderRadius: 999, backgroundColor: '#12B76A', color: '#FFFFFF', fontSize: 10, fontWeight: '900', textAlign: 'center', overflow: 'hidden', paddingHorizontal: 5 },
   errorCard: { backgroundColor: '#FEF3F2', borderRadius: 13, padding: 13, gap: 5 },
