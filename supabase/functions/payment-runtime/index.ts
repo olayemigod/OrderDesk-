@@ -56,6 +56,8 @@ Deno.serve(async (req: Request) => {
       const secrets = await decryptCredentials(credentials);
       const secretKey = stringValue(secrets.secretKey);
       if (!secretKey) return json({ error: 'Merchant gateway credential is invalid' }, 503);
+      const modeError = gatewayModeMismatch(payment, credentials, secrets, secretKey);
+      if (modeError) return json({ error: modeError }, 409);
 
       const email = customerEmail(payment);
       const amount = numberValue(payment.amount);
@@ -107,6 +109,7 @@ Deno.serve(async (req: Request) => {
           checkoutUrl,
           provider: 'paystack',
           providerReference: reference,
+          providerMode: payment.provider_mode,
         }, 201);
       }
 
@@ -158,6 +161,7 @@ Deno.serve(async (req: Request) => {
         checkoutUrl,
         provider: 'flutterwave',
         providerReference: reference,
+        providerMode: payment.provider_mode,
       }, 201);
     }
 
@@ -178,6 +182,8 @@ Deno.serve(async (req: Request) => {
     const secrets = await decryptCredentials(credentials);
     const secretKey = stringValue(secrets.secretKey);
     if (!secretKey) return json({ error: 'Merchant gateway credential is invalid' }, 503);
+    const modeError = gatewayModeMismatch(payment, credentials, secrets, secretKey);
+    if (modeError) return json({ error: modeError }, 409);
 
     if (payment.provider === 'paystack') {
       const reference = stringValue(payment.provider_reference);
@@ -221,6 +227,9 @@ Deno.serve(async (req: Request) => {
           amountMatched: true,
           currencyMatched: true,
           referenceMatched: true,
+          providerMode: payment.provider_mode,
+          providerDomain: data.domain ?? null,
+          environmentMatched: true,
         },
       });
 
@@ -324,7 +333,7 @@ Deno.serve(async (req: Request) => {
 
 async function loadPayment(id: string): Promise<J | null> {
   const rows = await rest<J[]>(
-    '/rest/v1/order_payments?select=id,tenant_id,order_id,payment_method_id,method_type,provider,status,amount,currency,provider_reference,provider_transaction_id,checkout_url,' +
+    '/rest/v1/order_payments?select=id,tenant_id,order_id,payment_method_id,method_type,provider,provider_mode,status,amount,currency,provider_reference,provider_transaction_id,checkout_url,' +
     'orders(public_order_id,customer_id,customers(display_name,phone,wa_id,email))' +
     '&id=eq.' + encodeURIComponent(id) + '&limit=1',
   );
@@ -378,6 +387,37 @@ function customerEmail(payment: J): string | null {
   return 'wa-' + phone.slice(-15) + '@processedge.com.ng';
 }
 
+function gatewayModeMismatch(payment: J, credentials: J, secrets: J, secretKey: string): string | null {
+  const paymentMode = stringValue(payment.provider_mode);
+  const credentialMode = stringValue(credentials.credential_mode);
+  const encryptedMode = stringValue(secrets.mode);
+  const provider = stringValue(payment.provider);
+
+  if (!paymentMode || (paymentMode !== 'test' && paymentMode !== 'live')) {
+    return 'SellerTray payment has no valid provider mode snapshot';
+  }
+  if (credentialMode !== paymentMode || encryptedMode !== paymentMode) {
+    return 'SellerTray gateway credential mode does not match payment mode';
+  }
+  if (!provider || !gatewayKeyMatchesMode(provider, secretKey, paymentMode)) {
+    return 'SellerTray gateway secret key does not match payment mode';
+  }
+  return null;
+}
+
+function gatewayKeyMatchesMode(provider: string, secretKey: string, mode: string): boolean {
+  if (provider === 'paystack') {
+    return mode === 'test' ? secretKey.startsWith('sk_test_') : secretKey.startsWith('sk_live_');
+  }
+  if (provider === 'flutterwave') {
+    const upper = secretKey.toUpperCase();
+    return mode === 'test'
+      ? upper.startsWith('FLWSECK_TEST-')
+      : upper.startsWith('FLWSECK-') && !upper.startsWith('FLWSECK_TEST-');
+  }
+  return false;
+}
+
 function normalizedPhone(value: unknown): string {
   const raw = typeof value === 'string' ? value.trim() : '';
   const digits = raw.replace(/\D/g, '');
@@ -391,7 +431,12 @@ function paystackMismatch(payment: J, data: J): string | null {
   const actualCurrency = stringValue(data.currency);
   const expectedRef = stringValue(payment.provider_reference);
   const actualRef = stringValue(data.reference);
+  const expectedMode = stringValue(payment.provider_mode);
+  const actualDomain = stringValue(data.domain);
 
+  if (!expectedMode || actualDomain !== expectedMode) {
+    return 'Verified Paystack environment does not match SellerTray payment mode';
+  }
   if (expectedAmount === null || actualAmount === null || Math.round(expectedAmount * 100) !== Math.round(actualAmount)) {
     return 'Verified Paystack amount does not match SellerTray payment';
   }

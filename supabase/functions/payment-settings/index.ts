@@ -82,10 +82,19 @@ Deno.serve(async (req: Request) => {
       return reply({ error: 'Gateway credential storage is not activated yet' }, 503, requestId);
     }
 
+    const method = await loadPaymentMethod(tenantId, methodId);
+    if (!method || method.method_type !== provider) {
+      return reply({ error: 'SellerTray gateway payment method mismatch' }, 409, requestId);
+    }
+    const mode = method.mode === 'test' ? 'test' : 'live';
+
     const secretKey = secret(body.secretKey);
     if (!secretKey) return reply({ error: 'A valid gateway secret key is required' }, 400, requestId);
+    if (!gatewayKeyMatchesMode(provider, secretKey, mode)) {
+      return reply({ error: provider + ' secret key does not match the SellerTray ' + mode + ' payment mode' }, 409, requestId);
+    }
 
-    const credentials: J = { secretKey };
+    const credentials: J = { secretKey, mode };
     if (provider === 'flutterwave') {
       const secretHash = secret(body.secretHash);
       if (!secretHash) {
@@ -107,7 +116,7 @@ Deno.serve(async (req: Request) => {
       p_key_version: 1,
     });
 
-    return reply({ ok: true, provider, fingerprint }, 200, requestId);
+    return reply({ ok: true, provider, mode, fingerprint }, 200, requestId);
   } catch (e) {
     const message = sanitize(e instanceof Error ? e.message : 'Payment settings request failed');
     const status = /only the business Owner|Owner or Manager|read-only|not a member/i.test(message)
@@ -138,6 +147,37 @@ async function verifiedUser(auth: string): Promise<string | null> {
     const user = await r.json() as J;
     return typeof user.id === 'string' && user.id ? user.id : null;
   } catch { return null; }
+}
+
+async function loadPaymentMethod(tenantId: string, methodId: string): Promise<J | null> {
+  const r = await fetch(
+    SUPABASE_URL + '/rest/v1/merchant_payment_methods?select=id,method_type,mode' +
+      '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+      '&id=eq.' + encodeURIComponent(methodId) +
+      '&limit=1',
+    {
+      headers: {
+        apikey: SERVICE_KEY,
+        authorization: 'Bearer ' + SERVICE_KEY,
+      },
+    },
+  );
+  if (!r.ok) throw new Error('Unable to verify SellerTray payment method mode');
+  const rows = await r.json() as J[];
+  return rows[0] ?? null;
+}
+
+function gatewayKeyMatchesMode(provider: string, secretKey: string, mode: 'test' | 'live'): boolean {
+  if (provider === 'paystack') {
+    return mode === 'test' ? secretKey.startsWith('sk_test_') : secretKey.startsWith('sk_live_');
+  }
+  if (provider === 'flutterwave') {
+    const upper = secretKey.toUpperCase();
+    return mode === 'test'
+      ? upper.startsWith('FLWSECK_TEST-')
+      : upper.startsWith('FLWSECK-') && !upper.startsWith('FLWSECK_TEST-');
+  }
+  return false;
 }
 
 async function rpc<T = unknown>(name: string, body: J): Promise<T> {

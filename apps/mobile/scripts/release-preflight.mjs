@@ -412,6 +412,7 @@ const usageBillingContract = read(join(repoRoot, 'docs/usage_billing.md'));
 const paymentCoreMigration = read(join(repoRoot, 'supabase/migrations/20260912072000_financial_document_contract_payment_core.sql'));
 const paymentMethodMigration = read(join(repoRoot, 'supabase/migrations/20260912075000_merchant_payment_method_settings.sql'));
 const paymentOrchestrationMigration = read(join(repoRoot, 'supabase/migrations/20260912084500_customer_payment_orchestration_foundation.sql'));
+const paymentEnvironmentMigration = read(join(repoRoot, 'supabase/migrations/20260912152000_payment_provider_mode_binding.sql'));
 const paymentSettingsFunction = read(join(repoRoot, 'supabase/functions/payment-settings/index.ts'));
 const paymentRuntimeFunction = read(join(repoRoot, 'supabase/functions/payment-runtime/index.ts'));
 const paystackPaymentWebhook = read(join(repoRoot, 'supabase/functions/paystack-payment-webhook/index.ts'));
@@ -452,6 +453,27 @@ requireValue(
     paymentSettingsFunction.includes("Gateway credential storage is not activated yet") &&
     !paymentSettingsFunction.includes("return reply({ secretKey"),
   'Merchant gateway credentials must remain AES-GCM encrypted and never returned to the client',
+);
+requireValue(
+  paymentSettingsFunction.includes("sk_test_") &&
+    paymentSettingsFunction.includes("sk_live_") &&
+    paymentSettingsFunction.includes("FLWSECK_TEST-") &&
+    paymentSettingsFunction.includes("const credentials: J = { secretKey, mode }"),
+  'Gateway credential connection must bind provider key material to the selected test/live mode',
+);
+requireValue(
+  paymentEnvironmentMigration.includes('provider_mode') &&
+    paymentEnvironmentMigration.includes('credential_mode') &&
+    paymentEnvironmentMigration.includes('SellerTray payment provider mode is immutable') &&
+    paymentEnvironmentMigration.includes('Disconnect SellerTray gateway credentials before changing test/live mode'),
+  'Payment attempts and encrypted gateway credentials must retain immutable environment binding',
+);
+requireValue(
+  paymentRuntimeFunction.includes('gatewayModeMismatch') &&
+    paymentRuntimeFunction.includes('Verified Paystack environment does not match SellerTray payment mode') &&
+    paymentRuntimeFunction.includes('data.domain') &&
+    paymentRuntimeFunction.includes('credential_mode'),
+  'Gateway runtime must reject credential/payment/provider environment mismatches before confirming value',
 );
 requireValue(
   paymentRuntimeFunction.includes('paystackMismatch') &&
