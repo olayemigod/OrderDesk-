@@ -43,7 +43,7 @@ jobs:
           fi
 
       - name: Start local Supabase
-        run: supabase start
+        run: supabase start --debug
 
       - name: Replay all migrations
         run: supabase db reset
