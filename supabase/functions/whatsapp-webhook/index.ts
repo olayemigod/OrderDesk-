@@ -779,13 +779,14 @@ function detectCustomerSupportIntent(value: string): CustomerSupportIntent | nul
   const normalized = value.trim().toLocaleLowerCase().replace(/\s+/g, ' ');
   const hasOrderId = /\bST-[0-9]{6}-[A-F0-9]{10}\b/i.test(value);
 
-  if (/\b(receipt|invoice)\b/i.test(normalized)) return 'receipt';
+  if (/\breceipt\b/i.test(normalized) || /\bproof of purchase\b/i.test(normalized)) return 'receipt';
 
   if (
     /\b(track|tracking|status)\b/i.test(normalized) ||
     /\bwhere\s+(?:is|are)\s+(?:my\s+)?order\b/i.test(normalized) ||
     /\bwhat(?:'s| is)\s+happening\s+with\s+(?:my\s+)?order\b/i.test(normalized) ||
     /\border\s+(?:id|number|no)\b/i.test(normalized) ||
+    /\b(?:last|latest|recent)\s+order\b/i.test(normalized) ||
     (hasOrderId && /\border\b/i.test(normalized))
   ) {
     return 'status';
@@ -990,13 +991,17 @@ function renderOrderReceipt(businessName: string, order: CustomerSupportOrder): 
   if (items.length === 0) {
     lines.push('- Order items unavailable');
   } else {
-    items.forEach((item, index) => {
+    const visibleItems = items.slice(0, 20);
+    visibleItems.forEach((item, index) => {
       const quantity = Number(item.quantity) || 0;
       const lineTotal = Number(item.line_total);
       lines.push(
         `${index + 1}. ${quantity} × ${item.item_name} — ${formatReceiptMoney(Number.isFinite(lineTotal) ? lineTotal : 0, order.currency)}`,
       );
     });
+    if (items.length > visibleItems.length) {
+      lines.push(`… plus ${items.length - visibleItems.length} more item line(s)`);
+    }
   }
 
   lines.push('');
