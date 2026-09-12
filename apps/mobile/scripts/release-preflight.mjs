@@ -476,6 +476,8 @@ requireValue(
     platformAdminFunction.includes('SellerTray Test Rice') &&
     platformAdminFunction.includes('SellerTray Test Milk') &&
     platformAdminFunction.includes("Deno.env.get('ORDER_PARSER_TOKEN')?.trim()") &&
+    platformAdminFunction.includes("overview.actorRole !== 'admin'") &&
+    platformAdminFunction.includes('ProcessEdge platform Admin role required for AI smoke test') &&
     read(join(mobileRoot, 'src/components/PlatformAdminView.tsx')).includes('Run AI smoke test'),
   'ProcessEdge AI smoke test must remain MFA-gated, synthetic-data-only and callable from the admin console',
 );

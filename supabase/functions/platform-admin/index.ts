@@ -65,6 +65,12 @@ Deno.serve(withObservability('platform-admin', async (request) => {
     }
 
     if (action === 'ai_parser_probe') {
+      const overview = await rpc<JsonRecord>('platform_admin_overview', {
+        p_actor_user_id: userId,
+      });
+      if (overview.actorRole !== 'admin') {
+        return json({ error: 'ProcessEdge platform Admin role required for AI smoke test' }, 403);
+      }
       return json({ probe: await runAiParserProbe() });
     }
 
