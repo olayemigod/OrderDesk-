@@ -307,7 +307,7 @@ requireValue(orderFulfillmentPanel.includes('Mark delivered & complete') && orde
 requireValue(orderFulfillmentPanel.includes('Customer confirmed receipt on WhatsApp'), 'Completed orders must show customer receipt-confirmation provenance');
 requireValue(
   saasApp.includes('order.publicOrderId') &&
-    saasApp.includes('Search order ref, customer, phone, message or product'),
+    saasApp.includes('Search orders, customers or products'),
   'Merchant-scoped order references must be visible in the merchant order UI',
 );
 const orderIdSelfServiceMigration = read(join(repoRoot, 'supabase/migrations/20260912053000_order_ids_whatsapp_self_service.sql'));
