@@ -884,6 +884,19 @@ async function maybeHandleCustomerSelfService({
     return true;
   }
 
+  if (intent === 'receipt' && selected.status !== 'completed') {
+    await queueCustomerSupportReply({
+      tenantId,
+      order: selected,
+      sourceMessageId,
+      fromPhoneNumberId,
+      toWaId: customerWaId,
+      eventKey: 'order_status_reply',
+      messageBody: `Order ${selected.public_order_id} is currently ${humanOrderStatus(selected)}. A receipt is available after the order is completed.`,
+    });
+    return true;
+  }
+
   const messageBody = intent === 'receipt'
     ? renderOrderReceipt(businessName, selected)
     : renderOrderStatus(businessName, selected);
