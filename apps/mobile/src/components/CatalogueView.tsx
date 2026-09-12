@@ -16,6 +16,8 @@ import { useCatalogue } from '../hooks/useCatalogue';
 export function CatalogueView({ business }: { business: MerchantBusiness }) {
   const { items, loading, error, refresh, createItem, editItem, setActive } = useCatalogue(business.id);
   const [editing, setEditing] = useState<CatalogueItem | 'new' | null>(null);
+  const [query, setQuery] = useState('');
+  const [showWhatsAppTools, setShowWhatsAppTools] = useState(false);
   const [whatsappStatus, setWhatsappStatus] = useState<WhatsAppCatalogueStatus | null>(null);
   const [whatsappLoading, setWhatsappLoading] = useState(true);
   const [whatsappError, setWhatsappError] = useState<string | null>(null);
@@ -26,6 +28,19 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
   const [retailerIdDraft, setRetailerIdDraft] = useState('');
   const [mappingBusy, setMappingBusy] = useState(false);
   const canEdit = business.role === 'owner' || business.role === 'manager';
+  const activeCount = items.filter((item) => item.isActive).length;
+  const mappedCount = items.filter((item) => Boolean(item.whatsappProductRetailerId)).length;
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleItems = normalizedQuery
+    ? items.filter((item) =>
+        [
+          item.name,
+          item.sku ?? '',
+          item.category ?? '',
+          ...item.aliases,
+        ].join(' ').toLowerCase().includes(normalizedQuery),
+      )
+    : items;
 
   async function refreshWhatsAppCatalogue() {
     setWhatsappLoading(true);
@@ -116,6 +131,45 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
         ) : null}
       </View>
 
+      <View style={styles.catalogueSummaryRow}>
+        <View style={styles.catalogueSummaryCard}>
+          <Text style={styles.catalogueSummaryValue}>{items.length}</Text>
+          <Text style={styles.catalogueSummaryLabel}>PRODUCTS</Text>
+        </View>
+        <View style={styles.catalogueSummaryCard}>
+          <Text style={styles.catalogueSummaryValue}>{activeCount}</Text>
+          <Text style={styles.catalogueSummaryLabel}>ACTIVE</Text>
+        </View>
+        <View style={styles.catalogueSummaryCard}>
+          <Text style={styles.catalogueSummaryValue}>{mappedCount}</Text>
+          <Text style={styles.catalogueSummaryLabel}>WHATSAPP MAPPED</Text>
+        </View>
+      </View>
+
+      <TextInput
+        value={query}
+        onChangeText={setQuery}
+        placeholder="Search products, SKU or customer words"
+        autoCorrect={false}
+        style={styles.searchInput}
+      />
+
+      <View style={styles.whatsappSummaryCard}>
+        <View style={styles.whatsappSummaryCopy}>
+          <Text style={styles.whatsappEyebrow}>WHATSAPP CATALOGUE</Text>
+          <Text style={styles.whatsappSummaryTitle}>
+            {whatsappStatus?.settings ? 'Catalogue connection configured' : 'Optional catalogue connection'}
+          </Text>
+          <Text style={styles.whatsappSummaryText}>
+            Keep product management simple. Open mapping tools only when connecting SellerTray products to a Meta catalogue.
+          </Text>
+        </View>
+        <Pressable onPress={() => setShowWhatsAppTools((value) => !value)} style={styles.manageMappingButton}>
+          <Text style={styles.manageMappingButtonText}>{showWhatsAppTools ? 'Hide' : 'Manage'}</Text>
+        </Pressable>
+      </View>
+
+      {showWhatsAppTools ? (
       <View style={styles.whatsappCard}>
         <View style={styles.whatsappHeading}>
           <View style={styles.whatsappHeadingCopy}>
@@ -182,6 +236,7 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
           <Text style={styles.retryText}>Refresh WhatsApp catalogue status</Text>
         </Pressable>
       </View>
+      ) : null}
 
       <ChatCatalogueReviewSection
         business={business}
@@ -228,7 +283,7 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
       ) : null}
 
       <View style={styles.list}>
-        {items.map((item) => (
+        {visibleItems.map((item) => (
           <View key={item.id} style={[styles.itemCard, !item.isActive && styles.itemInactive]}>
             <View style={styles.itemTop}>
               <View style={styles.itemIdentity}>
