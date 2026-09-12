@@ -108,6 +108,7 @@ function Workspace() {
   const [merchantName, setMerchantName] = useState('there');
 
   useEffect(() => {
+    if (view !== 'home') return undefined;
     let active = true;
     void supabase.auth.getUser().then(({ data }) => {
       if (!active) return;
@@ -120,7 +121,7 @@ function Workspace() {
       setMerchantName(firstName(candidate));
     });
     return () => { active = false; };
-  }, []);
+  }, [view]);
 
   useEffect(() => {
     setSelectedOrderId('');
