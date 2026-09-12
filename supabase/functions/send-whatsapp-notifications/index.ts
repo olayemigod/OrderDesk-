@@ -2,6 +2,7 @@ type JsonRecord = Record<string, unknown>;
 
 type ClaimedNotification = {
   id: string;
+  tenant_id: string;
   delivery_status: string;
   from_phone_number_id: string;
   to_wa_id: string;
@@ -19,6 +20,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const WORKER_TOKEN = Deno.env.get('NOTIFICATION_WORKER_TOKEN') ?? '';
 const META_ACCESS_TOKEN = Deno.env.get('META_ACCESS_TOKEN') ?? '';
+const WHATSAPP_ENCRYPTION_KEY = Deno.env.get('SELLERTRAY_WHATSAPP_ENCRYPTION_KEY') ?? '';
 const META_GRAPH_API_VERSION = Deno.env.get('META_GRAPH_API_VERSION') ?? '';
 const META_TEXT_TEMPLATE_NAME = Deno.env.get('META_TEXT_TEMPLATE_NAME')?.trim() ?? '';
 const META_DOCUMENT_TEMPLATE_NAME = Deno.env.get('META_DOCUMENT_TEMPLATE_NAME')?.trim() ?? '';
@@ -29,7 +31,7 @@ Deno.serve(withObservability('send-whatsapp-notifications', async (request) => {
     return json({ error: 'Method not allowed' }, 405);
   }
 
-  if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !WORKER_TOKEN || !META_ACCESS_TOKEN || !META_GRAPH_API_VERSION) {
+  if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !WORKER_TOKEN || !META_GRAPH_API_VERSION) {
     console.error('WhatsApp notification worker is not activated: required server secrets are missing.');
     return json({ error: 'Notification worker not configured' }, 503);
   }
@@ -59,14 +61,15 @@ async function claimNotifications(limit: number): Promise<ClaimedNotification[]>
 
 async function deliver(notification: ClaimedNotification): Promise<string> {
   try {
+    const metaAccessToken = await resolveMetaAccessTokenByPhone(notification.from_phone_number_id);
     const requiresTemplate = !notification.conversation_window_expires_at ||
       new Date(notification.conversation_window_expires_at).getTime() <= Date.now();
 
     const response = requiresTemplate
-      ? await sendTemplateNotification(notification)
+      ? await sendTemplateNotification(notification, metaAccessToken)
       : notification.media_type === 'document'
-        ? await sendDocumentNotification(notification)
-        : await sendTextNotification(notification);
+        ? await sendDocumentNotification(notification, metaAccessToken)
+        : await sendTextNotification(notification, metaAccessToken);
 
     const raw = await response.text();
     if (!response.ok) {
@@ -130,7 +133,7 @@ class TemplateConfigurationError extends Error {
   }
 }
 
-async function sendTemplateNotification(notification: ClaimedNotification): Promise<Response> {
+async function sendTemplateNotification(notification: ClaimedNotification, metaAccessToken: string): Promise<Response> {
   const isDocument = notification.media_type === 'document';
   const templateName = isDocument ? META_DOCUMENT_TEMPLATE_NAME : META_TEXT_TEMPLATE_NAME;
 
@@ -158,7 +161,7 @@ async function sendTemplateNotification(notification: ClaimedNotification): Prom
     }
 
     const document = await downloadPrivateDocument(bucket, storagePath, mimeType);
-    const mediaId = await uploadMetaDocument(notification.from_phone_number_id, document, filename, mimeType);
+    const mediaId = await uploadMetaDocument(notification.from_phone_number_id, document, filename, mimeType, metaAccessToken);
     components.push({
       type: 'header',
       parameters: [{
@@ -181,7 +184,7 @@ async function sendTemplateNotification(notification: ClaimedNotification): Prom
     {
       method: 'POST',
       headers: {
-        authorization: `Bearer ${META_ACCESS_TOKEN}`,
+        authorization: `Bearer ${metaAccessToken}`,
         'content-type': 'application/json',
       },
       body: JSON.stringify({
@@ -199,13 +202,13 @@ async function sendTemplateNotification(notification: ClaimedNotification): Prom
   );
 }
 
-async function sendTextNotification(notification: ClaimedNotification): Promise<Response> {
+async function sendTextNotification(notification: ClaimedNotification, metaAccessToken: string): Promise<Response> {
   return metaFetch(
     `https://graph.facebook.com/${encodeURIComponent(META_GRAPH_API_VERSION)}/${encodeURIComponent(notification.from_phone_number_id)}/messages`,
     {
       method: 'POST',
       headers: {
-        authorization: `Bearer ${META_ACCESS_TOKEN}`,
+        authorization: `Bearer ${metaAccessToken}`,
         'content-type': 'application/json',
       },
       body: JSON.stringify({
@@ -219,7 +222,7 @@ async function sendTextNotification(notification: ClaimedNotification): Promise<
   );
 }
 
-async function sendDocumentNotification(notification: ClaimedNotification): Promise<Response> {
+async function sendDocumentNotification(notification: ClaimedNotification, metaAccessToken: string): Promise<Response> {
   const bucket = notification.storage_bucket?.trim();
   const storagePath = notification.storage_path?.trim();
   const filename = notification.media_filename?.trim();
@@ -233,14 +236,14 @@ async function sendDocumentNotification(notification: ClaimedNotification): Prom
   }
 
   const document = await downloadPrivateDocument(bucket, storagePath, mimeType);
-  const mediaId = await uploadMetaDocument(notification.from_phone_number_id, document, filename, mimeType);
+  const mediaId = await uploadMetaDocument(notification.from_phone_number_id, document, filename, mimeType, metaAccessToken);
 
   return metaFetch(
     `https://graph.facebook.com/${encodeURIComponent(META_GRAPH_API_VERSION)}/${encodeURIComponent(notification.from_phone_number_id)}/messages`,
     {
       method: 'POST',
       headers: {
-        authorization: `Bearer ${META_ACCESS_TOKEN}`,
+        authorization: `Bearer ${metaAccessToken}`,
         'content-type': 'application/json',
       },
       body: JSON.stringify({
@@ -291,6 +294,7 @@ async function uploadMetaDocument(
   document: Blob,
   filename: string,
   mimeType: string,
+  metaAccessToken: string,
 ): Promise<string> {
   const form = new FormData();
   form.append('messaging_product', 'whatsapp');
@@ -302,7 +306,7 @@ async function uploadMetaDocument(
     {
       method: 'POST',
       headers: {
-        authorization: `Bearer ${META_ACCESS_TOKEN}`,
+        authorization: `Bearer ${metaAccessToken}`,
       },
       body: form,
     },
@@ -326,6 +330,94 @@ async function uploadMetaDocument(
   }
 
   return payload.id;
+}
+
+type RuntimeWhatsAppCredential = {
+  tenant_id: string;
+  connection_id: string;
+  waba_id: string | null;
+  phone_number_id: string;
+  credential_mode: 'platform_system_user' | 'business_integration_system_user';
+  credentials_ciphertext: string | null;
+  credentials_iv: string | null;
+  encryption_key_version: number | null;
+  credential_fingerprint: string | null;
+  credential_expires_at: string | null;
+};
+
+async function resolveMetaAccessTokenByPhone(phoneNumberId: string): Promise<string> {
+  const rows = await rest<RuntimeWhatsAppCredential[]>(
+    '/rest/v1/rpc/get_sellertray_whatsapp_runtime_credential_by_phone',
+    {
+      method: 'POST',
+      body: JSON.stringify({ p_phone_number_id: phoneNumberId }),
+    },
+  );
+  const credential = rows[0] ?? null;
+  if (!credential) throw new Error('No active SellerTray WhatsApp connection owns this Phone Number ID.');
+
+  if (credential.credential_mode === 'platform_system_user') {
+    if (!META_ACCESS_TOKEN) {
+      throw new Error('SellerTray platform WhatsApp credential is not configured.');
+    }
+    return META_ACCESS_TOKEN;
+  }
+
+  if (
+    !credential.credentials_ciphertext ||
+    !credential.credentials_iv ||
+    !credential.encryption_key_version
+  ) {
+    throw new Error('SellerTray merchant WhatsApp credential is unavailable.');
+  }
+  if (credential.credential_expires_at) {
+    const expiresAt = new Date(credential.credential_expires_at).getTime();
+    if (Number.isFinite(expiresAt) && expiresAt <= Date.now()) {
+      throw new Error('SellerTray merchant WhatsApp credential has expired.');
+    }
+  }
+
+  const payload = await decryptCredential(
+    credential.credentials_ciphertext,
+    credential.credentials_iv,
+  );
+  const accessToken = typeof payload.accessToken === 'string' ? payload.accessToken.trim() : '';
+  if (!accessToken) throw new Error('SellerTray merchant WhatsApp credential is invalid.');
+  return accessToken;
+}
+
+async function decryptCredential(ciphertext: string, ivValue: string): Promise<JsonRecord> {
+  const keyBytes = fromBase64(WHATSAPP_ENCRYPTION_KEY);
+  if (keyBytes.byteLength !== 32) {
+    throw new Error('SellerTray WhatsApp credential decryption is not configured.');
+  }
+  const iv = fromBase64(ivValue);
+  if (iv.byteLength !== 12) throw new Error('SellerTray WhatsApp credential IV is invalid.');
+
+  const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['decrypt']);
+  let plain: ArrayBuffer;
+  try {
+    plain = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      fromBase64(ciphertext),
+    );
+  } catch {
+    throw new Error('SellerTray merchant WhatsApp credential could not be decrypted.');
+  }
+
+  try {
+    const value = JSON.parse(new TextDecoder().decode(plain)) as unknown;
+    if (!isRecord(value)) throw new Error('invalid');
+    return value;
+  } catch {
+    throw new Error('SellerTray merchant WhatsApp credential payload is invalid.');
+  }
+}
+
+function fromBase64(value: string): Uint8Array {
+  try { return Uint8Array.from(atob(value), (char) => char.charCodeAt(0)); }
+  catch { return new Uint8Array(); }
 }
 
 async function finish(id: string, patch: JsonRecord): Promise<void> {
