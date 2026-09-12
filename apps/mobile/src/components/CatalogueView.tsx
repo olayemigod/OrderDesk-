@@ -3,12 +3,100 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 
 import type { MerchantBusiness } from '../data/businessRepository';
 import type { CatalogueItem, CatalogueItemInput } from '../data/catalogueRepository';
+import {
+  configureWhatsAppCatalogue,
+  loadWhatsAppCatalogueStatus,
+  mapWhatsAppCatalogueItem,
+  unmapWhatsAppCatalogueItem,
+  type WhatsAppCatalogueStatus,
+} from '../data/whatsappCatalogueRepository';
 import { useCatalogue } from '../hooks/useCatalogue';
 
 export function CatalogueView({ business }: { business: MerchantBusiness }) {
   const { items, loading, error, refresh, createItem, editItem, setActive } = useCatalogue(business.id);
   const [editing, setEditing] = useState<CatalogueItem | 'new' | null>(null);
+  const [whatsappStatus, setWhatsappStatus] = useState<WhatsAppCatalogueStatus | null>(null);
+  const [whatsappLoading, setWhatsappLoading] = useState(true);
+  const [whatsappError, setWhatsappError] = useState<string | null>(null);
+  const [catalogIdDraft, setCatalogIdDraft] = useState('');
+  const [catalogNameDraft, setCatalogNameDraft] = useState('');
+  const [catalogSaving, setCatalogSaving] = useState(false);
+  const [mappingItemId, setMappingItemId] = useState<string | null>(null);
+  const [retailerIdDraft, setRetailerIdDraft] = useState('');
+  const [mappingBusy, setMappingBusy] = useState(false);
   const canEdit = business.role === 'owner' || business.role === 'manager';
+
+  async function refreshWhatsAppCatalogue() {
+    setWhatsappLoading(true);
+    setWhatsappError(null);
+    try {
+      const status = await loadWhatsAppCatalogueStatus(business.id);
+      setWhatsappStatus(status);
+      setCatalogIdDraft(status.settings?.catalog_id ?? '');
+      setCatalogNameDraft(status.settings?.catalog_name ?? '');
+    } catch (err) {
+      setWhatsappError(err instanceof Error ? err.message : 'Unable to load WhatsApp catalogue settings.');
+    } finally {
+      setWhatsappLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void refreshWhatsAppCatalogue();
+  }, [business.id]);
+
+  async function saveWhatsAppCatalogue() {
+    if (!canEdit || catalogSaving) return;
+    if (!catalogIdDraft.trim()) {
+      setWhatsappError('Enter the WhatsApp Business catalogue ID.');
+      return;
+    }
+    setCatalogSaving(true);
+    setWhatsappError(null);
+    try {
+      await configureWhatsAppCatalogue(business.id, {
+        catalogId: catalogIdDraft,
+        catalogName: catalogNameDraft,
+        enabled: true,
+      });
+      await refreshWhatsAppCatalogue();
+    } catch (err) {
+      setWhatsappError(err instanceof Error ? err.message : 'Unable to save WhatsApp catalogue settings.');
+    } finally {
+      setCatalogSaving(false);
+    }
+  }
+
+  async function saveItemMapping(itemId: string) {
+    const catalogId = whatsappStatus?.settings?.catalog_id;
+    if (!canEdit || !catalogId || !retailerIdDraft.trim() || mappingBusy) return;
+    setMappingBusy(true);
+    setWhatsappError(null);
+    try {
+      await mapWhatsAppCatalogueItem(business.id, itemId, catalogId, retailerIdDraft);
+      setMappingItemId(null);
+      setRetailerIdDraft('');
+      await Promise.all([refresh(), refreshWhatsAppCatalogue()]);
+    } catch (err) {
+      setWhatsappError(err instanceof Error ? err.message : 'Unable to map this WhatsApp catalogue product.');
+    } finally {
+      setMappingBusy(false);
+    }
+  }
+
+  async function removeItemMapping(itemId: string) {
+    if (!canEdit || mappingBusy) return;
+    setMappingBusy(true);
+    setWhatsappError(null);
+    try {
+      await unmapWhatsAppCatalogueItem(business.id, itemId);
+      await Promise.all([refresh(), refreshWhatsAppCatalogue()]);
+    } catch (err) {
+      setWhatsappError(err instanceof Error ? err.message : 'Unable to remove the WhatsApp catalogue mapping.');
+    } finally {
+      setMappingBusy(false);
+    }
+  }
 
   return (
     <View style={styles.wrap}>
@@ -25,6 +113,73 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
             <Text style={styles.addButtonText}>+ Add product</Text>
           </Pressable>
         ) : null}
+      </View>
+
+      <View style={styles.whatsappCard}>
+        <View style={styles.whatsappHeading}>
+          <View style={styles.whatsappHeadingCopy}>
+            <Text style={styles.whatsappEyebrow}>WHATSAPP CATALOGUE</Text>
+            <Text style={styles.whatsappTitle}>
+              {whatsappStatus?.settings ? 'Catalogue mapping active' : 'Connect your product catalogue'}
+            </Text>
+            <Text style={styles.whatsappText}>
+              Map SellerTray products to WhatsApp Business product retailer IDs. Native WhatsApp catalogue orders then arrive as structured orders without AI parsing.
+            </Text>
+          </View>
+          {whatsappLoading ? <ActivityIndicator size="small" /> : null}
+        </View>
+
+        {whatsappStatus?.settings ? (
+          <View style={styles.whatsappStatusRow}>
+            <View style={styles.whatsappStatusPill}>
+              <Text style={styles.whatsappStatusText}>
+                {whatsappStatus.settings.is_enabled ? 'Enabled' : 'Disabled'}
+              </Text>
+            </View>
+            <Text style={styles.whatsappMeta}>
+              {whatsappStatus.settings.catalog_name || 'WhatsApp catalogue'} · ID {whatsappStatus.settings.catalog_id}
+            </Text>
+          </View>
+        ) : null}
+
+        {canEdit ? (
+          <View style={styles.whatsappForm}>
+            <Field label="WhatsApp catalogue ID" hint="Use the catalogue ID assigned in Meta Commerce / WhatsApp Business.">
+              <TextInput
+                value={catalogIdDraft}
+                onChangeText={setCatalogIdDraft}
+                autoCapitalize="none"
+                placeholder="e.g. 123456789012345"
+                style={styles.input}
+              />
+            </Field>
+            <Field label="Catalogue name" hint="Optional merchant-friendly label.">
+              <TextInput
+                value={catalogNameDraft}
+                onChangeText={setCatalogNameDraft}
+                placeholder="e.g. Main WhatsApp Catalogue"
+                style={styles.input}
+              />
+            </Field>
+            <Pressable disabled={catalogSaving || whatsappLoading} onPress={() => void saveWhatsAppCatalogue()} style={[styles.whatsappSaveButton, (catalogSaving || whatsappLoading) && styles.disabled]}>
+              <Text style={styles.whatsappSaveButtonText}>{catalogSaving ? 'Saving…' : whatsappStatus?.settings ? 'Update catalogue connection' : 'Save catalogue connection'}</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Text style={styles.whatsappReadOnly}>Only the business Owner or Manager can change WhatsApp catalogue mappings.</Text>
+        )}
+
+        <View style={styles.importNotice}>
+          <Text style={styles.importNoticeTitle}>Automatic Meta catalogue import is not active yet</Text>
+          <Text style={styles.importNoticeText}>
+            SellerTray will not read or sync a merchant's Meta catalogue using a shared platform credential. Automatic import will only be enabled after tenant-specific Meta asset authorization is verified.
+          </Text>
+        </View>
+
+        {whatsappError ? <Text style={styles.errorText}>{whatsappError}</Text> : null}
+        <Pressable disabled={whatsappLoading || catalogSaving || mappingBusy} onPress={() => void refreshWhatsAppCatalogue()}>
+          <Text style={styles.retryText}>Refresh WhatsApp catalogue status</Text>
+        </Pressable>
       </View>
 
       {error ? (
@@ -81,6 +236,70 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
 
             <Text style={styles.aliasLabel}>CUSTOMER WORDS</Text>
             <Text style={styles.aliases}>{item.aliases.length ? item.aliases.join(', ') : 'No aliases yet'}</Text>
+
+            <View style={styles.whatsappItemRow}>
+              <View style={styles.whatsappItemCopy}>
+                <Text style={styles.aliasLabel}>WHATSAPP PRODUCT</Text>
+                <Text style={styles.aliases}>
+                  {item.whatsappProductRetailerId
+                    ? `Mapped · ${item.whatsappProductRetailerId}`
+                    : whatsappStatus?.settings
+                      ? 'Not mapped'
+                      : 'Catalogue connection required'}
+                </Text>
+              </View>
+              {canEdit && whatsappStatus?.settings ? (
+                item.whatsappProductRetailerId ? (
+                  <Pressable disabled={mappingBusy} onPress={() => void removeItemMapping(item.id)}>
+                    <Text style={styles.link}>Unmap</Text>
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    onPress={() => {
+                      setMappingItemId(item.id);
+                      setRetailerIdDraft('');
+                    }}
+                  >
+                    <Text style={styles.link}>Map</Text>
+                  </Pressable>
+                )
+              ) : null}
+            </View>
+
+            {mappingItemId === item.id ? (
+              <View style={styles.mappingEditor}>
+                <Text style={styles.fieldLabel}>Product retailer ID</Text>
+                <Text style={styles.help}>
+                  Enter the exact product_retailer_id used for this item in the connected WhatsApp Business catalogue.
+                </Text>
+                <TextInput
+                  value={retailerIdDraft}
+                  onChangeText={setRetailerIdDraft}
+                  autoCapitalize="none"
+                  placeholder="e.g. SEM-5KG"
+                  style={styles.input}
+                />
+                <View style={styles.mappingActions}>
+                  <Pressable
+                    disabled={mappingBusy}
+                    onPress={() => {
+                      setMappingItemId(null);
+                      setRetailerIdDraft('');
+                    }}
+                    style={styles.mappingSecondary}
+                  >
+                    <Text style={styles.secondaryText}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    disabled={mappingBusy || !retailerIdDraft.trim()}
+                    onPress={() => void saveItemMapping(item.id)}
+                    style={[styles.mappingPrimary, (!retailerIdDraft.trim() || mappingBusy) && styles.disabled]}
+                  >
+                    <Text style={styles.primaryButtonText}>{mappingBusy ? 'Mapping…' : 'Save mapping'}</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
 
             <View style={styles.itemActions}>
               <Text style={[styles.stateText, item.isActive ? styles.activeText : styles.inactiveText]}>
@@ -269,4 +488,28 @@ const styles = StyleSheet.create({
   errorText: { color: '#B42318', fontSize: 11, lineHeight: 16 },
   retryText: { color: '#B42318', fontSize: 11, fontWeight: '900' },
   muted: { color: '#667085', fontSize: 11 },
+  whatsappCard: { backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#ABEFC6', borderRadius: 16, padding: 14, gap: 10 },
+  whatsappHeading: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  whatsappHeadingCopy: { flex: 1 },
+  whatsappEyebrow: { color: '#027A48', fontSize: 8, fontWeight: '900', letterSpacing: 1 },
+  whatsappTitle: { color: '#101828', fontSize: 14, fontWeight: '900', marginTop: 3 },
+  whatsappText: { color: '#475467', fontSize: 10, lineHeight: 16, marginTop: 4 },
+  whatsappStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  whatsappStatusPill: { backgroundColor: '#D1FADF', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 },
+  whatsappStatusText: { color: '#027A48', fontSize: 9, fontWeight: '900' },
+  whatsappMeta: { color: '#475467', fontSize: 9, fontWeight: '700', flexShrink: 1 },
+  whatsappForm: { gap: 9 },
+  whatsappSaveButton: { minHeight: 43, borderRadius: 10, backgroundColor: '#12B76A', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  whatsappSaveButtonText: { color: '#FFFFFF', fontSize: 11, fontWeight: '900' },
+  whatsappReadOnly: { color: '#667085', fontSize: 10, lineHeight: 15 },
+  importNotice: { backgroundColor: '#FFFFFF', borderRadius: 10, padding: 10, gap: 3 },
+  importNoticeTitle: { color: '#344054', fontSize: 10, fontWeight: '900' },
+  importNoticeText: { color: '#667085', fontSize: 9, lineHeight: 14 },
+  whatsappItemRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  whatsappItemCopy: { flex: 1 },
+  mappingEditor: { backgroundColor: '#F9FAFB', borderRadius: 10, padding: 10, gap: 7 },
+  mappingActions: { flexDirection: 'row', gap: 8 },
+  mappingSecondary: { flex: 1, minHeight: 38, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  mappingPrimary: { flex: 1, minHeight: 38, backgroundColor: '#12B76A', borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  disabled: { opacity: 0.45 },
 });

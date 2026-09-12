@@ -10,6 +10,9 @@ export type CatalogueItem = {
   price: number | null;
   isActive: boolean;
   aliases: string[];
+  whatsappCatalogId: string | null;
+  whatsappProductRetailerId: string | null;
+  whatsappMappingSource: 'manual' | 'meta_import' | null;
 };
 
 export type CatalogueItemInput = {
@@ -31,6 +34,9 @@ type CatalogueRow = {
   price_ngn: number | string | null;
   is_active: boolean;
   catalog_item_aliases: Array<{ alias: string }> | null;
+  whatsapp_catalog_id: string | null;
+  whatsapp_product_retailer_id: string | null;
+  whatsapp_mapping_source: 'manual' | 'meta_import' | null;
 };
 
 export async function loadCatalogue(tenantId: string): Promise<CatalogueItem[]> {
@@ -45,6 +51,9 @@ export async function loadCatalogue(tenantId: string): Promise<CatalogueItem[]> 
       image_url,
       price_ngn,
       is_active,
+      whatsapp_catalog_id,
+      whatsapp_product_retailer_id,
+      whatsapp_mapping_source,
       catalog_item_aliases(alias)
     `)
     .eq('tenant_id', tenantId)
@@ -65,6 +74,9 @@ export async function loadCatalogue(tenantId: string): Promise<CatalogueItem[]> 
     aliases: (row.catalog_item_aliases ?? [])
       .map((entry) => entry.alias)
       .sort((left, right) => left.localeCompare(right)),
+    whatsappCatalogId: row.whatsapp_catalog_id,
+    whatsappProductRetailerId: row.whatsapp_product_retailer_id,
+    whatsappMappingSource: row.whatsapp_mapping_source,
   }));
 }
 
