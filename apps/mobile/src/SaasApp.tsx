@@ -404,19 +404,33 @@ function HomeView({
 
   return (
     <View style={styles.sectionStack}>
-      <View style={styles.homeHero}>
-        <Text style={styles.sectionEyebrow}>MERCHANT DASHBOARD</Text>
-        <Text style={styles.pageTitle}>Your business in one place.</Text>
-        <Text style={styles.pageSubtitle}>
-          Manage orders, catalogue and merchant setup for {business.name}.
-        </Text>
+      <View style={styles.greetingBlock}>
+        <Text style={styles.greetingTitle}>{timeGreeting()}, {merchantName}</Text>
+        <Text style={styles.greetingSubtitle}>Here is what is happening at {business.name} today.</Text>
       </View>
 
+      <Pressable onPress={onOpenOrders} style={({ pressed }) => [styles.homeHeroGreen, pressed && styles.heroPressed]}>
+        <View style={styles.heroTopRow}>
+          <View style={styles.heroIconWrap}>
+            <Ionicons name="wallet-outline" size={23} color={theme.colors.white} />
+          </View>
+          <View style={styles.heroCopy}>
+            <Text style={styles.heroEyebrow}>SALES TODAY</Text>
+            <Text style={styles.heroValue}>{formatMoney(salesToday, business.currency)}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color={theme.colors.white} />
+        </View>
+        <View style={styles.heroBottomRow}>
+          <Text style={styles.heroMeta}>{todayOrders.length} order{todayOrders.length === 1 ? '' : 's'} received today</Text>
+          <Text style={styles.heroLink}>View orders</Text>
+        </View>
+      </Pressable>
+
       <View style={styles.homeMetricGrid}>
-        <HomeMetric label="Orders today" value={String(todayOrders.length)} hint="Received today" />
-        <HomeMetric label="Sales today" value={formatMoney(salesToday, business.currency)} hint="Known order value" />
-        <HomeMetric label="Awaiting payment" value={String(awaitingPayment)} hint="Needs payment action" attention={awaitingPayment > 0} />
-        <HomeMetric label="New enquiries" value={String(newEnquiries)} hint="WhatsApp needs review" attention={newEnquiries > 0} />
+        <HomeMetric icon="cart-outline" label="Orders today" value={String(todayOrders.length)} hint="Received today" />
+        <HomeMetric icon="cash-outline" label="Sales today" value={formatMoney(salesToday, business.currency)} hint="Known order value" />
+        <HomeMetric icon="time-outline" label="Awaiting payment" value={String(awaitingPayment)} hint="Needs payment action" attention={awaitingPayment > 0} />
+        <HomeMetric icon="chatbubble-ellipses-outline" label="New enquiries" value={String(newEnquiries)} hint="WhatsApp needs review" attention={newEnquiries > 0} />
       </View>
 
       <View style={styles.quickActionsCard}>
@@ -425,22 +439,11 @@ function HomeView({
           <Text style={styles.sectionTitle}>Common tasks</Text>
         </View>
         <View style={styles.quickActionRow}>
-          <QuickAction label="Orders" onPress={onOpenOrders} />
-          <QuickAction label="Catalogue" onPress={onOpenProducts} />
-          <QuickAction label="Setup" onPress={onOpenMore} />
+          <QuickAction icon="receipt-outline" label="Orders" onPress={onOpenOrders} />
+          <QuickAction icon="cube-outline" label="Catalogue" onPress={onOpenProducts} />
+          <QuickAction icon="settings-outline" label="Setup" onPress={onOpenMore} />
         </View>
       </View>
-
-      <SetupGuideCard
-        business={business}
-        productCount={productCount}
-        orderCount={orders.length}
-        onProducts={onOpenProducts}
-        onOrders={onOpenOrders}
-        onMore={onOpenMore}
-      />
-
-      <BusinessInsightsPanel business={business} />
 
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Recent orders</Text>
@@ -455,18 +458,31 @@ function HomeView({
         selectedOrderId=""
         currency={business.currency}
         onSelect={onSelectOrder}
-        emptyText="No WhatsApp orders have arrived for this business yet."
+        emptyText="No orders yet. New WhatsApp and manual orders will appear here."
       />
+
+      <SetupGuideCard
+        business={business}
+        productCount={productCount}
+        orderCount={orders.length}
+        onProducts={onOpenProducts}
+        onOrders={onOpenOrders}
+        onMore={onOpenMore}
+      />
+
+      <BusinessInsightsPanel business={business} />
     </View>
   );
 }
 
 function HomeMetric({
+  icon,
   label,
   value,
   hint,
   attention = false,
 }: {
+  icon: string;
   label: string;
   value: string;
   hint: string;
@@ -474,6 +490,9 @@ function HomeMetric({
 }) {
   return (
     <View style={[styles.homeMetricCard, attention && styles.homeMetricCardAttention]}>
+      <View style={styles.metricIconWrap}>
+        <Ionicons name={icon as never} size={19} color={attention ? '#B54708' : theme.colors.greenDark} />
+      </View>
       <Text style={styles.homeMetricLabel}>{label}</Text>
       <Text numberOfLines={1} style={styles.homeMetricValue}>{value}</Text>
       <Text style={styles.homeMetricHint}>{hint}</Text>
@@ -481,10 +500,12 @@ function HomeMetric({
   );
 }
 
-function QuickAction({ label, onPress }: { label: string; onPress: () => void }) {
+function QuickAction({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.quickAction, pressed && styles.quickActionPressed]}>
-      <Text style={styles.quickActionMark}>+</Text>
+      <View style={styles.quickActionIcon}>
+        <Ionicons name={icon as never} size={22} color={theme.colors.greenDark} />
+      </View>
       <Text style={styles.quickActionText}>{label}</Text>
     </Pressable>
   );
