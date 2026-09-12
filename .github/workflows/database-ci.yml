@@ -42,6 +42,56 @@ jobs:
             supabase init
           fi
 
+          # GitHub checks this repository out as "OrderDesk-". Supabase derives
+          # Docker DNS names from project_id; a trailing hyphen makes those
+          # hostnames invalid. Normalize the local-only CI project id.
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("supabase/config.toml")
+          text = path.read_text()
+          text, count = re.subn(
+              r'(?m)^project_id\s*=\s*".*"
+        run: >-
+          supabase start --debug
+          -x gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+
+      - name: Replay all migrations
+        run: supabase db reset
+
+      - name: Run SellerTray database tests
+        run: supabase test db
+
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup
+,
+              'project_id = "sellertray-ci"',
+              text,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit("supabase/config.toml has no project_id to normalize")
+          path.write_text(text)
+          PY
+
+          grep -q '^project_id = "sellertray-ci"
+        run: >-
+          supabase start --debug
+          -x gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+
+      - name: Replay all migrations
+        run: supabase db reset
+
+      - name: Run SellerTray database tests
+        run: supabase test db
+
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup
+ supabase/config.toml
+
       - name: Start database-only Supabase stack
         run: >-
           supabase start --debug
