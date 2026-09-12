@@ -7,6 +7,11 @@ type ClaimedNotification = {
   to_wa_id: string;
   message_body: string;
   attempt_count: number;
+  media_type: 'document' | null;
+  storage_bucket: string | null;
+  storage_path: string | null;
+  media_filename: string | null;
+  media_mime_type: string | null;
 };
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
@@ -50,23 +55,9 @@ async function claimNotifications(limit: number): Promise<ClaimedNotification[]>
 
 async function deliver(notification: ClaimedNotification): Promise<string> {
   try {
-    const response = await fetch(
-      `https://graph.facebook.com/${encodeURIComponent(META_GRAPH_API_VERSION)}/${encodeURIComponent(notification.from_phone_number_id)}/messages`,
-      {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${META_ACCESS_TOKEN}`,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          recipient_type: 'individual',
-          to: notification.to_wa_id,
-          type: 'text',
-          text: { preview_url: false, body: notification.message_body },
-        }),
-      },
-    );
+    const response = notification.media_type === 'document'
+      ? await sendDocumentNotification(notification)
+      : await sendTextNotification(notification);
 
     const raw = await response.text();
     if (!response.ok) {
@@ -112,6 +103,134 @@ async function deliver(notification: ClaimedNotification): Promise<string> {
     });
     return 'failed';
   }
+}
+
+async function sendTextNotification(notification: ClaimedNotification): Promise<Response> {
+  return fetch(
+    `https://graph.facebook.com/${encodeURIComponent(META_GRAPH_API_VERSION)}/${encodeURIComponent(notification.from_phone_number_id)}/messages`,
+    {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${META_ACCESS_TOKEN}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: notification.to_wa_id,
+        type: 'text',
+        text: { preview_url: false, body: notification.message_body },
+      }),
+    },
+  );
+}
+
+async function sendDocumentNotification(notification: ClaimedNotification): Promise<Response> {
+  const bucket = notification.storage_bucket?.trim();
+  const storagePath = notification.storage_path?.trim();
+  const filename = notification.media_filename?.trim();
+  const mimeType = notification.media_mime_type?.trim() || 'application/pdf';
+
+  if (!bucket || !storagePath || !filename) {
+    throw new Error('Document notification is missing governed Storage metadata.');
+  }
+  if (mimeType !== 'application/pdf') {
+    throw new Error('SellerTray document delivery currently permits PDF receipts only.');
+  }
+
+  const document = await downloadPrivateDocument(bucket, storagePath, mimeType);
+  const mediaId = await uploadMetaDocument(notification.from_phone_number_id, document, filename, mimeType);
+
+  return fetch(
+    `https://graph.facebook.com/${encodeURIComponent(META_GRAPH_API_VERSION)}/${encodeURIComponent(notification.from_phone_number_id)}/messages`,
+    {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${META_ACCESS_TOKEN}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: notification.to_wa_id,
+        type: 'document',
+        document: {
+          id: mediaId,
+          filename,
+          caption: notification.message_body.slice(0, 1024),
+        },
+      }),
+    },
+  );
+}
+
+async function downloadPrivateDocument(
+  bucket: string,
+  storagePath: string,
+  mimeType: string,
+): Promise<Blob> {
+  const encodedBucket = encodeURIComponent(bucket);
+  const encodedPath = storagePath.split('/').map(encodeURIComponent).join('/');
+  const response = await fetch(
+    `${SUPABASE_URL}/storage/v1/object/authenticated/${encodedBucket}/${encodedPath}`,
+    {
+      method: 'GET',
+      headers: {
+        apikey: SERVICE_ROLE_KEY,
+        authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    const detail = (await response.text()).replace(/\s+/g, ' ').slice(0, 300);
+    throw new Error(`Receipt Storage download failed (${response.status}): ${detail}`);
+  }
+
+  const bytes = await response.arrayBuffer();
+  return new Blob([bytes], { type: mimeType });
+}
+
+async function uploadMetaDocument(
+  phoneNumberId: string,
+  document: Blob,
+  filename: string,
+  mimeType: string,
+): Promise<string> {
+  const form = new FormData();
+  form.append('messaging_product', 'whatsapp');
+  form.append('type', mimeType);
+  form.append('file', document, filename);
+
+  const response = await fetch(
+    `https://graph.facebook.com/${encodeURIComponent(META_GRAPH_API_VERSION)}/${encodeURIComponent(phoneNumberId)}/media`,
+    {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${META_ACCESS_TOKEN}`,
+      },
+      body: form,
+    },
+  );
+
+  const raw = await response.text();
+  if (!response.ok) {
+    const providerError = parseMetaError(raw);
+    throw new Error(`Meta media upload failed: ${providerError.message}`);
+  }
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    payload = null;
+  }
+
+  if (!isRecord(payload) || typeof payload.id !== 'string' || !payload.id) {
+    throw new Error('Meta media upload returned no media id.');
+  }
+
+  return payload.id;
 }
 
 async function finish(id: string, patch: JsonRecord): Promise<void> {
