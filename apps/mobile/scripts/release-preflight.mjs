@@ -170,7 +170,7 @@ const blockedAndroidPermissions = new Set(app.android?.blockedPermissions ?? [])
 for (const permission of requiredBlockedAndroidPermissions) {
   requireValue(blockedAndroidPermissions.has(permission), 'Sensitive Android permission must remain blocked: '+permission);
 }
-requireValue(app.android?.versionCode === 5, 'Android versionCode must be 5 for the WhatsApp receipt-confirmation QA line');
+requireValue(app.android?.versionCode === 6, 'Android versionCode must be 6 for the order-ID and WhatsApp self-service QA line');
 requireValue(app.ios?.bundleIdentifier === 'ng.processedge.sellertray', 'iOS bundle ID must match SellerTray identity');
 requireValue(eas.build?.qa?.android?.buildType === 'apk', 'EAS QA profile must build an APK');
 requireValue(eas.build?.preview?.android?.buildType === 'apk', 'EAS preview profile must build an APK');
@@ -252,7 +252,7 @@ requireValue(saasApp.includes('label="Products"') && saasApp.includes("onChange(
 requireValue(saasApp.includes('label="More"') && saasApp.includes("onChange('more')"), 'Business/settings must be separated behind More');
 requireValue(saasApp.includes("paddingBottom: Platform.OS === 'android' ? 46 : 10"), 'Android bottom navigation must retain system-navigation clearance');
 requireValue(settingsHub.includes("BackHandler.addEventListener('hardwareBackPress'"), 'Android settings must support native back navigation');
-requireValue(settingsHub.includes('SellerTray 1.0.0 · Android build 5'), 'More screen must expose the current Android build marker');
+requireValue(settingsHub.includes('SellerTray 1.0.0 · Android build 6'), 'More screen must expose the current Android build marker');
 requireValue(saasApp.includes("StatusBar.currentHeight"), 'Android status-bar safe area must remain enforced in the merchant workspace');
 requireValue(catalogueView.includes('Product name') && catalogueView.includes('Selling price') && catalogueView.includes('Customer words / aliases'), 'Product editor must retain visible field labels and guidance');
 requireValue(manualOrderComposer.includes('Create an order') && manualOrderComposer.includes('Customer name') && manualOrderComposer.includes('Products *'), 'Orders must expose guided manual order creation');
@@ -260,12 +260,38 @@ const orderFulfillmentPanel = read(join(mobileRoot, 'src/components/OrderFulfill
 requireValue(orderFulfillmentPanel.includes('Customer pickup') && orderFulfillmentPanel.includes('Merchant / own rider') && orderFulfillmentPanel.includes('Third-party dispatch'), 'Order fulfillment tracking UI must remain wired');
 requireValue(orderFulfillmentPanel.includes('Mark delivered & complete') && orderFulfillmentPanel.includes('Mark collected & complete'), 'Order completion must retain fulfillment evidence');
 requireValue(orderFulfillmentPanel.includes('Customer confirmed receipt on WhatsApp'), 'Completed orders must show customer receipt-confirmation provenance');
+requireValue(
+  saasApp.includes('order.publicOrderId') &&
+    saasApp.includes('Search order ID, customer, phone, message or product'),
+  'Customer-facing order IDs must be visible in the merchant order UI',
+);
+const orderIdSelfServiceMigration = read(join(repoRoot, 'supabase/migrations/20260912053000_order_ids_whatsapp_self_service.sql'));
+const whatsappReceiptTemplate = read(join(repoRoot, 'supabase/templates/whatsapp/order-receipt.txt'));
+requireValue(
+  orderIdSelfServiceMigration.includes('public_order_id') &&
+    orderIdSelfServiceMigration.includes('order_status_reply') &&
+    orderIdSelfServiceMigration.includes('order_receipt'),
+  'Order ID and WhatsApp self-service migration contract is missing',
+);
+requireValue(
+  whatsappReceiptTemplate.includes('{{public_order_id}}') &&
+    whatsappReceiptTemplate.includes('ORDER RECEIPT'),
+  'WhatsApp order receipt template must retain the public order ID',
+);
 const whatsappWebhookReceiptFunction = read(join(repoRoot, 'supabase/functions/whatsapp-webhook/index.ts'));
 requireValue(
   whatsappWebhookReceiptFunction.includes('maybeConfirmCustomerReceipt') &&
     whatsappWebhookReceiptFunction.includes("fulfillment_confirmed_by: 'customer_whatsapp'") &&
     whatsappWebhookReceiptFunction.includes("fulfillment_status: 'delivered'"),
   'Customers must be able to confirm delivery receipt on WhatsApp',
+);
+requireValue(
+  whatsappWebhookReceiptFunction.includes('maybeHandleCustomerSelfService') &&
+    whatsappWebhookReceiptFunction.includes('detectCustomerSupportIntent') &&
+    whatsappWebhookReceiptFunction.includes('renderOrderReceipt') &&
+    whatsappWebhookReceiptFunction.includes('renderOrderStatus') &&
+    whatsappWebhookReceiptFunction.includes('extractPublicOrderId'),
+  'WhatsApp customers must be able to query status or request the latest receipt',
 );
 requireValue(accountControls.includes('DELETE MY SELLERTRAY ACCOUNT'), 'Account deletion confirmation must use SellerTray');
 requireValue(accountControls.includes('https://processedge.com.ng/sellertray/privacy'), 'In-app SellerTray privacy URL is missing');
