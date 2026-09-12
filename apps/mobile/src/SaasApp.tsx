@@ -335,8 +335,6 @@ function HomeView({
   onOpenMore: () => void;
   onSelectOrder: (orderId: string) => void;
 }) {
-  const attentionCount = orders.filter((order) => order.status === 'needs_review' || order.status === 'draft').length;
-  const inProgressCount = orders.filter((order) => ['accepted', 'processing', 'ready'].includes(order.status)).length;
   const now = new Date();
   const todayKey = localDayKey(now);
   const todayOrders = orders.filter((order) => localDayKey(new Date(order.receivedAt)) === todayKey);
@@ -527,9 +525,6 @@ function OrdersView({
       return searchable.includes(normalizedQuery);
     });
   }, [filter, orders, query]);
-
-  const visibleSelectedOrder =
-    visibleOrders.find((order) => order.id === selectedOrder?.id) ?? visibleOrders[0];
 
   const emptyText = query.trim()
     ? 'No orders match this search inside the selected workflow view.'
