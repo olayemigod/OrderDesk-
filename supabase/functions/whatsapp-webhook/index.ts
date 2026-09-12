@@ -1,3 +1,5 @@
+import { PDFDocument, StandardFonts, rgb } from 'npm:pdf-lib@1.17.1';
+
 type ParsedItem = {
   name: string;
   quantity: number;
@@ -70,6 +72,9 @@ type CustomerSupportOrder = {
   id: string;
   customer_id: string;
   public_order_id: string;
+  receipt_storage_path: string | null;
+  receipt_generated_at: string | null;
+  receipt_version: number | string;
   status: string;
   currency: string;
   total_amount: number | string | null;
@@ -88,6 +93,14 @@ type CustomerSupportOrder = {
 };
 
 type CustomerSupportIntent = 'status' | 'receipt';
+
+type ReceiptAttachment = {
+  mediaType: 'document';
+  storageBucket: 'receipts';
+  storagePath: string;
+  filename: string;
+  mimeType: 'application/pdf';
+};
 
 type JsonRecord = Record<string, unknown>;
 
@@ -320,6 +333,7 @@ async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[nu
   if (await maybeHandleCustomerSelfService({
     tenantId,
     businessName: tenant.name,
+    customerName: event.customerName,
     customerId,
     customerWaId: event.waId,
     sourceMessageId,
@@ -825,6 +839,7 @@ async function resolveCustomerIdsForWhatsApp(
 async function maybeHandleCustomerSelfService({
   tenantId,
   businessName,
+  customerName,
   customerId,
   customerWaId,
   sourceMessageId,
@@ -833,6 +848,7 @@ async function maybeHandleCustomerSelfService({
 }: {
   tenantId: string;
   businessName: string;
+  customerName: string | null;
   customerId: string;
   customerWaId: string;
   sourceMessageId: string;
@@ -874,9 +890,26 @@ async function maybeHandleCustomerSelfService({
     return true;
   }
 
-  const messageBody = intent === 'receipt'
-    ? renderOrderReceipt(businessName, selected)
-    : renderOrderStatus(businessName, selected);
+  let attachment: ReceiptAttachment | null = null;
+  let messageBody = renderOrderStatus(businessName, selected);
+
+  if (intent === 'receipt') {
+    try {
+      attachment = await ensureReceiptPdf({
+        tenantId,
+        businessName,
+        customerName,
+        customerWaId,
+        order: selected,
+      });
+      messageBody =
+        `Your PDF receipt for order ${selected.public_order_id} is attached. Total: ` +
+        formatReceiptMoney(calculateSupportOrderTotal(selected), selected.currency);
+    } catch (error) {
+      console.error('SellerTray PDF receipt generation failed; sending text fallback.', error);
+      messageBody = renderOrderReceipt(businessName, selected);
+    }
+  }
 
   await queueCustomerSupportReply({
     tenantId,
@@ -886,6 +919,7 @@ async function maybeHandleCustomerSelfService({
     toWaId: customerWaId,
     eventKey: intent === 'receipt' ? 'order_receipt' : 'order_status_reply',
     messageBody,
+    attachment,
   });
 
   return true;
@@ -905,7 +939,7 @@ async function findCustomerSupportOrder({
   if (customerIds.length === 0) return null;
 
   let path =
-    '/rest/v1/orders?select=id,customer_id,public_order_id,status,currency,total_amount,created_at,fulfillment_method,fulfillment_status,fulfillment_confirmed_by,delivery_provider,delivery_reference,order_items(item_name,quantity,unit_price,line_total)' +
+    '/rest/v1/orders?select=id,customer_id,public_order_id,receipt_storage_path,receipt_generated_at,receipt_version,status,currency,total_amount,created_at,fulfillment_method,fulfillment_status,fulfillment_confirmed_by,delivery_provider,delivery_reference,order_items(item_name,quantity,unit_price,line_total)' +
     '&tenant_id=eq.' + encodeURIComponent(tenantId) +
     '&customer_id=in.(' + customerIds.join(',') + ')';
 
@@ -928,6 +962,7 @@ async function queueCustomerSupportReply({
   toWaId,
   eventKey,
   messageBody,
+  attachment = null,
 }: {
   tenantId: string;
   order: CustomerSupportOrder;
@@ -936,6 +971,7 @@ async function queueCustomerSupportReply({
   toWaId: string;
   eventKey: 'order_status_reply' | 'order_receipt';
   messageBody: string;
+  attachment?: ReceiptAttachment | null;
 }): Promise<void> {
   await rest('/rest/v1/outbound_notifications', {
     method: 'POST',
@@ -950,9 +986,326 @@ async function queueCustomerSupportReply({
       from_phone_number_id: fromPhoneNumberId,
       to_wa_id: toWaId,
       message_body: messageBody.slice(0, 2000),
+      media_type: attachment?.mediaType ?? null,
+      storage_bucket: attachment?.storageBucket ?? null,
+      storage_path: attachment?.storagePath ?? null,
+      media_filename: attachment?.filename ?? null,
+      media_mime_type: attachment?.mimeType ?? null,
       conversation_window_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     }),
   });
+}
+
+async function ensureReceiptPdf({
+  tenantId,
+  businessName,
+  customerName,
+  customerWaId,
+  order,
+}: {
+  tenantId: string;
+  businessName: string;
+  customerName: string | null;
+  customerWaId: string;
+  order: CustomerSupportOrder;
+}): Promise<ReceiptAttachment> {
+  const version = Math.max(1, Number(order.receipt_version) || 1);
+  const filename = `Receipt-${order.public_order_id}.pdf`;
+  const cachedPath = order.receipt_storage_path?.trim();
+
+  if (cachedPath) {
+    return {
+      mediaType: 'document',
+      storageBucket: 'receipts',
+      storagePath: cachedPath,
+      filename,
+      mimeType: 'application/pdf',
+    };
+  }
+
+  const storagePath = `${tenantId}/${order.public_order_id}/receipt-v${version}.pdf`;
+  const pdfBytes = await buildReceiptPdf({
+    businessName,
+    customerName,
+    customerWaId,
+    order,
+  });
+
+  if (pdfBytes.byteLength > 2_097_152) {
+    throw new Error('Generated receipt exceeds the SellerTray 2 MB receipt limit.');
+  }
+
+  await uploadPrivateReceipt(storagePath, pdfBytes);
+
+  const generatedAt = new Date().toISOString();
+  await rest(
+    '/rest/v1/orders?id=eq.' + encodeURIComponent(order.id) +
+      '&tenant_id=eq.' + encodeURIComponent(tenantId),
+    {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        receipt_storage_path: storagePath,
+        receipt_generated_at: generatedAt,
+        receipt_version: version,
+        updated_at: generatedAt,
+      }),
+    },
+  );
+
+  order.receipt_storage_path = storagePath;
+  order.receipt_generated_at = generatedAt;
+
+  return {
+    mediaType: 'document',
+    storageBucket: 'receipts',
+    storagePath,
+    filename,
+    mimeType: 'application/pdf',
+  };
+}
+
+async function uploadPrivateReceipt(storagePath: string, pdfBytes: Uint8Array): Promise<void> {
+  const encodedPath = storagePath.split('/').map(encodeURIComponent).join('/');
+  const response = await fetch(`${SUPABASE_URL}/storage/v1/object/receipts/${encodedPath}`, {
+    method: 'POST',
+    headers: {
+      apikey: SERVICE_ROLE_KEY,
+      authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      'content-type': 'application/pdf',
+      'cache-control': '3600',
+      'x-upsert': 'true',
+    },
+    body: pdfBytes,
+  });
+
+  if (!response.ok) {
+    const detail = (await response.text()).replace(/\s+/g, ' ').slice(0, 300);
+    throw new Error(`Receipt storage upload failed (${response.status}): ${detail}`);
+  }
+}
+
+async function buildReceiptPdf({
+  businessName,
+  customerName,
+  customerWaId,
+  order,
+}: {
+  businessName: string;
+  customerName: string | null;
+  customerWaId: string;
+  order: CustomerSupportOrder;
+}): Promise<Uint8Array> {
+  const pdf = await PDFDocument.create();
+  const regular = await pdf.embedFont(StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const blue = rgb(0 / 255, 86 / 255, 166 / 255);
+  const green = rgb(28 / 255, 156 / 255, 93 / 255);
+  const dark = rgb(16 / 255, 24 / 255, 40 / 255);
+  const muted = rgb(102 / 255, 112 / 255, 133 / 255);
+  const line = rgb(234 / 255, 236 / 255, 240 / 255);
+  const pageWidth = 595.28;
+  const pageHeight = 841.89;
+  const margin = 44;
+  const bottomMargin = 52;
+  let page = pdf.addPage([pageWidth, pageHeight]);
+  let y = pageHeight - 48;
+
+  const drawText = (
+    value: string,
+    x: number,
+    size: number,
+    font = regular,
+    color = dark,
+  ) => {
+    page.drawText(pdfSafeText(value), { x, y, size, font, color });
+  };
+
+  const nextLine = (amount: number) => {
+    y -= amount;
+  };
+
+  const ensureSpace = (required: number) => {
+    if (y - required >= bottomMargin) return;
+    drawReceiptFooter(page, regular, muted, pageWidth);
+    page = pdf.addPage([pageWidth, pageHeight]);
+    y = pageHeight - 48;
+    page.drawText(pdfSafeText(`${businessName} - Receipt ${order.public_order_id}`), {
+      x: margin,
+      y,
+      size: 10,
+      font: bold,
+      color: blue,
+    });
+    y -= 28;
+  };
+
+  page.drawRectangle({
+    x: 0,
+    y: pageHeight - 10,
+    width: pageWidth,
+    height: 10,
+    color: blue,
+  });
+
+  drawText(businessName, margin, 20, bold, dark);
+  nextLine(25);
+  drawText('ORDER RECEIPT', margin, 11, bold, blue);
+  nextLine(18);
+  drawText('SellerTray', margin, 9, bold, green);
+
+  const rightX = 340;
+  page.drawText(pdfSafeText('Order ID'), { x: rightX, y: pageHeight - 52, size: 8, font: bold, color: muted });
+  page.drawText(pdfSafeText(order.public_order_id), { x: rightX, y: pageHeight - 68, size: 11, font: bold, color: dark });
+  page.drawText(pdfSafeText('Order date'), { x: rightX, y: pageHeight - 88, size: 8, font: bold, color: muted });
+  page.drawText(pdfSafeText(formatReceiptDate(order.created_at)), { x: rightX, y: pageHeight - 104, size: 10, font: regular, color: dark });
+
+  y = pageHeight - 145;
+  page.drawLine({ start: { x: margin, y }, end: { x: pageWidth - margin, y }, thickness: 1, color: line });
+  nextLine(22);
+
+  drawText('CUSTOMER', margin, 8, bold, muted);
+  nextLine(15);
+  drawText(customerName || 'WhatsApp customer', margin, 11, bold, dark);
+  nextLine(16);
+  drawText(customerWaId, margin, 9, regular, muted);
+  nextLine(28);
+
+  ensureSpace(100);
+  drawText('ITEMS', margin, 8, bold, muted);
+  nextLine(18);
+
+  const columns = { item: margin, qty: 330, unit: 380, amount: 470 };
+  drawText('Description', columns.item, 8, bold, muted);
+  page.drawText('Qty', { x: columns.qty, y, size: 8, font: bold, color: muted });
+  page.drawText('Unit', { x: columns.unit, y, size: 8, font: bold, color: muted });
+  page.drawText('Amount', { x: columns.amount, y, size: 8, font: bold, color: muted });
+  nextLine(10);
+  page.drawLine({ start: { x: margin, y }, end: { x: pageWidth - margin, y }, thickness: 0.8, color: line });
+  nextLine(18);
+
+  const items = order.order_items ?? [];
+  for (const item of items.slice(0, 50)) {
+    ensureSpace(48);
+    const qty = Number(item.quantity) || 0;
+    const unit = Number(item.unit_price);
+    const lineTotal = Number(item.line_total);
+    const descriptionLines = wrapPdfText(pdfSafeText(item.item_name), 43);
+
+    page.drawText(descriptionLines[0] || 'Item', { x: columns.item, y, size: 9, font: regular, color: dark });
+    if (descriptionLines[1]) {
+      page.drawText(descriptionLines[1], { x: columns.item, y: y - 12, size: 9, font: regular, color: dark });
+    }
+    page.drawText(String(qty), { x: columns.qty, y, size: 9, font: regular, color: dark });
+    page.drawText(
+      Number.isFinite(unit) ? formatReceiptMoneyPdf(unit, order.currency) : '-',
+      { x: columns.unit, y, size: 8, font: regular, color: dark },
+    );
+    page.drawText(
+      formatReceiptMoneyPdf(Number.isFinite(lineTotal) ? lineTotal : 0, order.currency),
+      { x: columns.amount, y, size: 8, font: bold, color: dark },
+    );
+    nextLine(descriptionLines[1] ? 32 : 22);
+  }
+
+  if (items.length > 50) {
+    ensureSpace(30);
+    drawText(`Additional item lines: ${items.length - 50}`, margin, 9, regular, muted);
+    nextLine(20);
+  }
+
+  ensureSpace(150);
+  page.drawLine({ start: { x: margin, y }, end: { x: pageWidth - margin, y }, thickness: 1, color: line });
+  nextLine(25);
+
+  const total = calculateSupportOrderTotal(order);
+  page.drawText('TOTAL', { x: 375, y, size: 10, font: bold, color: dark });
+  page.drawText(formatReceiptMoneyPdf(total, order.currency), { x: 450, y, size: 12, font: bold, color: blue });
+  nextLine(36);
+
+  drawText('Order status', margin, 8, bold, muted);
+  nextLine(14);
+  drawText(humanOrderStatus(order), margin, 10, bold, dark);
+  nextLine(22);
+
+  const fulfillment = humanFulfillment(order);
+  if (fulfillment) {
+    drawText('Fulfillment', margin, 8, bold, muted);
+    nextLine(14);
+    for (const row of wrapPdfText(pdfSafeText(fulfillment), 78)) {
+      drawText(row, margin, 9, regular, dark);
+      nextLine(13);
+    }
+    nextLine(8);
+  }
+
+  if (order.fulfillment_confirmed_by === 'customer_whatsapp') {
+    drawText('Customer confirmed receipt on WhatsApp.', margin, 9, bold, green);
+    nextLine(20);
+  }
+
+  drawText('Thank you for your order.', margin, 10, bold, dark);
+  drawReceiptFooter(page, regular, muted, pageWidth);
+
+  return await pdf.save();
+}
+
+function drawReceiptFooter(
+  page: ReturnType<PDFDocument['addPage']>,
+  font: Awaited<ReturnType<PDFDocument['embedFont']>>,
+  color: ReturnType<typeof rgb>,
+  pageWidth: number,
+): void {
+  page.drawText('Generated by SellerTray - Smart order management by ProcessEdge Solutions Limited', {
+    x: 44,
+    y: 26,
+    size: 7,
+    font,
+    color,
+  });
+  page.drawLine({
+    start: { x: 44, y: 38 },
+    end: { x: pageWidth - 44, y: 38 },
+    thickness: 0.5,
+    color: rgb(234 / 255, 236 / 255, 240 / 255),
+  });
+}
+
+function wrapPdfText(value: string, maxChars: number): string[] {
+  const words = value.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = '';
+
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length <= maxChars) {
+      current = candidate;
+      continue;
+    }
+    if (current) lines.push(current);
+    current = word.slice(0, maxChars);
+  }
+  if (current) lines.push(current);
+  return lines.length > 0 ? lines : [''];
+}
+
+function pdfSafeText(value: string): string {
+  return value
+    .replace(/₦/g, 'NGN ')
+    .replace(/×/g, 'x')
+    .replace(/[–—]/g, '-')
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .normalize('NFKD')
+    .replace(/[^ -~ -ÿ]/g, '?');
+}
+
+function formatReceiptMoneyPdf(value: number, currency: string): string {
+  const safeCurrency = /^[A-Z]{3}$/.test(currency) ? currency : 'NGN';
+  return `${safeCurrency} ${new Intl.NumberFormat('en-NG', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)}`;
 }
 
 function renderOrderStatus(businessName: string, order: CustomerSupportOrder): string {
