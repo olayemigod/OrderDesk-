@@ -266,12 +266,18 @@ requireValue(
   'Customer-facing order IDs must be visible in the merchant order UI',
 );
 const orderIdSelfServiceMigration = read(join(repoRoot, 'supabase/migrations/20260912053000_order_ids_whatsapp_self_service.sql'));
+const publicOrderIdHardeningMigration = read(join(repoRoot, 'supabase/migrations/20260912055500_public_order_id_entropy_hardening.sql'));
 const whatsappReceiptTemplate = read(join(repoRoot, 'supabase/templates/whatsapp/order-receipt.txt'));
 requireValue(
   orderIdSelfServiceMigration.includes('public_order_id') &&
     orderIdSelfServiceMigration.includes('order_status_reply') &&
     orderIdSelfServiceMigration.includes('order_receipt'),
   'Order ID and WhatsApp self-service migration contract is missing',
+);
+requireValue(
+  publicOrderIdHardeningMigration.includes("substr(md5(new.id::text), 1, 16)") &&
+    publicOrderIdHardeningMigration.includes("[A-F0-9]{16}"),
+  'Public order IDs must retain the 64-bit suffix contract',
 );
 requireValue(
   whatsappReceiptTemplate.includes('{{public_order_id}}') &&
