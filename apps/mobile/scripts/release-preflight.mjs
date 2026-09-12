@@ -472,6 +472,15 @@ requireValue(
 );
 
 requireValue(
+  platformAdminFunction.includes("'ai_parser_probe'") &&
+    platformAdminFunction.includes('SellerTray Test Rice') &&
+    platformAdminFunction.includes('SellerTray Test Milk') &&
+    platformAdminFunction.includes("Deno.env.get('ORDER_PARSER_TOKEN')?.trim()") &&
+    read(join(mobileRoot, 'src/components/PlatformAdminView.tsx')).includes('Run AI smoke test'),
+  'ProcessEdge AI smoke test must remain MFA-gated, synthetic-data-only and callable from the admin console',
+);
+
+requireValue(
   paymentCoreMigration.includes("'ST/' || split_part(v_order_ref,'/',1) || '/' || v_kind || '/' || split_part(v_order_ref,'/',2)") &&
     paymentCoreMigration.includes("when 'invoice' then 'INV'") &&
     paymentCoreMigration.includes("when 'receipt' then 'RCP'") &&

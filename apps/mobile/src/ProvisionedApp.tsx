@@ -46,10 +46,12 @@ function ProvisioningGate() {
             overview={platformAdmin.overview}
             audit={platformAdmin.audit}
             readiness={platformAdmin.readiness}
+            probe={platformAdmin.probe}
             loading={platformAdmin.loading}
             busy={platformAdmin.busy}
             error={platformAdmin.error}
             onRefresh={platformAdmin.refresh}
+            onRunAiProbe={platformAdmin.runAiProbe}
             onMutate={platformAdmin.mutate}
             standalone
           />

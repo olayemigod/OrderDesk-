@@ -6,6 +6,7 @@ import type {
   PlatformAdminMutationAction,
   PlatformAdminOverview,
   PlatformAiParserReadiness,
+  PlatformAiParserProbe,
   PlatformSubscriptionStatus,
   PlatformTenantSummary,
   PlatformWhatsappStatus,
@@ -15,10 +16,12 @@ type Props = {
   overview: PlatformAdminOverview | null;
   audit: PlatformAdminAuditEvent[];
   readiness: PlatformAiParserReadiness | null;
+  probe: PlatformAiParserProbe | null;
   loading: boolean;
   busy: boolean;
   error: string | null;
   onRefresh: () => Promise<void>;
+  onRunAiProbe: () => Promise<PlatformAiParserProbe>;
   onMutate: (
     tenantId: string,
     action: PlatformAdminMutationAction,
@@ -31,10 +34,12 @@ export function PlatformAdminView({
   overview,
   audit,
   readiness,
+  probe,
   loading,
   busy,
   error,
   onRefresh,
+  onRunAiProbe,
   onMutate,
   standalone = false,
 }: Props) {
@@ -118,7 +123,13 @@ export function PlatformAdminView({
         <Metric label="Usage failures" value={failedUsageSettlements} />
       </View>
 
-      <AiProductionReadinessCard readiness={readiness} />
+      <AiProductionReadinessCard
+        readiness={readiness}
+        probe={probe}
+        busy={busy}
+        canRun={overview.actorRole === 'admin'}
+        onRun={onRunAiProbe}
+      />
 
       {!canMutate ? (
         <View style={styles.supportNotice}>
@@ -182,7 +193,19 @@ export function PlatformAdminView({
   );
 }
 
-function AiProductionReadinessCard({ readiness }: { readiness: PlatformAiParserReadiness | null }) {
+function AiProductionReadinessCard({
+  readiness,
+  probe,
+  busy,
+  canRun,
+  onRun,
+}: {
+  readiness: PlatformAiParserReadiness | null;
+  probe: PlatformAiParserProbe | null;
+  busy: boolean;
+  canRun: boolean;
+  onRun: () => Promise<PlatformAiParserProbe>;
+}) {
   const ready = readiness?.acceptanceEvidence.productionAcceptanceReady === true;
 
   return (
@@ -241,6 +264,30 @@ function AiProductionReadinessCard({ readiness }: { readiness: PlatformAiParserR
                     ? 'Telemetry and metering need reconciliation before production acceptance.'
                     : 'Live parser, telemetry and usage metering evidence satisfy the automated AI gate.'}
           </Text>
+
+          {probe ? (
+            <View style={styles.aiProbeResult}>
+              <Text style={styles.aiProbeResultTitle}>
+                Smoke test: {probe.ok ? 'PASS' : probe.status.replace(/_/g, ' ').toUpperCase()}
+              </Text>
+              <Text style={styles.aiProbeResultText}>
+                {probe.telemetry.model ?? probe.configuredModel ?? 'Unknown model'} · {probe.durationMs ?? 0} ms · {probe.telemetry.totalTokens ?? 0} tokens
+              </Text>
+              <Text style={styles.aiProbeResultText}>
+                Synthetic result: rice {probe.observed.riceQuantity ?? '—'} / 2 · milk {probe.observed.milkQuantity ?? '—'} / 3
+              </Text>
+            </View>
+          ) : null}
+
+          {canRun ? (
+            <Pressable
+              disabled={busy}
+              onPress={() => void onRun()}
+              style={[styles.aiProbeButton, busy && styles.disabled]}
+            >
+              <Text style={styles.aiProbeButtonText}>{busy ? 'Running AI test…' : 'Run AI smoke test'}</Text>
+            </Pressable>
+          ) : null}
         </>
       )}
     </View>
@@ -530,6 +577,11 @@ const styles = StyleSheet.create({
   aiReadinessPillText: { color: '#B54708', fontSize: 9, fontWeight: '900' },
   aiReadinessPillTextReady: { color: '#027A48' },
   aiReadinessHint: { color: '#667085', fontSize: 10, lineHeight: 16 },
+  aiProbeResult: { backgroundColor: '#FFFFFF', borderRadius: 10, borderWidth: 1, borderColor: '#EAECF0', padding: 10, gap: 3 },
+  aiProbeResultTitle: { color: '#101828', fontSize: 10, fontWeight: '900' },
+  aiProbeResultText: { color: '#667085', fontSize: 9, lineHeight: 14 },
+  aiProbeButton: { minHeight: 40, borderRadius: 10, backgroundColor: '#101828', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  aiProbeButtonText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
   metricCard: { flexGrow: 1, flexBasis: '45%', minWidth: 130, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: '#EAECF0', padding: 13 },
   metricLabel: { color: '#667085', fontSize: 10, fontWeight: '800' },
   metricValue: { color: '#101828', fontSize: 24, fontWeight: '900', marginTop: 3 },
