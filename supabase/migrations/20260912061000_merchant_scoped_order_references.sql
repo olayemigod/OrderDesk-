@@ -288,4 +288,18 @@ revoke all on function public.provision_business_for_user(uuid,text,text,text,te
 revoke all on function public.provision_business_for_user(uuid,text,text,text,text,text) from authenticated;
 grant execute on function public.provision_business_for_user(uuid,text,text,text,text,text) to service_role;
 
+do $
+declare
+  v_def text;
+begin
+  select pg_get_functiondef('public.queue_orderdesk_notification()'::regprocedure)
+  into v_def;
+  v_def := replace(
+    v_def,
+    'Order ID: %s. Save this ID. You can ask "status %s" or "receipt %s" on WhatsApp at any time.',
+    'Order Ref: %s. Save this reference. You can ask "status %s" or "receipt %s" on WhatsApp at any time.'
+  );
+  execute v_def;
+end $;
+
 commit;
