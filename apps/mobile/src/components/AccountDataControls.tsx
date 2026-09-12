@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Linking,
   Platform,
@@ -26,6 +26,8 @@ const PRIVACY_URL = 'https://processedge.com.ng/sellertray/privacy';
 const TERMS_URL = 'https://processedge.com.ng/sellertray/terms';
 
 export function AccountDataControls({ business = null }: Props) {
+  const [profileName, setProfileName] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -36,6 +38,47 @@ export function AccountDataControls({ business = null }: Props) {
   const [notice, setNotice] = useState<string | null>(null);
 
   const canExport = business?.role === 'owner';
+
+  useEffect(() => {
+    let active = true;
+    void supabase.auth.getUser().then(({ data }) => {
+      if (!active) return;
+      const metadata = data.user?.user_metadata ?? {};
+      const name =
+        (typeof metadata.full_name === 'string' && metadata.full_name) ||
+        (typeof metadata.name === 'string' && metadata.name) ||
+        '';
+      setProfileName(name);
+    });
+    return () => { active = false; };
+  }, []);
+
+  async function saveProfileName() {
+    const clean = normalisePersonName(profileName);
+    if (clean.length < 2) {
+      setError('Enter the name you want SellerTray to use for greetings.');
+      return;
+    }
+
+    setSavingProfile(true);
+    setError(null);
+    setNotice(null);
+    const { error: updateError } = await supabase.auth.updateUser({
+      data: {
+        full_name: clean,
+        name: clean,
+      },
+    });
+    setSavingProfile(false);
+
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+
+    setProfileName(clean);
+    setNotice('Personal name updated. Your Home greeting will use it.');
+  }
 
   async function exportData() {
     if (!business || !canExport) return;
@@ -116,6 +159,33 @@ export function AccountDataControls({ business = null }: Props) {
         <Text style={styles.description}>
           Export business records or permanently close your SellerTray account.
         </Text>
+      </View>
+
+      <View style={styles.profileBlock}>
+        <Text style={styles.actionTitle}>Your name</Text>
+        <Text style={styles.actionText}>
+          Used for personal greetings such as “Good morning, Alex”. This does not change the business name.
+        </Text>
+        <TextInput
+          autoCapitalize="words"
+          autoComplete="name"
+          placeholder="Your name"
+          value={profileName}
+          onChangeText={setProfileName}
+          editable={!savingProfile}
+          style={styles.profileInput}
+        />
+        <Pressable
+          disabled={savingProfile || profileName.trim().length < 2}
+          onPress={() => void saveProfileName()}
+          style={({ pressed }) => [
+            styles.profileSaveButton,
+            pressed && styles.pressed,
+            (savingProfile || profileName.trim().length < 2) && styles.disabled,
+          ]}
+        >
+          <Text style={styles.profileSaveText}>{savingProfile ? 'Saving…' : 'Save name'}</Text>
+        </Pressable>
       </View>
 
       {business ? (
@@ -257,6 +327,15 @@ export function AccountDataControls({ business = null }: Props) {
   );
 }
 
+function normalisePersonName(value: string): string {
+  return value
+    .trim()
+    .replace(/\s+/g, ' ')
+    .split(' ')
+    .map((part) => part ? part.charAt(0).toUpperCase() + part.slice(1) : part)
+    .join(' ');
+}
+
 function safeFilename(value: string): string {
   const clean = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   return clean || 'business';
@@ -268,7 +347,11 @@ const styles = StyleSheet.create({
   eyebrow: { color: '#667085', fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
   title: { color: '#102A43', fontSize: 18, fontWeight: '900' },
   description: { color: '#667085', fontSize: 12, lineHeight: 18 },
-  actionBlock: { gap: 10 },
+  profileBlock: { gap: 10 },
+  profileInput: { minHeight: 46, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 11, paddingHorizontal: 12, backgroundColor: '#FFFFFF', color: '#102A43', fontSize: 14 },
+  profileSaveButton: { minHeight: 44, borderRadius: 11, backgroundColor: '#12B76A', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
+  profileSaveText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
+  actionBlock: { gap: 10, borderTopWidth: 1, borderTopColor: '#E4E7EC', paddingTop: 16 },
   actionTitle: { color: '#102A43', fontSize: 14, fontWeight: '900' },
   actionText: { color: '#667085', fontSize: 12, lineHeight: 18 },
   secondaryButton: { minHeight: 44, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 11, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
