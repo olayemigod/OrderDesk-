@@ -8,7 +8,7 @@
     ],
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "android": {
       "package": "ng.processedge.sellertray",
       "versionCode": 7,
@@ -58,6 +58,14 @@
         "expo-secure-store",
         {
           "configureAndroidBackup": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow SellerTray to select product images from your photo library.",
+          "cameraPermission": false,
+          "microphonePermission": false
         }
       ]
     ]
