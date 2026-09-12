@@ -426,6 +426,7 @@ function OrdersView({
       if (!normalizedQuery) return true;
 
       const searchable = [
+        order.publicOrderId,
         order.id,
         order.customerName,
         order.customerPhone,
@@ -474,7 +475,7 @@ function OrdersView({
         <TextInput
           value={query}
           onChangeText={setQuery}
-          placeholder="Search customer, phone, message or product"
+          placeholder="Search order ID, customer, phone, message or product"
           autoCorrect={false}
           style={styles.searchInput}
         />
@@ -609,7 +610,7 @@ function OrderList({
             <View style={styles.orderTopRow}>
               <View style={styles.orderIdentity}>
                 <Text style={styles.customerName}>{order.customerName}</Text>
-                <Text numberOfLines={1} style={styles.orderId}>{formatReceivedAt(order.receivedAt)} · {order.id}</Text>
+                <Text numberOfLines={1} style={styles.orderId}>{order.publicOrderId} · {formatReceivedAt(order.receivedAt)}</Text>
               </View>
               <View style={styles.orderRight}>
                 <StatusPill status={order.status} />
@@ -667,6 +668,7 @@ function OrderDetail({
       <View style={styles.orderTopRow}>
         <View style={styles.orderIdentity}>
           <Text style={styles.detailTitle}>{order.customerName}</Text>
+          <Text style={styles.publicOrderId}>{order.publicOrderId}</Text>
           <Text style={styles.orderMeta}>{order.customerPhone}</Text>
           <Text style={styles.orderMeta}>{formatReceivedAt(order.receivedAt)} · {order.source === 'whatsapp' ? 'WhatsApp' : 'Manual'}</Text>
         </View>
