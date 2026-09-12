@@ -426,6 +426,7 @@ requireValue(
 const usageScheduleMigration = read(join(repoRoot, 'supabase/migrations/20260910234500_schedule_usage_settlement_preparation.sql'));
 const deletionUsageGuardMigration = read(join(repoRoot, 'supabase/migrations/20260910233000_block_deletion_with_unsettled_usage.sql'));
 const financialRetentionMigration = read(join(repoRoot, 'supabase/migrations/20260912181000_financial_retention_and_storage_cleanup.sql'));
+const resilienceRateLimitMigration = read(join(repoRoot, 'supabase/migrations/20260912193000_request_rate_limit_foundation.sql'));
 const usagePeriodCurrencyMigration = read(join(repoRoot, 'supabase/migrations/20260910235500_harden_usage_settlement_period_currency.sql'));
 const accountLifecycleFunction = read(join(repoRoot, 'supabase/functions/account-lifecycle/index.ts'));
 const accountLifecycleRepository = read(join(mobileRoot, 'src/data/accountLifecycleRepository.ts'));
@@ -601,6 +602,15 @@ requireValue(
     paymentReconciliationRepository.includes('confirmReconciliationPayment') &&
     paymentReconciliationRepository.includes('verifyReconciliationGateway'),
   'P8 tenant payment reconciliation inbox/report must remain wired to governed payment operations',
+);
+requireValue(
+  resilienceRateLimitMigration.includes('sellertray_private.request_rate_limits') &&
+    resilienceRateLimitMigration.includes('consume_sellertray_rate_limit') &&
+    whatsappWebhookFunction.includes('AI_CUSTOMER_MINUTE_LIMIT') &&
+    whatsappWebhookFunction.includes('AI_TENANT_DAILY_LIMIT') &&
+    whatsappWebhookFunction.includes('consumeAiRequestBudget') &&
+    orderParserFunction.includes('AbortSignal.timeout(6500)'),
+  'High-cost AI parsing must retain server-side request budgets and an OpenAI provider deadline',
 );
 requireValue(
   platformAdminFunction.includes('/auth/v1/user') &&

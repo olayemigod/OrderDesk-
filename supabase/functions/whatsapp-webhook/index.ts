@@ -115,6 +115,9 @@ const ORDER_PARSER_URL = configuredParserUrl || (SUPABASE_URL ? `${SUPABASE_URL}
 const ORDER_PARSER_TOKEN = Deno.env.get('ORDER_PARSER_TOKEN') ?? '';
 const AI_CATALOGUE_CONTEXT_LIMIT = 160;
 const AI_ALIAS_CONTEXT_LIMIT = 6;
+const AI_CUSTOMER_MINUTE_LIMIT = boundedEnvInt('AI_CUSTOMER_MINUTE_LIMIT', 6, 1, 60);
+const AI_TENANT_MINUTE_LIMIT = boundedEnvInt('AI_TENANT_MINUTE_LIMIT', 60, 1, 1000);
+const AI_TENANT_DAILY_LIMIT = boundedEnvInt('AI_TENANT_DAILY_LIMIT', 2000, 1, 100000);
 
 Deno.serve(withObservability('whatsapp-webhook', async (request) => {
   if (request.method === 'GET') {
@@ -424,7 +427,7 @@ async function processClaimedInboundMessage({
   }
 
   const catalogue = await loadCatalogue(tenantId);
-  const parsed = await parseOrder(event.text, catalogue, tenantId, sourceMessageId);
+  const parsed = await parseOrder(event.text, catalogue, tenantId, customerId, sourceMessageId);
   const enrichedItems = enrichFromCatalogue(parsed.items, catalogue);
   const reviewReasons = buildReviewReasons(parsed, enrichedItems);
 
@@ -682,9 +685,19 @@ async function parseOrder(
   text: string,
   catalogue: CatalogueRow[],
   tenantId: string,
+  customerId: string,
   sourceMessageId: string,
 ): Promise<ParsedOrder> {
   if (ORDER_PARSER_URL && ORDER_PARSER_TOKEN) {
+    if (!(await consumeAiRequestBudget(tenantId, customerId))) {
+      console.warn(JSON.stringify({
+        event: 'ai_order_parser_rate_limited',
+        tenantId,
+        customerId,
+        sourceMessageId,
+      }));
+      return fallbackParseOrder(text);
+    }
     const parserCatalogue = selectParserCatalogue(text, catalogue);
     try {
       const response = await fetch(ORDER_PARSER_URL, {
@@ -808,6 +821,33 @@ async function recordParserAttempt(
   } catch (error) {
     console.warn('SellerTray AI parser telemetry could not be persisted.', error);
   }
+}
+
+async function consumeAiRequestBudget(tenantId: string, customerId: string): Promise<boolean> {
+  const contracts: Array<[string,string,number,number]> = [
+    ['ai_customer_minute', tenantId + ':' + customerId, AI_CUSTOMER_MINUTE_LIMIT, 60],
+    ['ai_tenant_minute', tenantId, AI_TENANT_MINUTE_LIMIT, 60],
+    ['ai_tenant_day', tenantId, AI_TENANT_DAILY_LIMIT, 86400],
+  ];
+  for (const [scope,key,limit,windowSeconds] of contracts) {
+    const allowed = await rest<boolean>('/rest/v1/rpc/consume_sellertray_rate_limit', {
+      method: 'POST',
+      body: JSON.stringify({
+        p_scope: scope,
+        p_key: key,
+        p_limit: limit,
+        p_window_seconds: windowSeconds,
+      }),
+    });
+    if (allowed !== true) return false;
+  }
+  return true;
+}
+
+function boundedEnvInt(name: string, fallback: number, min: number, max: number): number {
+  const raw = Deno.env.get(name);
+  const value = raw ? Number(raw) : fallback;
+  return Number.isInteger(value) && value >= min && value <= max ? value : fallback;
 }
 
 function headerString(headers: Headers, name: string): string | null {

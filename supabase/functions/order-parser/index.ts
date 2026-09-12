@@ -140,6 +140,7 @@ async function extractOrder(input: ParserRequest): Promise<{ parsed: ParsedOrder
 
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
+    signal: AbortSignal.timeout(6500),
     headers: {
       authorization: `Bearer ${OPENAI_API_KEY}`,
       'content-type': 'application/json',
