@@ -56,9 +56,9 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
 
   if (section !== 'menu') {
     return (
-      <View style={styles.detailWrap}>
+      <View style={[styles.detailWrap, appearance.dark && darkStyles.surface]}>
         <Pressable onPress={() => setSection('menu')} style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}>
-          <Text style={styles.backText}>← More</Text>
+          <Text style={[styles.backText, appearance.dark && darkStyles.greenText]}>← More</Text>
         </Pressable>
 
         {section === 'business' ? <BusinessProfileView business={business} onSave={onSaveBusiness} /> : null}
@@ -70,9 +70,9 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
         {section === 'subscription' ? (
           <View style={styles.detailSection}>
             <View>
-              <Text style={styles.eyebrow}>PLAN & BILLING</Text>
-              <Text style={styles.title}>Subscription</Text>
-              <Text style={styles.subtitle}>Review the current SellerTray plan and billing state for this business.</Text>
+              <Text style={[styles.eyebrow, appearance.dark && darkStyles.bodyText]}>PLAN & BILLING</Text>
+              <Text style={[styles.title, appearance.dark && darkStyles.titleText]}>Subscription</Text>
+              <Text style={[styles.subtitle, appearance.dark && darkStyles.bodyText]}>Review the current SellerTray plan and billing state for this business.</Text>
             </View>
             <SubscriptionStatusCard
               tenantId={business.id}
@@ -86,9 +86,9 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
         {section === 'security' ? (
           <View style={styles.detailSection}>
             <View>
-              <Text style={styles.eyebrow}>SECURITY</Text>
-              <Text style={styles.title}>Multi-factor authentication</Text>
-              <Text style={styles.subtitle}>Enroll or verify your authenticator for sensitive SellerTray access.</Text>
+              <Text style={[styles.eyebrow, appearance.dark && darkStyles.bodyText]}>SECURITY</Text>
+              <Text style={[styles.title, appearance.dark && darkStyles.titleText]}>Multi-factor authentication</Text>
+              <Text style={[styles.subtitle, appearance.dark && darkStyles.bodyText]}>Enroll or verify your authenticator for sensitive SellerTray access.</Text>
             </View>
             <MfaSecurityCard />
           </View>
@@ -105,9 +105,9 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
         {section === 'account' ? (
           <View style={styles.detailSection}>
             <View>
-              <Text style={styles.eyebrow}>ACCOUNT & PRIVACY</Text>
-              <Text style={styles.title}>Your SellerTray account</Text>
-              <Text style={styles.subtitle}>Session controls, data export, legal information and account closure.</Text>
+              <Text style={[styles.eyebrow, appearance.dark && darkStyles.bodyText]}>ACCOUNT & PRIVACY</Text>
+              <Text style={[styles.title, appearance.dark && darkStyles.titleText]}>Your SellerTray account</Text>
+              <Text style={[styles.subtitle, appearance.dark && darkStyles.bodyText]}>Session controls, data export, legal information and account closure.</Text>
             </View>
             <AccountDataControls business={business} />
           </View>
@@ -129,23 +129,23 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
   }
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, appearance.dark && darkStyles.surface]}>
       <View>
-        <Text style={styles.eyebrow}>MERCHANT SETTINGS</Text>
-        <Text style={styles.title}>More</Text>
-        <Text style={styles.subtitle}>
+        <Text style={[styles.eyebrow, appearance.dark && darkStyles.bodyText]}>MERCHANT SETTINGS</Text>
+        <Text style={[styles.title, appearance.dark && darkStyles.titleText, appearance.textSize === 'large' && styles.titleLarge]}>More</Text>
+        <Text style={[styles.subtitle, appearance.dark && darkStyles.bodyText]}>
           Manage your business profile, payments, WhatsApp, catalogue, team and account preferences.
         </Text>
       </View>
 
-      <View style={styles.summaryCard}>
+      <View style={[styles.summaryCard, appearance.dark && darkStyles.summaryCard]}>
         <Text style={styles.summaryName}>{business.name}</Text>
         <Text style={styles.summaryMeta}>{business.role.toUpperCase()} · {formatLabel(business.subscriptionStatus)}</Text>
       </View>
 
       <View style={styles.menuSection}>
-        <Text style={styles.groupLabel}>SELLING & CUSTOMERS</Text>
-        <View style={styles.menuGroup}>
+        <Text style={[styles.groupLabel, appearance.dark && darkStyles.bodyText]}>SELLING & CUSTOMERS</Text>
+        <View style={[styles.menuGroup, appearance.dark && darkStyles.card]}>
           <MenuRow
             icon="people-outline"
             title="Customers"
@@ -175,8 +175,8 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
       </View>
 
       <View style={styles.menuSection}>
-        <Text style={styles.groupLabel}>BUSINESS</Text>
-        <View style={styles.menuGroup}>
+        <Text style={[styles.groupLabel, appearance.dark && darkStyles.bodyText]}>BUSINESS</Text>
+        <View style={[styles.menuGroup, appearance.dark && darkStyles.card]}>
           <MenuRow
             icon="business-outline"
             title="Business profile"
@@ -199,8 +199,8 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
       </View>
 
       <View style={styles.menuSection}>
-        <Text style={styles.groupLabel}>ACCOUNT & SECURITY</Text>
-        <View style={styles.menuGroup}>
+        <Text style={[styles.groupLabel, appearance.dark && darkStyles.bodyText]}>ACCOUNT & SECURITY</Text>
+        <View style={[styles.menuGroup, appearance.dark && darkStyles.card]}>
           <MenuRow
             icon="moon-outline"
             title="Appearance"
@@ -228,11 +228,11 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
         </View>
       </View>
 
-      <Text style={styles.buildStamp}>SellerTray 1.0.0 · Android build 7</Text>
+      <Text style={[styles.buildStamp, appearance.dark && darkStyles.bodyText]}>SellerTray 1.0.0 · Android build 7</Text>
 
       {platformAdmin.overview ? (
         <View style={styles.adminGroup}>
-          <Text style={styles.groupLabel}>PROCESSEDGE ADMIN</Text>
+          <Text style={[styles.groupLabel, appearance.dark && darkStyles.bodyText]}>PROCESSEDGE ADMIN</Text>
           <MenuRow
             icon="construct-outline"
             title="Platform operations"
@@ -266,7 +266,7 @@ function AppearanceView({
 
       <View style={styles.preferenceCard}>
         <View style={styles.preferenceHeading}>
-          <View style={styles.menuIcon}>
+          <View style={[styles.menuIcon, appearance.dark && darkStyles.mintCard]}>
             <Ionicons name="moon-outline" size={21} color="#079455" />
           </View>
           <View style={styles.menuCopy}>
@@ -341,7 +341,7 @@ function SupportView() {
           <Text style={styles.supportHeroText}>Support for sign-in, setup, orders, payments and WhatsApp connection.</Text>
         </View>
       </View>
-      <View style={styles.menuGroup}>
+      <View style={[styles.menuGroup, appearance.dark && darkStyles.card]}>
         <SupportRow icon="chatbubbles-outline" title="Live chat" text="Open SellerTray support chat" url={chatUrl} />
         <SupportRow icon="logo-whatsapp" title="WhatsApp" text="+234 809 608 6857" url="https://wa.me/2348096086857?text=Hello%20SellerTray%20Support" />
         <SupportRow icon="call-outline" title="Call support" text="+234 809 608 6857" url="tel:+2348096086857" />
@@ -362,8 +362,8 @@ function SupportRow({ icon, title, text, url }: { icon: string; title: string; t
         <Ionicons name={icon as never} size={21} color="#079455" />
       </View>
       <View style={styles.menuCopy}>
-        <Text style={styles.menuTitle}>{title}</Text>
-        <Text style={styles.menuText}>{text}</Text>
+        <Text style={[styles.menuTitle, appearance.dark && darkStyles.titleText]}>{title}</Text>
+        <Text style={[styles.menuText, appearance.dark && darkStyles.bodyText]}>{text}</Text>
       </View>
       <Ionicons name="open-outline" size={19} color="#667085" />
     </Pressable>
@@ -383,8 +383,9 @@ function MenuRow({
   status?: string;
   onPress: () => void;
 }) {
+  const appearance = useSellerTrayAppearance();
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.menuRow, pressed && styles.pressed]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.menuRow, appearance.dark && darkStyles.rowBorder, pressed && styles.pressed]}>
       <View style={styles.menuIcon}>
         <Ionicons name={icon as never} size={21} color="#079455" />
       </View>
@@ -410,6 +411,7 @@ const styles = StyleSheet.create({
   detailSection: { gap: 16 },
   eyebrow: { color: '#667085', fontSize: 11, fontWeight: '900', letterSpacing: 1.2 },
   title: { color: '#102A43', fontSize: 28, lineHeight: 34, fontWeight: '900', marginTop: 3 },
+  titleLarge: { fontSize: 31, lineHeight: 38 },
   subtitle: { color: '#667085', fontSize: 14, lineHeight: 21, marginTop: 5 },
   summaryCard: { backgroundColor: '#102A43', borderRadius: 17, padding: 16 },
   summaryName: { color: '#FFFFFF', fontSize: 21, fontWeight: '900' },
@@ -452,4 +454,15 @@ const styles = StyleSheet.create({
   preferenceOptionText: { color: '#475467', fontSize: 12, fontWeight: '900' },
   preferenceOptionTextActive: { color: '#FFFFFF' },
   pressed: { opacity: 0.72 },
+});
+
+const darkStyles = StyleSheet.create({
+  surface: { backgroundColor: '#081825' },
+  card: { backgroundColor: '#102A43', borderColor: '#344054' },
+  summaryCard: { backgroundColor: '#0B2035', borderWidth: 1, borderColor: '#344054' },
+  mintCard: { backgroundColor: '#12372C' },
+  titleText: { color: '#F8FAFC' },
+  bodyText: { color: '#D0D5DD' },
+  greenText: { color: '#6CE9A6' },
+  rowBorder: { borderBottomColor: '#344054' },
 });
