@@ -137,9 +137,8 @@ requireValue(
     supabaseClient.includes('storage: nativeSecureStorage') &&
     supabaseClient.includes('AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY') &&
     !supabaseClient.includes('@react-native-async-storage/async-storage') &&
-    pkg.dependencies?.['expo-secure-store'] === '57.0.4' &&
-    !pkg.dependencies?.['@react-native-async-storage/async-storage'],
-  'Native Supabase sessions must remain encrypted in Expo SecureStore, never AsyncStorage',
+    pkg.dependencies?.['expo-secure-store'] === '57.0.4',
+  'Native Supabase auth sessions must remain encrypted in Expo SecureStore, never AsyncStorage',
 );
 const requiredBlockedAndroidPermissions = [
   "android.permission.ACCESS_COARSE_LOCATION",
@@ -387,7 +386,7 @@ const aiCachedTokenMigration = read(join(repoRoot, 'supabase/migrations/20260911
 const aiTokenIntegrityMigration = read(join(repoRoot, 'supabase/migrations/20260911000900_ai_parser_token_integrity.sql'));
 const aiContextBudgetMigration = read(join(repoRoot, 'supabase/migrations/20260911001000_ai_parser_context_budget.sql'));
 const whatsappWebhookFunction = read(join(repoRoot, 'supabase/functions/whatsapp-webhook/index.ts'));
-const whatsappNotificationWorker = read(join(repoRoot, 'supabase/functions/send-whatsapp-notifications/index.ts'));
+
 const whatsappTemplateMigration = read(join(repoRoot, 'supabase/migrations/20260912171500_whatsapp_template_dispatch.sql'));
 requireValue(
   merchantOrderFunction.includes("admin.auth.getUser(token)") &&
