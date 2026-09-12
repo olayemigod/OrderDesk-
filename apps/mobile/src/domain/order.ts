@@ -25,7 +25,8 @@ export type PaymentStatus =
   | 'unpaid'
   | 'pending'
   | 'verification_required'
-  | 'paid';
+  | 'paid'
+  | 'payment_issue';
 
 export type MatchSource =
   | 'legacy'

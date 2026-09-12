@@ -413,6 +413,7 @@ const paymentCoreMigration = read(join(repoRoot, 'supabase/migrations/2026091207
 const paymentMethodMigration = read(join(repoRoot, 'supabase/migrations/20260912075000_merchant_payment_method_settings.sql'));
 const paymentOrchestrationMigration = read(join(repoRoot, 'supabase/migrations/20260912084500_customer_payment_orchestration_foundation.sql'));
 const paymentEnvironmentMigration = read(join(repoRoot, 'supabase/migrations/20260912152000_payment_provider_mode_binding.sql'));
+const paymentExceptionMigration = read(join(repoRoot, 'supabase/migrations/20260912161000_payment_exception_lifecycle.sql'));
 const paymentSettingsFunction = read(join(repoRoot, 'supabase/functions/payment-settings/index.ts'));
 const paymentRuntimeFunction = read(join(repoRoot, 'supabase/functions/payment-runtime/index.ts'));
 const paystackPaymentWebhook = read(join(repoRoot, 'supabase/functions/paystack-payment-webhook/index.ts'));
@@ -467,6 +468,26 @@ requireValue(
     paymentEnvironmentMigration.includes('SellerTray payment provider mode is immutable') &&
     paymentEnvironmentMigration.includes('Disconnect SellerTray gateway credentials before changing test/live mode'),
   'Payment attempts and encrypted gateway credentials must retain immutable environment binding',
+);
+requireValue(
+  paymentExceptionMigration.includes("exception_state") &&
+    paymentExceptionMigration.includes("'duplicate_payment'") &&
+    paymentExceptionMigration.includes("'payment_issue'") &&
+    paymentExceptionMigration.includes('apply_sellertray_payment_exception') &&
+    paymentExceptionMigration.includes('cancel_sellertray_competing_payment_attempts'),
+  'Confirmed payment history must coexist with adverse financial exception and duplicate-payment controls',
+);
+requireValue(
+  paymentRuntimeFunction.includes("p_state: 'duplicate_payment'") &&
+    paymentRuntimeFunction.includes("p_state: 'reversed'") &&
+    paymentRuntimeFunction.includes("p_state: 'refund_pending'") &&
+    !paymentRuntimeFunction.includes("alreadyConfirmed: true });\n    }\n    if (payment.provider"),
+  'Provider verification must continue past prior confirmation and surface reversed/duplicate value',
+);
+requireValue(
+  orderPaymentPanel.includes('Financial exception') &&
+    paymentReconciliationPanel.includes('Financial exception'),
+  'Merchant mobile payment views must surface adverse financial states',
 );
 requireValue(
   paymentRuntimeFunction.includes('gatewayModeMismatch') &&

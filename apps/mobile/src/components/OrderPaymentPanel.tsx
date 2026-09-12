@@ -142,6 +142,12 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
             {payment.customerClaimedAt ? (
               <Text style={styles.claim}>Customer says paid · {formatDateTime(payment.customerClaimedAt)}</Text>
             ) : null}
+            {payment.exceptionState !== 'none' ? (
+              <View style={styles.exceptionBox}>
+                <Text style={styles.exceptionTitle}>Financial exception · {humanException(payment.exceptionState)}</Text>
+                {payment.exceptionReason ? <Text style={styles.error}>{payment.exceptionReason}</Text> : null}
+              </View>
+            ) : null}
             {payment.failureReason ? <Text style={styles.error}>{payment.failureReason}</Text> : null}
 
             {confirmable ? (
@@ -184,11 +190,12 @@ function PaymentPill({ status }: { status: MerchantOrder['paymentStatus'] }) {
     pending: 'Started',
     verification_required: 'Verify',
     paid: 'Paid',
+    payment_issue: 'Payment issue',
   }[status];
 
   return (
-    <View style={[styles.pill, status === 'paid' ? styles.pillPaid : status === 'verification_required' ? styles.pillWarning : styles.pillNeutral]}>
-      <Text style={[styles.pillText, status === 'paid' ? styles.pillTextPaid : status === 'verification_required' ? styles.pillTextWarning : styles.pillTextNeutral]}>
+    <View style={[styles.pill, status === 'paid' ? styles.pillPaid : (status === 'verification_required' || status === 'payment_issue') ? styles.pillWarning : styles.pillNeutral]}>
+      <Text style={[styles.pillText, status === 'paid' ? styles.pillTextPaid : (status === 'verification_required' || status === 'payment_issue') ? styles.pillTextWarning : styles.pillTextNeutral]}>
         {label}
       </Text>
     </View>
@@ -202,6 +209,18 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
       <Text selectable style={styles.summaryValue}>{value}</Text>
     </View>
   );
+}
+
+function humanException(value: OrderPaymentAttempt['exceptionState']): string {
+  return {
+    none: 'None',
+    refund_pending: 'Refund pending',
+    refunded: 'Refunded',
+    disputed: 'Disputed',
+    chargeback: 'Chargeback',
+    reversed: 'Reversed',
+    duplicate_payment: 'Duplicate payment',
+  }[value];
 }
 
 function humanMethod(value: OrderPaymentAttempt['methodType']): string {
@@ -275,6 +294,8 @@ const styles = StyleSheet.create({
   claim: { color: '#B54708', fontSize: 10, fontWeight: '800' },
   helper: { color: '#667085', fontSize: 10, lineHeight: 15 },
   error: { color: '#B42318', fontSize: 10, lineHeight: 15 },
+  exceptionBox: { backgroundColor: '#FEF3F2', borderRadius: 9, padding: 9, gap: 3 },
+  exceptionTitle: { color: '#B42318', fontSize: 10, fontWeight: '900' },
   primaryButton: { minHeight: 40, borderRadius: 9, backgroundColor: '#246BFD', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
   primaryText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
   secondaryButton: { minHeight: 40, borderRadius: 9, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D0D5DD', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },

@@ -165,9 +165,6 @@ Deno.serve(async (req: Request) => {
       }, 201);
     }
 
-    if (payment.status === 'confirmed') {
-      return json({ paymentId, status: 'confirmed', alreadyConfirmed: true });
-    }
     if (payment.provider !== 'paystack' && payment.provider !== 'flutterwave') {
       return json({ error: 'Payment method is not an online gateway' }, 409);
     }
@@ -234,6 +231,30 @@ Deno.serve(async (req: Request) => {
       });
 
       if (providerStatus === 'success') {
+        if (payment.status === 'confirmed') {
+          return json({
+            paymentId,
+            status: payment.exception_state === 'none' ? 'confirmed' : 'payment_issue',
+            providerStatus,
+            exceptionState: payment.exception_state,
+            alreadyConfirmed: true,
+          });
+        }
+
+        if (
+          ['failed', 'cancelled', 'expired'].includes(String(payment.status)) ||
+          payment.order_payment_status === 'paid' ||
+          payment.order_payment_status === 'payment_issue'
+        ) {
+          await rpc('apply_sellertray_payment_exception', {
+            p_payment_id: paymentId,
+            p_state: 'duplicate_payment',
+            p_provider_event_ref: transactionId,
+            p_reason: 'Provider verified funds after another payment had already settled or this attempt was closed',
+          });
+          return json({ paymentId, status: 'payment_issue', providerStatus, exceptionState: 'duplicate_payment' });
+        }
+
         await rpc('transition_sellertray_order_payment', {
           p_payment_id: paymentId,
           p_status: 'confirmed',
@@ -245,7 +266,40 @@ Deno.serve(async (req: Request) => {
         return json({ paymentId, status: 'confirmed', providerStatus });
       }
 
-      if (['failed', 'abandoned', 'reversed'].includes(providerStatus)) {
+      if (providerStatus === 'reversed') {
+        if (payment.status === 'confirmed') {
+          await rpc('apply_sellertray_payment_exception', {
+            p_payment_id: paymentId,
+            p_state: 'reversed',
+            p_provider_event_ref: transactionId,
+            p_reason: 'Paystack verified transaction status: reversed',
+          });
+          return json({ paymentId, status: 'payment_issue', providerStatus, exceptionState: 'reversed' });
+        }
+        if (payment.status === 'initiated' || payment.status === 'pending_verification') {
+          await rpc('transition_sellertray_order_payment', {
+            p_payment_id: paymentId,
+            p_status: 'failed',
+            p_confirmation_source: null,
+            p_confirmed_by_user_id: null,
+            p_provider_reference: reference,
+            p_failure_reason: 'Paystack verified transaction status: reversed',
+          });
+          return json({ paymentId, status: 'failed', providerStatus });
+        }
+      }
+
+      if (isReversalPending(providerStatus) && payment.status === 'confirmed') {
+        await rpc('apply_sellertray_payment_exception', {
+          p_payment_id: paymentId,
+          p_state: 'refund_pending',
+          p_provider_event_ref: transactionId,
+          p_reason: 'Paystack transaction is awaiting reversal/refund completion',
+        });
+        return json({ paymentId, status: 'payment_issue', providerStatus, exceptionState: 'refund_pending' });
+      }
+
+      if (['failed', 'abandoned'].includes(providerStatus) && (payment.status === 'initiated' || payment.status === 'pending_verification')) {
         await rpc('transition_sellertray_order_payment', {
           p_payment_id: paymentId,
           p_status: 'failed',
@@ -306,6 +360,30 @@ Deno.serve(async (req: Request) => {
     });
 
     if (providerStatus === 'successful') {
+      if (payment.status === 'confirmed') {
+        return json({
+          paymentId,
+          status: payment.exception_state === 'none' ? 'confirmed' : 'payment_issue',
+          providerStatus,
+          exceptionState: payment.exception_state,
+          alreadyConfirmed: true,
+        });
+      }
+
+      if (
+        ['failed', 'cancelled', 'expired'].includes(String(payment.status)) ||
+        payment.order_payment_status === 'paid' ||
+        payment.order_payment_status === 'payment_issue'
+      ) {
+        await rpc('apply_sellertray_payment_exception', {
+          p_payment_id: paymentId,
+          p_state: 'duplicate_payment',
+          p_provider_event_ref: transactionId,
+          p_reason: 'Provider verified funds after another payment had already settled or this attempt was closed',
+        });
+        return json({ paymentId, status: 'payment_issue', providerStatus, exceptionState: 'duplicate_payment' });
+      }
+
       await rpc('transition_sellertray_order_payment', {
         p_payment_id: paymentId,
         p_status: 'confirmed',
@@ -333,8 +411,8 @@ Deno.serve(async (req: Request) => {
 
 async function loadPayment(id: string): Promise<J | null> {
   const rows = await rest<J[]>(
-    '/rest/v1/order_payments?select=id,tenant_id,order_id,payment_method_id,method_type,provider,provider_mode,status,amount,currency,provider_reference,provider_transaction_id,checkout_url,' +
-    'orders(public_order_id,customer_id,customers(display_name,phone,wa_id,email))' +
+    '/rest/v1/order_payments?select=id,tenant_id,order_id,payment_method_id,method_type,provider,provider_mode,status,exception_state,amount,currency,provider_reference,provider_transaction_id,checkout_url,' +
+    'orders(public_order_id,customer_id,payment_status,customers(display_name,phone,wa_id,email))' +
     '&id=eq.' + encodeURIComponent(id) + '&limit=1',
   );
   const row = rows[0];
@@ -345,6 +423,7 @@ async function loadPayment(id: string): Promise<J | null> {
     ...row,
     public_order_id: order?.public_order_id ?? null,
     customer_id: order?.customer_id ?? null,
+    order_payment_status: order?.payment_status ?? null,
     customer_name: customer?.display_name ?? null,
     customer_phone: customer?.phone ?? null,
     customer_wa_id: customer?.wa_id ?? null,
@@ -512,6 +591,11 @@ function numberValue(v: unknown): number | null {
   }
   return null;
 }
+function isReversalPending(value: string): boolean {
+  const normalized = value.toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return normalized === 'reversal pending';
+}
+
 function transactionIdValue(v: unknown): string | null {
   if (typeof v === 'number' && Number.isFinite(v)) return String(v);
   return stringValue(v);

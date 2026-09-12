@@ -18,6 +18,9 @@ type PaymentRow = {
   method_type: OrderPaymentAttempt['methodType'];
   provider: string;
   status: OrderPaymentAttempt['status'];
+  exception_state: OrderPaymentAttempt['exceptionState'];
+  exception_reason: string | null;
+  exception_updated_at: string | null;
   amount: number | string;
   currency: string;
   provider_reference: string | null;
@@ -50,7 +53,7 @@ export async function loadPaymentReconciliation(
   const { data: paymentData, error: paymentError } = await supabase
     .from('order_payments')
     .select(
-      'id,order_id,method_type,provider,status,amount,currency,provider_reference,provider_transaction_id,checkout_url,customer_claimed_at,confirmed_at,confirmation_source,failure_reason,created_at',
+      'id,order_id,method_type,provider,status,exception_state,exception_reason,exception_updated_at,amount,currency,provider_reference,provider_transaction_id,checkout_url,customer_claimed_at,confirmed_at,confirmation_source,failure_reason,created_at',
     )
     .eq('tenant_id', tenantId)
     .order('created_at', { ascending: false })
@@ -101,6 +104,9 @@ export async function loadPaymentReconciliation(
       methodType: row.method_type,
       provider: row.provider,
       status: row.status,
+      exceptionState: row.exception_state,
+      exceptionReason: row.exception_reason,
+      exceptionUpdatedAt: row.exception_updated_at,
       amount: toNumber(row.amount),
       currency: row.currency,
       providerReference: row.provider_reference,

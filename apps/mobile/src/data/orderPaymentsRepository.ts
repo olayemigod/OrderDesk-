@@ -16,6 +16,9 @@ export type OrderPaymentAttempt = {
   methodType: 'bank_transfer' | 'paystack' | 'flutterwave' | 'cash_on_delivery' | 'pay_on_pickup';
   provider: string;
   status: 'initiated' | 'pending_verification' | 'confirmed' | 'failed' | 'cancelled' | 'expired';
+  exceptionState: 'none' | 'refund_pending' | 'refunded' | 'disputed' | 'chargeback' | 'reversed' | 'duplicate_payment';
+  exceptionReason: string | null;
+  exceptionUpdatedAt: string | null;
   amount: number;
   currency: string;
   providerReference: string | null;
@@ -44,6 +47,9 @@ type PaymentRow = {
   method_type: OrderPaymentAttempt['methodType'];
   provider: string;
   status: OrderPaymentAttempt['status'];
+  exception_state: OrderPaymentAttempt['exceptionState'];
+  exception_reason: string | null;
+  exception_updated_at: string | null;
   amount: number | string;
   currency: string;
   provider_reference: string | null;
@@ -69,7 +75,7 @@ export async function loadOrderFinancials(
       .order('issued_at', { ascending: true }),
     supabase
       .from('order_payments')
-      .select('id,method_type,provider,status,amount,currency,provider_reference,provider_transaction_id,checkout_url,customer_claimed_at,confirmed_at,confirmation_source,failure_reason,created_at')
+      .select('id,method_type,provider,status,exception_state,exception_reason,exception_updated_at,amount,currency,provider_reference,provider_transaction_id,checkout_url,customer_claimed_at,confirmed_at,confirmation_source,failure_reason,created_at')
       .eq('tenant_id', tenantId)
       .eq('order_id', orderId)
       .order('created_at', { ascending: false }),
@@ -94,6 +100,9 @@ export async function loadOrderFinancials(
       methodType: row.method_type,
       provider: row.provider,
       status: row.status,
+      exceptionState: row.exception_state,
+      exceptionReason: row.exception_reason,
+      exceptionUpdatedAt: row.exception_updated_at,
       amount: toNumber(row.amount),
       currency: row.currency,
       providerReference: row.provider_reference,

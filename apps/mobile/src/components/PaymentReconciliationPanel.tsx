@@ -38,12 +38,13 @@ export function PaymentReconciliationPanel({ tenantId }: { tenantId: string }) {
     open: items.filter((item) => item.status === 'initiated').length,
     confirmed: items.filter((item) => item.status === 'confirmed').length,
     failed: items.filter((item) => item.status === 'failed').length,
+    exceptions: items.filter((item) => item.exceptionState !== 'none').length,
   }), [items]);
 
   const visible = useMemo(
     () => filter === 'all'
       ? items
-      : items.filter((item) => item.status === 'pending_verification' || item.status === 'failed'),
+      : items.filter((item) => item.status === 'pending_verification' || item.status === 'failed' || item.exceptionState !== 'none'),
     [filter, items],
   );
 
@@ -94,10 +95,11 @@ export function PaymentReconciliationPanel({ tenantId }: { tenantId: string }) {
         <Metric label="Open" value={metrics.open} />
         <Metric label="Paid" value={metrics.confirmed} />
         <Metric label="Failed" value={metrics.failed} attention={metrics.failed > 0} />
+        <Metric label="Issues" value={metrics.exceptions} attention={metrics.exceptions > 0} />
       </View>
 
       <View style={styles.filters}>
-        <FilterButton active={filter === 'attention'} label={'Attention (' + (metrics.verify + metrics.failed) + ')'} onPress={() => setFilter('attention')} />
+        <FilterButton active={filter === 'attention'} label={'Attention (' + (metrics.verify + metrics.failed + metrics.exceptions) + ')'} onPress={() => setFilter('attention')} />
         <FilterButton active={filter === 'all'} label={'Recent (' + items.length + ')'} onPress={() => setFilter('all')} />
       </View>
 
@@ -139,6 +141,12 @@ export function PaymentReconciliationPanel({ tenantId }: { tenantId: string }) {
               <Text style={styles.claim}>Customer says paid · {formatDateTime(item.customerClaimedAt)}</Text>
             ) : null}
             {item.providerReference ? <Text style={styles.reference}>Ref: {item.providerReference}</Text> : null}
+            {item.exceptionState !== 'none' ? (
+              <Text style={styles.exception}>
+                Financial exception: {humanException(item.exceptionState)}
+                {item.exceptionReason ? ' · ' + item.exceptionReason : ''}
+              </Text>
+            ) : null}
             {item.failureReason ? <Text style={styles.error}>{item.failureReason}</Text> : null}
             <Text style={styles.time}>Started {formatDateTime(item.createdAt)}</Text>
 
@@ -197,6 +205,18 @@ function StatusPill({ status }: { status: PaymentReconciliationItem['status'] })
       <Text style={[styles.pillText, positive && styles.pillTextPositive, attention && styles.pillTextAttention]}>{label}</Text>
     </View>
   );
+}
+
+function humanException(value: PaymentReconciliationItem['exceptionState']): string {
+  return {
+    none: 'None',
+    refund_pending: 'Refund pending',
+    refunded: 'Refunded',
+    disputed: 'Disputed',
+    chargeback: 'Chargeback',
+    reversed: 'Reversed',
+    duplicate_payment: 'Duplicate payment',
+  }[value];
 }
 
 function humanMethod(value: PaymentReconciliationItem['methodType']): string {
@@ -272,6 +292,7 @@ const styles = StyleSheet.create({
   reference: { color: '#667085', fontSize: 9 },
   time: { color: '#98A2B3', fontSize: 9 },
   error: { color: '#B42318', fontSize: 10, lineHeight: 15 },
+  exception: { color: '#B42318', fontSize: 10, lineHeight: 15, fontWeight: '800' },
   pill: { borderRadius: 999, backgroundColor: '#F2F4F7', paddingHorizontal: 8, paddingVertical: 4 },
   pillPositive: { backgroundColor: '#ECFDF3' },
   pillAttention: { backgroundColor: '#FFF7E8' },
