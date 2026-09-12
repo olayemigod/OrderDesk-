@@ -1,29 +1,29 @@
-# OrderDesk
+# SellerTray
 
-OrderDesk is a lightweight AI-assisted order management SaaS for small merchants who sell through WhatsApp.
+SellerTray is a WhatsApp-first merchant order-management SaaS from ProcessEdge Solutions Limited.
 
-## Product contract
+> Historical note: this repository was bootstrapped under the working name **OrderDesk**. The approved production product name is **SellerTray**.
 
-- Customers stay on WhatsApp.
-- Merchants operate from a mobile app.
-- OrderDesk converts free-form customer messages into structured draft orders.
-- Merchants confirm, edit, accept, reject, and progress orders from the app.
-- The MVP is intentionally not an ERP, POS, inventory suite, CRM, or accounting system.
+## Phase 1 product contract
 
-## MVP vertical slice
+- Customers remain on WhatsApp.
+- Merchants use the SellerTray mobile app.
+- WhatsApp webhook messages are processed only after current business-owner data-processing consent.
+- AI-assisted order detection creates governed order records; ambiguous orders remain reviewable.
+- Customer order progress can be communicated back over WhatsApp.
+- Merchant payment methods support bank transfer, Paystack and Flutterwave foundations.
+- Catalogue and customer records are first-class SellerTray domains.
+- A merchant can select an inbound WhatsApp product image, create a catalogue candidate, review it, and explicitly convert it into a live catalogue item.
+- Chat images never auto-publish as products.
 
-1. WhatsApp message arrives.
-2. Webhook stores the conversation event.
-3. Order parser turns order intent into a structured draft.
-4. Merchant sees the draft in the mobile inbox.
-5. Merchant reviews and accepts it.
-6. Order status is updated and can be communicated back to the customer.
+## Backend
 
-## Proposed stack
+- Supabase Postgres, Auth, Storage and Edge Functions
+- Meta WhatsApp Cloud API
+- Provider-neutral order parser boundary
+- Row-Level Security plus server-only privileged commands
+- Versioned legal acceptance and WhatsApp channel consent
 
-- Mobile: Expo + React Native + TypeScript
-- Backend: Supabase Postgres, Auth, Realtime and Edge Functions
-- WhatsApp: Meta WhatsApp Cloud API webhook adapter
-- AI: provider-neutral order parsing boundary so the model can be changed without changing domain logic
+## Current checkpoint
 
-Implementation begins on a feature branch after this repository bootstrap commit.
+The files under `supabase/` capture the live Phase 1 backend checkpoint deployed on 12 September 2026.
