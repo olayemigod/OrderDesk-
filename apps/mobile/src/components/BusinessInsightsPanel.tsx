@@ -1,29 +1,32 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import type { MerchantBusiness } from '../data/businessRepository';
 import type { SevenDayInsight } from '../data/insightsRepository';
 import { useBusinessInsights } from '../hooks/useBusinessInsights';
+import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
 type Props = {
   business: MerchantBusiness;
 };
 
 export function BusinessInsightsPanel({ business }: Props) {
+  const appearance = useSellerTrayAppearance();
   const { insights, loading, error, refresh } = useBusinessInsights(business.id);
   const showPerformance = business.role === 'owner' || business.role === 'manager';
 
   if (loading && !insights) {
     return (
-      <View style={styles.loadingCard}>
+      <View style={[styles.loadingCard, appearance.dark && darkStyles.card]}>
         <ActivityIndicator />
-        <Text style={styles.helper}>Loading business activity…</Text>
+        <Text style={[styles.helper, appearance.dark && darkStyles.bodyText]}>Loading business activity…</Text>
       </View>
     );
   }
 
   if (!insights) {
     return (
-      <View style={styles.errorCard}>
+      <View style={[styles.errorCard, appearance.dark && darkStyles.errorCard]}>
         <Text style={styles.errorTitle}>Business insights unavailable</Text>
         <Text style={styles.errorText}>{error ?? 'SellerTray could not load the business summary.'}</Text>
         <Pressable onPress={() => void refresh()}>
@@ -34,32 +37,32 @@ export function BusinessInsightsPanel({ business }: Props) {
   }
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, appearance.dark && darkStyles.surface]}>
       <View>
-        <Text style={styles.eyebrow}>TODAY</Text>
-        <Text style={styles.title}>Order activity</Text>
-        <Text style={styles.helper}>Calculated on the server using {business.timezone}.</Text>
+        <Text style={[styles.eyebrow, appearance.dark && darkStyles.bodyText]}>TODAY</Text>
+        <Text style={[styles.title, appearance.dark && darkStyles.titleText]}>Order activity</Text>
+        <Text style={[styles.helper, appearance.dark && darkStyles.bodyText]}>Calculated on the server using {business.timezone}.</Text>
       </View>
 
       <View style={styles.metricGrid}>
-        <Metric label="Orders" value={formatNumber(insights.today.orders)} />
-        <Metric label="Needs review" value={formatNumber(insights.today.needsReview)} />
-        <Metric label="In progress" value={formatNumber(insights.today.inProgress)} />
-        <Metric label="Completed" value={formatNumber(insights.today.completed)} />
+        <Metric icon="receipt-outline" label="Orders" value={formatNumber(insights.today.orders)} />
+        <Metric icon="alert-circle-outline" label="Needs review" value={formatNumber(insights.today.needsReview)} />
+        <Metric icon="cube-outline" label="In progress" value={formatNumber(insights.today.inProgress)} />
+        <Metric icon="checkmark-circle-outline" label="Completed" value={formatNumber(insights.today.completed)} />
       </View>
 
-      <View style={styles.valueCard}>
+      <View style={[styles.valueCard, appearance.dark && darkStyles.mintCard]}>
         <Text style={styles.valueLabel}>TODAY'S KNOWN ORDER VALUE</Text>
-        <Text style={styles.valueAmount}>{formatMoney(insights.today.knownValue, business.currency)}</Text>
-        <Text style={styles.helper}>Rejected, cancelled and incompletely priced orders are excluded from known value.</Text>
+        <Text style={[styles.valueAmount, appearance.dark && darkStyles.titleText]}>{formatMoney(insights.today.knownValue, business.currency)}</Text>
+        <Text style={[styles.helper, appearance.dark && darkStyles.bodyText]}>Rejected, cancelled and incompletely priced orders are excluded from known value.</Text>
       </View>
 
       {showPerformance ? (
         <>
-          <View style={styles.divider} />
+          <View style={[styles.divider, appearance.dark && darkStyles.divider]} />
           <View>
-            <Text style={styles.eyebrow}>BUSINESS PERFORMANCE</Text>
-            <Text style={styles.title}>7-day and 30-day view</Text>
+            <Text style={[styles.eyebrow, appearance.dark && darkStyles.bodyText]}>BUSINESS PERFORMANCE</Text>
+            <Text style={[styles.title, appearance.dark && darkStyles.titleText]}>7-day and 30-day view</Text>
           </View>
 
           <View style={styles.periodGrid}>
@@ -84,27 +87,27 @@ export function BusinessInsightsPanel({ business }: Props) {
             />
           </View>
 
-          <View style={styles.topItemsCard}>
-            <Text style={styles.cardTitle}>Top products · 30 days</Text>
+          <View style={[styles.topItemsCard, appearance.dark && darkStyles.card]}>
+            <Text style={[styles.cardTitle, appearance.dark && darkStyles.titleText]}>Top products · 30 days</Text>
             {insights.topItems.length === 0 ? (
               <Text style={styles.helper}>No priced product activity yet.</Text>
             ) : (
               insights.topItems.map((item, index) => (
-                <View key={`${item.name}-${index}`} style={styles.topItemRow}>
+                <View key={`${item.name}-${index}`} style={[styles.topItemRow, appearance.dark && darkStyles.rowBorder]}>
                   <View style={styles.rank}><Text style={styles.rankText}>{index + 1}</Text></View>
                   <View style={styles.topItemCopy}>
-                    <Text style={styles.topItemName}>{item.name}</Text>
-                    <Text style={styles.topItemMeta}>{formatQuantity(item.quantity)} ordered</Text>
+                    <Text style={[styles.topItemName, appearance.dark && darkStyles.titleText]}>{item.name}</Text>
+                    <Text style={[styles.topItemMeta, appearance.dark && darkStyles.bodyText]}>{formatQuantity(item.quantity)} ordered</Text>
                   </View>
-                  <Text style={styles.topItemValue}>{formatMoney(item.value, business.currency)}</Text>
+                  <Text style={[styles.topItemValue, appearance.dark && darkStyles.titleText]}>{formatMoney(item.value, business.currency)}</Text>
                 </View>
               ))
             )}
           </View>
         </>
       ) : (
-        <View style={styles.staffNote}>
-          <Text style={styles.staffTitle}>Operational view</Text>
+        <View style={[styles.staffNote, appearance.dark && darkStyles.subtleCard]}>
+          <Text style={[styles.staffTitle, appearance.dark && darkStyles.titleText]}>Operational view</Text>
           <Text style={styles.helper}>Owner/Manager accounts also see longer-period business performance and top-product insights.</Text>
         </View>
       )}
@@ -114,11 +117,15 @@ export function BusinessInsightsPanel({ business }: Props) {
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({ icon, label, value }: { icon: string; label: string; value: string }) {
+  const appearance = useSellerTrayAppearance();
   return (
-    <View style={styles.metricCard}>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={styles.metricValue}>{value}</Text>
+    <View style={[styles.metricCard, appearance.dark && darkStyles.card]}>
+      <View style={[styles.metricIcon, appearance.dark && darkStyles.mintCard]}>
+        <Ionicons name={icon as never} size={19} color="#079455" />
+      </View>
+      <Text style={[styles.metricLabel, appearance.dark && darkStyles.bodyText]}>{label}</Text>
+      <Text style={[styles.metricValue, appearance.dark && darkStyles.titleText]}>{value}</Text>
     </View>
   );
 }
@@ -142,12 +149,13 @@ function PeriodCard({
   currency: string;
   comparison?: string;
 }) {
+  const appearance = useSellerTrayAppearance();
   return (
-    <View style={styles.periodCard}>
-      <Text style={styles.cardTitle}>{title}</Text>
-      <Text style={styles.periodValue}>{formatMoney(knownValue, currency)}</Text>
-      <Text style={styles.periodMeta}>{formatNumber(orders)} orders · {completionRate.toFixed(1)}% completion</Text>
-      <Text style={styles.periodMeta}>{formatNumber(completed)} completed · {formatNumber(closedUnsuccessful)} rejected/cancelled</Text>
+    <View style={[styles.periodCard, appearance.dark && darkStyles.card]}>
+      <Text style={[styles.cardTitle, appearance.dark && darkStyles.titleText]}>{title}</Text>
+      <Text style={[styles.periodValue, appearance.dark && darkStyles.titleText]}>{formatMoney(knownValue, currency)}</Text>
+      <Text style={[styles.periodMeta, appearance.dark && darkStyles.bodyText]}>{formatNumber(orders)} orders · {completionRate.toFixed(1)}% completion</Text>
+      <Text style={[styles.periodMeta, appearance.dark && darkStyles.bodyText]}>{formatNumber(completed)} completed · {formatNumber(closedUnsuccessful)} rejected/cancelled</Text>
       {comparison ? <Text style={styles.comparison}>{comparison}</Text> : null}
     </View>
   );
@@ -187,31 +195,32 @@ function formatQuantity(value: number): string {
 
 const styles = StyleSheet.create({
   wrap: { gap: 12 },
-  eyebrow: { color: '#667085', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
-  title: { color: '#102A43', fontSize: 17, fontWeight: '900', marginTop: 2 },
-  helper: { color: '#667085', fontSize: 10, lineHeight: 15, marginTop: 2 },
+  eyebrow: { color: '#667085', fontSize: 11, fontWeight: '900', letterSpacing: 1.1 },
+  title: { color: '#102A43', fontSize: 20, lineHeight: 26, fontWeight: '900', marginTop: 2 },
+  helper: { color: '#667085', fontSize: 12, lineHeight: 18, marginTop: 2 },
   metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   metricCard: { flexGrow: 1, flexBasis: '46%', minWidth: 130, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 14, padding: 12 },
-  metricLabel: { color: '#667085', fontSize: 10, fontWeight: '800' },
-  metricValue: { color: '#102A43', fontSize: 23, fontWeight: '900', marginTop: 3 },
+  metricIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: '#ECFDF3', alignItems: 'center', justifyContent: 'center', marginBottom: 5 },
+  metricLabel: { color: '#667085', fontSize: 12, fontWeight: '800' },
+  metricValue: { color: '#102A43', fontSize: 24, fontWeight: '900', marginTop: 3 },
   valueCard: { backgroundColor: '#ECFDF3', borderRadius: 15, padding: 14 },
-  valueLabel: { color: '#079455', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
+  valueLabel: { color: '#079455', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
   valueAmount: { color: '#102A43', fontSize: 25, fontWeight: '900', marginTop: 4 },
   divider: { height: 1, backgroundColor: '#E4E7EC', marginVertical: 2 },
   periodGrid: { gap: 9 },
   periodCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 14, padding: 13 },
-  cardTitle: { color: '#344054', fontSize: 11, fontWeight: '900' },
+  cardTitle: { color: '#344054', fontSize: 13, fontWeight: '900' },
   periodValue: { color: '#102A43', fontSize: 20, fontWeight: '900', marginTop: 5 },
-  periodMeta: { color: '#667085', fontSize: 10, lineHeight: 15, marginTop: 3 },
+  periodMeta: { color: '#667085', fontSize: 12, lineHeight: 18, marginTop: 3 },
   comparison: { color: '#079455', fontSize: 10, lineHeight: 15, fontWeight: '700', marginTop: 7 },
   topItemsCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 14, padding: 13, gap: 3 },
   topItemRow: { flexDirection: 'row', alignItems: 'center', gap: 9, paddingVertical: 9, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E4E7EC' },
   rank: { width: 23, height: 23, borderRadius: 999, backgroundColor: '#ECFDF3', alignItems: 'center', justifyContent: 'center' },
   rankText: { color: '#079455', fontSize: 9, fontWeight: '900' },
   topItemCopy: { flex: 1 },
-  topItemName: { color: '#102A43', fontSize: 11, fontWeight: '800' },
-  topItemMeta: { color: '#667085', fontSize: 9, marginTop: 2 },
-  topItemValue: { color: '#344054', fontSize: 10, fontWeight: '900' },
+  topItemName: { color: '#102A43', fontSize: 13, fontWeight: '800' },
+  topItemMeta: { color: '#667085', fontSize: 11, marginTop: 2 },
+  topItemValue: { color: '#344054', fontSize: 12, fontWeight: '900' },
   staffNote: { backgroundColor: '#F9FAFB', borderRadius: 12, padding: 11 },
   staffTitle: { color: '#344054', fontSize: 11, fontWeight: '900' },
   staleText: { color: '#B54708', fontSize: 9, lineHeight: 14 },
@@ -220,4 +229,16 @@ const styles = StyleSheet.create({
   errorTitle: { color: '#B42318', fontSize: 11, fontWeight: '900' },
   errorText: { color: '#912018', fontSize: 10, lineHeight: 15 },
   retry: { color: '#B42318', fontSize: 10, fontWeight: '900', marginTop: 3 },
+});
+
+const darkStyles = StyleSheet.create({
+  surface: { backgroundColor: '#081825' },
+  card: { backgroundColor: '#102A43', borderColor: '#344054' },
+  subtleCard: { backgroundColor: '#162F46' },
+  mintCard: { backgroundColor: '#12372C', borderColor: '#1C6B4A' },
+  errorCard: { backgroundColor: '#3A1717' },
+  titleText: { color: '#F8FAFC' },
+  bodyText: { color: '#D0D5DD' },
+  rowBorder: { borderBottomColor: '#344054' },
+  divider: { backgroundColor: '#344054' },
 });
