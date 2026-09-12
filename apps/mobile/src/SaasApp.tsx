@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
   Platform,
@@ -34,8 +35,8 @@ import { useOrders } from './hooks/useOrders';
 import { supabase } from './lib/supabase';
 import { sellerTrayTheme as theme } from './theme/sellerTrayTheme';
 
-type ViewName = 'home' | 'orders' | 'inbox' | 'products' | 'more';
-type OrderFilter = 'attention' | 'active' | 'done' | 'all';
+type ViewName = 'home' | 'orders' | 'inbox' | 'products' | 'more' | 'notifications';
+type OrderFilter = 'attention' | 'payment' | 'paid' | 'active' | 'done' | 'all';
 
 const statusLabels: Record<OrderStatus, string> = {
   draft: 'Draft',
@@ -102,6 +103,22 @@ function Workspace() {
   const catalogue = useCatalogue(activeBusiness?.id ?? null);
   const [view, setView] = useState<ViewName>('home');
   const [selectedOrderId, setSelectedOrderId] = useState('');
+  const [merchantName, setMerchantName] = useState('there');
+
+  useEffect(() => {
+    let active = true;
+    void supabase.auth.getUser().then(({ data }) => {
+      if (!active) return;
+      const metadata = data.user?.user_metadata ?? {};
+      const candidate =
+        (typeof metadata.full_name === 'string' && metadata.full_name) ||
+        (typeof metadata.name === 'string' && metadata.name) ||
+        data.user?.email?.split('@')[0] ||
+        'there';
+      setMerchantName(firstName(candidate));
+    });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     setSelectedOrderId('');
@@ -117,6 +134,11 @@ function Workspace() {
   const inboxCount = new Set(
     orders.filter((order) => order.source === 'whatsapp').map((order) => order.customerPhone),
   ).size;
+  const notificationCount =
+    reviewCount +
+    orders.filter((order) =>
+      ['pending', 'verification_required', 'payment_issue'].includes(order.paymentStatus),
+    ).length;
 
   async function refreshAll() {
     await refreshBusinesses();
@@ -169,6 +191,8 @@ function Workspace() {
             business={activeBusiness}
             businesses={businesses}
             onSelectBusiness={selectBusiness}
+            notificationCount={notificationCount}
+            onOpenNotifications={() => setView('notifications')}
           />
 
           {pageError ? (
@@ -184,6 +208,7 @@ function Workspace() {
           {view === 'home' ? (
             <HomeView
               business={activeBusiness}
+              merchantName={merchantName}
               orders={orders}
               loading={loading}
               productCount={catalogue.items.filter((item) => item.isActive).length}
@@ -235,6 +260,18 @@ function Workspace() {
           {view === 'more' ? (
             <SettingsHub business={activeBusiness} onSaveBusiness={saveProfile} />
           ) : null}
+
+          {view === 'notifications' ? (
+            <NotificationCenterView
+              orders={orders}
+              syncError={pageError}
+              onOpenOrder={(orderId) => {
+                setSelectedOrderId(orderId);
+                setView('orders');
+              }}
+              onBack={() => setView('home')}
+            />
+          ) : null}
         </ScrollView>
 
         <BottomNav
@@ -255,10 +292,14 @@ function WorkspaceHeader({
   business,
   businesses,
   onSelectBusiness,
+  notificationCount,
+  onOpenNotifications,
 }: {
   business: MerchantBusiness;
   businesses: MerchantBusiness[];
   onSelectBusiness: (businessId: string) => Promise<void>;
+  notificationCount: number;
+  onOpenNotifications: () => void;
 }) {
   return (
     <>
@@ -272,8 +313,17 @@ function WorkspaceHeader({
             </Text>
           </View>
         </View>
-        <Pressable onPress={() => void supabase.auth.signOut()} style={styles.signOutButton}>
-          <Text style={styles.signOutText}>Sign out</Text>
+        <Pressable
+          onPress={onOpenNotifications}
+          accessibilityLabel="Open notifications"
+          style={({ pressed }) => [styles.notificationButton, pressed && styles.quickActionPressed]}
+        >
+          <Ionicons name="notifications-outline" size={25} color={theme.colors.navy} />
+          {notificationCount > 0 ? (
+            <View style={styles.notificationBadge}>
+              <Text style={styles.notificationBadgeText}>{Math.min(notificationCount, 99)}</Text>
+            </View>
+          ) : null}
         </Pressable>
       </View>
 
@@ -318,6 +368,7 @@ function WorkspaceHeader({
 
 function HomeView({
   business,
+  merchantName,
   orders,
   loading,
   productCount,
@@ -327,6 +378,7 @@ function HomeView({
   onSelectOrder,
 }: {
   business: MerchantBusiness;
+  merchantName: string;
   orders: MerchantOrder[];
   loading: boolean;
   productCount: number;
