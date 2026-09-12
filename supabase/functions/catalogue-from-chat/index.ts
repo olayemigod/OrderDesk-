@@ -5,6 +5,7 @@ type J = Record<string, unknown>;
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const META_ACCESS_TOKEN = Deno.env.get('META_ACCESS_TOKEN') ?? '';
+const WHATSAPP_ENCRYPTION_KEY = Deno.env.get('SELLERTRAY_WHATSAPP_ENCRYPTION_KEY') ?? '';
 const META_GRAPH_API_VERSION = Deno.env.get('META_GRAPH_API_VERSION') ?? '';
 const CATALOGUE_BUCKET = 'sellertray-catalogue';
 const CAPTURE_BUCKET = 'sellertray-chat-captures';
@@ -135,11 +136,11 @@ Deno.serve(async (request) => {
         if (previewUrl) return reply({ previewUrl, staged: true }, 200, requestId);
       }
 
-      if (!META_ACCESS_TOKEN || !META_GRAPH_API_VERSION) {
+      if (!META_GRAPH_API_VERSION) {
         return reply({ error: 'WhatsApp media preview is not activated' }, 503, requestId);
       }
 
-      const fetched = await fetchMetaImage(media.provider_media_id, media.media_mime_type, media.media_sha256);
+      const fetched = await fetchMetaImage(tenantId, media.provider_media_id, media.media_mime_type, media.media_sha256);
       await ensureCaptureBucket();
       const extension = extensionForMime(fetched.mimeType);
       const storagePath = tenantId + '/' + media.id + '.' + extension;
@@ -283,20 +284,20 @@ Deno.serve(async (request) => {
           .from(CAPTURE_BUCKET)
           .download(previousCapturePath);
         if (stagedError || !staged) {
-          if (!META_ACCESS_TOKEN || !META_GRAPH_API_VERSION) {
+          if (!META_GRAPH_API_VERSION) {
             return reply({ error: 'WhatsApp media capture is not activated' }, 503, requestId);
           }
-          fetched = await fetchMetaImage(media.provider_media_id, media.media_mime_type, media.media_sha256);
+          fetched = await fetchMetaImage(tenantId, media.provider_media_id, media.media_mime_type, media.media_sha256);
         } else {
           const bytes = await staged.arrayBuffer();
           if (bytes.byteLength > MAX_IMAGE_BYTES) throw new Error('WhatsApp catalogue image exceeds the 5 MB limit');
           fetched = { bytes, mimeType: media.media_mime_type || staged.type || 'image/jpeg' };
         }
       } else {
-        if (!META_ACCESS_TOKEN || !META_GRAPH_API_VERSION) {
+        if (!META_GRAPH_API_VERSION) {
           return reply({ error: 'WhatsApp media capture is not activated' }, 503, requestId);
         }
-        fetched = await fetchMetaImage(media.provider_media_id, media.media_mime_type, media.media_sha256);
+        fetched = await fetchMetaImage(tenantId, media.provider_media_id, media.media_mime_type, media.media_sha256);
       }
 
       await ensureCatalogueBucket();
@@ -393,14 +394,16 @@ async function consumeRateLimit(tenantId: string, userId: string): Promise<boole
 }
 
 async function fetchMetaImage(
+  tenantId: string,
   mediaId: string,
   fallbackMime: string | null,
   expectedSha: string | null,
 ): Promise<{ bytes: ArrayBuffer; mimeType: string }> {
+  const metaAccessToken = await resolveMetaAccessTokenByTenant(tenantId);
   const metadataResponse = await fetch(
     'https://graph.facebook.com/' + encodeURIComponent(META_GRAPH_API_VERSION) + '/' + encodeURIComponent(mediaId),
     {
-      headers: { authorization: 'Bearer ' + META_ACCESS_TOKEN },
+      headers: { authorization: 'Bearer ' + metaAccessToken },
       signal: AbortSignal.timeout(10000),
     },
   );
@@ -422,7 +425,7 @@ async function fetchMetaImage(
   }
 
   const fileResponse = await fetch(mediaUrl, {
-    headers: { authorization: 'Bearer ' + META_ACCESS_TOKEN },
+    headers: { authorization: 'Bearer ' + metaAccessToken },
     signal: AbortSignal.timeout(15000),
   });
   if (!fileResponse.ok) throw new Error('Unable to download WhatsApp catalogue image');
@@ -442,6 +445,91 @@ async function fetchMetaImage(
   }
 
   return { bytes, mimeType };
+}
+
+type RuntimeWhatsAppCredential = {
+  tenant_id: string;
+  connection_id: string;
+  waba_id: string | null;
+  phone_number_id: string;
+  credential_mode: 'platform_system_user' | 'business_integration_system_user';
+  credentials_ciphertext: string | null;
+  credentials_iv: string | null;
+  encryption_key_version: number | null;
+  credential_fingerprint: string | null;
+  credential_expires_at: string | null;
+};
+
+async function resolveMetaAccessTokenByTenant(tenantId: string): Promise<string> {
+  const { data, error } = await admin!.rpc('get_sellertray_whatsapp_runtime_credential_by_tenant', {
+    p_tenant_id: tenantId,
+  });
+  if (error) throw error;
+
+  const rows = Array.isArray(data) ? data as RuntimeWhatsAppCredential[] : [];
+  const credential = rows[0] ?? null;
+  if (!credential) throw new Error('No active SellerTray WhatsApp connection exists for this business.');
+
+  if (credential.credential_mode === 'platform_system_user') {
+    if (!META_ACCESS_TOKEN) throw new Error('SellerTray platform WhatsApp credential is not configured.');
+    return META_ACCESS_TOKEN;
+  }
+
+  if (
+    !credential.credentials_ciphertext ||
+    !credential.credentials_iv ||
+    !credential.encryption_key_version
+  ) {
+    throw new Error('SellerTray merchant WhatsApp credential is unavailable.');
+  }
+  if (credential.credential_expires_at) {
+    const expiresAt = new Date(credential.credential_expires_at).getTime();
+    if (Number.isFinite(expiresAt) && expiresAt <= Date.now()) {
+      throw new Error('SellerTray merchant WhatsApp credential has expired.');
+    }
+  }
+
+  const payload = await decryptCredential(
+    credential.credentials_ciphertext,
+    credential.credentials_iv,
+  );
+  const accessToken = typeof payload.accessToken === 'string' ? payload.accessToken.trim() : '';
+  if (!accessToken) throw new Error('SellerTray merchant WhatsApp credential is invalid.');
+  return accessToken;
+}
+
+async function decryptCredential(ciphertext: string, ivValue: string): Promise<J> {
+  const keyBytes = fromBase64(WHATSAPP_ENCRYPTION_KEY);
+  if (keyBytes.byteLength !== 32) {
+    throw new Error('SellerTray WhatsApp credential decryption is not configured.');
+  }
+  const iv = fromBase64(ivValue);
+  if (iv.byteLength !== 12) throw new Error('SellerTray WhatsApp credential IV is invalid.');
+
+  const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['decrypt']);
+  let plain: ArrayBuffer;
+  try {
+    plain = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      fromBase64(ciphertext),
+    );
+  } catch {
+    throw new Error('SellerTray merchant WhatsApp credential could not be decrypted.');
+  }
+
+  try {
+    const value = JSON.parse(new TextDecoder().decode(plain)) as unknown;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('invalid');
+    return value as J;
+  } catch {
+    throw new Error('SellerTray merchant WhatsApp credential payload is invalid.');
+  }
+}
+
+function fromBase64(value: string): Uint8Array {
+  try { return Uint8Array.from(atob(value), (char) => char.charCodeAt(0)); }
+  catch { return new Uint8Array(); }
 }
 
 async function storagePreviewUrl(bucket: string, path: string): Promise<string | null> {

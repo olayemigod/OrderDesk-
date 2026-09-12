@@ -3,6 +3,7 @@ type AdminAction =
   | 'overview'
   | 'audit'
   | 'ai_parser_readiness'
+  | 'ai_parser_probe'
   | 'set_subscription_status'
   | 'extend_trial_days'
   | 'set_whatsapp_status'
@@ -61,6 +62,16 @@ Deno.serve(withObservability('platform-admin', async (request) => {
         p_actor_user_id: userId,
       });
       return json({ readiness: buildAiParserReadiness(overview) });
+    }
+
+    if (action === 'ai_parser_probe') {
+      const overview = await rpc<JsonRecord>('platform_admin_overview', {
+        p_actor_user_id: userId,
+      });
+      if (overview.actorRole !== 'admin') {
+        return json({ error: 'ProcessEdge platform Admin role required for AI smoke test' }, 403);
+      }
+      return json({ probe: await runAiParserProbe() });
     }
 
     if (action === 'audit') {
@@ -192,6 +203,7 @@ function cleanAction(value: unknown): AdminAction | null {
     'overview',
     'audit',
     'ai_parser_readiness',
+    'ai_parser_probe',
     'set_subscription_status',
     'extend_trial_days',
     'set_whatsapp_status',
@@ -200,6 +212,115 @@ function cleanAction(value: unknown): AdminAction | null {
   return typeof value === 'string' && supported.includes(value as AdminAction)
     ? value as AdminAction
     : null;
+}
+
+async function runAiParserProbe(): Promise<JsonRecord> {
+  const parserToken = Deno.env.get('ORDER_PARSER_TOKEN')?.trim() ?? '';
+  if (!parserToken || !SUPABASE_URL) {
+    return {
+      ok: false,
+      status: 'not_configured',
+      message: 'SellerTray AI parser server credentials are incomplete.',
+    };
+  }
+
+  const startedAt = Date.now();
+  let response: Response;
+  try {
+    response = await fetch(`${SUPABASE_URL}/functions/v1/order-parser`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(9000),
+      headers: {
+        authorization: `Bearer ${parserToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        text: 'Please send 2 SellerTray Test Rice and 3 SellerTray Test Milk.',
+        catalogue: [
+          { id: 'sellertray-smoke-rice', name: 'SellerTray Test Rice', aliases: ['test rice'] },
+          { id: 'sellertray-smoke-milk', name: 'SellerTray Test Milk', aliases: ['test milk'] },
+        ],
+      }),
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      status: 'network_error',
+      durationMs: Math.max(0, Date.now() - startedAt),
+      message: error instanceof Error ? error.name : 'Parser request failed',
+    };
+  }
+
+  const durationMs = Math.max(0, Date.now() - startedAt);
+  let payload: unknown = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+
+  const telemetry = {
+    outcome: response.headers.get('x-sellertray-ai-outcome'),
+    model: response.headers.get('x-sellertray-ai-model'),
+    providerStatus: safeIntegerHeader(response.headers, 'x-sellertray-ai-provider-status'),
+    inputTokens: safeIntegerHeader(response.headers, 'x-sellertray-ai-input-tokens'),
+    cachedInputTokens: safeIntegerHeader(response.headers, 'x-sellertray-ai-cached-input-tokens'),
+    outputTokens: safeIntegerHeader(response.headers, 'x-sellertray-ai-output-tokens'),
+    reasoningTokens: safeIntegerHeader(response.headers, 'x-sellertray-ai-reasoning-tokens'),
+    totalTokens: safeIntegerHeader(response.headers, 'x-sellertray-ai-total-tokens'),
+  };
+
+  const parsedItems = isRecord(payload) && Array.isArray(payload.items)
+    ? payload.items.filter(isRecord)
+    : [];
+  const quantityFor = (needle: string): number | null => {
+    const match = parsedItems.find((item) =>
+      typeof item.name === 'string' && item.name.toLowerCase().includes(needle)
+    );
+    if (!match) return null;
+    const quantity = typeof match.quantity === 'number' ? match.quantity : Number(match.quantity);
+    return Number.isFinite(quantity) ? quantity : null;
+  };
+
+  const riceQuantity = quantityFor('rice');
+  const milkQuantity = quantityFor('milk');
+  const structuredOutputValid =
+    response.ok &&
+    telemetry.outcome === 'success' &&
+    riceQuantity === 2 &&
+    milkQuantity === 3;
+
+  return {
+    ok: structuredOutputValid,
+    status: structuredOutputValid
+      ? 'passed'
+      : response.status === 503
+        ? 'not_configured'
+        : response.status === 401
+          ? 'parser_token_mismatch'
+          : response.ok
+            ? 'unexpected_output'
+            : 'provider_error',
+    httpStatus: response.status,
+    durationMs,
+    configuredModel: OPENAI_PARSER_MODEL,
+    structuredOutputValid,
+    observed: {
+      riceQuantity,
+      milkQuantity,
+      confidence: isRecord(payload) && typeof payload.confidence === 'number'
+        ? Math.max(0, Math.min(1, payload.confidence))
+        : null,
+    },
+    telemetry,
+  };
+}
+
+function safeIntegerHeader(headers: Headers, name: string): number | null {
+  const raw = headers.get(name);
+  if (raw === null) return null;
+  const value = Number(raw);
+  return Number.isInteger(value) && value >= 0 ? value : null;
 }
 
 function buildAiParserReadiness(overview: JsonRecord): JsonRecord {

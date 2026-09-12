@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(35);
+select extensions.plan(52);
 
 select extensions.ok((select relrowsecurity from pg_class where oid='public.orders'::regclass),'orders keeps RLS enabled');
 select extensions.ok((select relrowsecurity from pg_class where oid='public.order_items'::regclass),'order_items keeps RLS enabled');
@@ -9,6 +9,30 @@ select extensions.ok((select relrowsecurity from pg_class where oid='public.inbo
 select extensions.ok((select relrowsecurity from pg_class where oid='public.merchant_payment_methods'::regclass),'merchant_payment_methods keeps RLS enabled');
 select extensions.ok((select relrowsecurity from pg_class where oid='public.order_payments'::regclass),'order_payments keeps RLS enabled');
 select extensions.ok((select relrowsecurity from pg_class where oid='public.order_financial_documents'::regclass),'order_financial_documents keeps RLS enabled');
+
+select extensions.ok((select relrowsecurity from pg_class where oid='public.tenant_whatsapp_connections'::regclass),'tenant_whatsapp_connections keeps RLS enabled');
+select extensions.ok(has_table_privilege('authenticated','public.tenant_whatsapp_connections','SELECT'),'merchant members may read safe WhatsApp connection metadata');
+select extensions.ok(not has_table_privilege('authenticated','public.tenant_whatsapp_connections','INSERT'),'authenticated clients cannot create WhatsApp connection mappings directly');
+select extensions.ok(not has_table_privilege('authenticated','public.tenant_whatsapp_connections','UPDATE'),'authenticated clients cannot rewrite WhatsApp connection mappings directly');
+select extensions.ok(not has_table_privilege('anon','sellertray_private.whatsapp_connection_credentials','SELECT'),'anonymous role cannot read private WhatsApp credentials');
+select extensions.ok(not has_table_privilege('authenticated','sellertray_private.whatsapp_connection_credentials','SELECT'),'authenticated clients cannot read private WhatsApp credentials');
+select extensions.ok(not has_function_privilege('authenticated','public.upsert_sellertray_whatsapp_connection(uuid,uuid,text,text,text,text,text,text,text,text,text,text,text,integer,timestamptz)','EXECUTE'),'WhatsApp connection activation is service-only');
+select extensions.ok(not has_function_privilege('authenticated','public.get_sellertray_whatsapp_runtime_credential_by_phone(text)','EXECUTE'),'runtime WhatsApp credential lookup by phone is service-only');
+select extensions.ok(not has_function_privilege('authenticated','public.get_sellertray_whatsapp_runtime_credential_by_tenant(uuid)','EXECUTE'),'runtime WhatsApp credential lookup by tenant is service-only');
+select extensions.ok(not has_function_privilege('authenticated','public.disconnect_sellertray_whatsapp_connection(uuid,uuid)','EXECUTE'),'WhatsApp disconnect mutation is service-only');
+select extensions.ok(has_function_privilege('service_role','public.upsert_sellertray_whatsapp_connection(uuid,uuid,text,text,text,text,text,text,text,text,text,text,text,integer,timestamptz)','EXECUTE'),'service role can activate governed WhatsApp connections');
+select extensions.ok(has_function_privilege('service_role','public.get_sellertray_whatsapp_runtime_credential_by_phone(text)','EXECUTE'),'service role can resolve runtime WhatsApp credentials by phone');
+select extensions.ok(has_function_privilege('service_role','public.get_sellertray_whatsapp_runtime_credential_by_tenant(uuid)','EXECUTE'),'service role can resolve runtime WhatsApp credentials by tenant');
+select extensions.ok(
+  exists (
+    select 1 from pg_indexes
+    where schemaname='public'
+      and tablename='tenant_whatsapp_connections'
+      and indexdef ilike '%unique%'
+      and indexdef ilike '%phone_number_id%'
+  ),
+  'WhatsApp Phone Number ID is unique across SellerTray connection records'
+);
 
 select extensions.ok(not has_table_privilege('authenticated','public.customers','UPDATE'),'authenticated clients cannot directly update customer identity rows');
 select extensions.ok(has_function_privilege('authenticated','public.update_sellertray_customer_profile(uuid,uuid,text,text)','EXECUTE'),'authenticated clients use the governed customer-profile RPC');
@@ -36,6 +60,10 @@ select extensions.ok(not has_function_privilege('authenticated','public.create_s
 select extensions.ok(not has_function_privilege('authenticated','public.claim_sellertray_inbound_message(uuid)','EXECUTE'),'inbound claim function is service-only');
 select extensions.ok(not has_function_privilege('authenticated','public.consume_sellertray_rate_limit(text,text,integer,integer)','EXECUTE'),'rate limiter is service-only');
 select extensions.ok(not has_function_privilege('authenticated','public.create_sellertray_order_payment_for_method(uuid,uuid,uuid,text,text,text,timestamptz)','EXECUTE'),'payment creation RPC is service-only');
+
+select extensions.ok(not has_function_privilege('anon','public.sync_sellertray_order_total_from_items()','EXECUTE'),'anonymous role cannot directly execute order-total trigger function');
+select extensions.ok(not has_function_privilege('authenticated','public.sync_sellertray_order_total_from_items()','EXECUTE'),'authenticated role cannot directly execute order-total trigger function');
+select extensions.ok(not has_function_privilege('service_role','public.sync_sellertray_order_total_from_items()','EXECUTE'),'service role cannot directly execute trigger-only order-total function');
 
 select extensions.ok(has_function_privilege('service_role','public.create_sellertray_manual_order_atomic(uuid,text,text,text,jsonb)','EXECUTE'),'service role can create manual atomic orders');
 select extensions.ok(has_function_privilege('service_role','public.create_sellertray_whatsapp_order_atomic(uuid,uuid,uuid,text,numeric,text,text,text[],text,jsonb)','EXECUTE'),'service role can create WhatsApp atomic orders');

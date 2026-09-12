@@ -203,7 +203,7 @@ for (const profileName of ['qa', 'preview', 'production']) {
   for (const key of Object.keys(env)) {
     requireValue(key.startsWith('EXPO_PUBLIC_'), 'EAS '+profileName+' env may contain public client variables only: '+key);
     requireValue(
-      !/(SERVICE_ROLE|SECRET|OPENAI|PAYSTACK|WHATSAPP|WORKER_TOKEN|ORDER_PARSER_TOKEN)/i.test(key),
+      !/(SERVICE_ROLE|SECRET|OPENAI|PAYSTACK|WHATSAPP|META_ACCESS_TOKEN|META_WEBHOOK_VERIFY_TOKEN|WORKER_TOKEN|ORDER_PARSER_TOKEN)/i.test(key),
       'Forbidden server/provider secret variable in EAS '+profileName+': '+key,
     );
   }
@@ -392,6 +392,9 @@ const aiCachedTokenMigration = read(join(repoRoot, 'supabase/migrations/20260911
 const aiTokenIntegrityMigration = read(join(repoRoot, 'supabase/migrations/20260911000900_ai_parser_token_integrity.sql'));
 const aiContextBudgetMigration = read(join(repoRoot, 'supabase/migrations/20260911001000_ai_parser_context_budget.sql'));
 const whatsappWebhookFunction = read(join(repoRoot, 'supabase/functions/whatsapp-webhook/index.ts'));
+const whatsappConnectionFunction = read(join(repoRoot, 'supabase/functions/whatsapp-connection/index.ts'));
+const whatsappConnectionMigration = read(join(repoRoot, 'supabase/migrations/20260912235000_whatsapp_multi_merchant_connections.sql'));
+const catalogueFromChatFunction = read(join(repoRoot, 'supabase/functions/catalogue-from-chat/index.ts'));
 
 const whatsappTemplateMigration = read(join(repoRoot, 'supabase/migrations/20260912171500_whatsapp_template_dispatch.sql'));
 requireValue(
@@ -406,6 +409,44 @@ requireValue(
     atomicOrderMigration.includes("create or replace function public.create_sellertray_whatsapp_order_atomic") &&
     atomicOrderMigration.includes("to service_role"),
   'Manual and WhatsApp order aggregates must remain transactional and service-role-only',
+);
+requireValue(
+  whatsappWebhookFunction.includes('if (enrichedItems.length === 0)') &&
+    whatsappWebhookFunction.includes("event: 'whatsapp_message_not_an_order'"),
+  'Ordinary WhatsApp conversations must not create zero-item SellerTray orders',
+);
+requireValue(
+  whatsappConnectionMigration.includes('phone_number_id text unique') &&
+    whatsappConnectionMigration.includes('sellertray_private.whatsapp_connection_credentials') &&
+    whatsappConnectionMigration.includes('business_integration_system_user') &&
+    whatsappConnectionMigration.includes('get_sellertray_whatsapp_runtime_credential_by_phone') &&
+    whatsappConnectionMigration.includes('get_sellertray_whatsapp_runtime_credential_by_tenant') &&
+    whatsappConnectionMigration.includes('from public,anon,authenticated'),
+  'Multi-merchant WhatsApp identity and credentials must remain unique and server-only',
+);
+requireValue(
+  whatsappConnectionFunction.includes("META_APP_SECRET") &&
+    whatsappConnectionFunction.includes('/oauth/access_token') &&
+    whatsappConnectionFunction.includes('/debug_token') &&
+    whatsappConnectionFunction.includes('different application') &&
+    whatsappConnectionFunction.includes('whatsapp_business_management') &&
+    whatsappConnectionFunction.includes('whatsapp_business_messaging') &&
+    whatsappConnectionFunction.includes('/phone_numbers') &&
+    whatsappConnectionFunction.includes('/subscribed_apps') &&
+    whatsappConnectionFunction.includes('SELLERTRAY_WHATSAPP_ENCRYPTION_KEY') &&
+    whatsappConnectionFunction.includes('AES-GCM') &&
+    whatsappConnectionFunction.includes("p_credential_mode: 'business_integration_system_user'") &&
+    !whatsappConnectionFunction.includes('return reply({ accessToken'),
+  'Embedded Signup must exchange, verify, subscribe and encrypt Meta credentials only on the server',
+);
+requireValue(
+  whatsappNotificationWorker.includes('get_sellertray_whatsapp_runtime_credential_by_phone') &&
+    whatsappNotificationWorker.includes('resolveMetaAccessTokenByPhone') &&
+    whatsappNotificationWorker.includes('decryptCredential') &&
+    catalogueFromChatFunction.includes('get_sellertray_whatsapp_runtime_credential_by_tenant') &&
+    catalogueFromChatFunction.includes('resolveMetaAccessTokenByTenant') &&
+    catalogueFromChatFunction.includes('decryptCredential'),
+  'WhatsApp send/media runtimes must resolve merchant credentials server-side by phone or tenant',
 );
 requireValue(
   whatsappNotificationWorker.includes("type: 'template'") &&
@@ -475,6 +516,17 @@ requireValue(
   read(join(mobileRoot, 'src/data/platformAdminRepository.ts')).includes("action: 'ai_parser_readiness'") &&
     read(join(mobileRoot, 'src/components/PlatformAdminView.tsx')).includes('AI production readiness'),
   'ProcessEdge admin console must surface the automated AI production-readiness evidence',
+);
+
+requireValue(
+  platformAdminFunction.includes("'ai_parser_probe'") &&
+    platformAdminFunction.includes('SellerTray Test Rice') &&
+    platformAdminFunction.includes('SellerTray Test Milk') &&
+    platformAdminFunction.includes("Deno.env.get('ORDER_PARSER_TOKEN')?.trim()") &&
+    platformAdminFunction.includes("overview.actorRole !== 'admin'") &&
+    platformAdminFunction.includes('ProcessEdge platform Admin role required for AI smoke test') &&
+    read(join(mobileRoot, 'src/components/PlatformAdminView.tsx')).includes('Run AI smoke test'),
+  'ProcessEdge AI smoke test must remain MFA-gated, synthetic-data-only and callable from the admin console',
 );
 
 requireValue(
@@ -897,6 +949,8 @@ const forbiddenSecretPatterns = [
   /FLUTTERWAVE_SECRET_HASH/g,
   /SELLERTRAY_PAYMENT_ENCRYPTION_KEY/g,
   /WHATSAPP_ACCESS_TOKEN/g,
+  /META_ACCESS_TOKEN/g,
+  /META_WEBHOOK_VERIFY_TOKEN/g,
   /ORDER_PARSER_TOKEN/g,
   /WORKER_TOKEN/g,
   /sb_secret_[A-Za-z0-9_-]+/g,

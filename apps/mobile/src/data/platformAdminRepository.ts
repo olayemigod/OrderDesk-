@@ -89,6 +89,30 @@ export type PlatformAiParserReadiness = {
   generatedAt: string;
 };
 
+export type PlatformAiParserProbe = {
+  ok: boolean;
+  status: 'passed' | 'not_configured' | 'parser_token_mismatch' | 'unexpected_output' | 'provider_error' | 'network_error';
+  httpStatus: number | null;
+  durationMs: number | null;
+  configuredModel: string | null;
+  structuredOutputValid: boolean;
+  observed: {
+    riceQuantity: number | null;
+    milkQuantity: number | null;
+    confidence: number | null;
+  };
+  telemetry: {
+    outcome: string | null;
+    model: string | null;
+    providerStatus: number | null;
+    inputTokens: number | null;
+    cachedInputTokens: number | null;
+    outputTokens: number | null;
+    reasoningTokens: number | null;
+    totalTokens: number | null;
+  };
+};
+
 export type PlatformAdminAuditEvent = {
   id: string;
   tenantId: string | null;
@@ -130,6 +154,17 @@ export async function loadPlatformAiParserReadiness(): Promise<PlatformAiParserR
   return normalizeAiParserReadiness(raw);
 }
 
+export async function runPlatformAiParserProbe(): Promise<PlatformAiParserProbe> {
+  const { data, error } = await supabase.functions.invoke('platform-admin', {
+    body: { action: 'ai_parser_probe' },
+  });
+
+  if (error) throw new Error(functionError(error, 'Unable to run AI parser smoke test.'));
+  const raw = isRecord(data) && isRecord(data.probe) ? data.probe : null;
+  if (!raw) throw new Error('AI parser smoke test returned no result.');
+  return normalizeAiParserProbe(raw);
+}
+
 export async function mutatePlatformTenant(
   tenantId: string,
   action: PlatformAdminMutationAction,
@@ -166,6 +201,46 @@ export async function loadPlatformAdminAudit(
     createdAt: stringValue(event.createdAt),
     actorEmail: stringValue(event.actorEmail),
   }));
+}
+
+function normalizeAiParserProbe(raw: Record<string, unknown>): PlatformAiParserProbe {
+  const observed = isRecord(raw.observed) ? raw.observed : {};
+  const telemetry = isRecord(raw.telemetry) ? raw.telemetry : {};
+  const supportedStatuses: PlatformAiParserProbe['status'][] = [
+    'passed',
+    'not_configured',
+    'parser_token_mismatch',
+    'unexpected_output',
+    'provider_error',
+    'network_error',
+  ];
+  const status = supportedStatuses.includes(raw.status as PlatformAiParserProbe['status'])
+    ? raw.status as PlatformAiParserProbe['status']
+    : 'provider_error';
+
+  return {
+    ok: raw.ok === true,
+    status,
+    httpStatus: optionalNumber(raw.httpStatus),
+    durationMs: optionalNumber(raw.durationMs),
+    configuredModel: optionalString(raw.configuredModel),
+    structuredOutputValid: raw.structuredOutputValid === true,
+    observed: {
+      riceQuantity: optionalNumber(observed.riceQuantity),
+      milkQuantity: optionalNumber(observed.milkQuantity),
+      confidence: optionalNumber(observed.confidence),
+    },
+    telemetry: {
+      outcome: optionalString(telemetry.outcome),
+      model: optionalString(telemetry.model),
+      providerStatus: optionalNumber(telemetry.providerStatus),
+      inputTokens: optionalNumber(telemetry.inputTokens),
+      cachedInputTokens: optionalNumber(telemetry.cachedInputTokens),
+      outputTokens: optionalNumber(telemetry.outputTokens),
+      reasoningTokens: optionalNumber(telemetry.reasoningTokens),
+      totalTokens: optionalNumber(telemetry.totalTokens),
+    },
+  };
 }
 
 function normalizeAiParserReadiness(raw: Record<string, unknown>): PlatformAiParserReadiness {
