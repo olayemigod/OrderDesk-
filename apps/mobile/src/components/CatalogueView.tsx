@@ -15,8 +15,10 @@ import {
   type WhatsAppCatalogueStatus,
 } from '../data/whatsappCatalogueRepository';
 import { useCatalogue } from '../hooks/useCatalogue';
+import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
 export function CatalogueView({ business }: { business: MerchantBusiness }) {
+  const appearance = useSellerTrayAppearance();
   const { items, loading, error, refresh, createItem, editItem, setActive } = useCatalogue(business.id);
   const [editing, setEditing] = useState<CatalogueItem | 'new' | null>(null);
   const [query, setQuery] = useState('');
@@ -130,9 +132,9 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
     <View style={styles.wrap}>
       <View style={styles.headingRow}>
         <View style={styles.headingCopy}>
-          <Text style={styles.eyebrow}>CATALOGUE & PRICING</Text>
-          <Text style={styles.title}>Products customers can order</Text>
-          <Text style={styles.subtitle}>
+          <Text style={[styles.eyebrow, appearance.dark && darkStyles.bodyText]}>CATALOGUE & PRICING</Text>
+          <Text style={[styles.title, appearance.dark && darkStyles.titleText, appearance.textSize === 'large' && styles.titleLarge]}>Products customers can order</Text>
+          <Text style={[styles.subtitle, appearance.dark && darkStyles.bodyText]}>
             Keep this lightweight: Add clear product details and the words customers commonly use on WhatsApp.
           </Text>
         </View>
@@ -150,7 +152,7 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
       </View>
 
       <View style={styles.searchRow}>
-        <View style={styles.searchBox}>
+        <View style={[styles.searchBox, appearance.dark && darkStyles.input]}>
           <Ionicons name="search-outline" size={19} color="#667085" />
           <TextInput
             value={query}
@@ -158,12 +160,12 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
             placeholder="Search products, categories or SKU"
             placeholderTextColor="#98A2B3"
             autoCorrect={false}
-            style={styles.searchInputEmbedded}
+            style={[styles.searchInputEmbedded, appearance.dark && darkStyles.inputText]}
           />
         </View>
         <Pressable
           onPress={() => setShowFilters((value) => !value)}
-          style={[styles.filterIconButton, showFilters && styles.filterIconButtonActive]}
+          style={[styles.filterIconButton, appearance.dark && darkStyles.outlineButton, showFilters && styles.filterIconButtonActive]}
           accessibilityLabel="Catalogue filters"
         >
           <Ionicons name="options-outline" size={21} color={showFilters ? '#FFFFFF' : '#102A43'} />
@@ -171,8 +173,8 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
       </View>
 
       {showFilters ? (
-        <View style={styles.filterPanel}>
-          <Text style={styles.filterTitle}>Filter by category</Text>
+        <View style={[styles.filterPanel, appearance.dark && darkStyles.card]}>
+          <Text style={[styles.filterTitle, appearance.dark && darkStyles.titleText]}>Filter by category</Text>
           <View style={styles.categoryChips}>
             <CategoryChip label="All" active={categoryFilter === 'all'} onPress={() => setCategoryFilter('all')} />
             {categories.map((category) => (
@@ -187,13 +189,13 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
         </View>
       ) : null}
 
-      <View style={styles.whatsappSummaryCard}>
+      <View style={[styles.whatsappSummaryCard, appearance.dark && darkStyles.mintCard]}>
         <View style={styles.whatsappSummaryCopy}>
           <Text style={styles.whatsappEyebrow}>WHATSAPP CATALOGUE</Text>
-          <Text style={styles.whatsappSummaryTitle}>
+          <Text style={[styles.whatsappSummaryTitle, appearance.dark && darkStyles.titleText]}>
             {whatsappStatus?.settings ? 'Catalogue connection configured' : 'Optional catalogue connection'}
           </Text>
-          <Text style={styles.whatsappSummaryText}>
+          <Text style={[styles.whatsappSummaryText, appearance.dark && darkStyles.bodyText]}>
             Keep product management simple. Open mapping tools only when connecting SellerTray products to a Meta catalogue.
           </Text>
         </View>
@@ -203,14 +205,14 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
       </View>
 
       {showWhatsAppTools ? (
-      <View style={styles.whatsappCard}>
+      <View style={[styles.whatsappCard, appearance.dark && darkStyles.card]}>
         <View style={styles.whatsappHeading}>
           <View style={styles.whatsappHeadingCopy}>
             <Text style={styles.whatsappEyebrow}>WHATSAPP CATALOGUE</Text>
-            <Text style={styles.whatsappTitle}>
+            <Text style={[styles.whatsappTitle, appearance.dark && darkStyles.titleText]}>
               {whatsappStatus?.settings ? 'Catalogue mapping active' : 'Connect your product catalogue'}
             </Text>
-            <Text style={styles.whatsappText}>
+            <Text style={[styles.whatsappText, appearance.dark && darkStyles.bodyText]}>
               Map SellerTray products to WhatsApp Business product retailer IDs. Native WhatsApp catalogue orders then arrive as structured orders without AI parsing.
             </Text>
           </View>
@@ -224,7 +226,7 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
                 {whatsappStatus.settings.is_enabled ? 'Enabled' : 'Disabled'}
               </Text>
             </View>
-            <Text style={styles.whatsappMeta}>
+            <Text style={[styles.whatsappMeta, appearance.dark && darkStyles.bodyText]}>
               {whatsappStatus.settings.catalog_name || 'WhatsApp catalogue'} · ID {whatsappStatus.settings.catalog_id}
             </Text>
           </View>
@@ -238,7 +240,7 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
                 onChangeText={setCatalogIdDraft}
                 autoCapitalize="none"
                 placeholder="e.g. 123456789012345"
-                style={styles.input}
+                style={[styles.input, appearance.dark && darkStyles.input, appearance.dark && darkStyles.inputText]}
               />
             </Field>
             <Field label="Catalogue name" hint="Optional merchant-friendly label.">
@@ -246,7 +248,7 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
                 value={catalogNameDraft}
                 onChangeText={setCatalogNameDraft}
                 placeholder="e.g. Main WhatsApp Catalogue"
-                style={styles.input}
+                style={[styles.input, appearance.dark && darkStyles.input, appearance.dark && darkStyles.inputText]}
               />
             </Field>
             <Pressable disabled={catalogSaving || whatsappLoading} onPress={() => void saveWhatsAppCatalogue()} style={[styles.whatsappSaveButton, (catalogSaving || whatsappLoading) && styles.disabled]}>
@@ -257,9 +259,9 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
           <Text style={styles.whatsappReadOnly}>Only the business Owner or Manager can change WhatsApp catalogue mappings.</Text>
         )}
 
-        <View style={styles.importNotice}>
-          <Text style={styles.importNoticeTitle}>Automatic Meta catalogue import is not active yet</Text>
-          <Text style={styles.importNoticeText}>
+        <View style={[styles.importNotice, appearance.dark && darkStyles.infoCard]}>
+          <Text style={[styles.importNoticeTitle, appearance.dark && darkStyles.titleText]}>Automatic Meta catalogue import is not active yet</Text>
+          <Text style={[styles.importNoticeText, appearance.dark && darkStyles.bodyText]}>
             SellerTray will not read or sync a merchant's Meta catalogue using a shared platform credential. Automatic import will only be enabled after tenant-specific Meta asset authorization is verified.
           </Text>
         </View>
@@ -277,7 +279,7 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
       />
 
       {error ? (
-        <View style={styles.errorCard}>
+        <View style={[styles.errorCard, appearance.dark && darkStyles.errorCard]}>
           <Text style={styles.errorText}>{error}</Text>
           <Pressable onPress={() => void refresh()}><Text style={styles.retryText}>Retry</Text></Pressable>
         </View>
@@ -300,13 +302,13 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
       ) : null}
 
       {loading && items.length === 0 ? (
-        <View style={styles.loadingCard}><ActivityIndicator /><Text style={styles.muted}>Loading catalogue…</Text></View>
+        <View style={[styles.loadingCard, appearance.dark && darkStyles.card]}><ActivityIndicator /><Text style={[styles.muted, appearance.dark && darkStyles.bodyText]}>Loading catalogue…</Text></View>
       ) : null}
 
       {!loading && items.length === 0 && !editing ? (
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>Your catalogue is empty</Text>
-          <Text style={styles.emptyText}>
+        <View style={[styles.emptyCard, appearance.dark && darkStyles.card]}>
+          <Text style={[styles.emptyTitle, appearance.dark && darkStyles.titleText]}>Your catalogue is empty</Text>
+          <Text style={[styles.emptyText, appearance.dark && darkStyles.bodyText]}>
             Add your first priced product. SellerTray will then guide you to WhatsApp connection.
           </Text>
           {canEdit ? (
@@ -319,7 +321,7 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
 
       <View style={styles.list}>
         {visibleItems.map((item) => (
-          <View key={item.id} style={[styles.itemCard, !item.isActive && styles.itemInactive]}>
+          <View key={item.id} style={[styles.itemCard, appearance.dark && darkStyles.card, !item.isActive && styles.itemInactive]}>
             <View style={styles.itemTop}>
               {item.imageUrl ? (
                 <Image source={{ uri: item.imageUrl }} style={styles.itemImage} resizeMode="cover" />
@@ -329,21 +331,21 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
                 </View>
               )}
               <View style={styles.itemIdentity}>
-                <Text style={styles.itemName}>{item.name}</Text>
-                <Text style={styles.itemMeta}>
+                <Text style={[styles.itemName, appearance.dark && darkStyles.titleText]}>{item.name}</Text>
+                <Text style={[styles.itemMeta, appearance.dark && darkStyles.bodyText]}>
                   {[item.category, item.sku ? `SKU ${item.sku}` : null].filter(Boolean).join(' · ') || 'Uncategorised'}
                 </Text>
               </View>
-              <Text style={styles.price}>{item.price === null ? 'No price' : money(item.price, business.currency)}</Text>
+              <Text style={[styles.price, appearance.dark && darkStyles.titleText]}>{item.price === null ? 'No price' : money(item.price, business.currency)}</Text>
             </View>
 
-            <Text style={styles.aliasLabel}>CUSTOMER WORDS</Text>
-            <Text style={styles.aliases}>{item.aliases.length ? item.aliases.join(', ') : 'No aliases yet'}</Text>
+            <Text style={[styles.aliasLabel, appearance.dark && darkStyles.mutedText]}>CUSTOMER WORDS</Text>
+            <Text style={[styles.aliases, appearance.dark && darkStyles.bodyText]}>{item.aliases.length ? item.aliases.join(', ') : 'No aliases yet'}</Text>
 
             <View style={styles.whatsappItemRow}>
               <View style={styles.whatsappItemCopy}>
-                <Text style={styles.aliasLabel}>WHATSAPP PRODUCT</Text>
-                <Text style={styles.aliases}>
+                <Text style={[styles.aliasLabel, appearance.dark && darkStyles.mutedText]}>WHATSAPP PRODUCT</Text>
+                <Text style={[styles.aliases, appearance.dark && darkStyles.bodyText]}>
                   {item.whatsappProductRetailerId
                     ? `Mapped · ${item.whatsappProductRetailerId}`
                     : whatsappStatus?.settings
@@ -370,7 +372,7 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
             </View>
 
             {mappingItemId === item.id ? (
-              <View style={styles.mappingEditor}>
+              <View style={[styles.mappingEditor, appearance.dark && darkStyles.subtleCard]}>
                 <Text style={styles.fieldLabel}>Product retailer ID</Text>
                 <Text style={styles.help}>
                   Enter the exact product_retailer_id used for this item in the connected WhatsApp Business catalogue.
@@ -380,7 +382,7 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
                   onChangeText={setRetailerIdDraft}
                   autoCapitalize="none"
                   placeholder="e.g. SEM-5KG"
-                  style={styles.input}
+                  style={[styles.input, appearance.dark && darkStyles.input, appearance.dark && darkStyles.inputText]}
                 />
                 <View style={styles.mappingActions}>
                   <Pressable
@@ -425,21 +427,23 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
 }
 
 function CatalogueStat({ icon, label, value, positive = false }: { icon: string; label: string; value: number; positive?: boolean }) {
+  const appearance = useSellerTrayAppearance();
   return (
-    <View style={styles.catalogueSummaryCard}>
+    <View style={[styles.catalogueSummaryCard, appearance.dark && darkStyles.card]}>
       <View style={[styles.catalogueStatIcon, positive && styles.catalogueStatIconPositive]}>
         <Ionicons name={icon as never} size={20} color={positive ? '#079455' : '#102A43'} />
       </View>
-      <Text style={styles.catalogueSummaryValue}>{value}</Text>
-      <Text style={styles.catalogueSummaryLabel}>{label}</Text>
+      <Text style={[styles.catalogueSummaryValue, appearance.dark && darkStyles.titleText]}>{value}</Text>
+      <Text style={[styles.catalogueSummaryLabel, appearance.dark && darkStyles.bodyText]}>{label}</Text>
     </View>
   );
 }
 
 function CategoryChip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  const appearance = useSellerTrayAppearance();
   return (
-    <Pressable onPress={onPress} style={[styles.categoryChip, active && styles.categoryChipActive]}>
-      <Text style={[styles.categoryChipText, active && styles.categoryChipTextActive]}>{label}</Text>
+    <Pressable onPress={onPress} style={[styles.categoryChip, appearance.dark && darkStyles.outlineButton, active && styles.categoryChipActive]}>
+      <Text style={[styles.categoryChipText, appearance.dark && darkStyles.bodyText, active && styles.categoryChipTextActive]}>{label}</Text>
     </Pressable>
   );
 }
@@ -459,6 +463,7 @@ function CatalogueEditor({
   onSave: (input: CatalogueItemInput) => Promise<void>;
   onCancel: () => void;
 }) {
+  const appearance = useSellerTrayAppearance();
   const [name, setName] = useState(item?.name ?? '');
   const [sku, setSku] = useState(item?.sku ?? '');
   const [category, setCategory] = useState(item?.category ?? '');
@@ -534,10 +539,10 @@ function CatalogueEditor({
   }
 
   return (
-    <View style={styles.editorCard}>
-      <Text style={styles.editorTitle}>{item ? 'Edit product' : 'Add product'}</Text>
+    <View style={[styles.editorCard, appearance.dark && darkStyles.card]}>
+      <Text style={[styles.editorTitle, appearance.dark && darkStyles.titleText]}>{item ? 'Edit product' : 'Add product'}</Text>
       <Field label="Product name" required hint="Use the name customers and staff will easily recognise.">
-        <TextInput value={name} onChangeText={setName} placeholder="e.g. Golden Penny Semovita 5kg" style={styles.input} />
+        <TextInput value={name} onChangeText={setName} placeholder="e.g. Golden Penny Semovita 5kg" style={[styles.input, appearance.dark && darkStyles.input, appearance.dark && darkStyles.inputText]} />
       </Field>
 
       <Field label="Selling price" required hint={`Amount charged to the customer in ${currency}.`}>
@@ -546,7 +551,7 @@ function CatalogueEditor({
           onChangeText={setPrice}
           keyboardType="decimal-pad"
           placeholder="e.g. 12500"
-          style={styles.input}
+          style={[styles.input, appearance.dark && darkStyles.input, appearance.dark && darkStyles.inputText]}
         />
       </Field>
 
@@ -555,13 +560,13 @@ function CatalogueEditor({
           onPress={() => setShowCategoryPicker((value) => !value)}
           style={styles.categorySelect}
         >
-          <Text style={[styles.categorySelectText, !category && styles.categorySelectPlaceholder]}>
+          <Text style={[styles.categorySelectText, appearance.dark && darkStyles.inputText, !category && styles.categorySelectPlaceholder]}>
             {category || 'Choose category'}
           </Text>
           <Ionicons name={showCategoryPicker ? 'chevron-up' : 'chevron-down'} size={19} color="#667085" />
         </Pressable>
         {showCategoryPicker ? (
-          <View style={styles.categoryPicker}>
+          <View style={[styles.categoryPicker, appearance.dark && darkStyles.card]}>
             {catalogueCategoryOptions(categories).map((option) => (
               <Pressable
                 key={option}
@@ -570,9 +575,9 @@ function CatalogueEditor({
                   setCustomCategory('');
                   setShowCategoryPicker(false);
                 }}
-                style={[styles.categoryOption, category === option && styles.categoryOptionActive]}
+                style={[styles.categoryOption, appearance.dark && darkStyles.rowBorder, category === option && styles.categoryOptionActive]}
               >
-                <Text style={[styles.categoryOptionText, category === option && styles.categoryOptionTextActive]}>{option}</Text>
+                <Text style={[styles.categoryOptionText, appearance.dark && darkStyles.bodyText, category === option && styles.categoryOptionTextActive]}>{option}</Text>
                 {category === option ? <Ionicons name="checkmark" size={18} color="#079455" /> : null}
               </Pressable>
             ))}
@@ -604,7 +609,7 @@ function CatalogueEditor({
       </Field>
 
       <Field label="SKU / product code" hint="Optional internal product code.">
-        <TextInput value={sku} onChangeText={setSku} placeholder="e.g. SEM-5KG" style={styles.input} />
+        <TextInput value={sku} onChangeText={setSku} placeholder="e.g. SEM-5KG" style={[styles.input, appearance.dark && darkStyles.input, appearance.dark && darkStyles.inputText]} />
       </Field>
 
       <Field label="Customer words / aliases" hint="Optional. Add other names customers may type on WhatsApp, separated by commas.">
@@ -612,7 +617,7 @@ function CatalogueEditor({
           value={aliases}
           onChangeText={setAliases}
           placeholder="e.g. semo 5kg, big semovita, semo bag"
-          style={styles.input}
+          style={[styles.input, appearance.dark && darkStyles.input, appearance.dark && darkStyles.inputText]}
         />
       </Field>
 
