@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
   Pressable,
@@ -15,6 +16,7 @@ import type {
   PaymentMethodType,
 } from '../data/paymentMethodsRepository';
 import { usePaymentMethods } from '../hooks/usePaymentMethods';
+import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
 type Props = {
   business: MerchantBusiness;
@@ -23,6 +25,7 @@ type Props = {
 type GatewayProvider = 'paystack' | 'flutterwave';
 
 export function PaymentMethodsSettings({ business }: Props) {
+  const appearance = useSellerTrayAppearance();
   const payment = usePaymentMethods(business.id);
   const [showBankForm, setShowBankForm] = useState(false);
   const [bankName, setBankName] = useState('');
@@ -161,54 +164,65 @@ export function PaymentMethodsSettings({ business }: Props) {
 
   if (payment.loading && payment.methods.length === 0) {
     return (
-      <View style={styles.loadingCard}>
+      <View style={[styles.loadingCard, appearance.dark && darkStyles.card]}>
         <ActivityIndicator />
-        <Text style={styles.muted}>Loading customer payment methods…</Text>
+        <Text style={[styles.muted, appearance.dark && darkStyles.bodyText]}>Loading customer payment methods…</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, appearance.dark && darkStyles.surface]}>
       <View>
-        <Text style={styles.eyebrow}>CUSTOMER PAYMENTS</Text>
-        <Text style={styles.title}>How customers can pay</Text>
-        <Text style={styles.subtitle}>
+        <Text style={[styles.eyebrow, appearance.dark && darkStyles.bodyText]}>CUSTOMER PAYMENTS</Text>
+        <Text style={[styles.title, appearance.dark && darkStyles.titleText, appearance.textSize === 'large' && styles.titleLarge]}>How customers can pay</Text>
+        <Text style={[styles.subtitle, appearance.dark && darkStyles.bodyText]}>
           SellerTray keeps order, payment and fulfilment states separate. A financial receipt is issued only after payment is confirmed.
         </Text>
       </View>
 
-      <View style={styles.paymentSummaryRow}>
-        <View style={styles.paymentSummaryCard}>
-          <Text style={styles.paymentSummaryValue}>{payment.methods.filter((method) => method.isEnabled).length}</Text>
-          <Text style={styles.paymentSummaryLabel}>ACTIVE METHODS</Text>
+      <Pressable
+        onPress={() => setView('transactions')}
+        style={({ pressed }) => [styles.paymentHero, pressed && styles.pressed]}
+      >
+        <View style={styles.paymentHeroIcon}>
+          <Ionicons name="card-outline" size={25} color="#FFFFFF" />
         </View>
-        <View style={styles.paymentSummaryCard}>
-          <Text numberOfLines={1} style={styles.paymentSummaryValueSmall}>
-            {payment.methods.find((method) => method.isDefault)?.displayName ?? 'None'}
+        <View style={styles.flex}>
+          <Text style={styles.paymentHeroEyebrow}>PAYMENT CONTROL</Text>
+          <Text style={styles.paymentHeroValue}>{payment.methods.filter((method) => method.isEnabled).length} active methods</Text>
+          <Text style={styles.paymentHeroMeta}>
+            Default: {payment.methods.find((method) => method.isDefault)?.displayName ?? 'None'}
           </Text>
-          <Text style={styles.paymentSummaryLabel}>DEFAULT</Text>
         </View>
+        <Ionicons name="chevron-forward" size={22} color="#FFFFFF" />
+      </Pressable>
+
+      <View style={styles.paymentSummaryRow}>
+        <PaymentSummary icon="checkmark-circle-outline" label="Active methods" value={String(payment.methods.filter((method) => method.isEnabled).length)} />
+        <PaymentSummary icon="star-outline" label="Default" value={payment.methods.find((method) => method.isDefault)?.displayName ?? 'None'} compact />
       </View>
 
-      <View style={styles.segmentedControl}>
-        <Pressable onPress={() => setView('transactions')} style={[styles.segmentButton, view === 'transactions' && styles.segmentButtonActive]}>
-          <Text style={[styles.segmentText, view === 'transactions' && styles.segmentTextActive]}>Transactions</Text>
+      <View style={[styles.segmentedControl, appearance.dark && darkStyles.subtleCard]}>
+        <Pressable onPress={() => setView('transactions')} style={[styles.segmentButton, view === 'transactions' && styles.segmentButtonActive, view === 'transactions' && appearance.dark && darkStyles.card]}>
+          <Ionicons name="swap-horizontal-outline" size={18} color={view === 'transactions' ? '#079455' : appearance.dark ? '#D0D5DD' : '#667085'} />
+          <Text style={[styles.segmentText, appearance.dark && darkStyles.bodyText, view === 'transactions' && styles.segmentTextActive]}>Transactions</Text>
         </Pressable>
-        <Pressable onPress={() => setView('methods')} style={[styles.segmentButton, view === 'methods' && styles.segmentButtonActive]}>
-          <Text style={[styles.segmentText, view === 'methods' && styles.segmentTextActive]}>Payment methods</Text>
+        <Pressable onPress={() => setView('methods')} style={[styles.segmentButton, view === 'methods' && styles.segmentButtonActive, view === 'methods' && appearance.dark && darkStyles.card]}>
+          <Ionicons name="wallet-outline" size={18} color={view === 'methods' ? '#079455' : appearance.dark ? '#D0D5DD' : '#667085'} />
+          <Text style={[styles.segmentText, appearance.dark && darkStyles.bodyText, view === 'methods' && styles.segmentTextActive]}>Payment methods</Text>
         </Pressable>
       </View>
 
       {business.role === 'staff' ? (
-        <View style={styles.readOnlyCard}>
-          <Text style={styles.readOnlyTitle}>View only</Text>
-          <Text style={styles.readOnlyText}>Payment method configuration is view-only for Staff. Staff can still review and verify existing payments from the reconciliation inbox where applicable.</Text>
+        <View style={[styles.readOnlyCard, appearance.dark && darkStyles.subtleCard]}>
+          <Text style={[styles.readOnlyTitle, appearance.dark && darkStyles.titleText]}>View only</Text>
+          <Text style={[styles.readOnlyText, appearance.dark && darkStyles.bodyText]}>Payment method configuration is view-only for Staff. Staff can still review and verify existing payments from the reconciliation inbox where applicable.</Text>
         </View>
       ) : null}
 
       {payment.error ? (
-        <View style={styles.errorCard}>
+        <View style={[styles.errorCard, appearance.dark && darkStyles.errorCard]}>
           <Text style={styles.errorTitle}>Payment settings problem</Text>
           <Text style={styles.errorText}>{payment.error}</Text>
           <Pressable onPress={() => void payment.refresh()}>
@@ -218,16 +232,16 @@ export function PaymentMethodsSettings({ business }: Props) {
       ) : null}
 
       {success ? (
-        <View style={styles.successCard}>
+        <View style={[styles.successCard, appearance.dark && darkStyles.mintCard]}>
           <Text style={styles.successText}>{success}</Text>
         </View>
       ) : null}
 
       {view === 'transactions' ? (
         <View style={styles.viewStack}>
-          <View style={styles.infoCard}>
+          <View style={[styles.infoCard, appearance.dark && darkStyles.mintCard]}>
             <Text style={styles.infoTitle}>Payment activity & reconciliation</Text>
-            <Text style={styles.infoText}>
+            <Text style={[styles.infoText, appearance.dark && darkStyles.bodyText]}>
               Review customer payment claims, confirmations and exceptions without changing how customers are allowed to pay.
             </Text>
           </View>
@@ -346,6 +360,21 @@ export function PaymentMethodsSettings({ business }: Props) {
       </Section>
         </View>
       )}
+    </View>
+  );
+}
+
+function PaymentSummary({ icon, label, value, compact = false }: { icon: string; label: string; value: string; compact?: boolean }) {
+  const appearance = useSellerTrayAppearance();
+  return (
+    <View style={[styles.paymentSummaryCard, appearance.dark && darkStyles.card]}>
+      <View style={[styles.paymentSummaryIcon, appearance.dark && darkStyles.mintCard]}>
+        <Ionicons name={icon as never} size={19} color="#079455" />
+      </View>
+      <Text numberOfLines={1} style={[compact ? styles.paymentSummaryValueSmall : styles.paymentSummaryValue, appearance.dark && darkStyles.titleText]}>
+        {value}
+      </Text>
+      <Text style={[styles.paymentSummaryLabel, appearance.dark && darkStyles.bodyText]}>{label}</Text>
     </View>
   );
 }
@@ -610,20 +639,27 @@ function Pill({ label, positive }: { label: string; positive: boolean }) {
 const styles = StyleSheet.create({
   wrap: { gap: 16 },
   flex: { flex: 1 },
-  eyebrow: { color: '#667085', fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
-  title: { color: '#102A43', fontSize: 25, fontWeight: '900', marginTop: 3 },
-  subtitle: { color: '#667085', fontSize: 13, lineHeight: 19, marginTop: 5 },
+  eyebrow: { color: '#667085', fontSize: 11, fontWeight: '900', letterSpacing: 1.2 },
+  title: { color: '#102A43', fontSize: 28, lineHeight: 34, fontWeight: '900', marginTop: 3 },
+  titleLarge: { fontSize: 31, lineHeight: 38 },
+  subtitle: { color: '#667085', fontSize: 14, lineHeight: 21, marginTop: 5 },
   muted: { color: '#667085', fontSize: 12 },
   loadingCard: { minHeight: 120, alignItems: 'center', justifyContent: 'center', gap: 10 },
+  paymentHero: { minHeight: 104, borderRadius: 18, backgroundColor: '#12B76A', padding: 15, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  paymentHeroIcon: { width: 48, height: 48, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
+  paymentHeroEyebrow: { color: '#E8FFF3', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  paymentHeroValue: { color: '#FFFFFF', fontSize: 20, fontWeight: '900', marginTop: 3 },
+  paymentHeroMeta: { color: '#E8FFF3', fontSize: 12, marginTop: 3 },
   paymentSummaryRow: { flexDirection: 'row', gap: 8 },
-  paymentSummaryCard: { flex: 1, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 14, padding: 12 },
+  paymentSummaryCard: { flex: 1, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 14, padding: 12, gap: 3 },
+  paymentSummaryIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: '#ECFDF3', alignItems: 'center', justifyContent: 'center' },
   paymentSummaryValue: { color: '#102A43', fontSize: 21, fontWeight: '900' },
   paymentSummaryValueSmall: { color: '#102A43', fontSize: 13, fontWeight: '900', marginTop: 4 },
-  paymentSummaryLabel: { color: '#667085', fontSize: 8, fontWeight: '900', letterSpacing: 0.5, marginTop: 3 },
+  paymentSummaryLabel: { color: '#667085', fontSize: 10, fontWeight: '900', letterSpacing: 0.3, marginTop: 3 },
   segmentedControl: { flexDirection: 'row', backgroundColor: '#F2F4F7', borderRadius: 12, padding: 3, gap: 3 },
-  segmentButton: { flex: 1, minHeight: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  segmentButton: { flex: 1, minHeight: 46, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 },
   segmentButtonActive: { backgroundColor: '#FFFFFF' },
-  segmentText: { color: '#667085', fontSize: 10, fontWeight: '900' },
+  segmentText: { color: '#667085', fontSize: 12, fontWeight: '900' },
   segmentTextActive: { color: '#079455' },
   viewStack: { gap: 16 },
   infoCard: { backgroundColor: '#ECFDF3', borderRadius: 14, padding: 13, gap: 4 },
@@ -672,4 +708,14 @@ const styles = StyleSheet.create({
   emptyText: { color: '#667085', fontSize: 11, lineHeight: 17 },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.45 },
+});
+
+const darkStyles = StyleSheet.create({
+  surface: { backgroundColor: '#081825' },
+  card: { backgroundColor: '#102A43', borderColor: '#344054' },
+  subtleCard: { backgroundColor: '#162F46', borderColor: '#344054' },
+  mintCard: { backgroundColor: '#12372C', borderColor: '#1C6B4A' },
+  errorCard: { backgroundColor: '#3A1717', borderColor: '#7A271A' },
+  titleText: { color: '#F8FAFC' },
+  bodyText: { color: '#D0D5DD' },
 });
