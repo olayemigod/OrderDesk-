@@ -15,6 +15,7 @@ import { PlatformAdminView } from './PlatformAdminView';
 import { SubscriptionStatusCard } from './SubscriptionStatusCard';
 import { TeamManagementView } from './TeamManagementView';
 import { WhatsAppConnectionView } from './WhatsAppConnectionView';
+import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
 type Section =
   | 'menu'
@@ -28,6 +29,7 @@ type Section =
   | 'security'
   | 'account'
   | 'support'
+  | 'appearance'
   | 'admin';
 
 type Props = {
@@ -39,6 +41,7 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
   const [section, setSection] = useState<Section>('menu');
   const subscription = useSubscriptionAccess(business.id);
   const platformAdmin = usePlatformAdmin();
+  const appearance = useSellerTrayAppearance();
 
   useEffect(() => {
     if (Platform.OS !== 'android' || section === 'menu') return undefined;
@@ -91,6 +94,14 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
           </View>
         ) : null}
         {section === 'support' ? <SupportView /> : null}
+        {section === 'appearance' ? (
+          <AppearanceView
+            mode={appearance.mode}
+            textSize={appearance.textSize}
+            onMode={appearance.setMode}
+            onTextSize={appearance.setTextSize}
+          />
+        ) : null}
         {section === 'account' ? (
           <View style={styles.detailSection}>
             <View>
@@ -191,6 +202,12 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
         <Text style={styles.groupLabel}>ACCOUNT & SECURITY</Text>
         <View style={styles.menuGroup}>
           <MenuRow
+            icon="moon-outline"
+            title="Appearance"
+            text="Dark mode and comfortable text size"
+            onPress={() => setSection('appearance')}
+          />
+          <MenuRow
             icon="shield-checkmark-outline"
             title="Security & MFA"
             text="Authenticator enrollment and high-assurance session verification"
@@ -224,6 +241,83 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
           />
         </View>
       ) : null}
+    </View>
+  );
+}
+
+function AppearanceView({
+  mode,
+  textSize,
+  onMode,
+  onTextSize,
+}: {
+  mode: 'system' | 'light' | 'dark';
+  textSize: 'standard' | 'large';
+  onMode: (mode: 'system' | 'light' | 'dark') => Promise<void>;
+  onTextSize: (size: 'standard' | 'large') => Promise<void>;
+}) {
+  return (
+    <View style={styles.detailSection}>
+      <View>
+        <Text style={styles.eyebrow}>APPEARANCE</Text>
+        <Text style={styles.title}>Make SellerTray comfortable</Text>
+        <Text style={styles.subtitle}>Choose the display mode and text size that works best for you.</Text>
+      </View>
+
+      <View style={styles.preferenceCard}>
+        <View style={styles.preferenceHeading}>
+          <View style={styles.menuIcon}>
+            <Ionicons name="moon-outline" size={21} color="#079455" />
+          </View>
+          <View style={styles.menuCopy}>
+            <Text style={styles.menuTitle}>Display mode</Text>
+            <Text style={styles.menuText}>Follow your phone or choose light/dark explicitly.</Text>
+          </View>
+        </View>
+        <View style={styles.preferenceOptions}>
+          {(['system', 'light', 'dark'] as const).map((option) => (
+            <Pressable
+              key={option}
+              onPress={() => void onMode(option)}
+              style={[styles.preferenceOption, mode === option && styles.preferenceOptionActive]}
+            >
+              <Ionicons
+                name={option === 'system' ? 'phone-portrait-outline' : option === 'light' ? 'sunny-outline' : 'moon-outline'}
+                size={19}
+                color={mode === option ? '#FFFFFF' : '#475467'}
+              />
+              <Text style={[styles.preferenceOptionText, mode === option && styles.preferenceOptionTextActive]}>
+                {option.charAt(0).toUpperCase() + option.slice(1)}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.preferenceCard}>
+        <View style={styles.preferenceHeading}>
+          <View style={styles.menuIcon}>
+            <Ionicons name="text-outline" size={21} color="#079455" />
+          </View>
+          <View style={styles.menuCopy}>
+            <Text style={styles.menuTitle}>Text size</Text>
+            <Text style={styles.menuText}>SellerTray now uses a larger readable baseline; Large adds extra emphasis.</Text>
+          </View>
+        </View>
+        <View style={styles.preferenceOptions}>
+          {(['standard', 'large'] as const).map((option) => (
+            <Pressable
+              key={option}
+              onPress={() => void onTextSize(option)}
+              style={[styles.preferenceOption, textSize === option && styles.preferenceOptionActive]}
+            >
+              <Text style={[styles.preferenceOptionText, textSize === option && styles.preferenceOptionTextActive]}>
+                {option === 'standard' ? 'Standard' : 'Large'}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
     </View>
   );
 }
@@ -350,5 +444,12 @@ const styles = StyleSheet.create({
   supportHeroText: { color: '#D0D5DD', fontSize: 12, lineHeight: 18, marginTop: 2 },
   supportNote: { backgroundColor: '#ECFDF3', borderRadius: 14, padding: 12, flexDirection: 'row', gap: 9, alignItems: 'flex-start' },
   supportNoteText: { flex: 1, color: '#475467', fontSize: 12, lineHeight: 18 },
+  preferenceCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 16, padding: 13, gap: 12 },
+  preferenceHeading: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  preferenceOptions: { flexDirection: 'row', gap: 7, flexWrap: 'wrap' },
+  preferenceOption: { minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: '#D0D5DD', paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#FFFFFF' },
+  preferenceOptionActive: { backgroundColor: '#102A43', borderColor: '#102A43' },
+  preferenceOptionText: { color: '#475467', fontSize: 12, fontWeight: '900' },
+  preferenceOptionTextActive: { color: '#FFFFFF' },
   pressed: { opacity: 0.72 },
 });
