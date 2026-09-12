@@ -19,7 +19,13 @@ const eventLabels: Record<NotificationEventKey, string> = {
   order_rejected: 'Order rejected',
   order_cancelled: 'Order cancelled',
   order_status_reply: 'Status reply',
-  order_receipt: 'Receipt sent',
+  order_receipt: 'Order receipt sent',
+  payment_options: 'Payment options',
+  payment_instructions: 'Payment instructions',
+  payment_claim_received: 'Payment claim received',
+  payment_confirmed: 'Payment confirmed',
+  payment_status_reply: 'Payment status reply',
+  financial_document: 'Financial document sent',
 };
 
 const statusLabels: Record<NotificationDeliveryStatus, string> = {
