@@ -158,8 +158,8 @@ function suggestMerchantCode(value: string): string {
 
   if (words.length >= 3) return words.slice(0, 3).map((word) => word[0]).join('');
   if (words.length === 2) {
-    const combined = `${words[0].slice(0, 2)}${words[1][0]}`;
-    return combined.slice(0, 3);
+    if (words[0].length >= 3) return words[0].slice(0, 3);
+    return `${words[0]}${words[1]}`.slice(0, 3);
   }
 
   return (words[0] ?? '').slice(0, 3);
