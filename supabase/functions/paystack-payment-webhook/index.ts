@@ -197,6 +197,7 @@ async function decryptCredential(row: J): Promise<J> {
 async function paymentRuntimeVerify(paymentId: string): Promise<J> {
   const r = await fetch(SUPABASE_URL + '/functions/v1/payment-runtime', {
     method: 'POST',
+    signal: AbortSignal.timeout(12000),
     headers: {
       apikey: SERVICE_KEY,
       authorization: 'Bearer ' + SERVICE_KEY,

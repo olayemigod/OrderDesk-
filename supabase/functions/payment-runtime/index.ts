@@ -69,7 +69,7 @@ Deno.serve(async (req: Request) => {
       }
 
       if (payment.provider === 'paystack') {
-        const response = await fetch('https://api.paystack.co/transaction/initialize', {
+        const response = await providerFetch('https://api.paystack.co/transaction/initialize', {
           method: 'POST',
           headers: {
             authorization: 'Bearer ' + secretKey,
@@ -113,7 +113,7 @@ Deno.serve(async (req: Request) => {
         }, 201);
       }
 
-      const response = await fetch('https://api.flutterwave.com/v3/payments', {
+      const response = await providerFetch('https://api.flutterwave.com/v3/payments', {
         method: 'POST',
         headers: {
           authorization: 'Bearer ' + secretKey,
@@ -320,7 +320,7 @@ Deno.serve(async (req: Request) => {
       return json({ paymentId, status: payment.status, providerStatus: 'transaction_id_required' }, 200);
     }
 
-    const response = await fetch(
+    const response = await providerFetch(
       'https://api.flutterwave.com/v3/transactions/' + encodeURIComponent(transactionId) + '/verify',
       { headers: { authorization: 'Bearer ' + secretKey } },
     );
@@ -566,9 +566,17 @@ async function rpc<T = unknown>(name: string, body: J): Promise<T> {
   });
 }
 
+async function providerFetch(input: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(input, {
+    ...init,
+    signal: init.signal ?? AbortSignal.timeout(10000),
+  });
+}
+
 async function rest<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(SUPABASE_URL + path, {
     ...init,
+    signal: init.signal ?? AbortSignal.timeout(10000),
     headers: {
       apikey: SERVICE_KEY,
       authorization: 'Bearer ' + SERVICE_KEY,

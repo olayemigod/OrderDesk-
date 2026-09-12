@@ -35,6 +35,14 @@ Deno.serve(async (req: Request) => {
     const member = await isMember(tenantId, userId);
     if (!member) return json({ error: 'SellerTray tenant membership required' }, 403);
 
+    const userAllowed = await consumeRateLimit('merchant_payment_user', userId, 30, 60);
+    const tenantAllowed = userAllowed
+      ? await consumeRateLimit('merchant_payment_tenant', tenantId, 90, 60)
+      : false;
+    if (!userAllowed || !tenantAllowed) {
+      return json({ error: 'Too many payment operations. Try again shortly.' }, 429);
+    }
+
     const payment = await loadPayment(tenantId, paymentId);
     if (!payment) return json({ error: 'Payment not found' }, 404);
 
@@ -79,6 +87,7 @@ Deno.serve(async (req: Request) => {
 async function verifiedUser(auth: string): Promise<string | null> {
   if (!auth.startsWith('Bearer ')) return null;
   const r = await fetch(SUPABASE_URL + '/auth/v1/user', {
+    signal: AbortSignal.timeout(8000),
     headers: { apikey: SERVICE_KEY, authorization: auth },
   });
   if (!r.ok) return null;
@@ -110,6 +119,7 @@ async function loadPayment(tenantId: string, paymentId: string): Promise<J | nul
 async function callRuntime(paymentId: string): Promise<J> {
   const r = await fetch(SUPABASE_URL + '/functions/v1/payment-runtime', {
     method: 'POST',
+    signal: AbortSignal.timeout(12000),
     headers: {
       apikey: SERVICE_KEY,
       authorization: 'Bearer ' + SERVICE_KEY,
@@ -125,6 +135,20 @@ async function callRuntime(paymentId: string): Promise<J> {
   return payload;
 }
 
+async function consumeRateLimit(
+  scope: string,
+  key: string,
+  limit: number,
+  windowSeconds: number,
+): Promise<boolean> {
+  return rpc<boolean>('consume_sellertray_rate_limit', {
+    p_scope: scope,
+    p_key: key,
+    p_limit: limit,
+    p_window_seconds: windowSeconds,
+  });
+}
+
 async function rpc<T = unknown>(name: string, body: J): Promise<T> {
   return rest<T>('/rest/v1/rpc/' + encodeURIComponent(name), {
     method: 'POST',
@@ -135,6 +159,7 @@ async function rpc<T = unknown>(name: string, body: J): Promise<T> {
 async function rest<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
   const r = await fetch(SUPABASE_URL + path, {
     ...init,
+    signal: init.signal ?? AbortSignal.timeout(10000),
     headers: {
       apikey: SERVICE_KEY,
       authorization: 'Bearer ' + SERVICE_KEY,

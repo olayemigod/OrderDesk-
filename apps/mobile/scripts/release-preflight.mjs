@@ -613,6 +613,16 @@ requireValue(
   'High-cost AI parsing must retain server-side request budgets and an OpenAI provider deadline',
 );
 requireValue(
+  paymentRuntimeFunction.includes('providerFetch') &&
+    paymentRuntimeFunction.includes('AbortSignal.timeout(10000)') &&
+    merchantPaymentOperations.includes('Too many payment operations') &&
+    merchantPaymentOperations.includes("consumeRateLimit('merchant_payment_user'") &&
+    merchantPaymentOperations.includes('AbortSignal.timeout(12000)') &&
+    paystackPaymentWebhook.includes('AbortSignal.timeout(12000)') &&
+    flutterwavePaymentWebhook.includes('AbortSignal.timeout(12000)'),
+  'Payment provider verification must retain explicit deadlines and authenticated merchant request budgets',
+);
+requireValue(
   platformAdminFunction.includes('/auth/v1/user') &&
     platformAdminFunction.includes("identity.aal !== 'aal2'") &&
     platformAdminFunction.includes('MFA verification is required for ProcessEdge administrator access'),
