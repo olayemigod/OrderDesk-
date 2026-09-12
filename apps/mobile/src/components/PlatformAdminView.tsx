@@ -5,6 +5,7 @@ import type {
   PlatformAdminAuditEvent,
   PlatformAdminMutationAction,
   PlatformAdminOverview,
+  PlatformAiParserReadiness,
   PlatformSubscriptionStatus,
   PlatformTenantSummary,
   PlatformWhatsappStatus,
@@ -13,6 +14,7 @@ import type {
 type Props = {
   overview: PlatformAdminOverview | null;
   audit: PlatformAdminAuditEvent[];
+  readiness: PlatformAiParserReadiness | null;
   loading: boolean;
   busy: boolean;
   error: string | null;
@@ -28,6 +30,7 @@ type Props = {
 export function PlatformAdminView({
   overview,
   audit,
+  readiness,
   loading,
   busy,
   error,
@@ -115,6 +118,8 @@ export function PlatformAdminView({
         <Metric label="Usage failures" value={failedUsageSettlements} />
       </View>
 
+      <AiProductionReadinessCard readiness={readiness} />
+
       {!canMutate ? (
         <View style={styles.supportNotice}>
           <Text style={styles.supportTitle}>Support access is read-only</Text>
@@ -173,6 +178,71 @@ export function PlatformAdminView({
           </View>
         )}
       </View>
+    </View>
+  );
+}
+
+function AiProductionReadinessCard({ readiness }: { readiness: PlatformAiParserReadiness | null }) {
+  const ready = readiness?.acceptanceEvidence.productionAcceptanceReady === true;
+
+  return (
+    <View style={[styles.aiReadinessCard, ready && styles.aiReadinessCardReady]}>
+      <View style={styles.aiReadinessHeader}>
+        <View style={styles.aiReadinessTitleWrap}>
+          <Text style={styles.eyebrow}>AI OPERATIONS</Text>
+          <Text style={styles.aiReadinessTitle}>AI production readiness</Text>
+        </View>
+        <View style={[styles.aiReadinessPill, ready && styles.aiReadinessPillReady]}>
+          <Text style={[styles.aiReadinessPillText, ready && styles.aiReadinessPillTextReady]}>
+            {ready ? 'READY' : 'PENDING'}
+          </Text>
+        </View>
+      </View>
+
+      {!readiness ? (
+        <Text style={styles.muted}>Readiness evidence is unavailable. Refresh the ProcessEdge admin console.</Text>
+      ) : (
+        <>
+          <View style={styles.detailRows}>
+            <DetailRow
+              label="Parser secrets"
+              value={
+                readiness.configuration.openaiApiKeyConfigured && readiness.configuration.parserTokenConfigured
+                  ? 'Configured'
+                  : 'Incomplete'
+              }
+            />
+            <DetailRow label="Configured model" value={readiness.configuration.configuredModel} />
+            <DetailRow
+              label="Live parse evidence"
+              value={
+                String(readiness.currentPeriod.attempts) + ' attempts · ' +
+                String(readiness.currentPeriod.successes) + ' success · ' +
+                String(readiness.currentPeriod.nonSuccess) + ' fallback/error'
+              }
+            />
+            <DetailRow label="Metered external orders" value={String(readiness.currentPeriod.meteredExternalOrderUnits)} />
+            <DetailRow label="Observed tokens" value={String(readiness.currentPeriod.totalTokens)} />
+            <DetailRow
+              label="Latest observed model"
+              value={readiness.currentPeriod.latestObservedModel ?? 'No external AI attempt yet'}
+            />
+          </View>
+
+          <Text style={styles.aiReadinessHint}>
+            {!readiness.configured
+              ? 'Set the server-only OpenAI and parser-token secrets before live acceptance.'
+              : !readiness.acceptanceEvidence.hasSuccessfulParse
+                ? 'Run one real free-text WhatsApp order through the external parser.'
+                : !readiness.acceptanceEvidence.hasMeteredExternalOrder
+                  ? 'Complete a successful external-AI order so AI_ORDER_ACTIVITY metering is proven.'
+                  : !readiness.acceptanceEvidence.outcomesReconcile ||
+                      !readiness.acceptanceEvidence.meteredOrdersDoNotExceedSuccessfulParses
+                    ? 'Telemetry and metering need reconciliation before production acceptance.'
+                    : 'Live parser, telemetry and usage metering evidence satisfy the automated AI gate.'}
+          </Text>
+        </>
+      )}
     </View>
   );
 }
@@ -450,6 +520,16 @@ const styles = StyleSheet.create({
   loadingCard: { padding: 22, alignItems: 'center', gap: 8, backgroundColor: '#FFFFFF', borderRadius: 16 },
   muted: { color: '#667085', fontSize: 11, lineHeight: 17 },
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  aiReadinessCard: { backgroundColor: '#FFF8E7', borderRadius: 15, borderWidth: 1, borderColor: '#FEC84B', padding: 14, gap: 10 },
+  aiReadinessCardReady: { backgroundColor: '#ECFDF3', borderColor: '#6CE9A6' },
+  aiReadinessHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  aiReadinessTitleWrap: { flex: 1, gap: 2 },
+  aiReadinessTitle: { color: '#101828', fontSize: 15, fontWeight: '900' },
+  aiReadinessPill: { borderRadius: 999, backgroundColor: '#FEF0C7', paddingHorizontal: 9, paddingVertical: 5 },
+  aiReadinessPillReady: { backgroundColor: '#D1FADF' },
+  aiReadinessPillText: { color: '#B54708', fontSize: 9, fontWeight: '900' },
+  aiReadinessPillTextReady: { color: '#027A48' },
+  aiReadinessHint: { color: '#667085', fontSize: 10, lineHeight: 16 },
   metricCard: { flexGrow: 1, flexBasis: '45%', minWidth: 130, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: '#EAECF0', padding: 13 },
   metricLabel: { color: '#667085', fontSize: 10, fontWeight: '800' },
   metricValue: { color: '#101828', fontSize: 24, fontWeight: '900', marginTop: 3 },

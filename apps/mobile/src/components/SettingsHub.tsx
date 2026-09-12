@@ -105,6 +105,7 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
           <PlatformAdminView
             overview={platformAdmin.overview}
             audit={platformAdmin.audit}
+            readiness={platformAdmin.readiness}
             loading={platformAdmin.loading}
             busy={platformAdmin.busy}
             error={platformAdmin.error}

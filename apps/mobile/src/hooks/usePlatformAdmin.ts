@@ -3,15 +3,18 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   loadPlatformAdminAudit,
   loadPlatformAdminOverview,
+  loadPlatformAiParserReadiness,
   mutatePlatformTenant,
   type PlatformAdminAuditEvent,
   type PlatformAdminMutationAction,
   type PlatformAdminOverview,
+  type PlatformAiParserReadiness,
 } from '../data/platformAdminRepository';
 
 export function usePlatformAdmin() {
   const [overview, setOverview] = useState<PlatformAdminOverview | null>(null);
   const [audit, setAudit] = useState<PlatformAdminAuditEvent[]>([]);
+  const [readiness, setReadiness] = useState<PlatformAiParserReadiness | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,9 +25,15 @@ export function usePlatformAdmin() {
       const next = await loadPlatformAdminOverview();
       setOverview(next);
       if (next) {
-        setAudit(await loadPlatformAdminAudit(null, 30));
+        const [nextAudit, nextReadiness] = await Promise.all([
+          loadPlatformAdminAudit(null, 30),
+          loadPlatformAiParserReadiness(),
+        ]);
+        setAudit(nextAudit);
+        setReadiness(nextReadiness);
       } else {
         setAudit([]);
+        setReadiness(null);
       }
       setError(null);
     } catch (err) {
@@ -48,7 +57,12 @@ export function usePlatformAdmin() {
     try {
       const next = await mutatePlatformTenant(tenantId, action, value);
       setOverview(next);
-      setAudit(await loadPlatformAdminAudit(null, 30));
+      const [nextAudit, nextReadiness] = await Promise.all([
+        loadPlatformAdminAudit(null, 30),
+        loadPlatformAiParserReadiness(),
+      ]);
+      setAudit(nextAudit);
+      setReadiness(nextReadiness);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unable to update this SellerTray business.';
       setError(message);
@@ -61,6 +75,7 @@ export function usePlatformAdmin() {
   return {
     overview,
     audit,
+    readiness,
     isPlatformAdmin: overview !== null,
     loading,
     busy,

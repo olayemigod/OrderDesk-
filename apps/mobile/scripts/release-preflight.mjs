@@ -466,6 +466,12 @@ requireValue(
 );
 
 requireValue(
+  read(join(mobileRoot, 'src/data/platformAdminRepository.ts')).includes("action: 'ai_parser_readiness'") &&
+    read(join(mobileRoot, 'src/components/PlatformAdminView.tsx')).includes('AI production readiness'),
+  'ProcessEdge admin console must surface the automated AI production-readiness evidence',
+);
+
+requireValue(
   paymentCoreMigration.includes("'ST/' || split_part(v_order_ref,'/',1) || '/' || v_kind || '/' || split_part(v_order_ref,'/',2)") &&
     paymentCoreMigration.includes("when 'invoice' then 'INV'") &&
     paymentCoreMigration.includes("when 'receipt' then 'RCP'") &&
