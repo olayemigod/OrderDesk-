@@ -578,6 +578,21 @@ async function processClaimedInboundMessage({
   const catalogue = await loadCatalogue(tenantId);
   const parsed = await parseOrder(event.text, catalogue, tenantId, customerId, sourceMessageId);
   const enrichedItems = enrichFromCatalogue(parsed.items, catalogue);
+
+  // A normal WhatsApp conversation must never become an empty SellerTray order.
+  // External AI and the deterministic fallback may both conclude that a message
+  // contains no order items; in that case the message remains conversation history only.
+  if (enrichedItems.length === 0) {
+    console.info(JSON.stringify({
+      event: 'whatsapp_message_not_an_order',
+      tenantId,
+      customerId,
+      sourceMessageId,
+      parserSource: parsed.source,
+    }));
+    return;
+  }
+
   const reviewReasons = buildReviewReasons(parsed, enrichedItems);
 
   const orderId = await rest<string>('/rest/v1/rpc/create_sellertray_whatsapp_order_atomic', {
