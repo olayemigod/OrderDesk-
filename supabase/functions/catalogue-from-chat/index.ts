@@ -7,8 +7,9 @@ const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const META_ACCESS_TOKEN = Deno.env.get('META_ACCESS_TOKEN') ?? '';
 const META_GRAPH_API_VERSION = Deno.env.get('META_GRAPH_API_VERSION') ?? '';
 const CATALOGUE_BUCKET = 'sellertray-catalogue';
+const CAPTURE_BUCKET = 'sellertray-chat-captures';
 const MAX_BODY_BYTES = 65_536;
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -57,6 +58,119 @@ Deno.serve(async (request) => {
   if (!allowed) return reply({ error: 'Too many catalogue actions. Try again shortly.' }, 429, requestId);
 
   try {
+    if (action === 'list_captures') {
+      const { data: rows, error } = await admin
+        .from('inbound_message_media')
+        .select(`
+          id,
+          inbound_message_id,
+          customer_id,
+          media_caption,
+          media_mime_type,
+          storage_bucket,
+          storage_path,
+          expires_at,
+          created_at,
+          customers(display_name,wa_id),
+          catalogue_capture_candidates(id,status,suggested_name,suggested_category,suggested_price_ngn,catalog_item_id,created_at)
+        `)
+        .eq('tenant_id', tenantId)
+        .eq('media_type', 'image')
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+
+      const captures = [];
+      for (const row of rows ?? []) {
+        const candidate = Array.isArray(row.catalogue_capture_candidates)
+          ? row.catalogue_capture_candidates[0] ?? null
+          : row.catalogue_capture_candidates ?? null;
+        if (candidate?.status === 'converted' || candidate?.status === 'rejected') continue;
+
+        let previewUrl: string | null = null;
+        if (row.storage_bucket && row.storage_path) {
+          previewUrl = await storagePreviewUrl(row.storage_bucket, row.storage_path);
+        }
+
+        const customer = Array.isArray(row.customers) ? row.customers[0] ?? null : row.customers ?? null;
+        captures.push({
+          mediaId: row.id,
+          inboundMessageId: row.inbound_message_id,
+          customerId: row.customer_id,
+          customerName: customer?.display_name ?? null,
+          customerWaId: customer?.wa_id ?? null,
+          caption: row.media_caption ?? null,
+          mimeType: row.media_mime_type ?? null,
+          expiresAt: row.expires_at,
+          createdAt: row.created_at,
+          previewUrl,
+          candidate,
+        });
+      }
+
+      return reply({ captures }, 200, requestId);
+    }
+
+    if (action === 'preview_capture') {
+      const inboundMessageId = cleanUuid(body.inboundMessageId);
+      if (!inboundMessageId) return reply({ error: 'inboundMessageId is required' }, 400, requestId);
+
+      const { data: media, error: mediaError } = await admin
+        .from('inbound_message_media')
+        .select('id,provider_media_id,media_mime_type,media_sha256,storage_bucket,storage_path,expires_at')
+        .eq('tenant_id', tenantId)
+        .eq('inbound_message_id', inboundMessageId)
+        .maybeSingle();
+
+      if (mediaError) throw mediaError;
+      if (!media) return reply({ error: 'WhatsApp image capture not found' }, 404, requestId);
+      if (new Date(media.expires_at).getTime() <= Date.now()) {
+        return reply({ error: 'This WhatsApp image capture has expired' }, 410, requestId);
+      }
+
+      if (media.storage_bucket && media.storage_path) {
+        const previewUrl = await storagePreviewUrl(media.storage_bucket, media.storage_path);
+        if (previewUrl) return reply({ previewUrl, staged: true }, 200, requestId);
+      }
+
+      if (!META_ACCESS_TOKEN || !META_GRAPH_API_VERSION) {
+        return reply({ error: 'WhatsApp media preview is not activated' }, 503, requestId);
+      }
+
+      const fetched = await fetchMetaImage(media.provider_media_id, media.media_mime_type, media.media_sha256);
+      await ensureCaptureBucket();
+      const extension = extensionForMime(fetched.mimeType);
+      const storagePath = tenantId + '/' + media.id + '.' + extension;
+
+      const { error: uploadError } = await admin.storage
+        .from(CAPTURE_BUCKET)
+        .upload(storagePath, fetched.bytes, {
+          contentType: fetched.mimeType,
+          cacheControl: '3600',
+          upsert: true,
+        });
+      if (uploadError) throw uploadError;
+
+      const { error: updateError } = await admin
+        .from('inbound_message_media')
+        .update({
+          storage_bucket: CAPTURE_BUCKET,
+          storage_path: storagePath,
+          media_mime_type: fetched.mimeType,
+          media_file_size: fetched.bytes.byteLength,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('tenant_id', tenantId)
+        .eq('id', media.id);
+      if (updateError) throw updateError;
+
+      const previewUrl = await storagePreviewUrl(CAPTURE_BUCKET, storagePath);
+      if (!previewUrl) throw new Error('Unable to create private preview URL');
+      return reply({ previewUrl, staged: true }, 200, requestId);
+    }
+
     if (action === 'create_candidate') {
       const inboundMessageId = cleanUuid(body.inboundMessageId);
       if (!inboundMessageId) return reply({ error: 'inboundMessageId is required' }, 400, requestId);
@@ -150,7 +264,7 @@ Deno.serve(async (request) => {
 
       const { data: media, error: mediaError } = await admin
         .from('inbound_message_media')
-        .select('id,provider_media_id,media_mime_type,media_sha256,expires_at')
+        .select('id,provider_media_id,media_mime_type,media_sha256,storage_bucket,storage_path,expires_at')
         .eq('tenant_id', tenantId)
         .eq('id', candidate.source_media_id)
         .maybeSingle();
@@ -160,11 +274,31 @@ Deno.serve(async (request) => {
       if (new Date(media.expires_at).getTime() <= Date.now()) {
         return reply({ error: 'Source chat image has expired; ask the customer to resend it' }, 410, requestId);
       }
-      if (!META_ACCESS_TOKEN || !META_GRAPH_API_VERSION) {
-        return reply({ error: 'WhatsApp media capture is not activated' }, 503, requestId);
+      let fetched: { bytes: ArrayBuffer; mimeType: string };
+      const previousCaptureBucket = media.storage_bucket;
+      const previousCapturePath = media.storage_path;
+
+      if (previousCaptureBucket === CAPTURE_BUCKET && previousCapturePath) {
+        const { data: staged, error: stagedError } = await admin.storage
+          .from(CAPTURE_BUCKET)
+          .download(previousCapturePath);
+        if (stagedError || !staged) {
+          if (!META_ACCESS_TOKEN || !META_GRAPH_API_VERSION) {
+            return reply({ error: 'WhatsApp media capture is not activated' }, 503, requestId);
+          }
+          fetched = await fetchMetaImage(media.provider_media_id, media.media_mime_type, media.media_sha256);
+        } else {
+          const bytes = await staged.arrayBuffer();
+          if (bytes.byteLength > MAX_IMAGE_BYTES) throw new Error('WhatsApp catalogue image exceeds the 5 MB limit');
+          fetched = { bytes, mimeType: media.media_mime_type || staged.type || 'image/jpeg' };
+        }
+      } else {
+        if (!META_ACCESS_TOKEN || !META_GRAPH_API_VERSION) {
+          return reply({ error: 'WhatsApp media capture is not activated' }, 503, requestId);
+        }
+        fetched = await fetchMetaImage(media.provider_media_id, media.media_mime_type, media.media_sha256);
       }
 
-      const fetched = await fetchMetaImage(media.provider_media_id, media.media_mime_type, media.media_sha256);
       await ensureCatalogueBucket();
       const extension = extensionForMime(fetched.mimeType);
       const storagePath = tenantId + '/' + candidateId + '.' + extension;
@@ -200,6 +334,14 @@ Deno.serve(async (request) => {
 
       if (finalizeError || typeof itemId !== 'string') {
         throw finalizeError ?? new Error('Catalogue conversion returned no item id');
+      }
+
+      if (previousCaptureBucket === CAPTURE_BUCKET && previousCapturePath) {
+        try {
+          await admin.storage.from(CAPTURE_BUCKET).remove([previousCapturePath]);
+        } catch {
+          // Best-effort cleanup; the media row already points at the public catalogue image.
+        }
       }
 
       return reply({ catalogItemId: itemId, imageUrl, existing: false }, 201, requestId);
@@ -272,11 +414,11 @@ async function fetchMetaImage(
   const mimeType = typeof metadata.mime_type === 'string' ? metadata.mime_type : fallbackMime;
   const declaredSize = typeof metadata.file_size === 'number' ? metadata.file_size : Number(metadata.file_size ?? 0);
 
-  if (!mediaUrl || !mimeType || !['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) {
+  if (!mediaUrl || !mimeType || !['image/jpeg', 'image/png'].includes(mimeType)) {
     throw new Error('WhatsApp media is not a supported catalogue image');
   }
   if (Number.isFinite(declaredSize) && declaredSize > MAX_IMAGE_BYTES) {
-    throw new Error('WhatsApp catalogue image exceeds the 10 MB limit');
+    throw new Error('WhatsApp catalogue image exceeds the 5 MB limit');
   }
 
   const fileResponse = await fetch(mediaUrl, {
@@ -287,7 +429,7 @@ async function fetchMetaImage(
 
   const bytes = await fileResponse.arrayBuffer();
   if (bytes.byteLength > MAX_IMAGE_BYTES) {
-    throw new Error('WhatsApp catalogue image exceeds the 10 MB limit');
+    throw new Error('WhatsApp catalogue image exceeds the 5 MB limit');
   }
 
   if (expectedSha) {
@@ -302,11 +444,30 @@ async function fetchMetaImage(
   return { bytes, mimeType };
 }
 
+async function storagePreviewUrl(bucket: string, path: string): Promise<string | null> {
+  if (bucket === CATALOGUE_BUCKET) {
+    return admin!.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+  }
+
+  const { data, error } = await admin!.storage.from(bucket).createSignedUrl(path, 10 * 60);
+  if (error || !data?.signedUrl) return null;
+  return data.signedUrl;
+}
+
+async function ensureCaptureBucket(): Promise<void> {
+  const { error } = await admin!.storage.createBucket(CAPTURE_BUCKET, {
+    public: false,
+    allowedMimeTypes: ['image/jpeg', 'image/png'],
+    fileSizeLimit: '5MB',
+  });
+  if (error && !isAlreadyExists(error)) throw error;
+}
+
 async function ensureCatalogueBucket(): Promise<void> {
   const { error } = await admin!.storage.createBucket(CATALOGUE_BUCKET, {
     public: true,
-    allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
-    fileSizeLimit: '10MB',
+    allowedMimeTypes: ['image/jpeg', 'image/png'],
+    fileSizeLimit: '5MB',
   });
   if (error && !isAlreadyExists(error)) throw error;
 }
