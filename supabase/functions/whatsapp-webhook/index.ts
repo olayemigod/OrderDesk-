@@ -844,43 +844,16 @@ async function maybeHandleCustomerSelfService({
     tenantId,
     customerIds,
     publicOrderId: explicitOrderId,
-    completedOnly: intent === 'receipt' && !explicitOrderId,
+    completedOnly: false,
   });
 
   if (!selected) {
-    const latest = intent === 'receipt'
-      ? await findCustomerSupportOrder({
-          tenantId,
-          customerIds,
-          publicOrderId: explicitOrderId,
-          completedOnly: false,
-        })
-      : null;
-
-    const body = latest && intent === 'receipt'
-      ? `Order ${latest.public_order_id} is currently ${humanOrderStatus(latest)}. A receipt is available after the order is completed.`
-      : explicitOrderId
-        ? `I could not find order ${explicitOrderId} for this WhatsApp customer. Check the order ID and try again.`
-        : `I could not find a matching SellerTray order for this WhatsApp customer yet.`;
-
-    if (latest) {
-      await queueCustomerSupportReply({
-        tenantId,
-        order: latest,
-        sourceMessageId,
-        fromPhoneNumberId,
-        toWaId: customerWaId,
-        eventKey: 'order_status_reply',
-        messageBody: body,
-      });
-    } else {
-      console.info(JSON.stringify({
-        event: 'customer_self_service_no_order',
-        tenantId,
-        intent,
-        explicitOrderId,
-      }));
-    }
+    console.info(JSON.stringify({
+      event: 'customer_self_service_no_order',
+      tenantId,
+      intent,
+      explicitOrderId,
+    }));
     return true;
   }
 
