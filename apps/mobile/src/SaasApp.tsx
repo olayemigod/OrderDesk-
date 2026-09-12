@@ -24,6 +24,7 @@ import { OrderStatusHistory } from './components/OrderStatusHistory';
 import { OrderWorkflowPanel } from './components/OrderWorkflowPanel';
 import { SettingsHub } from './components/SettingsHub';
 import { SetupGuideCard } from './components/SetupGuideCard';
+import { SellerTrayBrand } from './components/SellerTrayBrand';
 import type { MerchantBusiness } from './data/businessRepository';
 import type { OrderFulfillmentInput, OrderItemInput } from './data/ordersRepository';
 import { orderTotal, type MerchantOrder, type OrderStatus } from './domain/order';
@@ -31,6 +32,7 @@ import { useBusinesses } from './hooks/useBusinesses';
 import { useCatalogue } from './hooks/useCatalogue';
 import { useOrders } from './hooks/useOrders';
 import { supabase } from './lib/supabase';
+import { sellerTrayTheme as theme } from './theme/sellerTrayTheme';
 
 type ViewName = 'home' | 'orders' | 'products' | 'more';
 type OrderFilter = 'attention' | 'active' | 'done' | 'all';
@@ -247,11 +249,13 @@ function WorkspaceHeader({
     <>
       <View style={styles.header}>
         <View style={styles.headerCopy}>
-          <Text style={styles.eyebrow}>SELLERTRAY</Text>
-          <Text style={styles.businessName}>{business.name}</Text>
-          <Text style={styles.workspaceMeta}>
-            {business.role.toUpperCase()} · {subscriptionLabels[business.subscriptionStatus]}
-          </Text>
+          <SellerTrayBrand size={38} showTagline />
+          <View style={styles.merchantIdentity}>
+            <Text style={styles.businessName}>{business.name}</Text>
+            <Text style={styles.workspaceMeta}>
+              {business.role.toUpperCase()} · {subscriptionLabels[business.subscriptionStatus]}
+            </Text>
+          </View>
         </View>
         <Pressable onPress={() => void supabase.auth.signOut()} style={styles.signOutButton}>
           <Text style={styles.signOutText}>Sign out</Text>
@@ -316,12 +320,41 @@ function HomeView({
   onOpenMore: () => void;
   onSelectOrder: (orderId: string) => void;
 }) {
+  const attentionCount = orders.filter((order) => order.status === 'needs_review' || order.status === 'draft').length;
+  const inProgressCount = orders.filter((order) => ['accepted', 'processing', 'ready'].includes(order.status)).length;
+  const completedCount = orders.filter((order) => order.status === 'completed').length;
+  const knownOrderValue = orders.reduce((sum, order) => {
+    const total = orderTotal(order);
+    return total === null ? sum : sum + total;
+  }, 0);
+
   return (
     <View style={styles.sectionStack}>
-      <View>
-        <Text style={styles.sectionEyebrow}>BUSINESS OVERVIEW</Text>
-        <Text style={styles.pageTitle}>WhatsApp orders at a glance.</Text>
-        <Text style={styles.pageSubtitle}>Activity shown here belongs only to {business.name}.</Text>
+      <View style={styles.homeHero}>
+        <Text style={styles.sectionEyebrow}>MERCHANT DASHBOARD</Text>
+        <Text style={styles.pageTitle}>Your business in one place.</Text>
+        <Text style={styles.pageSubtitle}>
+          Manage orders, catalogue and merchant setup for {business.name}.
+        </Text>
+      </View>
+
+      <View style={styles.homeMetricGrid}>
+        <HomeMetric label="Orders" value={String(orders.length)} hint="All orders" />
+        <HomeMetric label="Known value" value={formatMoney(knownOrderValue, business.currency)} hint="Priced orders" />
+        <HomeMetric label="In fulfilment" value={String(inProgressCount)} hint="Accepted to ready" />
+        <HomeMetric label="Needs attention" value={String(attentionCount)} hint={completedCount + ' completed'} attention={attentionCount > 0} />
+      </View>
+
+      <View style={styles.quickActionsCard}>
+        <View>
+          <Text style={styles.sectionEyebrow}>QUICK ACTIONS</Text>
+          <Text style={styles.sectionTitle}>Common tasks</Text>
+        </View>
+        <View style={styles.quickActionRow}>
+          <QuickAction label="Orders" onPress={onOpenOrders} />
+          <QuickAction label="Catalogue" onPress={onOpenProducts} />
+          <QuickAction label="More" onPress={onOpenMore} />
+        </View>
       </View>
 
       <SetupGuideCard
@@ -351,6 +384,35 @@ function HomeView({
         emptyText="No WhatsApp orders have arrived for this business yet."
       />
     </View>
+  );
+}
+
+function HomeMetric({
+  label,
+  value,
+  hint,
+  attention = false,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  attention?: boolean;
+}) {
+  return (
+    <View style={[styles.homeMetricCard, attention && styles.homeMetricCardAttention]}>
+      <Text style={styles.homeMetricLabel}>{label}</Text>
+      <Text numberOfLines={1} style={styles.homeMetricValue}>{value}</Text>
+      <Text style={styles.homeMetricHint}>{hint}</Text>
+    </View>
+  );
+}
+
+function QuickAction({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.quickAction, pressed && styles.quickActionPressed]}>
+      <Text style={styles.quickActionMark}>+</Text>
+      <Text style={styles.quickActionText}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -737,7 +799,7 @@ function BottomNav({
     <View style={styles.bottomNav}>
       <NavButton label="Home" active={view === 'home'} onPress={() => onChange('home')} />
       <NavButton label="Orders" active={view === 'orders'} count={reviewCount} onPress={() => onChange('orders')} />
-      <NavButton label="Products" active={view === 'products'} onPress={() => onChange('products')} />
+      <NavButton label="Catalogue" active={view === 'products'} onPress={() => onChange('products')} />
       <NavButton label="More" active={view === 'more'} onPress={() => onChange('more')} />
     </View>
   );
@@ -799,92 +861,106 @@ function formatReceivedAt(value: string): string {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F6F7F9', paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) : 0 },
+  safeArea: { flex: 1, backgroundColor: '#F8FAFC', paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) : 0 },
   appFrame: { flex: 1 },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 12, backgroundColor: '#F6F7F9' },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 12, backgroundColor: '#F8FAFC' },
   noWorkspaceAccount: { width: '100%', maxWidth: 620 },
   page: { padding: 18, paddingBottom: 34, gap: 15 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14 },
-  headerCopy: { flex: 1 },
-  eyebrow: { color: '#246BFD', fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
-  businessName: { color: '#101828', fontSize: 25, fontWeight: '900', marginTop: 3 },
+  headerCopy: { flex: 1, gap: 10 },
+  merchantIdentity: { gap: 1, paddingLeft: 2 },
+  eyebrow: { color: '#12B76A', fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
+  businessName: { color: '#102A43', fontSize: 25, fontWeight: '900', marginTop: 3 },
   workspaceMeta: { color: '#667085', fontSize: 11, fontWeight: '800', marginTop: 4 },
   signOutButton: { paddingVertical: 5 },
   signOutText: { color: '#667085', fontSize: 11, fontWeight: '800' },
-  switcherCard: { backgroundColor: '#FFFFFF', borderRadius: 15, borderWidth: 1, borderColor: '#EAECF0', padding: 11, gap: 8 },
-  switcherLabel: { color: '#98A2B3', fontSize: 9, fontWeight: '900', letterSpacing: 1.2 },
+  switcherCard: { backgroundColor: '#FFFFFF', borderRadius: 15, borderWidth: 1, borderColor: '#E4E7EC', padding: 11, gap: 8 },
+  switcherLabel: { color: '#667085', fontSize: 9, fontWeight: '900', letterSpacing: 1.2 },
   switcherButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   switcherButton: { borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 999, paddingVertical: 7, paddingHorizontal: 10 },
-  switcherButtonActive: { borderColor: '#246BFD', backgroundColor: '#EEF4FF' },
+  switcherButtonActive: { borderColor: '#12B76A', backgroundColor: '#ECFDF3' },
   switcherButtonText: { color: '#667085', fontSize: 11, fontWeight: '800', maxWidth: 210 },
-  switcherButtonTextActive: { color: '#175CD3' },
+  switcherButtonTextActive: { color: '#079455' },
   stateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   badge: { borderRadius: 999, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: '#F2F4F7' },
   badgePositive: { backgroundColor: '#ECFDF3' },
   badgeText: { color: '#475467', fontSize: 10, fontWeight: '800' },
   badgeTextPositive: { color: '#027A48' },
-  setupCard: { backgroundColor: '#101828', borderRadius: 17, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  setupCard: { backgroundColor: '#102A43', borderRadius: 17, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
   setupCopy: { flex: 1 },
   setupEyebrow: { color: '#84ADFF', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
   setupTitle: { color: '#FFFFFF', fontSize: 17, fontWeight: '900', marginTop: 4 },
   setupText: { color: '#D0D5DD', fontSize: 11, lineHeight: 17, marginTop: 4 },
   setupArrow: { color: '#FFFFFF', fontSize: 23, fontWeight: '900' },
   sectionStack: { gap: 14 },
-  sectionEyebrow: { color: '#98A2B3', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
-  pageTitle: { color: '#101828', fontSize: 24, lineHeight: 30, fontWeight: '900', marginTop: 3 },
+  homeHero: { gap: 2 },
+  homeMetricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  homeMetricCard: { flexGrow: 1, flexBasis: '46%', minWidth: 138, backgroundColor: theme.colors.white, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, padding: 13, ...theme.shadow.card },
+  homeMetricCardAttention: { backgroundColor: theme.colors.warningSoft, borderColor: '#FEDF89' },
+  homeMetricLabel: { color: theme.colors.slate, fontSize: 10, fontWeight: '800' },
+  homeMetricValue: { color: theme.colors.navy, fontSize: 21, fontWeight: '900', marginTop: 4 },
+  homeMetricHint: { color: theme.colors.muted, fontSize: 9, fontWeight: '700', marginTop: 3 },
+  quickActionsCard: { backgroundColor: theme.colors.white, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.lg, padding: 14, gap: 11, ...theme.shadow.card },
+  quickActionRow: { flexDirection: 'row', gap: 8 },
+  quickAction: { flex: 1, minHeight: 58, borderRadius: 13, backgroundColor: theme.colors.mintSoft, alignItems: 'center', justifyContent: 'center', gap: 3, paddingHorizontal: 5 },
+  quickActionPressed: { opacity: 0.75 },
+  quickActionMark: { color: theme.colors.greenDark, fontSize: 20, lineHeight: 21, fontWeight: '900' },
+  quickActionText: { color: theme.colors.navy, fontSize: 10, fontWeight: '900', textAlign: 'center' },
+  sectionEyebrow: { color: '#667085', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
+  pageTitle: { color: '#102A43', fontSize: 24, lineHeight: 30, fontWeight: '900', marginTop: 3 },
   pageSubtitle: { color: '#667085', fontSize: 12, lineHeight: 18, marginTop: 3 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  sectionTitle: { color: '#101828', fontSize: 15, fontWeight: '900' },
-  linkText: { color: '#246BFD', fontSize: 12, fontWeight: '800' },
+  sectionTitle: { color: '#102A43', fontSize: 15, fontWeight: '900' },
+  linkText: { color: '#12B76A', fontSize: 12, fontWeight: '800' },
   inboxControls: { gap: 9 },
-  searchInput: { minHeight: 44, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 12, paddingHorizontal: 13, backgroundColor: '#FFFFFF', color: '#101828' },
+  searchInput: { minHeight: 44, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 12, paddingHorizontal: 13, backgroundColor: '#FFFFFF', color: '#102A43' },
   filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   filterButton: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 36, borderRadius: 999, borderWidth: 1, borderColor: '#D0D5DD', backgroundColor: '#FFFFFF', paddingHorizontal: 11 },
-  filterButtonActive: { borderColor: '#246BFD', backgroundColor: '#EEF4FF' },
+  filterButtonActive: { borderColor: '#12B76A', backgroundColor: '#ECFDF3' },
   filterButtonText: { color: '#667085', fontSize: 11, fontWeight: '800' },
-  filterButtonTextActive: { color: '#175CD3' },
+  filterButtonTextActive: { color: '#079455' },
   filterCount: { minWidth: 18, borderRadius: 999, paddingHorizontal: 5, paddingVertical: 1, overflow: 'hidden', textAlign: 'center', backgroundColor: '#F2F4F7', color: '#475467', fontSize: 9, fontWeight: '900' },
-  filterCountActive: { backgroundColor: '#246BFD', color: '#FFFFFF' },
-  resultMeta: { color: '#98A2B3', fontSize: 10, fontWeight: '700' },
+  filterCountActive: { backgroundColor: '#12B76A', color: '#FFFFFF' },
+  resultMeta: { color: '#667085', fontSize: 10, fontWeight: '700' },
   orderList: { gap: 9 },
-  orderCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EAECF0', borderRadius: 15, padding: 13 },
-  orderCardSelected: { borderColor: '#246BFD', borderWidth: 2 },
+  orderCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 15, padding: 13 },
+  orderCardSelected: { borderColor: '#12B76A', borderWidth: 2 },
   orderTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 },
   orderIdentity: { flex: 1 },
   orderRight: { alignItems: 'flex-end', gap: 6 },
-  customerName: { color: '#101828', fontSize: 15, fontWeight: '900' },
-  orderId: { color: '#98A2B3', fontSize: 10, marginTop: 2 },
-  publicOrderId: { color: '#175CD3', fontSize: 11, fontWeight: '900', marginTop: 2 },
-  orderValue: { color: '#101828', fontSize: 11, fontWeight: '900' },
+  customerName: { color: '#102A43', fontSize: 15, fontWeight: '900' },
+  orderId: { color: '#667085', fontSize: 10, marginTop: 2 },
+  publicOrderId: { color: '#079455', fontSize: 11, fontWeight: '900', marginTop: 2 },
+  orderValue: { color: '#102A43', fontSize: 11, fontWeight: '900' },
   orderValuePending: { color: '#B54708' },
   orderMessage: { color: '#475467', fontSize: 13, lineHeight: 19, marginTop: 9 },
   closureMeta: { color: '#B54708', fontSize: 10, fontWeight: '700', marginTop: 6 },
   orderMeta: { color: '#667085', fontSize: 10, marginTop: 8 },
-  statusPill: { borderRadius: 999, backgroundColor: '#EAECF0', paddingVertical: 5, paddingHorizontal: 8 },
+  statusPill: { borderRadius: 999, backgroundColor: '#E4E7EC', paddingVertical: 5, paddingHorizontal: 8 },
   statusReview: { backgroundColor: '#FFF3D6' },
   statusText: { color: '#344054', fontSize: 10, fontWeight: '900' },
-  detailCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EAECF0', borderRadius: 18, padding: 16, gap: 14 },
-  detailTitle: { color: '#101828', fontSize: 19, fontWeight: '900' },
+  detailCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 18, padding: 16, gap: 14 },
+  detailTitle: { color: '#102A43', fontSize: 19, fontWeight: '900' },
   messageCard: { backgroundColor: '#F9FAFB', borderRadius: 13, padding: 13 },
   messageText: { color: '#344054', fontSize: 13, lineHeight: 20, marginTop: 6 },
   totalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingTop: 2 },
   totalLabel: { color: '#667085', fontWeight: '800', fontSize: 12 },
-  totalValue: { color: '#101828', fontWeight: '900', fontSize: 19 },
-  bottomNav: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#EAECF0', backgroundColor: '#FFFFFF', paddingHorizontal: 8, paddingTop: 8, paddingBottom: Platform.OS === 'android' ? 46 : 10, gap: 4 },
+  totalValue: { color: '#102A43', fontWeight: '900', fontSize: 19 },
+  bottomNav: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#E4E7EC', backgroundColor: '#FFFFFF', paddingHorizontal: 8, paddingTop: 8, paddingBottom: Platform.OS === 'android' ? 46 : 10, gap: 4 },
   navButton: { flex: 1, minHeight: 48, borderRadius: 11, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4, paddingHorizontal: 2 },
-  navButtonActive: { backgroundColor: '#EEF4FF' },
+  navButtonActive: { backgroundColor: '#ECFDF3' },
   navText: { color: '#667085', fontSize: 11, fontWeight: '800' },
-  navTextActive: { color: '#175CD3' },
-  navCount: { minWidth: 18, borderRadius: 999, backgroundColor: '#246BFD', color: '#FFFFFF', fontSize: 10, fontWeight: '900', textAlign: 'center', overflow: 'hidden', paddingHorizontal: 5 },
+  navTextActive: { color: '#079455' },
+  navCount: { minWidth: 18, borderRadius: 999, backgroundColor: '#12B76A', color: '#FFFFFF', fontSize: 10, fontWeight: '900', textAlign: 'center', overflow: 'hidden', paddingHorizontal: 5 },
   errorCard: { backgroundColor: '#FEF3F2', borderRadius: 13, padding: 13, gap: 5 },
   errorTitle: { color: '#B42318', fontWeight: '900', fontSize: 12 },
   errorText: { color: '#912018', fontSize: 11, lineHeight: 17 },
   retryText: { color: '#B42318', fontWeight: '900', fontSize: 11 },
   loadingCard: { backgroundColor: '#FFFFFF', borderRadius: 15, padding: 18, gap: 8, alignItems: 'center' },
-  emptyCard: { backgroundColor: '#FFFFFF', borderRadius: 15, padding: 18, borderWidth: 1, borderColor: '#EAECF0' },
-  emptyTitle: { color: '#101828', fontWeight: '900', fontSize: 15, textAlign: 'center' },
+  emptyCard: { backgroundColor: '#FFFFFF', borderRadius: 15, padding: 18, borderWidth: 1, borderColor: '#E4E7EC' },
+  emptyTitle: { color: '#102A43', fontWeight: '900', fontSize: 15, textAlign: 'center' },
   emptyText: { color: '#667085', fontSize: 11, lineHeight: 17, textAlign: 'center', marginTop: 4 },
   muted: { color: '#667085', fontSize: 11 },
-  primaryButton: { minHeight: 44, borderRadius: 11, backgroundColor: '#246BFD', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
+  primaryButton: { minHeight: 44, borderRadius: 11, backgroundColor: '#12B76A', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
   primaryButtonText: { color: '#FFFFFF', fontWeight: '900' },
 });
