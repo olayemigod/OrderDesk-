@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { MerchantBusiness } from '../data/businessRepository';
+import { ChatCatalogueReviewSection } from './ChatCatalogueReviewSection';
 import type { CatalogueItem, CatalogueItemInput } from '../data/catalogueRepository';
 import {
   configureWhatsAppCatalogue,
@@ -181,6 +182,11 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
           <Text style={styles.retryText}>Refresh WhatsApp catalogue status</Text>
         </Pressable>
       </View>
+
+      <ChatCatalogueReviewSection
+        business={business}
+        onCatalogueChanged={refresh}
+      />
 
       {error ? (
         <View style={styles.errorCard}>
