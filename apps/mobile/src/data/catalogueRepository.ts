@@ -219,9 +219,7 @@ function validateInput(input: CatalogueItemInput): CatalogueItemInput {
 }
 
 function makeUploadToken(): string {
-  const cryptoObject = globalThis.crypto as Crypto | undefined;
-  if (cryptoObject?.randomUUID) return cryptoObject.randomUUID();
-  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+  return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
 }
 
 function cleanOptional(value: string | null): string | null {
