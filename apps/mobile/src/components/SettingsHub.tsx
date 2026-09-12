@@ -6,7 +6,6 @@ import { usePlatformAdmin } from '../hooks/usePlatformAdmin';
 import { useSubscriptionAccess } from '../hooks/useSubscriptionAccess';
 import { AccountDataControls } from './AccountDataControls';
 import { BusinessProfileView } from './BusinessProfileView';
-import { CatalogueView } from './CatalogueView';
 import { CustomersView } from './CustomersView';
 import { CustomerNotificationSettings } from './CustomerNotificationSettings';
 import { PaymentMethodsSettings } from './PaymentMethodsSettings';
@@ -19,7 +18,6 @@ import { WhatsAppConnectionView } from './WhatsAppConnectionView';
 type Section =
   | 'menu'
   | 'business'
-  | 'catalogue'
   | 'customers'
   | 'whatsapp'
   | 'notifications'
@@ -59,7 +57,6 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
         </Pressable>
 
         {section === 'business' ? <BusinessProfileView business={business} onSave={onSaveBusiness} /> : null}
-        {section === 'catalogue' ? <CatalogueView business={business} /> : null}
         {section === 'customers' ? <CustomersView business={business} /> : null}
         {section === 'whatsapp' ? <WhatsAppConnectionView business={business} /> : null}
         {section === 'notifications' ? <CustomerNotificationSettings business={business} /> : null}
