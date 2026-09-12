@@ -311,14 +311,15 @@ function WorkspaceHeader({
   notificationCount: number;
   onOpenNotifications: () => void;
 }) {
+  const appearance = useSellerTrayAppearance();
   return (
     <>
       <View style={styles.header}>
         <View style={styles.headerCopy}>
-          <SellerTrayBrand size={38} showTagline />
+          <SellerTrayBrand size={38} showTagline inverted={appearance.dark} />
           <View style={styles.merchantIdentity}>
-            <Text style={styles.businessName}>{business.name}</Text>
-            <Text style={styles.workspaceMeta}>
+            <Text style={[styles.businessName, appearance.dark && darkStyles.titleText, appearance.textSize === 'large' && styles.businessNameLarge]}>{business.name}</Text>
+            <Text style={[styles.workspaceMeta, appearance.dark && darkStyles.bodyText]}>
               {business.role.toUpperCase()} · {subscriptionLabels[business.subscriptionStatus]}
             </Text>
           </View>
@@ -326,9 +327,9 @@ function WorkspaceHeader({
         <Pressable
           onPress={onOpenNotifications}
           accessibilityLabel="Open notifications"
-          style={({ pressed }) => [styles.notificationButton, pressed && styles.quickActionPressed]}
+          style={({ pressed }) => [styles.notificationButton, appearance.dark && darkStyles.card, pressed && styles.quickActionPressed]}
         >
-          <Ionicons name="notifications-outline" size={25} color={theme.colors.navy} />
+          <Ionicons name="notifications-outline" size={25} color={appearance.dark ? theme.colors.mint : theme.colors.navy} />
           {notificationCount > 0 ? (
             <View style={styles.notificationBadge}>
               <Text style={styles.notificationBadgeText}>{Math.min(notificationCount, 99)}</Text>
@@ -338,8 +339,8 @@ function WorkspaceHeader({
       </View>
 
       {businesses.length > 1 ? (
-        <View style={styles.switcherCard}>
-          <Text style={styles.switcherLabel}>BUSINESS</Text>
+        <View style={[styles.switcherCard, appearance.dark && darkStyles.card]}>
+          <Text style={[styles.switcherLabel, appearance.dark && darkStyles.bodyText]}>BUSINESS</Text>
           <View style={styles.switcherButtons}>
             {businesses.map((candidate) => (
               <Pressable
@@ -347,6 +348,7 @@ function WorkspaceHeader({
                 onPress={() => void onSelectBusiness(candidate.id)}
                 style={[
                   styles.switcherButton,
+                  appearance.dark && darkStyles.outlineButton,
                   candidate.id === business.id && styles.switcherButtonActive,
                 ]}
               >
@@ -354,6 +356,7 @@ function WorkspaceHeader({
                   numberOfLines={1}
                   style={[
                     styles.switcherButtonText,
+                    appearance.dark && darkStyles.bodyText,
                     candidate.id === business.id && styles.switcherButtonTextActive,
                   ]}
                 >
@@ -397,6 +400,7 @@ function HomeView({
   onOpenMore: () => void;
   onSelectOrder: (orderId: string) => void;
 }) {
+  const appearance = useSellerTrayAppearance();
   const now = new Date();
   const todayKey = localDayKey(now);
   const todayOrders = orders.filter((order) => localDayKey(new Date(order.receivedAt)) === todayKey);
@@ -415,8 +419,8 @@ function HomeView({
   return (
     <View style={styles.sectionStack}>
       <View style={styles.greetingBlock}>
-        <Text style={styles.greetingTitle}>{timeGreeting()}, {merchantName}</Text>
-        <Text style={styles.greetingSubtitle}>Here is what is happening at {business.name} today.</Text>
+        <Text style={[styles.greetingTitle, appearance.dark && darkStyles.titleText, appearance.textSize === 'large' && styles.greetingTitleLarge]}>{timeGreeting()}, {merchantName}</Text>
+        <Text style={[styles.greetingSubtitle, appearance.dark && darkStyles.bodyText]}>Here is what is happening at {business.name} today.</Text>
       </View>
 
       <Pressable onPress={onOpenOrders} style={({ pressed }) => [styles.homeHeroGreen, pressed && styles.heroPressed]}>
@@ -443,10 +447,10 @@ function HomeView({
         <HomeMetric icon="chatbubble-ellipses-outline" label="New enquiries" value={String(newEnquiries)} hint="WhatsApp needs review" attention={newEnquiries > 0} />
       </View>
 
-      <View style={styles.quickActionsCard}>
+      <View style={[styles.quickActionsCard, appearance.dark && darkStyles.card]}>
         <View>
-          <Text style={styles.sectionEyebrow}>QUICK ACTIONS</Text>
-          <Text style={styles.sectionTitle}>Common tasks</Text>
+          <Text style={[styles.sectionEyebrow, appearance.dark && darkStyles.bodyText]}>QUICK ACTIONS</Text>
+          <Text style={[styles.sectionTitle, appearance.dark && darkStyles.titleText]}>Common tasks</Text>
         </View>
         <View style={styles.quickActionRow}>
           <QuickAction icon="receipt-outline" label="Orders" onPress={onOpenOrders} />
@@ -456,7 +460,7 @@ function HomeView({
       </View>
 
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Recent orders</Text>
+        <Text style={[styles.sectionTitle, appearance.dark && darkStyles.titleText]}>Recent orders</Text>
         <Pressable onPress={onOpenOrders}>
           <Text style={styles.linkText}>View all</Text>
         </Pressable>
@@ -498,25 +502,27 @@ function HomeMetric({
   hint: string;
   attention?: boolean;
 }) {
+  const appearance = useSellerTrayAppearance();
   return (
-    <View style={[styles.homeMetricCard, attention && styles.homeMetricCardAttention]}>
+    <View style={[styles.homeMetricCard, appearance.dark && darkStyles.card, attention && styles.homeMetricCardAttention, attention && appearance.dark && darkStyles.warningCard]}>
       <View style={styles.metricIconWrap}>
         <Ionicons name={icon as never} size={19} color={attention ? '#B54708' : theme.colors.greenDark} />
       </View>
-      <Text style={styles.homeMetricLabel}>{label}</Text>
-      <Text numberOfLines={1} style={styles.homeMetricValue}>{value}</Text>
-      <Text style={styles.homeMetricHint}>{hint}</Text>
+      <Text style={[styles.homeMetricLabel, appearance.dark && darkStyles.bodyText]}>{label}</Text>
+      <Text numberOfLines={1} style={[styles.homeMetricValue, appearance.dark && darkStyles.titleText]}>{value}</Text>
+      <Text style={[styles.homeMetricHint, appearance.dark && darkStyles.mutedText]}>{hint}</Text>
     </View>
   );
 }
 
 function QuickAction({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
+  const appearance = useSellerTrayAppearance();
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.quickAction, pressed && styles.quickActionPressed]}>
-      <View style={styles.quickActionIcon}>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.quickAction, appearance.dark && darkStyles.mintCard, pressed && styles.quickActionPressed]}>
+      <View style={[styles.quickActionIcon, appearance.dark && darkStyles.card]}>
         <Ionicons name={icon as never} size={22} color={theme.colors.greenDark} />
       </View>
-      <Text style={styles.quickActionText}>{label}</Text>
+      <Text style={[styles.quickActionText, appearance.dark && darkStyles.titleText]}>{label}</Text>
     </Pressable>
   );
 }
