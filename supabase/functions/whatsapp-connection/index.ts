@@ -74,6 +74,7 @@ Deno.serve(async (request) => {
     }
 
     const accessToken = await exchangeAuthorizationCode(authorizationCode);
+    const tokenInfo = await inspectAccessToken(accessToken);
     const phone = await verifyPhoneBelongsToWaba(accessToken, wabaId, phoneNumberId);
     await subscribeAppToWaba(accessToken, wabaId);
 
@@ -95,7 +96,7 @@ Deno.serve(async (request) => {
       p_credentials_iv: encrypted.iv,
       p_credential_fingerprint: fingerprint,
       p_encryption_key_version: 1,
-      p_credential_expires_at: null,
+      p_credential_expires_at: tokenInfo.expiresAt,
     });
 
     console.info(JSON.stringify({
@@ -198,6 +199,50 @@ async function exchangeAuthorizationCode(code: string): Promise<string> {
     : '';
   if (!accessToken) throw new Error('Meta authorization-code exchange returned no access token');
   return accessToken;
+}
+
+async function inspectAccessToken(
+  accessToken: string,
+): Promise<{ expiresAt: string | null }> {
+  const url = new URL(
+    'https://graph.facebook.com/' + encodeURIComponent(META_GRAPH_API_VERSION) + '/debug_token',
+  );
+  url.searchParams.set('input_token', accessToken);
+
+  const response = await fetch(url, {
+    headers: {
+      authorization: 'Bearer ' + META_APP_ID + '|' + META_APP_SECRET,
+    },
+    signal: AbortSignal.timeout(12000),
+  });
+  const payload = await safeJson(response);
+  if (!response.ok || !isRecord(payload) || !isRecord(payload.data)) {
+    throw new Error(metaError(payload, 'Unable to validate the Meta business integration token'));
+  }
+
+  const data = payload.data;
+  if (data.is_valid !== true) throw new Error('Meta business integration token is not valid');
+  if (String(data.app_id ?? '') !== META_APP_ID) {
+    throw new Error('Meta business integration token was issued for a different application');
+  }
+
+  const scopes = Array.isArray(data.scopes)
+    ? data.scopes.filter((value): value is string => typeof value === 'string')
+    : [];
+  for (const required of ['whatsapp_business_management', 'whatsapp_business_messaging']) {
+    if (!scopes.includes(required)) {
+      throw new Error('Meta business integration token is missing required WhatsApp permissions');
+    }
+  }
+
+  const expiresAtSeconds = typeof data.expires_at === 'number'
+    ? data.expires_at
+    : Number(data.expires_at ?? 0);
+  const expiresAt = Number.isFinite(expiresAtSeconds) && expiresAtSeconds > 0
+    ? new Date(expiresAtSeconds * 1000).toISOString()
+    : null;
+
+  return { expiresAt };
 }
 
 async function verifyPhoneBelongsToWaba(
