@@ -132,58 +132,68 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
         <Text style={styles.summaryMeta}>{business.role.toUpperCase()} · {formatLabel(business.subscriptionStatus)}</Text>
       </View>
 
-      <View style={styles.menuGroup}>
-        <MenuRow
-          title="Catalogue"
-          text="Products, pricing, aliases and product images"
-          onPress={() => setSection('catalogue')}
-        />
-        <MenuRow
-          title="Customers"
-          text="Customer directory, order history and safe profile details"
-          onPress={() => setSection('customers')}
-        />
-        <MenuRow
-          title="Business profile"
-          text="Business name, contact details, currency and timezone"
-          onPress={() => setSection('business')}
-        />
-        <MenuRow
-          title="WhatsApp connection"
-          text={business.whatsappConnectionStatus === 'connected' ? 'Connected' : 'Connect and verify your WhatsApp Business number'}
-          status={business.whatsappConnectionStatus === 'connected' ? 'Connected' : 'Setup'}
-          onPress={() => setSection('whatsapp')}
-        />
-        <MenuRow
-          title="Customer notifications"
-          text="Control automated SellerTray order updates"
-          onPress={() => setSection('notifications')}
-        />
-        <MenuRow
-          title="Customer payments"
-          text="Bank transfer, Paystack, Flutterwave and pay-on-fulfilment options"
-          onPress={() => setSection('payments')}
-        />
-        <MenuRow
-          title="Team & access"
-          text="Owners, managers, staff and invitations"
-          onPress={() => setSection('team')}
-        />
-        <MenuRow
-          title="Plan & billing"
-          text="Subscription status and billing controls"
-          onPress={() => setSection('subscription')}
-        />
-        <MenuRow
-          title="Security & MFA"
-          text="Authenticator enrollment and high-assurance session verification"
-          onPress={() => setSection('security')}
-        />
-        <MenuRow
-          title="Account & privacy"
-          text="Sign out, export data, legal information and account closure"
-          onPress={() => setSection('account')}
-        />
+      <View style={styles.menuSection}>
+        <Text style={styles.groupLabel}>SELLING & CUSTOMERS</Text>
+        <View style={styles.menuGroup}>
+          <MenuRow
+            title="Customers"
+            text="Customer directory, history and profile details"
+            onPress={() => setSection('customers')}
+          />
+          <MenuRow
+            title="Customer payments"
+            text="Payment methods, reconciliation and customer payment choices"
+            onPress={() => setSection('payments')}
+          />
+          <MenuRow
+            title="WhatsApp connection"
+            text={business.whatsappConnectionStatus === 'connected' ? 'Connected and receiving supported activity' : 'Connect and verify your WhatsApp Business number'}
+            status={business.whatsappConnectionStatus === 'connected' ? 'Connected' : 'Setup'}
+            onPress={() => setSection('whatsapp')}
+          />
+          <MenuRow
+            title="Customer notifications"
+            text="Control automated order and payment updates"
+            onPress={() => setSection('notifications')}
+          />
+        </View>
+      </View>
+
+      <View style={styles.menuSection}>
+        <Text style={styles.groupLabel}>BUSINESS</Text>
+        <View style={styles.menuGroup}>
+          <MenuRow
+            title="Business profile"
+            text="Business name, contact details, currency and timezone"
+            onPress={() => setSection('business')}
+          />
+          <MenuRow
+            title="Team & access"
+            text="Owners, managers, staff and invitations"
+            onPress={() => setSection('team')}
+          />
+          <MenuRow
+            title="Plan & billing"
+            text="Subscription status and SellerTray billing controls"
+            onPress={() => setSection('subscription')}
+          />
+        </View>
+      </View>
+
+      <View style={styles.menuSection}>
+        <Text style={styles.groupLabel}>ACCOUNT & SECURITY</Text>
+        <View style={styles.menuGroup}>
+          <MenuRow
+            title="Security & MFA"
+            text="Authenticator enrollment and high-assurance session verification"
+            onPress={() => setSection('security')}
+          />
+          <MenuRow
+            title="Account & privacy"
+            text="Sign out, export data, legal information and account closure"
+            onPress={() => setSection('account')}
+          />
+        </View>
       </View>
 
       <Text style={styles.buildStamp}>SellerTray 1.0.0 · Android build 7</Text>
@@ -241,6 +251,7 @@ const styles = StyleSheet.create({
   summaryCard: { backgroundColor: '#102A43', borderRadius: 17, padding: 16 },
   summaryName: { color: '#FFFFFF', fontSize: 18, fontWeight: '900' },
   summaryMeta: { color: '#D0D5DD', fontSize: 11, fontWeight: '800', marginTop: 4 },
+  menuSection: { gap: 7 },
   menuGroup: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 18, overflow: 'hidden' },
   menuRow: {
     minHeight: 70,
