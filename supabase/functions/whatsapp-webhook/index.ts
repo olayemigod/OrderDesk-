@@ -1011,19 +1011,18 @@ async function ensureReceiptPdf({
 }): Promise<ReceiptAttachment> {
   const version = Math.max(1, Number(order.receipt_version) || 1);
   const filename = `Receipt-${order.public_order_id}.pdf`;
+  const storagePath = `${tenantId}/${order.public_order_id}/receipt-v${version}.pdf`;
   const cachedPath = order.receipt_storage_path?.trim();
 
-  if (cachedPath) {
+  if (cachedPath === storagePath) {
     return {
       mediaType: 'document',
       storageBucket: 'receipts',
-      storagePath: cachedPath,
+      storagePath,
       filename,
       mimeType: 'application/pdf',
     };
   }
-
-  const storagePath = `${tenantId}/${order.public_order_id}/receipt-v${version}.pdf`;
   const pdfBytes = await buildReceiptPdf({
     businessName,
     customerName,
