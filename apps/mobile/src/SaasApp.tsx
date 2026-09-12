@@ -1271,6 +1271,7 @@ function NotificationCenterView({
   onOpenOrder: (orderId: string) => void;
   onBack: () => void;
 }) {
+  const appearance = useSellerTrayAppearance();
   const alerts = orders
     .flatMap((order) => {
       const rows: Array<{ key: string; title: string; text: string; icon: string; tone: 'warning' | 'info' | 'success'; orderId: string }> = [];
@@ -1311,16 +1312,16 @@ function NotificationCenterView({
   return (
     <View style={styles.sectionStack}>
       <Pressable onPress={onBack} style={styles.backToListButton}>
-        <Text style={styles.backToListText}>← Home</Text>
+        <Text style={[styles.backToListText, appearance.dark && darkStyles.greenText]}>← Home</Text>
       </Pressable>
       <View>
-        <Text style={styles.sectionEyebrow}>ACTIVITY CENTER</Text>
-        <Text style={styles.pageTitle}>Notifications</Text>
-        <Text style={styles.pageSubtitle}>Orders, payments and important SellerTray activity that needs your attention.</Text>
+        <Text style={[styles.sectionEyebrow, appearance.dark && darkStyles.bodyText]}>ACTIVITY CENTER</Text>
+        <Text style={[styles.pageTitle, appearance.dark && darkStyles.titleText, appearance.textSize === 'large' && styles.pageTitleLarge]}>Notifications</Text>
+        <Text style={[styles.pageSubtitle, appearance.dark && darkStyles.bodyText]}>Orders, payments and important SellerTray activity that needs your attention.</Text>
       </View>
 
       {syncError ? (
-        <View style={styles.notificationSyncCard}>
+        <View style={[styles.notificationSyncCard, appearance.dark && darkStyles.errorCard]}>
           <Ionicons name="cloud-offline-outline" size={22} color="#B42318" />
           <View style={styles.conversationCopy}>
             <Text style={styles.notificationAlertTitle}>Workspace sync problem</Text>
@@ -1336,9 +1337,9 @@ function NotificationCenterView({
           <Text style={styles.emptyText}>New order, payment and fulfilment alerts will appear here.</Text>
         </View>
       ) : (
-        <View style={styles.notificationList}>
+        <View style={[styles.notificationList, appearance.dark && darkStyles.card]}>
           {alerts.map((alert) => (
-            <Pressable key={alert.key} onPress={() => onOpenOrder(alert.orderId)} style={styles.notificationAlertRow}>
+            <Pressable key={alert.key} onPress={() => onOpenOrder(alert.orderId)} style={[styles.notificationAlertRow, appearance.dark && darkStyles.rowBorder]}>
               <View style={[
                 styles.notificationAlertIcon,
                 alert.tone === 'warning' && styles.notificationAlertIconWarning,
@@ -1347,8 +1348,8 @@ function NotificationCenterView({
                 <Ionicons name={alert.icon as never} size={20} color={alert.tone === 'warning' ? '#B54708' : alert.tone === 'success' ? theme.colors.greenDark : theme.colors.navy} />
               </View>
               <View style={styles.conversationCopy}>
-                <Text style={styles.notificationAlertTitle}>{alert.title}</Text>
-                <Text style={styles.notificationAlertText}>{alert.text}</Text>
+                <Text style={[styles.notificationAlertTitle, appearance.dark && darkStyles.titleText]}>{alert.title}</Text>
+                <Text style={[styles.notificationAlertText, appearance.dark && darkStyles.bodyText]}>{alert.text}</Text>
               </View>
               <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
             </Pressable>
@@ -1402,8 +1403,9 @@ function BottomNav({
   inboxCount: number;
   onChange: (view: ViewName) => void;
 }) {
+  const appearance = useSellerTrayAppearance();
   return (
-    <View style={styles.bottomNav}>
+    <View style={[styles.bottomNav, appearance.dark && darkStyles.bottomNav]}>
       <NavButton icon="home-outline" label="Home" active={view === 'home'} onPress={() => onChange('home')} />
       <NavButton icon="receipt-outline" label="Orders" active={view === 'orders'} count={reviewCount} onPress={() => onChange('orders')} />
       <NavButton icon="chatbubbles-outline" label="Conversations" active={view === 'inbox'} count={inboxCount} onPress={() => onChange('inbox')} />
@@ -1426,29 +1428,32 @@ function NavButton({
   count?: number;
   onPress: () => void;
 }) {
+  const appearance = useSellerTrayAppearance();
   return (
-    <Pressable onPress={onPress} style={[styles.navButton, active && styles.navButtonActive]}>
+    <Pressable onPress={onPress} style={[styles.navButton, appearance.dark && darkStyles.navButton, active && styles.navButtonActive, active && appearance.dark && darkStyles.navButtonActive]}>
       <View style={styles.navIconWrap}>
-        <Ionicons name={icon as never} size={20} color={active ? theme.colors.greenDark : theme.colors.muted} />
+        <Ionicons name={icon as never} size={20} color={active ? theme.colors.green : appearance.dark ? '#D0D5DD' : theme.colors.muted} />
         {count > 0 ? <Text style={styles.navCount}>{count}</Text> : null}
       </View>
-      <Text numberOfLines={1} style={[styles.navText, active && styles.navTextActive]}>{label}</Text>
+      <Text numberOfLines={1} style={[styles.navText, appearance.dark && darkStyles.bodyText, active && styles.navTextActive]}>{label}</Text>
     </Pressable>
   );
 }
 
 function Badge({ label, positive = false }: { label: string; positive?: boolean }) {
+  const appearance = useSellerTrayAppearance();
   return (
-    <View style={[styles.badge, positive && styles.badgePositive]}>
-      <Text style={[styles.badgeText, positive && styles.badgeTextPositive]}>{label}</Text>
+    <View style={[styles.badge, appearance.dark && darkStyles.subtleCard, positive && styles.badgePositive, positive && appearance.dark && darkStyles.mintCard]}>
+      <Text style={[styles.badgeText, appearance.dark && darkStyles.bodyText, positive && styles.badgeTextPositive]}>{label}</Text>
     </View>
   );
 }
 
 function StatusPill({ status }: { status: OrderStatus }) {
+  const appearance = useSellerTrayAppearance();
   return (
-    <View style={[styles.statusPill, status === 'needs_review' && styles.statusReview]}>
-      <Text style={styles.statusText}>{statusLabels[status]}</Text>
+    <View style={[styles.statusPill, appearance.dark && darkStyles.subtleCard, status === 'needs_review' && styles.statusReview]}>
+      <Text style={[styles.statusText, appearance.dark && darkStyles.titleText]}>{statusLabels[status]}</Text>
     </View>
   );
 }
