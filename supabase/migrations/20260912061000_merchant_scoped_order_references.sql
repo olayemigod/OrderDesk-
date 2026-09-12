@@ -288,7 +288,7 @@ revoke all on function public.provision_business_for_user(uuid,text,text,text,te
 revoke all on function public.provision_business_for_user(uuid,text,text,text,text,text) from authenticated;
 grant execute on function public.provision_business_for_user(uuid,text,text,text,text,text) to service_role;
 
-do $
+do $sellertray$
 declare
   v_def text;
 begin
@@ -300,6 +300,6 @@ begin
     'Order Ref: %s. Save this reference. You can ask "status %s" or "receipt %s" on WhatsApp at any time.'
   );
   execute v_def;
-end $;
+end $sellertray$;
 
 commit;
