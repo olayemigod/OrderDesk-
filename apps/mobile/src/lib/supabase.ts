@@ -1,6 +1,6 @@
 import 'react-native-url-polyfill/auto';
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { AppState, Platform } from 'react-native';
 import { createClient } from '@supabase/supabase-js';
 
@@ -13,9 +13,17 @@ if (!supabaseUrl || !supabasePublishableKey) {
   );
 }
 
+const nativeSecureStorage = {
+  getItem: (key: string) => SecureStore.getItemAsync(key),
+  setItem: (key: string, value: string) => SecureStore.setItemAsync(key, value, {
+    keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
+  }),
+  removeItem: (key: string) => SecureStore.deleteItemAsync(key),
+};
+
 export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
   auth: {
-    ...(Platform.OS !== 'web' ? { storage: AsyncStorage } : {}),
+    ...(Platform.OS !== 'web' ? { storage: nativeSecureStorage } : {}),
     autoRefreshToken: true,
     persistSession: true,
     // SellerTray handles recovery URLs explicitly in AuthGate so the

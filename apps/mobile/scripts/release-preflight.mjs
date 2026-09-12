@@ -30,6 +30,7 @@ function collectFiles(dir, output = []) {
 const pkg = readJson(join(mobileRoot, 'package.json'));
 const lock = readJson(join(mobileRoot, 'package-lock.json'));
 const app = readJson(join(mobileRoot, 'app.json')).expo;
+const supabaseClient = read(join(mobileRoot, 'src/lib/supabase.ts'));
 const eas = readJson(join(mobileRoot, 'eas.json'));
 const releaseAcceptance = readJson(join(repoRoot, 'docs/release_acceptance.json'));
 const migrationDir = join(repoRoot, 'supabase/migrations');
@@ -131,6 +132,15 @@ requireValue(app.scheme?.[0] === 'sellertray', 'sellertray must be the canonical
 requireValue(app.scheme?.includes('orderdesk'), 'legacy orderdesk scheme must remain during the beta compatibility window');
 requireValue(app.android?.package === 'ng.processedge.sellertray', 'Android package must be ng.processedge.sellertray');
 requireValue(app.android?.allowBackup === false, 'Android Auto Backup must remain disabled for SellerTray');
+requireValue(
+  supabaseClient.includes("from 'expo-secure-store'") &&
+    supabaseClient.includes('storage: nativeSecureStorage') &&
+    supabaseClient.includes('AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY') &&
+    !supabaseClient.includes('@react-native-async-storage/async-storage') &&
+    pkg.dependencies?.['expo-secure-store'] === '57.0.4' &&
+    !pkg.dependencies?.['@react-native-async-storage/async-storage'],
+  'Native Supabase sessions must remain encrypted in Expo SecureStore, never AsyncStorage',
+);
 const requiredBlockedAndroidPermissions = [
   "android.permission.ACCESS_COARSE_LOCATION",
   "android.permission.ACCESS_FINE_LOCATION",

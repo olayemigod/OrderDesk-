@@ -52,6 +52,14 @@
     "ios": {
       "bundleIdentifier": "ng.processedge.sellertray",
       "buildNumber": "1"
-    }
+    },
+    "plugins": [
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": false
+        }
+      ]
+    ]
   }
 }

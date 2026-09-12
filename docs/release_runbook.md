@@ -186,3 +186,16 @@ The Google Play-distributed SellerTray Android build is consumption-only for Sel
 - merchant-customer payments for merchant orders are not SellerTray subscription purchases and remain governed by the customer-payment workflow.
 
 Before each Play release, complete/review the Financial features declaration using the features actually present in the binary. SellerTray facilitates merchant payment collection/reconciliation, so ProcessEdge must not certify “no financial features” without reviewing the then-current Play definitions. All Play apps must submit the declaration even when they have no financial features.
+
+
+## Native authentication storage
+
+SellerTray native Auth persistence uses `expo-secure-store` rather than AsyncStorage.
+
+- Android: SecureStore is backed by encrypted storage using Android Keystore.
+- iOS: SecureStore uses Keychain.
+- SellerTray requests `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY` accessibility for native session material.
+- Android Auto Backup remains disabled, and the SecureStore config plugin does not configure backup support.
+- The first build containing this security change may require existing beta users whose prior session lived only in AsyncStorage to sign in again. SellerTray intentionally does not migrate plaintext persisted sessions into the new secure store automatically.
+
+Release acceptance must verify sign-in persistence across app restart and sign-out removal on a physical device.
