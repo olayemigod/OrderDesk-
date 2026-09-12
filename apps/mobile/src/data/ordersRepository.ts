@@ -35,6 +35,7 @@ type OrderNotificationRow = {
 
 type OrderRow = {
   id: string;
+  public_order_id: string;
   status: OrderStatus;
   status_reason: string | null;
   fulfillment_method: FulfillmentMethod | null;
@@ -110,6 +111,7 @@ function mapOrder(row: OrderRow, notifications: OrderNotification[]): MerchantOr
 
   return {
     id: row.id,
+    publicOrderId: row.public_order_id,
     customerName: customer?.display_name || customer?.phone || customer?.wa_id || 'WhatsApp customer',
     customerPhone: customer?.phone || customer?.wa_id || '',
     receivedAt: row.created_at,
@@ -164,6 +166,7 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
       .from('orders')
       .select(`
         id,
+        public_order_id,
         status,
         status_reason,
         fulfillment_method,
