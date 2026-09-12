@@ -272,7 +272,27 @@ requireValue(
   'Business provisioning must verify the user token and persist the Merchant ID',
 );
 const orderFulfillmentPanel = read(join(mobileRoot, 'src/components/OrderFulfillmentPanel.tsx'));
+const ordersRepository = read(join(mobileRoot, 'src/data/ordersRepository.ts'));
+const orderFulfillmentFunction = read(join(repoRoot, 'supabase/functions/order-fulfillment/index.ts'));
+const fulfillmentIntegrityMigration = read(join(repoRoot, 'supabase/migrations/20260912134000_fulfillment_completion_integrity.sql'));
 requireValue(orderFulfillmentPanel.includes('Customer pickup') && orderFulfillmentPanel.includes('Merchant / own rider') && orderFulfillmentPanel.includes('Third-party dispatch'), 'Order fulfillment tracking UI must remain wired');
+requireValue(
+  ordersRepository.includes("supabase.functions.invoke('order-fulfillment'") &&
+    !ordersRepository.includes("fulfillment_status: 'out_for_delivery'"),
+  'Merchant fulfillment mutations must remain behind the governed order-fulfillment server operation',
+);
+requireValue(
+  orderFulfillmentFunction.includes('admin.auth.getUser(token)') &&
+    orderFulfillmentFunction.includes("orderdesk_subscription_can_write") &&
+    orderFulfillmentFunction.includes("eq('fulfillment_status', 'unassigned')") &&
+    orderFulfillmentFunction.includes("eq('fulfillment_status', 'out_for_delivery')"),
+  'order-fulfillment must authenticate the user, enforce subscription access and use compare-and-set fulfillment transitions',
+);
+requireValue(
+  fulfillmentIntegrityMigration.includes('Completed SellerTray orders require governed fulfillment evidence') &&
+    fulfillmentIntegrityMigration.includes("new.fulfillment_status not in ('delivered', 'collected')"),
+  'Database order completion must remain impossible without fulfillment evidence',
+);
 requireValue(orderFulfillmentPanel.includes('Mark delivered & complete') && orderFulfillmentPanel.includes('Mark collected & complete'), 'Order completion must retain fulfillment evidence');
 requireValue(orderFulfillmentPanel.includes('Customer confirmed receipt on WhatsApp'), 'Completed orders must show customer receipt-confirmation provenance');
 requireValue(

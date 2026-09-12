@@ -272,6 +272,36 @@ export type OrderFulfillmentInput = {
   note?: string | null;
 };
 
+async function invokeFulfillmentOperation(
+  action: 'start_delivery' | 'complete_fulfillment',
+  orderId: string,
+  input: OrderFulfillmentInput,
+): Promise<void> {
+  const { error } = await supabase.functions.invoke('order-fulfillment', {
+    body: {
+      action,
+      orderId,
+      method: input.method,
+      provider: input.provider?.trim() || null,
+      reference: input.reference?.trim() || null,
+      note: input.note?.trim() || null,
+    },
+  });
+
+  if (!error) return;
+
+  let message = error.message || 'SellerTray could not update fulfillment.';
+  if (error.context && typeof error.context === 'object' && 'clone' in error.context) {
+    try {
+      const payload = await (error.context as Response).clone().json() as { error?: string };
+      if (payload?.error) message = payload.error;
+    } catch {
+      // Keep the SDK message.
+    }
+  }
+  throw new Error(message);
+}
+
 export async function startOrderDelivery(
   orderId: string,
   input: OrderFulfillmentInput,
@@ -279,54 +309,14 @@ export async function startOrderDelivery(
   if (input.method === 'customer_pickup') {
     throw new Error('Customer pickup does not require a delivery start.');
   }
-
-  const now = new Date().toISOString();
-  const { error } = await supabase
-    .from('orders')
-    .update({
-      fulfillment_method: input.method,
-      fulfillment_status: 'out_for_delivery',
-      delivery_provider: input.provider?.trim() || null,
-      delivery_reference: input.reference?.trim() || null,
-      delivery_note: input.note?.trim() || null,
-      dispatched_at: now,
-      fulfilled_at: null,
-      updated_at: now,
-    })
-    .eq('id', orderId)
-    .eq('status', 'ready');
-
-  if (error) throw error;
+  await invokeFulfillmentOperation('start_delivery', orderId, input);
 }
 
 export async function completeOrderFulfillment(
   orderId: string,
   input: OrderFulfillmentInput,
 ): Promise<void> {
-  const now = new Date().toISOString();
-  const fulfillmentStatus: FulfillmentStatus =
-    input.method === 'customer_pickup' ? 'collected' : 'delivered';
-
-  const { error } = await supabase
-    .from('orders')
-    .update({
-      status: 'completed',
-      status_reason: null,
-      fulfillment_method: input.method,
-      fulfillment_status: fulfillmentStatus,
-      fulfillment_confirmed_by: 'merchant',
-      customer_confirmed_at: null,
-      customer_confirmation_message_id: null,
-      delivery_provider: input.provider?.trim() || null,
-      delivery_reference: input.reference?.trim() || null,
-      delivery_note: input.note?.trim() || null,
-      fulfilled_at: now,
-      updated_at: now,
-    })
-    .eq('id', orderId)
-    .eq('status', 'ready');
-
-  if (error) throw error;
+  await invokeFulfillmentOperation('complete_fulfillment', orderId, input);
 }
 
 export async function updateOrderStatus(
