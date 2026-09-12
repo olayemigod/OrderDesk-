@@ -128,6 +128,35 @@ export async function updateCatalogueItem(
   await replaceAliases(tenantId, itemId, clean.aliases);
 }
 
+export async function uploadCatalogueImage(
+  tenantId: string,
+  uri: string,
+  mimeType = 'image/jpeg',
+): Promise<string> {
+  const safeMime = ['image/jpeg', 'image/png', 'image/webp'].includes(mimeType) ? mimeType : 'image/jpeg';
+  const extension = safeMime === 'image/png' ? 'png' : safeMime === 'image/webp' ? 'webp' : 'jpg';
+  const response = await fetch(uri);
+  if (!response.ok) throw new Error('SellerTray could not read the selected image.');
+  const bytes = await response.arrayBuffer();
+  if (bytes.byteLength === 0) throw new Error('The selected product image is empty.');
+  if (bytes.byteLength > 5 * 1024 * 1024) throw new Error('Choose a product image smaller than 5 MB.');
+
+  const objectPath = `${tenantId}/${Date.now()}-${makeUploadToken()}.${extension}`;
+  const { error } = await supabase.storage
+    .from('catalogue-images')
+    .upload(objectPath, bytes, {
+      contentType: safeMime,
+      cacheControl: '3600',
+      upsert: false,
+    });
+
+  if (error) throw error;
+
+  const { data } = supabase.storage.from('catalogue-images').getPublicUrl(objectPath);
+  if (!data.publicUrl) throw new Error('SellerTray could not create the product image URL.');
+  return data.publicUrl;
+}
+
 export async function setCatalogueItemActive(
   itemId: string,
   tenantId: string,
@@ -187,6 +216,12 @@ function validateInput(input: CatalogueItemInput): CatalogueItemInput {
     price: input.price,
     aliases,
   };
+}
+
+function makeUploadToken(): string {
+  const cryptoObject = globalThis.crypto as Crypto | undefined;
+  if (cryptoObject?.randomUUID) return cryptoObject.randomUUID();
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
 function cleanOptional(value: string | null): string | null {
