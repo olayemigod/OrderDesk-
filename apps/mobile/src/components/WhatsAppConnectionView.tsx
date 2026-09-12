@@ -110,6 +110,13 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
         </View>
       </View>
 
+      <View style={styles.providerBillingCard}>
+        <Text style={styles.providerBillingTitle}>Meta WhatsApp charges are separate</Text>
+        <Text style={styles.providerBillingText}>
+          Connecting WhatsApp to SellerTray does not itself create a SellerTray charge. Your WhatsApp Business Account may require its own payment method, and any billable WhatsApp Business Platform messaging is charged by Meta under Meta&apos;s current pricing. SellerTray subscription and AI-usage charges are billed separately.
+        </Text>
+      </View>
+
       <View style={[styles.consentCard, processingActive && styles.consentActiveCard]}>
         <View style={styles.consentHeading}>
           <View style={styles.consentCopy}>
@@ -244,6 +251,9 @@ const styles = StyleSheet.create({
   statusTitle: { color: '#101828', fontSize: 14, fontWeight: '900' },
   statusText: { color: '#475467', fontSize: 12, lineHeight: 18, marginTop: 4 },
   pausedText: { color: '#B54708', fontSize: 10, lineHeight: 15, fontWeight: '800', marginTop: 6 },
+  providerBillingCard: { backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#EAECF0', borderRadius: 14, padding: 13, gap: 4 },
+  providerBillingTitle: { color: '#101828', fontSize: 12, fontWeight: '900' },
+  providerBillingText: { color: '#667085', fontSize: 10, lineHeight: 16 },
   consentCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#FEC84B', borderRadius: 16, padding: 14, gap: 9 },
   consentActiveCard: { borderColor: '#ABEFC6' },
   consentHeading: { flexDirection: 'row', alignItems: 'center', gap: 10 },
