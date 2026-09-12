@@ -231,7 +231,7 @@ The AI ceilings can be adjusted through `AI_CUSTOMER_MINUTE_LIMIT`, `AI_TENANT_M
 
 Phase 1 release candidates require the dedicated **Database CI** workflow in addition to Mobile CI.
 
-The database gate uses Supabase CLI 2.117.0 and pgTAP against a fresh local stack. It replays every migration from scratch before running the tests. The initial suite freezes 60 behavioral assertions covering:
+The database gate uses Supabase CLI 2.117.0 and pgTAP against a fresh local stack. It replays every migration from scratch before running the tests. The database suite now freezes at least 62 behavioral assertions covering:
 
 - RLS and column/table/function grants;
 - governed fulfilment permissions;
@@ -246,3 +246,10 @@ The database gate uses Supabase CLI 2.117.0 and pgTAP against a fresh local stac
 - fixed-window rate-limit enforcement.
 
 A green static/source preflight is not sufficient if Database CI is red. Do not cut the Phase 1 QA APK from a commit whose database tests have not passed.
+
+
+## Customer management boundary
+
+SellerTray exposes **Catalogue** and **Customers** from More so the footer can remain compact.
+
+The customer directory is tenant-scoped and shows safe operational history. Merchant users cannot directly update customer rows. Owner/Manager profile edits go through `update_sellertray_customer_profile` and are limited to display name and email. Customer phone and WhatsApp identity stay read-only/server-managed because they are identity keys used to correlate WhatsApp self-service and order history.

@@ -6,6 +6,8 @@ import { usePlatformAdmin } from '../hooks/usePlatformAdmin';
 import { useSubscriptionAccess } from '../hooks/useSubscriptionAccess';
 import { AccountDataControls } from './AccountDataControls';
 import { BusinessProfileView } from './BusinessProfileView';
+import { CatalogueView } from './CatalogueView';
+import { CustomersView } from './CustomersView';
 import { CustomerNotificationSettings } from './CustomerNotificationSettings';
 import { PaymentMethodsSettings } from './PaymentMethodsSettings';
 import { MfaSecurityCard } from './MfaSecurityCard';
@@ -17,6 +19,8 @@ import { WhatsAppConnectionView } from './WhatsAppConnectionView';
 type Section =
   | 'menu'
   | 'business'
+  | 'catalogue'
+  | 'customers'
   | 'whatsapp'
   | 'notifications'
   | 'payments'
@@ -55,6 +59,8 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
         </Pressable>
 
         {section === 'business' ? <BusinessProfileView business={business} onSave={onSaveBusiness} /> : null}
+        {section === 'catalogue' ? <CatalogueView business={business} /> : null}
+        {section === 'customers' ? <CustomersView business={business} /> : null}
         {section === 'whatsapp' ? <WhatsAppConnectionView business={business} /> : null}
         {section === 'notifications' ? <CustomerNotificationSettings business={business} /> : null}
         {section === 'payments' ? <PaymentMethodsSettings business={business} /> : null}
@@ -127,6 +133,16 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
       </View>
 
       <View style={styles.menuGroup}>
+        <MenuRow
+          title="Catalogue"
+          text="Products, pricing, aliases and product images"
+          onPress={() => setSection('catalogue')}
+        />
+        <MenuRow
+          title="Customers"
+          text="Customer directory, order history and safe profile details"
+          onPress={() => setSection('customers')}
+        />
         <MenuRow
           title="Business profile"
           text="Business name, contact details, currency and timezone"

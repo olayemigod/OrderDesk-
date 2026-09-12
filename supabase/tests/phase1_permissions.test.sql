@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(33);
+select extensions.plan(35);
 
 select extensions.ok((select relrowsecurity from pg_class where oid='public.orders'::regclass),'orders keeps RLS enabled');
 select extensions.ok((select relrowsecurity from pg_class where oid='public.order_items'::regclass),'order_items keeps RLS enabled');
@@ -9,6 +9,9 @@ select extensions.ok((select relrowsecurity from pg_class where oid='public.inbo
 select extensions.ok((select relrowsecurity from pg_class where oid='public.merchant_payment_methods'::regclass),'merchant_payment_methods keeps RLS enabled');
 select extensions.ok((select relrowsecurity from pg_class where oid='public.order_payments'::regclass),'order_payments keeps RLS enabled');
 select extensions.ok((select relrowsecurity from pg_class where oid='public.order_financial_documents'::regclass),'order_financial_documents keeps RLS enabled');
+
+select extensions.ok(not has_table_privilege('authenticated','public.customers','UPDATE'),'authenticated clients cannot directly update customer identity rows');
+select extensions.ok(has_function_privilege('authenticated','public.update_sellertray_customer_profile(uuid,uuid,text,text)','EXECUTE'),'authenticated clients use the governed customer-profile RPC');
 
 select extensions.ok(has_column_privilege('authenticated','public.orders','status','UPDATE'),'authenticated merchant may update order status');
 select extensions.ok(has_column_privilege('authenticated','public.orders','status_reason','UPDATE'),'authenticated merchant may update status reason');
