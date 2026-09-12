@@ -921,7 +921,7 @@ requireValue(
     metaTechProviderRunbook.includes('Embedded Signup') &&
     metaTechProviderRunbook.includes('whatsapp_business_management') &&
     metaTechProviderRunbook.includes('whatsapp_business_messaging') &&
-    metaTechProviderRunbook.includes('Connecting WhatsApp to SellerTray does not itself create a SellerTray charge'),
+    metaTechProviderRunbook.includes('SellerTray does not require a Meta payment method just to connect WhatsApp'),
   'Meta Tech Provider approval/evidence runbook must remain complete',
 );
 requireValue(
@@ -931,6 +931,7 @@ requireValue(
 );
 requireValue(
   whatsappConnectionView.includes('Meta WhatsApp charges are separate') &&
+    whatsappConnectionView.includes('SellerTray does not require a Meta payment method just to connect WhatsApp') &&
     whatsappConnectionView.includes('SellerTray subscription and AI-usage charges are billed separately'),
   'WhatsApp onboarding must disclose Meta and SellerTray billing separation',
 );
