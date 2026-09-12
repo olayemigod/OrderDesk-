@@ -48,10 +48,10 @@ export function CreateBusinessView({ onCreate }: Props) {
   return (
     <View style={styles.wrap}>
       <View style={styles.hero}>
-        <Text style={styles.eyebrow}>WELCOME TO SELLERTRAY</Text>
-        <Text style={styles.title}>Create your business workspace</Text>
+        <Text style={styles.eyebrow}>CREATE ACCOUNT & BUSINESS SETUP</Text>
+        <Text style={styles.title}>Set up your business</Text>
         <Text style={styles.subtitle}>
-          This becomes your private SellerTray account for WhatsApp orders. You will be the Owner and start on the trial plan.
+          Create your SellerTray workspace and get ready to manage orders, payments and customer conversations.
         </Text>
       </View>
 
@@ -135,7 +135,7 @@ export function CreateBusinessView({ onCreate }: Props) {
           onPress={() => void create()}
           style={({ pressed }) => [styles.button, pressed && styles.pressed, submitting && styles.disabled]}
         >
-          <Text style={styles.buttonText}>{submitting ? 'Creating workspace…' : 'Create my SellerTray'}</Text>
+          <Text style={styles.buttonText}>{submitting ? 'Creating workspace…' : 'Continue'}</Text>
         </Pressable>
       </View>
 
@@ -187,21 +187,21 @@ function Field({
 const styles = StyleSheet.create({
   wrap: { gap: 16, padding: 20 },
   hero: { gap: 6, paddingTop: 8 },
-  eyebrow: { color: '#246BFD', fontSize: 10, fontWeight: '900', letterSpacing: 1.4 },
-  title: { color: '#101828', fontSize: 28, lineHeight: 34, fontWeight: '900' },
+  eyebrow: { color: '#12B76A', fontSize: 10, fontWeight: '900', letterSpacing: 1.4 },
+  title: { color: '#102A43', fontSize: 28, lineHeight: 34, fontWeight: '900' },
   subtitle: { color: '#667085', fontSize: 13, lineHeight: 20 },
-  card: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EAECF0', borderRadius: 18, padding: 16, gap: 14 },
+  card: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 18, padding: 16, gap: 14 },
   field: { gap: 6 },
   label: { color: '#344054', fontSize: 12, fontWeight: '800' },
   help: { color: '#667085', fontSize: 10, lineHeight: 15 },
-  referencePreview: { color: '#175CD3', fontSize: 10, fontWeight: '800' },
-  input: { minHeight: 47, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 11, paddingHorizontal: 12, backgroundColor: '#FFFFFF', color: '#101828' },
+  referencePreview: { color: '#079455', fontSize: 10, fontWeight: '800' },
+  input: { minHeight: 47, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 11, paddingHorizontal: 12, backgroundColor: '#FFFFFF', color: '#102A43' },
   error: { color: '#B42318', fontSize: 12, lineHeight: 17 },
-  button: { minHeight: 50, borderRadius: 12, backgroundColor: '#246BFD', alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+  button: { minHeight: 50, borderRadius: 12, backgroundColor: '#12B76A', alignItems: 'center', justifyContent: 'center', marginTop: 2 },
   buttonText: { color: '#FFFFFF', fontWeight: '900', fontSize: 14 },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.5 },
-  nextCard: { backgroundColor: '#EEF4FF', borderRadius: 16, padding: 15, gap: 5 },
-  nextTitle: { color: '#175CD3', fontSize: 13, fontWeight: '900', marginBottom: 2 },
+  nextCard: { backgroundColor: '#ECFDF3', borderRadius: 16, padding: 15, gap: 5 },
+  nextTitle: { color: '#079455', fontSize: 13, fontWeight: '900', marginBottom: 2 },
   nextText: { color: '#475467', fontSize: 12, lineHeight: 18 },
 });
