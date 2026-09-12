@@ -24,7 +24,10 @@ The following are not billable AI usage:
 - an external parser response that fails schema validation;
 - trial activity;
 - activity recorded before a commercial usage rate is active;
-- activity that cannot be tied safely to a valid paid billing period.
+- activity that cannot be tied safely to a valid paid billing period;
+- deterministic order-status queries, PDF receipt generation and WhatsApp receipt delivery.
+
+Receipt/status self-service never creates an `AI_ORDER_ACTIVITY` event and consumes no LLM tokens in the MVP path.
 
 Usage events snapshot their unit price, ISO currency and paid-period boundaries at event time. A later price or plan-currency change must never retroactively reprice or recurrency an earlier event. Settlement preparation rejects future/open periods and mixed-currency period data.
 
