@@ -125,6 +125,16 @@ The acting user must be a member of the same tenant. The confirmation actor and 
 
 The merchant UI explicitly warns that confirmation should be used only after funds have been verified.
 
+## Reconciliation inbox
+
+More → Customer payments contains a tenant-level payment reconciliation inbox.
+
+It shows recent payment attempts with order/customer context and separates items needing attention from the wider recent-payment history. Operational counters include awaiting verification, open, paid and failed attempts.
+
+Authorized tenant Staff can reconcile existing payments without gaining permission to change merchant payment-method configuration.
+
+Offline payments are confirmed only through the audited merchant payment operation. Paystack and Flutterwave attempts are rechecked against their provider through the governed verification service. Payment reconciliation does not mutate order or fulfilment status.
+
 ## PDFs
 
 Financial document PDFs use a separate cache from the legacy order receipt.
