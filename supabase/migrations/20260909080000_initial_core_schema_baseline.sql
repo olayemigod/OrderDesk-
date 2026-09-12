@@ -32,15 +32,7 @@ create table public.customers (
   updated_at timestamptz not null default now(),
   email text,
   unique (tenant_id,id),
-  unique (tenant_id,wa_id),
-  constraint customers_email_check
-    check (
-      email is null
-      or (
-        char_length(email) between 3 and 320
-        and email ~ '^[^[:space:]@]+@[^[:space:]@]+[.][^[:space:]@]+$'
-      )
-    )
+  unique (tenant_id,wa_id)
 );
 
 create table public.inbound_messages (
