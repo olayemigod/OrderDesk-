@@ -559,6 +559,7 @@ function OrdersView({
     items: Array<{ catalogItemId: string; quantity: number }>;
   }) => Promise<string>;
 }) {
+  const appearance = useSellerTrayAppearance();
   const [filter, setFilter] = useState<OrderFilter>('attention');
   const [query, setQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
@@ -659,7 +660,7 @@ function OrdersView({
     return (
       <View style={styles.sectionStack}>
         <Pressable onPress={() => onSelectOrder('')} style={styles.backToListButton}>
-          <Text style={styles.backToListText}>← Orders</Text>
+          <Text style={[styles.backToListText, appearance.dark && darkStyles.greenText]}>← Orders</Text>
         </Pressable>
         <OrderDetail
           order={selectedOrder}
@@ -684,9 +685,9 @@ function OrdersView({
     <View style={styles.sectionStack}>
       <View style={styles.pageHeadingRow}>
         <View style={styles.pageHeadingCopy}>
-          <Text style={styles.sectionEyebrow}>ORDER MANAGEMENT</Text>
-          <Text style={styles.pageTitle}>{queueMode ? 'Order Queue' : 'Orders'}</Text>
-          <Text style={styles.pageSubtitle}>
+          <Text style={[styles.sectionEyebrow, appearance.dark && darkStyles.bodyText]}>ORDER MANAGEMENT</Text>
+          <Text style={[styles.pageTitle, appearance.dark && darkStyles.titleText, appearance.textSize === 'large' && styles.pageTitleLarge]}>{queueMode ? 'Order Queue' : 'Orders'}</Text>
+          <Text style={[styles.pageSubtitle, appearance.dark && darkStyles.bodyText]}>
             {queueMode
               ? 'Prioritised work queue: review, payment action and fulfilment first.'
               : `Review, accept and fulfil ${business.name} orders.`}
@@ -694,7 +695,7 @@ function OrdersView({
         </View>
         <Pressable
           onPress={() => setQueueMode((value) => !value)}
-          style={({ pressed }) => [styles.queueToggle, queueMode && styles.queueToggleActive, pressed && styles.quickActionPressed]}
+          style={({ pressed }) => [styles.queueToggle, appearance.dark && darkStyles.outlineButton, queueMode && styles.queueToggleActive, pressed && styles.quickActionPressed]}
         >
           <Ionicons name={queueMode ? 'list' : 'layers-outline'} size={19} color={queueMode ? theme.colors.white : theme.colors.greenDark} />
           <Text style={[styles.queueToggleText, queueMode && styles.queueToggleTextActive]}>
@@ -721,7 +722,7 @@ function OrdersView({
 
       <View style={styles.inboxControls}>
         <View style={styles.searchRow}>
-          <View style={styles.searchBox}>
+          <View style={[styles.searchBox, appearance.dark && darkStyles.input]}>
             <Ionicons name="search-outline" size={19} color={theme.colors.muted} />
             <TextInput
               value={query}
@@ -729,21 +730,21 @@ function OrdersView({
               placeholder="Search orders, customers or products"
               placeholderTextColor={theme.colors.subtle}
               autoCorrect={false}
-              style={styles.searchInputEmbedded}
+              style={[styles.searchInputEmbedded, appearance.dark && darkStyles.inputText]}
             />
           </View>
           <Pressable
             onPress={() => setShowFilters((value) => !value)}
             accessibilityLabel="More order filters"
-            style={[styles.filterIconButton, showFilters && styles.filterIconButtonActive]}
+            style={[styles.filterIconButton, appearance.dark && darkStyles.outlineButton, showFilters && styles.filterIconButtonActive]}
           >
             <Ionicons name="options-outline" size={21} color={showFilters ? theme.colors.white : theme.colors.navy} />
           </Pressable>
         </View>
 
         {showFilters ? (
-          <View style={styles.filterPanel}>
-            <Text style={styles.filterPanelTitle}>Order filters</Text>
+          <View style={[styles.filterPanel, appearance.dark && darkStyles.card]}>
+            <Text style={[styles.filterPanelTitle, appearance.dark && darkStyles.titleText]}>Order filters</Text>
             <View style={styles.filterRow}>
               <OrderFilterButton label="New" count={filterCounts.attention} active={filter === 'attention'} onPress={() => setFilter('attention')} />
               <OrderFilterButton label="Payment" count={filterCounts.payment} active={filter === 'payment'} onPress={() => setFilter('payment')} />
@@ -756,7 +757,7 @@ function OrdersView({
         ) : null}
       </View>
 
-      <Text style={styles.resultMeta}>
+      <Text style={[styles.resultMeta, appearance.dark && darkStyles.bodyText]}>
         {visibleOrders.length} order{visibleOrders.length === 1 ? '' : 's'} {queueMode ? 'in priority queue' : 'in this view'}
       </Text>
 
@@ -789,11 +790,13 @@ function OrderStat({
   positive?: boolean;
   onPress: () => void;
 }) {
+  const appearance = useSellerTrayAppearance();
   return (
     <Pressable
       onPress={onPress}
       style={[
         styles.orderStatCard,
+        appearance.dark && darkStyles.card,
         active && styles.orderStatCardActive,
         attention && styles.orderStatCardAttention,
       ]}
@@ -801,8 +804,8 @@ function OrderStat({
       <View style={[styles.orderStatIcon, positive && styles.orderStatIconPositive]}>
         <Ionicons name={icon as never} size={19} color={positive ? theme.colors.greenDark : attention ? '#B54708' : theme.colors.navy} />
       </View>
-      <Text style={styles.orderStatValue}>{value}</Text>
-      <Text style={styles.orderStatLabel}>{label}</Text>
+      <Text style={[styles.orderStatValue, appearance.dark && darkStyles.titleText]}>{value}</Text>
+      <Text style={[styles.orderStatLabel, appearance.dark && darkStyles.bodyText]}>{label}</Text>
     </Pressable>
   );
 }
@@ -818,12 +821,13 @@ function OrderFilterButton({
   active: boolean;
   onPress: () => void;
 }) {
+  const appearance = useSellerTrayAppearance();
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.filterButton, active && styles.filterButtonActive]}
+      style={[styles.filterButton, appearance.dark && darkStyles.outlineButton, active && styles.filterButtonActive]}
     >
-      <Text style={[styles.filterButtonText, active && styles.filterButtonTextActive]}>{label}</Text>
+      <Text style={[styles.filterButtonText, appearance.dark && darkStyles.bodyText, active && styles.filterButtonTextActive]}>{label}</Text>
       <Text style={[styles.filterCount, active && styles.filterCountActive]}>{count}</Text>
     </Pressable>
   );
@@ -844,20 +848,21 @@ function OrderList({
   onSelect: (orderId: string) => void;
   emptyText: string;
 }) {
+  const appearance = useSellerTrayAppearance();
   if (loading && orders.length === 0) {
     return (
-      <View style={styles.loadingCard}>
+      <View style={[styles.loadingCard, appearance.dark && darkStyles.card]}>
         <ActivityIndicator />
-        <Text style={styles.muted}>Loading orders…</Text>
+        <Text style={[styles.muted, appearance.dark && darkStyles.bodyText]}>Loading orders…</Text>
       </View>
     );
   }
 
   if (!loading && orders.length === 0) {
     return (
-      <View style={styles.emptyCard}>
-        <Text style={styles.emptyTitle}>Nothing here</Text>
-        <Text style={styles.emptyText}>{emptyText}</Text>
+      <View style={[styles.emptyCard, appearance.dark && darkStyles.card]}>
+        <Text style={[styles.emptyTitle, appearance.dark && darkStyles.titleText]}>Nothing here</Text>
+        <Text style={[styles.emptyText, appearance.dark && darkStyles.bodyText]}>{emptyText}</Text>
       </View>
     );
   }
