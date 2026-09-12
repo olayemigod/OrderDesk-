@@ -438,6 +438,8 @@ const orderPaymentPanel = read(join(mobileRoot, 'src/components/OrderPaymentPane
 const paymentReconciliationPanel = read(join(mobileRoot, 'src/components/PaymentReconciliationPanel.tsx'));
 const paymentReconciliationRepository = read(join(mobileRoot, 'src/data/paymentReconciliationRepository.ts'));
 const paymentMethodsSettings = read(join(mobileRoot, 'src/components/PaymentMethodsSettings.tsx'));
+const subscriptionStatusCard = read(join(mobileRoot, 'src/components/SubscriptionStatusCard.tsx'));
+const subscriptionRepository = read(join(mobileRoot, 'src/data/subscriptionRepository.ts'));
 const customerPaymentsContract = read(join(repoRoot, 'docs/customer_payments.md'));
 
 requireValue(
@@ -588,6 +590,13 @@ requireValue(
     paymentReconciliationRepository.includes('confirmReconciliationPayment') &&
     paymentReconciliationRepository.includes('verifyReconciliationGateway'),
   'P8 tenant payment reconciliation inbox/report must remain wired to governed payment operations',
+);
+requireValue(
+  subscriptionStatusCard.includes('Subscription purchase and plan changes are not offered inside the app') &&
+    !subscriptionStatusCard.includes('Subscribe with Paystack') &&
+    !subscriptionStatusCard.includes('Linking.openURL') &&
+    !subscriptionRepository.includes("functions.invoke('billing-checkout'"),
+  'Google Play Android build must remain consumption-only for SellerTray digital subscription billing',
 );
 requireValue(
   customerPaymentsContract.includes('No percentage-of-sales / GMV fee') &&

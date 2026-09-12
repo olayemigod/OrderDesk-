@@ -72,6 +72,7 @@ All of these must pass before creating a release candidate:
 7. Account deletion resource is live at `https://processedge.com.ng/sellertray/account-deletion`.
 8. Privacy Policy and Terms have SellerTray-specific data/service coverage and legal approval.
 9. Relevant external-service gates are accepted for the intended release scope.
+10. Google Play billing boundary is verified: the Play-distributed Android build contains no external SellerTray SaaS subscription checkout link or Paystack subscription CTA. Merchant-customer payments for physical goods/orders remain a separate commerce feature.
 
 ## Build commands
 
@@ -174,3 +175,14 @@ Before production WhatsApp activation, every merchant WABA must have approved ut
 - `META_TEMPLATE_LANGUAGE_CODE`: approved template language, default `en_US`.
 
 SellerTray free-form text/document messages are used only while the customer-service window is open. After that window, the worker sends the configured approved template. Missing or unapproved templates remain fail-closed as `template_required`; they must never be converted to unrestricted free-form delivery.
+
+
+## Google Play billing and financial-features boundary
+
+The Google Play-distributed SellerTray Android build is consumption-only for SellerTray's own digital SaaS subscription:
+
+- it may show current plan/access status and measured usage;
+- it must not expose `Subscribe with Paystack`, external subscription checkout URLs, or an external top-up CTA for SellerTray digital credits unless ProcessEdge deliberately implements a Google-approved billing/external-payments program;
+- merchant-customer payments for merchant orders are not SellerTray subscription purchases and remain governed by the customer-payment workflow.
+
+Before each Play release, complete/review the Financial features declaration using the features actually present in the binary. SellerTray facilitates merchant payment collection/reconciliation, so ProcessEdge must not certify “no financial features” without reviewing the then-current Play definitions. All Play apps must submit the declaration even when they have no financial features.

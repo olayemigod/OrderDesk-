@@ -35,11 +35,6 @@ export type SubscriptionAccess = {
   usageAmountThisPeriod: number;
 };
 
-export type BillingCheckout = {
-  authorizationUrl: string;
-  reference: string;
-};
-
 export async function loadSubscriptionAccess(tenantId: string): Promise<SubscriptionAccess> {
   const { data, error } = await supabase.rpc('get_orderdesk_subscription_access', {
     p_tenant_id: tenantId,
@@ -74,26 +69,6 @@ export async function loadSubscriptionAccess(tenantId: string): Promise<Subscrip
     usageUnitsThisPeriod: integerValue(value.usageUnitsThisPeriod),
     usageAmountThisPeriod: numberValue(value.usageAmountThisPeriod) ?? 0,
   };
-}
-
-export async function startBillingCheckout(tenantId: string): Promise<BillingCheckout> {
-  const { data, error } = await supabase.functions.invoke('billing-checkout', {
-    body: { tenantId },
-  });
-
-  if (error) throw error;
-  if (!data || typeof data !== 'object') {
-    throw new Error('SellerTray could not start billing checkout.');
-  }
-
-  const value = data as Record<string, unknown>;
-  const authorizationUrl = optionalString(value.authorizationUrl);
-  const reference = optionalString(value.reference);
-  if (!authorizationUrl || !reference) {
-    throw new Error('Billing provider returned an incomplete checkout session.');
-  }
-
-  return { authorizationUrl, reference };
 }
 
 function optionalString(value: unknown): string | null {
