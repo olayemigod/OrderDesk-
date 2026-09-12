@@ -113,7 +113,7 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
       <View style={styles.providerBillingCard}>
         <Text style={styles.providerBillingTitle}>Meta WhatsApp charges are separate</Text>
         <Text style={styles.providerBillingText}>
-          Connecting WhatsApp to SellerTray does not itself create a SellerTray charge. Your WhatsApp Business Account may require its own payment method, and any billable WhatsApp Business Platform messaging is charged by Meta under Meta&apos;s current pricing. SellerTray subscription and AI-usage charges are billed separately.
+          SellerTray does not require a Meta payment method just to connect WhatsApp. If you later use Meta-billable WhatsApp Business Platform messages, Meta may require billing setup and charges them under Meta’s current pricing. SellerTray subscription and AI-usage charges are billed separately.
         </Text>
       </View>
 
