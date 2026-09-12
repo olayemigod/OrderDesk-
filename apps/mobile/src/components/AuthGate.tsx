@@ -15,6 +15,7 @@ import {
 import type { Session } from '@supabase/supabase-js';
 
 import { supabase } from '../lib/supabase';
+import { SellerTrayBrand } from './SellerTrayBrand';
 
 type AuthMode = 'sign-in' | 'sign-up' | 'forgot-password' | 'reset-password';
 
@@ -360,7 +361,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   if (!session) {
     return (
-      <AuthCard title="Merchant sign in" subtitle="Turn WhatsApp messages into organised orders.">
+      <AuthCard title="Sign In" subtitle="Secure access for every merchant.">
         <EmailInput email={email} onChange={setEmail} />
         <PasswordField
           label="Password"
@@ -517,7 +518,10 @@ function AuthCard({ title, subtitle, children }: { title: string; subtitle: stri
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.card}>
-            <Text style={styles.eyebrow}>SELLERTRAY</Text>
+            <View style={styles.brandHeader}>
+              <SellerTrayBrand size={52} showTagline />
+            </View>
+            <Text style={styles.eyebrow}>MERCHANT APP</Text>
             <Text style={styles.title}>{title}</Text>
             <Text style={styles.subtitle}>{subtitle}</Text>
             {children}
@@ -570,23 +574,24 @@ function parseAuthTokens(url: string): {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F6F7F9' },
+  screen: { flex: 1, backgroundColor: '#F8FAFC' },
   keyboardArea: { flex: 1 },
   authScroll: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 22, paddingTop: 24, paddingBottom: Platform.OS === 'android' ? 48 : 24 },
-  centered: { flex: 1, gap: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F6F7F9' },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 20, borderWidth: 1, borderColor: '#EAECF0', padding: 22, gap: 12 },
-  eyebrow: { color: '#246BFD', fontSize: 12, fontWeight: '800', letterSpacing: 1.4 },
-  title: { color: '#101828', fontSize: 28, fontWeight: '900' },
+  centered: { flex: 1, gap: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC' },
+  card: { backgroundColor: '#FFFFFF', borderRadius: 24, borderWidth: 1, borderColor: '#E4E7EC', padding: 22, gap: 12, shadowColor: '#102A43', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.08, shadowRadius: 22, elevation: 3 },
+  brandHeader: { marginBottom: 8 },
+  eyebrow: { color: '#12B76A', fontSize: 12, fontWeight: '800', letterSpacing: 1.4 },
+  title: { color: '#102A43', fontSize: 28, fontWeight: '900' },
   subtitle: { color: '#667085', fontSize: 14, lineHeight: 20, marginBottom: 8 },
   field: { gap: 6 },
   fieldHeader: { minHeight: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   fieldLabel: { color: '#344054', fontSize: 12, fontWeight: '900' },
   fieldHint: { color: '#667085', fontSize: 10, lineHeight: 15 },
   fieldAction: { minHeight: 32, minWidth: 46, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
-  fieldActionText: { color: '#246BFD', fontSize: 11, fontWeight: '900' },
-  input: { minHeight: 50, borderRadius: 12, borderWidth: 1, borderColor: '#D0D5DD', paddingHorizontal: 14, backgroundColor: '#FFFFFF', color: '#101828' },
+  fieldActionText: { color: '#12B76A', fontSize: 11, fontWeight: '900' },
+  input: { minHeight: 50, borderRadius: 12, borderWidth: 1, borderColor: '#D0D5DD', paddingHorizontal: 14, backgroundColor: '#FFFFFF', color: '#102A43' },
   urlInput: { minHeight: 84, paddingTop: 12, textAlignVertical: 'top' },
-  button: { minHeight: 50, borderRadius: 12, backgroundColor: '#246BFD', alignItems: 'center', justifyContent: 'center', marginTop: 4 },
+  button: { minHeight: 50, borderRadius: 12, backgroundColor: '#12B76A', alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   buttonDisabled: { opacity: 0.5 },
   secondaryButton: { minHeight: 46, borderRadius: 12, borderWidth: 1, borderColor: '#D0D5DD', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
   buttonPressed: { opacity: 0.8 },
@@ -594,18 +599,18 @@ const styles = StyleSheet.create({
   secondaryButtonText: { color: '#344054', fontWeight: '800', fontSize: 14 },
   authLinks: { gap: 2, marginTop: 2 },
   linkButton: { alignSelf: 'center', minHeight: 44, justifyContent: 'center', paddingHorizontal: 10 },
-  linkText: { color: '#246BFD', fontWeight: '800', fontSize: 13 },
+  linkText: { color: '#12B76A', fontWeight: '800', fontSize: 13 },
   error: { color: '#B42318', fontSize: 13, lineHeight: 18 },
   notice: { color: '#027A48', fontSize: 13, lineHeight: 18 },
-  note: { color: '#98A2B3', fontSize: 12, lineHeight: 18, marginTop: 4 },
-  manualRecovery: { borderTopWidth: 1, borderTopColor: '#EAECF0', marginTop: 4, paddingTop: 12, gap: 10 },
+  note: { color: '#667085', fontSize: 12, lineHeight: 18, marginTop: 4 },
+  manualRecovery: { borderTopWidth: 1, borderTopColor: '#E4E7EC', marginTop: 4, paddingTop: 12, gap: 10 },
   manualTitle: { color: '#344054', fontWeight: '800', fontSize: 13 },
   legalConsentRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginTop: 2 },
   checkboxButton: { paddingTop: 1 },
-  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: '#98A2B3', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' },
-  checkboxChecked: { backgroundColor: '#246BFD', borderColor: '#246BFD' },
+  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: '#667085', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' },
+  checkboxChecked: { backgroundColor: '#12B76A', borderColor: '#12B76A' },
   checkboxMark: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
   legalConsentText: { flex: 1, color: '#667085', fontSize: 12, lineHeight: 18 },
-  inlineLink: { color: '#246BFD', fontWeight: '800' },
+  inlineLink: { color: '#12B76A', fontWeight: '800' },
   muted: { color: '#667085' },
 });
