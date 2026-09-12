@@ -86,38 +86,68 @@ Deno.serve(async (req: Request) => {
 });
 
 async function loadDocument(id: string): Promise<J | null> {
-  const rows = await rest<J[]>(
+  const documents = await rest<J[]>(
     '/rest/v1/order_financial_documents?select=' +
-    'id,tenant_id,order_id,document_type,document_reference,currency,amount,status,payment_id,issued_at,pdf_storage_path,pdf_generated_at,pdf_version,' +
-    'orders(public_order_id,created_at,customers(display_name,phone,wa_id),order_items(item_name,quantity,unit_price,line_total)),' +
-    'tenants(name,business_email,business_phone),' +
-    'order_payments(method_type,provider,provider_reference,provider_transaction_id,confirmed_at,confirmation_source)' +
+    'id,tenant_id,order_id,document_type,document_reference,currency,amount,status,payment_id,issued_at,pdf_storage_path,pdf_generated_at,pdf_version' +
     '&id=eq.' + encodeURIComponent(id) + '&limit=1',
   );
-  const row = rows[0];
+  const row = documents[0];
   if (!row) return null;
 
-  const order = one(row.orders);
-  const tenant = one(row.tenants);
-  const customer = order ? one(order.customers) : null;
-  const payment = one(row.order_payments);
+  const tenantId = String(row.tenant_id || '');
+  const orderId = String(row.order_id || '');
+  const paymentId = typeof row.payment_id === 'string' ? row.payment_id : null;
+
+  const orders = await rest<J[]>(
+    '/rest/v1/orders?select=id,public_order_id,created_at,customer_id,' +
+    'order_items(item_name,quantity,unit_price,line_total)' +
+    '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+    '&id=eq.' + encodeURIComponent(orderId) + '&limit=1',
+  );
+  const order = orders[0] || null;
+  if (!order) throw new Error('Financial document order was not found');
+
+  const tenants = await rest<J[]>(
+    '/rest/v1/tenants?select=name,business_email,business_phone' +
+    '&id=eq.' + encodeURIComponent(tenantId) + '&limit=1',
+  );
+  const tenant = tenants[0] || {};
+
+  const customerId = typeof order.customer_id === 'string' ? order.customer_id : '';
+  const customers = customerId
+    ? await rest<J[]>(
+        '/rest/v1/customers?select=display_name,phone,wa_id' +
+        '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+        '&id=eq.' + encodeURIComponent(customerId) + '&limit=1',
+      )
+    : [];
+  const customer = customers[0] || {};
+
+  const payments = paymentId
+    ? await rest<J[]>(
+        '/rest/v1/order_payments?select=method_type,provider,provider_reference,provider_transaction_id,confirmed_at,confirmation_source' +
+        '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+        '&id=eq.' + encodeURIComponent(paymentId) + '&limit=1',
+      )
+    : [];
+  const payment = payments[0] || {};
 
   return {
     ...row,
-    public_order_id: order?.public_order_id || '',
-    order_created_at: order?.created_at || null,
-    order_items: Array.isArray(order?.order_items) ? order?.order_items : [],
-    business_name: tenant?.name || 'SellerTray merchant',
-    business_email: tenant?.business_email || null,
-    business_phone: tenant?.business_phone || null,
-    customer_name: customer?.display_name || customer?.phone || customer?.wa_id || 'Customer',
-    customer_phone: customer?.phone || customer?.wa_id || null,
-    payment_method_type: payment?.method_type || null,
-    payment_provider: payment?.provider || null,
-    payment_reference: payment?.provider_reference || null,
-    provider_transaction_id: payment?.provider_transaction_id || null,
-    payment_confirmed_at: payment?.confirmed_at || null,
-    confirmation_source: payment?.confirmation_source || null,
+    public_order_id: order.public_order_id || '',
+    order_created_at: order.created_at || null,
+    order_items: Array.isArray(order.order_items) ? order.order_items : [],
+    business_name: tenant.name || 'SellerTray merchant',
+    business_email: tenant.business_email || null,
+    business_phone: tenant.business_phone || null,
+    customer_name: customer.display_name || customer.phone || customer.wa_id || 'Customer',
+    customer_phone: customer.phone || customer.wa_id || null,
+    payment_method_type: payment.method_type || null,
+    payment_provider: payment.provider || null,
+    payment_reference: payment.provider_reference || null,
+    provider_transaction_id: payment.provider_transaction_id || null,
+    payment_confirmed_at: payment.confirmed_at || null,
+    confirmation_source: payment.confirmation_source || null,
   };
 }
 
