@@ -848,6 +848,7 @@ const styles = StyleSheet.create({
   orderRight: { alignItems: 'flex-end', gap: 6 },
   customerName: { color: '#101828', fontSize: 15, fontWeight: '900' },
   orderId: { color: '#98A2B3', fontSize: 10, marginTop: 2 },
+  publicOrderId: { color: '#175CD3', fontSize: 11, fontWeight: '900', marginTop: 2 },
   orderValue: { color: '#101828', fontSize: 11, fontWeight: '900' },
   orderValuePending: { color: '#B54708' },
   orderMessage: { color: '#475467', fontSize: 13, lineHeight: 19, marginTop: 9 },
