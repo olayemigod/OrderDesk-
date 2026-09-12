@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -17,7 +18,7 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { SellerTrayBrand } from './SellerTrayBrand';
 
-type AuthMode = 'sign-in' | 'sign-up' | 'forgot-password' | 'reset-password';
+type AuthMode = 'welcome' | 'sign-in' | 'sign-up' | 'forgot-password' | 'reset-password';
 
 const SELLERTRAY_PRIVACY_URL = 'https://processedge.com.ng/sellertray/privacy';
 const SELLERTRAY_TERMS_URL = 'https://processedge.com.ng/sellertray/terms';
@@ -25,7 +26,7 @@ const SELLERTRAY_TERMS_URL = 'https://processedge.com.ng/sellertray/terms';
 export function AuthGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [booting, setBooting] = useState(true);
-  const [mode, setMode] = useState<AuthMode>('sign-in');
+  const [mode, setMode] = useState<AuthMode>('welcome');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -275,6 +276,43 @@ export function AuthGate({ children }: { children: ReactNode }) {
     );
   }
 
+  if (!session && mode === 'welcome') {
+    return (
+      <SafeAreaView style={styles.welcomeScreen}>
+        <ScrollView contentContainerStyle={styles.welcomeScroll} showsVerticalScrollIndicator={false}>
+          <View style={styles.welcomeBrand}>
+            <SellerTrayBrand size={62} showTagline inverted />
+          </View>
+
+          <View style={styles.welcomeHero}>
+            <Text style={styles.welcomeEyebrow}>SMARTER MERCHANT COMMERCE</Text>
+            <Text style={styles.welcomeTitle}>Orders. Conversations. Growth.</Text>
+            <Text style={styles.welcomeText}>
+              Manage customer conversations, orders, payments and fulfilment from one simple merchant app.
+            </Text>
+          </View>
+
+          <View style={styles.welcomeBenefits}>
+            <WelcomeBenefit icon="receipt-outline" title="Manage orders" text="Keep every customer order organised." />
+            <WelcomeBenefit icon="chatbubbles-outline" title="Sell through WhatsApp" text="Turn supported conversations into commerce." />
+            <WelcomeBenefit icon="card-outline" title="Get paid faster" text="Track payment choices and verification." />
+            <WelcomeBenefit icon="trending-up-outline" title="Grow with clarity" text="See the activity that matters to your business." />
+          </View>
+
+          <View style={styles.welcomeActions}>
+            <Pressable onPress={() => showMode('sign-up')} style={styles.welcomePrimary}>
+              <Text style={styles.welcomePrimaryText}>Get Started</Text>
+              <Ionicons name="arrow-forward" size={19} color="#FFFFFF" />
+            </Pressable>
+            <Pressable onPress={() => showMode('sign-in')} style={styles.welcomeSecondary}>
+              <Text style={styles.welcomeSecondaryText}>Sign In</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   if (!session && mode === 'forgot-password') {
     return (
       <AuthCard title="Reset password" subtitle="We will send a recovery link to your merchant email.">
@@ -382,11 +420,47 @@ export function AuthGate({ children }: { children: ReactNode }) {
             <Text style={styles.linkText}>Create a SellerTray account</Text>
           </Pressable>
         </View>
+
+        <View style={styles.signInHelp}>
+          <Text style={styles.signInHelpTitle}>Need help signing in?</Text>
+          <Text style={styles.signInHelpText}>Reach ProcessEdge support by WhatsApp, phone or email.</Text>
+          <View style={styles.supportRow}>
+            <SupportAction icon="logo-whatsapp" label="WhatsApp" url="https://wa.me/2348096086857" />
+            <SupportAction icon="call-outline" label="Call" url="tel:+2348096086857" />
+            <SupportAction icon="mail-outline" label="Email" url="mailto:processedgeng@gmail.com?subject=SellerTray%20Support" />
+          </View>
+        </View>
       </AuthCard>
     );
   }
 
   return <>{children}</>;
+}
+
+function WelcomeBenefit({ icon, title, text }: { icon: string; title: string; text: string }) {
+  return (
+    <View style={styles.welcomeBenefit}>
+      <View style={styles.welcomeBenefitIcon}>
+        <Ionicons name={icon as never} size={22} color="#12B76A" />
+      </View>
+      <View style={styles.welcomeBenefitCopy}>
+        <Text style={styles.welcomeBenefitTitle}>{title}</Text>
+        <Text style={styles.welcomeBenefitText}>{text}</Text>
+      </View>
+    </View>
+  );
+}
+
+function SupportAction({ icon, label, url }: { icon: string; label: string; url: string }) {
+  return (
+    <Pressable
+      onPress={() => void Linking.openURL(url)}
+      style={({ pressed }) => [styles.supportAction, pressed && styles.buttonPressed]}
+    >
+      <Ionicons name={icon as never} size={20} color="#079455" />
+      <Text style={styles.supportActionText}>{label}</Text>
+    </Pressable>
+  );
 }
 
 function EmailInput({ email, onChange }: { email: string; onChange: (value: string) => void }) {
@@ -574,10 +648,28 @@ function parseAuthTokens(url: string): {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#F8FAFC' },
+  screen: { flex: 1, backgroundColor: '#102A43' },
+  welcomeScreen: { flex: 1, backgroundColor: '#102A43' },
+  welcomeScroll: { flexGrow: 1, paddingHorizontal: 24, paddingTop: Platform.OS === 'android' ? 28 : 20, paddingBottom: 34, justifyContent: 'center', gap: 24 },
+  welcomeBrand: { alignItems: 'flex-start' },
+  welcomeHero: { gap: 8 },
+  welcomeEyebrow: { color: '#6CE9A6', fontSize: 11, fontWeight: '900', letterSpacing: 1.3 },
+  welcomeTitle: { color: '#FFFFFF', fontSize: 34, lineHeight: 40, fontWeight: '900' },
+  welcomeText: { color: '#D9FBE8', fontSize: 16, lineHeight: 24 },
+  welcomeBenefits: { gap: 10 },
+  welcomeBenefit: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 16, padding: 13 },
+  welcomeBenefitIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#ECFDF3', alignItems: 'center', justifyContent: 'center' },
+  welcomeBenefitCopy: { flex: 1 },
+  welcomeBenefitTitle: { color: '#FFFFFF', fontSize: 15, fontWeight: '900' },
+  welcomeBenefitText: { color: '#D0D5DD', fontSize: 12, lineHeight: 18, marginTop: 2 },
+  welcomeActions: { gap: 10, marginTop: 4 },
+  welcomePrimary: { minHeight: 54, borderRadius: 14, backgroundColor: '#12B76A', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  welcomePrimaryText: { color: '#FFFFFF', fontSize: 16, fontWeight: '900' },
+  welcomeSecondary: { minHeight: 52, borderRadius: 14, borderWidth: 1, borderColor: '#6CE9A6', alignItems: 'center', justifyContent: 'center' },
+  welcomeSecondaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '900' },
   keyboardArea: { flex: 1 },
   authScroll: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 22, paddingTop: 24, paddingBottom: Platform.OS === 'android' ? 48 : 24 },
-  centered: { flex: 1, gap: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC' },
+  centered: { flex: 1, gap: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#102A43' },
   card: { backgroundColor: '#FFFFFF', borderRadius: 24, borderWidth: 1, borderColor: '#E4E7EC', padding: 22, gap: 12, shadowColor: '#102A43', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.08, shadowRadius: 22, elevation: 3 },
   brandHeader: { marginBottom: 8 },
   eyebrow: { color: '#12B76A', fontSize: 12, fontWeight: '800', letterSpacing: 1.4 },
@@ -585,8 +677,8 @@ const styles = StyleSheet.create({
   subtitle: { color: '#667085', fontSize: 14, lineHeight: 20, marginBottom: 8 },
   field: { gap: 6 },
   fieldHeader: { minHeight: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  fieldLabel: { color: '#344054', fontSize: 12, fontWeight: '900' },
-  fieldHint: { color: '#667085', fontSize: 10, lineHeight: 15 },
+  fieldLabel: { color: '#344054', fontSize: 13, fontWeight: '900' },
+  fieldHint: { color: '#667085', fontSize: 12, lineHeight: 18 },
   fieldAction: { minHeight: 32, minWidth: 46, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
   fieldActionText: { color: '#12B76A', fontSize: 11, fontWeight: '900' },
   input: { minHeight: 50, borderRadius: 12, borderWidth: 1, borderColor: '#D0D5DD', paddingHorizontal: 14, backgroundColor: '#FFFFFF', color: '#102A43' },
@@ -602,7 +694,13 @@ const styles = StyleSheet.create({
   linkText: { color: '#12B76A', fontWeight: '800', fontSize: 13 },
   error: { color: '#B42318', fontSize: 13, lineHeight: 18 },
   notice: { color: '#027A48', fontSize: 13, lineHeight: 18 },
-  note: { color: '#667085', fontSize: 12, lineHeight: 18, marginTop: 4 },
+  note: { color: '#667085', fontSize: 13, lineHeight: 19, marginTop: 4 },
+  signInHelp: { marginTop: 4, borderTopWidth: 1, borderTopColor: '#E4E7EC', paddingTop: 14, gap: 6 },
+  signInHelpTitle: { color: '#102A43', fontSize: 14, fontWeight: '900', textAlign: 'center' },
+  signInHelpText: { color: '#667085', fontSize: 12, lineHeight: 18, textAlign: 'center' },
+  supportRow: { flexDirection: 'row', gap: 7, marginTop: 4 },
+  supportAction: { flex: 1, minHeight: 52, borderRadius: 12, backgroundColor: '#ECFDF3', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 5 },
+  supportActionText: { color: '#079455', fontSize: 10, fontWeight: '900' },
   manualRecovery: { borderTopWidth: 1, borderTopColor: '#E4E7EC', marginTop: 4, paddingTop: 12, gap: 10 },
   manualTitle: { color: '#344054', fontWeight: '800', fontSize: 13 },
   legalConsentRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginTop: 2 },
