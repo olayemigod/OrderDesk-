@@ -9,6 +9,7 @@ export type MerchantBusiness = {
   id: string;
   name: string;
   slug: string;
+  merchantCode: string;
   role: MerchantRole;
   businessEmail: string | null;
   businessPhone: string | null;
@@ -33,6 +34,7 @@ export type BusinessProfileInput = {
 
 export type InitialBusinessInput = {
   name: string;
+  merchantCode: string;
   businessEmail: string | null;
   businessPhone: string | null;
   businessType: string | null;
@@ -45,6 +47,7 @@ type MembershipRow = {
         id: string;
         name: string;
         slug: string;
+        merchant_code: string;
         business_email: string | null;
         business_phone: string | null;
         business_type: string | null;
@@ -59,6 +62,7 @@ type MembershipRow = {
         id: string;
         name: string;
         slug: string;
+        merchant_code: string;
         business_email: string | null;
         business_phone: string | null;
         business_type: string | null;
@@ -87,6 +91,7 @@ export async function loadBusinesses(): Promise<MerchantBusiness[]> {
         id,
         name,
         slug,
+        merchant_code,
         business_email,
         business_phone,
         business_type,
@@ -111,6 +116,7 @@ export async function loadBusinesses(): Promise<MerchantBusiness[]> {
         id: tenant.id,
         name: tenant.name,
         slug: tenant.slug,
+        merchantCode: tenant.merchant_code,
         role: membership.role,
         businessEmail: tenant.business_email,
         businessPhone: tenant.business_phone,
@@ -129,10 +135,15 @@ export async function loadBusinesses(): Promise<MerchantBusiness[]> {
 export async function createInitialBusiness(input: InitialBusinessInput): Promise<string> {
   const name = input.name.trim();
   if (!name) throw new Error('Business name is required.');
+  const merchantCode = input.merchantCode.trim().toUpperCase();
+  if (!/^[A-Z0-9]{3}$/.test(merchantCode)) {
+    throw new Error('Merchant ID must be exactly 3 letters or numbers.');
+  }
 
   const { data, error } = await supabase.functions.invoke('provision-business', {
     body: {
       name,
+      merchantCode,
       businessEmail: cleanOptional(input.businessEmail),
       businessPhone: cleanOptional(input.businessPhone),
       businessType: cleanOptional(input.businessType),
