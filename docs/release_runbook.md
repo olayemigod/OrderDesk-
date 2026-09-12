@@ -225,3 +225,24 @@ SellerTray Phase 1 hardening uses explicit provider deadlines and protective req
 - Usage-settlement Paystack verification/charge calls: 10-second provider deadline.
 
 The AI ceilings can be adjusted through `AI_CUSTOMER_MINUTE_LIMIT`, `AI_TENANT_MINUTE_LIMIT` and `AI_TENANT_DAILY_LIMIT` without a mobile release. If an AI protection ceiling is exhausted, SellerTray skips the paid model request and uses the non-AI fallback/review path. Revisit these defaults after Conversation-to-Order replaces per-message AI parsing.
+
+
+## Database behavioral CI
+
+Phase 1 release candidates require the dedicated **Database CI** workflow in addition to Mobile CI.
+
+The database gate uses Supabase CLI 2.117.0 and pgTAP against a fresh local stack. It replays every migration from scratch before running the tests. The initial suite freezes 60 behavioral assertions covering:
+
+- RLS and column/table/function grants;
+- governed fulfilment permissions;
+- server-only order/payment/rate-limit RPC boundaries;
+- WhatsApp inbound claim/reclaim behavior;
+- one-order-per-source-message idempotency;
+- atomic rollback on invalid order lines;
+- invoice issuance from the real acceptance trigger;
+- payment environment snapshots and immutability;
+- competing payment cancellation;
+- adverse payment exception projection/recovery;
+- fixed-window rate-limit enforcement.
+
+A green static/source preflight is not sufficient if Database CI is red. Do not cut the Phase 1 QA APK from a commit whose database tests have not passed.
