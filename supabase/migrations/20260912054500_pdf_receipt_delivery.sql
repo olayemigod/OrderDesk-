@@ -73,3 +73,33 @@ begin
       );
   end if;
 end $$;
+
+
+create or replace function public.guard_sellertray_receipt_cache()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if (
+    new.receipt_storage_path is distinct from old.receipt_storage_path
+    or new.receipt_generated_at is distinct from old.receipt_generated_at
+    or new.receipt_version is distinct from old.receipt_version
+  ) and (select auth.uid()) is not null then
+    raise exception 'SellerTray receipt cache is server-managed' using errcode = '42501';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists guard_sellertray_receipt_cache on public.orders;
+create trigger guard_sellertray_receipt_cache
+before update of receipt_storage_path, receipt_generated_at, receipt_version on public.orders
+for each row
+when (
+  old.receipt_storage_path is distinct from new.receipt_storage_path
+  or old.receipt_generated_at is distinct from new.receipt_generated_at
+  or old.receipt_version is distinct from new.receipt_version
+)
+execute function public.guard_sellertray_receipt_cache();
