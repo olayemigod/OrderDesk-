@@ -545,6 +545,8 @@ function OrdersView({
 }) {
   const [filter, setFilter] = useState<OrderFilter>('attention');
   const [query, setQuery] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [queueMode, setQueueMode] = useState(false);
 
   useEffect(() => {
     if (!selectedOrder) return;
@@ -563,6 +565,11 @@ function OrdersView({
   const filterCounts = useMemo(
     () => ({
       attention: orders.filter((order) => order.status === 'needs_review' || order.status === 'draft').length,
+      payment: orders.filter((order) =>
+        ['unpaid', 'pending', 'verification_required', 'payment_issue'].includes(order.paymentStatus) &&
+        !['rejected', 'cancelled'].includes(order.status),
+      ).length,
+      paid: orders.filter((order) => order.paymentStatus === 'paid').length,
       active: orders.filter((order) => ['accepted', 'processing', 'ready'].includes(order.status)).length,
       done: orders.filter((order) => order.status === 'completed').length,
       all: orders.length,
@@ -573,10 +580,12 @@ function OrdersView({
   const visibleOrders = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
 
-    return orders.filter((order) => {
+    const filtered = orders.filter((order) => {
       const matchesFilter =
         filter === 'all' ||
         (filter === 'attention' && (order.status === 'needs_review' || order.status === 'draft')) ||
+        (filter === 'payment' && ['unpaid', 'pending', 'verification_required', 'payment_issue'].includes(order.paymentStatus) && !['rejected', 'cancelled'].includes(order.status)) ||
+        (filter === 'paid' && order.paymentStatus === 'paid') ||
         (filter === 'active' && ['accepted', 'processing', 'ready'].includes(order.status)) ||
         (filter === 'done' && order.status === 'completed');
 
@@ -597,17 +606,38 @@ function OrdersView({
 
       return searchable.includes(normalizedQuery);
     });
-  }, [filter, orders, query]);
+
+    if (!queueMode) return filtered;
+
+    const priority = (order: MerchantOrder) => {
+      if (order.status === 'needs_review' || order.status === 'draft') return 0;
+      if (['verification_required', 'payment_issue', 'pending', 'unpaid'].includes(order.paymentStatus)) return 1;
+      if (order.status === 'accepted') return 2;
+      if (order.status === 'processing') return 3;
+      if (order.status === 'ready') return 4;
+      return 5;
+    };
+
+    return filtered.slice().sort((a, b) => {
+      const rank = priority(a) - priority(b);
+      if (rank !== 0) return rank;
+      return new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime();
+    });
+  }, [filter, orders, query, queueMode]);
 
   const emptyText = query.trim()
     ? 'No orders match this search inside the selected workflow view.'
     : filter === 'attention'
       ? 'No orders need review right now.'
-      : filter === 'active'
-        ? 'No accepted, processing or ready orders right now.'
-        : filter === 'done'
-          ? 'No completed orders yet.'
-          : 'No orders yet. New WhatsApp orders will appear here automatically.';
+      : filter === 'payment'
+        ? 'No orders are awaiting payment action.'
+        : filter === 'paid'
+          ? 'No paid orders yet.'
+          : filter === 'active'
+            ? 'No accepted, processing or ready orders right now.'
+            : filter === 'done'
+              ? 'No completed orders yet.'
+              : 'No orders yet. New WhatsApp and manual orders will appear here automatically.';
 
   if (selectedOrder) {
     return (
@@ -639,13 +669,29 @@ function OrdersView({
       <View style={styles.pageHeadingRow}>
         <View style={styles.pageHeadingCopy}>
           <Text style={styles.sectionEyebrow}>ORDER MANAGEMENT</Text>
-          <Text style={styles.pageTitle}>Orders</Text>
-          <Text style={styles.pageSubtitle}>Review, accept and fulfil {business.name} orders.</Text>
+          <Text style={styles.pageTitle}>{queueMode ? 'Order Queue' : 'Orders'}</Text>
+          <Text style={styles.pageSubtitle}>
+            {queueMode
+              ? 'Prioritised work queue: review, payment action and fulfilment first.'
+              : `Review, accept and fulfil ${business.name} orders.`}
+          </Text>
         </View>
-        <View style={styles.orderSummaryBadge}>
-          <Text style={styles.orderSummaryValue}>{filterCounts.attention}</Text>
-          <Text style={styles.orderSummaryLabel}>NEEDS REVIEW</Text>
-        </View>
+        <Pressable
+          onPress={() => setQueueMode((value) => !value)}
+          style={({ pressed }) => [styles.queueToggle, queueMode && styles.queueToggleActive, pressed && styles.quickActionPressed]}
+        >
+          <Ionicons name={queueMode ? 'list' : 'layers-outline'} size={19} color={queueMode ? theme.colors.white : theme.colors.greenDark} />
+          <Text style={[styles.queueToggleText, queueMode && styles.queueToggleTextActive]}>
+            {queueMode ? 'All orders' : 'Queue'}
+          </Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.orderStatsGrid}>
+        <OrderStat icon="alert-circle-outline" label="Needs review" value={filterCounts.attention} active={filter === 'attention'} attention onPress={() => { setFilter('attention'); setQueueMode(false); }} />
+        <OrderStat icon="time-outline" label="Awaiting payment" value={filterCounts.payment} active={filter === 'payment'} attention={filterCounts.payment > 0} onPress={() => { setFilter('payment'); setQueueMode(false); }} />
+        <OrderStat icon="cube-outline" label="In fulfilment" value={filterCounts.active} active={filter === 'active'} onPress={() => { setFilter('active'); setQueueMode(false); }} />
+        <OrderStat icon="checkmark-circle-outline" label="Completed" value={filterCounts.done} active={filter === 'done'} positive onPress={() => { setFilter('done'); setQueueMode(false); }} />
       </View>
 
       <ManualOrderComposer
@@ -658,43 +704,44 @@ function OrdersView({
       />
 
       <View style={styles.inboxControls}>
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Search orders, customers or products"
-          autoCorrect={false}
-          style={styles.searchInput}
-        />
-        <View style={styles.filterRow}>
-          <OrderFilterButton
-            label="New"
-            count={filterCounts.attention}
-            active={filter === 'attention'}
-            onPress={() => setFilter('attention')}
-          />
-          <OrderFilterButton
-            label="In progress"
-            count={filterCounts.active}
-            active={filter === 'active'}
-            onPress={() => setFilter('active')}
-          />
-          <OrderFilterButton
-            label="Completed"
-            count={filterCounts.done}
-            active={filter === 'done'}
-            onPress={() => setFilter('done')}
-          />
-          <OrderFilterButton
-            label="All"
-            count={filterCounts.all}
-            active={filter === 'all'}
-            onPress={() => setFilter('all')}
-          />
+        <View style={styles.searchRow}>
+          <View style={styles.searchBox}>
+            <Ionicons name="search-outline" size={19} color={theme.colors.muted} />
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search orders, customers or products"
+              placeholderTextColor={theme.colors.subtle}
+              autoCorrect={false}
+              style={styles.searchInputEmbedded}
+            />
+          </View>
+          <Pressable
+            onPress={() => setShowFilters((value) => !value)}
+            accessibilityLabel="More order filters"
+            style={[styles.filterIconButton, showFilters && styles.filterIconButtonActive]}
+          >
+            <Ionicons name="options-outline" size={21} color={showFilters ? theme.colors.white : theme.colors.navy} />
+          </Pressable>
         </View>
+
+        {showFilters ? (
+          <View style={styles.filterPanel}>
+            <Text style={styles.filterPanelTitle}>Order filters</Text>
+            <View style={styles.filterRow}>
+              <OrderFilterButton label="New" count={filterCounts.attention} active={filter === 'attention'} onPress={() => setFilter('attention')} />
+              <OrderFilterButton label="Payment" count={filterCounts.payment} active={filter === 'payment'} onPress={() => setFilter('payment')} />
+              <OrderFilterButton label="Paid" count={filterCounts.paid} active={filter === 'paid'} onPress={() => setFilter('paid')} />
+              <OrderFilterButton label="In progress" count={filterCounts.active} active={filter === 'active'} onPress={() => setFilter('active')} />
+              <OrderFilterButton label="Completed" count={filterCounts.done} active={filter === 'done'} onPress={() => setFilter('done')} />
+              <OrderFilterButton label="All" count={filterCounts.all} active={filter === 'all'} onPress={() => setFilter('all')} />
+            </View>
+          </View>
+        ) : null}
       </View>
 
       <Text style={styles.resultMeta}>
-        {visibleOrders.length} order{visibleOrders.length === 1 ? '' : 's'} in this view
+        {visibleOrders.length} order{visibleOrders.length === 1 ? '' : 's'} {queueMode ? 'in priority queue' : 'in this view'}
       </Text>
 
       <OrderList
@@ -706,6 +753,41 @@ function OrdersView({
         emptyText={emptyText}
       />
     </View>
+  );
+}
+
+function OrderStat({
+  icon,
+  label,
+  value,
+  active = false,
+  attention = false,
+  positive = false,
+  onPress,
+}: {
+  icon: string;
+  label: string;
+  value: number;
+  active?: boolean;
+  attention?: boolean;
+  positive?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[
+        styles.orderStatCard,
+        active && styles.orderStatCardActive,
+        attention && styles.orderStatCardAttention,
+      ]}
+    >
+      <View style={[styles.orderStatIcon, positive && styles.orderStatIconPositive]}>
+        <Ionicons name={icon as never} size={19} color={positive ? theme.colors.greenDark : attention ? '#B54708' : theme.colors.navy} />
+      </View>
+      <Text style={styles.orderStatValue}>{value}</Text>
+      <Text style={styles.orderStatLabel}>{label}</Text>
+    </Pressable>
   );
 }
 
