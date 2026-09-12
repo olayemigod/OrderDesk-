@@ -461,6 +461,23 @@ const subscriptionRepository = read(join(mobileRoot, 'src/data/subscriptionRepos
 const customerPaymentsContract = read(join(repoRoot, 'docs/customer_payments.md'));
 
 requireValue(
+  platformAdminFunction.includes("'ai_parser_readiness'") &&
+    platformAdminFunction.includes('OPENAI_API_KEY_CONFIGURED') &&
+    platformAdminFunction.includes('ORDER_PARSER_TOKEN_CONFIGURED') &&
+    platformAdminFunction.includes('productionAcceptanceReady') &&
+    platformAdminFunction.includes('meteredExternalOrderUnits') &&
+    !platformAdminFunction.includes("const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY')") &&
+    !platformAdminFunction.includes("const ORDER_PARSER_TOKEN = Deno.env.get('ORDER_PARSER_TOKEN')"),
+  'ProcessEdge AI readiness must remain MFA-gated, observable and secret-safe',
+);
+
+requireValue(
+  read(join(mobileRoot, 'src/data/platformAdminRepository.ts')).includes("action: 'ai_parser_readiness'") &&
+    read(join(mobileRoot, 'src/components/PlatformAdminView.tsx')).includes('AI production readiness'),
+  'ProcessEdge admin console must surface the automated AI production-readiness evidence',
+);
+
+requireValue(
   paymentCoreMigration.includes("'ST/' || split_part(v_order_ref,'/',1) || '/' || v_kind || '/' || split_part(v_order_ref,'/',2)") &&
     paymentCoreMigration.includes("when 'invoice' then 'INV'") &&
     paymentCoreMigration.includes("when 'receipt' then 'RCP'") &&
