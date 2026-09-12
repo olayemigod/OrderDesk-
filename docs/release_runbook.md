@@ -199,3 +199,15 @@ SellerTray native Auth persistence uses `expo-secure-store` rather than AsyncSto
 - The first build containing this security change may require existing beta users whose prior session lived only in AsyncStorage to sign in again. SellerTray intentionally does not migrate plaintext persisted sessions into the new secure store automatically.
 
 Release acceptance must verify sign-in persistence across app restart and sign-out removal on a physical device.
+
+
+## Multi-factor authentication
+
+SellerTray supports Supabase TOTP MFA from **More → Security & MFA**.
+
+- Merchants can enroll an authenticator factor and verify the current session to AAL2.
+- A user with an enrolled factor but an AAL1 session can enter the current six-digit authenticator code to upgrade the session.
+- ProcessEdge platform-admin APIs cryptographically validate the Supabase user session and require an `aal2` JWT before returning tenant-wide admin data or accepting mutations.
+- ProcessEdge platform administrators must enroll MFA before production operations acceptance.
+
+Physical-device QA must prove enrollment, AAL1→AAL2 verification, persistence through the intended session lifecycle and rejection of platform-admin calls at AAL1.

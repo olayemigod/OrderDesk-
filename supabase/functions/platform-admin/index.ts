@@ -22,8 +22,12 @@ Deno.serve(withObservability('platform-admin', async (request) => {
   if (!SUPABASE_URL || !SERVICE_ROLE_KEY) return json({ error: 'Server configuration error' }, 500);
 
   const authorization = request.headers.get('authorization') ?? '';
-  const userId = getJwtUserId(authorization);
-  if (!userId) return json({ error: 'Authentication required' }, 401);
+  const identity = await verifiedIdentity(authorization);
+  if (!identity) return json({ error: 'Authentication required' }, 401);
+  if (identity.aal !== 'aal2') {
+    return json({ error: 'MFA verification is required for ProcessEdge administrator access' }, 403);
+  }
+  const userId = identity.userId;
 
   const bodyRead = await readRequestTextLimited(request, 65_536);
   if (!bodyRead.ok) {
@@ -138,16 +142,35 @@ async function rpc<T>(name: string, body: JsonRecord): Promise<T> {
   return (raw ? JSON.parse(raw) : null) as T;
 }
 
-function getJwtUserId(authorization: string): string | null {
-  const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+async function verifiedIdentity(
+  authorization: string,
+): Promise<{ userId: string; aal: 'aal1' | 'aal2' } | null> {
+  if (!authorization.startsWith('Bearer ')) return null;
+  const token = authorization.slice(7);
+  if (!token) return null;
+
+  const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: { apikey: SERVICE_ROLE_KEY, authorization },
+  });
+  if (!response.ok) return null;
+
+  let user: JsonRecord;
+  try { user = await response.json() as JsonRecord; }
+  catch { return null; }
+
+  const userId = cleanUuid(user.id);
+  const aal = getJwtAal(token);
+  return userId && aal ? { userId, aal } : null;
+}
+
+function getJwtAal(token: string): 'aal1' | 'aal2' | null {
   const payloadSegment = token.split('.')[1];
   if (!payloadSegment) return null;
-
   try {
     const normalized = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
     const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
     const payload = JSON.parse(atob(padded)) as JsonRecord;
-    return cleanUuid(payload.sub);
+    return payload.aal === 'aal2' ? 'aal2' : 'aal1';
   } catch {
     return null;
   }

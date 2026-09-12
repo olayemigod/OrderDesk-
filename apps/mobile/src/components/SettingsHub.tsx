@@ -8,6 +8,7 @@ import { AccountDataControls } from './AccountDataControls';
 import { BusinessProfileView } from './BusinessProfileView';
 import { CustomerNotificationSettings } from './CustomerNotificationSettings';
 import { PaymentMethodsSettings } from './PaymentMethodsSettings';
+import { MfaSecurityCard } from './MfaSecurityCard';
 import { PlatformAdminView } from './PlatformAdminView';
 import { SubscriptionStatusCard } from './SubscriptionStatusCard';
 import { TeamManagementView } from './TeamManagementView';
@@ -21,6 +22,7 @@ type Section =
   | 'payments'
   | 'team'
   | 'subscription'
+  | 'security'
   | 'account'
   | 'admin';
 
@@ -71,6 +73,16 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
               loading={subscription.loading}
               error={subscription.error}
             />
+          </View>
+        ) : null}
+        {section === 'security' ? (
+          <View style={styles.detailSection}>
+            <View>
+              <Text style={styles.eyebrow}>SECURITY</Text>
+              <Text style={styles.title}>Multi-factor authentication</Text>
+              <Text style={styles.subtitle}>Enroll or verify your authenticator for sensitive SellerTray access.</Text>
+            </View>
+            <MfaSecurityCard />
           </View>
         ) : null}
         {section === 'account' ? (
@@ -145,6 +157,11 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
           title="Plan & billing"
           text="Subscription status and billing controls"
           onPress={() => setSection('subscription')}
+        />
+        <MenuRow
+          title="Security & MFA"
+          text="Authenticator enrollment and high-assurance session verification"
+          onPress={() => setSection('security')}
         />
         <MenuRow
           title="Account & privacy"

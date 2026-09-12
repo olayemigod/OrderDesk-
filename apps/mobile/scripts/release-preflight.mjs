@@ -448,6 +448,8 @@ const orderPaymentPanel = read(join(mobileRoot, 'src/components/OrderPaymentPane
 const paymentReconciliationPanel = read(join(mobileRoot, 'src/components/PaymentReconciliationPanel.tsx'));
 const paymentReconciliationRepository = read(join(mobileRoot, 'src/data/paymentReconciliationRepository.ts'));
 const paymentMethodsSettings = read(join(mobileRoot, 'src/components/PaymentMethodsSettings.tsx'));
+const mfaSecurityCard = read(join(mobileRoot, 'src/components/MfaSecurityCard.tsx'));
+const platformAdminFunction = read(join(repoRoot, 'supabase/functions/platform-admin/index.ts'));
 const subscriptionStatusCard = read(join(mobileRoot, 'src/components/SubscriptionStatusCard.tsx'));
 const subscriptionRepository = read(join(mobileRoot, 'src/data/subscriptionRepository.ts'));
 const customerPaymentsContract = read(join(repoRoot, 'docs/customer_payments.md'));
@@ -600,6 +602,18 @@ requireValue(
     paymentReconciliationRepository.includes('confirmReconciliationPayment') &&
     paymentReconciliationRepository.includes('verifyReconciliationGateway'),
   'P8 tenant payment reconciliation inbox/report must remain wired to governed payment operations',
+);
+requireValue(
+  platformAdminFunction.includes('/auth/v1/user') &&
+    platformAdminFunction.includes("identity.aal !== 'aal2'") &&
+    platformAdminFunction.includes('MFA verification is required for ProcessEdge administrator access'),
+  'ProcessEdge platform-admin API must validate the Supabase session and require AAL2 MFA',
+);
+requireValue(
+  mfaSecurityCard.includes('mfa.enroll') &&
+    mfaSecurityCard.includes('mfa.challengeAndVerify') &&
+    mfaSecurityCard.includes('getAuthenticatorAssuranceLevel'),
+  'SellerTray mobile must expose TOTP enrollment and current-session MFA verification',
 );
 requireValue(
   subscriptionStatusCard.includes('Subscription purchase and plan changes are not offered inside the app') &&
