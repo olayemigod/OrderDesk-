@@ -262,6 +262,11 @@ requireValue(settingsHub.includes('<AccountDataControls business={business} />')
 requireValue(saasApp.includes("supabase.auth.signOut({ scope: 'local' })"), 'Workspace quick sign-out must be device-local');
 requireValue(saasApp.includes('label="Catalogue"') && saasApp.includes("onChange('products')"), 'Catalogue must have a first-class bottom tab');
 requireValue(saasApp.includes('label="Inbox"') && saasApp.includes("onChange('inbox')"), 'WhatsApp conversations must have a first-class Inbox bottom tab');
+requireValue(saasApp.includes("if (selectedOrder)") && saasApp.includes("← Orders"), 'Order details must remain a mobile drill-in flow with a visible back action');
+requireValue(saasApp.includes('Captured order messages') && saasApp.includes('Linked order'), 'Inbox must expose captured WhatsApp order messages and linked-order navigation');
+requireValue(catalogueView.includes('Manage') && catalogueView.includes('Search products, SKU or customer words'), 'Catalogue must retain merchant-first search and optional WhatsApp mapping controls');
+const paymentMethodsSettings = read(join(mobileRoot, 'src/components/PaymentMethodsSettings.tsx'));
+requireValue(paymentMethodsSettings.includes('Transactions') && paymentMethodsSettings.includes('Payment methods'), 'Payments must keep operational transactions separate from payment-method configuration');
 requireValue(saasApp.includes('label="More"') && saasApp.includes("onChange('more')"), 'Business/settings must be separated behind More');
 requireValue(saasApp.includes("paddingBottom: Platform.OS === 'android' ? 46 : 10"), 'Android bottom navigation must retain system-navigation clearance');
 requireValue(settingsHub.includes("BackHandler.addEventListener('hardwareBackPress'"), 'Android settings must support native back navigation');
