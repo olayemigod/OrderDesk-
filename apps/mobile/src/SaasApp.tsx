@@ -18,6 +18,7 @@ import { BusinessInsightsPanel } from './components/BusinessInsightsPanel';
 import { CatalogueView } from './components/CatalogueView';
 import { ManualOrderComposer } from './components/ManualOrderComposer';
 import { OrderFulfillmentPanel } from './components/OrderFulfillmentPanel';
+import { OrderPaymentPanel } from './components/OrderPaymentPanel';
 import { OrderItemsEditor } from './components/OrderItemsEditor';
 import { OrderStatusHistory } from './components/OrderStatusHistory';
 import { OrderWorkflowPanel } from './components/OrderWorkflowPanel';
@@ -523,6 +524,7 @@ function OrdersView({
       {visibleSelectedOrder ? (
         <OrderDetail
           order={visibleSelectedOrder}
+          tenantId={business.id}
           currency={business.currency}
           onAccept={() => setStatus(visibleSelectedOrder.id, 'accepted')}
           onReject={(reason) => setStatus(visibleSelectedOrder.id, 'rejected', reason)}
@@ -635,6 +637,7 @@ function OrderList({
 
 function OrderDetail({
   order,
+  tenantId,
   currency,
   onAccept,
   onReject,
@@ -648,6 +651,7 @@ function OrderDetail({
   onRemoveItem,
 }: {
   order: MerchantOrder;
+  tenantId: string;
   currency: string;
   onAccept: () => Promise<void>;
   onReject: (reason: string) => Promise<void>;
@@ -697,6 +701,8 @@ function OrderDetail({
         <Text style={styles.totalLabel}>Order total</Text>
         <Text style={styles.totalValue}>{total === null ? 'Needs pricing' : formatMoney(total, currency)}</Text>
       </View>
+
+      <OrderPaymentPanel tenantId={tenantId} order={order} />
 
       <OrderWorkflowPanel
         order={order}
