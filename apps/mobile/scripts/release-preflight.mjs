@@ -402,6 +402,11 @@ requireValue(
   'Manual and WhatsApp order aggregates must remain transactional and service-role-only',
 );
 requireValue(
+  whatsappWebhookFunction.includes('if (enrichedItems.length === 0)') &&
+    whatsappWebhookFunction.includes("event: 'whatsapp_message_not_an_order'"),
+  'Ordinary WhatsApp conversations must not create zero-item SellerTray orders',
+);
+requireValue(
   whatsappNotificationWorker.includes("type: 'template'") &&
     whatsappNotificationWorker.includes('META_TEXT_TEMPLATE_NAME') &&
     whatsappNotificationWorker.includes('META_DOCUMENT_TEMPLATE_NAME') &&
