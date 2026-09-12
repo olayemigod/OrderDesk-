@@ -54,6 +54,41 @@ export type PlatformAdminOverview = {
   tenants: PlatformTenantSummary[];
 };
 
+export type PlatformAiParserReadiness = {
+  configured: boolean;
+  configuration: {
+    openaiApiKeyConfigured: boolean;
+    parserTokenConfigured: boolean;
+    configuredModel: string;
+  };
+  currentPeriod: {
+    tenants: number;
+    tenantsWithAttempts: number;
+    attempts: number;
+    successes: number;
+    nonSuccess: number;
+    inputTokens: number;
+    cachedInputTokens: number;
+    outputTokens: number;
+    reasoningTokens: number;
+    totalTokens: number;
+    meteredExternalOrderUnits: number;
+    catalogueItemsTotalMax: number;
+    catalogueItemsSentAvg: number;
+    catalogueAliasesSentAvg: number;
+    latestObservedModel: string | null;
+  };
+  acceptanceEvidence: {
+    hasLiveAttempt: boolean;
+    hasSuccessfulParse: boolean;
+    hasMeteredExternalOrder: boolean;
+    outcomesReconcile: boolean;
+    meteredOrdersDoNotExceedSuccessfulParses: boolean;
+    productionAcceptanceReady: boolean;
+  };
+  generatedAt: string;
+};
+
 export type PlatformAdminAuditEvent = {
   id: string;
   tenantId: string | null;
@@ -82,6 +117,17 @@ export async function loadPlatformAdminOverview(): Promise<PlatformAdminOverview
 
   const raw = isRecord(data) && isRecord(data.overview) ? data.overview : null;
   return raw ? normalizeOverview(raw) : null;
+}
+
+export async function loadPlatformAiParserReadiness(): Promise<PlatformAiParserReadiness> {
+  const { data, error } = await supabase.functions.invoke('platform-admin', {
+    body: { action: 'ai_parser_readiness' },
+  });
+
+  if (error) throw new Error(functionError(error, 'Unable to load AI parser readiness.'));
+  const raw = isRecord(data) && isRecord(data.readiness) ? data.readiness : null;
+  if (!raw) throw new Error('AI parser readiness returned no status.');
+  return normalizeAiParserReadiness(raw);
 }
 
 export async function mutatePlatformTenant(
@@ -120,6 +166,48 @@ export async function loadPlatformAdminAudit(
     createdAt: stringValue(event.createdAt),
     actorEmail: stringValue(event.actorEmail),
   }));
+}
+
+function normalizeAiParserReadiness(raw: Record<string, unknown>): PlatformAiParserReadiness {
+  const configuration = isRecord(raw.configuration) ? raw.configuration : {};
+  const currentPeriod = isRecord(raw.currentPeriod) ? raw.currentPeriod : {};
+  const acceptanceEvidence = isRecord(raw.acceptanceEvidence) ? raw.acceptanceEvidence : {};
+
+  return {
+    configured: raw.configured === true,
+    configuration: {
+      openaiApiKeyConfigured: configuration.openaiApiKeyConfigured === true,
+      parserTokenConfigured: configuration.parserTokenConfigured === true,
+      configuredModel: stringValue(configuration.configuredModel) || 'gpt-5.6-luna',
+    },
+    currentPeriod: {
+      tenants: numberValue(currentPeriod.tenants),
+      tenantsWithAttempts: numberValue(currentPeriod.tenantsWithAttempts),
+      attempts: numberValue(currentPeriod.attempts),
+      successes: numberValue(currentPeriod.successes),
+      nonSuccess: numberValue(currentPeriod.nonSuccess),
+      inputTokens: numberValue(currentPeriod.inputTokens),
+      cachedInputTokens: numberValue(currentPeriod.cachedInputTokens),
+      outputTokens: numberValue(currentPeriod.outputTokens),
+      reasoningTokens: numberValue(currentPeriod.reasoningTokens),
+      totalTokens: numberValue(currentPeriod.totalTokens),
+      meteredExternalOrderUnits: numberValue(currentPeriod.meteredExternalOrderUnits),
+      catalogueItemsTotalMax: numberValue(currentPeriod.catalogueItemsTotalMax),
+      catalogueItemsSentAvg: numberValue(currentPeriod.catalogueItemsSentAvg),
+      catalogueAliasesSentAvg: numberValue(currentPeriod.catalogueAliasesSentAvg),
+      latestObservedModel: optionalString(currentPeriod.latestObservedModel),
+    },
+    acceptanceEvidence: {
+      hasLiveAttempt: acceptanceEvidence.hasLiveAttempt === true,
+      hasSuccessfulParse: acceptanceEvidence.hasSuccessfulParse === true,
+      hasMeteredExternalOrder: acceptanceEvidence.hasMeteredExternalOrder === true,
+      outcomesReconcile: acceptanceEvidence.outcomesReconcile === true,
+      meteredOrdersDoNotExceedSuccessfulParses:
+        acceptanceEvidence.meteredOrdersDoNotExceedSuccessfulParses === true,
+      productionAcceptanceReady: acceptanceEvidence.productionAcceptanceReady === true,
+    },
+    generatedAt: stringValue(raw.generatedAt),
+  };
 }
 
 function normalizeOverview(raw: Record<string, unknown>): PlatformAdminOverview {
