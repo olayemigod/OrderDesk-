@@ -98,7 +98,7 @@ export async function loadBusinesses(): Promise<MerchantBusiness[]> {
     .select(`
       role,
       created_at,
-      tenants(
+      tenants!tenant_members_tenant_id_fkey(
         id,
         name,
         slug,
