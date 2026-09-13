@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import type { GateDecision } from '../data/orderGateRepository';
 import type { OrderFulfillmentInput } from '../data/ordersRepository';
 import type { FulfillmentMethod, MerchantOrder } from '../domain/order';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
@@ -9,6 +10,8 @@ type Props = {
   order: MerchantOrder;
   onStartDelivery: (input: OrderFulfillmentInput) => Promise<void>;
   onCompleteFulfillment: (input: OrderFulfillmentInput) => Promise<void>;
+  dispatchGate?: GateDecision | null;
+  completeGate?: GateDecision | null;
 };
 
 const methodLabels: Record<FulfillmentMethod, string> = {
@@ -21,6 +24,8 @@ export function OrderFulfillmentPanel({
   order,
   onStartDelivery,
   onCompleteFulfillment,
+  dispatchGate = null,
+  completeGate = null,
 }: Props) {
   const appearance = useSellerTrayAppearance();
   const [method, setMethod] = useState<FulfillmentMethod | null>(order.fulfillmentMethod);
@@ -120,10 +125,19 @@ export function OrderFulfillmentPanel({
         {order.deliveryNote ? <Text style={[styles.summaryLine, appearance.dark && darkStyles.bodyText]}>Note: {order.deliveryNote}</Text> : null}
         {order.dispatchedAt ? <Text style={[styles.timeText, appearance.dark && darkStyles.bodyText]}>Dispatched {formatDateTime(order.dispatchedAt)}</Text> : null}
 
+        {completeGate && !completeGate.allowed ? (
+          <View style={[styles.gateCard, appearance.dark && darkStyles.warningCard]}>
+            <Text style={[styles.gateTitle, appearance.dark && darkStyles.warningTitle]}>Payment gate active</Text>
+            <Text style={[styles.gateText, appearance.dark && darkStyles.warningText]}>
+              {completeGate.reason ?? 'Payment must be resolved before this delivery can be completed.'}
+            </Text>
+          </View>
+        ) : null}
+
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         <Pressable
-          disabled={pending !== null || !liveMethod}
+          disabled={pending !== null || !liveMethod || (completeGate ? !completeGate.allowed : false)}
           onPress={() => {
             if (!liveMethod) return;
             void run('complete', () =>
@@ -137,8 +151,8 @@ export function OrderFulfillmentPanel({
           }}
           style={({ pressed }) => [
             styles.primaryButton,
-            pending !== null && styles.disabled,
-            pressed && pending === null && styles.pressed,
+            (pending !== null || (completeGate ? !completeGate.allowed : false)) && styles.disabled,
+            pressed && pending === null && (!completeGate || completeGate.allowed) && styles.pressed,
           ]}
         >
           <Text style={styles.primaryButtonText}>
@@ -221,16 +235,34 @@ export function OrderFulfillmentPanel({
         </View>
       ) : null}
 
+      {method === 'customer_pickup' && completeGate && !completeGate.allowed ? (
+        <View style={[styles.gateCard, appearance.dark && darkStyles.warningCard]}>
+          <Text style={[styles.gateTitle, appearance.dark && darkStyles.warningTitle]}>Payment gate active</Text>
+          <Text style={[styles.gateText, appearance.dark && darkStyles.warningText]}>
+            {completeGate.reason ?? 'Payment must be resolved before pickup can be completed.'}
+          </Text>
+        </View>
+      ) : null}
+
+      {method && method !== 'customer_pickup' && dispatchGate && !dispatchGate.allowed ? (
+        <View style={[styles.gateCard, appearance.dark && darkStyles.warningCard]}>
+          <Text style={[styles.gateTitle, appearance.dark && darkStyles.warningTitle]}>Dispatch blocked by payment policy</Text>
+          <Text style={[styles.gateText, appearance.dark && darkStyles.warningText]}>
+            {dispatchGate.reason ?? 'Payment must be resolved before this order can be dispatched.'}
+          </Text>
+        </View>
+      ) : null}
+
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       {method === 'customer_pickup' && input ? (
         <Pressable
-          disabled={pending !== null}
+          disabled={pending !== null || (completeGate ? !completeGate.allowed : false)}
           onPress={() => void run('complete', () => onCompleteFulfillment(input))}
           style={({ pressed }) => [
             styles.primaryButton,
-            pending !== null && styles.disabled,
-            pressed && pending === null && styles.pressed,
+            (pending !== null || (completeGate ? !completeGate.allowed : false)) && styles.disabled,
+            pressed && pending === null && (!completeGate || completeGate.allowed) && styles.pressed,
           ]}
         >
           <Text style={styles.primaryButtonText}>
@@ -241,12 +273,12 @@ export function OrderFulfillmentPanel({
 
       {method && method !== 'customer_pickup' && input ? (
         <Pressable
-          disabled={pending !== null}
+          disabled={pending !== null || (dispatchGate ? !dispatchGate.allowed : false)}
           onPress={() => void run('start', () => onStartDelivery(input))}
           style={({ pressed }) => [
             styles.primaryButton,
-            pending !== null && styles.disabled,
-            pressed && pending === null && styles.pressed,
+            (pending !== null || (dispatchGate ? !dispatchGate.allowed : false)) && styles.disabled,
+            pressed && pending === null && (!dispatchGate || dispatchGate.allowed) && styles.pressed,
           ]}
         >
           <Text style={styles.primaryButtonText}>
@@ -314,6 +346,9 @@ const styles = StyleSheet.create({
   customerConfirmed: { color: '#027A48', fontSize: 13, lineHeight: 17, fontWeight: '900', marginTop: 3 },
   merchantConfirmed: { color: '#344054', fontSize: 13, lineHeight: 17, fontWeight: '800', marginTop: 3 },
   timeText: { color: '#667085', fontSize: 12, marginTop: 2 },
+  gateCard: { backgroundColor: '#FFF8E7', borderRadius: 10, padding: 10, gap: 3 },
+  gateTitle: { color: '#7A2E0E', fontSize: 13, fontWeight: '900' },
+  gateText: { color: '#854A0E', fontSize: 12, lineHeight: 18 },
   error: { color: '#B42318', backgroundColor: '#FEF3F2', borderRadius: 8, padding: 9, fontSize: 12, lineHeight: 15 },
   primaryButton: { minHeight: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: '#12B76A', paddingHorizontal: 12 },
   primaryButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
@@ -329,4 +364,7 @@ const darkStyles = StyleSheet.create({
   bodyText: { color: '#D0D5DD' },
   input: { backgroundColor: '#F8FAFC', borderColor: '#98A2B3', color: '#102A43' },
   secondaryButton: { backgroundColor: '#162F46', borderColor: '#667085' },
+  warningCard: { backgroundColor: '#3D2A12', borderColor: '#B54708' },
+  warningTitle: { color: '#FEDF89' },
+  warningText: { color: '#FEC84B' },
 });
