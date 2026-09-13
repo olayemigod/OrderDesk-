@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 
 export type MerchantNotification = {
   id: string;
-  eventKey: 'new_whatsapp_order' | 'order_change_request' | 'new_whatsapp_message';
+  eventKey: 'new_whatsapp_order' | 'order_change_request' | 'new_whatsapp_message' | 'payment_verification_required' | 'payment_confirmed' | 'payment_failed' | 'payment_exception';
   severity: 'info' | 'attention' | 'urgent';
   title: string;
   body: string;
