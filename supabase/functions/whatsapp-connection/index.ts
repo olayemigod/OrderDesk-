@@ -4,6 +4,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const META_APP_ID = Deno.env.get('META_APP_ID')?.trim() ?? '';
 const META_APP_SECRET = Deno.env.get('META_APP_SECRET')?.trim() ?? '';
+const META_ACCESS_TOKEN = Deno.env.get('META_ACCESS_TOKEN')?.trim() ?? '';
 const META_GRAPH_API_VERSION = Deno.env.get('META_GRAPH_API_VERSION')?.trim() ?? '';
 const META_EMBEDDED_SIGNUP_REDIRECT_URI = Deno.env.get('META_EMBEDDED_SIGNUP_REDIRECT_URI')?.trim() ?? '';
 const WHATSAPP_ENCRYPTION_KEY = Deno.env.get('SELLERTRAY_WHATSAPP_ENCRYPTION_KEY')?.trim() ?? '';
@@ -40,7 +41,7 @@ Deno.serve(async (request) => {
     if (!role) return reply({ error: 'SellerTray business membership required' }, 403, requestId);
 
     if (action === 'status') {
-      return reply({ connection: await loadSafeConnection(tenantId) }, 200, requestId);
+      return reply(await connectionStatusPayload(tenantId), 200, requestId);
     }
 
     if (role !== 'owner') {
@@ -52,7 +53,7 @@ Deno.serve(async (request) => {
         p_tenant_id: tenantId,
         p_actor_user_id: userId,
       });
-      return reply({ ok: true, connection: await loadSafeConnection(tenantId) }, 200, requestId);
+      return reply({ ok: true, ...(await connectionStatusPayload(tenantId)) }, 200, requestId);
     }
 
     if (action !== 'complete_embedded_signup') {
@@ -110,7 +111,7 @@ Deno.serve(async (request) => {
       credential_fingerprint: fingerprint,
     }));
 
-    return reply({ ok: true, connection }, 200, requestId);
+    return reply({ ok: true, connection, readiness: await messagingReadiness(connection) }, 200, requestId);
   } catch (error) {
     const message = sanitizeError(error);
     const status = /already connected|unique/i.test(message)
@@ -174,6 +175,185 @@ async function loadSafeConnection(tenantId: string): Promise<J | null> {
       '&limit=1',
   );
   return rows[0] ?? null;
+}
+
+async function connectionStatusPayload(tenantId: string): Promise<J> {
+  const connection = await loadSafeConnection(tenantId);
+  return {
+    connection,
+    readiness: await messagingReadiness(connection),
+  };
+}
+
+type RuntimeWhatsAppCredential = {
+  credential_mode: 'platform_system_user' | 'business_integration_system_user';
+  credentials_ciphertext: string | null;
+  credentials_iv: string | null;
+  encryption_key_version: number | null;
+  credential_expires_at: string | null;
+};
+
+async function messagingReadiness(connection: J | null): Promise<J> {
+  const connected = connection?.connection_status === 'connected';
+  const webhookReady = connection?.webhook_subscription_status === 'subscribed';
+  const phoneNumberId = typeof connection?.phone_number_id === 'string'
+    ? connection.phone_number_id
+    : '';
+  const inboundReady = Boolean(connected && webhookReady && phoneNumberId);
+
+  if (!connected) {
+    return {
+      inboundReady: false,
+      outboundReady: false,
+      messagingReady: false,
+      webhookReady: false,
+      credentialReady: false,
+      reason: 'WhatsApp connection is not active.',
+    };
+  }
+
+  if (!webhookReady || !phoneNumberId) {
+    return {
+      inboundReady: false,
+      outboundReady: false,
+      messagingReady: false,
+      webhookReady: false,
+      credentialReady: false,
+      reason: 'WhatsApp webhook subscription is not ready.',
+    };
+  }
+
+  try {
+    const accessToken = await runtimeAccessToken(connection, phoneNumberId);
+    await verifyPhoneMessagingAccess(accessToken, phoneNumberId);
+    return {
+      inboundReady,
+      outboundReady: true,
+      messagingReady: inboundReady,
+      webhookReady: true,
+      credentialReady: true,
+      reason: null,
+      checkedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    return {
+      inboundReady,
+      outboundReady: false,
+      messagingReady: false,
+      webhookReady: true,
+      credentialReady: false,
+      reason: sanitizeReadinessError(error),
+      checkedAt: new Date().toISOString(),
+    };
+  }
+}
+
+async function runtimeAccessToken(connection: J, phoneNumberId: string): Promise<string> {
+  const mode = connection.credential_mode;
+  if (mode === 'platform_system_user') {
+    if (!META_ACCESS_TOKEN) {
+      throw new Error('Outbound WhatsApp credential is not configured.');
+    }
+    return META_ACCESS_TOKEN;
+  }
+
+  if (mode !== 'business_integration_system_user') {
+    throw new Error('WhatsApp credential mode is not supported.');
+  }
+
+  const rows = await rpc<RuntimeWhatsAppCredential[]>(
+    'get_sellertray_whatsapp_runtime_credential_by_phone',
+    { p_phone_number_id: phoneNumberId },
+  );
+  const credential = rows[0] ?? null;
+  if (!credential?.credentials_ciphertext || !credential.credentials_iv) {
+    throw new Error('Merchant WhatsApp credential is unavailable.');
+  }
+  if (credential.credential_expires_at) {
+    const expiresAt = new Date(credential.credential_expires_at).getTime();
+    if (Number.isFinite(expiresAt) && expiresAt <= Date.now()) {
+      throw new Error('Merchant WhatsApp credential has expired.');
+    }
+  }
+
+  const payload = await decryptCredential(
+    credential.credentials_ciphertext,
+    credential.credentials_iv,
+  );
+  const accessToken = typeof payload.accessToken === 'string'
+    ? payload.accessToken.trim()
+    : '';
+  if (!accessToken) throw new Error('Merchant WhatsApp credential is invalid.');
+  return accessToken;
+}
+
+async function verifyPhoneMessagingAccess(accessToken: string, phoneNumberId: string): Promise<void> {
+  if (!META_GRAPH_API_VERSION) {
+    throw new Error('Meta Graph API version is not configured.');
+  }
+
+  const url = new URL(
+    'https://graph.facebook.com/' + encodeURIComponent(META_GRAPH_API_VERSION) +
+      '/' + encodeURIComponent(phoneNumberId),
+  );
+  url.searchParams.set('fields', 'id,display_phone_number');
+
+  const response = await fetch(url, {
+    headers: { authorization: 'Bearer ' + accessToken },
+    signal: AbortSignal.timeout(10000),
+  });
+  const payload = await safeJson(response);
+  if (!response.ok) {
+    throw new Error(metaError(payload, 'Meta rejected the WhatsApp messaging credential.'));
+  }
+  if (!isRecord(payload) || payload.id !== phoneNumberId) {
+    throw new Error('Meta did not confirm access to the connected WhatsApp number.');
+  }
+}
+
+async function decryptCredential(ciphertext: string, ivValue: string): Promise<J> {
+  const keyBytes = fromBase64(WHATSAPP_ENCRYPTION_KEY);
+  if (keyBytes.byteLength !== 32) {
+    throw new Error('WhatsApp credential decryption is not configured.');
+  }
+  const iv = fromBase64(ivValue);
+  if (iv.byteLength !== 12) throw new Error('WhatsApp credential IV is invalid.');
+
+  const key = await crypto.subtle.importKey(
+    'raw',
+    keyBytes,
+    { name: 'AES-GCM' },
+    false,
+    ['decrypt'],
+  );
+  let plain: ArrayBuffer;
+  try {
+    plain = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      fromBase64(ciphertext),
+    );
+  } catch {
+    throw new Error('Merchant WhatsApp credential could not be decrypted.');
+  }
+
+  try {
+    const value = JSON.parse(new TextDecoder().decode(plain)) as unknown;
+    if (!isRecord(value)) throw new Error('invalid');
+    return value;
+  } catch {
+    throw new Error('Merchant WhatsApp credential payload is invalid.');
+  }
+}
+
+function sanitizeReadinessError(error: unknown): string {
+  const message = error instanceof Error
+    ? error.message
+    : 'Outbound WhatsApp messaging is not ready.';
+  return message
+    .replace(/Bearer\s+[A-Za-z0-9._~+\/-=]+/gi, 'Bearer [redacted]')
+    .replace(/\s+/g, ' ')
+    .slice(0, 240);
 }
 
 async function exchangeAuthorizationCode(code: string): Promise<string> {
