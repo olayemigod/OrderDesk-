@@ -30,6 +30,7 @@ import { orderTotal, type MerchantOrder, type OrderStatus } from './domain/order
 import { useBusinesses } from './hooks/useBusinesses';
 import { useCatalogue } from './hooks/useCatalogue';
 import { useMerchantNotifications } from './hooks/useMerchantNotifications';
+import { useOrderChangeRequests } from './hooks/useOrderChangeRequests';
 import { useOrders } from './hooks/useOrders';
 import { supabase } from './lib/supabase';
 
@@ -106,6 +107,13 @@ function Workspace() {
     markRead: markMerchantNotificationRead,
     markAllRead: markAllMerchantNotificationsRead,
   } = useMerchantNotifications(activeBusiness?.id ?? null);
+  const {
+    requests: orderChangeRequests,
+    busyId: orderChangeRequestBusyId,
+    error: orderChangeRequestError,
+    refresh: refreshOrderChangeRequests,
+    runAction: runOrderChangeRequestAction,
+  } = useOrderChangeRequests(activeBusiness?.id ?? null);
   const catalogue = useCatalogue(activeBusiness?.id ?? null);
   const [view, setView] = useState<ViewName>('home');
   const [selectedOrderId, setSelectedOrderId] = useState('');
@@ -124,7 +132,10 @@ function Workspace() {
 
   async function refreshAll() {
     await refreshBusinesses();
-    await refresh();
+    await Promise.all([
+      refresh(),
+      refreshOrderChangeRequests(),
+    ]);
   }
 
   if (businessesLoading && !activeBusiness) {
@@ -155,7 +166,7 @@ function Workspace() {
     );
   }
 
-  const pageError = businessesError || error || merchantNotificationsError;
+  const pageError = businessesError || error || merchantNotificationsError || orderChangeRequestError;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -230,8 +241,14 @@ function Workspace() {
           {view === 'notifications' ? (
             <MerchantNotificationsView
               notifications={merchantNotifications}
+              changeRequests={orderChangeRequests}
               loading={merchantNotificationsLoading}
+              busyRequestId={orderChangeRequestBusyId}
               onMarkAllRead={() => void markAllMerchantNotificationsRead()}
+              onRequestAction={async (notificationId, requestId, action) => {
+                await runOrderChangeRequestAction(requestId, action);
+                await markMerchantNotificationRead(notificationId);
+              }}
               onOpenOrder={(notificationId, orderId) => {
                 void markMerchantNotificationRead(notificationId);
                 if (orderId) {
@@ -342,8 +359,11 @@ function WorkspaceHeader({
 
 function MerchantNotificationsView({
   notifications,
+  changeRequests,
   loading,
+  busyRequestId,
   onMarkAllRead,
+  onRequestAction,
   onOpenOrder,
 }: {
   notifications: Array<{
@@ -351,12 +371,31 @@ function MerchantNotificationsView({
     title: string;
     body: string;
     orderId: string | null;
+    changeRequestId: string | null;
     isRead: boolean;
     createdAt: string;
     severity: 'info' | 'attention' | 'urgent';
   }>;
+  changeRequests: Array<{
+    id: string;
+    orderId: string | null;
+    requestKind: 'add_items' | 'remove_items' | 'change_items' | 'cancel_order' | 'other';
+    requestText: string;
+    parsedItems: Array<{
+      itemName: string;
+      quantity: number;
+      unitPrice: number | null;
+    }>;
+    status: 'pending' | 'reviewed' | 'resolved' | 'rejected';
+  }>;
   loading: boolean;
+  busyRequestId: string | null;
   onMarkAllRead: () => void;
+  onRequestAction: (
+    notificationId: string,
+    requestId: string,
+    action: 'apply' | 'resolve' | 'reject',
+  ) => Promise<void>;
   onOpenOrder: (notificationId: string, orderId: string | null) => void;
 }) {
   const unreadCount = notifications.filter((notification) => !notification.isRead).length;
@@ -399,25 +438,100 @@ function MerchantNotificationsView({
       ) : null}
 
       <View style={styles.notificationList}>
-        {notifications.map((notification) => (
-          <Pressable
-            key={notification.id}
-            onPress={() => onOpenOrder(notification.id, notification.orderId)}
-            style={[
-              styles.notificationCard,
-              !notification.isRead && styles.notificationCardUnread,
-            ]}
-          >
-            <View style={styles.notificationCardTop}>
-              <Text style={styles.notificationTitle}>{notification.title}</Text>
-              {!notification.isRead ? <View style={styles.notificationUnreadDot} /> : null}
+        {notifications.map((notification) => {
+          const changeRequest = notification.changeRequestId
+            ? changeRequests.find((candidate) => candidate.id === notification.changeRequestId)
+            : null;
+          const requestBusy = Boolean(changeRequest && busyRequestId === changeRequest.id);
+          const canApply = Boolean(
+            changeRequest &&
+            changeRequest.status === 'pending' &&
+            (changeRequest.requestKind === 'add_items' || changeRequest.requestKind === 'cancel_order'),
+          );
+
+          return (
+            <View
+              key={notification.id}
+              style={[
+                styles.notificationCard,
+                !notification.isRead && styles.notificationCardUnread,
+              ]}
+            >
+              <Pressable onPress={() => onOpenOrder(notification.id, notification.orderId)}>
+                <View style={styles.notificationCardTop}>
+                  <Text style={styles.notificationTitle}>{notification.title}</Text>
+                  {!notification.isRead ? <View style={styles.notificationUnreadDot} /> : null}
+                </View>
+                <Text style={styles.notificationBody}>{notification.body}</Text>
+                <Text style={styles.notificationMeta}>
+                  {new Date(notification.createdAt).toLocaleString()}
+                </Text>
+              </Pressable>
+
+              {changeRequest ? (
+                <View style={styles.changeRequestCard}>
+                  <Text style={styles.changeRequestKind}>
+                    {changeRequest.requestKind.replaceAll('_', ' ').toUpperCase()}
+                  </Text>
+                  <Text style={styles.changeRequestText}>{changeRequest.requestText}</Text>
+
+                  {changeRequest.parsedItems.length > 0 ? (
+                    <View style={styles.changeRequestItems}>
+                      {changeRequest.parsedItems.map((item, index) => (
+                        <Text key={`${changeRequest.id}-${index}`} style={styles.changeRequestItem}>
+                          {item.quantity} × {item.itemName}
+                          {item.unitPrice === null ? ' · price review needed' : ''}
+                        </Text>
+                      ))}
+                    </View>
+                  ) : null}
+
+                  {changeRequest.status === 'pending' ? (
+                    <View style={styles.changeRequestActions}>
+                      <Pressable
+                        onPress={() => onOpenOrder(notification.id, notification.orderId)}
+                        disabled={requestBusy}
+                        style={styles.secondaryButton}
+                      >
+                        <Text style={styles.secondaryButtonText}>Open order</Text>
+                      </Pressable>
+                      {canApply ? (
+                        <Pressable
+                          onPress={() => void onRequestAction(notification.id, changeRequest.id, 'apply')}
+                          disabled={requestBusy}
+                          style={[styles.primarySmallButton, requestBusy && styles.buttonDisabled]}
+                        >
+                          <Text style={styles.primarySmallButtonText}>
+                            {changeRequest.requestKind === 'cancel_order' ? 'Confirm cancellation' : 'Apply additions'}
+                          </Text>
+                        </Pressable>
+                      ) : (
+                        <Pressable
+                          onPress={() => void onRequestAction(notification.id, changeRequest.id, 'resolve')}
+                          disabled={requestBusy}
+                          style={[styles.primarySmallButton, requestBusy && styles.buttonDisabled]}
+                        >
+                          <Text style={styles.primarySmallButtonText}>Mark handled</Text>
+                        </Pressable>
+                      )}
+                      <Pressable
+                        onPress={() => void onRequestAction(notification.id, changeRequest.id, 'reject')}
+                        disabled={requestBusy}
+                        style={styles.rejectSmallButton}
+                      >
+                        <Text style={styles.rejectSmallButtonText}>Reject request</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <Text style={styles.changeRequestResolved}>
+                      Request {changeRequest.status}.
+                    </Text>
+                  )}
+                </View>
+              ) : null}
             </View>
-            <Text style={styles.notificationBody}>{notification.body}</Text>
-            <Text style={styles.notificationMeta}>
-              {new Date(notification.createdAt).toLocaleString()}
-            </Text>
-          </Pressable>
-        ))}
+          );
+        })}
       </View>
     </View>
   );
@@ -998,6 +1112,20 @@ const styles = StyleSheet.create({
   notificationBody: { color: '#475467', fontSize: 12, lineHeight: 18 },
   notificationMeta: { color: '#98A2B3', fontSize: 9, fontWeight: '700' },
   notificationUnreadDot: { width: 8, height: 8, borderRadius: 999, backgroundColor: '#12B76A' },
+  changeRequestCard: { marginTop: 7, borderTopWidth: 1, borderTopColor: '#EAECF0', paddingTop: 10, gap: 7 },
+  changeRequestKind: { color: '#B54708', fontSize: 9, fontWeight: '900', letterSpacing: 0.8 },
+  changeRequestText: { color: '#344054', fontSize: 12, lineHeight: 18, fontWeight: '700' },
+  changeRequestItems: { backgroundColor: '#F9FAFB', borderRadius: 10, padding: 9, gap: 4 },
+  changeRequestItem: { color: '#475467', fontSize: 11, lineHeight: 16 },
+  changeRequestActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 2 },
+  secondaryButton: { minHeight: 34, borderRadius: 9, borderWidth: 1, borderColor: '#D0D5DD', backgroundColor: '#FFFFFF', justifyContent: 'center', paddingHorizontal: 10 },
+  secondaryButtonText: { color: '#344054', fontSize: 10, fontWeight: '900' },
+  primarySmallButton: { minHeight: 34, borderRadius: 9, backgroundColor: '#12B76A', justifyContent: 'center', paddingHorizontal: 10 },
+  primarySmallButtonText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
+  rejectSmallButton: { minHeight: 34, borderRadius: 9, borderWidth: 1, borderColor: '#FDA29B', backgroundColor: '#FFF5F4', justifyContent: 'center', paddingHorizontal: 10 },
+  rejectSmallButtonText: { color: '#B42318', fontSize: 10, fontWeight: '900' },
+  changeRequestResolved: { color: '#667085', fontSize: 10, fontWeight: '800' },
+  buttonDisabled: { opacity: 0.55 },
   orderList: { gap: 9 },
   orderCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EAECF0', borderRadius: 15, padding: 13 },
   orderCardSelected: { borderColor: '#246BFD', borderWidth: 2 },
