@@ -980,7 +980,7 @@ function OrderFilterButton({
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.filterButton, appearance.dark && darkStyles.outlineButton, active && styles.filterButtonActive]}
+      style={[styles.filterButton, appearance.dark && darkStyles.outlineButton, active && styles.filterButtonActive, active && appearance.dark && darkStyles.activeCard]}
     >
       <Text style={[styles.filterButtonText, appearance.dark && darkStyles.bodyText, active && styles.filterButtonTextActive]}>{label}</Text>
       <Text style={[styles.filterCount, active && styles.filterCountActive]}>{count}</Text>
@@ -1331,8 +1331,8 @@ function ConversationsView({
               <View key={order.id} style={[styles.customerBubble, appearance.dark && darkStyles.mintCard]}>
                 <Text style={[styles.bubbleText, appearance.dark && darkStyles.titleText]}>{order.customerMessage || 'Order message captured without text.'}</Text>
                 <View style={styles.bubbleMetaRow}>
-                  <Text style={styles.bubbleMeta}>{formatReceivedAt(order.receivedAt)}</Text>
-                  <Text style={styles.bubbleOrderRef}>{order.publicOrderId}</Text>
+                  <Text style={[styles.bubbleMeta, appearance.dark && darkStyles.mutedText]}>{formatReceivedAt(order.receivedAt)}</Text>
+                  <Text style={[styles.bubbleOrderRef, appearance.dark && darkStyles.greenText]}>{order.publicOrderId}</Text>
                 </View>
                 <View style={[styles.linkedOrderCard, appearance.dark && darkStyles.card]}>
                   <View style={styles.linkedOrderCopy}>
@@ -1439,14 +1439,14 @@ function ConversationsView({
               <View style={styles.conversationCopy}>
                 <View style={styles.conversationNameRow}>
                   <Text style={[styles.conversationName, appearance.dark && darkStyles.titleText]}>{conversation.name}</Text>
-                  <Text style={styles.conversationTime}>
+                  <Text style={[styles.conversationTime, appearance.dark && darkStyles.mutedText]}>
                     {conversation.latest ? formatReceivedAt(conversation.latest.receivedAt) : ''}
                   </Text>
                 </View>
                 <Text numberOfLines={1} style={[styles.conversationPreview, appearance.dark && darkStyles.bodyText]}>
                   {conversation.latest?.customerMessage || 'WhatsApp activity captured'}
                 </Text>
-                <Text style={styles.conversationMeta}>
+                <Text style={[styles.conversationMeta, appearance.dark && darkStyles.greenText]}>
                   {conversation.orders.length} linked order{conversation.orders.length === 1 ? '' : 's'}
                 </Text>
               </View>
@@ -1458,7 +1458,7 @@ function ConversationsView({
                     </Text>
                   </View>
                 ) : null}
-                <Text style={styles.conversationChevron}>›</Text>
+                <Text style={[styles.conversationChevron, appearance.dark && darkStyles.mutedText]}>›</Text>
               </View>
             </Pressable>
           ))}
@@ -1604,8 +1604,8 @@ function ConversationStat({
 }) {
   const appearance = useSellerTrayAppearance();
   return (
-    <Pressable onPress={onPress} style={[styles.conversationStatCard, appearance.dark && darkStyles.card, active && styles.conversationStatCardActive]}>
-      <Ionicons name={icon as never} size={19} color={active ? theme.colors.greenDark : theme.colors.navy} />
+    <Pressable onPress={onPress} style={[styles.conversationStatCard, appearance.dark && darkStyles.card, active && styles.conversationStatCardActive, active && appearance.dark && darkStyles.activeCard]}>
+      <Ionicons name={icon as never} size={19} color={active ? (appearance.dark ? theme.colors.green : theme.colors.greenDark) : appearance.dark ? '#D0D5DD' : theme.colors.navy} />
       <Text style={[styles.conversationStatValue, appearance.dark && darkStyles.titleText]}>{value}</Text>
       <Text style={[styles.conversationStatLabel, appearance.dark && darkStyles.bodyText]}>{label}</Text>
     </Pressable>
