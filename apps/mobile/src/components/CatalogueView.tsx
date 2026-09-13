@@ -168,7 +168,7 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
           style={[styles.filterIconButton, appearance.dark && darkStyles.outlineButton, showFilters && styles.filterIconButtonActive]}
           accessibilityLabel="Catalogue filters"
         >
-          <Ionicons name="options-outline" size={21} color={showFilters ? '#FFFFFF' : '#102A43'} />
+          <Ionicons name="options-outline" size={21} color={showFilters ? '#FFFFFF' : appearance.dark ? '#D9FBE8' : '#102A43'} />
         </Pressable>
       </View>
 
