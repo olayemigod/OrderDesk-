@@ -5,6 +5,16 @@ export type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'grace' | 'su
 export type WhatsAppConnectionStatus = 'not_connected' | 'pending' | 'connected' | 'error';
 export type MerchantRole = 'owner' | 'manager' | 'staff';
 
+export type WhatsAppMessagingReadiness = {
+  inboundReady: boolean;
+  outboundReady: boolean;
+  messagingReady: boolean;
+  webhookReady: boolean;
+  credentialReady: boolean;
+  reason: string | null;
+  checkedAt: string | null;
+};
+
 export type MerchantBusiness = {
   id: string;
   name: string;
@@ -20,6 +30,7 @@ export type MerchantBusiness = {
   onboardingStatus: OnboardingStatus;
   subscriptionStatus: SubscriptionStatus;
   whatsappConnectionStatus: WhatsAppConnectionStatus;
+  whatsappReadiness: WhatsAppMessagingReadiness;
 };
 
 export type BusinessProfileInput = {
@@ -107,7 +118,7 @@ export async function loadBusinesses(): Promise<MerchantBusiness[]> {
 
   if (error) throw error;
 
-  return ((data ?? []) as unknown as MembershipRow[])
+  const businesses = ((data ?? []) as unknown as MembershipRow[])
     .map((membership) => {
       const tenant = one(membership.tenants);
       if (!tenant) return null;
@@ -127,9 +138,25 @@ export async function loadBusinesses(): Promise<MerchantBusiness[]> {
         onboardingStatus: tenant.onboarding_status,
         subscriptionStatus: tenant.subscription_status,
         whatsappConnectionStatus: tenant.whatsapp_connection_status,
+        whatsappReadiness: fallbackWhatsAppReadiness(tenant.whatsapp_connection_status),
       } satisfies MerchantBusiness;
     })
     .filter((business): business is MerchantBusiness => business !== null);
+
+  const readiness = await Promise.all(
+    businesses.map(async (business) => {
+      try {
+        return await loadWhatsAppMessagingReadiness(business.id);
+      } catch {
+        return fallbackWhatsAppReadiness(business.whatsappConnectionStatus);
+      }
+    }),
+  );
+
+  return businesses.map((business, index) => ({
+    ...business,
+    whatsappReadiness: readiness[index] ?? fallbackWhatsAppReadiness(business.whatsappConnectionStatus),
+  }));
 }
 
 export async function createInitialBusiness(input: InitialBusinessInput): Promise<string> {
@@ -203,4 +230,50 @@ export async function updateBusinessProfile(
 function cleanOptional(value: string | null): string | null {
   const clean = value?.trim() ?? '';
   return clean || null;
+}
+
+async function loadWhatsAppMessagingReadiness(
+  tenantId: string,
+): Promise<WhatsAppMessagingReadiness> {
+  const { data, error } = await supabase.functions.invoke('whatsapp-connection', {
+    body: { action: 'status', tenantId },
+  });
+  if (error) throw error;
+
+  const readiness =
+    data && typeof data === 'object' && 'readiness' in data
+      ? (data as { readiness?: unknown }).readiness
+      : null;
+
+  if (!readiness || typeof readiness !== 'object') {
+    throw new Error('WhatsApp messaging readiness was not returned.');
+  }
+
+  const value = readiness as Record<string, unknown>;
+  return {
+    inboundReady: value.inboundReady === true,
+    outboundReady: value.outboundReady === true,
+    messagingReady: value.messagingReady === true,
+    webhookReady: value.webhookReady === true,
+    credentialReady: value.credentialReady === true,
+    reason: typeof value.reason === 'string' ? value.reason : null,
+    checkedAt: typeof value.checkedAt === 'string' ? value.checkedAt : null,
+  };
+}
+
+function fallbackWhatsAppReadiness(
+  status: WhatsAppConnectionStatus,
+): WhatsAppMessagingReadiness {
+  const connected = status === 'connected';
+  return {
+    inboundReady: connected,
+    outboundReady: false,
+    messagingReady: false,
+    webhookReady: connected,
+    credentialReady: false,
+    reason: connected
+      ? 'Outbound WhatsApp messaging readiness has not been verified yet.'
+      : 'WhatsApp connection is not active.',
+    checkedAt: null,
+  };
 }
