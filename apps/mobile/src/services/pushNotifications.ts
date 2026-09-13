@@ -94,8 +94,14 @@ export function subscribeToPushResponses(
     onOpen(routeFromData(response.notification.request.content.data));
   });
 
-  void Notifications.getLastNotificationResponseAsync().then((response) => {
-    if (response) onOpen(routeFromData(response.notification.request.content.data));
+  void Notifications.getLastNotificationResponseAsync().then(async (response) => {
+    if (!response) return;
+    onOpen(routeFromData(response.notification.request.content.data));
+    try {
+      await Notifications.clearLastNotificationResponseAsync();
+    } catch {
+      // A stale response must never block normal app startup.
+    }
   });
 
   return () => subscription.remove();
