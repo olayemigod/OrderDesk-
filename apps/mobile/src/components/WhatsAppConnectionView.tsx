@@ -129,7 +129,7 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
 
       <View style={styles.readinessGrid}>
         <ReadinessItem label="Inbound" ready={inboundReady} text={inboundReady ? 'Webhook ready' : 'Needs attention'} />
-        <ReadinessItem label="Outbound" ready={outboundReady} text={outboundReady ? 'Credential verified' : 'Not verified'} />
+        <ReadinessItem label="Outbound" ready={outboundReady} text={outboundReady ? 'Messaging active' : 'Needs attention'} />
       </View>
 
       <View style={[styles.consentCard, processingActive && styles.consentActiveCard, appearance.dark && darkStyles.card]}>
@@ -182,8 +182,8 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
         ) : null}
 
         {!consentLoading && processingActive && isOwner ? (
-          <Pressable disabled={consentBusy} onPress={() => void revokeConsent()} style={styles.secondaryButton}>
-            <Text style={styles.secondaryButtonText}>{consentBusy ? 'Updating…' : 'Revoke authorization'}</Text>
+          <Pressable disabled={consentBusy} onPress={() => void revokeConsent()} style={[styles.secondaryButton, appearance.dark && darkStyles.secondaryButton]}>
+            <Text style={[styles.secondaryButtonText, appearance.dark && darkStyles.titleText]}>{consentBusy ? 'Updating…' : 'Revoke authorization'}</Text>
           </Pressable>
         ) : null}
 
@@ -249,12 +249,13 @@ function ReadinessItem({ label, ready, text }: { label: string; ready: boolean; 
 }
 
 function Step({ number, title, text }: { number: string; title: string; text: string }) {
+  const appearance = useSellerTrayAppearance();
   return (
     <View style={styles.step}>
       <View style={styles.stepNumber}><Text style={styles.stepNumberText}>{number}</Text></View>
       <View style={styles.stepCopy}>
-        <Text style={styles.stepTitle}>{title}</Text>
-        <Text style={styles.stepText}>{text}</Text>
+        <Text style={[styles.stepTitle, appearance.dark && darkStyles.titleText]}>{title}</Text>
+        <Text style={[styles.stepText, appearance.dark && darkStyles.bodyText]}>{text}</Text>
       </View>
     </View>
   );
@@ -337,4 +338,5 @@ const darkStyles = StyleSheet.create({
   successCard: { backgroundColor: '#12372C', borderColor: '#1C6B4A' },
   titleText: { color: '#F8FAFC' },
   bodyText: { color: '#D0D5DD' },
+  secondaryButton: { backgroundColor: '#162F46', borderColor: '#667085' },
 });
