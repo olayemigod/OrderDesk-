@@ -59,8 +59,8 @@ type OrderRow = {
   review_reasons: string[] | null;
   created_at: string;
   customers:
-    | { display_name: string | null; phone: string | null; wa_id: string }
-    | Array<{ display_name: string | null; phone: string | null; wa_id: string }>
+    | { id: string; display_name: string | null; phone: string | null; wa_id: string }
+    | Array<{ id: string; display_name: string | null; phone: string | null; wa_id: string }>
     | null;
   inbound_messages:
     | { text_body: string | null }
@@ -115,6 +115,7 @@ function mapOrder(row: OrderRow, notifications: OrderNotification[]): MerchantOr
 
   return {
     id: row.id,
+    customerId: customer?.id ?? '',
     publicOrderId: row.public_order_id,
     customerName: customer?.display_name || customer?.phone || customer?.wa_id || 'WhatsApp customer',
     customerPhone: customer?.phone || customer?.wa_id || '',
@@ -195,7 +196,7 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
         parser_version,
         review_reasons,
         created_at,
-        customers(display_name, phone, wa_id),
+        customers(id, display_name, phone, wa_id),
         inbound_messages!orders_source_message_same_tenant(text_body),
         order_items(id, item_name, original_item_name, quantity, unit_price, match_source, match_confidence),
         order_status_events(id, event_type, from_status, to_status, actor_kind, reason, created_at)
