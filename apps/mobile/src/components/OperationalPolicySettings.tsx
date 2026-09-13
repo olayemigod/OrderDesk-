@@ -124,7 +124,6 @@ export function OperationalPolicySettings({ business }: { business: MerchantBusi
         </Text>
         <PushOption label="Actionable only" helper="Recommended: orders, change requests and payment events." value="actionable_only" active={draft.whatsappPushMode === 'actionable_only'} disabled={!canEdit || saving} onPress={setPushMode} />
         <PushOption label="All customer messages" helper="Every processed WhatsApp message may also create a SellerTray alert." value="all_messages" active={draft.whatsappPushMode === 'all_messages'} disabled={!canEdit || saving} onPress={setPushMode} />
-        <PushOption label="Orders & payments only" helper="Quietest mode. Conversation unread counts still work." value="orders_payments_only" active={draft.whatsappPushMode === 'orders_payments_only'} disabled={!canEdit || saving} onPress={setPushMode} />
       </View>
 
       {!canEdit ? (
