@@ -34,12 +34,10 @@ export async function loadMerchantNotifications(
 ): Promise<MerchantNotification[]> {
   if (!tenantId) return [];
 
-  const { data, error } = await supabase
-    .from('merchant_notifications')
-    .select('id,event_key,severity,title,body,order_id,change_request_id,source_inbound_message_id,is_read,created_at')
-    .eq('tenant_id', tenantId)
-    .order('created_at', { ascending: false })
-    .limit(limit);
+  const { data, error } = await supabase.rpc('sellertray_list_merchant_notifications', {
+    p_tenant_id: tenantId,
+    p_limit: limit,
+  });
 
   if (error) throw error;
 
@@ -58,25 +56,17 @@ export async function loadMerchantNotifications(
 }
 
 export async function markMerchantNotificationRead(id: string): Promise<void> {
-  const { error } = await supabase
-    .from('merchant_notifications')
-    .update({
-      is_read: true,
-      read_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', id);
+  const { error } = await supabase.rpc('sellertray_mark_merchant_notification_read', {
+    p_notification_id: id,
+  });
 
   if (error) throw error;
 }
 
 export async function markAllMerchantNotificationsRead(tenantId: string): Promise<void> {
-  const now = new Date().toISOString();
-  const { error } = await supabase
-    .from('merchant_notifications')
-    .update({ is_read: true, read_at: now, updated_at: now })
-    .eq('tenant_id', tenantId)
-    .eq('is_read', false);
+  const { error } = await supabase.rpc('sellertray_mark_all_merchant_notifications_read', {
+    p_tenant_id: tenantId,
+  });
 
   if (error) throw error;
 }
