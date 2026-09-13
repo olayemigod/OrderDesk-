@@ -328,7 +328,9 @@ function AppearanceView({
 
 function SupportView() {
   const appearance = useSellerTrayAppearance();
-  const chatUrl = process.env.EXPO_PUBLIC_SUPPORT_CHAT_URL?.trim() || 'https://processedge.com.ng/contact';
+  const configuredChatUrl = process.env.EXPO_PUBLIC_SUPPORT_CHAT_URL?.trim() || '';
+  const whatsappUrl = 'https://wa.me/2348096086857?text=Hello%20SellerTray%20Support';
+  const chatUrl = configuredChatUrl || whatsappUrl;
 
   return (
     <View style={styles.detailSection}>
@@ -346,15 +348,33 @@ function SupportView() {
           <Text style={styles.supportHeroText}>Support for sign-in, setup, orders, payments and WhatsApp connection.</Text>
         </View>
       </View>
+      <Pressable
+        onPress={() => void Linking.openURL(chatUrl)}
+        style={({ pressed }) => [styles.liveChatButton, pressed && styles.pressed]}
+      >
+        <View style={styles.liveChatIcon}>
+          <Ionicons name="chatbubbles-outline" size={24} color="#FFFFFF" />
+        </View>
+        <View style={styles.menuCopy}>
+          <Text style={styles.liveChatTitle}>Chat with SellerTray Support</Text>
+          <Text style={styles.liveChatText}>
+            {configuredChatUrl ? 'Open live customer-service chat' : 'Chat immediately on WhatsApp while live-chat inbox setup is completed'}
+          </Text>
+        </View>
+        <Ionicons name="arrow-forward-circle" size={25} color="#FFFFFF" />
+      </Pressable>
+
       <View style={[styles.menuGroup, appearance.dark && darkStyles.card]}>
-        <SupportRow icon="chatbubbles-outline" title="Live chat" text="Open SellerTray support chat" url={chatUrl} />
-        <SupportRow icon="logo-whatsapp" title="WhatsApp" text="+234 809 608 6857" url="https://wa.me/2348096086857?text=Hello%20SellerTray%20Support" />
+        <SupportRow icon="chatbubbles-outline" title="Live chat" text={configuredChatUrl ? 'Dedicated SellerTray chat inbox' : 'Currently routed to WhatsApp support'} url={chatUrl} />
+        <SupportRow icon="logo-whatsapp" title="WhatsApp" text="+234 809 608 6857" url={whatsappUrl} />
         <SupportRow icon="call-outline" title="Call support" text="+234 809 608 6857" url="tel:+2348096086857" />
         <SupportRow icon="mail-outline" title="Email" text="processedgeng@gmail.com" url="mailto:processedgeng@gmail.com?subject=SellerTray%20Support" />
       </View>
       <View style={[styles.supportNote, appearance.dark && darkStyles.mintCard]}>
         <Ionicons name="information-circle-outline" size={20} color="#079455" />
-        <Text style={[styles.supportNoteText, appearance.dark && darkStyles.bodyText]}>Live chat is wired through a configurable support URL so ProcessEdge can use Chatwoot without rebuilding the app when the inbox URL changes.</Text>
+        <Text style={[styles.supportNoteText, appearance.dark && darkStyles.bodyText]}>
+          SellerTray support chat uses EXPO_PUBLIC_SUPPORT_CHAT_URL when configured. Until then, Chat opens the ProcessEdge WhatsApp support conversation so merchants always have a working support channel.
+        </Text>
       </View>
     </View>
   );
@@ -450,6 +470,10 @@ const styles = StyleSheet.create({
   supportHeroIcon: { width: 48, height: 48, borderRadius: 15, backgroundColor: '#12B76A', alignItems: 'center', justifyContent: 'center' },
   supportHeroTitle: { color: '#FFFFFF', fontSize: 16, fontWeight: '900' },
   supportHeroText: { color: '#D0D5DD', fontSize: 12, lineHeight: 18, marginTop: 2 },
+  liveChatButton: { minHeight: 76, borderRadius: 16, backgroundColor: '#12B76A', padding: 14, flexDirection: 'row', alignItems: 'center', gap: 11 },
+  liveChatIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
+  liveChatTitle: { color: '#FFFFFF', fontSize: 15, fontWeight: '900' },
+  liveChatText: { color: '#E8FFF3', fontSize: 11, lineHeight: 16, marginTop: 2 },
   supportNote: { backgroundColor: '#ECFDF3', borderRadius: 14, padding: 12, flexDirection: 'row', gap: 9, alignItems: 'flex-start' },
   supportNoteText: { flex: 1, color: '#475467', fontSize: 12, lineHeight: 18 },
   preferenceCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 16, padding: 13, gap: 12 },
