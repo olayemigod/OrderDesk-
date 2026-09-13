@@ -125,6 +125,7 @@ function Workspace() {
   } = useConversationUnreadCounts(activeBusiness?.id ?? null);
   const [view, setView] = useState<ViewName>('home');
   const [selectedOrderId, setSelectedOrderId] = useState('');
+  const [ordersEntryFilter, setOrdersEntryFilter] = useState<OrderFilter>('attention');
   const [merchantName, setMerchantName] = useState('there');
 
   useEffect(() => {
@@ -261,7 +262,8 @@ function Workspace() {
               orders={orders}
               loading={loading}
               productCount={catalogue.items.filter((item) => item.isActive).length}
-              onOpenOrders={() => {
+              onOpenOrders={(filter = 'attention') => {
+                setOrdersEntryFilter(filter);
                 setSelectedOrderId('');
                 setView('orders');
               }}
@@ -288,6 +290,7 @@ function Workspace() {
               editItem={editItem}
               removeItem={removeItem}
               createOrder={createOrder}
+              initialFilter={ordersEntryFilter}
             />
           ) : null}
 
@@ -335,7 +338,10 @@ function Workspace() {
           reviewCount={reviewCount}
           inboxCount={inboxCount}
           onChange={(nextView) => {
-            if (nextView === 'orders' && view !== 'orders') setSelectedOrderId('');
+            if (nextView === 'orders' && view !== 'orders') {
+              setSelectedOrderId('');
+              setOrdersEntryFilter('attention');
+            }
             setView(nextView);
           }}
         />
@@ -453,7 +459,7 @@ function HomeView({
   orders: MerchantOrder[];
   loading: boolean;
   productCount: number;
-  onOpenOrders: () => void;
+  onOpenOrders: (filter?: OrderFilter) => void;
   onOpenProducts: () => void;
   onOpenMore: () => void;
   onSelectOrder: (orderId: string) => void;
@@ -528,7 +534,7 @@ function HomeView({
             icon="chatbubble-ellipses-outline"
             title={newEnquiries + ' order' + (newEnquiries === 1 ? '' : 's') + ' need review'}
             text="New WhatsApp orders are waiting for merchant review."
-            onPress={onOpenOrders}
+            onPress={() => onOpenOrders('attention')}
           />
         ) : null}
         {paymentsToVerify > 0 ? (
@@ -536,7 +542,7 @@ function HomeView({
             icon="card-outline"
             title={paymentsToVerify + ' payment' + (paymentsToVerify === 1 ? '' : 's') + ' need verification'}
             text="Confirm funds or resolve the payment exception before continuing."
-            onPress={onOpenOrders}
+            onPress={() => onOpenOrders('payment')}
             urgent
           />
         ) : null}
@@ -545,7 +551,7 @@ function HomeView({
             icon="lock-closed-outline"
             title={readyPaymentBlocked + ' ready order' + (readyPaymentBlocked === 1 ? '' : 's') + ' may be payment-gated'}
             text="SellerTray will enforce the merchant payment policy before fulfilment."
-            onPress={onOpenOrders}
+            onPress={() => onOpenOrders('payment')}
           />
         ) : null}
         {newEnquiries + paymentsToVerify + readyPaymentBlocked === 0 ? (
@@ -562,7 +568,7 @@ function HomeView({
           <Text style={[styles.sectionTitle, appearance.dark && darkStyles.titleText]}>Common tasks</Text>
         </View>
         <View style={styles.quickActionRow}>
-          <QuickAction icon="receipt-outline" label="Orders" onPress={onOpenOrders} />
+          <QuickAction icon="receipt-outline" label="Orders" onPress={() => onOpenOrders('all')} />
           <QuickAction icon="cube-outline" label="Catalogue" onPress={onOpenProducts} />
           <QuickAction icon="settings-outline" label="Setup" onPress={onOpenMore} />
         </View>
@@ -686,6 +692,7 @@ function OrdersView({
   editItem,
   removeItem,
   createOrder,
+  initialFilter,
 }: {
   business: MerchantBusiness;
   orders: MerchantOrder[];
@@ -698,6 +705,7 @@ function OrdersView({
   addItem: (orderId: string, item: OrderItemInput) => Promise<void>;
   editItem: (itemId: string, item: OrderItemInput) => Promise<void>;
   removeItem: (itemId: string) => Promise<void>;
+  initialFilter: OrderFilter;
   createOrder: (input: {
     customerName: string;
     customerPhone: string;
@@ -706,7 +714,7 @@ function OrdersView({
   }) => Promise<string>;
 }) {
   const appearance = useSellerTrayAppearance();
-  const [filter, setFilter] = useState<OrderFilter>('attention');
+  const [filter, setFilter] = useState<OrderFilter>(initialFilter);
   const [query, setQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [queueMode, setQueueMode] = useState(false);
