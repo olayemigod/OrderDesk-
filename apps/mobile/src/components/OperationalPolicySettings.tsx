@@ -176,7 +176,7 @@ function PushOption({ label, helper, value, active, disabled, onPress }: {
 }) {
   const appearance = useSellerTrayAppearance();
   return (
-    <Pressable disabled={disabled} onPress={() => onPress(value)} style={[styles.option, styles.pushOption, appearance.dark && darkStyles.option, active && styles.optionActive]}>
+    <Pressable disabled={disabled} onPress={() => onPress(value)} style={[styles.option, styles.pushOption, appearance.dark && darkStyles.option, active && styles.optionActive, appearance.dark && active && darkStyles.optionActive]}>
       <View style={[styles.radio, active && styles.radioActive]}>{active ? <View style={styles.radioDot} /> : null}</View>
       <View style={styles.flex}>
         <Text style={[styles.optionText, appearance.dark && darkStyles.titleText]}>{label}</Text>
