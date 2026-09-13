@@ -66,7 +66,7 @@ export function CustomerNotificationSettings({ business }: Props) {
       </View>
 
       {!canEdit ? (
-        <View style={styles.readOnlyCard}>
+        <View style={[styles.readOnlyCard, appearance.dark && darkStyles.subtleCard]}>
           <Text style={[styles.readOnlyTitle, appearance.dark && darkStyles.titleText]}>View only</Text>
           <Text style={[styles.readOnlyText, appearance.dark && darkStyles.bodyText]}>Only an Owner or Manager can change these notification rules.</Text>
         </View>
@@ -193,6 +193,7 @@ const styles = StyleSheet.create({
 
 const darkStyles = StyleSheet.create({
   card: { backgroundColor: '#102A43', borderColor: '#344054' },
+  subtleCard: { backgroundColor: '#162F46' },
   titleText: { color: '#F8FAFC' },
   bodyText: { color: '#D0D5DD' },
   rowBorder: { borderBottomColor: '#344054' },
