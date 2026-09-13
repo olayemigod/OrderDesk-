@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
@@ -31,7 +31,10 @@ import type { OrderFulfillmentInput, OrderItemInput } from './data/ordersReposit
 import { orderTotal, type MerchantOrder, type OrderStatus } from './domain/order';
 import { useBusinesses } from './hooks/useBusinesses';
 import { useCatalogue } from './hooks/useCatalogue';
+import { useConversationUnreadCounts } from './hooks/useConversationUnreadCounts';
+import { useMerchantNotifications } from './hooks/useMerchantNotifications';
 import { useOrders } from './hooks/useOrders';
+import { usePushNotifications } from './hooks/usePushNotifications';
 import { supabase } from './lib/supabase';
 import { sellerTrayTheme as theme } from './theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from './theme/AppearanceContext';
@@ -103,6 +106,22 @@ function Workspace() {
     removeItem,
   } = useOrders(activeBusiness?.id ?? null);
   const catalogue = useCatalogue(activeBusiness?.id ?? null);
+  const {
+    notifications: merchantNotifications,
+    unreadCount: merchantUnreadCount,
+    loading: merchantNotificationsLoading,
+    error: merchantNotificationsError,
+    refresh: refreshMerchantNotifications,
+    markRead: markMerchantNotificationRead,
+    markAllRead: markAllMerchantNotificationsRead,
+  } = useMerchantNotifications(activeBusiness?.id ?? null);
+  const {
+    unreadByCustomer,
+    unreadCount: conversationUnreadCount,
+    error: conversationUnreadError,
+    refresh: refreshConversationUnread,
+    markRead: markConversationRead,
+  } = useConversationUnreadCounts(activeBusiness?.id ?? null);
   const [view, setView] = useState<ViewName>('home');
   const [selectedOrderId, setSelectedOrderId] = useState('');
   const [merchantName, setMerchantName] = useState('there');
@@ -134,18 +153,34 @@ function Workspace() {
   );
 
   const reviewCount = orders.filter((order) => order.status === 'needs_review' || order.status === 'draft').length;
-  const inboxCount = new Set(
-    orders.filter((order) => order.source === 'whatsapp').map((order) => order.customerPhone),
-  ).size;
-  const notificationCount =
-    reviewCount +
-    orders.filter((order) =>
-      ['pending', 'verification_required', 'payment_issue'].includes(order.paymentStatus),
-    ).length;
+  const inboxCount = conversationUnreadCount;
+  const notificationCount = merchantUnreadCount;
+
+  const handlePushOpen = useCallback((route: { tenantId: string | null; notificationId: string | null; orderId: string | null }) => {
+    if (route.notificationId) {
+      void markMerchantNotificationRead(route.notificationId);
+    }
+    if (route.orderId && (!route.tenantId || route.tenantId === activeBusiness?.id)) {
+      setSelectedOrderId(route.orderId);
+      setView('orders');
+      return;
+    }
+    setView('notifications');
+  }, [activeBusiness?.id, markMerchantNotificationRead]);
+
+  usePushNotifications({
+    enabled: Boolean(activeBusiness?.id),
+    unreadCount: merchantUnreadCount + conversationUnreadCount,
+    onOpen: handlePushOpen,
+  });
 
   async function refreshAll() {
     await refreshBusinesses();
-    await refresh();
+    await Promise.all([
+      refresh(),
+      refreshMerchantNotifications(),
+      refreshConversationUnread(),
+    ]);
   }
 
   if (businessesLoading && !activeBusiness) {
@@ -176,7 +211,7 @@ function Workspace() {
     );
   }
 
-  const pageError = businessesError || error;
+  const pageError = businessesError || error || merchantNotificationsError || conversationUnreadError;
 
   return (
     <SafeAreaView style={[styles.safeArea, appearance.dark && darkStyles.safeArea]}>
