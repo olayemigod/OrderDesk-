@@ -472,6 +472,13 @@ function HomeView({
   const newEnquiries = orders.filter((order) =>
     order.source === 'whatsapp' && (order.status === 'needs_review' || order.status === 'draft'),
   ).length;
+  const paymentsToVerify = orders.filter((order) =>
+    ['verification_required', 'payment_issue'].includes(order.paymentStatus) &&
+    !['rejected', 'cancelled'].includes(order.status),
+  ).length;
+  const readyPaymentBlocked = orders.filter((order) =>
+    order.status === 'ready' && order.paymentStatus !== 'paid',
+  ).length;
 
   return (
     <View style={styles.sectionStack}>
@@ -502,6 +509,49 @@ function HomeView({
         <HomeMetric icon="cash-outline" label="Sales today" value={formatMoney(salesToday, business.currency)} hint="Known order value" />
         <HomeMetric icon="time-outline" label="Awaiting payment" value={String(awaitingPayment)} hint="Needs payment action" attention={awaitingPayment > 0} />
         <HomeMetric icon="chatbubble-ellipses-outline" label="New enquiries" value={String(newEnquiries)} hint="WhatsApp needs review" attention={newEnquiries > 0} />
+      </View>
+
+      <View style={[styles.actionCenterCard, appearance.dark && darkStyles.card]}>
+        <View style={styles.actionCenterHeading}>
+          <View>
+            <Text style={[styles.sectionEyebrow, appearance.dark && darkStyles.bodyText]}>ACTION CENTRE</Text>
+            <Text style={[styles.sectionTitle, appearance.dark && darkStyles.titleText]}>Needs attention</Text>
+          </View>
+          <View style={[styles.actionCountBadge, appearance.dark && darkStyles.warningCard]}>
+            <Text style={styles.actionCountText}>{newEnquiries + paymentsToVerify + readyPaymentBlocked}</Text>
+          </View>
+        </View>
+        {newEnquiries > 0 ? (
+          <ActionCenterRow
+            icon="chatbubble-ellipses-outline"
+            title={newEnquiries + ' order' + (newEnquiries === 1 ? '' : 's') + ' need review'}
+            text="New WhatsApp orders are waiting for merchant review."
+            onPress={onOpenOrders}
+          />
+        ) : null}
+        {paymentsToVerify > 0 ? (
+          <ActionCenterRow
+            icon="card-outline"
+            title={paymentsToVerify + ' payment' + (paymentsToVerify === 1 ? '' : 's') + ' need verification'}
+            text="Confirm funds or resolve the payment exception before continuing."
+            onPress={onOpenOrders}
+            urgent
+          />
+        ) : null}
+        {readyPaymentBlocked > 0 ? (
+          <ActionCenterRow
+            icon="lock-closed-outline"
+            title={readyPaymentBlocked + ' ready order' + (readyPaymentBlocked === 1 ? '' : 's') + ' may be payment-gated'}
+            text="SellerTray will enforce the merchant payment policy before fulfilment."
+            onPress={onOpenOrders}
+          />
+        ) : null}
+        {newEnquiries + paymentsToVerify + readyPaymentBlocked === 0 ? (
+          <View style={[styles.actionEmpty, appearance.dark && darkStyles.subtleCard]}>
+            <Ionicons name="checkmark-circle-outline" size={20} color={theme.colors.green} />
+            <Text style={[styles.actionEmptyText, appearance.dark && darkStyles.bodyText]}>Nothing urgent needs merchant attention.</Text>
+          </View>
+        ) : null}
       </View>
 
       <View style={[styles.quickActionsCard, appearance.dark && darkStyles.card]}>
@@ -569,6 +619,43 @@ function HomeMetric({
       <Text numberOfLines={1} style={[styles.homeMetricValue, appearance.dark && darkStyles.titleText]}>{value}</Text>
       <Text style={[styles.homeMetricHint, appearance.dark && darkStyles.mutedText]}>{hint}</Text>
     </View>
+  );
+}
+
+function ActionCenterRow({
+  icon,
+  title,
+  text,
+  onPress,
+  urgent = false,
+}: {
+  icon: string;
+  title: string;
+  text: string;
+  onPress: () => void;
+  urgent?: boolean;
+}) {
+  const appearance = useSellerTrayAppearance();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.actionRow,
+        appearance.dark && darkStyles.subtleCard,
+        urgent && styles.actionRowUrgent,
+        urgent && appearance.dark && darkStyles.warningCard,
+        pressed && styles.quickActionPressed,
+      ]}
+    >
+      <View style={[styles.actionRowIcon, urgent && styles.actionRowIconUrgent]}>
+        <Ionicons name={icon as never} size={20} color={urgent ? '#B54708' : theme.colors.greenDark} />
+      </View>
+      <View style={styles.actionRowCopy}>
+        <Text style={[styles.actionRowTitle, appearance.dark && darkStyles.titleText]}>{title}</Text>
+        <Text style={[styles.actionRowText, appearance.dark && darkStyles.bodyText]}>{text}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={appearance.dark ? '#98A2B3' : '#667085'} />
+    </Pressable>
   );
 }
 
@@ -1678,6 +1765,19 @@ const styles = StyleSheet.create({
   homeMetricLabel: { color: theme.colors.slate, fontSize: 13, fontWeight: '800' },
   homeMetricValue: { color: theme.colors.navy, fontSize: 24, fontWeight: '900', marginTop: 4 },
   homeMetricHint: { color: theme.colors.muted, fontSize: 11, lineHeight: 16, fontWeight: '700', marginTop: 3 },
+  actionCenterCard: { backgroundColor: theme.colors.white, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.lg, padding: 14, gap: 9, ...theme.shadow.card },
+  actionCenterHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  actionCountBadge: { minWidth: 34, minHeight: 34, borderRadius: 99, backgroundColor: theme.colors.warningSoft, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+  actionCountText: { color: '#B54708', fontSize: 15, fontWeight: '900' },
+  actionRow: { minHeight: 70, borderRadius: 13, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: '#F9FAFB', padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  actionRowUrgent: { backgroundColor: theme.colors.warningSoft, borderColor: '#FEDF89' },
+  actionRowIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: theme.colors.mintSoft, alignItems: 'center', justifyContent: 'center' },
+  actionRowIconUrgent: { backgroundColor: '#FEF0C7' },
+  actionRowCopy: { flex: 1 },
+  actionRowTitle: { color: theme.colors.navy, fontSize: 14, lineHeight: 19, fontWeight: '900' },
+  actionRowText: { color: theme.colors.slate, fontSize: 12, lineHeight: 18, marginTop: 2 },
+  actionEmpty: { minHeight: 54, borderRadius: 12, backgroundColor: theme.colors.mintSoft, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 9 },
+  actionEmptyText: { color: theme.colors.slate, fontSize: 13, lineHeight: 19, fontWeight: '700', flex: 1 },
   quickActionsCard: { backgroundColor: theme.colors.white, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.lg, padding: 14, gap: 11, ...theme.shadow.card },
   quickActionRow: { flexDirection: 'row', gap: 8 },
   quickAction: { flex: 1, minHeight: 76, borderRadius: 14, backgroundColor: theme.colors.mintSoft, alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: 6 },
