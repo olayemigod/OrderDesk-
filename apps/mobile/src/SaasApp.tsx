@@ -747,7 +747,7 @@ function OrdersView({
             accessibilityLabel="More order filters"
             style={[styles.filterIconButton, appearance.dark && darkStyles.outlineButton, showFilters && styles.filterIconButtonActive]}
           >
-            <Ionicons name="options-outline" size={21} color={showFilters ? theme.colors.white : theme.colors.navy} />
+            <Ionicons name="options-outline" size={21} color={showFilters ? theme.colors.white : appearance.dark ? theme.colors.mint : theme.colors.navy} />
           </Pressable>
         </View>
 
@@ -1203,7 +1203,7 @@ function ConversationsView({
           accessibilityLabel="More conversation filters"
           style={[styles.filterIconButton, appearance.dark && darkStyles.outlineButton, showConversationFilters && styles.filterIconButtonActive]}
         >
-          <Ionicons name="options-outline" size={21} color={showConversationFilters ? theme.colors.white : theme.colors.navy} />
+          <Ionicons name="options-outline" size={21} color={showConversationFilters ? theme.colors.white : appearance.dark ? theme.colors.mint : theme.colors.navy} />
         </Pressable>
       </View>
 
