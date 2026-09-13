@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { OrderItemInput } from '../data/ordersRepository';
 import type { MatchSource, MerchantOrder, OrderItem } from '../domain/order';
+import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
 const money = new Intl.NumberFormat('en-NG', {
   style: 'currency',
@@ -37,6 +38,7 @@ type Props = {
 };
 
 export function OrderItemsEditor({ order, editable, onAdd, onEdit, onRemove }: Props) {
+  const appearance = useSellerTrayAppearance();
   const [adding, setAdding] = useState(false);
 
   return (
@@ -44,9 +46,9 @@ export function OrderItemsEditor({ order, editable, onAdd, onEdit, onRemove }: P
       <ReviewDiagnostics order={order} />
 
       {order.items.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyTitle}>No items parsed</Text>
-          <Text style={styles.emptyText}>
+        <View style={[styles.emptyState, appearance.dark && darkStyles.warningCard]}>
+          <Text style={[styles.emptyTitle, appearance.dark && darkStyles.warningTitle]}>No items parsed</Text>
+          <Text style={[styles.emptyText, appearance.dark && darkStyles.warningText]}>
             Add what the customer ordered before accepting this order.
           </Text>
         </View>
@@ -85,16 +87,17 @@ export function OrderItemsEditor({ order, editable, onAdd, onEdit, onRemove }: P
 }
 
 function ReviewDiagnostics({ order }: { order: MerchantOrder }) {
+  const appearance = useSellerTrayAppearance();
   const confidence = order.confidence === null ? null : Math.round(order.confidence * 100);
   const showParser = order.parserSource !== 'legacy' || order.parserVersion;
 
   if (!showParser && order.reviewReasons.length === 0) return null;
 
   return (
-    <View style={styles.reviewCard}>
-      <Text style={styles.reviewTitle}>Why SellerTray wants a review</Text>
+    <View style={[styles.reviewCard, appearance.dark && darkStyles.card]}>
+      <Text style={[styles.reviewTitle, appearance.dark && darkStyles.titleText]}>Why SellerTray wants a review</Text>
       {showParser ? (
-        <Text style={styles.reviewMeta}>
+        <Text style={[styles.reviewMeta, appearance.dark && darkStyles.bodyText]}>
           {formatParserSource(order.parserSource)}
           {order.parserVersion ? ` · ${order.parserVersion}` : ''}
           {confidence === null ? '' : ` · ${confidence}% confidence`}
@@ -103,32 +106,33 @@ function ReviewDiagnostics({ order }: { order: MerchantOrder }) {
       {order.reviewReasons.length > 0 ? (
         <View style={styles.reasonList}>
           {order.reviewReasons.map((reason) => (
-            <Text key={reason} style={styles.reasonText}>
+            <Text key={reason} style={[styles.reasonText, appearance.dark && darkStyles.bodyText]}>
               • {reviewReasonLabels[reason] ?? formatReason(reason)}
             </Text>
           ))}
         </View>
       ) : (
-        <Text style={styles.reviewMeta}>Review the customer message and order lines before accepting.</Text>
+        <Text style={[styles.reviewMeta, appearance.dark && darkStyles.bodyText]}>Review the customer message and order lines before accepting.</Text>
       )}
     </View>
   );
 }
 
 function ReadOnlyLineItem({ item }: { item: OrderItem }) {
+  const appearance = useSellerTrayAppearance();
   return (
-    <View style={styles.lineItem}>
+    <View style={[styles.lineItem, appearance.dark && darkStyles.rowBorder]}>
       <View style={styles.quantityBox}>
         <Text style={styles.quantityText}>{item.quantity}×</Text>
       </View>
       <View style={styles.lineItemNameWrap}>
-        <Text style={styles.lineItemName}>{item.name}</Text>
-        <Text style={styles.lineItemPrice}>
+        <Text style={[styles.lineItemName, appearance.dark && darkStyles.titleText]}>{item.name}</Text>
+        <Text style={[styles.lineItemPrice, appearance.dark && darkStyles.bodyText]}>
           {item.unitPrice === null ? 'Price not set' : `${money.format(item.unitPrice)} each`}
         </Text>
         <MatchDetail item={item} />
       </View>
-      <Text style={styles.lineTotal}>
+      <Text style={[styles.lineTotal, appearance.dark && darkStyles.titleText]}>
         {item.unitPrice === null ? '—' : money.format(item.unitPrice * item.quantity)}
       </Text>
     </View>
@@ -149,6 +153,7 @@ function EditableLineItem({
   const [price, setPrice] = useState(item.unitPrice === null ? '' : String(item.unitPrice));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const appearance = useSellerTrayAppearance();
 
   useEffect(() => {
     setName(item.name);
@@ -187,13 +192,13 @@ function EditableLineItem({
   }
 
   return (
-    <View style={styles.editorCard}>
+    <View style={[styles.editorCard, appearance.dark && darkStyles.card]}>
       <MatchDetail item={item} />
       <TextInput
         placeholder="Item name"
         value={name}
         onChangeText={setName}
-        style={styles.input}
+        style={[styles.input, appearance.dark && darkStyles.input]}
       />
       <View style={styles.inputRow}>
         <TextInput
@@ -201,14 +206,14 @@ function EditableLineItem({
           placeholder="Qty"
           value={quantity}
           onChangeText={setQuantity}
-          style={[styles.input, styles.smallInput]}
+          style={[styles.input, styles.smallInput, appearance.dark && darkStyles.input]}
         />
         <TextInput
           keyboardType="decimal-pad"
           placeholder="Price (₦)"
           value={price}
           onChangeText={setPrice}
-          style={[styles.input, styles.priceInput]}
+          style={[styles.input, styles.priceInput, appearance.dark && darkStyles.input]}
         />
       </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -225,6 +230,7 @@ function EditableLineItem({
 }
 
 function MatchDetail({ item }: { item: OrderItem }) {
+  const appearance = useSellerTrayAppearance();
   const originalDiffers =
     item.originalName && item.originalName.trim().toLocaleLowerCase() !== item.name.trim().toLocaleLowerCase();
   const confidence = item.matchConfidence === null ? '' : ` · ${Math.round(item.matchConfidence * 100)}%`;
@@ -233,11 +239,11 @@ function MatchDetail({ item }: { item: OrderItem }) {
 
   return (
     <View style={styles.matchWrap}>
-      <Text style={[styles.matchText, item.matchSource === 'unmatched' && styles.matchWarning]}>
+      <Text style={[styles.matchText, appearance.dark && darkStyles.greenText, item.matchSource === 'unmatched' && styles.matchWarning]}>
         {matchLabels[item.matchSource]}{confidence}
       </Text>
       {originalDiffers ? (
-        <Text style={styles.originalText}>Customer wording: “{item.originalName}”</Text>
+        <Text style={[styles.originalText, appearance.dark && darkStyles.bodyText]}>Customer wording: “{item.originalName}”</Text>
       ) : null}
     </View>
   );
@@ -255,6 +261,7 @@ function NewLineItem({
   const [price, setPrice] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const appearance = useSellerTrayAppearance();
 
   async function save() {
     const input = parseInput(name, quantity, price);
@@ -274,14 +281,14 @@ function NewLineItem({
   }
 
   return (
-    <View style={[styles.editorCard, styles.newItemCard]}>
-      <Text style={styles.newItemTitle}>Add order item</Text>
+    <View style={[styles.editorCard, styles.newItemCard, appearance.dark && darkStyles.card]}>
+      <Text style={[styles.newItemTitle, appearance.dark && darkStyles.titleText]}>Add order item</Text>
       <TextInput
         autoFocus
         placeholder="Item name"
         value={name}
         onChangeText={setName}
-        style={styles.input}
+        style={[styles.input, appearance.dark && darkStyles.input]}
       />
       <View style={styles.inputRow}>
         <TextInput
@@ -407,4 +414,16 @@ const styles = StyleSheet.create({
   addButton: { alignSelf: 'flex-start', paddingVertical: 10, paddingHorizontal: 2 },
   addButtonText: { color: '#12B76A', fontWeight: '800', fontSize: 13 },
   error: { color: '#B42318', fontSize: 12, lineHeight: 17 },
+});
+
+const darkStyles = StyleSheet.create({
+  card: { backgroundColor: '#102A43', borderColor: '#475467' },
+  input: { backgroundColor: '#F8FAFC', borderColor: '#98A2B3', color: '#102A43' },
+  titleText: { color: '#F8FAFC' },
+  bodyText: { color: '#D0D5DD' },
+  greenText: { color: '#6CE9A6' },
+  rowBorder: { borderBottomColor: '#344054' },
+  warningCard: { backgroundColor: '#3D2A12' },
+  warningTitle: { color: '#FEDF89' },
+  warningText: { color: '#FEC84B' },
 });
