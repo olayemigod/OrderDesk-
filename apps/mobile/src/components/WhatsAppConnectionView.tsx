@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { MerchantBusiness } from '../data/businessRepository';
+import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import {
   acceptWhatsAppConsent,
   loadWhatsAppConsent,
@@ -29,6 +30,7 @@ const statusCopy: Record<MerchantBusiness['whatsappConnectionStatus'], { title: 
 };
 
 export function WhatsAppConnectionView({ business }: { business: MerchantBusiness }) {
+  const appearance = useSellerTrayAppearance();
   const status = statusCopy[business.whatsappConnectionStatus];
   const connected = business.whatsappConnectionStatus === 'connected';
   const messagingReady = business.whatsappReadiness.messagingReady;
@@ -93,24 +95,24 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
   return (
     <View style={styles.wrap}>
       <View>
-        <Text style={styles.eyebrow}>WHATSAPP</Text>
-        <Text style={styles.title}>WhatsApp connection</Text>
-        <Text style={styles.subtitle}>
+        <Text style={[styles.eyebrow, appearance.dark && darkStyles.bodyText]}>WHATSAPP</Text>
+        <Text style={[styles.title, appearance.dark && darkStyles.titleText]}>WhatsApp connection</Text>
+        <Text style={[styles.subtitle, appearance.dark && darkStyles.bodyText]}>
           Customers keep chatting on WhatsApp. SellerTray turns supported order messages into a merchant order inbox.
         </Text>
       </View>
 
-      <View style={[styles.statusCard, messagingReady && styles.connectedCard]}>
+      <View style={[styles.statusCard, messagingReady && styles.connectedCard, appearance.dark && darkStyles.card, appearance.dark && messagingReady && darkStyles.successCard]}>
         <View style={[styles.dot, messagingReady && styles.connectedDot]} />
         <View style={styles.statusCopy}>
-          <Text style={styles.statusTitle}>
+          <Text style={[styles.statusTitle, appearance.dark && darkStyles.titleText]}>
             {messagingReady
               ? 'WhatsApp messaging ready'
               : connected
                 ? 'WhatsApp connected · messaging setup incomplete'
                 : status.title}
           </Text>
-          <Text style={styles.statusText}>
+          <Text style={[styles.statusText, appearance.dark && darkStyles.bodyText]}>
             {messagingReady
               ? 'SellerTray has verified both inbound order capture and outbound customer updates for this WhatsApp number.'
               : connected
@@ -130,30 +132,30 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
         <ReadinessItem label="Outbound" ready={outboundReady} text={outboundReady ? 'Credential verified' : 'Not verified'} />
       </View>
 
-      <View style={[styles.consentCard, processingActive && styles.consentActiveCard]}>
+      <View style={[styles.consentCard, processingActive && styles.consentActiveCard, appearance.dark && darkStyles.card]}>
         <View style={styles.consentHeading}>
           <View style={styles.consentCopy}>
-            <Text style={styles.consentEyebrow}>DATA PROCESSING</Text>
-            <Text style={styles.consentTitle}>
+            <Text style={[styles.consentEyebrow, appearance.dark && darkStyles.bodyText]}>DATA PROCESSING</Text>
+            <Text style={[styles.consentTitle, appearance.dark && darkStyles.titleText]}>
               {processingActive ? 'WhatsApp processing authorized' : 'Owner authorization required'}
             </Text>
           </View>
           {consentLoading ? <ActivityIndicator size="small" /> : null}
         </View>
 
-        <Text style={styles.consentText}>
+        <Text style={[styles.consentText, appearance.dark && darkStyles.bodyText]}>
           {processingPolicy?.summary ??
             'SellerTray only processes connected WhatsApp conversations for the approved order, customer, payment, notification and catalogue workflows.'}
         </Text>
 
         {processingPolicy ? (
-          <Text style={styles.versionText}>
+          <Text style={[styles.versionText, appearance.dark && darkStyles.bodyText]}>
             Policy version {processingPolicy.version} · Effective {formatDate(processingPolicy.effective_at)}
           </Text>
         ) : null}
 
         {consent?.consent ? (
-          <Text style={styles.versionText}>
+          <Text style={[styles.versionText, appearance.dark && darkStyles.bodyText]}>
             Accepted {formatDate(consent.consent.accepted_at)} · {consent.consent.scopes.length} approved processing scopes
           </Text>
         ) : null}
@@ -186,7 +188,7 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
         ) : null}
 
         {!consentLoading && !isOwner ? (
-          <Text style={styles.ownerOnlyText}>
+          <Text style={[styles.ownerOnlyText, appearance.dark && darkStyles.bodyText]}>
             Only the business Owner can accept or revoke this authorization. Managers and Staff can view its status.
           </Text>
         ) : null}
@@ -197,8 +199,8 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
       </View>
 
       {!connected ? (
-        <View style={styles.setupCard}>
-          <Text style={styles.setupTitle}>How connection will work</Text>
+        <View style={[styles.setupCard, appearance.dark && darkStyles.card]}>
+          <Text style={[styles.setupTitle, appearance.dark && darkStyles.titleText]}>How connection will work</Text>
           <Step number="1" title="Use a WhatsApp Business number" text="Choose the number customers already use or a dedicated sales number." />
           <Step number="2" title="Connect through SellerTray" text="SellerTray will launch Meta's approved WhatsApp onboarding flow from this screen." />
           <Step number="3" title="Send a test order" text="After connection and authorization, send a real test message from another phone and confirm it appears in Orders." />
@@ -216,9 +218,9 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
           </View>
         </View>
       ) : (
-        <View style={styles.infoCard}>
-          <Text style={styles.infoTitle}>{processingActive ? 'Connection is active' : 'Connection is connected but paused'}</Text>
-          <Text style={styles.infoText}>
+        <View style={[styles.infoCard, appearance.dark && darkStyles.card]}>
+          <Text style={[styles.infoTitle, appearance.dark && darkStyles.titleText]}>{processingActive ? 'Connection is active' : 'Connection is connected but paused'}</Text>
+          <Text style={[styles.infoText, appearance.dark && darkStyles.bodyText]}>
             {processingActive
               ? messagingReady
                 ? 'Inbound and outbound WhatsApp messaging are ready. Send a test order and confirm both the order capture and customer update.'
@@ -232,14 +234,15 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
 }
 
 function ReadinessItem({ label, ready, text }: { label: string; ready: boolean; text: string }) {
+  const appearance = useSellerTrayAppearance();
   return (
-    <View style={[styles.readinessItem, ready && styles.readinessItemReady]}>
+    <View style={[styles.readinessItem, ready && styles.readinessItemReady, appearance.dark && darkStyles.card, appearance.dark && ready && darkStyles.successCard]}>
       <View style={[styles.readinessIcon, ready && styles.readinessIconReady]}>
         <Text style={[styles.readinessIconText, ready && styles.readinessIconTextReady]}>{ready ? '✓' : '!'}</Text>
       </View>
       <View style={styles.readinessCopy}>
-        <Text style={styles.readinessLabel}>{label}</Text>
-        <Text style={styles.readinessText}>{text}</Text>
+        <Text style={[styles.readinessLabel, appearance.dark && darkStyles.titleText]}>{label}</Text>
+        <Text style={[styles.readinessText, appearance.dark && darkStyles.bodyText]}>{text}</Text>
       </View>
     </View>
   );
@@ -266,9 +269,9 @@ function formatDate(value: string): string {
 
 const styles = StyleSheet.create({
   wrap: { gap: 16 },
-  eyebrow: { color: '#667085', fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
-  title: { color: '#102A43', fontSize: 25, fontWeight: '900', marginTop: 3 },
-  subtitle: { color: '#667085', fontSize: 13, lineHeight: 19, marginTop: 5 },
+  eyebrow: { color: '#667085', fontSize: 12, fontWeight: '900', letterSpacing: 1.2 },
+  title: { color: '#102A43', fontSize: 28, fontWeight: '900', marginTop: 3 },
+  subtitle: { color: '#667085', fontSize: 14, lineHeight: 21, marginTop: 5 },
   statusCard: {
     borderWidth: 1, borderColor: '#FEC84B', backgroundColor: '#FFFAEB', borderRadius: 16,
     padding: 14, flexDirection: 'row', gap: 11, alignItems: 'flex-start',
@@ -277,8 +280,8 @@ const styles = StyleSheet.create({
   dot: { width: 10, height: 10, borderRadius: 99, backgroundColor: '#F79009', marginTop: 4 },
   connectedDot: { backgroundColor: '#12B76A' },
   statusCopy: { flex: 1 },
-  statusTitle: { color: '#102A43', fontSize: 14, fontWeight: '900' },
-  statusText: { color: '#475467', fontSize: 12, lineHeight: 18, marginTop: 4 },
+  statusTitle: { color: '#102A43', fontSize: 15, fontWeight: '900' },
+  statusText: { color: '#475467', fontSize: 13, lineHeight: 19, marginTop: 4 },
   pausedText: { color: '#B54708', fontSize: 10, lineHeight: 15, fontWeight: '800', marginTop: 6 },
   readinessGrid: { flexDirection: 'row', gap: 8 },
   readinessItem: { flex: 1, minWidth: 0, borderWidth: 1, borderColor: '#FEC84B', backgroundColor: '#FFFAEB', borderRadius: 13, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -288,16 +291,16 @@ const styles = StyleSheet.create({
   readinessIconText: { color: '#B54708', fontSize: 11, fontWeight: '900' },
   readinessIconTextReady: { color: '#027A48' },
   readinessCopy: { flex: 1, minWidth: 0 },
-  readinessLabel: { color: '#102A43', fontSize: 10, fontWeight: '900' },
-  readinessText: { color: '#667085', fontSize: 8, lineHeight: 12, marginTop: 1 },
+  readinessLabel: { color: '#102A43', fontSize: 12, fontWeight: '900' },
+  readinessText: { color: '#667085', fontSize: 11, lineHeight: 16, marginTop: 1 },
   consentCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#FEC84B', borderRadius: 16, padding: 14, gap: 9 },
   consentActiveCard: { borderColor: '#ABEFC6' },
   consentHeading: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   consentCopy: { flex: 1 },
-  consentEyebrow: { color: '#667085', fontSize: 8, fontWeight: '900', letterSpacing: 1 },
-  consentTitle: { color: '#102A43', fontSize: 14, fontWeight: '900', marginTop: 2 },
-  consentText: { color: '#475467', fontSize: 11, lineHeight: 17 },
-  versionText: { color: '#667085', fontSize: 9, lineHeight: 14 },
+  consentEyebrow: { color: '#667085', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+  consentTitle: { color: '#102A43', fontSize: 16, fontWeight: '900', marginTop: 2 },
+  consentText: { color: '#475467', fontSize: 13, lineHeight: 20 },
+  versionText: { color: '#667085', fontSize: 11, lineHeight: 17 },
   warningBox: { backgroundColor: '#FFFAEB', borderRadius: 10, padding: 10, gap: 3 },
   warningTitle: { color: '#B54708', fontSize: 10, fontWeight: '900' },
   warningText: { color: '#7A2E0E', fontSize: 9, lineHeight: 14 },
@@ -307,7 +310,7 @@ const styles = StyleSheet.create({
   secondaryButton: { minHeight: 42, borderRadius: 11, borderWidth: 1, borderColor: '#D0D5DD', alignItems: 'center', justifyContent: 'center' },
   secondaryButtonText: { color: '#344054', fontSize: 10, fontWeight: '900' },
   ownerOnlyText: { color: '#667085', fontSize: 10, lineHeight: 15 },
-  refreshText: { color: '#12B76A', fontSize: 10, fontWeight: '900' },
+  refreshText: { color: '#12B76A', fontSize: 13, fontWeight: '900' },
   disabled: { opacity: 0.45 },
   setupCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 18, padding: 16, gap: 14 },
   setupTitle: { color: '#102A43', fontSize: 15, fontWeight: '900' },
@@ -326,4 +329,12 @@ const styles = StyleSheet.create({
   infoCard: { backgroundColor: '#F9FAFB', borderRadius: 14, padding: 14 },
   infoTitle: { color: '#102A43', fontSize: 13, fontWeight: '900' },
   infoText: { color: '#667085', fontSize: 11, lineHeight: 17, marginTop: 4 },
+});
+
+
+const darkStyles = StyleSheet.create({
+  card: { backgroundColor: '#102A43', borderColor: '#344054' },
+  successCard: { backgroundColor: '#12372C', borderColor: '#1C6B4A' },
+  titleText: { color: '#F8FAFC' },
+  bodyText: { color: '#D0D5DD' },
 });
