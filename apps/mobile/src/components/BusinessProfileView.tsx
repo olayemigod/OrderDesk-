@@ -5,6 +5,7 @@ import type {
   BusinessProfileInput,
   MerchantBusiness,
 } from '../data/businessRepository';
+import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
 type Props = {
   business: MerchantBusiness;
@@ -12,6 +13,7 @@ type Props = {
 };
 
 export function BusinessProfileView({ business, onSave }: Props) {
+  const appearance = useSellerTrayAppearance();
   const canEdit = business.role === 'owner' || business.role === 'manager';
   const [name, setName] = useState(business.name);
   const [businessType, setBusinessType] = useState(business.businessType ?? '');
@@ -66,28 +68,29 @@ export function BusinessProfileView({ business, onSave }: Props) {
   return (
     <View style={styles.wrap}>
       <View style={styles.heading}>
-        <Text style={styles.eyebrow}>BUSINESS PROFILE</Text>
-        <Text style={styles.title}>Business details</Text>
-        <Text style={styles.subtitle}>
+        <Text style={[styles.eyebrow, appearance.dark && darkStyles.bodyText]}>BUSINESS PROFILE</Text>
+        <Text style={[styles.title, appearance.dark && darkStyles.titleText]}>Business details</Text>
+        <Text style={[styles.subtitle, appearance.dark && darkStyles.bodyText]}>
           Manage the identity and basic operating defaults for this SellerTray business.
         </Text>
       </View>
 
       {!canEdit ? (
-        <View style={styles.readOnlyNotice}>
-          <Text style={styles.readOnlyTitle}>View only</Text>
-          <Text style={styles.readOnlyText}>Only an Owner or Manager can change business details.</Text>
+        <View style={[styles.readOnlyNotice, appearance.dark && darkStyles.warningCard]}>
+          <Text style={[styles.readOnlyTitle, appearance.dark && darkStyles.warningTitle]}>View only</Text>
+          <Text style={[styles.readOnlyText, appearance.dark && darkStyles.warningText]}>Only an Owner or Manager can change business details.</Text>
         </View>
       ) : null}
 
-      <View style={styles.card}>
+      <View style={[styles.card, appearance.dark && darkStyles.card]}>
         <Field label="Business name" required hint="The name shown to your team inside SellerTray.">
           <TextInput
             editable={canEdit && !saving}
             value={name}
             onChangeText={setName}
             placeholder="e.g. Pisonmart Enterprises"
-            style={[styles.input, !canEdit && styles.inputDisabled]}
+            placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
+            style={[styles.input, appearance.dark && darkStyles.input, !canEdit && styles.inputDisabled, !canEdit && appearance.dark && darkStyles.inputDisabled]}
           />
         </Field>
 
@@ -109,7 +112,8 @@ export function BusinessProfileView({ business, onSave }: Props) {
             value={businessType}
             onChangeText={setBusinessType}
             placeholder="e.g. Retail, Food vendor, Fashion"
-            style={[styles.input, !canEdit && styles.inputDisabled]}
+            placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
+            style={[styles.input, appearance.dark && darkStyles.input, !canEdit && styles.inputDisabled, !canEdit && appearance.dark && darkStyles.inputDisabled]}
           />
         </Field>
 
@@ -121,7 +125,8 @@ export function BusinessProfileView({ business, onSave }: Props) {
             autoCapitalize="none"
             keyboardType="email-address"
             placeholder="orders@business.com"
-            style={[styles.input, !canEdit && styles.inputDisabled]}
+            placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
+            style={[styles.input, appearance.dark && darkStyles.input, !canEdit && styles.inputDisabled, !canEdit && appearance.dark && darkStyles.inputDisabled]}
           />
         </Field>
 
@@ -132,7 +137,8 @@ export function BusinessProfileView({ business, onSave }: Props) {
             onChangeText={setPhone}
             keyboardType="phone-pad"
             placeholder="+234..."
-            style={[styles.input, !canEdit && styles.inputDisabled]}
+            placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
+            style={[styles.input, appearance.dark && darkStyles.input, !canEdit && styles.inputDisabled, !canEdit && appearance.dark && darkStyles.inputDisabled]}
           />
         </Field>
 
@@ -144,7 +150,8 @@ export function BusinessProfileView({ business, onSave }: Props) {
             autoCapitalize="characters"
             maxLength={3}
             placeholder="NGN"
-            style={[styles.input, !canEdit && styles.inputDisabled]}
+            placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
+            style={[styles.input, appearance.dark && darkStyles.input, !canEdit && styles.inputDisabled, !canEdit && appearance.dark && darkStyles.inputDisabled]}
           />
         </Field>
 
@@ -155,7 +162,8 @@ export function BusinessProfileView({ business, onSave }: Props) {
             onChangeText={setTimezone}
             autoCapitalize="none"
             placeholder="Africa/Lagos"
-            style={[styles.input, !canEdit && styles.inputDisabled]}
+            placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
+            style={[styles.input, appearance.dark && darkStyles.input, !canEdit && styles.inputDisabled, !canEdit && appearance.dark && darkStyles.inputDisabled]}
           />
         </Field>
 
@@ -166,7 +174,8 @@ export function BusinessProfileView({ business, onSave }: Props) {
             onChangeText={setLogoUrl}
             autoCapitalize="none"
             placeholder="https://..."
-            style={[styles.input, !canEdit && styles.inputDisabled]}
+            placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
+            style={[styles.input, appearance.dark && darkStyles.input, !canEdit && styles.inputDisabled, !canEdit && appearance.dark && darkStyles.inputDisabled]}
           />
         </Field>
 
@@ -198,10 +207,11 @@ function Field({
   hint?: string;
   children: ReactNode;
 }) {
+  const appearance = useSellerTrayAppearance();
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{label}{required ? ' *' : ''}</Text>
-      {hint ? <Text style={styles.help}>{hint}</Text> : null}
+      <Text style={[styles.label, appearance.dark && darkStyles.titleText]}>{label}{required ? ' *' : ''}</Text>
+      {hint ? <Text style={[styles.help, appearance.dark && darkStyles.bodyText]}>{hint}</Text> : null}
       {children}
     </View>
   );
@@ -228,4 +238,15 @@ const styles = StyleSheet.create({
   saveButtonText: { color: '#FFFFFF', fontWeight: '900', fontSize: 14 },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.5 },
+});
+
+const darkStyles = StyleSheet.create({
+  card: { backgroundColor: '#102A43', borderColor: '#344054' },
+  titleText: { color: '#F8FAFC' },
+  bodyText: { color: '#D0D5DD' },
+  input: { backgroundColor: '#F8FAFC', borderColor: '#98A2B3', color: '#102A43' },
+  inputDisabled: { backgroundColor: '#D0D5DD', color: '#475467' },
+  warningCard: { backgroundColor: '#3D2A12' },
+  warningTitle: { color: '#FEDF89' },
+  warningText: { color: '#FEC84B' },
 });
