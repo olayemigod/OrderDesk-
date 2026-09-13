@@ -4,10 +4,13 @@ import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   confirmOfflinePayment,
   loadOrderFinancials,
+  recordOfflineOrderPayment,
+  sendMerchantPaymentOptions,
   verifyGatewayPayment,
   type OrderFinancialDocument,
   type OrderPaymentAttempt,
 } from '../data/orderPaymentsRepository';
+import { loadPaymentMethods, type MerchantPaymentMethod } from '../data/paymentMethodsRepository';
 import type { MerchantOrder } from '../domain/order';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
@@ -20,6 +23,9 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
   const appearance = useSellerTrayAppearance();
   const [documents, setDocuments] = useState<OrderFinancialDocument[]>([]);
   const [payments, setPayments] = useState<OrderPaymentAttempt[]>([]);
+  const [methods, setMethods] = useState<MerchantPaymentMethod[]>([]);
+  const [showRecordMethods, setShowRecordMethods] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -27,9 +33,13 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await loadOrderFinancials(tenantId, order.id);
+      const [data, paymentMethods] = await Promise.all([
+        loadOrderFinancials(tenantId, order.id),
+        loadPaymentMethods(tenantId),
+      ]);
       setDocuments(data.documents);
       setPayments(data.payments);
+      setMethods(paymentMethods);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load payment details.');
@@ -51,6 +61,14 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
     [documents],
   );
 
+  const offlineMethods = useMemo(
+    () => methods.filter((method) =>
+      method.isEnabled &&
+      ['bank_transfer', 'cash_on_delivery', 'pay_on_pickup'].includes(method.methodType),
+    ),
+    [methods],
+  );
+
   async function confirm(payment: OrderPaymentAttempt) {
     Alert.alert(
       'Confirm payment received?',
@@ -69,6 +87,38 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
     );
   }
 
+  async function record(method: MerchantPaymentMethod) {
+    Alert.alert(
+      'Record payment received?',
+      'Use this only after you or a staff member has verified the money or cash was actually received. SellerTray will mark the order paid and issue the financial receipt.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Record payment',
+          onPress: () => {
+            void run(method.id, async () => {
+              await recordOfflineOrderPayment(
+                tenantId,
+                order.id,
+                method.id,
+                'Recorded by merchant/staff from the order payment panel.',
+              );
+              setShowRecordMethods(false);
+              setNotice('Payment recorded and financial receipt issued.');
+            });
+          },
+        },
+      ],
+    );
+  }
+
+  async function sendOptions() {
+    await run('send-options', async () => {
+      const result = await sendMerchantPaymentOptions(tenantId, order.id);
+      setNotice(result.message);
+    });
+  }
+
   async function verify(payment: OrderPaymentAttempt) {
     await run(payment.id, async () => {
       await verifyGatewayPayment(tenantId, payment.id);
@@ -78,6 +128,7 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
   async function run(paymentId: string, action: () => Promise<void>) {
     setBusyId(paymentId);
     setError(null);
+    setNotice(null);
     try {
       await action();
       await refresh();
@@ -111,12 +162,65 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
         ) : null}
       </View>
 
-      {loading && payments.length === 0 ? <Text style={styles.helper}>Loading payment attempts…</Text> : null}
+      {invoice && order.paymentStatus !== 'paid' ? (
+        <View style={[styles.merchantActions, appearance.dark && darkStyles.subtleCard]}>
+          <Text style={[styles.merchantActionsTitle, appearance.dark && darkStyles.titleText]}>Merchant payment actions</Text>
+          <Text style={[styles.helper, appearance.dark && darkStyles.bodyText]}>
+            Staff can record verified offline payments here. For WhatsApp orders, payment choices can also be sent back to the customer.
+          </Text>
+
+          {order.source === 'whatsapp' ? (
+            <Pressable
+              disabled={busyId !== null}
+              onPress={() => void sendOptions()}
+              style={({ pressed }) => [styles.secondaryButton, appearance.dark && darkStyles.secondaryButton, pressed && styles.pressed, busyId !== null && styles.disabled]}
+            >
+              <Text style={[styles.secondaryText, appearance.dark && darkStyles.titleText]}>
+                {busyId === 'send-options' ? 'Sending…' : 'Send payment options on WhatsApp'}
+              </Text>
+            </Pressable>
+          ) : null}
+
+          {offlineMethods.length > 0 ? (
+            <Pressable
+              disabled={busyId !== null}
+              onPress={() => setShowRecordMethods((value) => !value)}
+              style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed, busyId !== null && styles.disabled]}
+            >
+              <Text style={styles.primaryText}>{showRecordMethods ? 'Hide payment methods' : 'Record payment received'}</Text>
+            </Pressable>
+          ) : null}
+
+          {showRecordMethods ? (
+            <View style={styles.recordMethodList}>
+              {offlineMethods.map((method) => (
+                <Pressable
+                  key={method.id}
+                  disabled={busyId !== null}
+                  onPress={() => void record(method)}
+                  style={({ pressed }) => [styles.recordMethodButton, appearance.dark && darkStyles.secondaryButton, pressed && styles.pressed]}
+                >
+                  <Text style={[styles.recordMethodTitle, appearance.dark && darkStyles.titleText]}>{method.displayName}</Text>
+                  <Text style={[styles.recordMethodMeta, appearance.dark && darkStyles.bodyText]}>
+                    {humanMethod(method.methodType)}
+                  </Text>
+                </Pressable>
+              ))}
+              <Text style={[styles.note, appearance.dark && darkStyles.bodyText]}>
+                Paystack and Flutterwave are never manually marked paid here; use provider verification for gateway payments.
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
+      {loading && payments.length === 0 ? <Text style={[styles.helper, appearance.dark && darkStyles.bodyText]}>Loading payment attempts…</Text> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
+      {notice ? <Text style={styles.notice}>{notice}</Text> : null}
 
       {payments.length === 0 && !loading ? (
-        <Text style={styles.helper}>
-          No payment attempt yet. Customers can choose an enabled method from WhatsApp after order acceptance.
+        <Text style={[styles.helper, appearance.dark && darkStyles.bodyText]}>
+          No payment attempt yet. The customer can choose a method on WhatsApp, or merchant/staff can record a verified offline payment above.
         </Text>
       ) : null}
 
@@ -302,7 +406,14 @@ const styles = StyleSheet.create({
   primaryText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
   secondaryButton: { minHeight: 40, borderRadius: 9, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D0D5DD', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
   secondaryText: { color: '#344054', fontSize: 12, fontWeight: '900' },
-  note: { color: '#667085', fontSize: 13, lineHeight: 14 },
+  merchantActions: { borderRadius: 12, borderWidth: 1, borderColor: '#E4E7EC', backgroundColor: '#FFFFFF', padding: 11, gap: 8 },
+  merchantActionsTitle: { color: '#102A43', fontSize: 14, fontWeight: '900' },
+  recordMethodList: { gap: 7 },
+  recordMethodButton: { minHeight: 48, borderRadius: 10, borderWidth: 1, borderColor: '#D0D5DD', backgroundColor: '#FFFFFF', paddingHorizontal: 11, justifyContent: 'center' },
+  recordMethodTitle: { color: '#102A43', fontSize: 13, fontWeight: '900' },
+  recordMethodMeta: { color: '#667085', fontSize: 12, marginTop: 2 },
+  notice: { color: '#027A48', fontSize: 12, lineHeight: 18, fontWeight: '800' },
+  note: { color: '#667085', fontSize: 13, lineHeight: 18 },
   pressed: { opacity: 0.78 },
   disabled: { opacity: 0.5 },
 });
@@ -313,4 +424,5 @@ const darkStyles = StyleSheet.create({
   titleText: { color: '#F8FAFC' },
   bodyText: { color: '#D0D5DD' },
   mutedText: { color: '#98A2B3' },
+  secondaryButton: { backgroundColor: '#162F46', borderColor: '#667085' },
 });
