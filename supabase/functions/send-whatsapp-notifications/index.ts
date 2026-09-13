@@ -121,6 +121,11 @@ async function deliver(notification: ClaimedNotification): Promise<string> {
         return 'template_required';
       }
 
+      if (providerError.code === 190) {
+        await deferConfigurationFailure(notification, providerError.message);
+        return 'configuration_pending';
+      }
+
       const retryMinutes = Math.min(30, Math.max(2, notification.attempt_count * 5));
       await finish(notification.id, {
         delivery_status: 'failed',
@@ -155,14 +160,49 @@ async function deliver(notification: ClaimedNotification): Promise<string> {
       return 'template_required';
     }
 
+    const errorMessage = error instanceof Error
+      ? error.message.slice(0, 500)
+      : 'WhatsApp provider request failed';
+
+    if (isCredentialConfigurationFailure(errorMessage)) {
+      await deferConfigurationFailure(notification, errorMessage);
+      return 'configuration_pending';
+    }
+
     const retryMinutes = Math.min(30, Math.max(2, notification.attempt_count * 5));
     await finish(notification.id, {
       delivery_status: 'failed',
-      last_error: error instanceof Error ? error.message.slice(0, 500) : 'WhatsApp provider request failed',
+      last_error: errorMessage,
       available_at: new Date(Date.now() + retryMinutes * 60_000).toISOString(),
     });
     return 'failed';
   }
+}
+
+async function deferConfigurationFailure(
+  notification: ClaimedNotification,
+  message: string,
+): Promise<void> {
+  await finish(notification.id, {
+    delivery_status: 'failed',
+    attempt_count: Math.max(0, notification.attempt_count - 1),
+    last_error: message.slice(0, 500),
+    available_at: new Date(Date.now() + 15 * 60_000).toISOString(),
+  });
+}
+
+function isCredentialConfigurationFailure(message: string): boolean {
+  return [
+    'No active SellerTray WhatsApp connection owns this Phone Number ID.',
+    'SellerTray platform WhatsApp credential is not configured.',
+    'SellerTray merchant WhatsApp credential is unavailable.',
+    'SellerTray merchant WhatsApp credential has expired.',
+    'SellerTray merchant WhatsApp credential is invalid.',
+    'SellerTray WhatsApp credential decryption is not configured.',
+    'SellerTray WhatsApp credential IV is invalid.',
+    'SellerTray merchant WhatsApp credential could not be decrypted.',
+    'SellerTray merchant WhatsApp credential payload is invalid.',
+  ].some((candidate) => message.includes(candidate));
 }
 
 class TemplateConfigurationError extends Error {
