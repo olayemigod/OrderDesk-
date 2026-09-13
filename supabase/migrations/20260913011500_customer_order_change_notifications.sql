@@ -19,6 +19,8 @@ create table public.customer_order_change_requests (
   resolved_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  constraint customer_order_change_requests_tenant_id_id_key
+    unique (tenant_id,id),
   constraint customer_order_change_requests_source_unique
     unique (tenant_id,source_inbound_message_id),
   constraint customer_order_change_requests_order_same_tenant
