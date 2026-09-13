@@ -294,6 +294,8 @@ function Workspace() {
             <ConversationsView
               orders={orders}
               currency={activeBusiness.currency}
+              unreadByCustomer={unreadByCustomer}
+              onMarkConversationRead={markConversationRead}
               onOpenOrder={(orderId) => {
                 setSelectedOrderId(orderId);
                 setView('orders');
@@ -311,11 +313,16 @@ function Workspace() {
 
           {view === 'notifications' ? (
             <NotificationCenterView
-              orders={orders}
+              notifications={merchantNotifications}
+              loading={merchantNotificationsLoading}
               syncError={pageError}
-              onOpenOrder={(orderId) => {
-                setSelectedOrderId(orderId);
-                setView('orders');
+              onMarkAllRead={() => void markAllMerchantNotificationsRead()}
+              onOpenNotification={(notificationId, orderId) => {
+                void markMerchantNotificationRead(notificationId);
+                if (orderId) {
+                  setSelectedOrderId(orderId);
+                  setView('orders');
+                }
               }}
               onBack={() => setView('home')}
             />
