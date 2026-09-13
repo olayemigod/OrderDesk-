@@ -185,6 +185,10 @@ function Workspace() {
         backgroundColor={appearance.dark ? '#081825' : '#F8FAFC'}
       />
       <View style={[styles.appFrame, appearance.dark && darkStyles.appFrame]}>
+        <PinnedBrandHeader
+          notificationCount={notificationCount}
+          onOpenNotifications={() => setView('notifications')}
+        />
         <ScrollView
           style={appearance.dark ? darkStyles.scroll : undefined}
           contentContainerStyle={[styles.page, appearance.dark && darkStyles.page]}
@@ -198,12 +202,10 @@ function Workspace() {
             />
           }
         >
-          <WorkspaceHeader
+          <WorkspaceContextHeader
             business={activeBusiness}
             businesses={businesses}
             onSelectBusiness={selectBusiness}
-            notificationCount={notificationCount}
-            onOpenNotifications={() => setView('notifications')}
           />
 
           {pageError ? (
@@ -299,44 +301,50 @@ function Workspace() {
   );
 }
 
-function WorkspaceHeader({
-  business,
-  businesses,
-  onSelectBusiness,
+function PinnedBrandHeader({
   notificationCount,
   onOpenNotifications,
 }: {
-  business: MerchantBusiness;
-  businesses: MerchantBusiness[];
-  onSelectBusiness: (businessId: string) => Promise<void>;
   notificationCount: number;
   onOpenNotifications: () => void;
 }) {
   const appearance = useSellerTrayAppearance();
   return (
-    <>
-      <View style={styles.header}>
-        <View style={styles.headerCopy}>
-          <SellerTrayBrand size={38} showTagline inverted={appearance.dark} />
-          <View style={styles.merchantIdentity}>
-            <Text style={[styles.businessName, appearance.dark && darkStyles.titleText, appearance.textSize === 'large' && styles.businessNameLarge]}>{business.name}</Text>
-            <Text style={[styles.workspaceMeta, appearance.dark && darkStyles.bodyText]}>
-              {business.role.toUpperCase()} · {subscriptionLabels[business.subscriptionStatus]}
-            </Text>
+    <View style={[styles.pinnedHeader, appearance.dark && darkStyles.pinnedHeader]}>
+      <SellerTrayBrand size={34} showTagline inverted={appearance.dark} />
+      <Pressable
+        onPress={onOpenNotifications}
+        accessibilityLabel="Open notifications"
+        style={({ pressed }) => [styles.notificationButton, appearance.dark && darkStyles.card, pressed && styles.quickActionPressed]}
+      >
+        <Ionicons name="notifications-outline" size={24} color={appearance.dark ? theme.colors.mint : theme.colors.navy} />
+        {notificationCount > 0 ? (
+          <View style={styles.notificationBadge}>
+            <Text style={styles.notificationBadgeText}>{Math.min(notificationCount, 99)}</Text>
           </View>
-        </View>
-        <Pressable
-          onPress={onOpenNotifications}
-          accessibilityLabel="Open notifications"
-          style={({ pressed }) => [styles.notificationButton, appearance.dark && darkStyles.card, pressed && styles.quickActionPressed]}
-        >
-          <Ionicons name="notifications-outline" size={25} color={appearance.dark ? theme.colors.mint : theme.colors.navy} />
-          {notificationCount > 0 ? (
-            <View style={styles.notificationBadge}>
-              <Text style={styles.notificationBadgeText}>{Math.min(notificationCount, 99)}</Text>
-            </View>
-          ) : null}
-        </Pressable>
+        ) : null}
+      </Pressable>
+    </View>
+  );
+}
+
+function WorkspaceContextHeader({
+  business,
+  businesses,
+  onSelectBusiness,
+}: {
+  business: MerchantBusiness;
+  businesses: MerchantBusiness[];
+  onSelectBusiness: (businessId: string) => Promise<void>;
+}) {
+  const appearance = useSellerTrayAppearance();
+  return (
+    <>
+      <View style={styles.merchantIdentity}>
+        <Text style={[styles.businessName, appearance.dark && darkStyles.titleText, appearance.textSize === 'large' && styles.businessNameLarge]}>{business.name}</Text>
+        <Text style={[styles.workspaceMeta, appearance.dark && darkStyles.bodyText]}>
+          {business.role.toUpperCase()} · {subscriptionLabels[business.subscriptionStatus]}
+        </Text>
       </View>
 
       {businesses.length > 1 ? (
@@ -1519,7 +1527,8 @@ const styles = StyleSheet.create({
   appFrame: { flex: 1 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 12, backgroundColor: '#F8FAFC' },
   noWorkspaceAccount: { width: '100%', maxWidth: 620 },
-  page: { padding: 18, paddingBottom: 34, gap: 15 },
+  page: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 34, gap: 15 },
+  pinnedHeader: { minHeight: 66, paddingHorizontal: 18, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, backgroundColor: '#F8FAFC', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E4E7EC', zIndex: 20, elevation: 6 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14 },
   notificationButton: { width: 46, height: 46, borderRadius: 15, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, alignItems: 'center', justifyContent: 'center', position: 'relative' },
   notificationBadge: { position: 'absolute', right: 3, top: 2, minWidth: 17, height: 17, borderRadius: 9, backgroundColor: '#D92D20', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
@@ -1722,6 +1731,7 @@ const styles = StyleSheet.create({
 
 const darkStyles = StyleSheet.create({
   safeArea: { backgroundColor: '#081825' },
+  pinnedHeader: { backgroundColor: '#081825', borderBottomColor: '#344054' },
   appFrame: { backgroundColor: '#081825' },
   scroll: { backgroundColor: '#081825' },
   page: { backgroundColor: '#081825' },
