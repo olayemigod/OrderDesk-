@@ -14,11 +14,13 @@ import {
   getSellerTrayLegalAcceptance,
 } from '../data/accountLifecycleRepository';
 import { supabase } from '../lib/supabase';
+import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
 const PRIVACY_URL = 'https://processedge.com.ng/sellertray/privacy';
 const TERMS_URL = 'https://processedge.com.ng/sellertray/terms';
 
 export function LegalAcceptanceGate({ children }: { children: ReactNode }) {
+  const appearance = useSellerTrayAppearance();
   const [checking, setChecking] = useState(true);
   const [accepted, setAccepted] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
@@ -59,9 +61,9 @@ export function LegalAcceptanceGate({ children }: { children: ReactNode }) {
 
   if (checking) {
     return (
-      <SafeAreaView style={styles.centered}>
+      <SafeAreaView style={[styles.centered, appearance.dark && darkStyles.screen]}>
         <ActivityIndicator size="large" />
-        <Text style={styles.muted}>Checking SellerTray account terms…</Text>
+        <Text style={[styles.muted, appearance.dark && darkStyles.bodyText]}>Checking SellerTray account terms…</Text>
       </SafeAreaView>
     );
   }
@@ -69,19 +71,19 @@ export function LegalAcceptanceGate({ children }: { children: ReactNode }) {
   if (accepted) return <>{children}</>;
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <View style={styles.card}>
+    <SafeAreaView style={[styles.screen, appearance.dark && darkStyles.screen]}>
+      <View style={[styles.card, appearance.dark && darkStyles.card]}>
         <Text style={styles.eyebrow}>SELLERTRAY</Text>
-        <Text style={styles.title}>Review the service terms</Text>
-        <Text style={styles.subtitle}>
+        <Text style={[styles.title, appearance.dark && darkStyles.titleText]}>Review the service terms</Text>
+        <Text style={[styles.subtitle, appearance.dark && darkStyles.bodyText]}>
           Before using your SellerTray workspace, review the current Terms of Service and Privacy Policy.
         </Text>
 
         <View style={styles.linkRow}>
-          <Pressable onPress={() => void Linking.openURL(TERMS_URL)} style={({ pressed }) => [styles.linkButton, pressed && styles.pressed]}>
+          <Pressable onPress={() => void Linking.openURL(TERMS_URL)} style={({ pressed }) => [styles.linkButton, appearance.dark && darkStyles.secondaryButton, pressed && styles.pressed]}>
             <Text style={styles.linkText}>Terms of Service</Text>
           </Pressable>
-          <Pressable onPress={() => void Linking.openURL(PRIVACY_URL)} style={({ pressed }) => [styles.linkButton, pressed && styles.pressed]}>
+          <Pressable onPress={() => void Linking.openURL(PRIVACY_URL)} style={({ pressed }) => [styles.linkButton, appearance.dark && darkStyles.secondaryButton, pressed && styles.pressed]}>
             <Text style={styles.linkText}>Privacy Policy</Text>
           </Pressable>
         </View>
@@ -92,10 +94,10 @@ export function LegalAcceptanceGate({ children }: { children: ReactNode }) {
           onPress={() => setConfirmed((value) => !value)}
           style={({ pressed }) => [styles.confirmRow, pressed && styles.pressed]}
         >
-          <View style={[styles.checkbox, confirmed && styles.checkboxChecked]}>
+          <View style={[styles.checkbox, appearance.dark && darkStyles.checkbox, confirmed && styles.checkboxChecked]}>
             <Text style={styles.checkboxMark}>{confirmed ? '✓' : ''}</Text>
           </View>
-          <Text style={styles.confirmText}>
+          <Text style={[styles.confirmText, appearance.dark && darkStyles.bodyText]}>
             I agree to the SellerTray Terms of Service and acknowledge the Privacy Policy.
           </Text>
         </Pressable>
@@ -115,13 +117,13 @@ export function LegalAcceptanceGate({ children }: { children: ReactNode }) {
         </Pressable>
 
         {error ? (
-          <Pressable onPress={() => void refresh()} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}>
-            <Text style={styles.secondaryText}>Retry status check</Text>
+          <Pressable onPress={() => void refresh()} style={({ pressed }) => [styles.secondaryButton, appearance.dark && darkStyles.secondaryButton, pressed && styles.pressed]}>
+            <Text style={[styles.secondaryText, appearance.dark && darkStyles.titleText]}>Retry status check</Text>
           </Pressable>
         ) : null}
 
         <Pressable onPress={() => void supabase.auth.signOut()} style={({ pressed }) => [styles.signOut, pressed && styles.pressed]}>
-          <Text style={styles.signOutText}>Sign out</Text>
+          <Text style={[styles.signOutText, appearance.dark && darkStyles.bodyText]}>Sign out</Text>
         </Pressable>
       </View>
     </SafeAreaView>
@@ -153,4 +155,13 @@ const styles = StyleSheet.create({
   muted: { color: '#667085', fontSize: 12 },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.5 },
+});
+
+const darkStyles = StyleSheet.create({
+  screen: { backgroundColor: '#081825' },
+  card: { backgroundColor: '#102A43', borderColor: '#344054' },
+  secondaryButton: { backgroundColor: '#162F46', borderColor: '#667085' },
+  checkbox: { backgroundColor: '#162F46', borderColor: '#98A2B3' },
+  titleText: { color: '#F8FAFC' },
+  bodyText: { color: '#D0D5DD' },
 });
