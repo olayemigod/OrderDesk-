@@ -249,15 +249,15 @@ export function PaymentMethodsSettings({ business }: Props) {
         </View>
       ) : (
         <View style={styles.viewStack}>
-          <View style={styles.infoCard}>
+          <View style={[styles.infoCard, appearance.dark && darkStyles.mintCard]}>
             <Text style={styles.infoTitle}>Direct merchant settlement</Text>
-            <Text style={styles.infoText}>
+            <Text style={[styles.infoText, appearance.dark && darkStyles.bodyText]}>
               Bank transfers and connected gateways belong to this business. SellerTray does not collect card details or hold customer funds.
             </Text>
           </View>
 
       <Section title="BANK TRANSFER" helper="Add one or more merchant bank accounts.">
-        {banks.length === 0 ? <Text style={styles.emptyText}>No bank account configured yet.</Text> : null}
+        {banks.length === 0 ? <Text style={[styles.emptyText, appearance.dark && darkStyles.bodyText]}>No bank account configured yet.</Text> : null}
         {banks.map((method) => (
           <MethodCard
             key={method.id}
@@ -267,15 +267,15 @@ export function PaymentMethodsSettings({ business }: Props) {
             onToggle={() => void updateMethod(method, { isEnabled: !method.isEnabled })}
             onDefault={() => void updateMethod(method, { isEnabled: true, isDefault: true })}
           >
-            <Text style={styles.accountName}>{method.bankAccountName}</Text>
-            <Text style={styles.accountMeta}>{method.bankName} · {method.bankAccountNumber}</Text>
-            {method.instructions ? <Text style={styles.methodNote}>{method.instructions}</Text> : null}
+            <Text style={[styles.accountName, appearance.dark && darkStyles.titleText]}>{method.bankAccountName}</Text>
+            <Text style={[styles.accountMeta, appearance.dark && darkStyles.bodyText]}>{method.bankName} · {method.bankAccountNumber}</Text>
+            {method.instructions ? <Text style={[styles.methodNote, appearance.dark && darkStyles.bodyText]}>{method.instructions}</Text> : null}
           </MethodCard>
         ))}
 
         {canManage ? (
           showBankForm ? (
-            <View style={styles.formCard}>
+            <View style={[styles.formCard, appearance.dark && darkStyles.subtleCard]}>
               <Field label="Bank name" value={bankName} onChangeText={setBankName} placeholder="e.g. GTBank" />
               <Field label="Account name" value={accountName} onChangeText={setAccountName} placeholder={business.name} />
               <Field
@@ -427,7 +427,7 @@ function GatewayCard({
       {method?.isDefault ? <Text style={styles.defaultText}>Default customer payment method</Text> : null}
 
       {owner && !connected ? (
-        <View style={styles.gatewayForm}>
+        <View style={[styles.gatewayForm, appearance.dark && darkStyles.subtleCard]}>
           <Field
             label={label + ' secret key'}
             value={secretKey}
@@ -668,7 +668,7 @@ const styles = StyleSheet.create({
   paymentSummaryIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: '#ECFDF3', alignItems: 'center', justifyContent: 'center' },
   paymentSummaryValue: { color: '#102A43', fontSize: 21, fontWeight: '900' },
   paymentSummaryValueSmall: { color: '#102A43', fontSize: 13, fontWeight: '900', marginTop: 4 },
-  paymentSummaryLabel: { color: '#667085', fontSize: 10, fontWeight: '900', letterSpacing: 0.3, marginTop: 3 },
+  paymentSummaryLabel: { color: '#667085', fontSize: 12, fontWeight: '900', letterSpacing: 0.2, marginTop: 3 },
   segmentedControl: { flexDirection: 'row', backgroundColor: '#F2F4F7', borderRadius: 12, padding: 3, gap: 3 },
   segmentButton: { flex: 1, minHeight: 46, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 },
   segmentButtonActive: { backgroundColor: '#FFFFFF' },
@@ -676,8 +676,8 @@ const styles = StyleSheet.create({
   segmentTextActive: { color: '#079455' },
   viewStack: { gap: 16 },
   infoCard: { backgroundColor: '#ECFDF3', borderRadius: 14, padding: 13, gap: 4 },
-  infoTitle: { color: '#079455', fontSize: 12, fontWeight: '900' },
-  infoText: { color: '#1849A9', fontSize: 11, lineHeight: 17 },
+  infoTitle: { color: '#079455', fontSize: 14, fontWeight: '900' },
+  infoText: { color: '#475467', fontSize: 13, lineHeight: 20 },
   readOnlyCard: { backgroundColor: '#F9FAFB', borderRadius: 14, padding: 13, gap: 4 },
   readOnlyTitle: { color: '#344054', fontSize: 12, fontWeight: '900' },
   readOnlyText: { color: '#667085', fontSize: 11, lineHeight: 17 },
@@ -694,9 +694,9 @@ const styles = StyleSheet.create({
   methodHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   methodTitle: { color: '#102A43', fontSize: 14, fontWeight: '900' },
   methodNote: { color: '#667085', fontSize: 12, lineHeight: 18, marginTop: 3 },
-  accountName: { color: '#344054', fontSize: 11, fontWeight: '800', marginTop: 4 },
-  accountMeta: { color: '#667085', fontSize: 10, marginTop: 2 },
-  defaultText: { color: '#079455', fontSize: 10, fontWeight: '900' },
+  accountName: { color: '#344054', fontSize: 13, fontWeight: '800', marginTop: 4 },
+  accountMeta: { color: '#667085', fontSize: 12, marginTop: 2 },
+  defaultText: { color: '#079455', fontSize: 12, fontWeight: '900' },
   pill: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 },
   pillPositive: { backgroundColor: '#ECFDF3' },
   pillNeutral: { backgroundColor: '#F2F4F7' },
@@ -718,7 +718,7 @@ const styles = StyleSheet.create({
   buttonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
   buttonSecondaryText: { color: '#344054' },
   buttonDestructiveText: { color: '#B42318' },
-  emptyText: { color: '#667085', fontSize: 11, lineHeight: 17 },
+  emptyText: { color: '#667085', fontSize: 12, lineHeight: 18 },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.45 },
 });
