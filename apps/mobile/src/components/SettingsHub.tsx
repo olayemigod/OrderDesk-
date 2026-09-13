@@ -153,8 +153,20 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
         />
         <MenuRow
           title="WhatsApp connection"
-          text={business.whatsappConnectionStatus === 'connected' ? 'Connected' : 'Connect and verify your WhatsApp Business number'}
-          status={business.whatsappConnectionStatus === 'connected' ? 'Connected' : 'Setup'}
+          text={
+            business.whatsappReadiness.messagingReady
+              ? 'Inbound and outbound messaging verified'
+              : business.whatsappConnectionStatus === 'connected'
+                ? 'Connected, but outbound messaging still needs verification'
+                : 'Connect and verify your WhatsApp Business number'
+          }
+          status={
+            business.whatsappReadiness.messagingReady
+              ? 'Ready'
+              : business.whatsappConnectionStatus === 'connected'
+                ? 'Check'
+                : 'Setup'
+          }
           onPress={() => setSection('whatsapp')}
         />
         <MenuRow
