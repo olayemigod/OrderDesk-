@@ -37,8 +37,10 @@ export function SetupGuideCard({
     {
       key: 'whatsapp',
       title: 'Connect WhatsApp',
-      text: 'Link your WhatsApp Business number when Meta activation is available.',
-      done: business.whatsappConnectionStatus === 'connected',
+      text: business.whatsappReadiness.messagingReady
+        ? 'Inbound and outbound WhatsApp messaging are verified.'
+        : 'Connect WhatsApp and verify both inbound and outbound messaging.',
+      done: business.whatsappReadiness.messagingReady,
       action: onMore,
     },
     {
