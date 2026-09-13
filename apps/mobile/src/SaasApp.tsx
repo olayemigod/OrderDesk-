@@ -348,8 +348,14 @@ function WorkspaceHeader({
 
       <View style={styles.stateRow}>
         <Badge
-          label={whatsappLabels[business.whatsappConnectionStatus]}
-          positive={business.whatsappConnectionStatus === 'connected'}
+          label={
+            business.whatsappReadiness.messagingReady
+              ? 'WhatsApp ready'
+              : business.whatsappConnectionStatus === 'connected'
+                ? 'WhatsApp connected · outbound pending'
+                : whatsappLabels[business.whatsappConnectionStatus]
+          }
+          positive={business.whatsappReadiness.messagingReady}
         />
         <Badge label={`${subscriptionLabels[business.subscriptionStatus]} plan`} />
       </View>
