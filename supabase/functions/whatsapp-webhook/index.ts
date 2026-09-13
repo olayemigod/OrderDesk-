@@ -1260,9 +1260,20 @@ function detectOrderChangeKind(value: string): OrderChangeKind | null {
     /\b(?:my\s+)?(?:last|latest|recent|current)\s+order\b/i.test(normalized) ||
     /\bthis\s+order\b/i.test(normalized);
 
+  const softCancellation =
+    /\b(?:i\s+)?(?:don'?t|do\s+not)\s+want(?:\s+(?:it|am|this|that|the\s+order))?(?:\s+(?:again|anymore))?\b/i.test(normalized) ||
+    /\bno\s+need(?:\s+(?:again|anymore|am|for\s+it))?\b/i.test(normalized) ||
+    /\b(?:don'?t|do\s+not)\s+worry(?:\s+(?:again|about\s+it))?\b/i.test(normalized) ||
+    /\bnever\s*mind\b/i.test(normalized) ||
+    /\bforget\s+(?:it|am|the\s+order)\b/i.test(normalized) ||
+    /\b(?:don'?t|do\s+not|no)\s+send(?:\s+it|\s+am)?\s+again\b/i.test(normalized) ||
+    /\bi\s+no\s+want(?:\s+am)?(?:\s+again)?\b/i.test(normalized) ||
+    /\babeg\s+(?:cancel|leave)\s+am\b/i.test(normalized);
+
+  if (softCancellation) return 'cancel_order';
   if (!referencesOrder) return null;
 
-  if (/\b(cancel|cancelled|canceling|cancelling)\b/i.test(normalized)) return 'cancel_order';
+  if (/\b(cancel|cancelled|canceling|cancelling|cancel\s+am|stop\s+the\s+order)\b/i.test(normalized)) return 'cancel_order';
   if (/\b(add|include|append)\b/i.test(normalized)) return 'add_items';
   if (/\b(remove|delete|take\s+off|drop)\b/i.test(normalized)) return 'remove_items';
   if (/\b(change|replace|swap|update|increase|decrease|amend|modify)\b/i.test(normalized)) {
