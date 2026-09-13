@@ -408,15 +408,16 @@ function GatewayCard({
   onDefault: () => void;
   onDisconnect: () => void;
 }) {
+  const appearance = useSellerTrayAppearance();
   const owner = role === 'owner';
   const connected = method?.configurationStatus === 'configured';
 
   return (
-    <View style={styles.methodCard}>
+    <View style={[styles.methodCard, appearance.dark && darkStyles.card]}>
       <View style={styles.methodHeader}>
         <View style={styles.flex}>
-          <Text style={styles.methodTitle}>{label}</Text>
-          <Text style={styles.methodNote}>
+          <Text style={[styles.methodTitle, appearance.dark && darkStyles.titleText]}>{label}</Text>
+          <Text style={[styles.methodNote, appearance.dark && darkStyles.bodyText]}>
             {connected ? 'Credentials connected securely' : 'Not connected'}
           </Text>
         </View>
@@ -445,7 +446,7 @@ function GatewayCard({
               autoCapitalize="none"
             />
           ) : null}
-          <Text style={styles.secretHint}>SellerTray stores an encrypted server-side copy. Raw credentials are never shown again.</Text>
+          <Text style={[styles.secretHint, appearance.dark && darkStyles.bodyText]}>SellerTray stores an encrypted server-side copy. Raw credentials are never shown again.</Text>
           <Button
             label={busy ? 'Connecting…' : 'Connect ' + label}
             disabled={busy || !secretKey.trim() || (provider === 'flutterwave' && !(secretHash ?? '').trim())}
@@ -469,7 +470,7 @@ function GatewayCard({
         </View>
       ) : null}
 
-      {!owner ? <Text style={styles.secretHint}>Only the business Owner can connect or change gateway credentials.</Text> : null}
+      {!owner ? <Text style={[styles.secretHint, appearance.dark && darkStyles.bodyText]}>Only the business Owner can connect or change gateway credentials.</Text> : null}
     </View>
   );
 }
@@ -491,12 +492,13 @@ function SimpleMethodCard({
   onToggle: () => void;
   onDefault: () => void;
 }) {
+  const appearance = useSellerTrayAppearance();
   return (
-    <View style={styles.methodCard}>
+    <View style={[styles.methodCard, appearance.dark && darkStyles.card]}>
       <View style={styles.methodHeader}>
         <View style={styles.flex}>
-          <Text style={styles.methodTitle}>{title}</Text>
-          <Text style={styles.methodNote}>{description}</Text>
+          <Text style={[styles.methodTitle, appearance.dark && darkStyles.titleText]}>{title}</Text>
+          <Text style={[styles.methodNote, appearance.dark && darkStyles.bodyText]}>{description}</Text>
         </View>
         <Pill label={method?.isEnabled ? 'Enabled' : 'Off'} positive={Boolean(method?.isEnabled)} />
       </View>
@@ -533,11 +535,12 @@ function MethodCard({
   onDefault: () => void;
   children: React.ReactNode;
 }) {
+  const appearance = useSellerTrayAppearance();
   return (
-    <View style={styles.methodCard}>
+    <View style={[styles.methodCard, appearance.dark && darkStyles.card]}>
       <View style={styles.methodHeader}>
         <View style={styles.flex}>
-          <Text style={styles.methodTitle}>{method.displayName}</Text>
+          <Text style={[styles.methodTitle, appearance.dark && darkStyles.titleText]}>{method.displayName}</Text>
           {children}
         </View>
         <Pill label={method.isEnabled ? 'Enabled' : 'Off'} positive={method.isEnabled} />
@@ -569,11 +572,12 @@ function Section({
   helper: string;
   children: React.ReactNode;
 }) {
+  const appearance = useSellerTrayAppearance();
   return (
     <View style={styles.section}>
       <View>
-        <Text style={styles.sectionTitle}>{title}</Text>
-        <Text style={styles.sectionHelper}>{helper}</Text>
+        <Text style={[styles.sectionTitle, appearance.dark && darkStyles.titleText]}>{title}</Text>
+        <Text style={[styles.sectionHelper, appearance.dark && darkStyles.bodyText]}>{helper}</Text>
       </View>
       {children}
     </View>
@@ -586,10 +590,15 @@ function Field({
 }: {
   label: string;
 } & React.ComponentProps<typeof TextInput>) {
+  const appearance = useSellerTrayAppearance();
   return (
     <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <TextInput {...props} style={[styles.input, props.multiline && styles.inputMultiline]} />
+      <Text style={[styles.fieldLabel, appearance.dark && darkStyles.titleText]}>{label}</Text>
+      <TextInput
+        {...props}
+        placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
+        style={[styles.input, props.multiline && styles.inputMultiline, appearance.dark && darkStyles.input]}
+      />
     </View>
   );
 }
@@ -607,6 +616,7 @@ function Button({
   destructive?: boolean;
   disabled?: boolean;
 }) {
+  const appearance = useSellerTrayAppearance();
   return (
     <Pressable
       disabled={disabled}
@@ -615,6 +625,7 @@ function Button({
         styles.button,
         secondary && styles.buttonSecondary,
         destructive && styles.buttonDestructive,
+        appearance.dark && secondary && darkStyles.secondaryButton,
         disabled && styles.disabled,
         pressed && !disabled && styles.pressed,
       ]}
@@ -623,15 +634,17 @@ function Button({
         styles.buttonText,
         secondary && styles.buttonSecondaryText,
         destructive && styles.buttonDestructiveText,
+        appearance.dark && secondary && !destructive && darkStyles.titleText,
       ]}>{label}</Text>
     </Pressable>
   );
 }
 
 function Pill({ label, positive }: { label: string; positive: boolean }) {
+  const appearance = useSellerTrayAppearance();
   return (
     <View style={[styles.pill, positive ? styles.pillPositive : styles.pillNeutral]}>
-      <Text style={[styles.pillText, positive ? styles.pillTextPositive : styles.pillTextNeutral]}>{label}</Text>
+      <Text style={[styles.pillText, positive ? styles.pillTextPositive : styles.pillTextNeutral, appearance.dark && !positive && darkStyles.bodyText]}>{label}</Text>
     </View>
   );
 }
@@ -675,34 +688,34 @@ const styles = StyleSheet.create({
   successCard: { backgroundColor: '#ECFDF3', borderRadius: 14, padding: 12 },
   successText: { color: '#027A48', fontSize: 11, lineHeight: 17, fontWeight: '800' },
   section: { gap: 10 },
-  sectionTitle: { color: '#344054', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
-  sectionHelper: { color: '#667085', fontSize: 10, lineHeight: 15, marginTop: 2 },
+  sectionTitle: { color: '#344054', fontSize: 12, fontWeight: '900', letterSpacing: 1 },
+  sectionHelper: { color: '#667085', fontSize: 12, lineHeight: 18, marginTop: 3 },
   methodCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 15, padding: 13, gap: 9 },
   methodHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   methodTitle: { color: '#102A43', fontSize: 14, fontWeight: '900' },
-  methodNote: { color: '#667085', fontSize: 10, lineHeight: 15, marginTop: 3 },
+  methodNote: { color: '#667085', fontSize: 12, lineHeight: 18, marginTop: 3 },
   accountName: { color: '#344054', fontSize: 11, fontWeight: '800', marginTop: 4 },
   accountMeta: { color: '#667085', fontSize: 10, marginTop: 2 },
   defaultText: { color: '#079455', fontSize: 10, fontWeight: '900' },
   pill: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 },
   pillPositive: { backgroundColor: '#ECFDF3' },
   pillNeutral: { backgroundColor: '#F2F4F7' },
-  pillText: { fontSize: 9, fontWeight: '900' },
+  pillText: { fontSize: 11, fontWeight: '900' },
   pillTextPositive: { color: '#027A48' },
   pillTextNeutral: { color: '#667085' },
   formCard: { backgroundColor: '#F9FAFB', borderRadius: 14, padding: 12, gap: 10 },
   gatewayForm: { backgroundColor: '#F9FAFB', borderRadius: 12, padding: 10, gap: 9 },
   field: { gap: 5 },
-  fieldLabel: { color: '#344054', fontSize: 10, fontWeight: '800' },
-  input: { minHeight: 44, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 10, paddingHorizontal: 11, backgroundColor: '#FFFFFF', color: '#102A43', fontSize: 12 },
+  fieldLabel: { color: '#344054', fontSize: 12, fontWeight: '800' },
+  input: { minHeight: 48, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 10, paddingHorizontal: 11, backgroundColor: '#FFFFFF', color: '#102A43', fontSize: 14 },
   inputMultiline: { minHeight: 78, textAlignVertical: 'top', paddingTop: 10 },
-  secretHint: { color: '#667085', fontSize: 9, lineHeight: 14 },
+  secretHint: { color: '#667085', fontSize: 11, lineHeight: 17 },
   row: { flexDirection: 'row', gap: 8 },
   actionWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   button: { minHeight: 42, borderRadius: 10, backgroundColor: '#12B76A', paddingHorizontal: 13, alignItems: 'center', justifyContent: 'center', flexGrow: 1 },
   buttonSecondary: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D0D5DD' },
   buttonDestructive: { borderColor: '#FDA29B', backgroundColor: '#FFFBFA' },
-  buttonText: { color: '#FFFFFF', fontSize: 11, fontWeight: '900' },
+  buttonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
   buttonSecondaryText: { color: '#344054' },
   buttonDestructiveText: { color: '#B42318' },
   emptyText: { color: '#667085', fontSize: 11, lineHeight: 17 },
@@ -718,4 +731,6 @@ const darkStyles = StyleSheet.create({
   errorCard: { backgroundColor: '#3A1717', borderColor: '#7A271A' },
   titleText: { color: '#F8FAFC' },
   bodyText: { color: '#D0D5DD' },
+  input: { backgroundColor: '#F8FAFC', borderColor: '#98A2B3', color: '#102A43' },
+  secondaryButton: { backgroundColor: '#162F46', borderColor: '#667085' },
 });
