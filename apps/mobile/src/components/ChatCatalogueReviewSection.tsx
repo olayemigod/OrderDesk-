@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { MerchantBusiness } from '../data/businessRepository';
+import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import {
   convertChatCatalogueCandidate,
   createChatCatalogueCandidate,
@@ -19,6 +20,7 @@ export function ChatCatalogueReviewSection({
   business: MerchantBusiness;
   onCatalogueChanged: () => Promise<void>;
 }) {
+  const appearance = useSellerTrayAppearance();
   const canEdit = business.role === 'owner' || business.role === 'manager';
   const [captures, setCaptures] = useState<ChatCatalogueCapture[]>([]);
   const [loading, setLoading] = useState(false);
@@ -76,12 +78,12 @@ export function ChatCatalogueReviewSection({
   if (!canEdit) return null;
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, appearance.dark && darkStyles.card]}>
       <View style={styles.heading}>
         <View style={styles.headingCopy}>
           <Text style={styles.eyebrow}>FROM WHATSAPP CHATS</Text>
-          <Text style={styles.title}>Review product images customers send</Text>
-          <Text style={styles.text}>
+          <Text style={[styles.title, appearance.dark && darkStyles.titleText]}>Review product images customers send</Text>
+          <Text style={[styles.text, appearance.dark && darkStyles.bodyText]}>
             Images stay private while you review them. SellerTray only publishes an image after you explicitly create the product.
           </Text>
         </View>
@@ -91,9 +93,9 @@ export function ChatCatalogueReviewSection({
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       {!loading && captures.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>No product-image captures waiting</Text>
-          <Text style={styles.emptyText}>
+        <View style={[styles.empty, appearance.dark && darkStyles.subtleCard]}>
+          <Text style={[styles.emptyTitle, appearance.dark && darkStyles.titleText]}>No product-image captures waiting</Text>
+          <Text style={[styles.emptyText, appearance.dark && darkStyles.bodyText]}>
             When a customer sends an image on the connected WhatsApp number, eligible captures appear here for Owner or Manager review.
           </Text>
         </View>
@@ -101,7 +103,7 @@ export function ChatCatalogueReviewSection({
 
       <View style={styles.list}>
         {captures.map((capture) => (
-          <View key={capture.mediaId} style={styles.capture}>
+          <View key={capture.mediaId} style={[styles.capture, appearance.dark && darkStyles.subtleCard]}>
             {capture.previewUrl ? (
               <Image source={{ uri: capture.previewUrl }} style={styles.image} resizeMode="cover" />
             ) : (
@@ -114,10 +116,10 @@ export function ChatCatalogueReviewSection({
               <Text style={styles.customer}>
                 {capture.customerName || capture.customerWaId || 'WhatsApp customer'}
               </Text>
-              <Text style={styles.caption}>
+              <Text style={[styles.caption, appearance.dark && darkStyles.bodyText]}>
                 {capture.caption || 'Customer sent a product image without a caption.'}
               </Text>
-              <Text style={styles.meta}>
+              <Text style={[styles.meta, appearance.dark && darkStyles.mutedText]}>
                 {formatDate(capture.createdAt)} · Expires {formatDate(capture.expiresAt)}
               </Text>
 
@@ -175,6 +177,7 @@ function ProductReviewEditor({
   onCancel: () => void;
   onChanged: () => Promise<void>;
 }) {
+  const appearance = useSellerTrayAppearance();
   const [name, setName] = useState(capture.candidate.suggested_name || capture.caption || '');
   const [price, setPrice] = useState(
     capture.candidate.suggested_price_ngn === null || capture.candidate.suggested_price_ngn === undefined
@@ -228,10 +231,10 @@ function ProductReviewEditor({
   }
 
   return (
-    <View style={styles.editor}>
+    <View style={[styles.editor, appearance.dark && darkStyles.card]}>
       <Text style={styles.eyebrow}>WHATSAPP PRODUCT REVIEW</Text>
-      <Text style={styles.editorTitle}>Create catalogue product</Text>
-      <Text style={styles.help}>
+      <Text style={[styles.editorTitle, appearance.dark && darkStyles.titleText]}>Create catalogue product</Text>
+      <Text style={[styles.help, appearance.dark && darkStyles.bodyText]}>
         Review the image and details before publishing. Nothing is added to the live catalogue until you tap Create product.
       </Text>
 
@@ -240,7 +243,7 @@ function ProductReviewEditor({
       ) : null}
 
       <Field label="Product name" required>
-        <TextInput value={name} onChangeText={setName} placeholder="Product name" style={styles.input} />
+        <TextInput value={name} onChangeText={setName} placeholder="Product name" style={[styles.input, appearance.dark && darkStyles.input]} />
       </Field>
       <Field label="Selling price" required hint={`Amount charged to the customer in ${currency}.`}>
         <TextInput
@@ -248,14 +251,14 @@ function ProductReviewEditor({
           onChangeText={setPrice}
           keyboardType="decimal-pad"
           placeholder="e.g. 12500"
-          style={styles.input}
+          style={[styles.input, appearance.dark && darkStyles.input]}
         />
       </Field>
       <Field label="Category" hint="Optional.">
-        <TextInput value={category} onChangeText={setCategory} placeholder="e.g. Groceries" style={styles.input} />
+        <TextInput value={category} onChangeText={setCategory} placeholder="e.g. Groceries" style={[styles.input, appearance.dark && darkStyles.input]} />
       </Field>
       <Field label="SKU / product code" hint="Optional.">
-        <TextInput value={sku} onChangeText={setSku} placeholder="e.g. SEM-5KG" style={styles.input} />
+        <TextInput value={sku} onChangeText={setSku} placeholder="e.g. SEM-5KG" style={[styles.input, appearance.dark && darkStyles.input]} />
       </Field>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -264,8 +267,8 @@ function ProductReviewEditor({
         <Pressable disabled={busy} onPress={() => void dismiss()} style={styles.dismissButton}>
           <Text style={styles.dismissText}>Dismiss</Text>
         </Pressable>
-        <Pressable disabled={busy} onPress={onCancel} style={styles.secondaryButton}>
-          <Text style={styles.secondaryText}>Cancel</Text>
+        <Pressable disabled={busy} onPress={onCancel} style={[styles.secondaryButton, appearance.dark && darkStyles.outlineButton]}>
+          <Text style={[styles.secondaryText, appearance.dark && darkStyles.titleText]}>Cancel</Text>
         </Pressable>
         <Pressable disabled={busy} onPress={() => void publish()} style={styles.primaryButton}>
           <Text style={styles.primaryText}>{busy ? 'Saving…' : 'Create product'}</Text>
@@ -340,4 +343,14 @@ const styles = StyleSheet.create({
   secondaryText: { color: '#344054', fontWeight: '900', fontSize: 11 },
   primaryButton: { flex: 1, minHeight: 43, borderRadius: 10, backgroundColor: '#12B76A', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
   primaryText: { color: '#FFFFFF', fontWeight: '900', fontSize: 11 },
+});
+
+const darkStyles = StyleSheet.create({
+  card: { backgroundColor: '#102A43', borderColor: '#475467' },
+  subtleCard: { backgroundColor: '#162F46', borderColor: '#344054' },
+  titleText: { color: '#F8FAFC' },
+  bodyText: { color: '#D0D5DD' },
+  mutedText: { color: '#98A2B3' },
+  input: { backgroundColor: '#F8FAFC', borderColor: '#98A2B3', color: '#102A43' },
+  outlineButton: { backgroundColor: '#162F46', borderColor: '#475467' },
 });
