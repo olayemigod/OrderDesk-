@@ -1361,7 +1361,7 @@ function NotificationCenterView({
 }: {
   notifications: Array<{
     id: string;
-    eventKey: 'new_whatsapp_order' | 'order_change_request';
+    eventKey: 'new_whatsapp_order' | 'order_change_request' | 'new_whatsapp_message';
     severity: 'info' | 'attention' | 'urgent';
     title: string;
     body: string;
