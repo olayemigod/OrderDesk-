@@ -159,7 +159,7 @@ function GateOption({ label, value, active, disabled, onPress }: {
 }) {
   const appearance = useSellerTrayAppearance();
   return (
-    <Pressable disabled={disabled} onPress={() => onPress(value)} style={[styles.option, appearance.dark && darkStyles.option, active && styles.optionActive]}>
+    <Pressable disabled={disabled} onPress={() => onPress(value)} style={[styles.option, appearance.dark && darkStyles.option, active && styles.optionActive, appearance.dark && active && darkStyles.optionActive]}>
       <View style={[styles.radio, active && styles.radioActive]}>{active ? <View style={styles.radioDot} /> : null}</View>
       <Text style={[styles.optionText, appearance.dark && darkStyles.titleText]}>{label}</Text>
     </Pressable>
@@ -234,6 +234,7 @@ const styles = StyleSheet.create({
 const darkStyles = StyleSheet.create({
   card: { backgroundColor: '#102A43', borderColor: '#344054' },
   option: { backgroundColor: '#162F46', borderColor: '#475467' },
+  optionActive: { backgroundColor: '#12372C', borderColor: '#12B76A' },
   titleText: { color: '#F8FAFC' },
   bodyText: { color: '#D0D5DD' },
   rowBorder: { borderBottomColor: '#344054' },
