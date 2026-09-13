@@ -28,6 +28,7 @@ import { SetupGuideCard } from './components/SetupGuideCard';
 import { SellerTrayBrand } from './components/SellerTrayBrand';
 import type { MerchantBusiness } from './data/businessRepository';
 import type { OrderFulfillmentInput, OrderItemInput } from './data/ordersRepository';
+import { sendMerchantPaymentOptions } from './data/orderPaymentsRepository';
 import { orderTotal, type MerchantOrder, type OrderStatus } from './domain/order';
 import { useBusinesses } from './hooks/useBusinesses';
 import { useCatalogue } from './hooks/useCatalogue';
@@ -296,6 +297,7 @@ function Workspace() {
 
           {view === 'inbox' ? (
             <ConversationsView
+              tenantId={activeBusiness.id}
               orders={orders}
               currency={activeBusiness.currency}
               unreadByCustomer={unreadByCustomer}
@@ -996,6 +998,7 @@ function OrderList({
   onSelect,
   emptyText,
 }: {
+  tenantId: string;
   orders: MerchantOrder[];
   loading: boolean;
   selectedOrderId: string;
@@ -1210,6 +1213,7 @@ function DetailSummary({
 }
 
 function ConversationsView({
+  tenantId,
   orders,
   currency,
   unreadByCustomer,
@@ -1227,6 +1231,24 @@ function ConversationsView({
   const [selectedKey, setSelectedKey] = useState('');
   const [conversationFilter, setConversationFilter] = useState<'all' | 'unread' | 'new' | 'payment' | 'active'>('all');
   const [showConversationFilters, setShowConversationFilters] = useState(false);
+  const [paymentSendBusyId, setPaymentSendBusyId] = useState<string | null>(null);
+  const [paymentSendNotice, setPaymentSendNotice] = useState<string | null>(null);
+  const [paymentSendError, setPaymentSendError] = useState<string | null>(null);
+
+  async function sendPaymentOptionsFromConversation(orderId: string) {
+    if (paymentSendBusyId) return;
+    setPaymentSendBusyId(orderId);
+    setPaymentSendNotice(null);
+    setPaymentSendError(null);
+    try {
+      const result = await sendMerchantPaymentOptions(tenantId, orderId);
+      setPaymentSendNotice(result.message);
+    } catch (err) {
+      setPaymentSendError(err instanceof Error ? err.message : 'Unable to send payment options.');
+    } finally {
+      setPaymentSendBusyId(null);
+    }
+  }
 
   const conversations = useMemo(() => {
     const whatsappOrders = orders
@@ -1323,6 +1345,17 @@ function ConversationsView({
           </Text>
         </View>
 
+        {paymentSendNotice ? (
+          <View style={[styles.conversationActionNotice, appearance.dark && darkStyles.mintCard]}>
+            <Text style={[styles.conversationActionNoticeText, appearance.dark && darkStyles.bodyText]}>{paymentSendNotice}</Text>
+          </View>
+        ) : null}
+        {paymentSendError ? (
+          <View style={[styles.conversationActionNotice, styles.conversationActionError, appearance.dark && darkStyles.errorCard]}>
+            <Text style={styles.errorText}>{paymentSendError}</Text>
+          </View>
+        ) : null}
+
         <View style={styles.conversationThread}>
           {selected.orders
             .slice()
@@ -1341,9 +1374,22 @@ function ConversationsView({
                       {order.items.length} item{order.items.length === 1 ? '' : 's'} · {orderTotal(order) === null ? 'Needs pricing' : formatMoney(orderTotal(order) ?? 0, currency)}
                     </Text>
                   </View>
-                  <Pressable onPress={() => onOpenOrder(order.id)} style={styles.openOrderButton}>
-                    <Text style={styles.openOrderButtonText}>Open</Text>
-                  </Pressable>
+                  <View style={styles.linkedOrderActions}>
+                    {order.paymentStatus !== 'paid' && ['accepted', 'processing', 'ready'].includes(order.status) ? (
+                      <Pressable
+                        disabled={paymentSendBusyId !== null}
+                        onPress={() => void sendPaymentOptionsFromConversation(order.id)}
+                        style={[styles.paymentChatButton, appearance.dark && darkStyles.outlineButton, paymentSendBusyId !== null && styles.disabled]}
+                      >
+                        <Text style={[styles.paymentChatButtonText, appearance.dark && darkStyles.greenText]}>
+                          {paymentSendBusyId === order.id ? 'Sending…' : 'Payment'}
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                    <Pressable onPress={() => onOpenOrder(order.id)} style={styles.openOrderButton}>
+                      <Text style={styles.openOrderButtonText}>Open</Text>
+                    </Pressable>
+                  </View>
                 </View>
               </View>
             ))}
@@ -1906,6 +1952,9 @@ const styles = StyleSheet.create({
   threadNotice: { backgroundColor: theme.colors.infoSoft, borderRadius: 13, padding: 12, gap: 3 },
   threadNoticeTitle: { color: theme.colors.navy, fontSize: 13, fontWeight: '900' },
   threadNoticeText: { color: theme.colors.slate, fontSize: 12, lineHeight: 18 },
+  conversationActionNotice: { borderRadius: 12, borderWidth: 1, borderColor: '#ABEFC6', backgroundColor: '#ECFDF3', padding: 10 },
+  conversationActionError: { borderColor: '#FDA29B', backgroundColor: '#FEF3F2' },
+  conversationActionNoticeText: { color: '#027A48', fontSize: 12, lineHeight: 18, fontWeight: '800' },
   conversationThread: { gap: 10 },
   customerBubble: { alignSelf: 'stretch', backgroundColor: theme.colors.mintSoft, borderRadius: 16, borderTopLeftRadius: 5, padding: 12, gap: 8 },
   bubbleText: { color: theme.colors.navy, fontSize: 14, lineHeight: 21 },
@@ -1914,6 +1963,9 @@ const styles = StyleSheet.create({
   bubbleOrderRef: { color: theme.colors.greenDark, fontSize: 12, fontWeight: '900' },
   linkedOrderCard: { backgroundColor: theme.colors.white, borderRadius: 12, padding: 10, flexDirection: 'row', alignItems: 'center', gap: 10 },
   linkedOrderCopy: { flex: 1 },
+  linkedOrderActions: { gap: 6, alignItems: 'stretch' },
+  paymentChatButton: { minHeight: 34, borderRadius: 9, borderWidth: 1, borderColor: theme.colors.green, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center' },
+  paymentChatButtonText: { color: theme.colors.greenDark, fontSize: 12, fontWeight: '900' },
   linkedOrderTitle: { color: theme.colors.navy, fontSize: 12, fontWeight: '900' },
   linkedOrderMeta: { color: theme.colors.muted, fontSize: 12, marginTop: 2 },
   openOrderButton: { minHeight: 34, borderRadius: 9, backgroundColor: theme.colors.green, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
