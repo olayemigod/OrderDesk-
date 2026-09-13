@@ -1449,7 +1449,7 @@ function NotificationCenterView({
 }: {
   notifications: Array<{
     id: string;
-    eventKey: 'new_whatsapp_order' | 'order_change_request' | 'new_whatsapp_message';
+    eventKey: 'new_whatsapp_order' | 'order_change_request' | 'new_whatsapp_message' | 'payment_verification_required' | 'payment_confirmed' | 'payment_failed' | 'payment_exception';
     severity: 'info' | 'attention' | 'urgent';
     title: string;
     body: string;
@@ -1511,14 +1511,21 @@ function NotificationCenterView({
         <View style={[styles.emptyCard, appearance.dark && darkStyles.card]}>
           <Ionicons name="notifications-outline" size={28} color={theme.colors.greenDark} />
           <Text style={[styles.emptyTitle, appearance.dark && darkStyles.titleText]}>You are all caught up</Text>
-          <Text style={[styles.emptyText, appearance.dark && darkStyles.bodyText]}>New WhatsApp orders and customer requests will appear here and can also arrive as device push notifications.</Text>
+          <Text style={[styles.emptyText, appearance.dark && darkStyles.bodyText]}>Actionable WhatsApp orders, customer requests and payment events will appear here and can also arrive as device push notifications.</Text>
         </View>
       ) : (
         <View style={[styles.notificationList, appearance.dark && darkStyles.card]}>
           {notifications.map((notification) => {
-            const icon = notification.eventKey === 'order_change_request'
-              ? 'chatbox-ellipses-outline'
-              : 'logo-whatsapp';
+            const icon =
+              notification.eventKey === 'order_change_request'
+                ? 'chatbox-ellipses-outline'
+                : notification.eventKey === 'payment_confirmed'
+                  ? 'checkmark-circle-outline'
+                  : notification.eventKey === 'payment_verification_required' ||
+                      notification.eventKey === 'payment_failed' ||
+                      notification.eventKey === 'payment_exception'
+                    ? 'card-outline'
+                    : 'logo-whatsapp';
             const iconColor = notification.severity === 'urgent' ? '#B42318' : theme.colors.greenDark;
             return (
               <Pressable
