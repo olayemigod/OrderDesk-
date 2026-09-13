@@ -204,12 +204,14 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
       <View style={styles.menuSection}>
         <Text style={[styles.groupLabel, appearance.dark && darkStyles.bodyText]}>BUSINESS</Text>
         <View style={[styles.menuGroup, appearance.dark && darkStyles.card]}>
-          <MenuRow
-            icon="stats-chart-outline"
-            title="Reports"
-            text="Orders, payments, products and fulfilment performance"
-            onPress={() => setSection('reports')}
-          />
+          {business.role !== 'staff' ? (
+            <MenuRow
+              icon="stats-chart-outline"
+              title="Reports"
+              text="Orders, payments, products and fulfilment performance"
+              onPress={() => setSection('reports')}
+            />
+          ) : null}
           <MenuRow
             icon="business-outline"
             title="Business profile"
