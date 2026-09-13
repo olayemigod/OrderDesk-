@@ -161,3 +161,52 @@ function toNumber(value: number | string): number {
   const parsed = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 }
+
+
+export async function recordOfflineOrderPayment(
+  tenantId: string,
+  orderId: string,
+  paymentMethodId: string,
+  note?: string | null,
+): Promise<void> {
+  await invokeMerchantPaymentOperation({
+    action: 'record_offline',
+    tenantId,
+    orderId,
+    paymentMethodId,
+    note: note?.trim() || null,
+  });
+}
+
+export async function sendMerchantPaymentOptions(
+  tenantId: string,
+  orderId: string,
+): Promise<{ deliveryStatus: string; message: string }> {
+  const data = await invokeMerchantPaymentOperation({
+    action: 'send_options',
+    tenantId,
+    orderId,
+  });
+  const row = data && typeof data === 'object' ? data as Record<string, unknown> : {};
+  return {
+    deliveryStatus: typeof row.deliveryStatus === 'string' ? row.deliveryStatus : 'unknown',
+    message: typeof row.message === 'string' ? row.message : 'Payment options queued.',
+  };
+}
+
+async function invokeMerchantPaymentOperation(body: Record<string, unknown>): Promise<unknown> {
+  const { data, error } = await supabase.functions.invoke('merchant-payment-operations', { body });
+  if (error) {
+    let message = error.message || 'SellerTray payment operation failed.';
+    if (error.context && typeof error.context === 'object' && 'clone' in error.context) {
+      try {
+        const payload = await (error.context as Response).clone().json() as { error?: string };
+        if (payload?.error) message = payload.error;
+      } catch {
+        // Keep the SDK error.
+      }
+    }
+    throw new Error(message);
+  }
+  return data;
+}
