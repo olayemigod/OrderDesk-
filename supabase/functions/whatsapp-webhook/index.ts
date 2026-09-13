@@ -95,6 +95,14 @@ type CustomerSupportOrder = {
 
 type CustomerSupportIntent = 'status' | 'receipt';
 
+type OrderChangeKind = 'add_items' | 'remove_items' | 'change_items' | 'cancel_order';
+
+type OrderChangeTarget = {
+  id: string;
+  public_order_id: string;
+  status: string;
+};
+
 type ReceiptAttachment = {
   mediaType: 'document';
   storageBucket: 'receipts';
@@ -547,6 +555,16 @@ async function processClaimedInboundMessage({
     customerWaId: event.waId,
     sourceMessageId,
     fromPhoneNumberId: event.phoneNumberId,
+    text: event.text,
+  })) {
+    return;
+  }
+
+  if (await maybeRecordCustomerOrderChangeRequest({
+    tenantId,
+    customerId,
+    customerWaId: event.waId,
+    sourceMessageId,
     text: event.text,
   })) {
     return;
@@ -1234,7 +1252,150 @@ function validateParsedOrder(value: unknown): ParsedPayload | null {
   return { items, confidence };
 }
 
+function detectOrderChangeKind(value: string): OrderChangeKind | null {
+  const normalized = value.trim().toLocaleLowerCase().replace(/\s+/g, ' ');
+  const hasOrderId = /\b[A-Z0-9]{3}\/[0-9]{6,}\b/i.test(value);
+  const referencesOrder =
+    hasOrderId ||
+    /\b(?:my\s+)?(?:last|latest|recent|current)\s+order\b/i.test(normalized) ||
+    /\bthis\s+order\b/i.test(normalized);
+
+  if (!referencesOrder) return null;
+
+  if (/\b(cancel|cancelled|canceling|cancelling)\b/i.test(normalized)) return 'cancel_order';
+  if (/\b(add|include|append)\b/i.test(normalized)) return 'add_items';
+  if (/\b(remove|delete|take\s+off|drop)\b/i.test(normalized)) return 'remove_items';
+  if (/\b(change|replace|swap|update|increase|decrease|amend|modify)\b/i.test(normalized)) {
+    return 'change_items';
+  }
+  return null;
+}
+
+function normalizeOrderChangeTextForParser(value: string, kind: OrderChangeKind): string | null {
+  if (kind !== 'add_items') return null;
+
+  let text = value.trim();
+  text = text.replace(
+    /^(?:please\s+)?(?:(?:can|could|would)\s+you\s+)?(?:add|include|append)\s+/i,
+    '',
+  );
+  text = text.replace(
+    /\s+(?:to|into)\s+(?:my\s+)?(?:(?:last|latest|recent|current)\s+)?order(?:\s+[A-Z0-9]{3}\/[0-9]{6,})?.*$/i,
+    '',
+  );
+  text = text.replace(
+    /\s+(?:to|into)\s+order\s+[A-Z0-9]{3}\/[0-9]{6,}.*$/i,
+    '',
+  );
+  text = text.replace(
+    /^(\d+(?:\.\d+)?)\s+(?:pieces?|pcs?|units?)\s+of\s+/i,
+    '$1 ',
+  );
+  const clean = text.trim().replace(/\s+/g, ' ');
+  return clean || null;
+}
+
+async function findOrderChangeTarget({
+  tenantId,
+  customerIds,
+  explicitOrderId,
+}: {
+  tenantId: string;
+  customerIds: string[];
+  explicitOrderId: string | null;
+}): Promise<OrderChangeTarget | null> {
+  if (customerIds.length === 0) return null;
+
+  let path =
+    '/rest/v1/orders?select=id,public_order_id,status' +
+    '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+    '&customer_id=in.(' + customerIds.join(',') + ')';
+
+  if (explicitOrderId) {
+    path += '&public_order_id=eq.' + encodeURIComponent(explicitOrderId);
+  } else {
+    path += '&status=in.(draft,needs_review,accepted,processing,ready)';
+  }
+
+  path += '&order=created_at.desc&limit=1';
+  const rows = await rest<OrderChangeTarget[]>(path);
+  return rows[0] ?? null;
+}
+
+async function maybeRecordCustomerOrderChangeRequest({
+  tenantId,
+  customerId,
+  customerWaId,
+  sourceMessageId,
+  text,
+}: {
+  tenantId: string;
+  customerId: string;
+  customerWaId: string;
+  sourceMessageId: string;
+  text: string;
+}): Promise<boolean> {
+  const kind = detectOrderChangeKind(text);
+  if (!kind) return false;
+
+  const customerIds = await resolveCustomerIdsForWhatsApp(tenantId, customerId, customerWaId);
+  const explicitOrderId = extractPublicOrderId(text);
+  const target = await findOrderChangeTarget({
+    tenantId,
+    customerIds,
+    explicitOrderId,
+  });
+
+  let parsedItems: JsonRecord[] = [];
+  const parserText = normalizeOrderChangeTextForParser(text, kind);
+  if (parserText) {
+    const catalogue = await loadCatalogue(tenantId);
+    const parsed = await parseOrder(parserText, catalogue, tenantId, customerId, sourceMessageId);
+    const enriched = enrichFromCatalogue(parsed.items, catalogue);
+    parsedItems = enriched.map((item) => ({
+      catalog_item_id: item.catalogItemId,
+      item_name: item.canonicalName,
+      original_item_name: item.originalName,
+      quantity: item.quantity,
+      unit_price: item.unitPrice,
+      match_source: item.matchSource,
+      match_confidence: item.matchConfidence,
+    }));
+  }
+
+  await rest(
+    '/rest/v1/customer_order_change_requests?on_conflict=tenant_id,source_inbound_message_id',
+    {
+      method: 'POST',
+      headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
+      body: JSON.stringify({
+        tenant_id: tenantId,
+        order_id: target?.id ?? null,
+        customer_id: customerId,
+        source_inbound_message_id: sourceMessageId,
+        request_kind: kind,
+        request_text: text.slice(0, 2000),
+        parsed_items: parsedItems,
+        status: 'pending',
+      }),
+    },
+  );
+
+  console.info(JSON.stringify({
+    event: 'customer_order_change_request',
+    tenantId,
+    sourceMessageId,
+    requestKind: kind,
+    targetOrderId: target?.id ?? null,
+    targetOrderRef: target?.public_order_id ?? explicitOrderId,
+    parsedItemCount: parsedItems.length,
+  }));
+
+  return true;
+}
+
 function detectCustomerSupportIntent(value: string): CustomerSupportIntent | null {
+  if (detectOrderChangeKind(value)) return null;
   const normalized = value.trim().toLocaleLowerCase().replace(/\s+/g, ' ');
   const hasOrderId = /\b[A-Z0-9]{3}\/[0-9]{6,}\b/i.test(value);
   const onlyOrderId = /^[A-Z0-9]{3}\/[0-9]{6,}$/i.test(value.trim());
