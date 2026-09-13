@@ -199,6 +199,9 @@ async function messagingReadiness(connection: J | null): Promise<J> {
   const phoneNumberId = typeof connection?.phone_number_id === 'string'
     ? connection.phone_number_id
     : '';
+  const tenantId = typeof connection?.tenant_id === 'string'
+    ? connection.tenant_id
+    : '';
   const inboundReady = Boolean(connected && webhookReady && phoneNumberId);
 
   if (!connected) {
@@ -234,8 +237,27 @@ async function messagingReadiness(connection: J | null): Promise<J> {
       credentialReady: true,
       reason: null,
       checkedAt: new Date().toISOString(),
+      readinessEvidence: 'credential_probe',
     };
   } catch (error) {
+    const lastOutboundSuccessAt = tenantId
+      ? await latestSuccessfulOutbound(tenantId, phoneNumberId)
+      : null;
+
+    if (lastOutboundSuccessAt) {
+      return {
+        inboundReady,
+        outboundReady: true,
+        messagingReady: inboundReady,
+        webhookReady: true,
+        credentialReady: true,
+        reason: null,
+        checkedAt: new Date().toISOString(),
+        lastOutboundSuccessAt,
+        readinessEvidence: 'live_delivery',
+      };
+    }
+
     return {
       inboundReady,
       outboundReady: false,
@@ -244,7 +266,26 @@ async function messagingReadiness(connection: J | null): Promise<J> {
       credentialReady: false,
       reason: sanitizeReadinessError(error),
       checkedAt: new Date().toISOString(),
+      readinessEvidence: 'credential_probe_failed',
     };
+  }
+}
+
+async function latestSuccessfulOutbound(tenantId: string, phoneNumberId: string): Promise<string | null> {
+  try {
+    const rows = await rest<Array<{ sent_at: string | null }>>(
+      '/rest/v1/outbound_notifications?select=sent_at' +
+        '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+        '&from_phone_number_id=eq.' + encodeURIComponent(phoneNumberId) +
+        '&delivery_status=eq.sent' +
+        '&sent_at=not.is.null' +
+        '&order=sent_at.desc' +
+        '&limit=1',
+    );
+    const sentAt = rows[0]?.sent_at ?? null;
+    return typeof sentAt === 'string' && sentAt ? sentAt : null;
+  } catch {
+    return null;
   }
 }
 
