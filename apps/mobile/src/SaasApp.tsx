@@ -466,6 +466,7 @@ function HomeView({
     const total = orderTotal(order);
     return total === null ? sum : sum + total;
   }, 0);
+  const paidOnTodayOrders = todayOrders.reduce((sum, order) => sum + Math.max(0, order.amountPaid), 0);
   const awaitingPayment = orders.filter((order) =>
     !['paid'].includes(order.paymentStatus) && !['rejected', 'cancelled'].includes(order.status),
   ).length;
@@ -493,7 +494,7 @@ function HomeView({
             <Ionicons name="wallet-outline" size={23} color={theme.colors.white} />
           </View>
           <View style={styles.heroCopy}>
-            <Text style={styles.heroEyebrow}>SALES TODAY</Text>
+            <Text style={styles.heroEyebrow}>ORDER VALUE TODAY</Text>
             <Text style={styles.heroValue}>{formatMoney(salesToday, business.currency)}</Text>
           </View>
           <Ionicons name="chevron-forward" size={22} color={theme.colors.white} />
@@ -506,7 +507,7 @@ function HomeView({
 
       <View style={styles.homeMetricGrid}>
         <HomeMetric icon="cart-outline" label="Orders today" value={String(todayOrders.length)} hint="Received today" />
-        <HomeMetric icon="cash-outline" label="Sales today" value={formatMoney(salesToday, business.currency)} hint="Known order value" />
+        <HomeMetric icon="cash-outline" label="Paid on today's orders" value={formatMoney(paidOnTodayOrders, business.currency)} hint="Confirmed customer payments" />
         <HomeMetric icon="time-outline" label="Awaiting payment" value={String(awaitingPayment)} hint="Needs payment action" attention={awaitingPayment > 0} />
         <HomeMetric icon="chatbubble-ellipses-outline" label="New enquiries" value={String(newEnquiries)} hint="WhatsApp needs review" attention={newEnquiries > 0} />
       </View>
