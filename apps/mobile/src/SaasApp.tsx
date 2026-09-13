@@ -1382,7 +1382,7 @@ function ConversationsView({
                         style={[styles.paymentChatButton, appearance.dark && darkStyles.outlineButton, paymentSendBusyId !== null && styles.disabled]}
                       >
                         <Text style={[styles.paymentChatButtonText, appearance.dark && darkStyles.greenText]}>
-                          {paymentSendBusyId === order.id ? 'Sending…' : 'Payment'}
+                          {paymentSendBusyId === order.id ? 'Sending…' : 'Send payment'}
                         </Text>
                       </Pressable>
                     ) : null}
