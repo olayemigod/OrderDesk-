@@ -133,7 +133,7 @@ function ReportSection({ title, dark, children }: { title: string; dark: boolean
 
 function Metric({ label, value, attention = false, dark }: { label: string; value: string; attention?: boolean; dark: boolean }) {
   return (
-    <View style={[styles.metric, dark && darkStyles.metric, attention && styles.metricAttention]}>
+    <View style={[styles.metric, dark && darkStyles.metric, attention && styles.metricAttention, dark && attention && darkStyles.warningMetric]}>
       <Text numberOfLines={1} style={[styles.metricValue, dark && darkStyles.titleText]}>{value}</Text>
       <Text style={[styles.metricLabel, dark && darkStyles.bodyText]}>{label}</Text>
     </View>
@@ -197,6 +197,7 @@ const styles = StyleSheet.create({
 const darkStyles = StyleSheet.create({
   card: { backgroundColor: '#102A43', borderColor: '#344054' },
   metric: { backgroundColor: '#162F46' },
+  warningMetric: { backgroundColor: '#3D2A12', borderColor: '#B54708' },
   segment: { backgroundColor: '#162F46' },
   titleText: { color: '#F8FAFC' },
   bodyText: { color: '#D0D5DD' },
