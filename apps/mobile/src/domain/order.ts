@@ -92,6 +92,7 @@ export type OrderItem = {
 
 export type MerchantOrder = {
   id: string;
+  customerId: string;
   publicOrderId: string;
   customerName: string;
   customerPhone: string;
