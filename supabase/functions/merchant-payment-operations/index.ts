@@ -22,13 +22,26 @@ Deno.serve(async (req: Request) => {
   try { body = await req.json() as J; }
   catch { return json({ error: 'Invalid JSON' }, 400); }
 
-  const action = body.action === 'confirm_offline' || body.action === 'verify_gateway'
-    ? String(body.action)
+  const rawAction = typeof body.action === 'string' ? body.action : '';
+  const action = ['confirm_offline','verify_gateway','record_offline','send_options'].includes(rawAction)
+    ? rawAction
     : null;
   const tenantId = uuid(body.tenantId);
   const paymentId = uuid(body.paymentId);
-  if (!action || !tenantId || !paymentId) {
-    return json({ error: 'action, tenantId and paymentId are required' }, 400);
+  const orderId = uuid(body.orderId);
+  const paymentMethodId = uuid(body.paymentMethodId);
+
+  if (!action || !tenantId) {
+    return json({ error: 'action and tenantId are required' }, 400);
+  }
+  if ((action === 'confirm_offline' || action === 'verify_gateway') && !paymentId) {
+    return json({ error: 'paymentId is required' }, 400);
+  }
+  if ((action === 'record_offline' || action === 'send_options') && !orderId) {
+    return json({ error: 'orderId is required' }, 400);
+  }
+  if (action === 'record_offline' && !paymentMethodId) {
+    return json({ error: 'paymentMethodId is required' }, 400);
   }
 
   try {
@@ -43,7 +56,47 @@ Deno.serve(async (req: Request) => {
       return json({ error: 'Too many payment operations. Try again shortly.' }, 429);
     }
 
-    const payment = await loadPayment(tenantId, paymentId);
+    if (action === 'send_options') {
+      const canWrite = await rpc<boolean>('orderdesk_subscription_can_write', {
+        p_tenant_id: tenantId,
+      });
+      if (!canWrite) return json({ error: 'SellerTray subscription is read-only' }, 403);
+      const queued = await queueMerchantPaymentOptions(tenantId, orderId!);
+      return json({ ok: true, orderId, ...queued });
+    }
+
+    if (action === 'record_offline') {
+      const canWrite = await rpc<boolean>('orderdesk_subscription_can_write', {
+        p_tenant_id: tenantId,
+      });
+      if (!canWrite) return json({ error: 'SellerTray subscription is read-only' }, 403);
+
+      const method = await loadPaymentMethod(tenantId, paymentMethodId!);
+      if (!method || method.is_enabled !== true) {
+        return json({ error: 'Payment method is not enabled' }, 409);
+      }
+      if (!['bank_transfer','cash_on_delivery','pay_on_pickup'].includes(String(method.method_type))) {
+        return json({ error: 'Only offline payment methods can be recorded manually' }, 409);
+      }
+
+      const newPaymentId = await rpc<string>('create_sellertray_order_payment_for_method', {
+        p_tenant_id: tenantId,
+        p_order_id: orderId,
+        p_payment_method_id: paymentMethodId,
+        p_status: 'initiated',
+        p_provider_reference: null,
+        p_idempotency_key: 'merchant-record:' + userId + ':' + crypto.randomUUID(),
+        p_customer_claimed_at: null,
+      });
+      await rpc('confirm_sellertray_offline_payment', {
+        p_payment_id: newPaymentId,
+        p_actor_user_id: userId,
+        p_note: optional(body.note, 500),
+      });
+      return json({ ok: true, orderId, paymentId: newPaymentId, status: 'confirmed' });
+    }
+
+    const payment = await loadPayment(tenantId, paymentId!);
     if (!payment) return json({ error: 'Payment not found' }, 404);
 
     if (action === 'confirm_offline') {
@@ -105,6 +158,124 @@ async function isMember(tenantId: string, userId: string): Promise<boolean> {
     '&user_id=eq.' + encodeURIComponent(userId) + '&limit=1',
   );
   return Boolean(rows[0]?.role);
+}
+
+async function loadPaymentMethod(tenantId: string, paymentMethodId: string): Promise<J | null> {
+  const rows = await rest<J[]>(
+    '/rest/v1/merchant_payment_methods?select=id,tenant_id,method_type,display_name,is_enabled' +
+    '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+    '&id=eq.' + encodeURIComponent(paymentMethodId) + '&limit=1',
+  );
+  return rows[0] || null;
+}
+
+async function queueMerchantPaymentOptions(
+  tenantId: string,
+  orderId: string,
+): Promise<{ deliveryStatus: string; message: string }> {
+  const orders = await rest<Array<{
+    id: string;
+    customer_id: string;
+    public_order_id: string;
+    payment_status: string;
+    source: string;
+  }>>(
+    '/rest/v1/orders?select=id,customer_id,public_order_id,payment_status,source' +
+    '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+    '&id=eq.' + encodeURIComponent(orderId) + '&limit=1',
+  );
+  const order = orders[0];
+  if (!order) throw new Error('Order not found');
+  if (order.payment_status === 'paid') throw new Error('SellerTray order is already paid');
+  if (order.source !== 'whatsapp') throw new Error('Payment options can only be sent to a WhatsApp customer');
+
+  const [tenants, customers, invoices, methods, inbound] = await Promise.all([
+    rest<Array<{ name: string; whatsapp_phone_number_id: string | null }>>(
+      '/rest/v1/tenants?select=name,whatsapp_phone_number_id&id=eq.' + encodeURIComponent(tenantId) + '&limit=1',
+    ),
+    rest<Array<{ wa_id: string | null }>>(
+      '/rest/v1/customers?select=wa_id&tenant_id=eq.' + encodeURIComponent(tenantId) +
+      '&id=eq.' + encodeURIComponent(order.customer_id) + '&limit=1',
+    ),
+    rest<Array<{ document_reference: string; amount: number | string; currency: string }>>(
+      '/rest/v1/order_financial_documents?select=document_reference,amount,currency' +
+      '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+      '&order_id=eq.' + encodeURIComponent(orderId) +
+      '&document_type=eq.invoice&status=eq.issued&limit=1',
+    ),
+    rest<Array<{ display_name: string }>>(
+      '/rest/v1/merchant_payment_methods?select=display_name' +
+      '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+      '&is_enabled=eq.true&order=is_default.desc,sort_order.asc,created_at.asc',
+    ),
+    rest<Array<{ received_at: string }>>(
+      '/rest/v1/inbound_messages?select=received_at' +
+      '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+      '&customer_id=eq.' + encodeURIComponent(order.customer_id) +
+      '&order=received_at.desc&limit=1',
+    ),
+  ]);
+
+  const tenant = tenants[0];
+  const customer = customers[0];
+  const invoice = invoices[0];
+  if (!tenant?.whatsapp_phone_number_id || !customer?.wa_id || customer.wa_id.startsWith('manual:')) {
+    throw new Error('Customer does not have an active WhatsApp destination');
+  }
+  if (!invoice) throw new Error('SellerTray order has no payable invoice');
+  if (methods.length === 0) throw new Error('No customer payment method is enabled');
+
+  const methodNames = methods.map((method) => method.display_name).join(', ');
+  const message = [
+    'Payment options — ' + tenant.name,
+    'Order Ref: ' + order.public_order_id,
+    'Invoice: ' + invoice.document_reference,
+    'Total: ' + formatMoney(Number(invoice.amount) || 0, invoice.currency),
+    'Available: ' + methodNames,
+    '',
+    'Reply PAY ' + order.public_order_id + ' to choose how to pay.',
+  ].join('\n');
+
+  const lastInboundAt = inbound[0]?.received_at ? new Date(inbound[0].received_at).getTime() : 0;
+  const windowExpiresAt = lastInboundAt ? new Date(lastInboundAt + 86_400_000) : null;
+  const deliveryStatus = windowExpiresAt && windowExpiresAt.getTime() > Date.now()
+    ? 'pending'
+    : 'template_required';
+
+  await rest('/rest/v1/outbound_notifications', {
+    method: 'POST',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      tenant_id: tenantId,
+      order_id: orderId,
+      customer_id: order.customer_id,
+      event_key: 'payment_options',
+      delivery_status: deliveryStatus,
+      from_phone_number_id: tenant.whatsapp_phone_number_id,
+      to_wa_id: customer.wa_id,
+      message_body: message.slice(0, 2000),
+      conversation_window_expires_at: windowExpiresAt?.toISOString() ?? null,
+    }),
+  });
+
+  return {
+    deliveryStatus,
+    message: deliveryStatus === 'pending'
+      ? 'Payment options queued to the customer on WhatsApp.'
+      : 'Payment options require an approved WhatsApp template because the 24-hour customer-service window is closed.',
+  };
+}
+
+function formatMoney(value: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat('en-NG', {
+      style: 'currency',
+      currency: /^[A-Z]{3}$/.test(currency) ? currency : 'NGN',
+      maximumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    return currency + ' ' + value.toFixed(2);
+  }
 }
 
 async function loadPayment(tenantId: string, paymentId: string): Promise<J | null> {
