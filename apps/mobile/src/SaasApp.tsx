@@ -495,7 +495,7 @@ function HomeView({
         <Text style={[styles.greetingSubtitle, appearance.dark && darkStyles.bodyText]}>Here is what is happening at {business.name} today.</Text>
       </View>
 
-      <Pressable onPress={onOpenOrders} style={({ pressed }) => [styles.homeHeroGreen, pressed && styles.heroPressed]}>
+      <Pressable onPress={() => onOpenOrders('all')} style={({ pressed }) => [styles.homeHeroGreen, pressed && styles.heroPressed]}>
         <View style={styles.heroTopRow}>
           <View style={styles.heroIconWrap}>
             <Ionicons name="wallet-outline" size={23} color={theme.colors.white} />
@@ -576,7 +576,7 @@ function HomeView({
 
       <View style={styles.sectionHeader}>
         <Text style={[styles.sectionTitle, appearance.dark && darkStyles.titleText]}>Recent orders</Text>
-        <Pressable onPress={onOpenOrders}>
+        <Pressable onPress={() => onOpenOrders('all')}>
           <Text style={styles.linkText}>View all</Text>
         </Pressable>
       </View>
@@ -595,7 +595,7 @@ function HomeView({
         productCount={productCount}
         orderCount={orders.length}
         onProducts={onOpenProducts}
-        onOrders={onOpenOrders}
+        onOrders={() => onOpenOrders('attention')}
         onMore={onOpenMore}
       />
 
