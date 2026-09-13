@@ -1261,14 +1261,17 @@ function detectOrderChangeKind(value: string): OrderChangeKind | null {
     /\bthis\s+order\b/i.test(normalized);
 
   const softCancellation =
-    /\b(?:i\s+)?(?:don'?t|do\s+not)\s+want(?:\s+(?:it|am|this|that|the\s+order))?(?:\s+(?:again|anymore))?\b/i.test(normalized) ||
-    /\bno\s+need(?:\s+(?:again|anymore|am|for\s+it))?\b/i.test(normalized) ||
-    /\b(?:don'?t|do\s+not)\s+worry(?:\s+(?:again|about\s+it))?\b/i.test(normalized) ||
-    /\bnever\s*mind\b/i.test(normalized) ||
-    /\bforget\s+(?:it|am|the\s+order)\b/i.test(normalized) ||
-    /\b(?:don'?t|do\s+not|no)\s+send(?:\s+it|\s+am)?\s+again\b/i.test(normalized) ||
-    /\bi\s+no\s+want(?:\s+am)?(?:\s+again)?\b/i.test(normalized) ||
-    /\babeg\s+(?:cancel|leave)\s+am\b/i.test(normalized);
+    /^(?:please\s+|abeg\s+)?(?:i\s+)?(?:don'?t|do\s+not)\s+want(?:\s+(?:it|am|this|that|the\s+order))?(?:\s+(?:again|anymore))?[.!]*$/i.test(normalized) ||
+    /^(?:please\s+|abeg\s+)?no\s+need(?:\s+(?:again|anymore|am|for\s+it))?[.!]*$/i.test(normalized) ||
+    /^(?:please\s+|abeg\s+)?(?:don'?t|do\s+not)\s+worry(?:\s+(?:again|about\s+it))?[.!]*$/i.test(normalized) ||
+    /^(?:please\s+|abeg\s+)?(?:don'?t|do\s+not)\s+bother(?:\s+again)?[.!]*$/i.test(normalized) ||
+    /^(?:please\s+|abeg\s+)?never\s*mind[.!]*$/i.test(normalized) ||
+    /^(?:please\s+|abeg\s+)?forget(?:\s+about)?\s+(?:it|am|the\s+order)[.!]*$/i.test(normalized) ||
+    /^(?:please\s+|abeg\s+)?(?:leave|leave\s+it|leave\s+am|let\s+it\s+be)[.!]*$/i.test(normalized) ||
+    /^(?:please\s+|abeg\s+)?(?:don'?t|do\s+not|no)\s+send(?:\s+it|\s+am)?(?:\s+again)?[.!]*$/i.test(normalized) ||
+    /^(?:please\s+|abeg\s+)?i\s+no\s+(?:want|need)(?:\s+am)?(?:\s+again)?[.!]*$/i.test(normalized) ||
+    /^(?:please\s+|abeg\s+)?(?:i\s+)?(?:changed?\s+my\s+mind|no\s+longer\s+interested|not\s+interested(?:\s+again|\s+anymore)?)[.!]*$/i.test(normalized) ||
+    /^(?:please\s+|abeg\s+)?(?:cancel|cancel\s+am|leave\s+am)[.!]*$/i.test(normalized);
 
   if (softCancellation) return 'cancel_order';
   if (!referencesOrder) return null;
