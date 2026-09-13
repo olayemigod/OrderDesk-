@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { supabase } from '../lib/supabase';
+import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
 type Enrollment = { factorId: string; secret: string };
 
 export function MfaSecurityCard() {
+  const appearance = useSellerTrayAppearance();
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [currentLevel, setCurrentLevel] = useState<string | null>(null);
@@ -92,22 +94,22 @@ export function MfaSecurityCard() {
   }
 
   if (loading) {
-    return <View style={styles.card}><ActivityIndicator /><Text style={styles.helper}>Checking multi-factor authentication…</Text></View>;
+    return <View style={[styles.card, appearance.dark && darkStyles.card]}><ActivityIndicator /><Text style={[styles.helper, appearance.dark && darkStyles.bodyText]}>Checking multi-factor authentication…</Text></View>;
   }
 
   const sessionVerified = currentLevel === 'aal2';
   const factorEnrolled = Boolean(verifiedFactorId) || nextLevel === 'aal2';
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, appearance.dark && darkStyles.card]}>
       <View>
-        <Text style={styles.eyebrow}>ACCOUNT SECURITY</Text>
-        <Text style={styles.title}>Authenticator MFA</Text>
-        <Text style={styles.helper}>Protect sensitive SellerTray access with a six-digit authenticator code. ProcessEdge platform-admin access requires an MFA-verified session.</Text>
+        <Text style={[styles.eyebrow, appearance.dark && darkStyles.bodyText]}>ACCOUNT SECURITY</Text>
+        <Text style={[styles.title, appearance.dark && darkStyles.titleText]}>Authenticator MFA</Text>
+        <Text style={[styles.helper, appearance.dark && darkStyles.bodyText]}>Protect sensitive SellerTray access with a six-digit authenticator code. ProcessEdge platform-admin access requires an MFA-verified session.</Text>
       </View>
 
-      <View style={[styles.statusBox, sessionVerified ? styles.statusGood : styles.statusNeutral]}>
-        <Text style={sessionVerified ? styles.statusGoodText : styles.statusNeutralText}>
+      <View style={[styles.statusBox, sessionVerified ? styles.statusGood : styles.statusNeutral, appearance.dark && (sessionVerified ? darkStyles.successCard : darkStyles.subtleCard)]}>
+        <Text style={[sessionVerified ? styles.statusGoodText : styles.statusNeutralText, appearance.dark && (sessionVerified ? darkStyles.successText : darkStyles.bodyText)]}>
           {sessionVerified ? 'MFA verified for this session' : factorEnrolled ? 'MFA is enrolled — verify this session' : 'MFA is not enrolled'}
         </Text>
       </View>
@@ -119,19 +121,19 @@ export function MfaSecurityCard() {
       ) : null}
 
       {enrollment ? (
-        <View style={styles.enrollmentBox}>
-          <Text style={styles.stepTitle}>1. Add SellerTray to your authenticator app</Text>
-          <Text style={styles.helper}>Use this setup secret for manual entry:</Text>
-          <Text selectable style={styles.secret}>{enrollment.secret}</Text>
-          <Text style={styles.stepTitle}>2. Enter the current six-digit code</Text>
+        <View style={[styles.enrollmentBox, appearance.dark && darkStyles.subtleCard]}>
+          <Text style={[styles.stepTitle, appearance.dark && darkStyles.titleText]}>1. Add SellerTray to your authenticator app</Text>
+          <Text style={[styles.helper, appearance.dark && darkStyles.bodyText]}>Use this setup secret for manual entry:</Text>
+          <Text selectable style={[styles.secret, appearance.dark && darkStyles.titleText]}>{enrollment.secret}</Text>
+          <Text style={[styles.stepTitle, appearance.dark && darkStyles.titleText]}>2. Enter the current six-digit code</Text>
         </View>
       ) : factorEnrolled && !sessionVerified ? (
-        <Text style={styles.helper}>Enter the current code from your enrolled authenticator to unlock high-assurance actions.</Text>
+        <Text style={[styles.helper, appearance.dark && darkStyles.bodyText]}>Enter the current code from your enrolled authenticator to unlock high-assurance actions.</Text>
       ) : null}
 
       {enrollment || (factorEnrolled && !sessionVerified) ? (
         <>
-          <TextInput value={code} onChangeText={(value) => setCode(value.replace(/\D/g, '').slice(0, 6))} keyboardType="number-pad" maxLength={6} placeholder="123456" autoComplete="one-time-code" style={styles.codeInput} />
+          <TextInput value={code} onChangeText={(value) => setCode(value.replace(/\D/g, '').slice(0, 6))} keyboardType="number-pad" maxLength={6} placeholder="123456" autoComplete="one-time-code" placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'} style={[styles.codeInput, appearance.dark && darkStyles.input]} />
           <Pressable disabled={busy} onPress={() => void verify()} style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed, busy && styles.disabled]}>
             <Text style={styles.primaryText}>{busy ? 'Verifying…' : 'Verify MFA code'}</Text>
           </Pressable>
@@ -140,30 +142,40 @@ export function MfaSecurityCard() {
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
-      <Text style={styles.policy}>Keep access to your authenticator device. SellerTray does not persist the authenticator setup secret after this screen is dismissed.</Text>
+      <Text style={[styles.policy, appearance.dark && darkStyles.bodyText]}>Keep access to your authenticator device. SellerTray does not persist the authenticator setup secret after this screen is dismissed.</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 18, padding: 16, gap: 12 },
-  eyebrow: { color: '#667085', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
+  eyebrow: { color: '#667085', fontSize: 12, fontWeight: '900', letterSpacing: 1.1 },
   title: { color: '#102A43', fontSize: 17, fontWeight: '900', marginTop: 3 },
-  helper: { color: '#667085', fontSize: 10, lineHeight: 16, marginTop: 3 },
+  helper: { color: '#667085', fontSize: 13, lineHeight: 20, marginTop: 3 },
   statusBox: { borderRadius: 11, padding: 10 },
   statusGood: { backgroundColor: '#ECFDF3' },
   statusNeutral: { backgroundColor: '#F2F4F7' },
-  statusGoodText: { color: '#027A48', fontSize: 10, fontWeight: '900' },
-  statusNeutralText: { color: '#475467', fontSize: 10, fontWeight: '900' },
+  statusGoodText: { color: '#027A48', fontSize: 13, fontWeight: '900' },
+  statusNeutralText: { color: '#475467', fontSize: 13, fontWeight: '900' },
   enrollmentBox: { backgroundColor: '#F9FAFB', borderRadius: 12, padding: 11, gap: 7 },
-  stepTitle: { color: '#344054', fontSize: 10, fontWeight: '900' },
+  stepTitle: { color: '#344054', fontSize: 13, fontWeight: '900' },
   secret: { color: '#102A43', fontSize: 13, fontWeight: '900', letterSpacing: 1, paddingVertical: 6 },
   codeInput: { minHeight: 48, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 11, paddingHorizontal: 14, fontSize: 20, letterSpacing: 5, color: '#102A43', backgroundColor: '#FFFFFF' },
   primaryButton: { minHeight: 44, borderRadius: 11, backgroundColor: '#12B76A', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
-  primaryText: { color: '#FFFFFF', fontSize: 11, fontWeight: '900' },
+  primaryText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
   error: { color: '#B42318', fontSize: 10, lineHeight: 15 },
   notice: { color: '#027A48', fontSize: 10, fontWeight: '800', lineHeight: 15 },
-  policy: { color: '#667085', fontSize: 9, lineHeight: 14 },
+  policy: { color: '#667085', fontSize: 12, lineHeight: 18 },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.5 },
+});
+
+const darkStyles = StyleSheet.create({
+  card: { backgroundColor: '#102A43', borderColor: '#344054' },
+  subtleCard: { backgroundColor: '#162F46' },
+  successCard: { backgroundColor: '#12372C' },
+  titleText: { color: '#F8FAFC' },
+  bodyText: { color: '#D0D5DD' },
+  successText: { color: '#ABEFC6' },
+  input: { backgroundColor: '#F8FAFC', borderColor: '#98A2B3', color: '#102A43' },
 });
