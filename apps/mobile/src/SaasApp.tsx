@@ -1095,16 +1095,20 @@ function DetailSummary({
 function ConversationsView({
   orders,
   currency,
+  unreadByCustomer,
+  onMarkConversationRead,
   onOpenOrder,
 }: {
   orders: MerchantOrder[];
   currency: string;
+  unreadByCustomer: Map<string, { unreadCount: number; latestReceivedAt: string | null }>;
+  onMarkConversationRead: (customerId: string, through: string | null) => Promise<void>;
   onOpenOrder: (orderId: string) => void;
 }) {
   const appearance = useSellerTrayAppearance();
   const [query, setQuery] = useState('');
-  const [selectedPhone, setSelectedPhone] = useState('');
-  const [conversationFilter, setConversationFilter] = useState<'all' | 'new' | 'payment' | 'active'>('all');
+  const [selectedKey, setSelectedKey] = useState('');
+  const [conversationFilter, setConversationFilter] = useState<'all' | 'unread' | 'new' | 'payment' | 'active'>('all');
   const [showConversationFilters, setShowConversationFilters] = useState(false);
 
   const conversations = useMemo(() => {
@@ -1113,23 +1117,34 @@ function ConversationsView({
       .slice()
       .sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime());
 
-    const byPhone = new Map<string, MerchantOrder[]>();
+    const grouped = new Map<string, MerchantOrder[]>();
     whatsappOrders.forEach((order) => {
-      const current = byPhone.get(order.customerPhone) ?? [];
+      const key = order.customerId || order.customerPhone;
+      const current = grouped.get(key) ?? [];
       current.push(order);
-      byPhone.set(order.customerPhone, current);
+      grouped.set(key, current);
     });
 
-    return Array.from(byPhone.entries()).map(([phone, customerOrders]) => ({
-      phone,
-      name: customerOrders[0]?.customerName ?? phone,
-      latest: customerOrders[0],
-      orders: customerOrders,
-    }));
-  }, [orders]);
+    return Array.from(grouped.entries()).map(([key, customerOrders]) => {
+      const latest = customerOrders[0];
+      const customerId = latest?.customerId ?? '';
+      const unread = customerId ? unreadByCustomer.get(customerId) : undefined;
+      return {
+        key,
+        customerId,
+        phone: latest?.customerPhone ?? '',
+        name: latest?.customerName ?? latest?.customerPhone ?? 'WhatsApp customer',
+        latest,
+        orders: customerOrders,
+        unreadCount: unread?.unreadCount ?? 0,
+        latestUnreadAt: unread?.latestReceivedAt ?? latest?.receivedAt ?? null,
+      };
+    });
+  }, [orders, unreadByCustomer]);
 
   const conversationCounts = {
     all: conversations.length,
+    unread: conversations.filter((conversation) => conversation.unreadCount > 0).length,
     new: conversations.filter((conversation) =>
       conversation.orders.some((order) => order.status === 'needs_review' || order.status === 'draft'),
     ).length,
@@ -1148,6 +1163,7 @@ function ConversationsView({
   const visible = conversations.filter((conversation) => {
     const matchesFilter =
       conversationFilter === 'all' ||
+      (conversationFilter === 'unread' && conversation.unreadCount > 0) ||
       (conversationFilter === 'new' && conversation.orders.some((order) => order.status === 'needs_review' || order.status === 'draft')) ||
       (conversationFilter === 'payment' && conversation.orders.some((order) =>
         ['unpaid', 'pending', 'verification_required', 'payment_issue'].includes(order.paymentStatus) &&
@@ -1163,12 +1179,12 @@ function ConversationsView({
       .includes(normalized);
   });
 
-  const selected = conversations.find((conversation) => conversation.phone === selectedPhone);
+  const selected = conversations.find((conversation) => conversation.key === selectedKey);
 
   if (selected) {
     return (
       <View style={styles.sectionStack}>
-        <Pressable onPress={() => setSelectedPhone('')} style={styles.backToListButton}>
+        <Pressable onPress={() => setSelectedKey('')} style={styles.backToListButton}>
           <Text style={[styles.backToListText, appearance.dark && darkStyles.greenText]}>← Conversations</Text>
         </Pressable>
 
@@ -1219,6 +1235,8 @@ function ConversationsView({
     );
   }
 
+  const visibleUnreadMessages = visible.reduce((sum, conversation) => sum + conversation.unreadCount, 0);
+
   return (
     <View style={styles.sectionStack}>
       <View>
@@ -1229,6 +1247,7 @@ function ConversationsView({
 
       <View style={styles.conversationStatsGrid}>
         <ConversationStat icon="chatbubbles-outline" label="All" value={conversationCounts.all} active={conversationFilter === 'all'} onPress={() => setConversationFilter('all')} />
+        <ConversationStat icon="mail-unread-outline" label="Unread" value={conversationCounts.unread} active={conversationFilter === 'unread'} onPress={() => setConversationFilter('unread')} />
         <ConversationStat icon="sparkles-outline" label="New orders" value={conversationCounts.new} active={conversationFilter === 'new'} onPress={() => setConversationFilter('new')} />
         <ConversationStat icon="card-outline" label="Payment" value={conversationCounts.payment} active={conversationFilter === 'payment'} onPress={() => setConversationFilter('payment')} />
         <ConversationStat icon="cube-outline" label="Active" value={conversationCounts.active} active={conversationFilter === 'active'} onPress={() => setConversationFilter('active')} />
@@ -1260,6 +1279,7 @@ function ConversationsView({
           <Text style={[styles.filterPanelTitle, appearance.dark && darkStyles.titleText]}>Inbox filters</Text>
           <View style={styles.filterRow}>
             <SimpleFilter label="All" active={conversationFilter === 'all'} onPress={() => setConversationFilter('all')} />
+            <SimpleFilter label="Unread" active={conversationFilter === 'unread'} onPress={() => setConversationFilter('unread')} />
             <SimpleFilter label="New orders" active={conversationFilter === 'new'} onPress={() => setConversationFilter('new')} />
             <SimpleFilter label="Payment pending" active={conversationFilter === 'payment'} onPress={() => setConversationFilter('payment')} />
             <SimpleFilter label="In progress" active={conversationFilter === 'active'} onPress={() => setConversationFilter('active')} />
@@ -1272,23 +1292,28 @@ function ConversationsView({
           <Ionicons name="logo-whatsapp" size={24} color={theme.colors.white} />
         </View>
         <View style={styles.conversationCopy}>
-          <Text style={styles.inboxStatValue}>{visible.length}</Text>
-          <Text style={styles.inboxStatTitle}>Conversations in this view</Text>
-          <Text style={styles.inboxStatText}>Built from connected WhatsApp order activity.</Text>
+          <Text style={styles.inboxStatValue}>{visibleUnreadMessages}</Text>
+          <Text style={styles.inboxStatTitle}>Unread messages in this view</Text>
+          <Text style={styles.inboxStatText}>{visible.length} conversation{visible.length === 1 ? '' : 's'} shown.</Text>
         </View>
       </View>
 
       {visible.length === 0 ? (
         <View style={[styles.emptyCard, appearance.dark && darkStyles.card]}>
-          <Text style={[styles.emptyTitle, appearance.dark && darkStyles.titleText]}>No conversations yet</Text>
-          <Text style={[styles.emptyText, appearance.dark && darkStyles.bodyText]}>WhatsApp customers will appear here after SellerTray captures supported order messages.</Text>
+          <Text style={[styles.emptyTitle, appearance.dark && darkStyles.titleText]}>No conversations here</Text>
+          <Text style={[styles.emptyText, appearance.dark && darkStyles.bodyText]}>WhatsApp customers will appear here after SellerTray captures supported messages.</Text>
         </View>
       ) : (
         <View style={[styles.conversationList, appearance.dark && darkStyles.card]}>
           {visible.map((conversation) => (
             <Pressable
-              key={conversation.phone}
-              onPress={() => setSelectedPhone(conversation.phone)}
+              key={conversation.key}
+              onPress={() => {
+                if (conversation.customerId) {
+                  void onMarkConversationRead(conversation.customerId, conversation.latestUnreadAt);
+                }
+                setSelectedKey(conversation.key);
+              }}
               style={[styles.conversationRow, appearance.dark && darkStyles.rowBorder]}
             >
               <View style={styles.customerAvatarSmall}>
@@ -1302,13 +1327,22 @@ function ConversationsView({
                   </Text>
                 </View>
                 <Text numberOfLines={1} style={[styles.conversationPreview, appearance.dark && darkStyles.bodyText]}>
-                  {conversation.latest?.customerMessage || 'Order message captured'}
+                  {conversation.latest?.customerMessage || 'WhatsApp activity captured'}
                 </Text>
                 <Text style={styles.conversationMeta}>
                   {conversation.orders.length} linked order{conversation.orders.length === 1 ? '' : 's'}
                 </Text>
               </View>
-              <Text style={styles.conversationChevron}>›</Text>
+              <View style={styles.conversationRowRight}>
+                {conversation.unreadCount > 0 ? (
+                  <View style={styles.conversationUnreadBadge}>
+                    <Text style={styles.conversationUnreadText}>
+                      {conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}
+                    </Text>
+                  </View>
+                ) : null}
+                <Text style={styles.conversationChevron}>›</Text>
+              </View>
             </Pressable>
           ))}
         </View>
@@ -1318,53 +1352,31 @@ function ConversationsView({
 }
 
 function NotificationCenterView({
-  orders,
+  notifications,
+  loading,
   syncError,
-  onOpenOrder,
+  onMarkAllRead,
+  onOpenNotification,
   onBack,
 }: {
-  orders: MerchantOrder[];
+  notifications: Array<{
+    id: string;
+    eventKey: 'new_whatsapp_order' | 'order_change_request';
+    severity: 'info' | 'attention' | 'urgent';
+    title: string;
+    body: string;
+    orderId: string | null;
+    isRead: boolean;
+    createdAt: string;
+  }>;
+  loading: boolean;
   syncError: string | null;
-  onOpenOrder: (orderId: string) => void;
+  onMarkAllRead: () => void;
+  onOpenNotification: (notificationId: string, orderId: string | null) => void;
   onBack: () => void;
 }) {
   const appearance = useSellerTrayAppearance();
-  const alerts = orders
-    .flatMap((order) => {
-      const rows: Array<{ key: string; title: string; text: string; icon: string; tone: 'warning' | 'info' | 'success'; orderId: string }> = [];
-      if (order.status === 'needs_review' || order.status === 'draft') {
-        rows.push({
-          key: order.id + '-review',
-          title: 'Order needs review',
-          text: `${order.publicOrderId} · ${order.customerName}`,
-          icon: 'alert-circle-outline',
-          tone: 'warning',
-          orderId: order.id,
-        });
-      }
-      if (['pending', 'verification_required', 'payment_issue'].includes(order.paymentStatus)) {
-        rows.push({
-          key: order.id + '-payment',
-          title: order.paymentStatus === 'payment_issue' ? 'Payment needs attention' : 'Payment update',
-          text: `${order.publicOrderId} · ${formatPaymentStatus(order.paymentStatus)}`,
-          icon: 'card-outline',
-          tone: 'warning',
-          orderId: order.id,
-        });
-      }
-      if (order.status === 'ready') {
-        rows.push({
-          key: order.id + '-ready',
-          title: 'Order ready',
-          text: `${order.publicOrderId} is ready for pickup or delivery.`,
-          icon: 'checkmark-circle-outline',
-          tone: 'success',
-          orderId: order.id,
-        });
-      }
-      return rows;
-    })
-    .slice(0, 30);
+  const unreadCount = notifications.filter((notification) => !notification.isRead).length;
 
   return (
     <View style={styles.sectionStack}>
@@ -1374,43 +1386,78 @@ function NotificationCenterView({
       <View>
         <Text style={[styles.sectionEyebrow, appearance.dark && darkStyles.bodyText]}>ACTIVITY CENTER</Text>
         <Text style={[styles.pageTitle, appearance.dark && darkStyles.titleText, appearance.textSize === 'large' && styles.pageTitleLarge]}>Notifications</Text>
-        <Text style={[styles.pageSubtitle, appearance.dark && darkStyles.bodyText]}>Orders, payments and important SellerTray activity that needs your attention.</Text>
+        <Text style={[styles.pageSubtitle, appearance.dark && darkStyles.bodyText]}>Unread merchant alerts stay synchronized across SellerTray sessions and devices.</Text>
+      </View>
+
+      <View style={styles.notificationSummaryRow}>
+        <View style={[styles.notificationUnreadSummary, appearance.dark && darkStyles.card]}>
+          <Ionicons name="notifications-outline" size={20} color={theme.colors.greenDark} />
+          <Text style={[styles.notificationUnreadSummaryValue, appearance.dark && darkStyles.titleText]}>{unreadCount}</Text>
+          <Text style={[styles.notificationUnreadSummaryLabel, appearance.dark && darkStyles.bodyText]}>unread</Text>
+        </View>
+        {unreadCount > 0 ? (
+          <Pressable onPress={onMarkAllRead} style={styles.markAllReadButton}>
+            <Text style={styles.markAllReadText}>Mark all read</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {syncError ? (
         <View style={[styles.notificationSyncCard, appearance.dark && darkStyles.errorCard]}>
           <Ionicons name="cloud-offline-outline" size={22} color="#B42318" />
           <View style={styles.conversationCopy}>
-            <Text style={styles.notificationAlertTitle}>Workspace sync problem</Text>
-            <Text style={styles.notificationAlertText}>{syncError}</Text>
+            <Text style={[styles.notificationAlertTitle, appearance.dark && darkStyles.titleText]}>Workspace sync problem</Text>
+            <Text style={[styles.notificationAlertText, appearance.dark && darkStyles.bodyText]}>{syncError}</Text>
           </View>
         </View>
       ) : null}
 
-      {alerts.length === 0 ? (
-        <View style={styles.emptyCard}>
+      {loading && notifications.length === 0 ? (
+        <View style={[styles.emptyCard, appearance.dark && darkStyles.card]}>
+          <ActivityIndicator />
+          <Text style={[styles.emptyText, appearance.dark && darkStyles.bodyText]}>Loading notifications…</Text>
+        </View>
+      ) : null}
+
+      {!loading && notifications.length === 0 ? (
+        <View style={[styles.emptyCard, appearance.dark && darkStyles.card]}>
           <Ionicons name="notifications-outline" size={28} color={theme.colors.greenDark} />
-          <Text style={styles.emptyTitle}>You are all caught up</Text>
-          <Text style={styles.emptyText}>New order, payment and fulfilment alerts will appear here.</Text>
+          <Text style={[styles.emptyTitle, appearance.dark && darkStyles.titleText]}>You are all caught up</Text>
+          <Text style={[styles.emptyText, appearance.dark && darkStyles.bodyText]}>New WhatsApp orders and customer requests will appear here and can also arrive as device push notifications.</Text>
         </View>
       ) : (
         <View style={[styles.notificationList, appearance.dark && darkStyles.card]}>
-          {alerts.map((alert) => (
-            <Pressable key={alert.key} onPress={() => onOpenOrder(alert.orderId)} style={[styles.notificationAlertRow, appearance.dark && darkStyles.rowBorder]}>
-              <View style={[
-                styles.notificationAlertIcon,
-                alert.tone === 'warning' && styles.notificationAlertIconWarning,
-                alert.tone === 'success' && styles.notificationAlertIconSuccess,
-              ]}>
-                <Ionicons name={alert.icon as never} size={20} color={alert.tone === 'warning' ? '#B54708' : alert.tone === 'success' ? theme.colors.greenDark : theme.colors.navy} />
-              </View>
-              <View style={styles.conversationCopy}>
-                <Text style={[styles.notificationAlertTitle, appearance.dark && darkStyles.titleText]}>{alert.title}</Text>
-                <Text style={[styles.notificationAlertText, appearance.dark && darkStyles.bodyText]}>{alert.text}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
-            </Pressable>
-          ))}
+          {notifications.map((notification) => {
+            const icon = notification.eventKey === 'order_change_request'
+              ? 'chatbox-ellipses-outline'
+              : 'logo-whatsapp';
+            const iconColor = notification.severity === 'urgent' ? '#B42318' : theme.colors.greenDark;
+            return (
+              <Pressable
+                key={notification.id}
+                onPress={() => onOpenNotification(notification.id, notification.orderId)}
+                style={[
+                  styles.notificationAlertRow,
+                  appearance.dark && darkStyles.rowBorder,
+                  !notification.isRead && styles.notificationUnreadRow,
+                  !notification.isRead && appearance.dark && darkStyles.unreadRow,
+                ]}
+              >
+                <View style={[styles.notificationAlertIcon, !notification.isRead && styles.notificationAlertIconUnread]}>
+                  <Ionicons name={icon as never} size={20} color={iconColor} />
+                </View>
+                <View style={styles.conversationCopy}>
+                  <View style={styles.notificationTitleRow}>
+                    <Text style={[styles.notificationAlertTitle, appearance.dark && darkStyles.titleText]}>{notification.title}</Text>
+                    {!notification.isRead ? <View style={styles.notificationUnreadDot} /> : null}
+                  </View>
+                  <Text style={[styles.notificationAlertText, appearance.dark && darkStyles.bodyText]}>{notification.body}</Text>
+                  <Text style={styles.notificationAlertTime}>{formatReceivedAt(notification.createdAt)}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
+              </Pressable>
+            );
+          })}
         </View>
       )}
     </View>
