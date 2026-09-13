@@ -51,97 +51,45 @@ export type InitialBusinessInput = {
   businessType: string | null;
 };
 
-type MembershipRow = {
+type BusinessMembershipRow = {
+  id: string;
+  name: string;
+  slug: string;
+  merchant_code: string;
   role: MerchantRole;
-  tenants:
-    | {
-        id: string;
-        name: string;
-        slug: string;
-        merchant_code: string;
-        business_email: string | null;
-        business_phone: string | null;
-        business_type: string | null;
-        logo_url: string | null;
-        currency: string;
-        timezone: string;
-        onboarding_status: OnboardingStatus;
-        subscription_status: SubscriptionStatus;
-        whatsapp_connection_status: WhatsAppConnectionStatus;
-      }
-    | Array<{
-        id: string;
-        name: string;
-        slug: string;
-        merchant_code: string;
-        business_email: string | null;
-        business_phone: string | null;
-        business_type: string | null;
-        logo_url: string | null;
-        currency: string;
-        timezone: string;
-        onboarding_status: OnboardingStatus;
-        subscription_status: SubscriptionStatus;
-        whatsapp_connection_status: WhatsAppConnectionStatus;
-      }>
-    | null;
+  business_email: string | null;
+  business_phone: string | null;
+  business_type: string | null;
+  logo_url: string | null;
+  currency: string;
+  timezone: string;
+  onboarding_status: OnboardingStatus;
+  subscription_status: SubscriptionStatus;
+  whatsapp_connection_status: WhatsAppConnectionStatus;
+  membership_created_at: string;
 };
 
-function one<T>(value: T | T[] | null): T | null {
-  if (Array.isArray(value)) return value[0] ?? null;
-  return value;
-}
-
 export async function loadBusinesses(): Promise<MerchantBusiness[]> {
-  const { data, error } = await supabase
-    .from('tenant_members')
-    .select(`
-      role,
-      created_at,
-      tenants!tenant_members_tenant_id_fkey(
-        id,
-        name,
-        slug,
-        merchant_code,
-        business_email,
-        business_phone,
-        business_type,
-        logo_url,
-        currency,
-        timezone,
-        onboarding_status,
-        subscription_status,
-        whatsapp_connection_status
-      )
-    `)
-    .order('created_at', { ascending: true });
-
+  const { data, error } = await supabase.rpc('sellertray_list_businesses_for_current_user');
   if (error) throw error;
 
-  const businesses = ((data ?? []) as unknown as MembershipRow[])
-    .map((membership) => {
-      const tenant = one(membership.tenants);
-      if (!tenant) return null;
-
-      return {
-        id: tenant.id,
-        name: tenant.name,
-        slug: tenant.slug,
-        merchantCode: tenant.merchant_code,
-        role: membership.role,
-        businessEmail: tenant.business_email,
-        businessPhone: tenant.business_phone,
-        businessType: tenant.business_type,
-        logoUrl: tenant.logo_url,
-        currency: tenant.currency,
-        timezone: tenant.timezone,
-        onboardingStatus: tenant.onboarding_status,
-        subscriptionStatus: tenant.subscription_status,
-        whatsappConnectionStatus: tenant.whatsapp_connection_status,
-        whatsappReadiness: fallbackWhatsAppReadiness(tenant.whatsapp_connection_status),
-      } satisfies MerchantBusiness;
-    })
-    .filter((business): business is MerchantBusiness => business !== null);
+  const businesses = ((data ?? []) as unknown as BusinessMembershipRow[]).map((row) => ({
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    merchantCode: row.merchant_code,
+    role: row.role,
+    businessEmail: row.business_email,
+    businessPhone: row.business_phone,
+    businessType: row.business_type,
+    logoUrl: row.logo_url,
+    currency: row.currency,
+    timezone: row.timezone,
+    onboardingStatus: row.onboarding_status,
+    subscriptionStatus: row.subscription_status,
+    whatsappConnectionStatus: row.whatsapp_connection_status,
+    whatsappReadiness: fallbackWhatsAppReadiness(row.whatsapp_connection_status),
+  } satisfies MerchantBusiness));
 
   const readiness = await Promise.all(
     businesses.map(async (business) => {
