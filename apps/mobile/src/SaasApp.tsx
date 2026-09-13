@@ -362,7 +362,7 @@ function PinnedBrandHeader({
         <Ionicons name="notifications-outline" size={24} color={appearance.dark ? theme.colors.mint : theme.colors.navy} />
         {notificationCount > 0 ? (
           <View style={styles.notificationBadge}>
-            <Text style={styles.notificationBadgeText}>{Math.min(notificationCount, 99)}</Text>
+            <Text style={styles.notificationBadgeText}>{notificationCount > 99 ? '99+' : notificationCount}</Text>
           </View>
         ) : null}
       </Pressable>
@@ -1537,7 +1537,7 @@ function NavButton({
     <Pressable onPress={onPress} style={[styles.navButton, appearance.dark && darkStyles.navButton, active && styles.navButtonActive, active && appearance.dark && darkStyles.navButtonActive]}>
       <View style={styles.navIconWrap}>
         <Ionicons name={icon as never} size={20} color={active ? theme.colors.green : appearance.dark ? '#D0D5DD' : theme.colors.muted} />
-        {count > 0 ? <Text style={styles.navCount}>{count}</Text> : null}
+        {count > 0 ? <Text style={styles.navCount}>{count > 99 ? '99+' : count}</Text> : null}
       </View>
       <Text numberOfLines={1} style={[styles.navText, appearance.dark && darkStyles.bodyText, active && styles.navTextActive]}>{label}</Text>
     </Pressable>
