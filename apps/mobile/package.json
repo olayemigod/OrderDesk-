@@ -24,7 +24,9 @@
     "react-dom": "19.2.3",
     "react-native": "0.86.2",
     "react-native-url-polyfill": "4.0.0",
-    "react-native-web": "~0.21.0"
+    "react-native-web": "~0.21.0",
+    "expo-constants": "57.0.17",
+    "expo-notifications": "57.0.18"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
