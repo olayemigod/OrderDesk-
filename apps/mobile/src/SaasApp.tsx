@@ -1470,7 +1470,7 @@ function NotificationCenterView({
 }: {
   notifications: Array<{
     id: string;
-    eventKey: 'new_whatsapp_order' | 'order_change_request' | 'new_whatsapp_message' | 'payment_verification_required' | 'payment_confirmed' | 'payment_failed' | 'payment_exception';
+    eventKey: 'new_whatsapp_order' | 'order_change_request' | 'new_whatsapp_message' | 'payment_verification_required' | 'payment_confirmed' | 'payment_failed' | 'payment_exception' | 'payment_gate_blocked';
     severity: 'info' | 'attention' | 'urgent';
     title: string;
     body: string;
@@ -1544,7 +1544,8 @@ function NotificationCenterView({
                   ? 'checkmark-circle-outline'
                   : notification.eventKey === 'payment_verification_required' ||
                       notification.eventKey === 'payment_failed' ||
-                      notification.eventKey === 'payment_exception'
+                      notification.eventKey === 'payment_exception' ||
+                      notification.eventKey === 'payment_gate_blocked'
                     ? 'card-outline'
                     : 'logo-whatsapp';
             const iconColor = notification.severity === 'urgent' ? '#B42318' : theme.colors.greenDark;
