@@ -34,6 +34,7 @@ import { useCatalogue } from './hooks/useCatalogue';
 import { useConversationUnreadCounts } from './hooks/useConversationUnreadCounts';
 import { useMerchantNotifications } from './hooks/useMerchantNotifications';
 import { useOrders } from './hooks/useOrders';
+import { useOrderGateStatus } from './hooks/useOrderGateStatus';
 import { usePushNotifications } from './hooks/usePushNotifications';
 import { supabase } from './lib/supabase';
 import { sellerTrayTheme as theme } from './theme/sellerTrayTheme';
@@ -1082,6 +1083,21 @@ function OrderDetail({
 }) {
   const appearance = useSellerTrayAppearance();
   const total = orderTotal(order);
+  const gateRefreshKey = [
+    order.status,
+    order.paymentStatus,
+    order.amountPaid,
+    order.fulfillmentStatus,
+    order.fulfillmentMethod ?? '',
+  ].join(':');
+  const orderGates = useOrderGateStatus(order.id, gateRefreshKey);
+  const unavailableGate = {
+    allowed: false,
+    reason: orderGates.loading
+      ? 'Checking merchant payment policy…'
+      : orderGates.error ?? 'SellerTray could not verify the merchant payment policy.',
+    paymentMethod: null,
+  };
   const editable =
     order.status === 'needs_review' ||
     order.status === 'draft' ||
@@ -1150,12 +1166,16 @@ function OrderDetail({
         onStart={onStart}
         onReady={onReady}
         onCancel={onCancel}
+        processingGate={orderGates.status?.processing ?? unavailableGate}
+        readyGate={orderGates.status?.ready ?? unavailableGate}
       />
 
       <OrderFulfillmentPanel
         order={order}
         onStartDelivery={onStartDelivery}
         onCompleteFulfillment={onCompleteFulfillment}
+        dispatchGate={orderGates.status?.dispatch ?? unavailableGate}
+        completeGate={orderGates.status?.complete ?? unavailableGate}
       />
 
       <OrderStatusHistory order={order} />
