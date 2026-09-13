@@ -42,7 +42,7 @@ export function useBusinesses() {
       if (nextActiveId) await AsyncStorage.setItem(ACTIVE_BUSINESS_KEY, nextActiveId);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to load your SellerTray businesses.');
+      setError(errorMessage(err, 'Unable to load your SellerTray businesses.'));
     } finally {
       setLoading(false);
     }
@@ -71,7 +71,7 @@ export function useBusinesses() {
         setError(null);
         return businessId;
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unable to create the business workspace.');
+        setError(errorMessage(err, 'Unable to create the business workspace.'));
         throw err;
       }
     },
@@ -85,7 +85,7 @@ export function useBusinesses() {
         await refresh();
         setError(null);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unable to update the business profile.');
+        setError(errorMessage(err, 'Unable to update the business profile.'));
         throw err;
       }
     },
@@ -102,4 +102,13 @@ export function useBusinesses() {
     createBusiness,
     saveProfile,
   };
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim()) return message;
+  }
+  return fallback;
 }
