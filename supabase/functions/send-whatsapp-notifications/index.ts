@@ -31,13 +31,36 @@ Deno.serve(withObservability('send-whatsapp-notifications', async (request) => {
     return json({ error: 'Method not allowed' }, 405);
   }
 
-  if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !WORKER_TOKEN || !META_GRAPH_API_VERSION) {
-    console.error('WhatsApp notification worker is not activated: required server secrets are missing.');
+  if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !META_GRAPH_API_VERSION) {
+    console.error('WhatsApp notification worker is not activated: required server configuration is missing.');
     return json({ error: 'Notification worker not configured' }, 503);
   }
 
   const authorization = request.headers.get('authorization') ?? '';
-  if (!constantTimeEqual(authorization, `Bearer ${WORKER_TOKEN}`)) {
+  let authorized = Boolean(WORKER_TOKEN) &&
+    constantTimeEqual(authorization, `Bearer ${WORKER_TOKEN}`);
+
+  if (!authorized) {
+    const bodyRead = await readRequestTextLimited(request, 8192);
+    if (!bodyRead.ok) return json({ error: 'Payload too large' }, 413);
+
+    let invocationNonce: string | null = null;
+    try {
+      const payload = bodyRead.text ? JSON.parse(bodyRead.text) as JsonRecord : {};
+      invocationNonce = typeof payload.invocationNonce === 'string' &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload.invocationNonce)
+        ? payload.invocationNonce
+        : null;
+    } catch {
+      invocationNonce = null;
+    }
+
+    authorized = invocationNonce
+      ? await claimDatabaseInvocation(invocationNonce)
+      : false;
+  }
+
+  if (!authorized) {
     return json({ error: 'Unauthorized' }, 401);
   }
 
@@ -51,6 +74,22 @@ Deno.serve(withObservability('send-whatsapp-notifications', async (request) => {
 
   return json({ claimed: claimed.length, results }, 200);
 }));
+
+async function claimDatabaseInvocation(invocationNonce: string): Promise<boolean> {
+  try {
+    const claimed = await rest<boolean>(
+      '/rest/v1/rpc/claim_sellertray_notification_worker_invocation',
+      {
+        method: 'POST',
+        body: JSON.stringify({ p_nonce: invocationNonce }),
+      },
+    );
+    return claimed === true;
+  } catch (error) {
+    console.warn('SellerTray notification worker database invocation could not be validated.', error);
+    return false;
+  }
+}
 
 async function claimNotifications(limit: number): Promise<ClaimedNotification[]> {
   return rest<ClaimedNotification[]>('/rest/v1/rpc/claim_outbound_notifications', {
@@ -494,6 +533,37 @@ function constantTimeEqual(left: string, right: string): boolean {
     difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
   }
   return difference === 0;
+}
+
+async function readRequestTextLimited(
+  request: Request,
+  maxBytes: number,
+): Promise<{ ok: true; text: string } | { ok: false }> {
+  const declared = Number(request.headers.get('content-length') ?? 0);
+  if (Number.isFinite(declared) && declared > maxBytes) return { ok: false };
+  if (!request.body) return { ok: true, text: '' };
+
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  const parts: string[] = [];
+  let total = 0;
+
+  try {
+    while (true) {
+      const result = await reader.read();
+      if (result.done) break;
+      total += result.value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        return { ok: false };
+      }
+      parts.push(decoder.decode(result.value, { stream: true }));
+    }
+    parts.push(decoder.decode());
+    return { ok: true, text: parts.join('') };
+  } finally {
+    try { reader.releaseLock(); } catch {}
+  }
 }
 
 function json(body: unknown, status: number): Response {
