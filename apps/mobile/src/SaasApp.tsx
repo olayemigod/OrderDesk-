@@ -29,10 +29,11 @@ import type { OrderFulfillmentInput, OrderItemInput } from './data/ordersReposit
 import { orderTotal, type MerchantOrder, type OrderStatus } from './domain/order';
 import { useBusinesses } from './hooks/useBusinesses';
 import { useCatalogue } from './hooks/useCatalogue';
+import { useMerchantNotifications } from './hooks/useMerchantNotifications';
 import { useOrders } from './hooks/useOrders';
 import { supabase } from './lib/supabase';
 
-type ViewName = 'home' | 'orders' | 'products' | 'more';
+type ViewName = 'home' | 'orders' | 'products' | 'notifications' | 'more';
 type OrderFilter = 'attention' | 'active' | 'done' | 'all';
 
 const statusLabels: Record<OrderStatus, string> = {
@@ -97,6 +98,14 @@ function Workspace() {
     editItem,
     removeItem,
   } = useOrders(activeBusiness?.id ?? null);
+  const {
+    notifications: merchantNotifications,
+    unreadCount: merchantUnreadCount,
+    loading: merchantNotificationsLoading,
+    error: merchantNotificationsError,
+    markRead: markMerchantNotificationRead,
+    markAllRead: markAllMerchantNotificationsRead,
+  } = useMerchantNotifications(activeBusiness?.id ?? null);
   const catalogue = useCatalogue(activeBusiness?.id ?? null);
   const [view, setView] = useState<ViewName>('home');
   const [selectedOrderId, setSelectedOrderId] = useState('');
@@ -146,7 +155,7 @@ function Workspace() {
     );
   }
 
-  const pageError = businessesError || error;
+  const pageError = businessesError || error || merchantNotificationsError;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -163,6 +172,8 @@ function Workspace() {
           <WorkspaceHeader
             business={activeBusiness}
             businesses={businesses}
+            unreadCount={merchantUnreadCount}
+            onOpenNotifications={() => setView('notifications')}
             onSelectBusiness={selectBusiness}
           />
 
@@ -216,6 +227,21 @@ function Workspace() {
             <CatalogueView business={activeBusiness} />
           ) : null}
 
+          {view === 'notifications' ? (
+            <MerchantNotificationsView
+              notifications={merchantNotifications}
+              loading={merchantNotificationsLoading}
+              onMarkAllRead={() => void markAllMerchantNotificationsRead()}
+              onOpenOrder={(notificationId, orderId) => {
+                void markMerchantNotificationRead(notificationId);
+                if (orderId) {
+                  setSelectedOrderId(orderId);
+                  setView('orders');
+                }
+              }}
+            />
+          ) : null}
+
           {view === 'more' ? (
             <SettingsHub business={activeBusiness} onSaveBusiness={saveProfile} />
           ) : null}
@@ -237,10 +263,14 @@ function Workspace() {
 function WorkspaceHeader({
   business,
   businesses,
+  unreadCount,
+  onOpenNotifications,
   onSelectBusiness,
 }: {
   business: MerchantBusiness;
   businesses: MerchantBusiness[];
+  unreadCount: number;
+  onOpenNotifications: () => void;
   onSelectBusiness: (businessId: string) => Promise<void>;
 }) {
   return (
@@ -253,9 +283,22 @@ function WorkspaceHeader({
             {business.role.toUpperCase()} · {subscriptionLabels[business.subscriptionStatus]}
           </Text>
         </View>
-        <Pressable onPress={() => void supabase.auth.signOut()} style={styles.signOutButton}>
-          <Text style={styles.signOutText}>Sign out</Text>
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable
+            onPress={onOpenNotifications}
+            accessibilityRole="button"
+            accessibilityLabel={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+            style={styles.notificationButton}
+          >
+            <Text style={styles.notificationButtonText}>Alerts</Text>
+            {unreadCount > 0 ? (
+              <Text style={styles.notificationBadge}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+            ) : null}
+          </Pressable>
+          <Pressable onPress={() => void supabase.auth.signOut()} style={styles.signOutButton}>
+            <Text style={styles.signOutText}>Sign out</Text>
+          </Pressable>
+        </View>
       </View>
 
       {businesses.length > 1 ? (
@@ -294,6 +337,89 @@ function WorkspaceHeader({
         <Badge label={`${subscriptionLabels[business.subscriptionStatus]} plan`} />
       </View>
     </>
+  );
+}
+
+function MerchantNotificationsView({
+  notifications,
+  loading,
+  onMarkAllRead,
+  onOpenOrder,
+}: {
+  notifications: Array<{
+    id: string;
+    title: string;
+    body: string;
+    orderId: string | null;
+    isRead: boolean;
+    createdAt: string;
+    severity: 'info' | 'attention' | 'urgent';
+  }>;
+  loading: boolean;
+  onMarkAllRead: () => void;
+  onOpenOrder: (notificationId: string, orderId: string | null) => void;
+}) {
+  const unreadCount = notifications.filter((notification) => !notification.isRead).length;
+
+  return (
+    <View style={styles.sectionStack}>
+      <View>
+        <Text style={styles.sectionEyebrow}>MERCHANT ALERTS</Text>
+        <Text style={styles.pageTitle}>Notifications</Text>
+        <Text style={styles.pageSubtitle}>
+          Customer requests and new WhatsApp orders that need merchant attention.
+        </Text>
+      </View>
+
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>
+          {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+        </Text>
+        {unreadCount > 0 ? (
+          <Pressable onPress={onMarkAllRead}>
+            <Text style={styles.linkText}>Mark all read</Text>
+          </Pressable>
+        ) : null}
+      </View>
+
+      {loading && notifications.length === 0 ? (
+        <View style={styles.loadingCard}>
+          <ActivityIndicator />
+          <Text style={styles.muted}>Loading notifications…</Text>
+        </View>
+      ) : null}
+
+      {!loading && notifications.length === 0 ? (
+        <View style={styles.emptyCard}>
+          <Text style={styles.emptyTitle}>No merchant alerts yet</Text>
+          <Text style={styles.emptyText}>
+            New WhatsApp orders and customer order-change requests will appear here.
+          </Text>
+        </View>
+      ) : null}
+
+      <View style={styles.notificationList}>
+        {notifications.map((notification) => (
+          <Pressable
+            key={notification.id}
+            onPress={() => onOpenOrder(notification.id, notification.orderId)}
+            style={[
+              styles.notificationCard,
+              !notification.isRead && styles.notificationCardUnread,
+            ]}
+          >
+            <View style={styles.notificationCardTop}>
+              <Text style={styles.notificationTitle}>{notification.title}</Text>
+              {!notification.isRead ? <View style={styles.notificationUnreadDot} /> : null}
+            </View>
+            <Text style={styles.notificationBody}>{notification.body}</Text>
+            <Text style={styles.notificationMeta}>
+              {new Date(notification.createdAt).toLocaleString()}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
   );
 }
 
@@ -820,6 +946,10 @@ const styles = StyleSheet.create({
   page: { padding: 18, paddingBottom: 34, gap: 15 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14 },
   headerCopy: { flex: 1 },
+  headerActions: { alignItems: 'flex-end', gap: 6 },
+  notificationButton: { minHeight: 32, borderRadius: 999, borderWidth: 1, borderColor: '#D0D5DD', backgroundColor: '#FFFFFF', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, justifyContent: 'center' },
+  notificationButtonText: { color: '#344054', fontSize: 11, fontWeight: '900' },
+  notificationBadge: { minWidth: 18, borderRadius: 999, backgroundColor: '#12B76A', color: '#FFFFFF', fontSize: 9, fontWeight: '900', textAlign: 'center', overflow: 'hidden', paddingHorizontal: 5, paddingVertical: 1 },
   eyebrow: { color: '#246BFD', fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
   businessName: { color: '#101828', fontSize: 25, fontWeight: '900', marginTop: 3 },
   workspaceMeta: { color: '#667085', fontSize: 11, fontWeight: '800', marginTop: 4 },
@@ -860,6 +990,14 @@ const styles = StyleSheet.create({
   filterCount: { minWidth: 18, borderRadius: 999, paddingHorizontal: 5, paddingVertical: 1, overflow: 'hidden', textAlign: 'center', backgroundColor: '#F2F4F7', color: '#475467', fontSize: 9, fontWeight: '900' },
   filterCountActive: { backgroundColor: '#246BFD', color: '#FFFFFF' },
   resultMeta: { color: '#98A2B3', fontSize: 10, fontWeight: '700' },
+  notificationList: { gap: 9 },
+  notificationCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EAECF0', borderRadius: 15, padding: 13, gap: 5 },
+  notificationCardUnread: { borderColor: '#12B76A', backgroundColor: '#F6FEF9' },
+  notificationCardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  notificationTitle: { flex: 1, color: '#101828', fontSize: 13, fontWeight: '900' },
+  notificationBody: { color: '#475467', fontSize: 12, lineHeight: 18 },
+  notificationMeta: { color: '#98A2B3', fontSize: 9, fontWeight: '700' },
+  notificationUnreadDot: { width: 8, height: 8, borderRadius: 999, backgroundColor: '#12B76A' },
   orderList: { gap: 9 },
   orderCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EAECF0', borderRadius: 15, padding: 13 },
   orderCardSelected: { borderColor: '#246BFD', borderWidth: 2 },
