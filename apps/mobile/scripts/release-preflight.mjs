@@ -167,7 +167,6 @@ const requiredBlockedAndroidPermissions = [
   "android.permission.ACTIVITY_RECOGNITION",
   "android.permission.BLUETOOTH_SCAN",
   "android.permission.BLUETOOTH_CONNECT",
-  "android.permission.POST_NOTIFICATIONS",
   "android.permission.SCHEDULE_EXACT_ALARM",
   "android.permission.USE_EXACT_ALARM",
   "android.permission.MANAGE_EXTERNAL_STORAGE",
@@ -181,6 +180,12 @@ for (const permission of requiredBlockedAndroidPermissions) {
 }
 requireValue(app.android?.versionCode === 8, 'Android versionCode must be 8 for the merchant-reference QA line');
 requireValue(app.ios?.bundleIdentifier === 'ng.processedge.sellertray', 'iOS bundle ID must match SellerTray identity');
+requireValue(pkg.dependencies?.['expo-notifications'] === '57.0.18', 'SellerTray mobile must pin expo-notifications for native push');
+requireValue(pkg.dependencies?.['expo-constants'] === '57.0.17', 'SellerTray mobile must pin expo-constants for Expo push project identity');
+requireValue(
+  (app.plugins ?? []).some((plugin) => Array.isArray(plugin) ? plugin[0] === 'expo-notifications' : plugin === 'expo-notifications'),
+  'Expo notifications config plugin must be enabled',
+);
 requireValue(eas.build?.qa?.android?.buildType === 'apk', 'EAS QA profile must build an APK');
 requireValue(eas.build?.preview?.android?.buildType === 'apk', 'EAS preview profile must build an APK');
 requireValue(eas.build?.production?.android?.buildType === 'app-bundle', 'EAS production profile must build an AAB');
@@ -264,6 +269,9 @@ requireValue(saasApp.includes('label="Catalogue"') && saasApp.includes("onChange
 requireValue(saasApp.includes('label="Conversations"') && saasApp.includes("onChange('inbox')"), 'WhatsApp conversations must have a first-class Conversations bottom tab');
 requireValue(saasApp.includes("if (selectedOrder)") && saasApp.includes("← Orders"), 'Order details must remain a mobile drill-in flow with a visible back action');
 requireValue(saasApp.includes('Captured order messages') && saasApp.includes('Linked order'), 'Inbox must expose captured WhatsApp order messages and linked-order navigation');
+requireValue(saasApp.includes('conversationUnreadBadge') && saasApp.includes('Unread messages in this view'), 'Conversations must expose per-conversation unread bubbles and unread summary');
+requireValue(saasApp.includes('merchantUnreadCount') && saasApp.includes('markAllMerchantNotificationsRead'), 'Notification bell and Activity Center must use durable per-user unread state');
+requireValue(saasApp.includes('usePushNotifications'), 'SellerTray shell must register native merchant push notifications');
 requireValue(catalogueView.includes('Manage') && catalogueView.includes('Search products, categories or SKU'), 'Catalogue must retain merchant-first search and optional WhatsApp mapping controls');
 const paymentSettingsUi = read(join(mobileRoot, 'src/components/PaymentMethodsSettings.tsx'));
 requireValue(paymentSettingsUi.includes('Transactions') && paymentSettingsUi.includes('Payment methods'), 'Payments must keep operational transactions separate from payment-method configuration');
@@ -353,6 +361,8 @@ requireValue(
 );
 const pdfReceiptMigration = read(join(repoRoot, 'supabase/migrations/20260912054500_pdf_receipt_delivery.sql'));
 const whatsappNotificationWorker = read(join(repoRoot, 'supabase/functions/send-whatsapp-notifications/index.ts'));
+const merchantPushWorker = read(join(repoRoot, 'supabase/functions/send-merchant-push/index.ts'));
+const merchantPushMigration = read(join(repoRoot, 'supabase/migrations/20260913023000_merchant_push_and_per_user_unread.sql'));
 requireValue(
   pdfReceiptMigration.includes("'receipts', 'receipts', false") &&
     pdfReceiptMigration.includes("media_type = 'document'") &&
@@ -374,6 +384,17 @@ requireValue(
     whatsappNotificationWorker.includes("type: 'document'") &&
     whatsappNotificationWorker.includes('/storage/v1/object/authenticated/'),
   'WhatsApp notification worker must deliver private PDF receipts as documents',
+);
+requireValue(
+  merchantPushWorker.includes('https://exp.host/--/api/v2/push/send') &&
+    merchantPushWorker.includes('sellertray_unread_notification_count_for_user'),
+  'Merchant push worker must send durable Expo pushes with synchronized unread badges',
+);
+requireValue(
+  merchantPushMigration.includes('merchant_push_devices') &&
+    merchantPushMigration.includes('merchant_notification_reads') &&
+    merchantPushMigration.includes('merchant_conversation_reads'),
+  'Per-user notification, conversation unread, and push-device contracts are missing',
 );
 requireValue(accountControls.includes('DELETE MY SELLERTRAY ACCOUNT'), 'Account deletion confirmation must use SellerTray');
 requireValue(accountControls.includes('https://processedge.com.ng/sellertray/privacy'), 'In-app SellerTray privacy URL is missing');
