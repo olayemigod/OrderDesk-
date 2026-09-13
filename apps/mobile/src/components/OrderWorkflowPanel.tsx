@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import type { GateDecision } from '../data/orderGateRepository';
 import type { MerchantOrder, OrderStatus } from '../domain/order';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
@@ -14,6 +15,8 @@ type Props = {
   onStart: () => Promise<void>;
   onReady: () => Promise<void>;
   onCancel: (reason: string) => Promise<void>;
+  processingGate?: GateDecision | null;
+  readyGate?: GateDecision | null;
 };
 
 const actionSuccess: Record<WorkflowAction, string> = {
@@ -31,6 +34,8 @@ export function OrderWorkflowPanel({
   onStart,
   onReady,
   onCancel,
+  processingGate = null,
+  readyGate = null,
 }: Props) {
   const appearance = useSellerTrayAppearance();
   const [pending, setPending] = useState<WorkflowAction | null>(null);
@@ -51,6 +56,12 @@ export function OrderWorkflowPanel({
   const editable = order.status === 'needs_review' || order.status === 'draft';
   const active = ['accepted', 'processing', 'ready'].includes(order.status);
   const canAccept = editable && blockers.length === 0;
+  const paymentGateBlock =
+    order.status === 'accepted' && processingGate && !processingGate.allowed
+      ? processingGate.reason ?? 'Payment policy blocks processing.'
+      : order.status === 'processing' && readyGate && !readyGate.allowed
+        ? readyGate.reason ?? 'Payment policy blocks ready status.'
+        : null;
 
   async function run(action: WorkflowAction, operation: () => Promise<void>) {
     if (pending) return;
@@ -106,6 +117,14 @@ export function OrderWorkflowPanel({
         </View>
       )}
 
+      {paymentGateBlock ? (
+        <View style={[styles.blockerCard, appearance.dark && darkStyles.warningCard]}>
+          <Text style={[styles.blockerTitle, appearance.dark && darkStyles.warningTitle]}>Payment gate active</Text>
+          <Text style={[styles.blockerText, appearance.dark && darkStyles.warningText]}>{paymentGateBlock}</Text>
+          <Text style={[styles.gateHelp, appearance.dark && darkStyles.bodyText]}>Review the payment section above before continuing.</Text>
+        </View>
+      ) : null}
+
       {success ? (
         <View style={[styles.successCard, appearance.dark && darkStyles.successCard]}>
           <Text style={[styles.successText, appearance.dark && darkStyles.successText]}>{success}</Text>
@@ -147,6 +166,8 @@ export function OrderWorkflowPanel({
           onAccept={() => void run('accept', onAccept)}
           onStart={() => void run('start', onStart)}
           onReady={() => void run('ready', onReady)}
+          startAllowed={!processingGate || processingGate.allowed}
+          readyAllowed={!readyGate || readyGate.allowed}
           onRequestCancel={() => {
             setSuccess(null);
             setError(null);
@@ -227,6 +248,8 @@ function WorkflowActions({
   onReady,
   onRequestCancel,
   showCancel,
+  startAllowed,
+  readyAllowed,
 }: {
   status: OrderStatus;
   canAccept: boolean;
@@ -237,6 +260,8 @@ function WorkflowActions({
   onReady: () => void;
   onRequestCancel: () => void;
   showCancel: boolean;
+  startAllowed: boolean;
+  readyAllowed: boolean;
 }) {
   const busy = pending !== null;
 
@@ -257,7 +282,7 @@ function WorkflowActions({
   if (status === 'accepted') {
     return (
       <View style={styles.stackActions}>
-        <ActionButton label={pending === 'start' ? 'Starting…' : 'Start processing'} disabled={busy} loading={pending === 'start'} onPress={onStart} />
+        <ActionButton label={pending === 'start' ? 'Starting…' : 'Start processing'} disabled={busy || !startAllowed} loading={pending === 'start'} onPress={onStart} />
         {showCancel ? <ActionButton label="Cancel order" secondary disabled={busy} onPress={onRequestCancel} /> : null}
       </View>
     );
@@ -266,7 +291,7 @@ function WorkflowActions({
   if (status === 'processing') {
     return (
       <View style={styles.stackActions}>
-        <ActionButton label={pending === 'ready' ? 'Updating…' : 'Mark ready'} disabled={busy} loading={pending === 'ready'} onPress={onReady} />
+        <ActionButton label={pending === 'ready' ? 'Updating…' : 'Mark ready'} disabled={busy || !readyAllowed} loading={pending === 'ready'} onPress={onReady} />
         {showCancel ? <ActionButton label="Cancel order" secondary disabled={busy} onPress={onRequestCancel} /> : null}
       </View>
     );
@@ -342,7 +367,8 @@ const styles = StyleSheet.create({
   wrap: { gap: 10 },
   blockerCard: { backgroundColor: '#FFF8E7', borderRadius: 12, padding: 12, gap: 4 },
   blockerTitle: { color: '#7A2E0E', fontSize: 12, fontWeight: '900' },
-  blockerText: { color: '#854A0E', fontSize: 13, lineHeight: 17 },
+  blockerText: { color: '#854A0E', fontSize: 13, lineHeight: 19 },
+  gateHelp: { color: '#667085', fontSize: 12, lineHeight: 18, marginTop: 3 },
   readyCard: { backgroundColor: '#ECFDF3', borderRadius: 12, padding: 12, gap: 3 },
   readyTitle: { color: '#027A48', fontSize: 12, fontWeight: '900' },
   readyText: { color: '#05603A', fontSize: 13, lineHeight: 17 },
