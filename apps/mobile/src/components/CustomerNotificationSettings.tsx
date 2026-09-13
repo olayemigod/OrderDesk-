@@ -4,12 +4,14 @@ import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, View } from 're
 import type { MerchantBusiness } from '../data/businessRepository';
 import type { NotificationSettings } from '../data/notificationRepository';
 import { useNotificationSettings } from '../hooks/useNotificationSettings';
+import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
 type Props = {
   business: MerchantBusiness;
 };
 
 export function CustomerNotificationSettings({ business }: Props) {
+  const appearance = useSellerTrayAppearance();
   const canEdit = business.role === 'owner' || business.role === 'manager';
   const { settings, loading, saving, error, save } = useNotificationSettings(business.id);
   const [draft, setDraft] = useState<NotificationSettings | null>(null);
@@ -22,10 +24,10 @@ export function CustomerNotificationSettings({ business }: Props) {
 
   if (loading && !draft) {
     return (
-      <View style={styles.card}>
+      <View style={[styles.card, appearance.dark && darkStyles.card]}>
         <View style={styles.loadingRow}>
           <ActivityIndicator />
-          <Text style={styles.helper}>Loading customer notification settings…</Text>
+          <Text style={[styles.helper, appearance.dark && darkStyles.bodyText]}>Loading customer notification settings…</Text>
         </View>
       </View>
     );
@@ -33,8 +35,8 @@ export function CustomerNotificationSettings({ business }: Props) {
 
   if (!draft) {
     return (
-      <View style={styles.card}>
-        <Text style={styles.title}>Customer notifications</Text>
+      <View style={[styles.card, appearance.dark && darkStyles.card]}>
+        <Text style={[styles.title, appearance.dark && darkStyles.titleText]}>Customer notifications</Text>
         <Text style={styles.error}>{error ?? 'Notification settings are unavailable.'}</Text>
       </View>
     );
@@ -54,19 +56,19 @@ export function CustomerNotificationSettings({ business }: Props) {
   }
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, appearance.dark && darkStyles.card]}>
       <View style={styles.heading}>
-        <Text style={styles.eyebrow}>WHATSAPP AUTOMATION</Text>
-        <Text style={styles.title}>Customer notifications</Text>
-        <Text style={styles.helper}>
+        <Text style={[styles.eyebrow, appearance.dark && darkStyles.bodyText]}>WHATSAPP AUTOMATION</Text>
+        <Text style={[styles.title, appearance.dark && darkStyles.titleText]}>Customer notifications</Text>
+        <Text style={[styles.helper, appearance.dark && darkStyles.bodyText]}>
           Choose which order updates SellerTray should queue for customers. Delivery still depends on WhatsApp availability and Meta policy.
         </Text>
       </View>
 
       {!canEdit ? (
         <View style={styles.readOnlyCard}>
-          <Text style={styles.readOnlyTitle}>View only</Text>
-          <Text style={styles.readOnlyText}>Only an Owner or Manager can change these notification rules.</Text>
+          <Text style={[styles.readOnlyTitle, appearance.dark && darkStyles.titleText]}>View only</Text>
+          <Text style={[styles.readOnlyText, appearance.dark && darkStyles.bodyText]}>Only an Owner or Manager can change these notification rules.</Text>
         </View>
       ) : null}
 
@@ -123,7 +125,7 @@ export function CustomerNotificationSettings({ business }: Props) {
         </Pressable>
       ) : null}
 
-      <Text style={styles.policyNote}>
+      <Text style={[styles.policyNote, appearance.dark && darkStyles.bodyText]}>
         SellerTray does not send free-form WhatsApp messages outside the active customer-service window. Those events are held as “Template required” until an approved template path is configured.
       </Text>
     </View>
@@ -143,11 +145,12 @@ function NotificationToggle({
   disabled: boolean;
   onChange: (value: boolean) => void;
 }) {
+  const appearance = useSellerTrayAppearance();
   return (
-    <View style={styles.toggleRow}>
+    <View style={[styles.toggleRow, appearance.dark && darkStyles.rowBorder]}>
       <View style={styles.toggleCopy}>
-        <Text style={styles.toggleLabel}>{label}</Text>
-        <Text style={styles.toggleHelper}>{helper}</Text>
+        <Text style={[styles.toggleLabel, appearance.dark && darkStyles.titleText]}>{label}</Text>
+        <Text style={[styles.toggleHelper, appearance.dark && darkStyles.bodyText]}>{helper}</Text>
       </View>
       <Switch value={value} disabled={disabled} onValueChange={onChange} />
     </View>
@@ -167,22 +170,30 @@ function sameSettings(left: NotificationSettings, right: NotificationSettings): 
 const styles = StyleSheet.create({
   card: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 18, padding: 16, gap: 13 },
   heading: { gap: 4 },
-  eyebrow: { color: '#667085', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
-  title: { color: '#102A43', fontSize: 16, fontWeight: '900' },
-  helper: { color: '#667085', fontSize: 11, lineHeight: 17 },
+  eyebrow: { color: '#667085', fontSize: 11, fontWeight: '900', letterSpacing: 1.1 },
+  title: { color: '#102A43', fontSize: 20, fontWeight: '900' },
+  helper: { color: '#667085', fontSize: 13, lineHeight: 20 },
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   readOnlyCard: { backgroundColor: '#F9FAFB', borderRadius: 12, padding: 11 },
   readOnlyTitle: { color: '#344054', fontSize: 11, fontWeight: '900' },
   readOnlyText: { color: '#667085', fontSize: 10, lineHeight: 15, marginTop: 2 },
   toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 9, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E4E7EC' },
   toggleCopy: { flex: 1 },
-  toggleLabel: { color: '#102A43', fontSize: 12, fontWeight: '800' },
-  toggleHelper: { color: '#667085', fontSize: 10, lineHeight: 15, marginTop: 2 },
+  toggleLabel: { color: '#102A43', fontSize: 14, fontWeight: '800' },
+  toggleHelper: { color: '#667085', fontSize: 12, lineHeight: 18, marginTop: 2 },
   saveButton: { minHeight: 46, borderRadius: 12, backgroundColor: '#12B76A', alignItems: 'center', justifyContent: 'center' },
-  saveText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
-  policyNote: { color: '#667085', fontSize: 10, lineHeight: 15 },
+  saveText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
+  policyNote: { color: '#667085', fontSize: 12, lineHeight: 18 },
   error: { color: '#B42318', fontSize: 11, lineHeight: 16 },
   notice: { color: '#027A48', fontSize: 11, fontWeight: '800' },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.45 },
+});
+
+
+const darkStyles = StyleSheet.create({
+  card: { backgroundColor: '#102A43', borderColor: '#344054' },
+  titleText: { color: '#F8FAFC' },
+  bodyText: { color: '#D0D5DD' },
+  rowBorder: { borderBottomColor: '#344054' },
 });
