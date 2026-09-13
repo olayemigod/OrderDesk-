@@ -1,6 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import type { MerchantBusiness } from '../data/businessRepository';
+import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
 type Props = {
   business: MerchantBusiness;
@@ -19,6 +21,7 @@ export function SetupGuideCard({
   onOrders,
   onMore,
 }: Props) {
+  const appearance = useSellerTrayAppearance();
   const steps = [
     {
       key: 'business',
@@ -26,6 +29,7 @@ export function SetupGuideCard({
       text: 'Confirm your business contact details and operating defaults.',
       done: Boolean(business.name && (business.businessPhone || business.businessEmail)),
       action: onMore,
+      icon: 'business-outline',
     },
     {
       key: 'products',
@@ -33,6 +37,7 @@ export function SetupGuideCard({
       text: 'Add the products customers can order and their selling prices.',
       done: productCount > 0,
       action: onProducts,
+      icon: 'cube-outline',
     },
     {
       key: 'whatsapp',
@@ -40,6 +45,7 @@ export function SetupGuideCard({
       text: 'Link your WhatsApp Business number when Meta activation is available.',
       done: business.whatsappConnectionStatus === 'connected',
       action: onMore,
+      icon: 'logo-whatsapp',
     },
     {
       key: 'order',
@@ -47,6 +53,7 @@ export function SetupGuideCard({
       text: 'Create a manual order now or send a WhatsApp test order after connection.',
       done: orderCount > 0,
       action: onOrders,
+      icon: 'receipt-outline',
     },
   ];
 
@@ -54,12 +61,12 @@ export function SetupGuideCard({
   const allDone = completed === steps.length;
 
   return (
-    <View style={[styles.card, allDone && styles.doneCard]}>
+    <View style={[styles.card, appearance.dark && darkStyles.card, allDone && styles.doneCard, allDone && appearance.dark && darkStyles.doneCard]}>
       <View style={styles.header}>
         <View style={styles.headerCopy}>
           <Text style={styles.eyebrow}>{allDone ? 'SETUP COMPLETE' : 'GET STARTED'}</Text>
-          <Text style={styles.title}>{allDone ? 'SellerTray is ready' : 'Finish setting up SellerTray'}</Text>
-          <Text style={styles.subtitle}>
+          <Text style={[styles.title, appearance.dark && darkStyles.titleText]}>{allDone ? 'SellerTray is ready' : 'Finish setting up SellerTray'}</Text>
+          <Text style={[styles.subtitle, appearance.dark && darkStyles.bodyText]}>
             {allDone
               ? 'Your core merchant setup is complete.'
               : completed + ' of ' + steps.length + ' setup steps completed'}
@@ -77,16 +84,18 @@ export function SetupGuideCard({
               key={step.key}
               disabled={step.done}
               onPress={step.action}
-              style={({ pressed }) => [styles.step, step.done && styles.stepDone, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.step, appearance.dark && darkStyles.step, step.done && styles.stepDone, pressed && styles.pressed]}
             >
-              <View style={[styles.stepNumber, step.done && styles.stepNumberDone]}>
-                <Text style={[styles.stepNumberText, step.done && styles.stepNumberTextDone]}>
-                  {step.done ? '✓' : index + 1}
-                </Text>
+              <View style={[styles.stepNumber, step.done && styles.stepNumberDone, appearance.dark && darkStyles.iconWrap]}>
+                <Ionicons
+                  name={step.done ? 'checkmark' : step.icon as never}
+                  size={18}
+                  color={step.done ? '#027A48' : '#079455'}
+                />
               </View>
               <View style={styles.stepCopy}>
-                <Text style={[styles.stepTitle, step.done && styles.stepTitleDone]}>{step.title}</Text>
-                <Text style={styles.stepText}>{step.text}</Text>
+                <Text style={[styles.stepTitle, appearance.dark && darkStyles.titleText, step.done && styles.stepTitleDone]}>{step.title}</Text>
+                <Text style={[styles.stepText, appearance.dark && darkStyles.bodyText]}>{step.text}</Text>
               </View>
               {!step.done ? <Text style={styles.chevron}>›</Text> : null}
             </Pressable>
@@ -101,7 +110,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#B2CCFF',
+    borderColor: '#ABEFC6',
     borderRadius: 18,
     padding: 15,
     gap: 13,
@@ -109,11 +118,11 @@ const styles = StyleSheet.create({
   doneCard: { borderColor: '#ABEFC6', backgroundColor: '#F6FEF9' },
   header: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   headerCopy: { flex: 1 },
-  eyebrow: { color: '#246BFD', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
-  title: { color: '#101828', fontSize: 17, fontWeight: '900', marginTop: 3 },
-  subtitle: { color: '#667085', fontSize: 11, lineHeight: 16, marginTop: 3 },
-  progressBadge: { minWidth: 42, borderRadius: 999, backgroundColor: '#EEF4FF', paddingHorizontal: 9, paddingVertical: 6, alignItems: 'center' },
-  progressText: { color: '#175CD3', fontSize: 10, fontWeight: '900' },
+  eyebrow: { color: '#12B76A', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
+  title: { color: '#102A43', fontSize: 19, fontWeight: '900', marginTop: 3 },
+  subtitle: { color: '#667085', fontSize: 13, lineHeight: 19, marginTop: 3 },
+  progressBadge: { minWidth: 42, borderRadius: 999, backgroundColor: '#ECFDF3', paddingHorizontal: 9, paddingVertical: 6, alignItems: 'center' },
+  progressText: { color: '#079455', fontSize: 10, fontWeight: '900' },
   steps: { gap: 7 },
   step: {
     minHeight: 62,
@@ -125,14 +134,23 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   stepDone: { opacity: 0.62 },
-  stepNumber: { width: 30, height: 30, borderRadius: 99, backgroundColor: '#EEF4FF', alignItems: 'center', justifyContent: 'center' },
+  stepNumber: { width: 30, height: 30, borderRadius: 99, backgroundColor: '#ECFDF3', alignItems: 'center', justifyContent: 'center' },
   stepNumberDone: { backgroundColor: '#ECFDF3' },
-  stepNumberText: { color: '#175CD3', fontSize: 11, fontWeight: '900' },
+  stepNumberText: { color: '#079455', fontSize: 11, fontWeight: '900' },
   stepNumberTextDone: { color: '#027A48' },
   stepCopy: { flex: 1 },
-  stepTitle: { color: '#101828', fontSize: 12, fontWeight: '900' },
+  stepTitle: { color: '#102A43', fontSize: 13, fontWeight: '900' },
   stepTitleDone: { color: '#475467' },
-  stepText: { color: '#667085', fontSize: 10, lineHeight: 15, marginTop: 2 },
-  chevron: { color: '#98A2B3', fontSize: 24 },
+  stepText: { color: '#667085', fontSize: 12, lineHeight: 18, marginTop: 2 },
+  chevron: { color: '#667085', fontSize: 24 },
   pressed: { opacity: 0.75 },
+});
+
+const darkStyles = StyleSheet.create({
+  card: { backgroundColor: '#102A43', borderColor: '#1C6B4A' },
+  doneCard: { backgroundColor: '#12372C' },
+  step: { backgroundColor: '#162F46' },
+  iconWrap: { backgroundColor: '#12372C' },
+  titleText: { color: '#F8FAFC' },
+  bodyText: { color: '#D0D5DD' },
 });

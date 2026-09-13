@@ -179,7 +179,7 @@ const blockedAndroidPermissions = new Set(app.android?.blockedPermissions ?? [])
 for (const permission of requiredBlockedAndroidPermissions) {
   requireValue(blockedAndroidPermissions.has(permission), 'Sensitive Android permission must remain blocked: '+permission);
 }
-requireValue(app.android?.versionCode === 7, 'Android versionCode must be 7 for the merchant-reference QA line');
+requireValue(app.android?.versionCode === 8, 'Android versionCode must be 8 for the merchant-reference QA line');
 requireValue(app.ios?.bundleIdentifier === 'ng.processedge.sellertray', 'iOS bundle ID must match SellerTray identity');
 requireValue(eas.build?.qa?.android?.buildType === 'apk', 'EAS QA profile must build an APK');
 requireValue(eas.build?.preview?.android?.buildType === 'apk', 'EAS preview profile must build an APK');
@@ -260,11 +260,17 @@ const businessRepository = read(join(mobileRoot, 'src/data/businessRepository.ts
 const provisionBusinessFunction = read(join(repoRoot, 'supabase/functions/provision-business/index.ts'));
 requireValue(settingsHub.includes('<AccountDataControls business={business} />'), 'Active merchants must reach AccountDataControls through More > Account & privacy');
 requireValue(saasApp.includes("supabase.auth.signOut({ scope: 'local' })"), 'Workspace quick sign-out must be device-local');
-requireValue(saasApp.includes('label="Products"') && saasApp.includes("onChange('products')"), 'Products must have a first-class bottom tab');
+requireValue(saasApp.includes('label="Catalogue"') && saasApp.includes("onChange('products')"), 'Catalogue must have a first-class bottom tab');
+requireValue(saasApp.includes('label="Conversations"') && saasApp.includes("onChange('inbox')"), 'WhatsApp conversations must have a first-class Conversations bottom tab');
+requireValue(saasApp.includes("if (selectedOrder)") && saasApp.includes("← Orders"), 'Order details must remain a mobile drill-in flow with a visible back action');
+requireValue(saasApp.includes('Captured order messages') && saasApp.includes('Linked order'), 'Inbox must expose captured WhatsApp order messages and linked-order navigation');
+requireValue(catalogueView.includes('Manage') && catalogueView.includes('Search products, categories or SKU'), 'Catalogue must retain merchant-first search and optional WhatsApp mapping controls');
+const paymentSettingsUi = read(join(mobileRoot, 'src/components/PaymentMethodsSettings.tsx'));
+requireValue(paymentSettingsUi.includes('Transactions') && paymentSettingsUi.includes('Payment methods'), 'Payments must keep operational transactions separate from payment-method configuration');
 requireValue(saasApp.includes('label="More"') && saasApp.includes("onChange('more')"), 'Business/settings must be separated behind More');
 requireValue(saasApp.includes("paddingBottom: Platform.OS === 'android' ? 46 : 10"), 'Android bottom navigation must retain system-navigation clearance');
 requireValue(settingsHub.includes("BackHandler.addEventListener('hardwareBackPress'"), 'Android settings must support native back navigation');
-requireValue(settingsHub.includes('SellerTray 1.0.0 · Android build 7'), 'More screen must expose the current Android build marker');
+requireValue(settingsHub.includes('SellerTray 1.0.0 · Android build 8'), 'More screen must expose the current Android build marker');
 requireValue(saasApp.includes("StatusBar.currentHeight"), 'Android status-bar safe area must remain enforced in the merchant workspace');
 requireValue(catalogueView.includes('Product name') && catalogueView.includes('Selling price') && catalogueView.includes('Customer words / aliases'), 'Product editor must retain visible field labels and guidance');
 requireValue(manualOrderComposer.includes('Create an order') && manualOrderComposer.includes('Customer name') && manualOrderComposer.includes('Products *'), 'Orders must expose guided manual order creation');
@@ -306,7 +312,7 @@ requireValue(orderFulfillmentPanel.includes('Mark delivered & complete') && orde
 requireValue(orderFulfillmentPanel.includes('Customer confirmed receipt on WhatsApp'), 'Completed orders must show customer receipt-confirmation provenance');
 requireValue(
   saasApp.includes('order.publicOrderId') &&
-    saasApp.includes('Search order ref, customer, phone, message or product'),
+    saasApp.includes('Search orders, customers or products'),
   'Merchant-scoped order references must be visible in the merchant order UI',
 );
 const orderIdSelfServiceMigration = read(join(repoRoot, 'supabase/migrations/20260912053000_order_ids_whatsapp_self_service.sql'));

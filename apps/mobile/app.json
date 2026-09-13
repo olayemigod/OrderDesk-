@@ -8,10 +8,10 @@
     ],
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "android": {
       "package": "ng.processedge.sellertray",
-      "versionCode": 7,
+      "versionCode": 8,
       "blockedPermissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
@@ -47,7 +47,11 @@
         "android.permission.SYSTEM_ALERT_WINDOW",
         "com.google.android.gms.permission.AD_ID"
       ],
-      "allowBackup": false
+      "allowBackup": false,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F8FAFC"
+      }
     },
     "ios": {
       "bundleIdentifier": "ng.processedge.sellertray",
@@ -59,7 +63,21 @@
         {
           "configureAndroidBackup": false
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow SellerTray to select product images from your photo library.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
       ]
-    ]
+    ],
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#102A43"
+    }
   }
 }

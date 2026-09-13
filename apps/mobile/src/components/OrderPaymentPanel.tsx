@@ -9,6 +9,7 @@ import {
   type OrderPaymentAttempt,
 } from '../data/orderPaymentsRepository';
 import type { MerchantOrder } from '../domain/order';
+import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
 type Props = {
   tenantId: string;
@@ -16,6 +17,7 @@ type Props = {
 };
 
 export function OrderPaymentPanel({ tenantId, order }: Props) {
+  const appearance = useSellerTrayAppearance();
   const [documents, setDocuments] = useState<OrderFinancialDocument[]>([]);
   const [payments, setPayments] = useState<OrderPaymentAttempt[]>([]);
   const [loading, setLoading] = useState(true);
@@ -91,21 +93,21 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
   }
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, appearance.dark && darkStyles.card]}>
       <View style={styles.header}>
         <View style={styles.headerCopy}>
-          <Text style={styles.eyebrow}>PAYMENT</Text>
-          <Text style={styles.title}>Financial status</Text>
+          <Text style={[styles.eyebrow, appearance.dark && darkStyles.bodyText]}>PAYMENT</Text>
+          <Text style={[styles.title, appearance.dark && darkStyles.titleText]}>Financial status</Text>
         </View>
         <PaymentPill status={order.paymentStatus} />
       </View>
 
-      <View style={styles.summary}>
-        <SummaryRow label="Amount paid" value={formatMoney(order.amountPaid, invoice?.currency ?? 'NGN')} />
-        {invoice ? <SummaryRow label="Invoice" value={invoice.documentReference} /> : null}
-        {receipt ? <SummaryRow label="Financial receipt" value={receipt.documentReference} /> : null}
+      <View style={[styles.summary, appearance.dark && darkStyles.subtleCard]}>
+        <SummaryRow dark={appearance.dark} label="Amount paid" value={formatMoney(order.amountPaid, invoice?.currency ?? 'NGN')} />
+        {invoice ? <SummaryRow dark={appearance.dark} label="Invoice" value={invoice.documentReference} /> : null}
+        {receipt ? <SummaryRow dark={appearance.dark} label="Financial receipt" value={receipt.documentReference} /> : null}
         {order.paymentConfirmedAt ? (
-          <SummaryRow label="Confirmed" value={formatDateTime(order.paymentConfirmedAt)} />
+          <SummaryRow dark={appearance.dark} label="Confirmed" value={formatDateTime(order.paymentConfirmedAt)} />
         ) : null}
       </View>
 
@@ -125,19 +127,19 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
         const verifiable = gateway && ['initiated', 'pending_verification'].includes(payment.status);
 
         return (
-          <View key={payment.id} style={styles.attempt}>
+          <View key={payment.id} style={[styles.attempt, appearance.dark && darkStyles.subtleCard]}>
             <View style={styles.attemptTop}>
               <View style={styles.headerCopy}>
-                <Text style={styles.attemptTitle}>{humanMethod(payment.methodType)}</Text>
-                <Text style={styles.attemptMeta}>
+                <Text style={[styles.attemptTitle, appearance.dark && darkStyles.titleText]}>{humanMethod(payment.methodType)}</Text>
+                <Text style={[styles.attemptMeta, appearance.dark && darkStyles.bodyText]}>
                   {formatMoney(payment.amount, payment.currency)} · {humanAttemptStatus(payment.status)}
                 </Text>
               </View>
-              <Text style={styles.time}>{formatDateTime(payment.createdAt)}</Text>
+              <Text style={[styles.time, appearance.dark && darkStyles.mutedText]}>{formatDateTime(payment.createdAt)}</Text>
             </View>
 
             {payment.providerReference ? (
-              <Text style={styles.reference}>Ref: {payment.providerReference}</Text>
+              <Text style={[styles.reference, appearance.dark && darkStyles.bodyText]}>Ref: {payment.providerReference}</Text>
             ) : null}
             {payment.customerClaimedAt ? (
               <Text style={styles.claim}>Customer says paid · {formatDateTime(payment.customerClaimedAt)}</Text>
@@ -177,7 +179,7 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
         );
       })}
 
-      <Text style={styles.note}>
+      <Text style={[styles.note, appearance.dark && darkStyles.bodyText]}>
         Order status, payment status and fulfilment status are independent. Confirming payment does not complete the order or delivery.
       </Text>
     </View>
@@ -202,11 +204,11 @@ function PaymentPill({ status }: { status: MerchantOrder['paymentStatus'] }) {
   );
 }
 
-function SummaryRow({ label, value }: { label: string; value: string }) {
+function SummaryRow({ label, value, dark }: { label: string; value: string; dark: boolean }) {
   return (
     <View style={styles.summaryRow}>
-      <Text style={styles.summaryLabel}>{label}</Text>
-      <Text selectable style={styles.summaryValue}>{value}</Text>
+      <Text style={[styles.summaryLabel, dark && darkStyles.bodyText]}>{label}</Text>
+      <Text selectable style={[styles.summaryValue, dark && darkStyles.titleText]}>{value}</Text>
     </View>
   );
 }
@@ -271,8 +273,8 @@ const styles = StyleSheet.create({
   wrap: { borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 15, padding: 13, gap: 10, backgroundColor: '#FCFCFD' },
   header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
   headerCopy: { flex: 1 },
-  eyebrow: { color: '#98A2B3', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
-  title: { color: '#101828', fontSize: 15, fontWeight: '900', marginTop: 3 },
+  eyebrow: { color: '#667085', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
+  title: { color: '#102A43', fontSize: 15, fontWeight: '900', marginTop: 3 },
   pill: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 5 },
   pillPaid: { backgroundColor: '#ECFDF3' },
   pillWarning: { backgroundColor: '#FFF7E8' },
@@ -284,23 +286,31 @@ const styles = StyleSheet.create({
   summary: { backgroundColor: '#FFFFFF', borderRadius: 11, padding: 10, gap: 7 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
   summaryLabel: { color: '#667085', fontSize: 10, fontWeight: '700' },
-  summaryValue: { color: '#101828', fontSize: 10, fontWeight: '900', flex: 1, textAlign: 'right' },
-  attempt: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EAECF0', borderRadius: 11, padding: 10, gap: 7 },
+  summaryValue: { color: '#102A43', fontSize: 10, fontWeight: '900', flex: 1, textAlign: 'right' },
+  attempt: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 11, padding: 10, gap: 7 },
   attemptTop: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
-  attemptTitle: { color: '#101828', fontSize: 12, fontWeight: '900' },
+  attemptTitle: { color: '#102A43', fontSize: 12, fontWeight: '900' },
   attemptMeta: { color: '#667085', fontSize: 10, marginTop: 2 },
-  time: { color: '#98A2B3', fontSize: 9 },
+  time: { color: '#667085', fontSize: 9 },
   reference: { color: '#475467', fontSize: 9 },
   claim: { color: '#B54708', fontSize: 10, fontWeight: '800' },
   helper: { color: '#667085', fontSize: 10, lineHeight: 15 },
   error: { color: '#B42318', fontSize: 10, lineHeight: 15 },
   exceptionBox: { backgroundColor: '#FEF3F2', borderRadius: 9, padding: 9, gap: 3 },
   exceptionTitle: { color: '#B42318', fontSize: 10, fontWeight: '900' },
-  primaryButton: { minHeight: 40, borderRadius: 9, backgroundColor: '#246BFD', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
+  primaryButton: { minHeight: 40, borderRadius: 9, backgroundColor: '#12B76A', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
   primaryText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
   secondaryButton: { minHeight: 40, borderRadius: 9, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D0D5DD', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
   secondaryText: { color: '#344054', fontSize: 10, fontWeight: '900' },
-  note: { color: '#98A2B3', fontSize: 9, lineHeight: 14 },
+  note: { color: '#667085', fontSize: 9, lineHeight: 14 },
   pressed: { opacity: 0.78 },
   disabled: { opacity: 0.5 },
+});
+
+const darkStyles = StyleSheet.create({
+  card: { backgroundColor: '#102A43', borderColor: '#475467' },
+  subtleCard: { backgroundColor: '#162F46', borderColor: '#344054' },
+  titleText: { color: '#F8FAFC' },
+  bodyText: { color: '#D0D5DD' },
+  mutedText: { color: '#98A2B3' },
 });

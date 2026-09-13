@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { MerchantBusiness } from '../data/businessRepository';
 import type { ManualOrderLineInput } from '../data/ordersRepository';
 import { useCatalogue } from '../hooks/useCatalogue';
+import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
 type Props = {
   business: MerchantBusiness;
@@ -17,6 +18,7 @@ type Props = {
 };
 
 export function ManualOrderComposer({ business, onCreate, onCreated }: Props) {
+  const appearance = useSellerTrayAppearance();
   const { items, loading, error: catalogueError } = useCatalogue(business.id);
   const [open, setOpen] = useState(false);
   const [customerName, setCustomerName] = useState('');
@@ -79,17 +81,17 @@ export function ManualOrderComposer({ business, onCreate, onCreated }: Props) {
   }
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, appearance.dark && darkStyles.card]}>
       <View style={styles.heading}>
         <View style={styles.headingCopy}>
           <Text style={styles.eyebrow}>MANUAL ORDER</Text>
-          <Text style={styles.title}>Create an order</Text>
-          <Text style={styles.subtitle}>
+          <Text style={[styles.title, appearance.dark && darkStyles.titleText]}>Create an order</Text>
+          <Text style={[styles.subtitle, appearance.dark && darkStyles.bodyText]}>
             Use this for phone, walk-in or manually captured orders. WhatsApp orders will continue to arrive automatically.
           </Text>
         </View>
         <Pressable disabled={submitting} onPress={() => setOpen(false)}>
-          <Text style={styles.close}>Close</Text>
+          <Text style={[styles.close, appearance.dark && darkStyles.bodyText]}>Close</Text>
         </Pressable>
       </View>
 
@@ -99,7 +101,7 @@ export function ManualOrderComposer({ business, onCreate, onCreated }: Props) {
           onChangeText={setCustomerName}
           placeholder="e.g. Aisha Bello"
           editable={!submitting}
-          style={styles.input}
+          style={[styles.input, appearance.dark && darkStyles.input, appearance.dark && darkStyles.inputText]}
         />
       </Field>
 
@@ -110,7 +112,7 @@ export function ManualOrderComposer({ business, onCreate, onCreated }: Props) {
           placeholder="+234..."
           keyboardType="phone-pad"
           editable={!submitting}
-          style={styles.input}
+          style={[styles.input, appearance.dark && darkStyles.input, appearance.dark && darkStyles.inputText]}
         />
       </Field>
 
@@ -121,41 +123,41 @@ export function ManualOrderComposer({ business, onCreate, onCreated }: Props) {
           placeholder="e.g. Deliver before 4pm"
           multiline
           editable={!submitting}
-          style={[styles.input, styles.noteInput]}
+          style={[styles.input, styles.noteInput, appearance.dark && darkStyles.input, appearance.dark && darkStyles.inputText]}
         />
       </Field>
 
       <View style={styles.productsBlock}>
-        <Text style={styles.label}>Products *</Text>
-        <Text style={styles.hint}>Tap + to add products from your catalogue. Prices are copied automatically.</Text>
+        <Text style={[styles.label, appearance.dark && darkStyles.titleText]}>Products *</Text>
+        <Text style={[styles.hint, appearance.dark && darkStyles.bodyText]}>Tap + to add products from your catalogue. Prices are copied automatically.</Text>
 
         {catalogueError ? <Text style={styles.error}>{catalogueError}</Text> : null}
-        {loading && !activeItems.length ? <Text style={styles.muted}>Loading products…</Text> : null}
+        {loading && !activeItems.length ? <Text style={[styles.muted, appearance.dark && darkStyles.bodyText]}>Loading products…</Text> : null}
         {!loading && !activeItems.length ? (
-          <Text style={styles.emptyText}>No active priced products yet. Add products from the Products tab first.</Text>
+          <Text style={[styles.emptyText, appearance.dark && darkStyles.bodyText]}>No active priced products yet. Add products from the Products tab first.</Text>
         ) : null}
 
         {activeItems.map((item) => {
           const quantity = quantities[item.id] ?? 0;
           return (
-            <View key={item.id} style={[styles.productRow, quantity > 0 && styles.productRowSelected]}>
+            <View key={item.id} style={[styles.productRow, appearance.dark && darkStyles.productRow, quantity > 0 && styles.productRowSelected, quantity > 0 && appearance.dark && darkStyles.productRowSelected]}>
               <View style={styles.productCopy}>
-                <Text style={styles.productName}>{item.name}</Text>
-                <Text style={styles.productPrice}>{money(item.price ?? 0, business.currency)}</Text>
+                <Text style={[styles.productName, appearance.dark && darkStyles.titleText]}>{item.name}</Text>
+                <Text style={[styles.productPrice, appearance.dark && darkStyles.bodyText]}>{money(item.price ?? 0, business.currency)}</Text>
               </View>
               <View style={styles.quantityControls}>
                 <Pressable
                   disabled={submitting || quantity === 0}
                   onPress={() => changeQuantity(item.id, -1)}
-                  style={[styles.qtyButton, quantity === 0 && styles.disabled]}
+                  style={[styles.qtyButton, appearance.dark && darkStyles.qtyButton, quantity === 0 && styles.disabled]}
                 >
-                  <Text style={styles.qtyButtonText}>−</Text>
+                  <Text style={[styles.qtyButtonText, appearance.dark && darkStyles.titleText]}>−</Text>
                 </Pressable>
-                <Text style={styles.qtyValue}>{quantity}</Text>
+                <Text style={[styles.qtyValue, appearance.dark && darkStyles.titleText]}>{quantity}</Text>
                 <Pressable
                   disabled={submitting}
                   onPress={() => changeQuantity(item.id, 1)}
-                  style={styles.qtyButton}
+                  style={[styles.qtyButton, appearance.dark && darkStyles.qtyButton]}
                 >
                   <Text style={styles.qtyButtonText}>+</Text>
                 </Pressable>
@@ -167,8 +169,8 @@ export function ManualOrderComposer({ business, onCreate, onCreated }: Props) {
 
       {selected.length ? (
         <View style={styles.totalRow}>
-          <Text style={styles.totalLabel}>Order total</Text>
-          <Text style={styles.total}>{money(total, business.currency)}</Text>
+          <Text style={[styles.totalLabel, appearance.dark && darkStyles.bodyText]}>Order total</Text>
+          <Text style={[styles.total, appearance.dark && darkStyles.titleText]}>{money(total, business.currency)}</Text>
         </View>
       ) : null}
 
@@ -196,10 +198,11 @@ function Field({
   hint?: string;
   children: React.ReactNode;
 }) {
+  const appearance = useSellerTrayAppearance();
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{label}{required ? ' *' : ''}</Text>
-      {hint ? <Text style={styles.hint}>{hint}</Text> : null}
+      <Text style={[styles.label, appearance.dark && darkStyles.titleText]}>{label}{required ? ' *' : ''}</Text>
+      {hint ? <Text style={[styles.hint, appearance.dark && darkStyles.bodyText]}>{hint}</Text> : null}
       {children}
     </View>
   );
@@ -217,7 +220,7 @@ const styles = StyleSheet.create({
   newButton: {
     minHeight: 46,
     borderRadius: 12,
-    backgroundColor: '#246BFD',
+    backgroundColor: '#12B76A',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
@@ -233,13 +236,13 @@ const styles = StyleSheet.create({
   },
   heading: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   headingCopy: { flex: 1 },
-  eyebrow: { color: '#246BFD', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
-  title: { color: '#101828', fontSize: 20, fontWeight: '900', marginTop: 3 },
-  subtitle: { color: '#667085', fontSize: 12, lineHeight: 18, marginTop: 4 },
+  eyebrow: { color: '#12B76A', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
+  title: { color: '#102A43', fontSize: 22, fontWeight: '900', marginTop: 3 },
+  subtitle: { color: '#667085', fontSize: 14, lineHeight: 21, marginTop: 4 },
   close: { color: '#667085', fontSize: 12, fontWeight: '800' },
   field: { gap: 6 },
-  label: { color: '#344054', fontSize: 12, fontWeight: '900' },
-  hint: { color: '#667085', fontSize: 10, lineHeight: 15 },
+  label: { color: '#344054', fontSize: 13, fontWeight: '900' },
+  hint: { color: '#667085', fontSize: 12, lineHeight: 18 },
   input: {
     minHeight: 46,
     borderWidth: 1,
@@ -247,24 +250,24 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     paddingHorizontal: 12,
     backgroundColor: '#FFFFFF',
-    color: '#101828',
+    color: '#102A43',
   },
   noteInput: { minHeight: 76, paddingTop: 12, textAlignVertical: 'top' },
   productsBlock: { gap: 8 },
   productRow: {
     minHeight: 58,
     borderWidth: 1,
-    borderColor: '#EAECF0',
+    borderColor: '#E4E7EC',
     borderRadius: 12,
     padding: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
-  productRowSelected: { borderColor: '#84ADFF', backgroundColor: '#F5F8FF' },
+  productRowSelected: { borderColor: '#6CE9A6', backgroundColor: '#F5F8FF' },
   productCopy: { flex: 1 },
-  productName: { color: '#101828', fontSize: 13, fontWeight: '900' },
-  productPrice: { color: '#667085', fontSize: 11, marginTop: 2 },
+  productName: { color: '#102A43', fontSize: 14, fontWeight: '900' },
+  productPrice: { color: '#667085', fontSize: 12, marginTop: 2 },
   quantityControls: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   qtyButton: {
     width: 34,
@@ -276,15 +279,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#FFFFFF',
   },
-  qtyButtonText: { color: '#101828', fontSize: 18, fontWeight: '900' },
-  qtyValue: { minWidth: 24, textAlign: 'center', color: '#101828', fontSize: 13, fontWeight: '900' },
+  qtyButtonText: { color: '#102A43', fontSize: 18, fontWeight: '900' },
+  qtyValue: { minWidth: 24, textAlign: 'center', color: '#102A43', fontSize: 13, fontWeight: '900' },
   totalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   totalLabel: { color: '#667085', fontSize: 12, fontWeight: '800' },
-  total: { color: '#101828', fontSize: 18, fontWeight: '900' },
+  total: { color: '#102A43', fontSize: 18, fontWeight: '900' },
   createButton: {
     minHeight: 48,
     borderRadius: 12,
-    backgroundColor: '#246BFD',
+    backgroundColor: '#12B76A',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -294,4 +297,15 @@ const styles = StyleSheet.create({
   error: { color: '#B42318', fontSize: 11, lineHeight: 16 },
   disabled: { opacity: 0.45 },
   pressed: { opacity: 0.8 },
+});
+
+const darkStyles = StyleSheet.create({
+  card: { backgroundColor: '#102A43', borderColor: '#344054' },
+  productRow: { backgroundColor: '#102A43', borderColor: '#344054' },
+  productRowSelected: { backgroundColor: '#12372C', borderColor: '#1C6B4A' },
+  qtyButton: { backgroundColor: '#162F46', borderColor: '#475467' },
+  input: { backgroundColor: '#162F46', borderColor: '#475467' },
+  inputText: { color: '#F8FAFC' },
+  titleText: { color: '#F8FAFC' },
+  bodyText: { color: '#D0D5DD' },
 });

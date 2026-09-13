@@ -93,7 +93,7 @@ function ProvisioningGate() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F6F7F9', paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) : 0 },
+  safeArea: { flex: 1, backgroundColor: '#F8FAFC', paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) : 0 },
   page: { paddingBottom: 36 },
   adminPage: { padding: 18, paddingBottom: 36, gap: 18 },
   centered: {
@@ -102,7 +102,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 10,
     padding: 24,
-    backgroundColor: '#F6F7F9',
+    backgroundColor: '#F8FAFC',
   },
   muted: { color: '#667085', fontSize: 12 },
   errorCard: {
