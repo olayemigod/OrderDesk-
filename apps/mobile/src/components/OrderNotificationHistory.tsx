@@ -1,5 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
+import { useSellerTrayAppearance } from '../theme/AppearanceContext';
+
 import type {
   MerchantOrder,
   NotificationDeliveryStatus,
@@ -38,22 +40,23 @@ const statusLabels: Record<NotificationDeliveryStatus, string> = {
 };
 
 export function OrderNotificationHistory({ order }: Props) {
+  const appearance = useSellerTrayAppearance();
   if (order.source !== 'whatsapp' && order.notifications.length === 0) return null;
 
   return (
     <View style={styles.wrap}>
       <View style={styles.heading}>
         <Text style={styles.eyebrow}>CUSTOMER UPDATES</Text>
-        <Text style={styles.title}>WhatsApp notifications</Text>
-        <Text style={styles.helper}>
+        <Text style={[styles.title, appearance.dark && darkStyles.titleText]}>WhatsApp notifications</Text>
+        <Text style={[styles.helper, appearance.dark && darkStyles.bodyText]}>
           Delivery state is read-only. SellerTray controls provider delivery on the server.
         </Text>
       </View>
 
       {order.notifications.length === 0 ? (
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>No customer update queued yet</Text>
-          <Text style={styles.emptyText}>
+        <View style={[styles.emptyCard, appearance.dark && darkStyles.card]}>
+          <Text style={[styles.emptyTitle, appearance.dark && darkStyles.titleText]}>No customer update queued yet</Text>
+          <Text style={[styles.emptyText, appearance.dark && darkStyles.bodyText]}>
             Notifications appear here when an enabled order event is queued for this customer.
           </Text>
         </View>
@@ -69,16 +72,17 @@ export function OrderNotificationHistory({ order }: Props) {
 }
 
 function NotificationRow({ notification }: { notification: OrderNotification }) {
+  const appearance = useSellerTrayAppearance();
   const status = notification.deliveryStatus;
   const needsAttention = status === 'failed' || status === 'template_required';
   const positive = status === 'sent';
 
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, appearance.dark && darkStyles.card]}>
       <View style={styles.topRow}>
         <View style={styles.eventCopy}>
-          <Text style={styles.eventTitle}>{eventLabels[notification.eventKey]}</Text>
-          <Text style={styles.timeText}>
+          <Text style={[styles.eventTitle, appearance.dark && darkStyles.titleText]}>{eventLabels[notification.eventKey]}</Text>
+          <Text style={[styles.timeText, appearance.dark && darkStyles.bodyText]}>
             {formatTime(notification.sentAt ?? notification.createdAt)}
           </Text>
         </View>
@@ -100,7 +104,7 @@ function NotificationRow({ notification }: { notification: OrderNotification }) 
           </Text>
         </View>
       </View>
-      <Text style={styles.message}>{notification.messageBody}</Text>
+      <Text style={[styles.message, appearance.dark && darkStyles.bodyText]}>{notification.messageBody}</Text>
       {status === 'template_required' ? (
         <Text style={styles.attentionText}>
           The customer-service window is closed. An approved WhatsApp template is required before this update can be delivered.
@@ -150,4 +154,10 @@ const styles = StyleSheet.create({
   emptyCard: { backgroundColor: '#F9FAFB', borderRadius: 12, padding: 12 },
   emptyTitle: { color: '#344054', fontSize: 11, fontWeight: '800' },
   emptyText: { color: '#667085', fontSize: 10, lineHeight: 15, marginTop: 3 },
+});
+
+const darkStyles = StyleSheet.create({
+  card: { backgroundColor: '#162F46' },
+  titleText: { color: '#F8FAFC' },
+  bodyText: { color: '#D0D5DD' },
 });
