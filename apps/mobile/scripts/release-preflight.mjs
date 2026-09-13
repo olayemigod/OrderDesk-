@@ -363,6 +363,7 @@ const pdfReceiptMigration = read(join(repoRoot, 'supabase/migrations/20260912054
 const whatsappNotificationWorker = read(join(repoRoot, 'supabase/functions/send-whatsapp-notifications/index.ts'));
 const merchantPushWorker = read(join(repoRoot, 'supabase/functions/send-merchant-push/index.ts'));
 const merchantPushMigration = read(join(repoRoot, 'supabase/migrations/20260913023000_merchant_push_and_per_user_unread.sql'));
+const genericWhatsappMessageMigration = read(join(repoRoot, 'supabase/migrations/20260913024000_generic_whatsapp_message_notifications.sql'));
 requireValue(
   pdfReceiptMigration.includes("'receipts', 'receipts', false") &&
     pdfReceiptMigration.includes("media_type = 'document'") &&
@@ -395,6 +396,11 @@ requireValue(
     merchantPushMigration.includes('merchant_notification_reads') &&
     merchantPushMigration.includes('merchant_conversation_reads'),
   'Per-user notification, conversation unread, and push-device contracts are missing',
+);
+requireValue(
+  genericWhatsappMessageMigration.includes("'new_whatsapp_message'") &&
+    genericWhatsappMessageMigration.includes('queue_sellertray_unhandled_whatsapp_message_notification'),
+  'Ordinary WhatsApp messages must produce merchant alerts without duplicating order/change-request alerts',
 );
 requireValue(accountControls.includes('DELETE MY SELLERTRAY ACCOUNT'), 'Account deletion confirmation must use SellerTray');
 requireValue(accountControls.includes('https://processedge.com.ng/sellertray/privacy'), 'In-app SellerTray privacy URL is missing');
