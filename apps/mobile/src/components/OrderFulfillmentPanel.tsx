@@ -184,6 +184,7 @@ export function OrderFulfillmentPanel({
               value={provider}
               onChangeText={setProvider}
               placeholder="Who is delivering?"
+              placeholderTextColor={appearance.dark ? '#667085' : '#98A2B3'}
               maxLength={120}
               style={[styles.input, appearance.dark && darkStyles.input]}
             />
@@ -196,6 +197,7 @@ export function OrderFulfillmentPanel({
               value={reference}
               onChangeText={setReference}
               placeholder="Reference / phone"
+              placeholderTextColor={appearance.dark ? '#667085' : '#98A2B3'}
               maxLength={120}
               style={[styles.input, appearance.dark && darkStyles.input]}
             />
@@ -211,6 +213,7 @@ export function OrderFulfillmentPanel({
             value={note}
             onChangeText={setNote}
             placeholder="Optional note"
+            placeholderTextColor={appearance.dark ? '#667085' : '#98A2B3'}
             maxLength={300}
             multiline
             style={[styles.input, styles.noteInput, appearance.dark && darkStyles.input]}
@@ -293,27 +296,27 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 14, padding: 14, gap: 11 },
   deliveryCard: { backgroundColor: '#EFF8FF', borderWidth: 1, borderColor: '#B2DDFF', borderRadius: 14, padding: 14, gap: 8 },
   completedCard: { backgroundColor: '#ECFDF3', borderWidth: 1, borderColor: '#ABEFC6', borderRadius: 14, padding: 14, gap: 6 },
-  eyebrow: { color: '#667085', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
+  eyebrow: { color: '#667085', fontSize: 11, fontWeight: '900', letterSpacing: 1.1 },
   title: { color: '#102A43', fontSize: 16, fontWeight: '900' },
-  help: { color: '#667085', fontSize: 11, lineHeight: 17 },
+  help: { color: '#667085', fontSize: 13, lineHeight: 20 },
   methodList: { gap: 7 },
   methodButton: { minHeight: 44, justifyContent: 'center', borderRadius: 11, borderWidth: 1, borderColor: '#D0D5DD', backgroundColor: '#FFFFFF', paddingHorizontal: 12 },
   methodButtonActive: { borderColor: '#12B76A', backgroundColor: '#ECFDF3' },
-  methodText: { color: '#344054', fontSize: 12, fontWeight: '800' },
+  methodText: { color: '#344054', fontSize: 14, fontWeight: '800' },
   methodTextActive: { color: '#079455' },
   fields: { gap: 10 },
   field: { gap: 5 },
-  label: { color: '#344054', fontSize: 12, fontWeight: '900' },
-  fieldHelp: { color: '#667085', fontSize: 10, lineHeight: 15 },
+  label: { color: '#344054', fontSize: 14, fontWeight: '900' },
+  fieldHelp: { color: '#667085', fontSize: 12, lineHeight: 18 },
   input: { minHeight: 44, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 10, paddingHorizontal: 11, backgroundColor: '#FFFFFF', color: '#102A43' },
   noteInput: { minHeight: 72, paddingTop: 10, textAlignVertical: 'top' },
-  summaryLine: { color: '#344054', fontSize: 11, lineHeight: 17, fontWeight: '700' },
+  summaryLine: { color: '#344054', fontSize: 13, lineHeight: 20, fontWeight: '700' },
   customerConfirmed: { color: '#027A48', fontSize: 11, lineHeight: 17, fontWeight: '900', marginTop: 3 },
   merchantConfirmed: { color: '#344054', fontSize: 11, lineHeight: 17, fontWeight: '800', marginTop: 3 },
   timeText: { color: '#667085', fontSize: 10, marginTop: 2 },
   error: { color: '#B42318', backgroundColor: '#FEF3F2', borderRadius: 8, padding: 9, fontSize: 10, lineHeight: 15 },
   primaryButton: { minHeight: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: '#12B76A', paddingHorizontal: 12 },
-  primaryButtonText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
+  primaryButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
   disabled: { opacity: 0.5 },
   pressed: { opacity: 0.78 },
 });
