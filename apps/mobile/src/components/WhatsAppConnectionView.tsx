@@ -31,6 +31,9 @@ const statusCopy: Record<MerchantBusiness['whatsappConnectionStatus'], { title: 
 export function WhatsAppConnectionView({ business }: { business: MerchantBusiness }) {
   const status = statusCopy[business.whatsappConnectionStatus];
   const connected = business.whatsappConnectionStatus === 'connected';
+  const messagingReady = business.whatsappReadiness.messagingReady;
+  const inboundReady = business.whatsappReadiness.inboundReady;
+  const outboundReady = business.whatsappReadiness.outboundReady;
   const [consent, setConsent] = useState<WhatsAppConsentStatus | null>(null);
   const [consentLoading, setConsentLoading] = useState(true);
   const [consentBusy, setConsentBusy] = useState(false);
@@ -85,7 +88,7 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
   }
 
   const processingActive = consent?.consentActive === true;
-  const connectionOperational = connected && processingActive;
+  const connectionOperational = messagingReady && processingActive;
 
   return (
     <View style={styles.wrap}>
@@ -97,17 +100,34 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
         </Text>
       </View>
 
-      <View style={[styles.statusCard, connectionOperational && styles.connectedCard]}>
-        <View style={[styles.dot, connectionOperational && styles.connectedDot]} />
+      <View style={[styles.statusCard, messagingReady && styles.connectedCard]}>
+        <View style={[styles.dot, messagingReady && styles.connectedDot]} />
         <View style={styles.statusCopy}>
-          <Text style={styles.statusTitle}>{status.title}</Text>
-          <Text style={styles.statusText}>{status.text}</Text>
+          <Text style={styles.statusTitle}>
+            {messagingReady
+              ? 'WhatsApp messaging ready'
+              : connected
+                ? 'WhatsApp connected · messaging setup incomplete'
+                : status.title}
+          </Text>
+          <Text style={styles.statusText}>
+            {messagingReady
+              ? 'SellerTray has verified both inbound order capture and outbound customer updates for this WhatsApp number.'
+              : connected
+                ? business.whatsappReadiness.reason ?? 'SellerTray is still verifying outbound messaging readiness.'
+                : status.text}
+          </Text>
           {connected && !processingActive ? (
             <Text style={styles.pausedText}>
               Message processing is paused until the business Owner authorizes the current WhatsApp data-processing terms.
             </Text>
           ) : null}
         </View>
+      </View>
+
+      <View style={styles.readinessGrid}>
+        <ReadinessItem label="Inbound" ready={inboundReady} text={inboundReady ? 'Webhook ready' : 'Needs attention'} />
+        <ReadinessItem label="Outbound" ready={outboundReady} text={outboundReady ? 'Credential verified' : 'Not verified'} />
       </View>
 
       <View style={styles.providerBillingCard}>
@@ -207,11 +227,25 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
           <Text style={styles.infoTitle}>{processingActive ? 'Connection is active' : 'Connection is connected but paused'}</Text>
           <Text style={styles.infoText}>
             {processingActive
-              ? 'Send a product order from a different WhatsApp number and confirm the order appears in the Orders tab.'
+              ? 'Inbound and outbound WhatsApp messaging are ready. Send a test order and confirm both the order capture and customer update.'
               : 'No customer conversation content will be stored or interpreted by SellerTray until the current authorization is active.'}
           </Text>
         </View>
       )}
+    </View>
+  );
+}
+
+function ReadinessItem({ label, ready, text }: { label: string; ready: boolean; text: string }) {
+  return (
+    <View style={[styles.readinessItem, ready && styles.readinessItemReady]}>
+      <View style={[styles.readinessIcon, ready && styles.readinessIconReady]}>
+        <Text style={[styles.readinessIconText, ready && styles.readinessIconTextReady]}>{ready ? '✓' : '!'}</Text>
+      </View>
+      <View style={styles.readinessCopy}>
+        <Text style={styles.readinessLabel}>{label}</Text>
+        <Text style={styles.readinessText}>{text}</Text>
+      </View>
     </View>
   );
 }
@@ -251,6 +285,16 @@ const styles = StyleSheet.create({
   statusTitle: { color: '#101828', fontSize: 14, fontWeight: '900' },
   statusText: { color: '#475467', fontSize: 12, lineHeight: 18, marginTop: 4 },
   pausedText: { color: '#B54708', fontSize: 10, lineHeight: 15, fontWeight: '800', marginTop: 6 },
+  readinessGrid: { flexDirection: 'row', gap: 8 },
+  readinessItem: { flex: 1, minWidth: 0, borderWidth: 1, borderColor: '#FEC84B', backgroundColor: '#FFFAEB', borderRadius: 13, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  readinessItemReady: { borderColor: '#ABEFC6', backgroundColor: '#ECFDF3' },
+  readinessIcon: { width: 26, height: 26, borderRadius: 99, backgroundColor: '#FEF0C7', alignItems: 'center', justifyContent: 'center' },
+  readinessIconReady: { backgroundColor: '#D1FADF' },
+  readinessIconText: { color: '#B54708', fontSize: 11, fontWeight: '900' },
+  readinessIconTextReady: { color: '#027A48' },
+  readinessCopy: { flex: 1, minWidth: 0 },
+  readinessLabel: { color: '#101828', fontSize: 10, fontWeight: '900' },
+  readinessText: { color: '#667085', fontSize: 8, lineHeight: 12, marginTop: 1 },
   providerBillingCard: { backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#EAECF0', borderRadius: 14, padding: 13, gap: 4 },
   providerBillingTitle: { color: '#101828', fontSize: 12, fontWeight: '900' },
   providerBillingText: { color: '#667085', fontSize: 10, lineHeight: 16 },
