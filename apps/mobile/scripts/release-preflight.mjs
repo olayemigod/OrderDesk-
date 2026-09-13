@@ -389,6 +389,13 @@ const whatsappWebhookFunction = read(join(repoRoot, 'supabase/functions/whatsapp
 const whatsappConnectionFunction = read(join(repoRoot, 'supabase/functions/whatsapp-connection/index.ts'));
 const whatsappConnectionMigration = read(join(repoRoot, 'supabase/migrations/20260912235000_whatsapp_multi_merchant_connections.sql'));
 const catalogueFromChatFunction = read(join(repoRoot, 'supabase/functions/catalogue-from-chat/index.ts'));
+const orderChangeRequestFunction = read(join(repoRoot, 'supabase/functions/order-change-request/index.ts'));
+const orderChangeNotificationMigration = read(join(repoRoot, 'supabase/migrations/20260913011500_customer_order_change_notifications.sql'));
+const orderChangeRealtimeMigration = read(join(repoRoot, 'supabase/migrations/20260913014500_order_change_request_realtime.sql'));
+const merchantNotificationsRepository = read(join(mobileRoot, 'src/data/merchantNotificationsRepository.ts'));
+const orderChangeRequestsRepository = read(join(mobileRoot, 'src/data/orderChangeRequestsRepository.ts'));
+const merchantNotificationsHook = read(join(mobileRoot, 'src/hooks/useMerchantNotifications.ts'));
+const orderChangeRequestsHook = read(join(mobileRoot, 'src/hooks/useOrderChangeRequests.ts'));
 
 const whatsappTemplateMigration = read(join(repoRoot, 'supabase/migrations/20260912171500_whatsapp_template_dispatch.sql'));
 requireValue(
@@ -408,6 +415,54 @@ requireValue(
   whatsappWebhookFunction.includes('if (enrichedItems.length === 0)') &&
     whatsappWebhookFunction.includes("event: 'whatsapp_message_not_an_order'"),
   'Ordinary WhatsApp conversations must not create zero-item SellerTray orders',
+);
+requireValue(
+  whatsappWebhookFunction.includes('maybeRecordCustomerOrderChangeRequest') &&
+    whatsappWebhookFunction.includes('detectOrderChangeKind') &&
+    whatsappWebhookFunction.includes("return 'cancel_order'") &&
+    whatsappWebhookFunction.includes("return 'add_items'") &&
+    whatsappWebhookFunction.includes('softCancellation') &&
+    whatsappWebhookFunction.includes('no\\s+need') &&
+    whatsappWebhookFunction.includes('never\\s*mind'),
+  'WhatsApp order-change and soft-cancellation language must route to governed merchant review',
+);
+requireValue(
+  orderChangeNotificationMigration.includes('customer_order_change_requests') &&
+    orderChangeNotificationMigration.includes('merchant_notifications') &&
+    orderChangeNotificationMigration.includes('order_change_request_received') &&
+    orderChangeNotificationMigration.includes('notification_worker_invocations') &&
+    orderChangeNotificationMigration.includes('kick_whatsapp_notification_worker') &&
+    orderChangeNotificationMigration.includes('sellertray-whatsapp-notification-retry') &&
+    orderChangeRealtimeMigration.includes('customer_order_change_requests'),
+  'Customer order-change requests must generate realtime merchant alerts and durable WhatsApp dispatch',
+);
+requireValue(
+  orderChangeRequestFunction.includes("admin.auth.getUser(token)") &&
+    orderChangeRequestFunction.includes("request_kind === 'add_items'") &&
+    orderChangeRequestFunction.includes("request_kind === 'cancel_order'") &&
+    orderChangeRequestFunction.includes('For remove/change requests') &&
+    orderChangeRequestFunction.includes('tenant_members'),
+  'Merchant order-change actions must remain authenticated, tenant-scoped and explicit',
+);
+requireValue(
+  merchantNotificationsRepository.includes('merchant_notifications') &&
+    merchantNotificationsRepository.includes('postgres_changes') &&
+    orderChangeRequestsRepository.includes('order-change-request') &&
+    orderChangeRequestsRepository.includes('customer_order_change_requests') &&
+    merchantNotificationsHook.includes('unreadCount') &&
+    orderChangeRequestsHook.includes('runAction') &&
+    saasApp.includes('Customer requested an order change') === false &&
+    saasApp.includes('MerchantNotificationsView') &&
+    saasApp.includes('Apply additions') &&
+    saasApp.includes('Confirm cancellation') &&
+    saasApp.includes('Mark handled'),
+  'SellerTray mobile must surface realtime actionable merchant alerts without hard-coded test content',
+);
+requireValue(
+  whatsappNotificationWorker.includes('claim_sellertray_notification_worker_invocation') &&
+    whatsappNotificationWorker.includes('readRequestTextLimited(request, 8192)') &&
+    whatsappNotificationWorker.includes("Deno.env.get('META_GRAPH_API_VERSION')?.trim() || 'v22.0'"),
+  'WhatsApp notification worker must support single-use server tickets and a stable Graph API baseline',
 );
 requireValue(
   whatsappConnectionMigration.includes('phone_number_id text unique') &&
