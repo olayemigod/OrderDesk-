@@ -10,7 +10,8 @@
       },
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://eujxswjspolugrzlsjnn.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_NlNRn9grGvfwZ1cYP09OvA_XSHOA-3I"
+        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_NlNRn9grGvfwZ1cYP09OvA_XSHOA-3I",
+        "EXPO_PUBLIC_EAS_PROJECT_ID": "e6f57a2d-6db7-4972-b4ed-410df0495485"
       }
     },
     "production": {
@@ -20,7 +21,8 @@
       },
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://eujxswjspolugrzlsjnn.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_NlNRn9grGvfwZ1cYP09OvA_XSHOA-3I"
+        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_NlNRn9grGvfwZ1cYP09OvA_XSHOA-3I",
+        "EXPO_PUBLIC_EAS_PROJECT_ID": "e6f57a2d-6db7-4972-b4ed-410df0495485"
       }
     },
     "qa": {
@@ -30,7 +32,8 @@
       },
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://eujxswjspolugrzlsjnn.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_NlNRn9grGvfwZ1cYP09OvA_XSHOA-3I"
+        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_NlNRn9grGvfwZ1cYP09OvA_XSHOA-3I",
+        "EXPO_PUBLIC_EAS_PROJECT_ID": "e6f57a2d-6db7-4972-b4ed-410df0495485"
       }
     }
   },
