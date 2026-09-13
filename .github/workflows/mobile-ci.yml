@@ -1,0 +1,85 @@
+name: Mobile CI
+
+concurrency:
+  group: mobile-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/functions/**'
+      - 'supabase/migrations/**'
+      - 'supabase/templates/**'
+      - 'apps/mobile/**'
+      - 'docs/release_runbook.md'
+      - 'docs/data_lifecycle.md'
+      - 'docs/release_acceptance.json'
+      - 'docs/saas_rollout_status.md'
+      - 'docs/google_play_data_safety.md'
+      - 'docs/google_play_submission.md'
+      - 'docs/google_play_store_listing.md'
+      - 'docs/data_processor_review.md'
+      - 'docs/commercial_pricing_proposal.md'
+      - 'docs/usage_billing.md'
+      - '.github/workflows/mobile-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'supabase/functions/**'
+      - 'supabase/migrations/**'
+      - 'supabase/templates/**'
+      - 'apps/mobile/**'
+      - 'docs/release_runbook.md'
+      - 'docs/data_lifecycle.md'
+      - 'docs/release_acceptance.json'
+      - 'docs/saas_rollout_status.md'
+      - 'docs/google_play_data_safety.md'
+      - 'docs/google_play_submission.md'
+      - 'docs/google_play_store_listing.md'
+      - 'docs/data_processor_review.md'
+      - 'docs/commercial_pricing_proposal.md'
+      - 'docs/usage_billing.md'
+      - '.github/workflows/mobile-ci.yml'
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Production Android bundle smoke
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://eujxswjspolugrzlsjnn.supabase.co
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_NlNRn9grGvfwZ1cYP09OvA_XSHOA-3I
+        run: |
+          npx expo export --platform android --output-dir .ci-dist --clear
+          if grep -R -F "Expo Go fallback" .ci-dist; then
+            echo "Development-only recovery UI leaked into the production bundle"
+            exit 1
+          fi
+
+      - name: SellerTray release preflight
+        run: npm run preflight

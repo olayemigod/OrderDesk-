@@ -1,0 +1,2 @@
+create index order_payment_events_tenant_order_payment_idx
+  on public.order_payment_events(tenant_id,order_id,payment_id);
