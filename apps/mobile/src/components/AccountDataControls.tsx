@@ -16,6 +16,7 @@ import {
   exportBusinessData,
 } from '../data/accountLifecycleRepository';
 import { supabase } from '../lib/supabase';
+import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
 type Props = {
   business?: MerchantBusiness | null;
@@ -26,6 +27,7 @@ const PRIVACY_URL = 'https://processedge.com.ng/sellertray/privacy';
 const TERMS_URL = 'https://processedge.com.ng/sellertray/terms';
 
 export function AccountDataControls({ business = null }: Props) {
+  const appearance = useSellerTrayAppearance();
   const [profileName, setProfileName] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -152,18 +154,18 @@ export function AccountDataControls({ business = null }: Props) {
   }
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, appearance.dark && darkStyles.card]}>
       <View style={styles.heading}>
-        <Text style={styles.eyebrow}>DATA & ACCOUNT</Text>
-        <Text style={styles.title}>Your data and account</Text>
-        <Text style={styles.description}>
+        <Text style={[styles.eyebrow, appearance.dark && darkStyles.bodyText]}>DATA & ACCOUNT</Text>
+        <Text style={[styles.title, appearance.dark && darkStyles.titleText]}>Your data and account</Text>
+        <Text style={[styles.description, appearance.dark && darkStyles.bodyText]}>
           Export business records or permanently close your SellerTray account.
         </Text>
       </View>
 
       <View style={styles.profileBlock}>
-        <Text style={styles.actionTitle}>Your name</Text>
-        <Text style={styles.actionText}>
+        <Text style={[styles.actionTitle, appearance.dark && darkStyles.titleText]}>Your name</Text>
+        <Text style={[styles.actionText, appearance.dark && darkStyles.bodyText]}>
           Used for personal greetings such as “Good morning, Alex”. This does not change the business name.
         </Text>
         <TextInput
@@ -173,7 +175,8 @@ export function AccountDataControls({ business = null }: Props) {
           value={profileName}
           onChangeText={setProfileName}
           editable={!savingProfile}
-          style={styles.profileInput}
+          placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
+          style={[styles.profileInput, appearance.dark && darkStyles.input]}
         />
         <Pressable
           disabled={savingProfile || profileName.trim().length < 2}
@@ -189,9 +192,9 @@ export function AccountDataControls({ business = null }: Props) {
       </View>
 
       {business ? (
-        <View style={styles.actionBlock}>
-          <Text style={styles.actionTitle}>Business data export</Text>
-          <Text style={styles.actionText}>
+        <View style={[styles.actionBlock, appearance.dark && darkStyles.borderTop]}>
+          <Text style={[styles.actionTitle, appearance.dark && darkStyles.titleText]}>Business data export</Text>
+          <Text style={[styles.actionText, appearance.dark && darkStyles.bodyText]}>
             {canExport
               ? 'Download a JSON copy of this business profile, catalogue, customers, WhatsApp order records, notification history, team records and subscription state.'
               : 'Only the business Owner can export the complete workspace dataset.'}
@@ -206,7 +209,7 @@ export function AccountDataControls({ business = null }: Props) {
                 (exporting || deleting) && styles.disabled,
               ]}
             >
-              <Text style={styles.secondaryButtonText}>
+              <Text style={[styles.secondaryButtonText, appearance.dark && darkStyles.titleText]}>
                 {exporting ? 'Preparing export…' : 'Export business data'}
               </Text>
             </Pressable>
@@ -214,9 +217,9 @@ export function AccountDataControls({ business = null }: Props) {
         </View>
       ) : null}
 
-      <View style={styles.sessionBlock}>
-        <Text style={styles.actionTitle}>Signed-in session</Text>
-        <Text style={styles.actionText}>
+      <View style={[styles.sessionBlock, appearance.dark && darkStyles.borderTop]}>
+        <Text style={[styles.actionTitle, appearance.dark && darkStyles.titleText]}>Signed-in session</Text>
+        <Text style={[styles.actionText, appearance.dark && darkStyles.bodyText]}>
           Sign out of SellerTray on this device. Your business and order data remain safely stored.
         </Text>
         <Pressable
@@ -228,34 +231,34 @@ export function AccountDataControls({ business = null }: Props) {
             (signingOut || deleting || exporting) && styles.disabled,
           ]}
         >
-          <Text style={styles.signOutButtonText}>{signingOut ? 'Signing out…' : 'Sign out of this device'}</Text>
+          <Text style={[styles.signOutButtonText, appearance.dark && darkStyles.titleText]}>{signingOut ? 'Signing out…' : 'Sign out of this device'}</Text>
         </Pressable>
       </View>
 
-      <View style={styles.legalBlock}>
-        <Text style={styles.actionTitle}>Legal & privacy</Text>
-        <Text style={styles.actionText}>
+      <View style={[styles.legalBlock, appearance.dark && darkStyles.borderTop]}>
+        <Text style={[styles.actionTitle, appearance.dark && darkStyles.titleText]}>Legal & privacy</Text>
+        <Text style={[styles.actionText, appearance.dark && darkStyles.bodyText]}>
           Review how SellerTray handles merchant and customer order data and the terms that govern the service.
         </Text>
         <View style={styles.buttonRow}>
           <Pressable
             onPress={() => void Linking.openURL(PRIVACY_URL)}
-            style={({ pressed }) => [styles.legalButton, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.legalButton, appearance.dark && darkStyles.secondaryButton, pressed && styles.pressed]}
           >
-            <Text style={styles.secondaryButtonText}>Privacy Policy</Text>
+            <Text style={[styles.secondaryButtonText, appearance.dark && darkStyles.titleText]}>Privacy Policy</Text>
           </Pressable>
           <Pressable
             onPress={() => void Linking.openURL(TERMS_URL)}
-            style={({ pressed }) => [styles.legalButton, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.legalButton, appearance.dark && darkStyles.secondaryButton, pressed && styles.pressed]}
           >
-            <Text style={styles.secondaryButtonText}>Terms</Text>
+            <Text style={[styles.secondaryButtonText, appearance.dark && darkStyles.titleText]}>Terms</Text>
           </Pressable>
         </View>
       </View>
 
-      <View style={styles.dangerBlock}>
-        <Text style={styles.actionTitle}>Danger zone</Text>
-        <Text style={styles.actionText}>
+      <View style={[styles.dangerBlock, appearance.dark && darkStyles.borderTop]}>
+        <Text style={[styles.actionTitle, appearance.dark && darkStyles.titleText]}>Danger zone</Text>
+        <Text style={[styles.actionText, appearance.dark && darkStyles.bodyText]}>
           Account closure is intentionally kept here, away from everyday settings. Closing the account permanently deletes businesses you own and removes memberships in other businesses. Active paid subscriptions must be cancelled first.
         </Text>
 
@@ -267,14 +270,14 @@ export function AccountDataControls({ business = null }: Props) {
               setError(null);
               setNotice(null);
             }}
-            style={({ pressed }) => [styles.dangerOutlineButton, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.dangerOutlineButton, appearance.dark && darkStyles.secondaryButton, pressed && styles.pressed]}
           >
-            <Text style={styles.secondaryButtonText}>Account closure options</Text>
+            <Text style={[styles.secondaryButtonText, appearance.dark && darkStyles.titleText]}>Account closure options</Text>
           </Pressable>
         ) : (
-          <View style={styles.confirmation}>
-            <Text style={styles.confirmTitle}>Permanent action</Text>
-            <Text style={styles.actionText}>
+          <View style={[styles.confirmation, appearance.dark && darkStyles.dangerCard]}>
+            <Text style={[styles.confirmTitle, appearance.dark && darkStyles.dangerTitle]}>Permanent action</Text>
+            <Text style={[styles.actionText, appearance.dark && darkStyles.bodyText]}>
               Enter your current password, then type {DELETE_PHRASE}. This cannot be undone.
             </Text>
             <TextInput
@@ -285,7 +288,8 @@ export function AccountDataControls({ business = null }: Props) {
               value={password}
               onChangeText={setPassword}
               editable={!deleting}
-              style={styles.input}
+              placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
+              style={[styles.input, appearance.dark && darkStyles.input]}
             />
             <TextInput
               autoCapitalize="characters"
@@ -294,7 +298,8 @@ export function AccountDataControls({ business = null }: Props) {
               value={phrase}
               onChangeText={setPhrase}
               editable={!deleting}
-              style={styles.input}
+              placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
+              style={[styles.input, appearance.dark && darkStyles.input]}
             />
             <View style={styles.buttonRow}>
               <Pressable
@@ -305,9 +310,9 @@ export function AccountDataControls({ business = null }: Props) {
                   setPhrase('');
                   setError(null);
                 }}
-                style={({ pressed }) => [styles.cancelButton, pressed && styles.pressed]}
+                style={({ pressed }) => [styles.cancelButton, appearance.dark && darkStyles.secondaryButton, pressed && styles.pressed]}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Text style={[styles.cancelButtonText, appearance.dark && darkStyles.titleText]}>Cancel</Text>
               </Pressable>
               <Pressable
                 disabled={deleting}
@@ -344,16 +349,16 @@ function safeFilename(value: string): string {
 const styles = StyleSheet.create({
   card: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 18, padding: 16, gap: 16 },
   heading: { gap: 4 },
-  eyebrow: { color: '#667085', fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
+  eyebrow: { color: '#667085', fontSize: 12, fontWeight: '900', letterSpacing: 1.2 },
   title: { color: '#102A43', fontSize: 18, fontWeight: '900' },
-  description: { color: '#667085', fontSize: 12, lineHeight: 18 },
+  description: { color: '#667085', fontSize: 13, lineHeight: 20 },
   profileBlock: { gap: 10 },
   profileInput: { minHeight: 46, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 11, paddingHorizontal: 12, backgroundColor: '#FFFFFF', color: '#102A43', fontSize: 14 },
   profileSaveButton: { minHeight: 44, borderRadius: 11, backgroundColor: '#12B76A', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
   profileSaveText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
   actionBlock: { gap: 10, borderTopWidth: 1, borderTopColor: '#E4E7EC', paddingTop: 16 },
   actionTitle: { color: '#102A43', fontSize: 14, fontWeight: '900' },
-  actionText: { color: '#667085', fontSize: 12, lineHeight: 18 },
+  actionText: { color: '#667085', fontSize: 13, lineHeight: 20 },
   secondaryButton: { minHeight: 44, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 11, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
   secondaryButtonText: { color: '#344054', fontSize: 13, fontWeight: '800' },
   sessionBlock: { gap: 10, borderTopWidth: 1, borderTopColor: '#E4E7EC', paddingTop: 16 },
@@ -377,4 +382,15 @@ const styles = StyleSheet.create({
   notice: { color: '#027A48', fontSize: 12, fontWeight: '700' },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.5 },
+});
+
+const darkStyles = StyleSheet.create({
+  card: { backgroundColor: '#102A43', borderColor: '#344054' },
+  titleText: { color: '#F8FAFC' },
+  bodyText: { color: '#D0D5DD' },
+  borderTop: { borderTopColor: '#344054' },
+  input: { backgroundColor: '#F8FAFC', borderColor: '#98A2B3', color: '#102A43' },
+  secondaryButton: { backgroundColor: '#162F46', borderColor: '#667085' },
+  dangerCard: { backgroundColor: '#3A1717' },
+  dangerTitle: { color: '#FDA29B' },
 });
