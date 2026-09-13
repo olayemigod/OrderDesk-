@@ -10,6 +10,8 @@ import { BusinessProfileView } from './BusinessProfileView';
 import { CustomersView } from './CustomersView';
 import { CustomerNotificationSettings } from './CustomerNotificationSettings';
 import { PaymentMethodsSettings } from './PaymentMethodsSettings';
+import { OperationalPolicySettings } from './OperationalPolicySettings';
+import { ReportsView } from './ReportsView';
 import { MfaSecurityCard } from './MfaSecurityCard';
 import { PlatformAdminView } from './PlatformAdminView';
 import { SubscriptionStatusCard } from './SubscriptionStatusCard';
@@ -24,6 +26,8 @@ type Section =
   | 'whatsapp'
   | 'notifications'
   | 'payments'
+  | 'operations'
+  | 'reports'
   | 'team'
   | 'subscription'
   | 'security'
@@ -66,6 +70,8 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
         {section === 'whatsapp' ? <WhatsAppConnectionView business={business} /> : null}
         {section === 'notifications' ? <CustomerNotificationSettings business={business} /> : null}
         {section === 'payments' ? <PaymentMethodsSettings business={business} /> : null}
+        {section === 'operations' ? <OperationalPolicySettings business={business} /> : null}
+        {section === 'reports' ? <ReportsView business={business} /> : null}
         {section === 'team' ? <TeamManagementView business={business} /> : null}
         {section === 'subscription' ? (
           <View style={styles.detailSection}>
@@ -162,6 +168,12 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
             onPress={() => setSection('payments')}
           />
           <MenuRow
+            icon="options-outline"
+            title="Payment & delivery policy"
+            text="Payment gates, delivery evidence and merchant WhatsApp alert rules"
+            onPress={() => setSection('operations')}
+          />
+          <MenuRow
             icon="logo-whatsapp"
             title="WhatsApp connection"
             text={
@@ -192,6 +204,12 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
       <View style={styles.menuSection}>
         <Text style={[styles.groupLabel, appearance.dark && darkStyles.bodyText]}>BUSINESS</Text>
         <View style={[styles.menuGroup, appearance.dark && darkStyles.card]}>
+          <MenuRow
+            icon="stats-chart-outline"
+            title="Reports"
+            text="Orders, payments, products and fulfilment performance"
+            onPress={() => setSection('reports')}
+          />
           <MenuRow
             icon="business-outline"
             title="Business profile"
@@ -243,7 +261,7 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
         </View>
       </View>
 
-      <Text style={[styles.buildStamp, appearance.dark && darkStyles.bodyText]}>SellerTray 1.0.0 · Android build 8</Text>
+      <Text style={[styles.buildStamp, appearance.dark && darkStyles.bodyText]}>SellerTray 1.0.0 · Android build 10</Text>
 
       {platformAdmin.overview ? (
         <View style={styles.adminGroup}>
