@@ -210,7 +210,7 @@ function Field({
 const styles = StyleSheet.create({
   wrap: { gap: 16 },
   heading: { gap: 5 },
-  eyebrow: { color: '#667085', fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
+  eyebrow: { color: '#667085', fontSize: 12, fontWeight: '900', letterSpacing: 1.2 },
   title: { color: '#102A43', fontSize: 25, fontWeight: '900' },
   subtitle: { color: '#667085', fontSize: 13, lineHeight: 19 },
   readOnlyNotice: { backgroundColor: '#FFF8E7', borderRadius: 14, padding: 14 },
@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 18, padding: 16, gap: 15 },
   field: { gap: 6 },
   label: { color: '#344054', fontSize: 12, fontWeight: '900' },
-  help: { color: '#667085', fontSize: 10, lineHeight: 15 },
+  help: { color: '#667085', fontSize: 12, lineHeight: 15 },
   input: { minHeight: 48, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 11, paddingHorizontal: 12, backgroundColor: '#FFFFFF', color: '#102A43' },
   inputDisabled: { backgroundColor: '#F9FAFB', color: '#667085' },
   error: { color: '#B42318', fontSize: 12, lineHeight: 17 },
