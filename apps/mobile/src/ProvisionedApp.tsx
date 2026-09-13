@@ -73,13 +73,14 @@ function ProvisioningGate() {
             <View style={styles.errorCard}>
               <Text style={styles.errorTitle}>Account setup problem</Text>
               <Text style={styles.errorText}>{setupError}</Text>
+              <Text style={styles.errorHelp}>Your existing SellerTray workspace has not been replaced. Retry loading it before creating another business.</Text>
               <Pressable onPress={() => void Promise.all([refresh(), platformAdmin.refresh()])}>
                 <Text style={styles.retryText}>Retry</Text>
               </Pressable>
             </View>
-          ) : null}
-
-          <CreateBusinessView onCreate={createBusiness} />
+          ) : (
+            <CreateBusinessView onCreate={createBusiness} />
+          )}
 
           <Pressable onPress={() => void supabase.auth.signOut({ scope: 'local' })} style={styles.signOutButton}>
             <Text style={styles.signOutText}>Sign out</Text>
@@ -115,6 +116,7 @@ const styles = StyleSheet.create({
   },
   errorTitle: { color: '#B42318', fontWeight: '900', fontSize: 12 },
   errorText: { color: '#912018', fontSize: 11, lineHeight: 17 },
+  errorHelp: { color: '#7A271A', fontSize: 10.5, lineHeight: 16 },
   retryText: { color: '#B42318', fontWeight: '900', fontSize: 11 },
   signOutButton: { alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 14 },
   signOutText: { color: '#667085', fontSize: 12, fontWeight: '800' },
