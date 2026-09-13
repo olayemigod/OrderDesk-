@@ -39,7 +39,6 @@
         "android.permission.ACTIVITY_RECOGNITION",
         "android.permission.BLUETOOTH_SCAN",
         "android.permission.BLUETOOTH_CONNECT",
-        "android.permission.POST_NOTIFICATIONS",
         "android.permission.SCHEDULE_EXACT_ALARM",
         "android.permission.USE_EXACT_ALARM",
         "android.permission.MANAGE_EXTERNAL_STORAGE",
@@ -70,6 +69,13 @@
           "photosPermission": "Allow SellerTray to select product images from your photo library.",
           "cameraPermission": false,
           "microphonePermission": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#12B76A",
+          "defaultChannel": "sellertray-alerts"
         }
       ]
     ],
