@@ -99,14 +99,36 @@ function detectCommand(value: string): Command | null {
   const normalized = value.trim().replace(/\s+/g, ' ');
   if (!extractOrderRef(normalized)) return null;
 
-  if (/^payment\s+receipt\b/i.test(normalized)) return { kind: 'financial_receipt' };
+  if (/^(?:payment\s+receipt|receipt\s+for\s+payment)\b/i.test(normalized)) {
+    return { kind: 'financial_receipt' };
+  }
   if (/^invoice\b/i.test(normalized)) return { kind: 'invoice' };
-  if (/^payment\s+status\b/i.test(normalized)) return { kind: 'status' };
-  if (/^(?:paid|i\s+have\s+paid|payment\s+made)\b/i.test(normalized)) return { kind: 'claim' };
+  if (
+    /^payment\s+status\b/i.test(normalized) ||
+    /\b(?:has|did)\s+(?:my\s+)?payment\s+(?:go\s+through|reflect|enter|arrive)\b/i.test(normalized)
+  ) {
+    return { kind: 'status' };
+  }
+
+  if (
+    /^(?:paid|i\s+have\s+paid|i['’]?ve\s+paid|payment\s+made|payment\s+done|transfer\s+done|transferred|i\s+transferred|i\s+sent\s+(?:the\s+)?money)\b/i.test(normalized)
+  ) {
+    return { kind: 'claim' };
+  }
 
   const select = normalized.match(/^pay\s+[A-Z0-9]{3}\/[0-9]{6,}\s+(.+)$/i);
   if (select && select[1]) return { kind: 'select', token: select[1].trim().toUpperCase() };
-  if (/^pay\s+[A-Z0-9]{3}\/[0-9]{6,}$/i.test(normalized)) return { kind: 'list' };
+
+  if (
+    /^pay\s+[A-Z0-9]{3}\/[0-9]{6,}$/i.test(normalized) ||
+    /^payment\s+[A-Z0-9]{3}\/[0-9]{6,}$/i.test(normalized) ||
+    /\b(?:payment\s+(?:options?|details?|methods?)|bank\s+details)\b/i.test(normalized) ||
+    /\b(?:how|where)\s+(?:do|can)\s+i\s+pay\b/i.test(normalized) ||
+    /\bi\s+(?:want|need|would\s+like)\s+to\s+pay\b/i.test(normalized) ||
+    /\bsend\s+(?:me\s+)?(?:payment|bank)\s+(?:details?|options?)\b/i.test(normalized)
+  ) {
+    return { kind: 'list' };
+  }
   return null;
 }
 
