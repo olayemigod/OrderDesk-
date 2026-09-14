@@ -426,7 +426,7 @@ async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[nu
     '/rest/v1/customers?on_conflict=tenant_id,wa_id&select=id',
     {
       method: 'POST',
-      headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+      headers: { Prefer: 'resolution=ignore-duplicates,return=representation' },
       body: JSON.stringify(customerPayload),
     },
   );
@@ -1234,6 +1234,7 @@ async function loadRecentCustomerEnquiry(
       '&tenant_id=eq.' + encodeURIComponent(tenantId) +
       '&customer_id=eq.' + encodeURIComponent(customerId) +
       '&status=in.(open,replied)' +
+      '&converted_order_id=is.null' +
       '&created_at=gte.' + encodeURIComponent(since) +
       '&order=created_at.desc&limit=1',
   );
@@ -1485,7 +1486,9 @@ async function markEnquiryConverted(input: {
 }): Promise<void> {
   await rest(
     '/rest/v1/customer_enquiries?id=eq.' + encodeURIComponent(input.enquiryId) +
-      '&tenant_id=eq.' + encodeURIComponent(input.tenantId),
+      '&tenant_id=eq.' + encodeURIComponent(input.tenantId) +
+      '&converted_order_id=is.null' +
+      '&status=in.(open,replied)',
     {
       method: 'PATCH',
       headers: { Prefer: 'return=minimal' },
