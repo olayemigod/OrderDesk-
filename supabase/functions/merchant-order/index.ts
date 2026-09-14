@@ -82,6 +82,59 @@ Deno.serve(async (request) => {
     return json({ error: createError?.message ?? 'Unable to create order' }, 400);
   }
 
+  const { data: createdOrder } = await admin
+    .from('orders')
+    .select('id,customer_id,public_order_id,status,payment_status,amount_paid,total_amount,currency,fulfillment_status,fulfillment_method')
+    .eq('id', orderId)
+    .eq('tenant_id', tenantId)
+    .maybeSingle();
+
+  if (createdOrder) {
+    const requestedBy = String(membership.role) === 'staff' ? 'staff' : 'merchant';
+    const { error: auditError } = await admin
+      .from('commercial_action_ledger')
+      .upsert({
+        tenant_id: tenantId,
+        action_key: 'manual-order:' + orderId,
+        channel: 'merchant_app',
+        customer_id: createdOrder.customer_id,
+        target_order_id: orderId,
+        action_type: 'manual_order_created',
+        risk_class: 'medium',
+        requested_by: requestedBy,
+        actor_user_id: userId,
+        policy_result: 'allowed',
+        action_status: 'applied',
+        financial_impact: null,
+        currency: createdOrder.currency,
+        before_state: {},
+        after_state: {
+          public_order_id: createdOrder.public_order_id,
+          status: createdOrder.status,
+          payment_status: createdOrder.payment_status,
+          amount_paid: createdOrder.amount_paid,
+          total_amount: createdOrder.total_amount,
+          currency: createdOrder.currency,
+          fulfillment_status: createdOrder.fulfillment_status,
+          fulfillment_method: createdOrder.fulfillment_method,
+        },
+        metadata: {
+          customer_name: customerName,
+          customer_phone: customerPhone,
+          line_count: lines.length,
+          source: 'merchant_app',
+        },
+        applied_at: new Date().toISOString(),
+      }, {
+        onConflict: 'tenant_id,action_key',
+        ignoreDuplicates: true,
+      });
+
+    if (auditError) {
+      console.warn('SellerTray manual order audit write failed', auditError.message);
+    }
+  }
+
   return json({ orderId }, 201);
 });
 
