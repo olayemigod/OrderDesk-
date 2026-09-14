@@ -780,8 +780,14 @@ async function maybeHandleUnifiedConversationIntent({
   }
 
   if (decision.intent === 'unknown') {
+    console.info(JSON.stringify({
+      event: 'sellertray_message_no_safe_commercial_intent',
+      tenantId,
+      customerId,
+      sourceMessageId,
+    }));
     return {
-      handled: false,
+      handled: true,
       orderTextOverride: null,
       enquiryId: null,
       decision,
