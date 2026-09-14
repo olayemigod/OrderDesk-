@@ -17,6 +17,9 @@ export type ConversationIntent =
   | 'delivery_confirm'
   | 'pickup_request'
   | 'delivery_instruction'
+  | 'product_price_enquiry'
+  | 'product_availability_enquiry'
+  | 'product_enquiry'
   | 'catalogue_query'
   | 'complaint'
   | 'refund_request'
@@ -42,10 +45,23 @@ export type IntentOrderContext = {
   createdAt: string;
 };
 
+export type IntentEnquiryContext = {
+  id: string;
+  enquiryType: 'price' | 'availability' | 'product' | 'general';
+  productQuery: string | null;
+  matchedCatalogItemId: string | null;
+  matchedItemName: string | null;
+  quotedPrice: number | null;
+  currency: string;
+  status: 'open' | 'replied' | 'converted' | 'dismissed';
+  createdAt: string;
+};
+
 export type IntentConversationContext = {
   orders: IntentOrderContext[];
   lastOutboundEventKey: string | null;
   lastOutboundMessage: string | null;
+  lastEnquiry: IntentEnquiryContext | null;
 };
 
 export type IntentDecision = {
@@ -83,6 +99,9 @@ const ALLOWED_INTENTS = new Set<ConversationIntent>([
   'delivery_confirm',
   'pickup_request',
   'delivery_instruction',
+  'product_price_enquiry',
+  'product_availability_enquiry',
+  'product_enquiry',
   'catalogue_query',
   'complaint',
   'refund_request',
@@ -285,12 +304,35 @@ function ruleDecision(
     };
   }
 
-  if (/\b(?:how much|price|available|do you have|in stock)\b/i.test(normalized)) {
-    return emptyDecision('catalogue_query', 'rules', 0.86, explicitOrderRef);
+  if (/\b(?:how much|what(?:s| is) the price|price of|cost of|how much be|wetin be the price)\b/i.test(normalized)) {
+    return {
+      ...emptyDecision('product_price_enquiry', 'rules', 0.97, explicitOrderRef),
+      itemText: rawText.trim(),
+    };
   }
 
+  if (/\b(?:do you have|do you sell|is .* available|in stock|you get|una get|do you stock)\b/i.test(normalized)) {
+    return {
+      ...emptyDecision('product_availability_enquiry', 'rules', 0.96, explicitOrderRef),
+      itemText: rawText.trim(),
+    };
+  }
+
+  if (/\b(?:tell me about|what size|which size|what type|which one|show me|what do you have)\b/i.test(normalized)) {
+    return {
+      ...emptyDecision('product_enquiry', 'rules', 0.90, explicitOrderRef),
+      itemText: rawText.trim(),
+    };
+  }
+
+  const contextualOrder = contextualOrderFromEnquiry(rawText, normalized, context);
+  if (contextualOrder) return contextualOrder;
+
   if (looksLikeNewOrder(normalized)) {
-    return emptyDecision('new_order', 'rules', 0.86, explicitOrderRef);
+    return {
+      ...emptyDecision('new_order', 'rules', 0.88, explicitOrderRef),
+      itemText: rawText.trim(),
+    };
   }
 
   return null;
@@ -315,12 +357,14 @@ function shouldInvokeAi(
 
   if (looksLikeNewOrder(normalized)) return false;
 
+  if (context.lastEnquiry && looksLikeEnquiryFollowUp(normalized)) return false;
+
   const activeContext = context.orders.some((order) =>
     !['completed', 'cancelled', 'rejected'].includes(order.status),
   );
-  const actionHint = /\b(?:pay|paid|transfer|cancel|change|remove|add|replace|refund|receipt|invoice|order|rider|deliver|delivery|pickup|pick|collect|wrong|problem|account|bank|status|where|when|how|instead|again|dont|do not|yes|no)\b/i.test(normalized);
+  const actionHint = /\b(?:pay|paid|transfer|cancel|change|remove|add|replace|refund|receipt|invoice|order|rider|deliver|delivery|pickup|pick|collect|wrong|problem|account|bank|status|where|when|how|instead|again|dont|do not|yes|no|price|cost|available|stock|want|take|give|send|bring)\b/i.test(normalized);
 
-  return activeContext || actionHint;
+  return activeContext || Boolean(context.lastEnquiry) || actionHint;
 }
 
 async function resolveWithAi(input: {
@@ -352,7 +396,9 @@ async function resolveWithAi(input: {
               'Choose exactly one allowed intent. ' +
               'Never claim that payment is verified merely because a customer says they paid. ' +
               'Never infer a refund, cancellation, order modification, payment or delivery confirmation if the message is only casual chatter. ' +
-              'If the message is a fresh purchase request, use new_order. ' +
+              'Distinguish enquiries from purchase commitments carefully. A customer asking "how much is a bag of rice?", "do you have rice?" or "what sizes do you have?" is asking an enquiry and is NOT placing an order. ' +
+              'Use product_price_enquiry for price questions, product_availability_enquiry for stock/availability questions, and product_enquiry for other product questions. ' +
+              'Use new_order only when the customer expresses purchase commitment or a clear request to supply/buy an item, including follow-ups to a recent enquiry such as "okay give me two", "I will take one", or "send two bags". ' +
               'If meaning is unsafe or genuinely unclear, use unknown. ' +
               'target_order_ref must be one of the supplied order references or null. ' +
               'payment_method should be BANK, PAYSTACK, FLUTTERWAVE, COD or PICKUP only when the customer selected one. ' +
@@ -375,6 +421,17 @@ async function resolveWithAi(input: {
                 ? {
                     event: input.context.lastOutboundEventKey,
                     text: input.context.lastOutboundMessage.slice(0, 600),
+                  }
+                : null,
+              last_product_enquiry: input.context.lastEnquiry
+                ? {
+                    enquiry_type: input.context.lastEnquiry.enquiryType,
+                    product_query: input.context.lastEnquiry.productQuery,
+                    matched_item_name: input.context.lastEnquiry.matchedItemName,
+                    quoted_price: input.context.lastEnquiry.quotedPrice,
+                    currency: input.context.lastEnquiry.currency,
+                    status: input.context.lastEnquiry.status,
+                    created_at: input.context.lastEnquiry.createdAt,
                   }
                 : null,
             }),
@@ -426,12 +483,50 @@ async function resolveWithAi(input: {
 }
 
 function looksLikeNewOrder(normalized: string): boolean {
-  if (/\b(?:i want|i need|i need to buy|send me|give me|get me|bring me|i wan buy|i wan get|order)\b/i.test(normalized)) {
+  if (/\b(?:how much|price|cost|available|availability|do you have|do you sell|in stock|tell me about|what size|which size)\b/i.test(normalized)) {
+    return false;
+  }
+  if (/\b(?:i want|i need|i need to buy|send me|give me|get me|bring me|i wan buy|i wan get|i go take|ill take|i will take|let me have|order)\b/i.test(normalized)) {
     return true;
   }
   const quantityWord = /\b(?:one|two|three|four|five|six|seven|eight|nine|ten|a dozen|half dozen|\d+)\b/i;
   const purchaseWord = /\b(?:carton|pack|piece|pcs|bottle|bag|crate|box|unit|kg|litre|liter)\b/i;
   return quantityWord.test(normalized) && purchaseWord.test(normalized);
+}
+
+function contextualOrderFromEnquiry(
+  rawText: string,
+  normalized: string,
+  context: IntentConversationContext,
+): IntentDecision | null {
+  const enquiry = context.lastEnquiry;
+  if (!enquiry || enquiry.status === 'converted' || enquiry.status === 'dismissed') return null;
+  if (!enquiry.matchedItemName && !enquiry.productQuery) return null;
+  if (!looksLikeEnquiryFollowUp(normalized)) return null;
+
+  const quantity = extractFollowUpQuantity(normalized);
+  const itemName = enquiry.matchedItemName ?? enquiry.productQuery ?? '';
+  const orderText = quantity ? quantity + ' ' + itemName : itemName;
+
+  return {
+    ...emptyDecision('new_order', 'context', 0.96, null),
+    itemText: orderText,
+  };
+}
+
+function looksLikeEnquiryFollowUp(normalized: string): boolean {
+  return /^(?:(?:ok|okay|alright|oya|yes|fine|good)\s+)?(?:give me|send me|bring me|i(?:ll| will)? take|let me have|make it|i want|i need|i go take)\b/i.test(normalized) ||
+    /^(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\b.*\b(?:please|abeg|thanks)?$/i.test(normalized);
+}
+
+function extractFollowUpQuantity(normalized: string): string | null {
+  const match = normalized.match(/\b(one|two|three|four|five|six|seven|eight|nine|ten|\d+(?:\.\d+)?)\b/i);
+  if (!match) return null;
+  const words: Record<string,string> = {
+    one: '1', two: '2', three: '3', four: '4', five: '5',
+    six: '6', seven: '7', eight: '8', nine: '9', ten: '10',
+  };
+  return words[match[1].toLowerCase()] ?? match[1];
 }
 
 function extractOrderRef(value: string): string | null {
@@ -440,7 +535,16 @@ function extractOrderRef(value: string): string | null {
 }
 
 function itemTextForIntent(intent: ConversationIntent, normalized: string): string | null {
-  return ['order_add_items', 'order_remove_items', 'order_change_items'].includes(intent)
+  return [
+    'new_order',
+    'order_add_items',
+    'order_remove_items',
+    'order_change_items',
+    'product_price_enquiry',
+    'product_availability_enquiry',
+    'product_enquiry',
+    'catalogue_query',
+  ].includes(intent)
     ? normalized
     : null;
 }
