@@ -653,6 +653,7 @@ async function processClaimedInboundMessage({
     });
   }
 
+  const createdOrderState = await reloadConversationOrder(tenantId, orderId);
   await recordCommercialAction({
     tenantId,
     customerId,
@@ -663,6 +664,9 @@ async function processClaimedInboundMessage({
     riskClass: 'medium',
     policyResult: 'allowed',
     actionStatus: 'applied',
+    beforeState: {},
+    afterState: conversationOrderState(createdOrderState),
+    currency: createdOrderState?.currency ?? tenant.currency ?? 'NGN',
     metadata: {
       parser_source: parsed.source,
       parser_confidence: parsed.confidence,
@@ -837,13 +841,25 @@ async function maybeHandleUnifiedConversationIntent({
   }
 
   if (decision.intent === 'delivery_confirm') {
-    const handled = await maybeConfirmCustomerReceipt({
+    target = target ?? chooseSingleOrder(
+      orders.filter((order) =>
+        order.status === 'ready' && order.fulfillment_status === 'out_for_delivery'
+      ),
+    );
+    const beforeState = conversationOrderState(target);
+    await maybeConfirmCustomerReceipt({
       tenantId,
       customerId,
       customerWaId,
       sourceMessageId,
       text: 'received',
     });
+    const afterTarget = target ? await reloadConversationOrder(tenantId, target.id) : null;
+    const applied = Boolean(
+      afterTarget &&
+      afterTarget.status === 'completed' &&
+      afterTarget.fulfillment_status === 'delivered',
+    );
     await recordCommercialAction({
       tenantId,
       customerId,
@@ -852,8 +868,14 @@ async function maybeHandleUnifiedConversationIntent({
       targetOrderId: target?.id ?? null,
       actionType: 'delivery_confirmation',
       riskClass: 'medium',
-      policyResult: handled ? 'allowed' : 'clarification_required',
-      actionStatus: handled ? 'applied' : 'clarification_required',
+      policyResult: applied ? 'allowed' : 'clarification_required',
+      actionStatus: applied ? 'applied' : 'clarification_required',
+      beforeState,
+      afterState: conversationOrderState(afterTarget),
+      currency: afterTarget?.currency ?? target?.currency ?? null,
+      metadata: {
+        confirmation_channel: 'whatsapp',
+      },
     });
     return { handled: true, orderTextOverride: null, enquiryId: null, decision };
   }
@@ -892,6 +914,7 @@ async function maybeHandleUnifiedConversationIntent({
       return { handled: true, orderTextOverride: null, enquiryId: null, decision };
     }
 
+    const beforeState = conversationOrderState(target);
     const routedText = paymentIntentText(decision, target.public_order_id);
     const handled = await handleCustomerPaymentSelfService({
       tenantId,
@@ -902,6 +925,7 @@ async function maybeHandleUnifiedConversationIntent({
       fromPhoneNumberId,
       text: routedText,
     });
+    const afterTarget = await reloadConversationOrder(tenantId, target.id);
     await recordCommercialAction({
       tenantId,
       customerId,
@@ -912,6 +936,12 @@ async function maybeHandleUnifiedConversationIntent({
       riskClass: riskClassForIntent(decision.intent),
       policyResult: handled ? 'allowed' : 'blocked',
       actionStatus: handled ? 'applied' : 'failed',
+      beforeState,
+      afterState: conversationOrderState(afterTarget),
+      currency: afterTarget?.currency ?? target.currency,
+      metadata: {
+        routed_action: decision.intent,
+      },
     });
     return { handled: true, orderTextOverride: null, enquiryId: null, decision };
   }
@@ -969,6 +999,9 @@ async function maybeHandleUnifiedConversationIntent({
       riskClass: 'low',
       policyResult: handled ? 'allowed' : 'blocked',
       actionStatus: handled ? 'applied' : 'failed',
+      beforeState: conversationOrderState(target),
+      afterState: conversationOrderState(target),
+      currency: target.currency,
     });
     return { handled: true, orderTextOverride: null, enquiryId: null, decision };
   }
@@ -1028,6 +1061,11 @@ async function maybeHandleUnifiedConversationIntent({
       riskClass: riskClassForIntent(decision.intent),
       policyResult: 'pending',
       actionStatus: 'requested',
+      beforeState: conversationOrderState(target),
+      currency: target.currency,
+      metadata: {
+        requested_change: decision.intent,
+      },
     });
     return { handled: true, orderTextOverride: null, enquiryId: null, decision };
   }
@@ -1084,6 +1122,13 @@ async function maybeHandleUnifiedConversationIntent({
       riskClass: riskClassForIntent(decision.intent),
       policyResult: decision.intent === 'refund_request' ? 'pending' : 'not_applicable',
       actionStatus: 'requested',
+      beforeState: conversationOrderState(target),
+      currency: target?.currency ?? null,
+      metadata: {
+        customer_text: text.slice(0, 1000),
+        amount_paid: target ? toNumber(target.amount_paid) ?? 0 : null,
+        total_amount: target ? toNumber(target.total_amount) : null,
+      },
     });
     return { handled: true, orderTextOverride: null, enquiryId: null, decision };
   }
