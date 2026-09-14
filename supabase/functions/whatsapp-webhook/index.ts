@@ -1341,7 +1341,7 @@ async function handleCustomerProductEnquiry(input: {
         source_inbound_message_id: input.sourceMessageId,
         channel: 'whatsapp',
         enquiry_type: enquiryType,
-        status: 'replied',
+        status: 'open',
         original_text: input.text.slice(0, 2000),
         normalized_text: normalizeIntentText(input.text).slice(0, 1000),
         product_query: productQuery?.slice(0, 500) ?? null,
@@ -1350,7 +1350,7 @@ async function handleCustomerProductEnquiry(input: {
         quoted_price: match ? toNumber(match.item.price_ngn) : null,
         currency: input.currency,
         response_text: responseText.slice(0, 2000),
-        replied_at: new Date().toISOString(),
+        replied_at: null,
         updated_at: new Date().toISOString(),
       }),
     },
@@ -1371,6 +1371,8 @@ async function handleCustomerProductEnquiry(input: {
       conversation_window_expires_at: new Date(Date.now() + 86400000).toISOString(),
     }),
   });
+
+  await kickNotificationWorker();
 
   await rest('/rest/v1/merchant_notifications', {
     method: 'POST',
@@ -1564,6 +1566,8 @@ async function queueWorkflowClarification(input: {
       conversation_window_expires_at: new Date(Date.now() + 86400000).toISOString(),
     }),
   });
+
+  await kickNotificationWorker();
 
   await rest('/rest/v1/merchant_notifications', {
     method: 'POST',
