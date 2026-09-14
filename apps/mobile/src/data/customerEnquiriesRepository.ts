@@ -67,6 +67,62 @@ export async function loadCustomerEnquiries(
   });
 }
 
+
+export async function convertCustomerEnquiryToOrder(
+  tenantId: string,
+  enquiryId: string,
+  quantity: number,
+): Promise<{ orderId: string; publicOrderId: string | null }> {
+  const data = await invokeEnquiryAction({
+    tenantId,
+    enquiryId,
+    action: 'convert_to_order',
+    quantity,
+  });
+  const orderId = typeof data.orderId === 'string' ? data.orderId : null;
+  if (!orderId) throw new Error('SellerTray did not return the created order.');
+  return {
+    orderId,
+    publicOrderId: typeof data.publicOrderId === 'string' ? data.publicOrderId : null,
+  };
+}
+
+export async function replyToCustomerEnquiry(
+  tenantId: string,
+  enquiryId: string,
+  message: string,
+): Promise<void> {
+  await invokeEnquiryAction({ tenantId, enquiryId, action: 'reply', message });
+}
+
+export async function dismissCustomerEnquiry(
+  tenantId: string,
+  enquiryId: string,
+): Promise<void> {
+  await invokeEnquiryAction({ tenantId, enquiryId, action: 'dismiss' });
+}
+
+async function invokeEnquiryAction(
+  body: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const { data, error } = await supabase.functions.invoke('merchant-enquiry-action', { body });
+  if (error) {
+    let message = error.message || 'Unable to complete enquiry action.';
+    if (error.context && typeof error.context === 'object' && 'clone' in error.context) {
+      try {
+        const payload = await (error.context as Response).clone().json() as { error?: string };
+        if (payload?.error) message = payload.error;
+      } catch {
+        // Keep the SDK message.
+      }
+    }
+    throw new Error(message);
+  }
+  return data && typeof data === 'object' && !Array.isArray(data)
+    ? data as Record<string, unknown>
+    : {};
+}
+
 function stringOrNull(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value : null;
 }
