@@ -2662,7 +2662,9 @@ async function queueCustomerSupportReply({
       media_mime_type: attachment?.mimeType ?? null,
       conversation_window_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     }),
-  });  await kickNotificationWorker();
+  });
+
+  await kickNotificationWorker();
 }
 
 async function ensureReceiptPdf({
