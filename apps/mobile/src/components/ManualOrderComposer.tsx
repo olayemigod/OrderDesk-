@@ -292,7 +292,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   createButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
-  muted: { color: '#667085', fontSize: 11 },
+  muted: { color: '#667085', fontSize: 12 },
   emptyText: { color: '#667085', fontSize: 13, lineHeight: 17 },
   error: { color: '#B42318', fontSize: 13, lineHeight: 16 },
   disabled: { opacity: 0.45 },
