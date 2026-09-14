@@ -47,6 +47,7 @@ class ParserProviderError extends Error {
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') ?? '';
 const OPENAI_PARSER_MODEL = Deno.env.get('OPENAI_PARSER_MODEL') ?? 'gpt-5.6-luna';
 const ORDER_PARSER_TOKEN = Deno.env.get('ORDER_PARSER_TOKEN') ?? '';
+const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
 const MAX_MESSAGE_LENGTH = 4000;
 const MAX_CATALOGUE_ITEMS = 500;
@@ -80,14 +81,17 @@ Deno.serve(withObservability('order-parser', async (request) => {
     return json({ error: 'Method not allowed' }, 405);
   }
 
-  if (!ORDER_PARSER_TOKEN || !OPENAI_API_KEY) {
-    console.error('Order parser is not activated: required server secrets are missing.');
+  if (!OPENAI_API_KEY) {
+    console.error('Order parser is not activated: OpenAI server secret is missing.');
     return json({ error: 'Parser not configured' }, 503);
   }
 
   const authorization = request.headers.get('authorization') ?? '';
-  const expectedAuthorization = `Bearer ${ORDER_PARSER_TOKEN}`;
-  if (!constantTimeEqual(authorization, expectedAuthorization)) {
+  const acceptedTokens = [ORDER_PARSER_TOKEN, SERVICE_ROLE_KEY].filter(Boolean);
+  const authorized = acceptedTokens.some((token) =>
+    constantTimeEqual(authorization, `Bearer ${token}`)
+  );
+  if (!authorized) {
     return json({ error: 'Unauthorized' }, 401);
   }
 
