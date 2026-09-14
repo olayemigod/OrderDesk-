@@ -7,6 +7,7 @@ import { usePlatformAdmin } from '../hooks/usePlatformAdmin';
 import { useSubscriptionAccess } from '../hooks/useSubscriptionAccess';
 import { AccountDataControls } from './AccountDataControls';
 import { BusinessProfileView } from './BusinessProfileView';
+import { CommercialActionAuditView } from './CommercialActionAuditView';
 import { CustomersView } from './CustomersView';
 import { CustomerNotificationSettings } from './CustomerNotificationSettings';
 import { CustomerEnquiriesView } from './CustomerEnquiriesView';
@@ -30,6 +31,7 @@ type Section =
   | 'payments'
   | 'operations'
   | 'reports'
+  | 'audit'
   | 'team'
   | 'subscription'
   | 'security'
@@ -75,6 +77,7 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
         {section === 'payments' ? <PaymentMethodsSettings business={business} /> : null}
         {section === 'operations' ? <OperationalPolicySettings business={business} /> : null}
         {section === 'reports' ? <ReportsView business={business} /> : null}
+        {section === 'audit' ? <CommercialActionAuditView business={business} /> : null}
         {section === 'team' ? <TeamManagementView business={business} /> : null}
         {section === 'subscription' ? (
           <View style={styles.detailSection}>
@@ -214,12 +217,20 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
         <Text style={[styles.groupLabel, appearance.dark && darkStyles.bodyText]}>BUSINESS</Text>
         <View style={[styles.menuGroup, appearance.dark && darkStyles.card]}>
           {business.role !== 'staff' ? (
-            <MenuRow
-              icon="stats-chart-outline"
-              title="Reports"
-              text="Orders, payments, products and fulfilment performance"
-              onPress={() => setSection('reports')}
-            />
+            <>
+              <MenuRow
+                icon="stats-chart-outline"
+                title="Reports"
+                text="Orders, payments, products and fulfilment performance"
+                onPress={() => setSection('reports')}
+              />
+              <MenuRow
+                icon="shield-checkmark-outline"
+                title="Commercial action audit"
+                text="Trace AI, customer, policy and workflow actions"
+                onPress={() => setSection('audit')}
+              />
+            </>
           ) : null}
           <MenuRow
             icon="business-outline"
