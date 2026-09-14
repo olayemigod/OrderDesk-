@@ -160,8 +160,10 @@ async function extractOrder(input: ParserRequest): Promise<{ parsed: ParsedOrder
           content:
             'You extract purchase-order line items from short WhatsApp messages for a small merchant. ' +
             'Return only products the customer is actually ordering and their numeric quantities. ' +
-            'Use the supplied merchant catalogue names and aliases only to understand abbreviations, packaging, spelling and informal wording. ' +
-            'For each item name, preserve the customer wording when it is clear; otherwise use the closest catalogue name. ' +
+            'Use the supplied merchant catalogue names and aliases to understand abbreviations, packaging, spelling, size notation, word order and informal wording. ' +
+            'When the customer wording uniquely refers to a supplied catalogue item, return that exact catalogue name. For example, catalogue "Rice" plus "2 bags of rice" should return name "Rice", quantity 2; catalogue "50kg Semolina" plus "semo 50kg" should return name "50kg Semolina". ' +
+            'Do not guess between multiple catalogue variants when the customer omitted a distinguishing size, flavour or pack attribute; preserve the customer wording so SellerTray can request review or clarification. ' +
+            'When no supplied catalogue item matches safely, preserve the customer wording rather than inventing a catalogue product. ' +
             'Ignore greetings, delivery instructions, addresses, payment discussion, thanks and non-order chatter. ' +
             'Never invent a product, quantity, catalogue ID or selling price. Selling prices are deliberately outside your output. ' +
             'If no purchase line can be identified safely, return an empty items array. ' +
