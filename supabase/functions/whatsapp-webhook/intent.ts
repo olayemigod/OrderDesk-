@@ -305,7 +305,10 @@ function ruleDecision(
     return emptyDecision('delivery_confirm', 'rules', 0.93, explicitOrderRef);
   }
 
-  if (/\b(?:pick it up|pick it myself|pickup|pick up myself|come and collect)\b/i.test(normalized)) {
+  if (
+    !looksLikePaymentOptionsLanguage(normalized) &&
+    /\b(?:pick it up|pick it myself|pickup|pick up myself|come and collect)\b/i.test(normalized)
+  ) {
     return emptyDecision('pickup_request', 'rules', 0.94, explicitOrderRef);
   }
 
