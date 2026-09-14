@@ -291,6 +291,8 @@ function Workspace() {
               editItem={editItem}
               removeItem={removeItem}
               createOrder={createOrder}
+              refreshOrders={refresh}
+              refreshCatalogue={catalogue.refresh}
               initialFilter={ordersEntryFilter}
             />
           ) : null}
@@ -694,6 +696,8 @@ function OrdersView({
   editItem,
   removeItem,
   createOrder,
+  refreshOrders,
+  refreshCatalogue,
   initialFilter,
 }: {
   business: MerchantBusiness;
@@ -707,6 +711,8 @@ function OrdersView({
   addItem: (orderId: string, item: OrderItemInput) => Promise<void>;
   editItem: (itemId: string, item: OrderItemInput) => Promise<void>;
   removeItem: (itemId: string) => Promise<void>;
+  refreshOrders: () => Promise<void>;
+  refreshCatalogue: () => Promise<void>;
   initialFilter: OrderFilter;
   createOrder: (input: {
     customerName: string;
@@ -832,6 +838,9 @@ function OrdersView({
           onAddItem={(item) => addItem(selectedOrder.id, item)}
           onEditItem={editItem}
           onRemoveItem={removeItem}
+          role={business.role}
+          refreshOrders={refreshOrders}
+          refreshCatalogue={refreshCatalogue}
         />
       </View>
     );
@@ -1077,10 +1086,16 @@ function OrderDetail({
   onAddItem,
   onEditItem,
   onRemoveItem,
+  role,
+  refreshOrders,
+  refreshCatalogue,
 }: {
   order: MerchantOrder;
   tenantId: string;
   currency: string;
+  role: MerchantBusiness['role'];
+  refreshOrders: () => Promise<void>;
+  refreshCatalogue: () => Promise<void>;
   onAccept: () => Promise<void>;
   onReject: (reason: string) => Promise<void>;
   onStart: () => Promise<void>;
@@ -1157,10 +1172,14 @@ function OrderDetail({
 
       <OrderItemsEditor
         order={order}
+        tenantId={tenantId}
+        role={role}
         editable={editable}
         onAdd={(_orderId, item) => onAddItem(item)}
         onEdit={onEditItem}
         onRemove={onRemoveItem}
+        onResolved={refreshOrders}
+        onCatalogueChanged={refreshCatalogue}
       />
 
       <View style={styles.totalRow}>
