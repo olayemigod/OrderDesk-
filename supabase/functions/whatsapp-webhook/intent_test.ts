@@ -170,3 +170,25 @@ Deno.test('pay on pickup selects payment method instead of fulfillment pickup', 
   assertEquals(decision.intent, 'payment_method_select');
   assertEquals(decision.paymentMethod, 'PICKUP');
 });
+
+
+Deno.test('numeric payment option reply is routed after payment options', async () => {
+  const decision = await resolveConversationIntent({
+    text: '1',
+    vocabulary: [],
+    context: {
+      ...baseContext,
+      orders: [{
+        id: '33333333-3333-4333-8333-333333333333',
+        publicOrderId: 'NLM/000006',
+        status: 'accepted',
+        paymentStatus: 'unpaid',
+        fulfillmentStatus: 'unassigned',
+        createdAt: new Date().toISOString(),
+      }],
+      lastOutboundEventKey: 'payment_options',
+    },
+  });
+  assertEquals(decision.intent, 'payment_method_select');
+  assertEquals(decision.paymentMethod, '1');
+});
