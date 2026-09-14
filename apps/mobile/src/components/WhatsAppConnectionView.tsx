@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
   setupTitle: { color: '#102A43', fontSize: 15, fontWeight: '900' },
   step: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   stepNumber: { width: 28, height: 28, borderRadius: 99, backgroundColor: '#ECFDF3', alignItems: 'center', justifyContent: 'center' },
-  stepNumberText: { color: '#079455', fontWeight: '900', fontSize: 11 },
+  stepNumberText: { color: '#079455', fontWeight: '900', fontSize: 12 },
   stepCopy: { flex: 1 },
   stepTitle: { color: '#344054', fontSize: 12, fontWeight: '900' },
   stepText: { color: '#667085', fontSize: 12, lineHeight: 17, marginTop: 2 },
