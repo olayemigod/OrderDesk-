@@ -1460,6 +1460,7 @@ function findEnquiryCatalogueMatch(
 
 function extractEnquiryProductQuery(text: string): string {
   return normalizeIntentText(text)
+    .replace(/^(?:hi|hello|hey|good morning|good afternoon|good evening)\s+/i, '')
     .replace(/^(?:please\s+)?(?:how much (?:is|are|be)|what(?:s| is) the price of|price of|cost of|wetin be the price(?: of)?|do you have|do you sell|do you stock|is|are|you get|una get|tell me about|show me)\s+/i, '')
     .replace(/\b(?:available|in stock)\b/gi, '')
     .replace(/^(?:a|an|the)\s+/i, '')
