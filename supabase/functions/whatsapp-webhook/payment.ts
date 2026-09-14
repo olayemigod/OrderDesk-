@@ -202,7 +202,6 @@ async function sendOptions(input: HandlerInput, order: OrderRow): Promise<void> 
     if (method.method_type === 'bank_transfer') bankNo += 1;
     lines.push(methodToken(method, bankNo) + ' — ' + method.display_name + (method.is_default ? ' · default' : ''));
   }
-  const firstBankNo = methods[0].method_type === 'bank_transfer' ? 1 : 0;
   lines.push('');
   lines.push('Reply with the option you prefer, for example "' + methods[0].display_name +
     '". You can also ask naturally, such as "send account details" or "cash on delivery".');
