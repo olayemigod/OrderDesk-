@@ -152,7 +152,12 @@ export async function resolveConversationIntent(input: {
   const explicitOrderRef = extractOrderRef(input.text);
 
   const vocabularyDecision = matchVocabulary(normalized, input.vocabulary, explicitOrderRef);
-  if (vocabularyDecision) return vocabularyDecision;
+  if (
+    vocabularyDecision &&
+    !(vocabularyDecision.intent === 'new_order' && looksLikeNonOrderWorkflow(normalized))
+  ) {
+    return vocabularyDecision;
+  }
 
   const rulesDecision = ruleDecision(input.text, normalized, input.context, explicitOrderRef);
   if (rulesDecision) return rulesDecision;
@@ -167,6 +172,9 @@ export async function resolveConversationIntent(input: {
     context: input.context,
     explicitOrderRef,
   });
+  if (aiDecision?.intent === 'new_order' && looksLikeNonOrderWorkflow(normalized)) {
+    return emptyDecision('unknown', 'rules', 1, explicitOrderRef);
+  }
   return aiDecision ?? emptyDecision('unknown', 'none', 0, explicitOrderRef);
 }
 
@@ -304,6 +312,14 @@ function ruleDecision(
     };
   }
 
+  if (looksLikePaymentOptionsLanguage(normalized)) {
+    const paymentMethod = paymentMethodFromSentence(normalized);
+    return {
+      ...emptyDecision(paymentMethod ? 'payment_method_select' : 'payment_options', 'rules', 0.97, explicitOrderRef),
+      paymentMethod,
+    };
+  }
+
   if (/\b(?:how much|what(?:s| is) the price|price of|cost of|how much be|wetin be the price)\b/i.test(normalized)) {
     return {
       ...emptyDecision('product_price_enquiry', 'rules', 0.97, explicitOrderRef),
@@ -399,6 +415,7 @@ async function resolveWithAi(input: {
               'Distinguish enquiries from purchase commitments carefully. A customer asking "how much is a bag of rice?", "do you have rice?" or "what sizes do you have?" is asking an enquiry and is NOT placing an order. ' +
               'Use product_price_enquiry for price questions, product_availability_enquiry for stock/availability questions, and product_enquiry for other product questions. ' +
               'Use new_order only when the customer expresses purchase commitment or a clear request to supply/buy an item, including follow-ups to a recent enquiry such as "okay give me two", "I will take one", or "send two bags". ' +
+              'Payment, transfer, refund, receipt, invoice, delivery, cancellation, complaint or order-status language is never enough to create a new product order, even when there is a recent enquiry. ' +
               'If meaning is unsafe or genuinely unclear, use unknown. ' +
               'target_order_ref must be one of the supplied order references or null. ' +
               'payment_method should be BANK, PAYSTACK, FLUTTERWAVE, COD or PICKUP only when the customer selected one. ' +
@@ -483,6 +500,7 @@ async function resolveWithAi(input: {
 }
 
 function looksLikeNewOrder(normalized: string): boolean {
+  if (looksLikeNonOrderWorkflow(normalized)) return false;
   if (/\b(?:how much|price|cost|available|availability|do you have|do you sell|in stock|tell me about|what size|which size)\b/i.test(normalized)) {
     return false;
   }
@@ -521,8 +539,29 @@ function contextualOrderFromEnquiry(
 }
 
 function looksLikeEnquiryFollowUp(normalized: string): boolean {
+  if (looksLikeNonOrderWorkflow(normalized)) return false;
   return /^(?:(?:ok|okay|alright|oya|yes|fine|good)\s+)?(?:give me|send me|bring me|i(?:ll| will)? take|let me have|make it|i want|i need|i go take)\b/i.test(normalized) ||
     /^(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\b.*\b(?:please|abeg|thanks)?$/i.test(normalized);
+}
+
+function looksLikePaymentOptionsLanguage(normalized: string): boolean {
+  return /\b(?:i want to pay|i wan pay|want to pay|make i pay|how can i pay|how do i pay|how to pay|where can i pay|where should i transfer|pay by|pay with|payment options|payment details|bank transfer|paystack|flutterwave|cash on delivery|pay on pickup)\b/i.test(normalized);
+}
+
+function paymentMethodFromSentence(normalized: string): string | null {
+  if (/\b(?:paystack)\b/i.test(normalized)) return 'PAYSTACK';
+  if (/\b(?:flutterwave|flw)\b/i.test(normalized)) return 'FLUTTERWAVE';
+  if (/\b(?:cash on delivery|cod)\b/i.test(normalized)) return 'COD';
+  if (/\b(?:pay on pickup|pickup)\b/i.test(normalized)) return 'PICKUP';
+  if (/\b(?:bank transfer|transfer|bank)\b/i.test(normalized)) return 'BANK';
+  return null;
+}
+
+function looksLikeNonOrderWorkflow(normalized: string): boolean {
+  return (
+    looksLikePaymentOptionsLanguage(normalized) ||
+    /\b(?:paid|payment|refund|money back|receipt|invoice|cancel|stop order|order status|track my order|where is my order|delivery status|where is the rider|rider|pickup|pick up|collect|complaint|damaged|spoilt|spoiled|missing item)\b/i.test(normalized)
+  );
 }
 
 function extractFollowUpQuantity(normalized: string): string | null {
