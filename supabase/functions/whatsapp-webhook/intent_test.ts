@@ -66,3 +66,86 @@ Deno.test('price question remains an enquiry', async () => {
   });
   assertEquals(decision.intent, 'product_price_enquiry');
 });
+
+
+Deno.test('cash on delivery is a payment method selection', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'Cash on delivery',
+    vocabulary: [],
+    context: {
+      ...baseContext,
+      orders: [{
+        id: '33333333-3333-4333-8333-333333333333',
+        publicOrderId: 'NLM/000006',
+        status: 'accepted',
+        paymentStatus: 'unpaid',
+        fulfillmentStatus: 'unassigned',
+        createdAt: new Date().toISOString(),
+      }],
+      lastOutboundEventKey: 'order_accepted',
+    },
+  });
+  assertEquals(decision.intent, 'payment_method_select');
+  assertEquals(decision.paymentMethod, 'COD');
+});
+
+Deno.test('paying on delivery natural language selects COD', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'I am paying on delivery',
+    vocabulary: [],
+    context: {
+      ...baseContext,
+      orders: [{
+        id: '33333333-3333-4333-8333-333333333333',
+        publicOrderId: 'NLM/000006',
+        status: 'accepted',
+        paymentStatus: 'unpaid',
+        fulfillmentStatus: 'unassigned',
+        createdAt: new Date().toISOString(),
+      }],
+      lastOutboundEventKey: 'payment_options',
+    },
+  });
+  assertEquals(decision.intent, 'payment_method_select');
+  assertEquals(decision.paymentMethod, 'COD');
+});
+
+Deno.test('bank display-name reply after payment options is routed as method selection', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'Access Bank',
+    vocabulary: [],
+    context: {
+      ...baseContext,
+      orders: [{
+        id: '33333333-3333-4333-8333-333333333333',
+        publicOrderId: 'NLM/000006',
+        status: 'accepted',
+        paymentStatus: 'unpaid',
+        fulfillmentStatus: 'unassigned',
+        createdAt: new Date().toISOString(),
+      }],
+      lastOutboundEventKey: 'payment_options',
+    },
+  });
+  assertEquals(decision.intent, 'payment_method_select');
+  assertEquals(decision.paymentMethod, 'ACCESS_BANK');
+});
+
+Deno.test('paid claim is never treated as a new order', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'I have transferred',
+    vocabulary: [],
+    context: {
+      ...baseContext,
+      orders: [{
+        id: '33333333-3333-4333-8333-333333333333',
+        publicOrderId: 'NLM/000006',
+        status: 'accepted',
+        paymentStatus: 'unpaid',
+        fulfillmentStatus: 'unassigned',
+        createdAt: new Date().toISOString(),
+      }],
+    },
+  });
+  assertEquals(decision.intent, 'payment_claim');
+});
