@@ -68,6 +68,7 @@ type OrderRow = {
     | null;
   order_items: Array<{
     id: string;
+    catalog_item_id: string | null;
     item_name: string;
     original_item_name: string | null;
     quantity: number | string;
@@ -156,6 +157,7 @@ function mapOrder(row: OrderRow, notifications: OrderNotification[]): MerchantOr
       .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()),
     items: (row.order_items ?? []).map((item) => ({
       id: item.id,
+      catalogItemId: item.catalog_item_id,
       name: item.item_name,
       originalName: item.original_item_name,
       quantity: toNumber(item.quantity) ?? 1,
@@ -198,7 +200,7 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
         created_at,
         customers(id, display_name, phone, wa_id),
         inbound_messages!orders_source_message_same_tenant(text_body),
-        order_items(id, item_name, original_item_name, quantity, unit_price, match_source, match_confidence),
+        order_items(id, catalog_item_id, item_name, original_item_name, quantity, unit_price, match_source, match_confidence),
         order_status_events(id, event_type, from_status, to_status, actor_kind, reason, created_at)
       `)
       .eq('tenant_id', tenantId)
