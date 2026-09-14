@@ -725,7 +725,7 @@ async function maybeHandleUnifiedConversationIntent({
       customerId,
       customerWaId,
       sourceMessageId,
-      text,
+      text: 'received',
     });
   }
 
