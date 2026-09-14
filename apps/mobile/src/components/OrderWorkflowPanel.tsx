@@ -105,7 +105,7 @@ export function OrderWorkflowPanel({
         ) : (
           <View style={[styles.readyCard, appearance.dark && darkStyles.successCard]}>
             <Text style={[styles.readyTitle, appearance.dark && darkStyles.successTitle]}>Ready to accept</Text>
-            <Text style={[styles.readyText, appearance.dark && darkStyles.successText]}>The order currently has at least one item and every line has a selling price.</Text>
+            <Text style={[styles.readyText, appearance.dark && darkStyles.successText]}>Every line is priced and all unmatched catalogue items have been explicitly resolved.</Text>
           </View>
         )
       ) : (
@@ -187,6 +187,15 @@ function currentBlockers(order: MerchantOrder): string[] {
   const missingPriceCount = order.items.filter((item) => item.unitPrice === null).length;
   if (missingPriceCount > 0) {
     blockers.push(`Set a selling price for ${missingPriceCount} line${missingPriceCount === 1 ? '' : 's'}.`);
+  }
+
+  const unmatchedCount = order.items.filter(
+    (item) => item.catalogItemId === null && item.matchSource === 'unmatched',
+  ).length;
+  if (unmatchedCount > 0) {
+    blockers.push(
+      `Resolve ${unmatchedCount} unmatched catalogue item${unmatchedCount === 1 ? '' : 's'} or explicitly keep ${unmatchedCount === 1 ? 'it' : 'them'} as one-off.`,
+    );
   }
 
   return blockers;
