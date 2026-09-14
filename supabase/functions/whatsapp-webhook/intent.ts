@@ -523,13 +523,13 @@ function contextualOrderFromEnquiry(
 ): IntentDecision | null {
   const enquiry = context.lastEnquiry;
   if (!enquiry || enquiry.status === 'converted' || enquiry.status === 'dismissed') return null;
-  if (!enquiry.matchedItemName && !enquiry.productQuery) return null;
+  if (!enquiry.matchedCatalogItemId || !enquiry.matchedItemName) return null;
   if (!looksLikeEnquiryFollowUp(normalized)) return null;
 
   const quantity =
     extractFollowUpQuantity(normalized) ??
     (/\b(?:take it|give me it|send it|bring it|want it|need it)\b/i.test(normalized) ? '1' : null);
-  const itemName = enquiry.matchedItemName ?? enquiry.productQuery ?? '';
+  const itemName = enquiry.matchedItemName;
   const orderText = (quantity ?? '1') + ' ' + itemName;
 
   return {
