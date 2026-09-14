@@ -351,12 +351,7 @@ function UnmatchedCatalogueResolver({
   const matches = catalogue
     .filter((entry) => {
       if (!normalizedSearch) return true;
-      return [
-        entry.name,
-        entry.sku ?? '',
-        entry.category ?? '',
-        ...entry.aliases,
-      ].join(' ').toLocaleLowerCase().includes(normalizedSearch);
+      return catalogueSearchMatches(entry, normalizedSearch);
     })
     .slice(0, 12);
 
@@ -683,6 +678,42 @@ function parseInput(
       unitPrice: price,
     },
   };
+}
+
+function catalogueSearchMatches(entry: CatalogueItem, search: string): boolean {
+  const query = normalizeProductSearch(search);
+  if (!query) return true;
+
+  const variants = [
+    entry.name,
+    entry.sku ?? '',
+    entry.category ?? '',
+    ...entry.aliases,
+  ]
+    .map(normalizeProductSearch)
+    .filter(Boolean);
+
+  const queryTokens = new Set(query.split(' ').filter(Boolean));
+
+  return variants.some((variant) => {
+    if (variant.includes(query) || query.includes(variant)) return true;
+    const variantTokens = variant.split(' ').filter(Boolean);
+    return variantTokens.length > 0 && variantTokens.every((token) => queryTokens.has(token));
+  });
+}
+
+function normalizeProductSearch(value: string): string {
+  return value
+    .toLocaleLowerCase()
+    .replace(/(\d+(?:\.\d+)?)\s*(kilograms?|kilogrammes?|kgs?)\b/g, '$1kg')
+    .replace(/\bsemo\b/g, 'semolina')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\b(?:bags?|cartons?|packs?|packets?|bottles?|crates?|boxes?|pieces?|pcs|units?|of)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .sort()
+    .join(' ');
 }
 
 function formatParserSource(source: MerchantOrder['parserSource']): string {
