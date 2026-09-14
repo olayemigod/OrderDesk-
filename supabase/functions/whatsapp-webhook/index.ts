@@ -1319,7 +1319,11 @@ function findEnquiryCatalogueMatch(
   text: string,
   catalogue: CatalogueRow[],
 ): CatalogueMatch | null {
-  const normalizedText = normalizePhrase(text);
+  const productQuery = extractEnquiryProductQuery(text);
+  const direct = findCatalogueMatch(productQuery, catalogue);
+  if (direct) return direct;
+
+  const normalizedText = normalizePhrase(productQuery || text);
   const messageTokens = new Set(normalizedText.split(' ').filter((token) => token.length >= 2));
   const ranked = catalogue
     .map((item) => ({
@@ -1330,11 +1334,11 @@ function findEnquiryCatalogueMatch(
 
   const best = ranked[0];
   const second = ranked[1];
-  if (!best || best.score < 24) return null;
-  if (best.score < 100 && second && best.score - second.score < 8) return null;
+  if (!best || best.score < 35) return null;
+  if (best.score < 100 && second && best.score - second.score < 10) return null;
 
   const exact = findCatalogueMatch(best.item.name, [best.item]);
-  return exact ?? { item: best.item, source: 'normalized_name', confidence: Math.min(0.93, best.score / 100) };
+  return exact ?? { item: best.item, source: 'normalized_name', confidence: Math.min(0.92, best.score / 100) };
 }
 
 function extractEnquiryProductQuery(text: string): string {
@@ -1864,60 +1868,170 @@ function enrichFromCatalogue(parsedItems: ParsedItem[], catalogue: CatalogueRow[
 }
 
 function findCatalogueMatch(parsedName: string, catalogue: CatalogueRow[]): CatalogueMatch | null {
-  const normalizedParsed = normalizePhrase(parsedName);
+  const normalizedParsed = normalizeProductPhrase(parsedName);
 
   for (const item of catalogue) {
-    if (normalizedParsed === normalizePhrase(item.name)) {
+    if (normalizedParsed === normalizeProductPhrase(item.name)) {
       return { item, source: 'catalogue_name', confidence: 1 };
     }
   }
 
   for (const item of catalogue) {
     for (const alias of item.catalog_item_aliases ?? []) {
-      if (normalizedParsed === normalizePhrase(alias.alias)) {
+      if (normalizedParsed === normalizeProductPhrase(alias.alias)) {
         return { item, source: 'catalogue_alias', confidence: 0.99 };
       }
     }
   }
 
-  const variants = phraseVariants(parsedName);
-  variants.delete(normalizedParsed);
+  const parsedKey = productTokenKey(parsedName);
+  const parsedBaseKey = productBaseKey(parsedName);
+  const candidates: Array<{
+    item: CatalogueRow;
+    source: Exclude<MatchSource, 'unmatched'>;
+    confidence: number;
+    score: number;
+  }> = [];
 
   for (const item of catalogue) {
-    if (variants.has(normalizePhrase(item.name))) {
-      return { item, source: 'normalized_name', confidence: 0.95 };
+    const nameKey = productTokenKey(item.name);
+    const nameBaseKey = productBaseKey(item.name);
+
+    if (parsedKey && parsedKey === nameKey) {
+      candidates.push({
+        item,
+        source: 'normalized_name',
+        confidence: 0.97,
+        score: 97,
+      });
+    } else if (parsedBaseKey && parsedBaseKey === nameBaseKey) {
+      candidates.push({
+        item,
+        source: 'normalized_name',
+        confidence: 0.95,
+        score: 95,
+      });
+    }
+
+    for (const alias of item.catalog_item_aliases ?? []) {
+      const aliasKey = productTokenKey(alias.alias);
+      const aliasBaseKey = productBaseKey(alias.alias);
+      if (parsedKey && parsedKey === aliasKey) {
+        candidates.push({
+          item,
+          source: 'normalized_alias',
+          confidence: 0.96,
+          score: 96,
+        });
+      } else if (parsedBaseKey && parsedBaseKey === aliasBaseKey) {
+        candidates.push({
+          item,
+          source: 'normalized_alias',
+          confidence: 0.94,
+          score: 94,
+        });
+      }
     }
   }
 
-  for (const item of catalogue) {
-    for (const alias of item.catalog_item_aliases ?? []) {
-      if (variants.has(normalizePhrase(alias.alias))) {
-        return { item, source: 'normalized_alias', confidence: 0.94 };
-      }
+  const deduped = new Map<string, typeof candidates[number]>();
+  for (const candidate of candidates) {
+    const existing = deduped.get(candidate.item.id);
+    if (!existing || candidate.score > existing.score) {
+      deduped.set(candidate.item.id, candidate);
     }
+  }
+  const ranked = [...deduped.values()].sort((left, right) => right.score - left.score);
+
+  if (ranked.length === 1) {
+    const best = ranked[0];
+    return { item: best.item, source: best.source, confidence: best.confidence };
+  }
+
+  if (ranked.length > 1 && ranked[0].score - ranked[1].score >= 3) {
+    const best = ranked[0];
+    return { item: best.item, source: best.source, confidence: best.confidence };
   }
 
   return null;
 }
 
+function normalizeProductPhrase(value: string): string {
+  const normalized = value
+    .toLocaleLowerCase()
+    .replace(/(\d+(?:\.\d+)?)\s*(kilograms?|kilogrammes?|kgs?)\b/g, '$1kg')
+    .replace(/(\d+(?:\.\d+)?)\s*(grams?|gms?)\b/g, '$1g')
+    .replace(/(\d+(?:\.\d+)?)\s*(litres?|liters?|ltrs?)\b/g, '$1l')
+    .replace(/(\d+(?:\.\d+)?)\s*(millilitres?|milliliters?|mls?)\b/g, '$1ml')
+    .replace(/\bsemo\b/g, 'semolina')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return normalized
+    .split(' ')
+    .map((token) => normalizePackagingToken(token))
+    .filter(Boolean)
+    .join(' ');
+}
+
+function productTokenKey(value: string): string {
+  return normalizeProductPhrase(value)
+    .split(' ')
+    .filter((token) => token && token !== 'of')
+    .sort()
+    .join(' ');
+}
+
+function productBaseKey(value: string): string {
+  const tokens = normalizeProductPhrase(value)
+    .split(' ')
+    .filter(Boolean);
+
+  const withoutLeadingQuantity =
+    tokens.length >= 2 &&
+    /^\d+(?:\.\d+)?$/.test(tokens[0]) &&
+    isPackagingToken(tokens[1])
+      ? tokens.slice(2)
+      : tokens;
+
+  return withoutLeadingQuantity
+    .filter((token) => token !== 'of' && !isPackagingToken(token))
+    .sort()
+    .join(' ');
+}
+
+function normalizePackagingToken(token: string): string {
+  const map: Record<string,string> = {
+    bags: 'bag',
+    cartons: 'carton',
+    packs: 'pack',
+    packets: 'packet',
+    bottles: 'bottle',
+    crates: 'crate',
+    boxes: 'box',
+    pieces: 'piece',
+    pcs: 'piece',
+    units: 'unit',
+  };
+  return map[token] ?? token;
+}
+
+function isPackagingToken(token: string): boolean {
+  return new Set([
+    'bag','carton','pack','packet','bottle','crate','box','piece','unit',
+  ]).has(normalizePackagingToken(token));
+}
+
 function phraseVariants(value: string): Set<string> {
-  const normalized = normalizePhrase(value);
-  const variants = new Set<string>([normalized]);
-  const words = normalized.split(' ');
-
-  if (words.length >= 3 && words[1] === 'of' && words[0].endsWith('s') && words[0].length > 2) {
-    variants.add([words[0].slice(0, -1), ...words.slice(1)].join(' '));
-  }
-
+  const normalized = normalizeProductPhrase(value);
+  const variants = new Set<string>([normalized, productTokenKey(value), productBaseKey(value)]);
+  variants.delete('');
   return variants;
 }
 
 function normalizePhrase(value: string): string {
-  return value
-    .toLocaleLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return normalizeProductPhrase(value);
 }
 
 function buildReviewReasons(parsed: ParsedOrder, items: EnrichedItem[]): string[] {
