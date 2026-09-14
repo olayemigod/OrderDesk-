@@ -16,8 +16,8 @@ import {
 import { supabase } from '../lib/supabase';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
-const PRIVACY_URL = 'https://processedge.com.ng/sellertray/privacy';
-const TERMS_URL = 'https://processedge.com.ng/sellertray/terms';
+const PRIVACY_URL = 'https://sellertray.vercel.app/privacy';
+const TERMS_URL = 'https://sellertray.vercel.app/terms';
 
 export function LegalAcceptanceGate({ children }: { children: ReactNode }) {
   const appearance = useSellerTrayAppearance();
