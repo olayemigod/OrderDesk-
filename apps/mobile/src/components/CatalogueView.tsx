@@ -802,7 +802,7 @@ const styles = StyleSheet.create({
   errorCard: { backgroundColor: '#FEF3F2', borderRadius: 12, padding: 11, gap: 4 },
   errorText: { color: '#B42318', fontSize: 12, lineHeight: 16 },
   retryText: { color: '#B42318', fontSize: 12, fontWeight: '900' },
-  muted: { color: '#667085', fontSize: 11 },
+  muted: { color: '#667085', fontSize: 12 },
   whatsappCard: { backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#ABEFC6', borderRadius: 16, padding: 14, gap: 10 },
   whatsappHeading: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   whatsappHeadingCopy: { flex: 1 },
