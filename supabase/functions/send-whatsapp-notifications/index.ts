@@ -3,6 +3,9 @@ type JsonRecord = Record<string, unknown>;
 type ClaimedNotification = {
   id: string;
   tenant_id: string;
+  order_id: string | null;
+  source_inbound_message_id: string | null;
+  event_key: string;
   delivery_status: string;
   from_phone_number_id: string;
   to_wa_id: string;
@@ -21,7 +24,7 @@ const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const WORKER_TOKEN = Deno.env.get('NOTIFICATION_WORKER_TOKEN') ?? '';
 const META_ACCESS_TOKEN = Deno.env.get('META_ACCESS_TOKEN') ?? '';
 const WHATSAPP_ENCRYPTION_KEY = Deno.env.get('SELLERTRAY_WHATSAPP_ENCRYPTION_KEY') ?? '';
-const META_GRAPH_API_VERSION = Deno.env.get('META_GRAPH_API_VERSION') ?? '';
+const META_GRAPH_API_VERSION = Deno.env.get('META_GRAPH_API_VERSION')?.trim() || 'v22.0';
 const META_TEXT_TEMPLATE_NAME = Deno.env.get('META_TEXT_TEMPLATE_NAME')?.trim() ?? '';
 const META_DOCUMENT_TEMPLATE_NAME = Deno.env.get('META_DOCUMENT_TEMPLATE_NAME')?.trim() ?? '';
 const META_TEMPLATE_LANGUAGE_CODE = Deno.env.get('META_TEMPLATE_LANGUAGE_CODE')?.trim() || 'en_US';
@@ -31,13 +34,36 @@ Deno.serve(withObservability('send-whatsapp-notifications', async (request) => {
     return json({ error: 'Method not allowed' }, 405);
   }
 
-  if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !WORKER_TOKEN || !META_GRAPH_API_VERSION) {
-    console.error('WhatsApp notification worker is not activated: required server secrets are missing.');
+  if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !META_GRAPH_API_VERSION) {
+    console.error('WhatsApp notification worker is not activated: required server configuration is missing.');
     return json({ error: 'Notification worker not configured' }, 503);
   }
 
   const authorization = request.headers.get('authorization') ?? '';
-  if (!constantTimeEqual(authorization, `Bearer ${WORKER_TOKEN}`)) {
+  let authorized = Boolean(WORKER_TOKEN) &&
+    constantTimeEqual(authorization, `Bearer ${WORKER_TOKEN}`);
+
+  if (!authorized) {
+    const bodyRead = await readRequestTextLimited(request, 8192);
+    if (!bodyRead.ok) return json({ error: 'Payload too large' }, 413);
+
+    let invocationNonce: string | null = null;
+    try {
+      const payload = bodyRead.text ? JSON.parse(bodyRead.text) as JsonRecord : {};
+      invocationNonce = typeof payload.invocationNonce === 'string' &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload.invocationNonce)
+        ? payload.invocationNonce
+        : null;
+    } catch {
+      invocationNonce = null;
+    }
+
+    authorized = invocationNonce
+      ? await claimDatabaseInvocation(invocationNonce)
+      : false;
+  }
+
+  if (!authorized) {
     return json({ error: 'Unauthorized' }, 401);
   }
 
@@ -51,6 +77,22 @@ Deno.serve(withObservability('send-whatsapp-notifications', async (request) => {
 
   return json({ claimed: claimed.length, results }, 200);
 }));
+
+async function claimDatabaseInvocation(invocationNonce: string): Promise<boolean> {
+  try {
+    const claimed = await rest<boolean>(
+      '/rest/v1/rpc/claim_sellertray_notification_worker_invocation',
+      {
+        method: 'POST',
+        body: JSON.stringify({ p_nonce: invocationNonce }),
+      },
+    );
+    return claimed === true;
+  } catch (error) {
+    console.warn('SellerTray notification worker database invocation could not be validated.', error);
+    return false;
+  }
+}
 
 async function claimNotifications(limit: number): Promise<ClaimedNotification[]> {
   return rest<ClaimedNotification[]>('/rest/v1/rpc/claim_outbound_notifications', {
@@ -82,6 +124,11 @@ async function deliver(notification: ClaimedNotification): Promise<string> {
         return 'template_required';
       }
 
+      if (providerError.code === 190) {
+        await deferConfigurationFailure(notification, providerError.message);
+        return 'configuration_pending';
+      }
+
       const retryMinutes = Math.min(30, Math.max(2, notification.attempt_count * 5));
       await finish(notification.id, {
         delivery_status: 'failed',
@@ -99,12 +146,15 @@ async function deliver(notification: ClaimedNotification): Promise<string> {
     }
 
     const providerMessageId = extractProviderMessageId(payload);
+    const sentAt = new Date().toISOString();
     await finish(notification.id, {
       delivery_status: 'sent',
       provider_message_id: providerMessageId,
       last_error: null,
-      sent_at: new Date().toISOString(),
+      sent_at: sentAt,
     });
+
+    await markConversationReplyState(notification, sentAt);
     return 'sent';
   } catch (error) {
     if (error instanceof TemplateConfigurationError) {
@@ -116,14 +166,49 @@ async function deliver(notification: ClaimedNotification): Promise<string> {
       return 'template_required';
     }
 
+    const errorMessage = error instanceof Error
+      ? error.message.slice(0, 500)
+      : 'WhatsApp provider request failed';
+
+    if (isCredentialConfigurationFailure(errorMessage)) {
+      await deferConfigurationFailure(notification, errorMessage);
+      return 'configuration_pending';
+    }
+
     const retryMinutes = Math.min(30, Math.max(2, notification.attempt_count * 5));
     await finish(notification.id, {
       delivery_status: 'failed',
-      last_error: error instanceof Error ? error.message.slice(0, 500) : 'WhatsApp provider request failed',
+      last_error: errorMessage,
       available_at: new Date(Date.now() + retryMinutes * 60_000).toISOString(),
     });
     return 'failed';
   }
+}
+
+async function deferConfigurationFailure(
+  notification: ClaimedNotification,
+  message: string,
+): Promise<void> {
+  await finish(notification.id, {
+    delivery_status: 'failed',
+    attempt_count: Math.max(0, notification.attempt_count - 1),
+    last_error: message.slice(0, 500),
+    available_at: new Date(Date.now() + 15 * 60_000).toISOString(),
+  });
+}
+
+function isCredentialConfigurationFailure(message: string): boolean {
+  return [
+    'No active SellerTray WhatsApp connection owns this Phone Number ID.',
+    'SellerTray platform WhatsApp credential is not configured.',
+    'SellerTray merchant WhatsApp credential is unavailable.',
+    'SellerTray merchant WhatsApp credential has expired.',
+    'SellerTray merchant WhatsApp credential is invalid.',
+    'SellerTray WhatsApp credential decryption is not configured.',
+    'SellerTray WhatsApp credential IV is invalid.',
+    'SellerTray merchant WhatsApp credential could not be decrypted.',
+    'SellerTray merchant WhatsApp credential payload is invalid.',
+  ].some((candidate) => message.includes(candidate));
 }
 
 class TemplateConfigurationError extends Error {
@@ -420,6 +505,37 @@ function fromBase64(value: string): Uint8Array {
   catch { return new Uint8Array(); }
 }
 
+async function markConversationReplyState(
+  notification: ClaimedNotification,
+  sentAt: string,
+): Promise<void> {
+  if (
+    notification.event_key !== 'customer_enquiry_reply' ||
+    !notification.source_inbound_message_id
+  ) {
+    return;
+  }
+
+  try {
+    await rest(
+      '/rest/v1/customer_enquiries' +
+        '?tenant_id=eq.' + encodeURIComponent(notification.tenant_id) +
+        '&source_inbound_message_id=eq.' + encodeURIComponent(notification.source_inbound_message_id),
+      {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({
+          status: 'replied',
+          replied_at: sentAt,
+          updated_at: sentAt,
+        }),
+      },
+    );
+  } catch (error) {
+    console.warn('SellerTray could not reconcile enquiry reply state after WhatsApp accepted the message.', error);
+  }
+}
+
 async function finish(id: string, patch: JsonRecord): Promise<void> {
   await rest(`/rest/v1/outbound_notifications?id=eq.${encodeURIComponent(id)}`, {
     method: 'PATCH',
@@ -494,6 +610,37 @@ function constantTimeEqual(left: string, right: string): boolean {
     difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
   }
   return difference === 0;
+}
+
+async function readRequestTextLimited(
+  request: Request,
+  maxBytes: number,
+): Promise<{ ok: true; text: string } | { ok: false }> {
+  const declared = Number(request.headers.get('content-length') ?? 0);
+  if (Number.isFinite(declared) && declared > maxBytes) return { ok: false };
+  if (!request.body) return { ok: true, text: '' };
+
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  const parts: string[] = [];
+  let total = 0;
+
+  try {
+    while (true) {
+      const result = await reader.read();
+      if (result.done) break;
+      total += result.value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        return { ok: false };
+      }
+      parts.push(decoder.decode(result.value, { stream: true }));
+    }
+    parts.push(decoder.decode());
+    return { ok: true, text: parts.join('') };
+  } finally {
+    try { reader.releaseLock(); } catch {}
+  }
 }
 
 function json(body: unknown, status: number): Response {
