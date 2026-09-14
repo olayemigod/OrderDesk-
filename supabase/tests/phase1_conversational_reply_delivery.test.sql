@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(8);
+select extensions.plan(10);
 
 select extensions.ok(
   exists(
@@ -67,6 +67,24 @@ select extensions.ok(
     'public.sellertray_kick_notification_worker()'::regprocedure
   )) > 0,
   'public service-role wrapper delegates to the private notification worker kick'
+);
+
+select extensions.ok(
+  position('customer_enquiry_reply' in pg_get_constraintdef((
+    select oid from pg_constraint
+    where conrelid='public.outbound_notifications'::regclass
+      and conname='outbound_notifications_event_key_check'
+  ))) > 0,
+  'outbound queue accepts customer enquiry reply events'
+);
+
+select extensions.ok(
+  position('workflow_clarification' in pg_get_constraintdef((
+    select oid from pg_constraint
+    where conrelid='public.outbound_notifications'::regclass
+      and conname='outbound_notifications_event_key_check'
+  ))) > 0,
+  'outbound queue accepts workflow clarification events'
 );
 
 select extensions.ok(
