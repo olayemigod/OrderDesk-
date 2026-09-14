@@ -198,13 +198,15 @@ async function sendOptions(input: HandlerInput, order: OrderRow): Promise<void> 
   ];
 
   let bankNo = 0;
-  for (const method of methods) {
+  methods.forEach((method, index) => {
     if (method.method_type === 'bank_transfer') bankNo += 1;
-    lines.push(methodToken(method, bankNo) + ' — ' + method.display_name + (method.is_default ? ' · default' : ''));
-  }
+    lines.push(
+      (index + 1) + '. ' + methodToken(method, bankNo) + ' — ' +
+      method.display_name + (method.is_default ? ' · default' : '')
+    );
+  });
   lines.push('');
-  lines.push('Reply with the option you prefer, for example "' + methods[0].display_name +
-    '". You can also ask naturally, such as "send account details" or "cash on delivery".');
+  lines.push('Reply with the number, code, or method name. Example: "1", "COD", "Access Bank", or "cash on delivery".');
 
   await queueReply(input, order, 'payment_options', lines.join('\n'));
 }
@@ -220,8 +222,7 @@ async function selectMethod(input: HandlerInput, order: OrderRow, token: string)
   const method = resolveMethod(methods, token);
   if (!method) {
     await queueReply(input, order, 'payment_instructions',
-      'I could not match "' + token + '" to an enabled payment method. Reply "PAY ' +
-      order.public_order_id + '" to see the current options.');
+      'I could not match "' + token + '" to an enabled payment method. Ask to see the payment options again, then reply with the number, code, or method name.');
     return;
   }
 
