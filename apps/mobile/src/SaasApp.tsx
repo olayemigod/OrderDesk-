@@ -1524,7 +1524,7 @@ function NotificationCenterView({
 }: {
   notifications: Array<{
     id: string;
-    eventKey: 'new_whatsapp_order' | 'order_change_request' | 'new_whatsapp_message' | 'payment_verification_required' | 'payment_confirmed' | 'payment_failed' | 'payment_exception' | 'payment_gate_blocked' | 'customer_complaint' | 'refund_request' | 'catalogue_enquiry' | 'workflow_clarification';
+    eventKey: 'new_whatsapp_order' | 'order_change_request' | 'new_whatsapp_message' | 'payment_verification_required' | 'payment_confirmed' | 'payment_failed' | 'payment_exception' | 'payment_gate_blocked' | 'customer_complaint' | 'refund_request' | 'catalogue_enquiry' | 'customer_enquiry' | 'workflow_clarification';
     severity: 'info' | 'attention' | 'urgent';
     title: string;
     body: string;
@@ -1605,7 +1605,7 @@ function NotificationCenterView({
                       ? 'warning-outline'
                       : notification.eventKey === 'refund_request'
                         ? 'return-down-back-outline'
-                        : notification.eventKey === 'catalogue_enquiry'
+                        : notification.eventKey === 'catalogue_enquiry' || notification.eventKey === 'customer_enquiry'
                           ? 'pricetag-outline'
                           : notification.eventKey === 'workflow_clarification'
                             ? 'help-circle-outline'
