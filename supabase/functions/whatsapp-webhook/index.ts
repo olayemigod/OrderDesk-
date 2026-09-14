@@ -1508,6 +1508,7 @@ async function recordConversationIntent(input: {
         tenant_id: input.tenantId,
         customer_id: input.customerId,
         source_inbound_message_id: input.sourceMessageId,
+        channel: 'whatsapp',
         intent: input.decision.intent,
         source: input.decision.source,
         confidence: input.decision.confidence,
