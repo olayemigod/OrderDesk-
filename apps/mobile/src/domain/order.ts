@@ -35,7 +35,9 @@ export type MatchSource =
   | 'normalized_name'
   | 'normalized_alias'
   | 'unmatched'
-  | 'manual';
+  | 'manual'
+  | 'merchant_match'
+  | 'one_off';
 
 export type OrderStatusEvent = {
   id: string;
@@ -82,6 +84,7 @@ export type OrderNotification = {
 
 export type OrderItem = {
   id: string;
+  catalogItemId: string | null;
   name: string;
   originalName: string | null;
   quantity: number;
