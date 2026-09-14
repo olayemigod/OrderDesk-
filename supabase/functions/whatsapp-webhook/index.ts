@@ -677,7 +677,13 @@ type ConversationOrderRow = {
   public_order_id: string;
   status: string;
   payment_status: string;
+  amount_paid: number | string;
+  total_amount: number | string | null;
+  currency: string;
   fulfillment_status: string;
+  fulfillment_method: string | null;
+  delivery_provider: string | null;
+  delivery_reference: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -1103,11 +1109,40 @@ async function loadRecentConversationOrders(
 ): Promise<ConversationOrderRow[]> {
   if (customerIds.length === 0) return [];
   return rest<ConversationOrderRow[]>(
-    '/rest/v1/orders?select=id,public_order_id,status,payment_status,fulfillment_status,created_at,updated_at' +
+    '/rest/v1/orders?select=id,public_order_id,status,payment_status,amount_paid,total_amount,currency,fulfillment_status,fulfillment_method,delivery_provider,delivery_reference,created_at,updated_at' +
       '&tenant_id=eq.' + encodeURIComponent(tenantId) +
       '&customer_id=in.(' + customerIds.join(',') + ')' +
       '&order=updated_at.desc&limit=6',
   );
+}
+
+async function reloadConversationOrder(
+  tenantId: string,
+  orderId: string,
+): Promise<ConversationOrderRow | null> {
+  const rows = await rest<ConversationOrderRow[]>(
+    '/rest/v1/orders?select=id,public_order_id,status,payment_status,amount_paid,total_amount,currency,fulfillment_status,fulfillment_method,delivery_provider,delivery_reference,created_at,updated_at' +
+      '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+      '&id=eq.' + encodeURIComponent(orderId) +
+      '&limit=1',
+  );
+  return rows[0] ?? null;
+}
+
+function conversationOrderState(order: ConversationOrderRow | null): Record<string, unknown> {
+  if (!order) return {};
+  return {
+    public_order_id: order.public_order_id,
+    status: order.status,
+    payment_status: order.payment_status,
+    amount_paid: toNumber(order.amount_paid) ?? 0,
+    total_amount: toNumber(order.total_amount),
+    currency: order.currency,
+    fulfillment_status: order.fulfillment_status,
+    fulfillment_method: order.fulfillment_method,
+    delivery_provider: order.delivery_provider,
+    delivery_reference: order.delivery_reference,
+  };
 }
 
 async function loadRecentCustomerEnquiry(
@@ -1574,6 +1609,10 @@ async function recordCommercialAction(input: {
   actionStatus: 'requested' | 'applied' | 'rejected' | 'clarification_required' | 'failed';
   financialImpact?: number | null;
   currency?: string | null;
+  beforeState?: Record<string, unknown>;
+  afterState?: Record<string, unknown>;
+  actorUserId?: string | null;
+  requestedBy?: 'customer' | 'merchant' | 'staff' | 'ai' | 'system';
   metadata?: Record<string, unknown>;
 }): Promise<void> {
   try {
@@ -1589,13 +1628,16 @@ async function recordCommercialAction(input: {
         target_order_id: input.targetOrderId,
         action_type: input.actionType,
         risk_class: input.riskClass,
-        requested_by: 'customer',
+        requested_by: input.requestedBy ?? 'customer',
+        actor_user_id: input.actorUserId ?? null,
         interpretation_source: input.decision?.source ?? null,
         interpretation_confidence: input.decision?.confidence ?? null,
         policy_result: input.policyResult,
         action_status: input.actionStatus,
         financial_impact: input.financialImpact ?? null,
         currency: input.currency ?? null,
+        before_state: input.beforeState ?? {},
+        after_state: input.afterState ?? {},
         metadata: input.metadata ?? {},
         applied_at: input.actionStatus === 'applied' ? new Date().toISOString() : null,
       }),
