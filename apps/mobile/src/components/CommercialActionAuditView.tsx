@@ -98,7 +98,7 @@ export function CommercialActionAuditView({ business }: { business: MerchantBusi
 
             <View style={styles.detailGrid}>
               <Detail label="Interpreter" value={humanLabel(action.interpretationSource ?? 'workflow')} dark={appearance.dark} />
-              <Detail label="Actor" value={humanLabel(action.requestedBy)} dark={appearance.dark} />
+              <Detail label="Actor" value={action.actorName} dark={appearance.dark} />
               <Detail label="Policy" value={humanLabel(action.policyResult)} dark={appearance.dark} />
               <Detail label="Result" value={humanLabel(action.actionStatus)} dark={appearance.dark} />
             </View>
