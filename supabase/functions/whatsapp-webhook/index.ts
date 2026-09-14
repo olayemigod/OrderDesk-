@@ -892,6 +892,16 @@ async function maybeHandleUnifiedConversationIntent({
     decision.intent === 'financial_receipt_request'
   ) {
     target = target ?? resolvePaymentTarget(decision.intent, orders);
+    if (target) {
+      await recordConversationIntent({
+        tenantId,
+        customerId,
+        sourceMessageId,
+        decision,
+        target,
+        text,
+      });
+    }
     if (!target) {
       await queueWorkflowClarification({
         tenantId,
@@ -954,6 +964,16 @@ async function maybeHandleUnifiedConversationIntent({
       orders.filter((order) => !['cancelled', 'rejected'].includes(order.status)),
     );
     if (!target && orders.length === 1) target = orders[0];
+    if (target) {
+      await recordConversationIntent({
+        tenantId,
+        customerId,
+        sourceMessageId,
+        decision,
+        target,
+        text,
+      });
+    }
     if (!target && orders.length > 1) {
       await queueWorkflowClarification({
         tenantId,
@@ -1020,6 +1040,17 @@ async function maybeHandleUnifiedConversationIntent({
     target = target ?? chooseSingleOrder(
       orders.filter((order) => ['needs_review', 'accepted', 'processing', 'ready'].includes(order.status)),
     );
+
+    if (target) {
+      await recordConversationIntent({
+        tenantId,
+        customerId,
+        sourceMessageId,
+        decision,
+        target,
+        text,
+      });
+    }
 
     if (!target) {
       await queueWorkflowClarification({
