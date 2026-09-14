@@ -260,8 +260,8 @@ async function queueMerchantPaymentOptions(
       '&order_id=eq.' + encodeURIComponent(orderId) +
       '&document_type=eq.invoice&status=eq.issued&limit=1',
     ),
-    rest<Array<{ display_name: string }>>(
-      '/rest/v1/merchant_payment_methods?select=display_name' +
+    rest<Array<{ method_type: string; display_name: string }>>(
+      '/rest/v1/merchant_payment_methods?select=method_type,display_name' +
       '&tenant_id=eq.' + encodeURIComponent(tenantId) +
       '&is_enabled=eq.true&order=is_default.desc,sort_order.asc,created_at.asc',
     ),
@@ -282,16 +282,16 @@ async function queueMerchantPaymentOptions(
   if (!invoice) throw new Error('SellerTray order has no payable invoice');
   if (methods.length === 0) throw new Error('No customer payment method is enabled');
 
-  const methodNames = methods.map((method) => method.display_name).join(', ');
+  const paymentOptionLines = buildPaymentOptionLines(methods);
   const message = [
     'Payment options — ' + tenant.name,
     'Order Ref: ' + order.public_order_id,
     'Invoice: ' + invoice.document_reference,
     'Total: ' + formatMoney(Number(invoice.amount) || 0, invoice.currency),
-    'Available: ' + methodNames,
     '',
-    'Reply with the option you prefer, for example "' + methods[0].display_name +
-      '". You can also say things like "cash on delivery" or "send account details".',
+    ...paymentOptionLines,
+    '',
+    'Reply with the number, code, or method name. Example: "1", "COD", "Access Bank", or "cash on delivery".',
   ].join('\n');
 
   const lastInboundAt = inbound[0]?.received_at ? new Date(inbound[0].received_at).getTime() : 0;
@@ -322,6 +322,29 @@ async function queueMerchantPaymentOptions(
       ? 'Payment options queued to the customer on WhatsApp.'
       : 'Payment options require an approved WhatsApp template because the 24-hour customer-service window is closed.',
   };
+}
+
+
+function buildPaymentOptionLines(methods: Array<{ method_type: string; display_name: string }>): string[] {
+  let bankIndex = 0;
+  return methods.map((method, index) => {
+    let code: string;
+    if (method.method_type === 'bank_transfer') {
+      bankIndex += 1;
+      code = 'BANK' + bankIndex;
+    } else if (method.method_type === 'paystack') {
+      code = 'PAYSTACK';
+    } else if (method.method_type === 'flutterwave') {
+      code = 'FLUTTERWAVE';
+    } else if (method.method_type === 'cash_on_delivery') {
+      code = 'COD';
+    } else if (method.method_type === 'pay_on_pickup') {
+      code = 'PICKUP';
+    } else {
+      code = 'OPTION' + (index + 1);
+    }
+    return (index + 1) + '. ' + code + ' — ' + method.display_name;
+  });
 }
 
 function formatMoney(value: number, currency: string): string {
