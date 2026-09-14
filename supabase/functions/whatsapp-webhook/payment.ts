@@ -204,8 +204,8 @@ async function sendOptions(input: HandlerInput, order: OrderRow): Promise<void> 
   }
   const firstBankNo = methods[0].method_type === 'bank_transfer' ? 1 : 0;
   lines.push('');
-  lines.push('Reply PAY ' + order.public_order_id + ' <option>, e.g. PAY ' +
-    order.public_order_id + ' ' + methodToken(methods[0], firstBankNo) + '.');
+  lines.push('Reply with the option you prefer, for example "' + methods[0].display_name +
+    '". You can also ask naturally, such as "send account details" or "cash on delivery".');
 
   await queueReply(input, order, 'payment_options', lines.join('\n'));
 }
@@ -253,8 +253,8 @@ async function selectMethod(input: HandlerInput, order: OrderRow, token: string)
       method.bank_account_number || '',
     ];
     if (method.instructions) lines.push('', method.instructions);
-    lines.push('', 'After transferring, reply PAID ' + order.public_order_id +
-      '. Payment remains unconfirmed until the merchant verifies it.');
+    lines.push('', 'After transferring, tell us "I have paid" or "I have transferred". ' +
+      'Payment remains unconfirmed until the merchant verifies it.');
     await queueReply(input, order, 'payment_instructions', lines.filter((x, i) => x !== '' || i === 4).join('\n'));
     return;
   }
@@ -285,8 +285,7 @@ async function selectMethod(input: HandlerInput, order: OrderRow, token: string)
       'Invoice: ' + financial.invoice.document_reference + '\n' +
       'Amount: ' + formatMoney(Number(financial.invoice.amount) || 0, financial.invoice.currency) + '\n\n' +
       'Secure checkout: ' + checkoutUrl + '\n\n' +
-      'SellerTray confirms payment only after server-side verification. Reply "PAYMENT STATUS ' +
-      order.public_order_id + '" afterwards.',
+      'SellerTray confirms payment only after server-side verification. You can ask "has my payment gone through?" afterwards.',
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Gateway checkout initialization failed';
@@ -305,7 +304,7 @@ async function selectMethod(input: HandlerInput, order: OrderRow, token: string)
       order,
       'payment_instructions',
       method.display_name + ' checkout is temporarily unavailable for order ' + order.public_order_id +
-      '. Reply "PAY ' + order.public_order_id + '" to choose another enabled payment method.',
+      '. Tell us another payment option you would like to use.',
     );
   }
 }
@@ -324,7 +323,7 @@ async function recordPaidClaim(input: HandlerInput, order: OrderRow): Promise<vo
   if (!payment) {
     await queueReply(input, order, 'payment_claim_received',
       'No open bank-transfer payment was found for order ' + order.public_order_id +
-      '. Reply "PAY ' + order.public_order_id + '" first.');
+      '. Ask for bank transfer details first, then tell us after you have transferred.');
     return;
   }
 
@@ -559,7 +558,7 @@ function methodToken(method: PaymentMethod, bankNo: number): string {
 }
 
 function resolveMethod(methods: PaymentMethod[], raw: string): PaymentMethod | null {
-  const token = raw.trim().toUpperCase().replace(/\s+/g, '_');
+  const token = normalizeMethodToken(raw);
   if (token === 'BANK' || token === 'TRANSFER' || token === 'BANK_TRANSFER') {
     return methods.find((m) => m.method_type === 'bank_transfer' && m.is_default) ||
       methods.find((m) => m.method_type === 'bank_transfer') || null;
@@ -569,17 +568,39 @@ function resolveMethod(methods: PaymentMethod[], raw: string): PaymentMethod | n
     const banks = methods.filter((m) => m.method_type === 'bank_transfer');
     return banks[Number(bankMatch[1]) - 1] || null;
   }
+
+  const exactNamed = methods.find((method) =>
+    normalizeMethodToken(method.display_name) === token ||
+    (method.bank_name ? normalizeMethodToken(method.bank_name) === token : false)
+  );
+  if (exactNamed) return exactNamed;
+
+  const containedNamed = methods.find((method) => {
+    const display = normalizeMethodToken(method.display_name);
+    const bank = method.bank_name ? normalizeMethodToken(method.bank_name) : '';
+    return token.includes(display) || display.includes(token) ||
+      (bank ? token.includes(bank) || bank.includes(token) : false);
+  });
+  if (containedNamed && token.length >= 4) return containedNamed;
+
   const map: Record<string, PaymentMethod['method_type']> = {
     PAYSTACK: 'paystack',
     FLUTTERWAVE: 'flutterwave',
     FLW: 'flutterwave',
     COD: 'cash_on_delivery',
     CASH_ON_DELIVERY: 'cash_on_delivery',
+    PAY_ON_DELIVERY: 'cash_on_delivery',
+    PAYING_ON_DELIVERY: 'cash_on_delivery',
     PICKUP: 'pay_on_pickup',
     PAY_ON_PICKUP: 'pay_on_pickup',
+    PAY_ON_COLLECTION: 'pay_on_pickup',
   };
   const kind = map[token];
   return kind ? methods.find((m) => m.method_type === kind) || null : null;
+}
+
+function normalizeMethodToken(value: string): string {
+  return value.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 }
 
 function paymentReference(orderRef: string): string {
