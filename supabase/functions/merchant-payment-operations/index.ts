@@ -45,8 +45,9 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const member = await isMember(tenantId, userId);
-    if (!member) return json({ error: 'SellerTray tenant membership required' }, 403);
+    const memberRole = await membershipRole(tenantId, userId);
+    if (!memberRole) return json({ error: 'SellerTray tenant membership required' }, 403);
+    const requestedBy = memberRole === 'staff' ? 'staff' : 'merchant';
 
     const userAllowed = await consumeRateLimit('merchant_payment_user', userId, 30, 60);
     const tenantAllowed = userAllowed
@@ -62,6 +63,18 @@ Deno.serve(async (req: Request) => {
       });
       if (!canWrite) return json({ error: 'SellerTray subscription is read-only' }, 403);
       const queued = await queueMerchantPaymentOptions(tenantId, orderId!);
+      await auditPaymentAction({
+        tenantId,
+        orderId: orderId!,
+        paymentId: null,
+        actionType: 'merchant_payment_options_sent',
+        requestedBy,
+        actorUserId: userId,
+        riskClass: 'low',
+        beforeState: {},
+        afterState: { delivery_status: queued.deliveryStatus },
+        metadata: {},
+      });
       return json({ ok: true, orderId, ...queued });
     }
 
@@ -93,6 +106,21 @@ Deno.serve(async (req: Request) => {
         p_actor_user_id: userId,
         p_note: optional(body.note, 500),
       });
+      const recorded = await loadPayment(tenantId, newPaymentId);
+      await auditPaymentAction({
+        tenantId,
+        orderId: orderId!,
+        paymentId: newPaymentId,
+        actionType: 'merchant_offline_payment_recorded',
+        requestedBy,
+        actorUserId: userId,
+        riskClass: 'high',
+        beforeState: { payment_status: 'initiated' },
+        afterState: { payment_status: 'confirmed' },
+        financialImpact: numberOrNull(recorded?.amount),
+        currency: typeof recorded?.currency === 'string' ? recorded.currency : null,
+        metadata: { method_type: method.method_type, note_present: Boolean(optional(body.note, 500)) },
+      });
       return json({ ok: true, orderId, paymentId: newPaymentId, status: 'confirmed' });
     }
 
@@ -105,6 +133,21 @@ Deno.serve(async (req: Request) => {
         p_actor_user_id: userId,
         p_note: optional(body.note, 500),
       });
+      const refreshed = await loadPayment(tenantId, paymentId!);
+      await auditPaymentAction({
+        tenantId,
+        orderId: typeof payment.order_id === 'string' ? payment.order_id : '',
+        paymentId: paymentId!,
+        actionType: 'merchant_offline_payment_confirmed',
+        requestedBy,
+        actorUserId: userId,
+        riskClass: 'high',
+        beforeState: { payment_status: payment.status },
+        afterState: { payment_status: refreshed?.status ?? 'confirmed' },
+        financialImpact: numberOrNull(payment.amount),
+        currency: typeof payment.currency === 'string' ? payment.currency : null,
+        metadata: { method_type: payment.method_type, note_present: Boolean(optional(body.note, 500)) },
+      });
       return json({ ok: true, paymentId, status: 'confirmed' });
     }
 
@@ -113,6 +156,20 @@ Deno.serve(async (req: Request) => {
     }
 
     const runtime = await callRuntime(paymentId);
+    await auditPaymentAction({
+      tenantId,
+      orderId: typeof payment.order_id === 'string' ? payment.order_id : '',
+      paymentId: paymentId!,
+      actionType: 'merchant_gateway_payment_verified',
+      requestedBy,
+      actorUserId: userId,
+      riskClass: 'high',
+      beforeState: { payment_status: payment.status },
+      afterState: { payment_status: runtime.status || payment.status },
+      financialImpact: numberOrNull(payment.amount),
+      currency: typeof payment.currency === 'string' ? payment.currency : null,
+      metadata: { provider: payment.provider, provider_status: runtime.providerStatus || null },
+    });
     return json({
       ok: true,
       paymentId,
@@ -152,12 +209,12 @@ async function verifiedUser(auth: string): Promise<string | null> {
   }
 }
 
-async function isMember(tenantId: string, userId: string): Promise<boolean> {
+async function membershipRole(tenantId: string, userId: string): Promise<string | null> {
   const rows = await rest<Array<{ role: string }>>(
     '/rest/v1/tenant_members?select=role&tenant_id=eq.' + encodeURIComponent(tenantId) +
     '&user_id=eq.' + encodeURIComponent(userId) + '&limit=1',
   );
-  return Boolean(rows[0]?.role);
+  return rows[0]?.role || null;
 }
 
 async function loadPaymentMethod(tenantId: string, paymentMethodId: string): Promise<J | null> {
@@ -233,7 +290,8 @@ async function queueMerchantPaymentOptions(
     'Total: ' + formatMoney(Number(invoice.amount) || 0, invoice.currency),
     'Available: ' + methodNames,
     '',
-    'Reply PAY ' + order.public_order_id + ' to choose how to pay.',
+    'Reply with the option you prefer, for example "' + methods[0].display_name +
+      '". You can also say things like "cash on delivery" or "send account details".',
   ].join('\n');
 
   const lastInboundAt = inbound[0]?.received_at ? new Date(inbound[0].received_at).getTime() : 0;
@@ -280,7 +338,7 @@ function formatMoney(value: number, currency: string): string {
 
 async function loadPayment(tenantId: string, paymentId: string): Promise<J | null> {
   const rows = await rest<J[]>(
-    '/rest/v1/order_payments?select=id,tenant_id,provider,method_type,status' +
+    '/rest/v1/order_payments?select=id,tenant_id,order_id,provider,method_type,status,amount,currency' +
     '&tenant_id=eq.' + encodeURIComponent(tenantId) +
     '&id=eq.' + encodeURIComponent(paymentId) + '&limit=1',
   );
@@ -304,6 +362,58 @@ async function callRuntime(paymentId: string): Promise<J> {
     throw new Error(typeof payload.error === 'string' ? payload.error : 'Provider verification failed');
   }
   return payload;
+}
+
+
+async function auditPaymentAction(input: {
+  tenantId: string;
+  orderId: string;
+  paymentId: string | null;
+  actionType: string;
+  requestedBy: 'merchant' | 'staff';
+  actorUserId: string;
+  riskClass: 'low' | 'medium' | 'high';
+  beforeState: J;
+  afterState: J;
+  financialImpact?: number | null;
+  currency?: string | null;
+  metadata: J;
+}): Promise<void> {
+  if (!input.orderId) return;
+  try {
+    await rest('/rest/v1/commercial_action_ledger', {
+      method: 'POST',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        tenant_id: input.tenantId,
+        action_key: 'merchant-payment:' + input.actionType + ':' + crypto.randomUUID(),
+        channel: 'merchant_app',
+        target_order_id: input.orderId,
+        action_type: input.actionType,
+        risk_class: input.riskClass,
+        requested_by: input.requestedBy,
+        actor_user_id: input.actorUserId,
+        policy_result: 'allowed',
+        action_status: 'applied',
+        financial_impact: input.financialImpact ?? null,
+        currency: input.currency ?? null,
+        before_state: input.beforeState,
+        after_state: input.afterState,
+        metadata: {
+          payment_id: input.paymentId,
+          ...input.metadata,
+        },
+        applied_at: new Date().toISOString(),
+      }),
+    });
+  } catch (error) {
+    console.warn('SellerTray payment audit write failed', error);
+  }
+}
+
+function numberOrNull(value: unknown): number | null {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 async function consumeRateLimit(
