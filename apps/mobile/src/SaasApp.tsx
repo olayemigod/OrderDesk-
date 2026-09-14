@@ -1524,7 +1524,7 @@ function NotificationCenterView({
 }: {
   notifications: Array<{
     id: string;
-    eventKey: 'new_whatsapp_order' | 'order_change_request' | 'new_whatsapp_message' | 'payment_verification_required' | 'payment_confirmed' | 'payment_failed' | 'payment_exception' | 'payment_gate_blocked';
+    eventKey: 'new_whatsapp_order' | 'order_change_request' | 'new_whatsapp_message' | 'payment_verification_required' | 'payment_confirmed' | 'payment_failed' | 'payment_exception' | 'payment_gate_blocked' | 'customer_complaint' | 'refund_request' | 'catalogue_enquiry' | 'workflow_clarification';
     severity: 'info' | 'attention' | 'urgent';
     title: string;
     body: string;
@@ -1601,7 +1601,15 @@ function NotificationCenterView({
                       notification.eventKey === 'payment_exception' ||
                       notification.eventKey === 'payment_gate_blocked'
                     ? 'card-outline'
-                    : 'logo-whatsapp';
+                    : notification.eventKey === 'customer_complaint'
+                      ? 'warning-outline'
+                      : notification.eventKey === 'refund_request'
+                        ? 'return-down-back-outline'
+                        : notification.eventKey === 'catalogue_enquiry'
+                          ? 'pricetag-outline'
+                          : notification.eventKey === 'workflow_clarification'
+                            ? 'help-circle-outline'
+                            : 'logo-whatsapp';
             const iconColor = notification.severity === 'urgent' ? '#B42318' : theme.colors.greenDark;
             return (
               <Pressable
