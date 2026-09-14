@@ -504,9 +504,11 @@ function contextualOrderFromEnquiry(
   if (!enquiry.matchedItemName && !enquiry.productQuery) return null;
   if (!looksLikeEnquiryFollowUp(normalized)) return null;
 
-  const quantity = extractFollowUpQuantity(normalized);
+  const quantity =
+    extractFollowUpQuantity(normalized) ??
+    (/\b(?:take it|give me it|send it|bring it|want it|need it)\b/i.test(normalized) ? '1' : null);
   const itemName = enquiry.matchedItemName ?? enquiry.productQuery ?? '';
-  const orderText = quantity ? quantity + ' ' + itemName : itemName;
+  const orderText = (quantity ?? '1') + ' ' + itemName;
 
   return {
     ...emptyDecision('new_order', 'context', 0.96, null),
