@@ -4,7 +4,7 @@ SellerTray production authentication email delivery uses the Supabase **Send Ema
 
 ## Production contract
 
-- Site URL: `https://processedge.com.ng/sellertray`
+- Site URL: `https://sellertray.vercel.app`
 - Hook endpoint: `https://eujxswjspolugrzlsjnn.supabase.co/functions/v1/send-auth-email`
 - Provider: Resend
 - Sending domain: `processedge.com.ng`
