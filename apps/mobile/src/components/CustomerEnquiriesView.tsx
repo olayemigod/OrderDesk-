@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import type { MerchantBusiness } from '../data/businessRepository';
 import {
+  convertCustomerEnquiryToOrder,
+  dismissCustomerEnquiry,
   loadCustomerEnquiries,
+  replyToCustomerEnquiry,
   type CustomerEnquiry,
 } from '../data/customerEnquiriesRepository';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
@@ -17,6 +20,11 @@ export function CustomerEnquiriesView({ business }: { business: MerchantBusiness
   const [filter, setFilter] = useState<Filter>('active');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [quantities, setQuantities] = useState<Record<string, string>>({});
+  const [replies, setReplies] = useState<Record<string, string>>({});
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionErrors, setActionErrors] = useState<Record<string, string>>({});
+  const [actionNotices, setActionNotices] = useState<Record<string, string>>({});
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -33,6 +41,79 @@ export function CustomerEnquiriesView({ business }: { business: MerchantBusiness
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  const setActionError = (id: string, message: string | null) => {
+    setActionErrors((current) => {
+      const next = { ...current };
+      if (message) next[id] = message;
+      else delete next[id];
+      return next;
+    });
+  };
+
+  const setActionNotice = (id: string, message: string | null) => {
+    setActionNotices((current) => {
+      const next = { ...current };
+      if (message) next[id] = message;
+      else delete next[id];
+      return next;
+    });
+  };
+
+  const convertToOrder = async (item: CustomerEnquiry) => {
+    const quantity = Number(quantities[item.id] ?? '1');
+    if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 9999) {
+      setActionError(item.id, 'Enter a quantity between 1 and 9999.');
+      return;
+    }
+    setBusyId(item.id);
+    setActionError(item.id, null);
+    setActionNotice(item.id, null);
+    try {
+      const result = await convertCustomerEnquiryToOrder(business.id, item.id, quantity);
+      setActionNotice(item.id, result.publicOrderId ? `Order ${result.publicOrderId} created.` : 'Order created.');
+      await refresh();
+    } catch (err) {
+      setActionError(item.id, err instanceof Error ? err.message : 'Unable to create order.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const sendReply = async (item: CustomerEnquiry) => {
+    const message = (replies[item.id] ?? '').trim();
+    if (!message) {
+      setActionError(item.id, 'Enter a reply first.');
+      return;
+    }
+    setBusyId(item.id);
+    setActionError(item.id, null);
+    setActionNotice(item.id, null);
+    try {
+      await replyToCustomerEnquiry(business.id, item.id, message);
+      setReplies((current) => ({ ...current, [item.id]: '' }));
+      setActionNotice(item.id, 'Reply queued for WhatsApp delivery.');
+      await refresh();
+    } catch (err) {
+      setActionError(item.id, err instanceof Error ? err.message : 'Unable to send reply.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const dismiss = async (item: CustomerEnquiry) => {
+    setBusyId(item.id);
+    setActionError(item.id, null);
+    setActionNotice(item.id, null);
+    try {
+      await dismissCustomerEnquiry(business.id, item.id);
+      await refresh();
+    } catch (err) {
+      setActionError(item.id, err instanceof Error ? err.message : 'Unable to dismiss enquiry.');
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const visible = useMemo(() => items.filter((item) => {
     if (filter === 'active') return item.status === 'open' || item.status === 'replied';
@@ -138,10 +219,72 @@ export function CustomerEnquiriesView({ business }: { business: MerchantBusiness
                   Customer committed to buy · enquiry converted to order
                 </Text>
               </View>
-            ) : (
+            ) : item.status === 'dismissed' ? (
               <Text style={[styles.leadHint, appearance.dark && darkStyles.bodyText]}>
-                This remains an enquiry until the customer expresses clear purchase intent.
+                Dismissed by the merchant. This enquiry will not trigger an order.
               </Text>
+            ) : (
+              <>
+                <Text style={[styles.leadHint, appearance.dark && darkStyles.bodyText]}>
+                  This remains an enquiry until the customer clearly commits, or you create the order yourself.
+                </Text>
+                <View style={[styles.actionPanel, appearance.dark && darkStyles.subtleCard]}>
+                  <Text style={[styles.actionTitle, appearance.dark && darkStyles.titleText]}>MERCHANT ACTIONS</Text>
+
+                  {item.matchedCatalogItemId ? (
+                    <View style={styles.convertRow}>
+                      <TextInput
+                        value={quantities[item.id] ?? '1'}
+                        onChangeText={(value) => setQuantities((current) => ({ ...current, [item.id]: value.replace(/[^0-9.]/g, '') }))}
+                        keyboardType="decimal-pad"
+                        editable={busyId !== item.id}
+                        style={[styles.quantityInput, appearance.dark && darkStyles.input, appearance.dark && darkStyles.titleText]}
+                      />
+                      <Pressable
+                        disabled={busyId === item.id}
+                        onPress={() => void convertToOrder(item)}
+                        style={[styles.primaryAction, busyId === item.id && styles.disabled]}
+                      >
+                        <Text style={styles.primaryActionText}>{busyId === item.id ? 'Working…' : 'Create order'}</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <Text style={[styles.actionHint, appearance.dark && darkStyles.warningText]}>
+                      Create order is disabled until this enquiry is matched to a catalogue item.
+                    </Text>
+                  )}
+
+                  <TextInput
+                    value={replies[item.id] ?? ''}
+                    onChangeText={(value) => setReplies((current) => ({ ...current, [item.id]: value }))}
+                    placeholder="Reply to this customer on WhatsApp"
+                    placeholderTextColor={appearance.dark ? '#98A2B3' : '#98A2B3'}
+                    multiline
+                    editable={busyId !== item.id}
+                    style={[styles.replyInput, appearance.dark && darkStyles.input, appearance.dark && darkStyles.titleText]}
+                  />
+
+                  <View style={styles.actionButtons}>
+                    <Pressable
+                      disabled={busyId === item.id}
+                      onPress={() => void sendReply(item)}
+                      style={[styles.secondaryAction, appearance.dark && darkStyles.secondaryAction, busyId === item.id && styles.disabled]}
+                    >
+                      <Text style={[styles.secondaryActionText, appearance.dark && darkStyles.titleText]}>Reply</Text>
+                    </Pressable>
+                    <Pressable
+                      disabled={busyId === item.id}
+                      onPress={() => void dismiss(item)}
+                      style={[styles.dismissAction, busyId === item.id && styles.disabled]}
+                    >
+                      <Text style={styles.dismissActionText}>Dismiss</Text>
+                    </Pressable>
+                  </View>
+
+                  {actionErrors[item.id] ? <Text style={styles.actionError}>{actionErrors[item.id]}</Text> : null}
+                  {actionNotices[item.id] ? <Text style={styles.actionNotice}>{actionNotices[item.id]}</Text> : null}
+                </View>
+              </>
             )}
           </View>
         ))}
@@ -232,6 +375,22 @@ const styles = StyleSheet.create({
   convertedBox: { backgroundColor: '#ECFDF3', borderRadius: 11, minHeight: 43, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 7 },
   convertedText: { color: '#027A48', fontSize: 12, lineHeight: 18, fontWeight: '800', flex: 1 },
   leadHint: { color: '#667085', fontSize: 12, lineHeight: 18 },
+  actionPanel: { backgroundColor: '#F9FAFB', borderRadius: 12, padding: 11, gap: 9 },
+  actionTitle: { color: '#344054', fontSize: 12, fontWeight: '900', letterSpacing: 0.6 },
+  actionHint: { color: '#B54708', fontSize: 12, lineHeight: 18, fontWeight: '700' },
+  convertRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  quantityInput: { width: 72, minHeight: 44, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 10, paddingHorizontal: 10, backgroundColor: '#FFFFFF', color: '#102A43', textAlign: 'center', fontWeight: '800' },
+  replyInput: { minHeight: 70, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 10, padding: 10, backgroundColor: '#FFFFFF', color: '#102A43', textAlignVertical: 'top', fontSize: 13, lineHeight: 19 },
+  actionButtons: { flexDirection: 'row', gap: 8 },
+  primaryAction: { flex: 1, minHeight: 44, borderRadius: 10, backgroundColor: '#12B76A', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  primaryActionText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
+  secondaryAction: { flex: 1, minHeight: 44, borderRadius: 10, borderWidth: 1, borderColor: '#D0D5DD', backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  secondaryActionText: { color: '#344054', fontSize: 13, fontWeight: '900' },
+  dismissAction: { flex: 1, minHeight: 44, borderRadius: 10, borderWidth: 1, borderColor: '#FDA29B', backgroundColor: '#FEF3F2', alignItems: 'center', justifyContent: 'center' },
+  dismissActionText: { color: '#B42318', fontSize: 13, fontWeight: '900' },
+  actionError: { color: '#B42318', fontSize: 12, lineHeight: 18, fontWeight: '700' },
+  actionNotice: { color: '#027A48', fontSize: 12, lineHeight: 18, fontWeight: '800' },
+  disabled: { opacity: 0.5 },
   pill: { borderRadius: 999, paddingVertical: 5, paddingHorizontal: 8 },
   pillPositive: { backgroundColor: '#ECFDF3' },
   pillNeutral: { backgroundColor: '#F2F4F7' },
@@ -250,6 +409,8 @@ const darkStyles = StyleSheet.create({
   mintCard: { backgroundColor: '#12372C' },
   filterButton: { backgroundColor: '#162F46' },
   filterActive: { backgroundColor: '#12372C' },
+  input: { backgroundColor: '#162F46', borderColor: '#475467' },
+  secondaryAction: { backgroundColor: '#162F46', borderColor: '#475467' },
   titleText: { color: '#F8FAFC' },
   bodyText: { color: '#D0D5DD' },
   greenText: { color: '#ABEFC6' },
