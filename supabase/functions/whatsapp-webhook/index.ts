@@ -667,7 +667,10 @@ async function processClaimedInboundMessage({
     beforeState: {},
     afterState: conversationOrderState(createdOrderState),
     currency: createdOrderState?.currency ?? tenant.currency ?? 'NGN',
+    interpretationSource: parsed.source === 'ai' ? 'ai' : intentRoute.decision?.source ?? null,
+    interpretationConfidence: parsed.source === 'ai' ? parsed.confidence : intentRoute.decision?.confidence ?? null,
     metadata: {
+      intent_source: intentRoute.decision?.source ?? null,
       parser_source: parsed.source,
       parser_confidence: parsed.confidence,
       enquiry_id: intentRoute.enquiryId,
@@ -1658,6 +1661,8 @@ async function recordCommercialAction(input: {
   afterState?: Record<string, unknown>;
   actorUserId?: string | null;
   requestedBy?: 'customer' | 'merchant' | 'staff' | 'ai' | 'system';
+  interpretationSource?: 'vocabulary' | 'rules' | 'context' | 'ai' | 'none' | null;
+  interpretationConfidence?: number | null;
   metadata?: Record<string, unknown>;
 }): Promise<void> {
   try {
@@ -1675,8 +1680,8 @@ async function recordCommercialAction(input: {
         risk_class: input.riskClass,
         requested_by: input.requestedBy ?? 'customer',
         actor_user_id: input.actorUserId ?? null,
-        interpretation_source: input.decision?.source ?? null,
-        interpretation_confidence: input.decision?.confidence ?? null,
+        interpretation_source: input.interpretationSource ?? input.decision?.source ?? null,
+        interpretation_confidence: input.interpretationConfidence ?? input.decision?.confidence ?? null,
         policy_result: input.policyResult,
         action_status: input.actionStatus,
         financial_impact: input.financialImpact ?? null,
