@@ -1007,7 +1007,6 @@ function OrderList({
   onSelect,
   emptyText,
 }: {
-  tenantId: string;
   orders: MerchantOrder[];
   loading: boolean;
   selectedOrderId: string;
