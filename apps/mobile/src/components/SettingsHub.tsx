@@ -9,6 +9,7 @@ import { AccountDataControls } from './AccountDataControls';
 import { BusinessProfileView } from './BusinessProfileView';
 import { CustomersView } from './CustomersView';
 import { CustomerNotificationSettings } from './CustomerNotificationSettings';
+import { CustomerEnquiriesView } from './CustomerEnquiriesView';
 import { PaymentMethodsSettings } from './PaymentMethodsSettings';
 import { OperationalPolicySettings } from './OperationalPolicySettings';
 import { ReportsView } from './ReportsView';
@@ -23,6 +24,7 @@ type Section =
   | 'menu'
   | 'business'
   | 'customers'
+  | 'enquiries'
   | 'whatsapp'
   | 'notifications'
   | 'payments'
@@ -67,6 +69,7 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
 
         {section === 'business' ? <BusinessProfileView business={business} onSave={onSaveBusiness} /> : null}
         {section === 'customers' ? <CustomersView business={business} /> : null}
+        {section === 'enquiries' ? <CustomerEnquiriesView business={business} /> : null}
         {section === 'whatsapp' ? <WhatsAppConnectionView business={business} /> : null}
         {section === 'notifications' ? <CustomerNotificationSettings business={business} /> : null}
         {section === 'payments' ? <PaymentMethodsSettings business={business} /> : null}
@@ -160,6 +163,12 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
             title="Customers"
             text="Customer directory, history and profile details"
             onPress={() => setSection('customers')}
+          />
+          <MenuRow
+            icon="chatbubble-ellipses-outline"
+            title="Customer enquiries"
+            text="Price and product questions kept separate from actual orders"
+            onPress={() => setSection('enquiries')}
           />
           <MenuRow
             icon="card-outline"
