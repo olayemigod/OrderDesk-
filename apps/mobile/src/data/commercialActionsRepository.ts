@@ -7,6 +7,7 @@ export type CommercialAction = {
   riskClass: 'low' | 'medium' | 'high';
   requestedBy: string;
   actorUserId: string | null;
+  actorName: string;
   interpretationSource: string | null;
   interpretationConfidence: number | null;
   policyResult: string;
@@ -50,6 +51,7 @@ export async function loadCommercialActions(
       riskClass: (['low','medium','high'].includes(row.risk_class) ? row.risk_class : 'low') as CommercialAction['riskClass'],
       requestedBy: typeof row.requested_by === 'string' ? row.requested_by : 'system',
       actorUserId: typeof row.actor_user_id === 'string' ? row.actor_user_id : null,
+      actorName: typeof row.actor_name === 'string' && row.actor_name ? row.actor_name : humanActor(row.requested_by),
       interpretationSource: typeof row.interpretation_source === 'string' ? row.interpretation_source : null,
       interpretationConfidence: numberOrNull(row.interpretation_confidence),
       policyResult: typeof row.policy_result === 'string' ? row.policy_result : 'pending',
@@ -66,6 +68,11 @@ export async function loadCommercialActions(
         : {},
     }];
   });
+}
+
+function humanActor(value: unknown): string {
+  if (typeof value !== 'string' || !value) return 'System';
+  return value.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function numberOrNull(value: unknown): number | null {
