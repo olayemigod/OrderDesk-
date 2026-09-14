@@ -56,7 +56,7 @@ Deno.serve(withObservability('order-fulfillment', async (request) => {
 
   const { data: order, error: orderError } = await admin
     .from('orders')
-    .select('id,tenant_id,status,fulfillment_method,fulfillment_status,delivery_provider,delivery_reference,delivery_note')
+    .select('id,tenant_id,customer_id,public_order_id,status,payment_status,amount_paid,total_amount,currency,fulfillment_method,fulfillment_status,delivery_provider,delivery_reference,delivery_note,dispatched_at,fulfilled_at,fulfillment_confirmed_by')
     .eq('id', orderId)
     .maybeSingle();
 
@@ -119,11 +119,23 @@ Deno.serve(withObservability('order-fulfillment', async (request) => {
       .eq('tenant_id', tenantId)
       .eq('status', 'ready')
       .eq('fulfillment_status', 'unassigned')
-      .select('id,status,fulfillment_status')
+      .select('id,tenant_id,customer_id,public_order_id,status,payment_status,amount_paid,total_amount,currency,fulfillment_method,fulfillment_status,delivery_provider,delivery_reference,delivery_note,dispatched_at,fulfilled_at,fulfillment_confirmed_by')
       .maybeSingle();
 
     if (updateError) return json({ error: updateError.message }, 400);
     if (!updated) return json({ error: 'Order fulfillment changed before delivery could start. Refresh and try again.' }, 409);
+
+    await recordFulfillmentCommercialAction({
+      tenantId,
+      userId,
+      role: String(membership.role),
+      orderBefore: order,
+      orderAfter: updated,
+      action: 'start_delivery',
+      provider,
+      reference,
+      note,
+    });
 
     return json({ orderId, status: updated.status, fulfillmentStatus: updated.fulfillment_status }, 200);
   }
@@ -162,11 +174,23 @@ Deno.serve(withObservability('order-fulfillment', async (request) => {
       .eq('tenant_id', tenantId)
       .eq('status', 'ready')
       .eq('fulfillment_status', 'unassigned')
-      .select('id,status,fulfillment_status')
+      .select('id,tenant_id,customer_id,public_order_id,status,payment_status,amount_paid,total_amount,currency,fulfillment_method,fulfillment_status,delivery_provider,delivery_reference,delivery_note,dispatched_at,fulfilled_at,fulfillment_confirmed_by')
       .maybeSingle();
 
     if (updateError) return json({ error: updateError.message }, 400);
     if (!updated) return json({ error: 'Order fulfillment changed before pickup could be completed. Refresh and try again.' }, 409);
+
+    await recordFulfillmentCommercialAction({
+      tenantId,
+      userId,
+      role: String(membership.role),
+      orderBefore: order,
+      orderAfter: updated,
+      action: 'complete_fulfillment',
+      provider: null,
+      reference: null,
+      note,
+    });
 
     return json({ orderId, status: updated.status, fulfillmentStatus: updated.fulfillment_status }, 200);
   }
@@ -195,14 +219,108 @@ Deno.serve(withObservability('order-fulfillment', async (request) => {
     .eq('status', 'ready')
     .eq('fulfillment_status', 'out_for_delivery')
     .eq('fulfillment_method', method)
-    .select('id,status,fulfillment_status')
+    .select('id,tenant_id,customer_id,public_order_id,status,payment_status,amount_paid,total_amount,currency,fulfillment_method,fulfillment_status,delivery_provider,delivery_reference,delivery_note,dispatched_at,fulfilled_at,fulfillment_confirmed_by')
     .maybeSingle();
 
   if (updateError) return json({ error: updateError.message }, 400);
   if (!updated) return json({ error: 'Order fulfillment changed before delivery could be completed. Refresh and try again.' }, 409);
 
+  await recordFulfillmentCommercialAction({
+    tenantId,
+    userId,
+    role: String(membership.role),
+    orderBefore: order,
+    orderAfter: updated,
+    action: 'complete_fulfillment',
+    provider: updated.delivery_provider ?? provider,
+    reference: updated.delivery_reference ?? reference,
+    note: updated.delivery_note ?? note,
+  });
+
   return json({ orderId, status: updated.status, fulfillmentStatus: updated.fulfillment_status }, 200);
 }));
+
+async function recordFulfillmentCommercialAction(input: {
+  tenantId: string;
+  userId: string;
+  role: string;
+  orderBefore: Record<string, unknown>;
+  orderAfter: Record<string, unknown>;
+  action: Action;
+  provider: string | null;
+  reference: string | null;
+  note: string | null;
+}): Promise<void> {
+  if (!admin) return;
+
+  const requestedBy = input.role === 'staff' ? 'staff' : 'merchant';
+  const status = String(input.orderAfter.fulfillment_status ?? '');
+  const actionType = input.action === 'start_delivery'
+    ? 'delivery_started'
+    : status === 'collected'
+      ? 'pickup_completed'
+      : 'delivery_completed';
+  const riskClass = input.action === 'start_delivery' ? 'medium' : 'high';
+  const appliedAt = new Date().toISOString();
+  const actionKey =
+    'fulfillment:' +
+    String(input.orderAfter.id ?? '') + ':' +
+    actionType + ':' +
+    String(input.orderAfter.dispatched_at ?? input.orderAfter.fulfilled_at ?? appliedAt);
+
+  const beforeState = fulfillmentState(input.orderBefore);
+  const afterState = fulfillmentState(input.orderAfter);
+
+  const { error } = await admin
+    .from('commercial_action_ledger')
+    .upsert({
+      tenant_id: input.tenantId,
+      action_key: actionKey,
+      channel: 'merchant_app',
+      customer_id: input.orderAfter.customer_id ?? null,
+      target_order_id: input.orderAfter.id ?? null,
+      action_type: actionType,
+      risk_class: riskClass,
+      requested_by: requestedBy,
+      actor_user_id: input.userId,
+      policy_result: 'allowed',
+      action_status: 'applied',
+      financial_impact: null,
+      currency: input.orderAfter.currency ?? null,
+      before_state: beforeState,
+      after_state: afterState,
+      metadata: {
+        public_order_id: input.orderAfter.public_order_id ?? null,
+        delivery_provider: input.provider,
+        delivery_reference: input.reference,
+        note: input.note,
+      },
+      applied_at: appliedAt,
+    }, {
+      onConflict: 'tenant_id,action_key',
+      ignoreDuplicates: true,
+    });
+
+  if (error) {
+    console.warn('SellerTray fulfillment audit write failed', error.message);
+  }
+}
+
+function fulfillmentState(order: Record<string, unknown>): Record<string, unknown> {
+  return {
+    status: order.status ?? null,
+    payment_status: order.payment_status ?? null,
+    amount_paid: order.amount_paid ?? null,
+    total_amount: order.total_amount ?? null,
+    fulfillment_method: order.fulfillment_method ?? null,
+    fulfillment_status: order.fulfillment_status ?? null,
+    delivery_provider: order.delivery_provider ?? null,
+    delivery_reference: order.delivery_reference ?? null,
+    dispatched_at: order.dispatched_at ?? null,
+    fulfilled_at: order.fulfilled_at ?? null,
+    fulfillment_confirmed_by: order.fulfillment_confirmed_by ?? null,
+  };
+}
 
 function cleanAction(value: unknown): Action | null {
   return value === 'start_delivery' || value === 'complete_fulfillment' ? value : null;
