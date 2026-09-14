@@ -33,6 +33,7 @@ export const demoOrders: MerchantOrder[] = [
     items: [
       {
         id: '1',
+        catalogItemId: 'demo-catalogue-1',
         name: '5kg Rice',
         originalName: '5kg Rice',
         quantity: 2,
@@ -42,6 +43,7 @@ export const demoOrders: MerchantOrder[] = [
       },
       {
         id: '2',
+        catalogItemId: 'demo-catalogue-2',
         name: 'Vegetable Oil',
         originalName: 'Vegetable Oil',
         quantity: 1,
@@ -83,6 +85,7 @@ export const demoOrders: MerchantOrder[] = [
     items: [
       {
         id: '3',
+        catalogItemId: 'demo-catalogue-3',
         name: 'Bottled Water - Carton',
         originalName: 'cartons of bottled water',
         quantity: 3,
@@ -124,6 +127,7 @@ export const demoOrders: MerchantOrder[] = [
     items: [
       {
         id: '4',
+        catalogItemId: 'demo-catalogue-4',
         name: 'Malt - Crate',
         originalName: 'crate malt',
         quantity: 1,
@@ -133,6 +137,7 @@ export const demoOrders: MerchantOrder[] = [
       },
       {
         id: '5',
+        catalogItemId: 'demo-catalogue-5',
         name: 'Tissue - Pack',
         originalName: 'packs tissue',
         quantity: 2,
