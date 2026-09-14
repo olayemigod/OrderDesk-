@@ -120,6 +120,7 @@ const META_APP_SECRET = Deno.env.get('META_APP_SECRET') ?? '';
 const configuredParserUrl = Deno.env.get('ORDER_PARSER_URL')?.trim() ?? '';
 const ORDER_PARSER_URL = configuredParserUrl || (SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/order-parser` : '');
 const ORDER_PARSER_TOKEN = Deno.env.get('ORDER_PARSER_TOKEN') ?? '';
+const ORDER_PARSER_AUTH_TOKEN = ORDER_PARSER_TOKEN || SERVICE_ROLE_KEY;
 const AI_CATALOGUE_CONTEXT_LIMIT = 160;
 const AI_ALIAS_CONTEXT_LIMIT = 6;
 const AI_CUSTOMER_MINUTE_LIMIT = boundedEnvInt('AI_CUSTOMER_MINUTE_LIMIT', 6, 1, 60);
@@ -1536,7 +1537,7 @@ async function parseOrder(
   customerId: string,
   sourceMessageId: string,
 ): Promise<ParsedOrder> {
-  if (ORDER_PARSER_URL && ORDER_PARSER_TOKEN) {
+  if (ORDER_PARSER_URL && ORDER_PARSER_AUTH_TOKEN) {
     if (!(await consumeAiRequestBudget(tenantId, customerId))) {
       console.warn(JSON.stringify({
         event: 'ai_order_parser_rate_limited',
@@ -1552,7 +1553,7 @@ async function parseOrder(
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          authorization: `Bearer ${ORDER_PARSER_TOKEN}`,
+          authorization: `Bearer ${ORDER_PARSER_AUTH_TOKEN}`,
         },
         signal: AbortSignal.timeout(8000),
         body: JSON.stringify({
