@@ -221,8 +221,8 @@ requireValue(authEmailConfirmation.includes('SellerTray'), 'Signup confirmation 
 requireValue(authEmailConfirmation.includes('{{ .ConfirmationURL }}'), 'Signup confirmation template must preserve Supabase ConfirmationURL');
 requireValue(authEmailRecovery.includes('SellerTray'), 'Password recovery template must use SellerTray branding');
 requireValue(authEmailRecovery.includes('{{ .ConfirmationURL }}'), 'Password recovery template must preserve Supabase ConfirmationURL');
-requireValue(authEmailConfirmation.includes('https://processedge.com.ng/sellertray/privacy'), 'Signup confirmation template must link the SellerTray Privacy Policy');
-requireValue(authEmailRecovery.includes('https://processedge.com.ng/sellertray/privacy'), 'Password recovery template must link the SellerTray Privacy Policy');
+requireValue(authEmailConfirmation.includes('https://sellertray.vercel.app/privacy'), 'Signup confirmation template must link the SellerTray Privacy Policy');
+requireValue(authEmailRecovery.includes('https://sellertray.vercel.app/privacy'), 'Password recovery template must link the SellerTray Privacy Policy');
 requireValue(!authEmailConfirmation.includes('OrderDesk') && !authEmailRecovery.includes('OrderDesk'), 'Production Auth email templates must not expose the OrderDesk beta name');
 requireValue(authEmailTemplateReadme.includes('Send Email Auth Hook'), 'Auth email deployment notes must retain the Send Email Hook contract');
 const sendAuthEmailFunction = read(join(repoRoot, 'supabase/functions/send-auth-email/index.ts'));
@@ -245,8 +245,8 @@ const provisionedApp = read(join(mobileRoot, 'src/ProvisionedApp.tsx'));
 const legalGate = read(join(mobileRoot, 'src/components/LegalAcceptanceGate.tsx'));
 requireValue(provisionedApp.includes('<LegalAcceptanceGate>'), 'Authenticated SellerTray sessions must pass through LegalAcceptanceGate');
 requireValue(legalGate.includes('acceptSellerTrayLegal'), 'LegalAcceptanceGate must record acceptance through the lifecycle repository');
-requireValue(legalGate.includes('https://processedge.com.ng/sellertray/privacy'), 'LegalAcceptanceGate privacy URL is missing');
-requireValue(legalGate.includes('https://processedge.com.ng/sellertray/terms'), 'LegalAcceptanceGate terms URL is missing');
+requireValue(legalGate.includes('https://sellertray.vercel.app/privacy'), 'LegalAcceptanceGate privacy URL is missing');
+requireValue(legalGate.includes('https://sellertray.vercel.app/terms'), 'LegalAcceptanceGate terms URL is missing');
 requireValue(authGate.includes('signupLegalAccepted'), 'SellerTray signup must require legal acknowledgement');
 requireValue(authGate.includes('Email address') && authGate.includes('Confirm password'), 'Authentication forms must retain visible field labels');
 requireValue(authGate.includes("keyboardShouldPersistTaps=\"handled\""), 'Authentication forms must remain keyboard-safe and scrollable');
@@ -403,8 +403,8 @@ requireValue(
   'Ordinary WhatsApp messages must produce merchant alerts without duplicating order/change-request alerts',
 );
 requireValue(accountControls.includes('DELETE MY SELLERTRAY ACCOUNT'), 'Account deletion confirmation must use SellerTray');
-requireValue(accountControls.includes('https://processedge.com.ng/sellertray/privacy'), 'In-app SellerTray privacy URL is missing');
-requireValue(accountControls.includes('https://processedge.com.ng/sellertray/terms'), 'In-app SellerTray terms URL is missing');
+requireValue(accountControls.includes('https://sellertray.vercel.app/privacy'), 'In-app SellerTray privacy URL is missing');
+requireValue(accountControls.includes('https://sellertray.vercel.app/terms'), 'In-app SellerTray terms URL is missing');
 
 const orderParserFunction = read(join(repoRoot, 'supabase/functions/order-parser/index.ts'));
 const merchantOrderFunction = read(join(repoRoot, 'supabase/functions/merchant-order/index.ts'));
@@ -945,7 +945,7 @@ const releaseRunbook = read(join(repoRoot, 'docs/release_runbook.md'));
 const lifecycle = read(join(repoRoot, 'docs/data_lifecycle.md'));
 requireValue(releaseRunbook.includes('ng.processedge.sellertray'), 'Release runbook must record the frozen Android package');
 requireValue(releaseRunbook.includes('sellertray://auth-confirm'), 'Release runbook must record SellerTray Auth redirects');
-requireValue(lifecycle.includes('https://processedge.com.ng/sellertray/account-deletion'), 'Data lifecycle must record the public deletion resource');
+requireValue(lifecycle.includes('https://sellertray.vercel.app/account-deletion'), 'Data lifecycle must record the public deletion resource');
 
 const legacyUiPhrases = [
   'Opening OrderDesk',
