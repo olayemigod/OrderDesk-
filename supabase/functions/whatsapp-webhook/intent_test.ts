@@ -149,3 +149,24 @@ Deno.test('paid claim is never treated as a new order', async () => {
   });
   assertEquals(decision.intent, 'payment_claim');
 });
+
+
+Deno.test('pay on pickup selects payment method instead of fulfillment pickup', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'I will pay on pickup',
+    vocabulary: [],
+    context: {
+      ...baseContext,
+      orders: [{
+        id: '33333333-3333-4333-8333-333333333333',
+        publicOrderId: 'NLM/000006',
+        status: 'accepted',
+        paymentStatus: 'unpaid',
+        fulfillmentStatus: 'unassigned',
+        createdAt: new Date().toISOString(),
+      }],
+    },
+  });
+  assertEquals(decision.intent, 'payment_method_select');
+  assertEquals(decision.paymentMethod, 'PICKUP');
+});
