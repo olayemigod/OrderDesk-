@@ -33,7 +33,9 @@ export function CommercialActionAuditView({ business }: { business: MerchantBusi
 
   const visible = useMemo(() => actions.filter((action) => {
     if (filter === 'high') return action.riskClass === 'high';
-    if (filter === 'ai') return action.interpretationSource === 'ai';
+    if (filter === 'ai') {
+      return action.interpretationSource === 'ai' || action.metadata.parser_source === 'ai';
+    }
     return true;
   }), [actions, filter]);
 
