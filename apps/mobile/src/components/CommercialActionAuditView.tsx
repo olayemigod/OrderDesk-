@@ -95,11 +95,24 @@ export function CommercialActionAuditView({ business }: { business: MerchantBusi
             </View>
 
             <View style={styles.detailGrid}>
-              <Detail label="Source" value={humanLabel(action.interpretationSource ?? 'workflow')} dark={appearance.dark} />
+              <Detail label="Interpreter" value={humanLabel(action.interpretationSource ?? 'workflow')} dark={appearance.dark} />
+              <Detail label="Actor" value={humanLabel(action.requestedBy)} dark={appearance.dark} />
               <Detail label="Policy" value={humanLabel(action.policyResult)} dark={appearance.dark} />
               <Detail label="Result" value={humanLabel(action.actionStatus)} dark={appearance.dark} />
-              <Detail label="Channel" value={humanLabel(action.channel)} dark={appearance.dark} />
             </View>
+
+            {stateTransition(action) ? (
+              <View style={[styles.transitionBox, appearance.dark && darkStyles.subtleCard]}>
+                <Text style={[styles.transitionLabel, appearance.dark && darkStyles.bodyText]}>STATE EVIDENCE</Text>
+                <Text style={[styles.transitionText, appearance.dark && darkStyles.titleText]}>{stateTransition(action)}</Text>
+              </View>
+            ) : null}
+
+            {action.financialImpact !== null ? (
+              <Text style={[styles.financialImpact, appearance.dark && darkStyles.greenText]}>
+                Financial impact: {formatMoney(action.financialImpact, action.currency)}
+              </Text>
+            ) : null}
 
             {action.interpretationConfidence !== null ? (
               <Text style={[styles.confidence, appearance.dark && darkStyles.bodyText]}>
@@ -107,6 +120,9 @@ export function CommercialActionAuditView({ business }: { business: MerchantBusi
               </Text>
             ) : null}
 
+            <Text style={[styles.meta, appearance.dark && darkStyles.bodyText]}>
+              Channel: {humanLabel(action.channel)}
+            </Text>
             <Text style={[styles.timestamp, appearance.dark && darkStyles.bodyText]}>{formatDate(action.createdAt)}</Text>
           </View>
         ))}
@@ -147,7 +163,47 @@ function humanAction(value: string) {
 }
 
 function humanLabel(value: string) {
-  return value.replace(/_/g, ' ').replace(/w/g, (letter) => letter.toUpperCase());
+  return value
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function stateTransition(action: CommercialAction): string | null {
+  const beforeStatus = textState(action.beforeState.status);
+  const afterStatus = textState(action.afterState.status);
+  const beforePayment = textState(action.beforeState.payment_status);
+  const afterPayment = textState(action.afterState.payment_status);
+  const beforeFulfillment = textState(action.beforeState.fulfillment_status);
+  const afterFulfillment = textState(action.afterState.fulfillment_status);
+
+  const parts: string[] = [];
+  if (beforeStatus || afterStatus) {
+    parts.push('Order: ' + (beforeStatus ?? '—') + ' → ' + (afterStatus ?? '—'));
+  }
+  if ((beforePayment || afterPayment) && beforePayment !== afterPayment) {
+    parts.push('Payment: ' + (beforePayment ?? '—') + ' → ' + (afterPayment ?? '—'));
+  }
+  if ((beforeFulfillment || afterFulfillment) && beforeFulfillment !== afterFulfillment) {
+    parts.push('Fulfilment: ' + (beforeFulfillment ?? '—') + ' → ' + (afterFulfillment ?? '—'));
+  }
+  return parts.length ? parts.join(' · ') : null;
+}
+
+function textState(value: unknown): string | null {
+  return typeof value === 'string' && value ? humanLabel(value) : null;
+}
+
+function formatMoney(value: number, currency: string | null) {
+  const code = currency && /^[A-Z]{3}$/.test(currency) ? currency : 'NGN';
+  try {
+    return new Intl.NumberFormat('en-NG', {
+      style: 'currency',
+      currency: code,
+      maximumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    return code + ' ' + value.toFixed(2);
+  }
 }
 
 function iconForAction(action: string) {
@@ -207,13 +263,17 @@ const styles = StyleSheet.create({
   detailBox: { flexBasis: '47%', flexGrow: 1, minWidth: 120, backgroundColor: '#F9FAFB', borderRadius: 10, padding: 9 },
   detailLabel: { color: '#667085', fontSize: 12, fontWeight: '700' },
   detailValue: { color: '#344054', fontSize: 12, lineHeight: 18, fontWeight: '900', marginTop: 2 },
+  transitionBox: { backgroundColor: '#F9FAFB', borderRadius: 10, padding: 9, gap: 3 },
+  transitionLabel: { color: '#667085', fontSize: 12, fontWeight: '800' },
+  transitionText: { color: '#344054', fontSize: 13, lineHeight: 19, fontWeight: '800' },
+  financialImpact: { color: '#027A48', fontSize: 13, lineHeight: 19, fontWeight: '900' },
   confidence: { color: '#667085', fontSize: 12, lineHeight: 18 },
   timestamp: { color: '#98A2B3', fontSize: 12 },
   riskPill: { borderRadius: 999, paddingVertical: 5, paddingHorizontal: 7 },
   riskLow: { backgroundColor: '#ECFDF3' },
   riskMedium: { backgroundColor: '#FFFAEB' },
   riskHigh: { backgroundColor: '#FEF3F2' },
-  riskText: { fontSize: 11, fontWeight: '900' },
+  riskText: { fontSize: 12, fontWeight: '900' },
   riskLowText: { color: '#027A48' },
   riskMediumText: { color: '#B54708' },
   riskHighText: { color: '#B42318' },
@@ -230,4 +290,5 @@ const darkStyles = StyleSheet.create({
   filterActive: { backgroundColor: '#12372C' },
   titleText: { color: '#F8FAFC' },
   bodyText: { color: '#D0D5DD' },
+  greenText: { color: '#ABEFC6' },
 });
