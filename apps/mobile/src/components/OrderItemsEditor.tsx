@@ -623,6 +623,7 @@ function NewLineItem({
       <TextInput
         autoFocus
         placeholder="Item name"
+        placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
         value={name}
         onChangeText={setName}
         style={[styles.input, appearance.dark && darkStyles.input]}
@@ -631,16 +632,18 @@ function NewLineItem({
         <TextInput
           keyboardType="decimal-pad"
           placeholder="Qty"
+          placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
           value={quantity}
           onChangeText={setQuantity}
-          style={[styles.input, styles.smallInput]}
+          style={[styles.input, styles.smallInput, appearance.dark && darkStyles.input]}
         />
         <TextInput
           keyboardType="decimal-pad"
           placeholder="Price (₦)"
+          placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
           value={price}
           onChangeText={setPrice}
-          style={[styles.input, styles.priceInput]}
+          style={[styles.input, styles.priceInput, appearance.dark && darkStyles.input]}
         />
       </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
