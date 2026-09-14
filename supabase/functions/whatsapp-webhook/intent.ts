@@ -491,7 +491,11 @@ function looksLikeNewOrder(normalized: string): boolean {
   }
   const quantityWord = /\b(?:one|two|three|four|five|six|seven|eight|nine|ten|a dozen|half dozen|\d+)\b/i;
   const purchaseWord = /\b(?:carton|pack|piece|pcs|bottle|bag|crate|box|unit|kg|litre|liter)\b/i;
-  return quantityWord.test(normalized) && purchaseWord.test(normalized);
+  if (quantityWord.test(normalized) && purchaseWord.test(normalized)) return true;
+
+  const leadingQuantity = /^(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+(?:\.\d+)?)\s+[a-z0-9]/i;
+  const trailingQuantity = /[a-z]\s+(?:x\s*)?(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+(?:\.\d+)?)$/i;
+  return leadingQuantity.test(normalized) || trailingQuantity.test(normalized);
 }
 
 function contextualOrderFromEnquiry(
