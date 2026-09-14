@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
   pill: { borderRadius: 999, paddingVertical: 5, paddingHorizontal: 8 },
   pillPositive: { backgroundColor: '#ECFDF3' },
   pillNeutral: { backgroundColor: '#F2F4F7' },
-  pillText: { fontSize: 11, fontWeight: '900' },
+  pillText: { fontSize: 12, fontWeight: '900' },
   pillTextPositive: { color: '#027A48' },
   pillTextNeutral: { color: '#475467' },
   errorCard: { backgroundColor: '#FEF3F2', borderRadius: 14, padding: 13, gap: 4 },
