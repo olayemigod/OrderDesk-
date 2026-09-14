@@ -20,8 +20,8 @@ import { SellerTrayBrand } from './SellerTrayBrand';
 
 type AuthMode = 'welcome' | 'sign-in' | 'sign-up' | 'forgot-password' | 'reset-password';
 
-const SELLERTRAY_PRIVACY_URL = 'https://processedge.com.ng/sellertray/privacy';
-const SELLERTRAY_TERMS_URL = 'https://processedge.com.ng/sellertray/terms';
+const SELLERTRAY_PRIVACY_URL = 'https://sellertray.vercel.app/privacy';
+const SELLERTRAY_TERMS_URL = 'https://sellertray.vercel.app/terms';
 
 export function AuthGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
