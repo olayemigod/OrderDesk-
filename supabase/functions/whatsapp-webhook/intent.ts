@@ -248,6 +248,10 @@ function ruleDecision(
     };
   }
 
+  if (looksLikePaymentClaimLanguage(normalized)) {
+    return emptyDecision('payment_claim', 'rules', 0.98, explicitOrderRef);
+  }
+
   if (/\b(?:refund|money back|return my money)\b/i.test(normalized)) {
     return emptyDecision('refund_request', 'rules', 0.96, explicitOrderRef);
   }
@@ -317,6 +321,16 @@ function ruleDecision(
     return {
       ...emptyDecision(paymentMethod ? 'payment_method_select' : 'payment_options', 'rules', 0.97, explicitOrderRef),
       paymentMethod,
+    };
+  }
+
+  if (
+    context.lastOutboundEventKey === 'payment_options' &&
+    looksLikeShortPaymentOptionReply(normalized)
+  ) {
+    return {
+      ...emptyDecision('payment_method_select', 'context', 0.95, explicitOrderRef),
+      paymentMethod: normalizePaymentMethod(rawText),
     };
   }
 
@@ -544,21 +558,35 @@ function looksLikeEnquiryFollowUp(normalized: string): boolean {
     /^(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\b.*\b(?:please|abeg|thanks)?$/i.test(normalized);
 }
 
+function looksLikePaymentClaimLanguage(normalized: string): boolean {
+  return /\b(?:i have paid|ive paid|i paid|already paid|payment made|payment done|payment sent|sent payment|i have transferred|ive transferred|i transferred|i don transfer|don pay|transfer done|transferred already|sent the money|sent money|money sent)\b/i.test(normalized);
+}
+
 function looksLikePaymentOptionsLanguage(normalized: string): boolean {
-  return /\b(?:i want to pay|i wan pay|want to pay|make i pay|how can i pay|how do i pay|how to pay|where can i pay|where should i transfer|pay by|pay with|payment options|payment details|bank transfer|paystack|flutterwave|cash on delivery|pay on pickup)\b/i.test(normalized);
+  return /\b(?:i want to pay|i wan pay|want to pay|make i pay|how can i pay|how do i pay|how to pay|where can i pay|where should i transfer|where do i transfer|can i transfer|i will transfer|ill transfer|pay by|pay with|payment options|payment details|bank details|account details|account number|send account|send me account|bank transfer|paystack|flutterwave|cash on delivery|pay on delivery|paying on delivery|pay when delivered|pay when it arrives|pay when it gets here|pay when i receive|pay on pickup|pay at pickup|pay when i pick|pay when i collect|pay on collection)\b/i.test(normalized);
 }
 
 function paymentMethodFromSentence(normalized: string): string | null {
   if (/\b(?:paystack)\b/i.test(normalized)) return 'PAYSTACK';
   if (/\b(?:flutterwave|flw)\b/i.test(normalized)) return 'FLUTTERWAVE';
-  if (/\b(?:cash on delivery|cod)\b/i.test(normalized)) return 'COD';
-  if (/\b(?:pay on pickup|pickup)\b/i.test(normalized)) return 'PICKUP';
-  if (/\b(?:bank transfer|transfer|bank)\b/i.test(normalized)) return 'BANK';
+  if (/\b(?:cash on delivery|pay on delivery|paying on delivery|pay when delivered|pay when it arrives|pay when it gets here|pay when i receive|cod)\b/i.test(normalized)) return 'COD';
+  if (/\b(?:pay on pickup|pay at pickup|pay when i pick|pay when i collect|pay on collection|pickup)\b/i.test(normalized)) return 'PICKUP';
+  if (/\b(?:bank transfer|transfer|bank details|account details|account number|send account|send me account|where should i transfer|where do i transfer|can i transfer|i will transfer|ill transfer|pay by bank|pay via bank)\b/i.test(normalized)) return 'BANK';
   return null;
+}
+
+function looksLikeShortPaymentOptionReply(normalized: string): boolean {
+  const tokens = normalized.split(' ').filter(Boolean);
+  if (tokens.length === 0 || tokens.length > 6) return false;
+  if (/^(?:ok|okay|alright|thanks|thank you|yes|no|fine|good)$/i.test(normalized)) return false;
+  if (looksLikePaymentClaimLanguage(normalized)) return false;
+  if (/\b(?:refund|receipt|invoice|cancel|status|where|when|why|how|delivery address|change|remove|add)\b/i.test(normalized)) return false;
+  return /^[a-z0-9][a-z0-9 &+._-]*$/i.test(normalized);
 }
 
 function looksLikeNonOrderWorkflow(normalized: string): boolean {
   return (
+    looksLikePaymentClaimLanguage(normalized) ||
     looksLikePaymentOptionsLanguage(normalized) ||
     /\b(?:paid|payment|refund|money back|receipt|invoice|cancel|stop order|order status|track my order|where is my order|delivery status|where is the rider|rider|pickup|pick up|collect|complaint|damaged|spoilt|spoiled|missing item)\b/i.test(normalized)
   );
