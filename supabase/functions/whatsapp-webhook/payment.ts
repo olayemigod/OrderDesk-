@@ -558,6 +558,12 @@ function methodToken(method: PaymentMethod, bankNo: number): string {
 
 function resolveMethod(methods: PaymentMethod[], raw: string): PaymentMethod | null {
   const token = normalizeMethodToken(raw);
+
+  const numeric = token.match(/^([1-9][0-9]?)$/);
+  if (numeric) {
+    return methods[Number(numeric[1]) - 1] || null;
+  }
+
   if (token === 'BANK' || token === 'TRANSFER' || token === 'BANK_TRANSFER') {
     return methods.find((m) => m.method_type === 'bank_transfer' && m.is_default) ||
       methods.find((m) => m.method_type === 'bank_transfer') || null;
