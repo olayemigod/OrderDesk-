@@ -23,8 +23,9 @@ type Props = {
 };
 
 const DELETE_PHRASE = 'DELETE MY SELLERTRAY ACCOUNT';
-const PRIVACY_URL = 'https://processedge.com.ng/sellertray/privacy';
-const TERMS_URL = 'https://processedge.com.ng/sellertray/terms';
+const ACCOUNT_DELETION_URL = 'https://sellertray.vercel.app/account-deletion';
+const PRIVACY_URL = 'https://sellertray.vercel.app/privacy';
+const TERMS_URL = 'https://sellertray.vercel.app/terms';
 
 export function AccountDataControls({ business = null }: Props) {
   const appearance = useSellerTrayAppearance();
@@ -254,6 +255,12 @@ export function AccountDataControls({ business = null }: Props) {
             <Text style={[styles.secondaryButtonText, appearance.dark && darkStyles.titleText]}>Terms</Text>
           </Pressable>
         </View>
+        <Pressable
+          onPress={() => void Linking.openURL(ACCOUNT_DELETION_URL)}
+          style={({ pressed }) => [styles.deletionGuideButton, appearance.dark && darkStyles.secondaryButton, pressed && styles.pressed]}
+        >
+          <Text style={[styles.secondaryButtonText, appearance.dark && darkStyles.titleText]}>Account deletion guide</Text>
+        </Pressable>
       </View>
 
       <View style={[styles.dangerBlock, appearance.dark && darkStyles.borderTop]}>
@@ -366,6 +373,7 @@ const styles = StyleSheet.create({
   signOutButtonText: { color: '#344054', fontSize: 13, fontWeight: '900' },
   legalBlock: { gap: 10, borderTopWidth: 1, borderTopColor: '#E4E7EC', paddingTop: 16 },
   legalButton: { flex: 1, minHeight: 44, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 11, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  deletionGuideButton: { minHeight: 44, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 11, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
   dangerBlock: { gap: 10, borderTopWidth: 1, borderTopColor: '#E4E7EC', paddingTop: 16 },
   dangerTitle: { color: '#B42318', fontSize: 14, fontWeight: '900' },
   dangerOutlineButton: { minHeight: 44, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 11, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, backgroundColor: '#FFFFFF' },
