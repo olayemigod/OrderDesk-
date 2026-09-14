@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import type { MerchantRole } from '../data/businessRepository';
+import { loadCatalogue, type CatalogueItem } from '../data/catalogueRepository';
 import type { OrderItemInput } from '../data/ordersRepository';
+import {
+  createCatalogueFromOrderItem,
+  keepOrderItemOneOff,
+  loadOrderItemCatalogueCandidates,
+  matchOrderItemToCatalogue,
+  type OrderItemCatalogueCandidate,
+} from '../data/orderItemCatalogueResolutionRepository';
 import type { MatchSource, MerchantOrder, OrderItem } from '../domain/order';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
@@ -27,19 +36,50 @@ const matchLabels: Record<MatchSource, string> = {
   normalized_alias: 'Matched normalized alias',
   unmatched: 'Not matched to catalogue',
   manual: 'Merchant-entered item',
+  merchant_match: 'Matched by merchant',
+  one_off: 'Approved one-off item',
 };
 
 type Props = {
   order: MerchantOrder;
+  tenantId: string;
+  role: MerchantRole;
   editable: boolean;
   onAdd: (orderId: string, item: OrderItemInput) => Promise<void>;
   onEdit: (itemId: string, item: OrderItemInput) => Promise<void>;
   onRemove: (itemId: string) => Promise<void>;
+  onResolved: () => Promise<void>;
+  onCatalogueChanged: () => Promise<void>;
 };
 
-export function OrderItemsEditor({ order, editable, onAdd, onEdit, onRemove }: Props) {
+export function OrderItemsEditor({
+  order,
+  tenantId,
+  role,
+  editable,
+  onAdd,
+  onEdit,
+  onRemove,
+  onResolved,
+  onCatalogueChanged,
+}: Props) {
   const appearance = useSellerTrayAppearance();
   const [adding, setAdding] = useState(false);
+  const [candidates, setCandidates] = useState<OrderItemCatalogueCandidate[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    void loadOrderItemCatalogueCandidates(tenantId, order.id)
+      .then((rows) => {
+        if (active) setCandidates(rows);
+      })
+      .catch(() => {
+        if (active) setCandidates([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [tenantId, order.id, order.items]);
 
   return (
     <View style={styles.wrap}>
@@ -54,18 +94,36 @@ export function OrderItemsEditor({ order, editable, onAdd, onEdit, onRemove }: P
         </View>
       ) : null}
 
-      {order.items.map((item) =>
-        editable ? (
-          <EditableLineItem
-            key={item.id}
-            item={item}
-            onSave={(input) => onEdit(item.id, input)}
-            onRemove={() => onRemove(item.id)}
-          />
-        ) : (
-          <ReadOnlyLineItem key={item.id} item={item} />
-        ),
-      )}
+      {order.items.map((item) => {
+        const candidate = candidates.find((entry) => entry.orderItemId === item.id) ?? null;
+        return (
+          <View key={item.id} style={styles.itemStack}>
+            {editable ? (
+              <EditableLineItem
+                item={item}
+                onSave={(input) => onEdit(item.id, input)}
+                onRemove={() => onRemove(item.id)}
+              />
+            ) : (
+              <ReadOnlyLineItem item={item} />
+            )}
+
+            {editable && item.matchSource === 'unmatched' ? (
+              <UnmatchedCatalogueResolver
+                tenantId={tenantId}
+                role={role}
+                item={item}
+                candidate={candidate}
+                onResolved={async (catalogueChanged) => {
+                  setCandidates(await loadOrderItemCatalogueCandidates(tenantId, order.id));
+                  await onResolved();
+                  if (catalogueChanged) await onCatalogueChanged();
+                }}
+              />
+            ) : null}
+          </View>
+        );
+      })}
 
       {editable ? (
         adding ? (
@@ -249,6 +307,290 @@ function MatchDetail({ item }: { item: OrderItem }) {
   );
 }
 
+function UnmatchedCatalogueResolver({
+  tenantId,
+  role,
+  item,
+  candidate,
+  onResolved,
+}: {
+  tenantId: string;
+  role: MerchantRole;
+  item: OrderItem;
+  candidate: OrderItemCatalogueCandidate | null;
+  onResolved: (catalogueChanged: boolean) => Promise<void>;
+}) {
+  const appearance = useSellerTrayAppearance();
+  const canCreateCatalogue = role === 'owner' || role === 'manager';
+  const [mode, setMode] = useState<'none' | 'match' | 'create' | 'one_off'>('none');
+  const [catalogue, setCatalogue] = useState<CatalogueItem[]>([]);
+  const [search, setSearch] = useState(item.originalName || item.name);
+  const [name, setName] = useState(item.originalName || item.name);
+  const [price, setPrice] = useState(item.unitPrice === null ? '' : String(item.unitPrice));
+  const [sku, setSku] = useState('');
+  const [category, setCategory] = useState('');
+  const [learnAlias, setLearnAlias] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void loadCatalogue(tenantId)
+      .then((rows) => {
+        if (active) setCatalogue(rows.filter((entry) => entry.isActive));
+      })
+      .catch(() => {
+        if (active) setCatalogue([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [tenantId]);
+
+  const normalizedSearch = search.trim().toLocaleLowerCase();
+  const matches = catalogue
+    .filter((entry) => {
+      if (!normalizedSearch) return true;
+      return [
+        entry.name,
+        entry.sku ?? '',
+        entry.category ?? '',
+        ...entry.aliases,
+      ].join(' ').toLocaleLowerCase().includes(normalizedSearch);
+    })
+    .slice(0, 12);
+
+  async function run(action: () => Promise<void>, catalogueChanged = false) {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+      setMode('none');
+      await onResolved(catalogueChanged);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to resolve this catalogue item.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function matchExisting(catalogueItem: CatalogueItem) {
+    if (catalogueItem.price === null) {
+      setError('This catalogue product does not have a selling price yet.');
+      return;
+    }
+    await run(
+      () => matchOrderItemToCatalogue({
+        tenantId,
+        orderItemId: item.id,
+        catalogItemId: catalogueItem.id,
+        learnAlias: canCreateCatalogue && learnAlias,
+      }),
+      canCreateCatalogue && learnAlias,
+    );
+  }
+
+  async function createProduct() {
+    const amount = Number(price);
+    if (!name.trim()) return setError('Enter the catalogue product name.');
+    if (!price.trim() || !Number.isFinite(amount) || amount < 0) {
+      return setError('Enter a valid selling price.');
+    }
+    await run(
+      async () => {
+        await createCatalogueFromOrderItem({
+          tenantId,
+          orderItemId: item.id,
+          name,
+          price: amount,
+          sku,
+          category,
+          learnAlias,
+        });
+      },
+      true,
+    );
+  }
+
+  async function keepOneOff() {
+    const amount = Number(price);
+    if (!price.trim() || !Number.isFinite(amount) || amount < 0) {
+      return setError('Enter the selling price for this one-off item.');
+    }
+    await run(() => keepOrderItemOneOff({
+      tenantId,
+      orderItemId: item.id,
+      price: amount,
+      name,
+    }));
+  }
+
+  return (
+    <View style={[styles.resolveCard, appearance.dark && darkStyles.warningCard]}>
+      <Text style={[styles.resolveEyebrow, appearance.dark && darkStyles.warningTitle]}>CATALOGUE RESOLUTION REQUIRED</Text>
+      <Text style={[styles.resolveTitle, appearance.dark && darkStyles.titleText]}>
+        Unknown item: “{candidate?.customerWording || item.originalName || item.name}”
+      </Text>
+      <Text style={[styles.resolveBody, appearance.dark && darkStyles.warningText]}>
+        Resolve this product before accepting the order. SellerTray will keep the customer wording as evidence.
+      </Text>
+
+      <View style={styles.resolveActions}>
+        <Pressable
+          disabled={busy}
+          onPress={() => setMode(mode === 'match' ? 'none' : 'match')}
+          style={[styles.resolveButton, appearance.dark && darkStyles.outlineButton]}
+        >
+          <Text style={[styles.resolveButtonText, appearance.dark && darkStyles.titleText]}>Match existing</Text>
+        </Pressable>
+        {canCreateCatalogue ? (
+          <Pressable
+            disabled={busy}
+            onPress={() => setMode(mode === 'create' ? 'none' : 'create')}
+            style={[styles.resolveButton, appearance.dark && darkStyles.outlineButton]}
+          >
+            <Text style={[styles.resolveButtonText, appearance.dark && darkStyles.titleText]}>Create product</Text>
+          </Pressable>
+        ) : null}
+        <Pressable
+          disabled={busy}
+          onPress={() => setMode(mode === 'one_off' ? 'none' : 'one_off')}
+          style={[styles.resolveButton, appearance.dark && darkStyles.outlineButton]}
+        >
+          <Text style={[styles.resolveButtonText, appearance.dark && darkStyles.titleText]}>Keep one-off</Text>
+        </Pressable>
+      </View>
+
+      {mode === 'match' ? (
+        <View style={[styles.resolvePanel, appearance.dark && darkStyles.subtleCard]}>
+          <Text style={[styles.resolvePanelTitle, appearance.dark && darkStyles.titleText]}>Match an existing catalogue product</Text>
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search product, alias, SKU or category"
+            placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
+            style={[styles.input, appearance.dark && darkStyles.input]}
+          />
+          {canCreateCatalogue ? (
+            <Pressable onPress={() => setLearnAlias((value) => !value)} style={styles.learnAliasRow}>
+              <View style={[styles.checkBox, learnAlias && styles.checkBoxActive]}>
+                {learnAlias ? <Text style={styles.checkMark}>✓</Text> : null}
+              </View>
+              <Text style={[styles.learnAliasText, appearance.dark && darkStyles.bodyText]}>
+                Remember “{candidate?.customerWording || item.originalName || item.name}” as an alias for future chats
+              </Text>
+            </Pressable>
+          ) : (
+            <Text style={[styles.resolveHint, appearance.dark && darkStyles.bodyText]}>
+              Staff can match the order item; Owner or Manager controls permanent catalogue aliases.
+            </Text>
+          )}
+
+          <View style={styles.catalogueMatchList}>
+            {matches.length === 0 ? (
+              <Text style={[styles.resolveHint, appearance.dark && darkStyles.bodyText]}>No active catalogue product matches this search.</Text>
+            ) : matches.map((entry) => (
+              <Pressable
+                key={entry.id}
+                disabled={busy || entry.price === null}
+                onPress={() => void matchExisting(entry)}
+                style={[styles.catalogueMatchRow, appearance.dark && darkStyles.card, entry.price === null && styles.disabled]}
+              >
+                <View style={styles.matchProductCopy}>
+                  <Text style={[styles.catalogueMatchName, appearance.dark && darkStyles.titleText]}>{entry.name}</Text>
+                  <Text style={[styles.resolveHint, appearance.dark && darkStyles.bodyText]}>
+                    {entry.price === null ? 'Price not set' : money.format(entry.price)}
+                    {entry.aliases.length > 0 ? ' · ' + entry.aliases.slice(0, 2).join(', ') : ''}
+                  </Text>
+                </View>
+                <Text style={styles.useProductText}>Use</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ) : null}
+
+      {mode === 'create' && canCreateCatalogue ? (
+        <View style={[styles.resolvePanel, appearance.dark && darkStyles.subtleCard]}>
+          <Text style={[styles.resolvePanelTitle, appearance.dark && darkStyles.titleText]}>Create catalogue product from this order</Text>
+          <TextInput
+            value={name}
+            onChangeText={setName}
+            placeholder="Canonical product name"
+            placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
+            style={[styles.input, appearance.dark && darkStyles.input]}
+          />
+          <TextInput
+            value={price}
+            onChangeText={setPrice}
+            keyboardType="decimal-pad"
+            placeholder="Selling price"
+            placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
+            style={[styles.input, appearance.dark && darkStyles.input]}
+          />
+          <View style={styles.inputRow}>
+            <TextInput
+              value={sku}
+              onChangeText={setSku}
+              placeholder="SKU (optional)"
+              placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
+              style={[styles.input, styles.priceInput, appearance.dark && darkStyles.input]}
+            />
+            <TextInput
+              value={category}
+              onChangeText={setCategory}
+              placeholder="Category"
+              placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
+              style={[styles.input, styles.priceInput, appearance.dark && darkStyles.input]}
+            />
+          </View>
+          <Pressable onPress={() => setLearnAlias((value) => !value)} style={styles.learnAliasRow}>
+            <View style={[styles.checkBox, learnAlias && styles.checkBoxActive]}>
+              {learnAlias ? <Text style={styles.checkMark}>✓</Text> : null}
+            </View>
+            <Text style={[styles.learnAliasText, appearance.dark && darkStyles.bodyText]}>
+              Learn the customer wording as a product alias
+            </Text>
+          </Pressable>
+          <Pressable disabled={busy} onPress={() => void createProduct()} style={styles.primaryResolveButton}>
+            <Text style={styles.primaryResolveText}>{busy ? 'Creating…' : 'Create product & resolve order'}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {mode === 'one_off' ? (
+        <View style={[styles.resolvePanel, appearance.dark && darkStyles.subtleCard]}>
+          <Text style={[styles.resolvePanelTitle, appearance.dark && darkStyles.titleText]}>Keep as a one-off item</Text>
+          <Text style={[styles.resolveHint, appearance.dark && darkStyles.bodyText]}>
+            Use this when you can fulfil this customer request but do not want it added to your reusable catalogue.
+          </Text>
+          <TextInput
+            value={name}
+            onChangeText={setName}
+            placeholder="Order item name"
+            placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
+            style={[styles.input, appearance.dark && darkStyles.input]}
+          />
+          <TextInput
+            value={price}
+            onChangeText={setPrice}
+            keyboardType="decimal-pad"
+            placeholder="Selling price"
+            placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
+            style={[styles.input, appearance.dark && darkStyles.input]}
+          />
+          <Pressable disabled={busy} onPress={() => void keepOneOff()} style={styles.primaryResolveButton}>
+            <Text style={styles.primaryResolveText}>{busy ? 'Saving…' : 'Approve as one-off item'}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+    </View>
+  );
+}
+
 function NewLineItem({
   onSave,
   onCancel,
@@ -359,6 +701,7 @@ function formatReason(value: string): string {
 
 const styles = StyleSheet.create({
   wrap: { gap: 10 },
+  itemStack: { gap: 8 },
   reviewCard: { backgroundColor: '#F9FAFB', borderRadius: 12, padding: 12, gap: 5, borderWidth: 1, borderColor: '#E4E7EC' },
   reviewTitle: { color: '#344054', fontWeight: '900', fontSize: 12 },
   reviewMeta: { color: '#667085', fontSize: 13, lineHeight: 16 },
@@ -413,6 +756,28 @@ const styles = StyleSheet.create({
   saveButtonText: { color: '#FFFFFF', fontWeight: '800', fontSize: 12 },
   addButton: { alignSelf: 'flex-start', paddingVertical: 10, paddingHorizontal: 2 },
   addButtonText: { color: '#12B76A', fontWeight: '800', fontSize: 13 },
+  resolveCard: { backgroundColor: '#FFF8E7', borderWidth: 1, borderColor: '#FEDF89', borderRadius: 14, padding: 12, gap: 9 },
+  resolveEyebrow: { color: '#B54708', fontSize: 12, fontWeight: '900', letterSpacing: 0.6 },
+  resolveTitle: { color: '#7A2E0E', fontSize: 14, lineHeight: 20, fontWeight: '900' },
+  resolveBody: { color: '#854A0E', fontSize: 13, lineHeight: 19 },
+  resolveActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  resolveButton: { minHeight: 40, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 10, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' },
+  resolveButtonText: { color: '#344054', fontSize: 12, fontWeight: '900' },
+  resolvePanel: { backgroundColor: '#FFFFFF', borderRadius: 11, padding: 10, gap: 8 },
+  resolvePanelTitle: { color: '#102A43', fontSize: 13, fontWeight: '900' },
+  resolveHint: { color: '#667085', fontSize: 12, lineHeight: 18 },
+  learnAliasRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingVertical: 3 },
+  checkBox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1, borderColor: '#98A2B3', alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  checkBoxActive: { backgroundColor: '#12B76A', borderColor: '#12B76A' },
+  checkMark: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
+  learnAliasText: { color: '#475467', fontSize: 12, lineHeight: 18, flex: 1 },
+  catalogueMatchList: { gap: 6 },
+  catalogueMatchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 52, padding: 9, borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 10, backgroundColor: '#FFFFFF' },
+  matchProductCopy: { flex: 1 },
+  catalogueMatchName: { color: '#102A43', fontSize: 13, fontWeight: '900' },
+  useProductText: { color: '#079455', fontSize: 12, fontWeight: '900' },
+  primaryResolveButton: { minHeight: 44, backgroundColor: '#12B76A', borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
+  primaryResolveText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
   error: { color: '#B42318', fontSize: 12, lineHeight: 17 },
 });
 
@@ -423,6 +788,8 @@ const darkStyles = StyleSheet.create({
   bodyText: { color: '#D0D5DD' },
   greenText: { color: '#6CE9A6' },
   rowBorder: { borderBottomColor: '#344054' },
+  subtleCard: { backgroundColor: '#162F46', borderColor: '#344054' },
+  outlineButton: { backgroundColor: '#162F46', borderColor: '#667085' },
   warningCard: { backgroundColor: '#3D2A12' },
   warningTitle: { color: '#FEDF89' },
   warningText: { color: '#FEC84B' },
