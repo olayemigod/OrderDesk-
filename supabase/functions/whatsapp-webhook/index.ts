@@ -4,6 +4,7 @@ import {
   normalizeIntentText,
   resolveConversationIntent,
   type IntentDecision,
+  type IntentEnquiryContext,
   type IntentOrderContext,
   type VocabularyEntry,
 } from './intent.ts';
@@ -538,15 +539,17 @@ async function processClaimedInboundMessage({
     return;
   }
 
-  if (await maybeHandleUnifiedConversationIntent({
+  const intentRoute = await maybeHandleUnifiedConversationIntent({
     tenantId,
     businessName: tenant.name,
+    currency: tenant.currency || 'NGN',
     customerId,
     customerWaId: event.waId,
     sourceMessageId,
     fromPhoneNumberId: event.phoneNumberId,
     text: event.text,
-  })) {
+  });
+  if (intentRoute.handled) {
     return;
   }
 
@@ -596,7 +599,8 @@ async function processClaimedInboundMessage({
   }
 
   const catalogue = await loadCatalogue(tenantId);
-  const parsed = await parseOrder(event.text, catalogue, tenantId, customerId, sourceMessageId);
+  const orderText = intentRoute.orderTextOverride || event.text;
+  const parsed = await parseOrder(orderText, catalogue, tenantId, customerId, sourceMessageId);
   const enrichedItems = enrichFromCatalogue(parsed.items, catalogue);
 
   // A normal WhatsApp conversation must never become an empty SellerTray order.
@@ -640,6 +644,31 @@ async function processClaimedInboundMessage({
   });
 
   if (!orderId) throw new Error('Atomic order creation returned no order id.');
+
+  if (intentRoute.enquiryId) {
+    await markEnquiryConverted({
+      tenantId,
+      enquiryId: intentRoute.enquiryId,
+      orderId,
+    });
+  }
+
+  await recordCommercialAction({
+    tenantId,
+    customerId,
+    sourceMessageId,
+    decision: intentRoute.decision,
+    targetOrderId: orderId,
+    actionType: intentRoute.enquiryId ? 'enquiry_converted_to_order' : 'order_created',
+    riskClass: 'medium',
+    policyResult: 'allowed',
+    actionStatus: 'applied',
+    metadata: {
+      parser_source: parsed.source,
+      parser_confidence: parsed.confidence,
+      enquiry_id: intentRoute.enquiryId,
+    },
+  });
 }
 
 
