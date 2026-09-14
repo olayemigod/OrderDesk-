@@ -1128,17 +1128,13 @@ async function recordIntentVocabularyCandidate(
 ): Promise<void> {
   if (decision.intent === 'unknown' || decision.intent === 'general_chatter' || decision.intent === 'new_order') return;
   try {
-    await rest('/rest/v1/sellertray_intent_vocab_candidates?on_conflict=normalized_phrase,intent,locale', {
+    await rest('/rest/v1/rpc/sellertray_record_intent_vocab_candidate', {
       method: 'POST',
-      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
       body: JSON.stringify({
-        normalized_phrase: normalizeIntentText(text).slice(0, 500),
-        intent: decision.intent,
-        locale: 'en-NG',
-        observations: 1,
-        max_confidence: decision.confidence,
-        last_source_message_id: sourceMessageId,
-        last_seen_at: new Date().toISOString(),
+        p_normalized_phrase: normalizeIntentText(text).slice(0, 500),
+        p_intent: decision.intent,
+        p_confidence: decision.confidence,
+        p_source_message_id: sourceMessageId,
       }),
     });
   } catch (error) {
