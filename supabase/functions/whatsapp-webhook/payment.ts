@@ -648,6 +648,19 @@ async function queueReply(
       conversation_window_expires_at: new Date(Date.now() + 86400000).toISOString(),
     }),
   });
+
+  await kickNotificationWorker();
+}
+
+async function kickNotificationWorker(): Promise<void> {
+  try {
+    await rest('/rest/v1/rpc/sellertray_kick_notification_worker', {
+      method: 'POST',
+      body: '{}',
+    });
+  } catch (error) {
+    console.warn('SellerTray notification worker kick failed; cron retry remains available.', error);
+  }
 }
 
 async function paymentRuntime(action: 'initialize' | 'verify', paymentId: string): Promise<J> {
