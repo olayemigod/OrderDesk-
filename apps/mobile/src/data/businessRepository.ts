@@ -70,10 +70,29 @@ type BusinessMembershipRow = {
 };
 
 export async function loadBusinesses(): Promise<MerchantBusiness[]> {
-  const { data, error } = await supabase.rpc('sellertray_list_businesses_for_current_user');
-  if (error) throw error;
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) throw sessionError;
+  const session = sessionData.session;
+  if (!session?.user?.id) {
+    throw new Error('Your SellerTray session is not ready. Sign in again if this continues.');
+  }
 
-  const businesses = ((data ?? []) as unknown as BusinessMembershipRow[]).map((row) => ({
+  let { data, error } = await supabase.rpc('sellertray_list_businesses_for_current_user');
+
+  if (error && looksLikeAuthSessionError(error)) {
+    const refreshed = await supabase.auth.refreshSession();
+    if (!refreshed.error && refreshed.data.session) {
+      const retry = await supabase.rpc('sellertray_list_businesses_for_current_user');
+      data = retry.data;
+      error = retry.error;
+    }
+  }
+
+  const rows = error
+    ? await loadBusinessesViaRls(session.user.id, error)
+    : ((data ?? []) as unknown as BusinessMembershipRow[]);
+
+  const businesses = rows.map((row) => ({
     id: row.id,
     name: row.name,
     slug: row.slug,
@@ -173,6 +192,56 @@ export async function updateBusinessProfile(
     .eq('id', businessId);
 
   if (error) throw error;
+}
+
+
+type DirectMembershipRow = {
+  role: MerchantRole;
+  created_at: string;
+  tenants: Omit<BusinessMembershipRow, 'role' | 'membership_created_at'> | Array<Omit<BusinessMembershipRow, 'role' | 'membership_created_at'>> | null;
+};
+
+async function loadBusinessesViaRls(
+  userId: string,
+  originalError: unknown,
+): Promise<BusinessMembershipRow[]> {
+  const { data, error } = await supabase
+    .from('tenant_members')
+    .select(
+      'role,created_at,tenants!inner(id,name,slug,merchant_code,business_email,business_phone,business_type,logo_url,currency,timezone,onboarding_status,subscription_status,whatsapp_connection_status)',
+    )
+    .eq('user_id', userId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw originalError;
+
+  return ((data ?? []) as unknown as DirectMembershipRow[]).flatMap((membership) => {
+    const tenant = Array.isArray(membership.tenants)
+      ? membership.tenants[0] ?? null
+      : membership.tenants;
+    if (!tenant) return [];
+
+    return [{
+      ...tenant,
+      role: membership.role,
+      membership_created_at: membership.created_at,
+    } satisfies BusinessMembershipRow];
+  });
+}
+
+function looksLikeAuthSessionError(error: unknown): boolean {
+  const message =
+    error && typeof error === 'object' && 'message' in error && typeof (error as { message?: unknown }).message === 'string'
+      ? String((error as { message: string }).message).toLowerCase()
+      : '';
+
+  return (
+    message.includes('jwt') ||
+    message.includes('token') ||
+    message.includes('auth') ||
+    message.includes('permission') ||
+    message.includes('401')
+  );
 }
 
 function cleanOptional(value: string | null): string | null {
