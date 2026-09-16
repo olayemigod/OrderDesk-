@@ -790,6 +790,7 @@ type ConversationOrderRow = {
 
 type ConversationEnquiryRow = {
   id: string;
+  source_inbound_message_id: string | null;
   enquiry_type: 'price' | 'availability' | 'product' | 'general';
   status: 'open' | 'replied' | 'converted' | 'dismissed';
   product_query: string | null;
@@ -833,13 +834,20 @@ async function maybeHandleUnifiedConversationIntent({
     resolveCustomerIdsForWhatsApp(tenantId, customerId, customerWaId),
   ]);
 
-  const [orders, lastOutboundRows, lastEnquiry] = await Promise.all([
+  const [orders, lastOutboundRows, lastInboundRows, lastEnquiry] = await Promise.all([
     loadRecentConversationOrders(tenantId, customerIds),
     rest<Array<{ event_key: string; message_body: string; created_at: string }>>(
       '/rest/v1/outbound_notifications?select=event_key,message_body,created_at' +
         '&tenant_id=eq.' + encodeURIComponent(tenantId) +
         '&customer_id=eq.' + encodeURIComponent(customerId) +
         '&order=created_at.desc&limit=1',
+    ),
+    rest<Array<{ id: string; text_body: string | null; received_at: string }>>(
+      '/rest/v1/inbound_messages?select=id,text_body,received_at' +
+        '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+        '&customer_id=eq.' + encodeURIComponent(customerId) +
+        '&id=neq.' + encodeURIComponent(sourceMessageId) +
+        '&order=received_at.desc&limit=1',
     ),
     loadRecentCustomerEnquiry(tenantId, customerId),
   ]);
@@ -851,6 +859,9 @@ async function maybeHandleUnifiedConversationIntent({
       orders: orders.map(toIntentOrderContext),
       lastOutboundEventKey: lastOutboundRows[0]?.event_key ?? null,
       lastOutboundMessage: lastOutboundRows[0]?.message_body ?? null,
+      lastInboundMessageId: lastInboundRows[0]?.id ?? null,
+      lastInboundMessage: lastInboundRows[0]?.text_body ?? null,
+      lastInboundReceivedAt: lastInboundRows[0]?.received_at ?? null,
       lastEnquiry: toIntentEnquiryContext(lastEnquiry),
     },
   });
@@ -1323,7 +1334,7 @@ async function loadRecentCustomerEnquiry(
 ): Promise<ConversationEnquiryRow | null> {
   const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
   const rows = await rest<ConversationEnquiryRow[]>(
-    '/rest/v1/customer_enquiries?select=id,enquiry_type,status,product_query,matched_catalog_item_id,matched_item_name,quoted_price,currency,created_at' +
+    '/rest/v1/customer_enquiries?select=id,source_inbound_message_id,enquiry_type,status,product_query,matched_catalog_item_id,matched_item_name,quoted_price,currency,created_at' +
       '&tenant_id=eq.' + encodeURIComponent(tenantId) +
       '&customer_id=eq.' + encodeURIComponent(customerId) +
       '&status=in.(open,replied)' +
@@ -1349,6 +1360,7 @@ function toIntentEnquiryContext(enquiry: ConversationEnquiryRow | null): IntentE
   if (!enquiry) return null;
   return {
     id: enquiry.id,
+    sourceInboundMessageId: enquiry.source_inbound_message_id,
     enquiryType: enquiry.enquiry_type,
     productQuery: enquiry.product_query,
     matchedCatalogItemId: enquiry.matched_catalog_item_id,
@@ -1423,13 +1435,14 @@ async function handleCustomerProductEnquiry(input: {
   text: string;
 }): Promise<void> {
   const catalogue = await loadCatalogue(input.tenantId);
-  const match = findEnquiryCatalogueMatch(input.text, catalogue);
+  const enquiryText = input.decision.itemText?.trim() || input.text;
+  const match = findEnquiryCatalogueMatch(enquiryText, catalogue);
   const enquiryType =
     input.decision.intent === 'product_price_enquiry' ? 'price' :
     input.decision.intent === 'product_availability_enquiry' ? 'availability' :
     input.decision.intent === 'product_enquiry' ? 'product' :
     'general';
-  const productQuery = match?.item.name ?? extractEnquiryProductQuery(input.text);
+  const productQuery = match?.item.name ?? extractEnquiryProductQuery(enquiryText);
 
   let responseText: string;
   if (match) {
