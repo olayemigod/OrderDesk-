@@ -160,8 +160,9 @@ Deno.serve(withObservability('whatsapp-webhook', async (request) => {
     return new Response('Invalid JSON', { status: 400 });
   }
 
+  let webhookReceiptId: string | null = null;
   try {
-    await recordWebhookReceipt(payload);
+    webhookReceiptId = await recordWebhookReceipt(payload);
   } catch (error) {
     console.warn('Unable to record WhatsApp webhook receipt diagnostic', error);
   }
@@ -172,6 +173,7 @@ Deno.serve(withObservability('whatsapp-webhook', async (request) => {
     // business has an active consent for the current SellerTray legal versions.
     const consentedPhoneNumberIds = await resolveConsentedWebhookPhoneNumbers(payload);
     if (consentedPhoneNumberIds.size === 0) {
+      await updateWebhookReceipt(webhookReceiptId, 'ignored', 'no_consented_route');
       return new Response('OK', { status: 200 });
     }
 
@@ -179,7 +181,9 @@ Deno.serve(withObservability('whatsapp-webhook', async (request) => {
     for (const event of events) {
       await ingestMessage(event);
     }
+    await updateWebhookReceipt(webhookReceiptId, 'accepted', null);
   } catch (error) {
+    await updateWebhookReceipt(webhookReceiptId, 'failed', diagnosticError(error));
     console.error('WhatsApp ingestion failed', error);
     return new Response('Webhook processing failed', { status: 500 });
   }
@@ -237,7 +241,7 @@ function constantTimeEqual(left: string, right: string): boolean {
 }
 
 
-async function recordWebhookReceipt(payload: JsonRecord): Promise<void> {
+async function recordWebhookReceipt(payload: JsonRecord): Promise<string | null> {
   const entries = Array.isArray(payload.entry) ? payload.entry : [];
   let changeCount = 0;
   let messageCount = 0;
@@ -254,9 +258,9 @@ async function recordWebhookReceipt(payload: JsonRecord): Promise<void> {
     }
   }
 
-  await rest('/rest/v1/whatsapp_webhook_receipts', {
+  const rows = await rest<Array<{ id: string }>>('/rest/v1/whatsapp_webhook_receipts?select=id', {
     method: 'POST',
-    headers: { Prefer: 'return=minimal' },
+    headers: { Prefer: 'return=representation' },
     body: JSON.stringify({
       signature_valid: true,
       phone_number_ids: extractWebhookPhoneNumberIds(payload),
@@ -267,6 +271,32 @@ async function recordWebhookReceipt(payload: JsonRecord): Promise<void> {
       processing_result: 'received',
     }),
   });
+  return rows[0]?.id ?? null;
+}
+
+async function updateWebhookReceipt(
+  id: string | null,
+  result: 'accepted' | 'ignored' | 'failed',
+  errorCode: string | null,
+): Promise<void> {
+  if (!id) return;
+  try {
+    await rest('/rest/v1/whatsapp_webhook_receipts?id=eq.' + encodeURIComponent(id), {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        processing_result: result,
+        error_code: errorCode,
+      }),
+    });
+  } catch (error) {
+    console.warn('Unable to update WhatsApp webhook receipt diagnostic', error);
+  }
+}
+
+function diagnosticError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.slice(0, 500);
 }
 
 function extractWebhookPhoneNumberIds(payload: JsonRecord): string[] {
