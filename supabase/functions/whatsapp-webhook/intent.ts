@@ -210,7 +210,7 @@ function priorityContextDecision(
   if (clarification) return clarification;
 
   if (
-    /^(?:how much is (?:it|this|that)|what(?:s| is) the price(?: of (?:it|this|that))?|what does (?:it|this|that) cost)$/i.test(normalized)
+    /^(?:how much is (?:it|ot|this|that)|what(?:s| is) the price(?: of (?:it|this|that))?|what does (?:it|this|that) cost)$/i.test(normalized)
   ) {
     const contextualItem = contextualEnquiryItemForPronoun(normalized, context);
     if (contextualItem) {
@@ -706,7 +706,7 @@ function contextualEnquiryItemForPronoun(
   if (!enquiry || !enquiry.matchedItemName || !enquiry.sourceInboundMessageId) return null;
 
   const pronounOnly =
-    /^(?:how much is (?:it|this|that)|what(?:s| is) the price(?: of (?:it|this|that))?|what does (?:it|this|that) cost|do you have (?:it|this|that|them)|is (?:it|this|that) available)$/i.test(normalized);
+    /^(?:how much is (?:it|ot|this|that)|what(?:s| is) the price(?: of (?:it|this|that))?|what does (?:it|this|that) cost|do you have (?:it|this|that|them)|is (?:it|this|that) available)$/i.test(normalized);
   if (!pronounOnly) return null;
 
   if (context.lastInboundMessageId !== enquiry.sourceInboundMessageId) return null;
