@@ -307,6 +307,16 @@ async function whatsappManagementReadiness(connection: J | null): Promise<J> {
       phone_count: phoneCount,
     }));
 
+    await recordManagementProbe({
+      tenantId,
+      wabaId,
+      phoneNumberId,
+      succeeded: true,
+      evidence: 'waba_phone_numbers_read',
+      errorMessage: null,
+      phoneCount,
+    });
+
     return {
       managementApiReady: true,
       reason: null,
@@ -325,6 +335,17 @@ async function whatsappManagementReadiness(connection: J | null): Promise<J> {
       phone_number_id: phoneNumberId,
       error: reason,
     }));
+
+    await recordManagementProbe({
+      tenantId,
+      wabaId,
+      phoneNumberId,
+      succeeded: false,
+      evidence: 'waba_phone_numbers_read_failed',
+      errorMessage: reason,
+      phoneCount: null,
+    });
+
     return {
       managementApiReady: false,
       reason,
@@ -372,6 +393,52 @@ async function verifyWabaManagementAccess(
   }
 
   return data.length;
+}
+
+async function recordManagementProbe(input: {
+  tenantId: string;
+  wabaId: string;
+  phoneNumberId: string;
+  succeeded: boolean;
+  evidence: string;
+  errorMessage: string | null;
+  phoneCount: number | null;
+}): Promise<void> {
+  try {
+    const response = await fetch(
+      SUPABASE_URL + '/rest/v1/whatsapp_management_probe_events',
+      {
+        method: 'POST',
+        headers: {
+          apikey: SERVICE_ROLE_KEY,
+          authorization: 'Bearer ' + SERVICE_ROLE_KEY,
+          'content-type': 'application/json',
+          Prefer: 'return=minimal',
+        },
+        body: JSON.stringify({
+          tenant_id: input.tenantId,
+          waba_id: input.wabaId,
+          phone_number_id: input.phoneNumberId,
+          succeeded: input.succeeded,
+          evidence: input.evidence,
+          error_message: input.errorMessage,
+          phone_count: input.phoneCount,
+        }),
+        signal: AbortSignal.timeout(10000),
+      },
+    );
+    if (!response.ok) {
+      console.warn(JSON.stringify({
+        ts: new Date().toISOString(),
+        service: 'whatsapp-connection',
+        event: 'management_probe_evidence_persist_failed',
+        tenant_id: input.tenantId,
+        status: response.status,
+      }));
+    }
+  } catch {
+    // Probe evidence persistence must never break merchant connection status.
+  }
 }
 
 async function latestSuccessfulOutbound(tenantId: string, phoneNumberId: string): Promise<string | null> {
