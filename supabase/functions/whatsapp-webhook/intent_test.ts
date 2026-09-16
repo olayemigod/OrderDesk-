@@ -5,8 +5,12 @@ const baseContext: IntentConversationContext = {
   orders: [],
   lastOutboundEventKey: null,
   lastOutboundMessage: null,
+  lastInboundMessageId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  lastInboundMessage: 'How much is rice',
+  lastInboundReceivedAt: new Date().toISOString(),
   lastEnquiry: {
     id: '11111111-1111-4111-8111-111111111111',
+    sourceInboundMessageId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     enquiryType: 'price',
     productQuery: 'Rice',
     matchedCatalogItemId: '22222222-2222-4222-8222-222222222222',
@@ -191,4 +195,88 @@ Deno.test('numeric payment option reply is routed after payment options', async 
   });
   assertEquals(decision.intent, 'payment_method_select');
   assertEquals(decision.paymentMethod, '1');
+});
+
+Deno.test('explicit product wording overrides older matched enquiry context', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'I want to buy 2 rechargeable batteries',
+    vocabulary: [],
+    context: baseContext,
+  });
+  assertEquals(decision.intent, 'new_order');
+  assertEquals(decision.source, 'rules');
+  assertEquals(decision.itemText, 'I want to buy 2 rechargeable batteries');
+});
+
+Deno.test('natural customer pickup wording is recognised', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'I will come and pick up',
+    vocabulary: [],
+    context: {
+      ...baseContext,
+      orders: [{
+        id: '33333333-3333-4333-8333-333333333333',
+        publicOrderId: 'REV/000003',
+        status: 'accepted',
+        paymentStatus: 'unpaid',
+        fulfillmentStatus: 'unassigned',
+        createdAt: new Date().toISOString(),
+      }],
+    },
+  });
+  assertEquals(decision.intent, 'pickup_request');
+});
+
+Deno.test('natural receipt request is recognised', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'I need receipt please',
+    vocabulary: [],
+    context: {
+      ...baseContext,
+      orders: [{
+        id: '33333333-3333-4333-8333-333333333333',
+        publicOrderId: 'REV/000003',
+        status: 'completed',
+        paymentStatus: 'paid',
+        fulfillmentStatus: 'collected',
+        createdAt: new Date().toISOString(),
+      }],
+    },
+  });
+  assertEquals(decision.intent, 'financial_receipt_request');
+});
+
+Deno.test('short acknowledgement is chatter instead of unknown', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'Okay noted',
+    vocabulary: [],
+    context: baseContext,
+  });
+  assertEquals(decision.intent, 'general_chatter');
+});
+
+Deno.test('pronoun price follow-up uses only the immediately previous enquiry', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'How much is it',
+    vocabulary: [],
+    context: baseContext,
+  });
+  assertEquals(decision.intent, 'product_price_enquiry');
+  assertEquals(decision.source, 'context');
+  assertEquals(decision.itemText, 'Rice');
+});
+
+Deno.test('pronoun price follow-up does not jump over an intervening customer message', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'How much is it',
+    vocabulary: [],
+    context: {
+      ...baseContext,
+      lastInboundMessageId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      lastInboundMessage: 'Good day want to buy 50k bag of rice',
+    },
+  });
+  assertEquals(decision.intent, 'product_price_enquiry');
+  assertEquals(decision.source, 'rules');
+  assertEquals(decision.itemText, 'How much is it');
 });
