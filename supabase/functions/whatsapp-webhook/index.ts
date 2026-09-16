@@ -897,6 +897,38 @@ async function maybeHandleUnifiedConversationIntent({
   }
 
   if (decision.intent === 'unknown') {
+    if (looksLikeUnresolvedCommercialMessage(text)) {
+      await handleCustomerProductEnquiry({
+        tenantId,
+        businessName,
+        currency,
+        customerId,
+        customerWaId,
+        sourceMessageId,
+        fromPhoneNumberId,
+        decision,
+        text,
+      });
+      await recordCommercialAction({
+        tenantId,
+        customerId,
+        sourceMessageId,
+        decision,
+        targetOrderId: null,
+        actionType: 'customer_enquiry_recorded',
+        riskClass: 'low',
+        policyResult: 'clarification_required',
+        actionStatus: 'requested',
+        metadata: { unresolved_commercial_message: true },
+      });
+      return {
+        handled: true,
+        orderTextOverride: null,
+        enquiryId: null,
+        decision,
+      };
+    }
+
     console.info(JSON.stringify({
       event: 'sellertray_message_no_safe_commercial_intent',
       tenantId,
@@ -1370,6 +1402,13 @@ function toIntentEnquiryContext(enquiry: ConversationEnquiryRow | null): IntentE
     status: enquiry.status,
     createdAt: enquiry.created_at,
   };
+}
+
+function looksLikeUnresolvedCommercialMessage(value: string): boolean {
+  const normalized = normalizeIntentText(value);
+  if (!normalized || normalized.length < 4) return false;
+
+  return /\b(?:buy|want|need|price|cost|how much|sell|stock|available|availability|product|item|bag|bags|piece|pieces|pcs|pack|packs|bottle|bottles|carton|cartons|crate|crates|box|boxes|unit|units|kg|litre|liter)\b/i.test(normalized);
 }
 
 function resolveConversationTarget(
