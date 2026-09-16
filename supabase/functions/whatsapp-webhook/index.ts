@@ -1451,8 +1451,7 @@ async function handleCustomerProductEnquiry(input: {
     }
   } else {
     responseText =
-      'I understand you are asking about ' + (productQuery || 'a product') +
-      '. I could not match it confidently to the catalogue, so the merchant has been notified.';
+      'Thanks. Please give me a minute — I’ll respond to your enquiry shortly.';
   }
 
   const rows = await rest<Array<{ id: string }>>(
@@ -1509,7 +1508,9 @@ async function handleCustomerProductEnquiry(input: {
       title: match ? 'Customer product enquiry' : 'Customer enquiry needs review',
       body: (
         input.text +
-        (match ? ' · Matched: ' + match.item.name : ' · No confident catalogue match')
+        (match
+          ? ' · Matched: ' + match.item.name
+          : merchantCandidateHint(input.text, catalogue))
       ).slice(0, 1000),
       source_inbound_message_id: input.sourceMessageId,
     }),
@@ -1549,6 +1550,17 @@ function findEnquiryCatalogueMatch(
 
   const exact = findCatalogueMatch(best.item.name, [best.item]);
   return exact ?? { item: best.item, source: 'normalized_name', confidence: Math.min(0.92, best.score / 100) };
+}
+
+function merchantCandidateHint(text: string, catalogue: CatalogueRow[]): string {
+  const candidates = fuzzyCatalogueCandidates(extractEnquiryProductQuery(text), catalogue)
+    .filter((candidate) => candidate.score >= 55)
+    .slice(0, 4)
+    .map((candidate) => candidate.item.name);
+
+  return candidates.length > 0
+    ? ' · Needs merchant review. Possible catalogue matches: ' + candidates.join(', ')
+    : ' · No confident catalogue match';
 }
 
 function extractEnquiryProductQuery(text: string): string {
@@ -2177,8 +2189,137 @@ function findCatalogueMatch(parsedName: string, catalogue: CatalogueRow[]): Cata
     return { item: best.item, source: best.source, confidence: best.confidence };
   }
 
+  // Conservative fuzzy discovery: a generic customer term may resolve to one
+  // unique catalogue product, but never choose silently between variants.
+  const fuzzy = fuzzyCatalogueCandidates(parsedName, catalogue);
+  if (fuzzy.length === 1 && fuzzy[0].score >= 72) {
+    return {
+      item: fuzzy[0].item,
+      source: fuzzy[0].source,
+      confidence: Math.min(0.92, fuzzy[0].score / 100),
+    };
+  }
+
+  if (
+    fuzzy.length > 1 &&
+    fuzzy[0].score >= 82 &&
+    fuzzy[0].score - fuzzy[1].score >= 14
+  ) {
+    return {
+      item: fuzzy[0].item,
+      source: fuzzy[0].source,
+      confidence: Math.min(0.92, fuzzy[0].score / 100),
+    };
+  }
+
   return null;
 }
+
+function fuzzyCatalogueCandidates(
+  value: string,
+  catalogue: CatalogueRow[],
+): Array<{
+  item: CatalogueRow;
+  source: 'normalized_name' | 'normalized_alias';
+  score: number;
+}> {
+  const query = productDiscoveryShape(value);
+  if (query.coreTokens.length === 0) return [];
+
+  const candidates: Array<{
+    item: CatalogueRow;
+    source: 'normalized_name' | 'normalized_alias';
+    score: number;
+  }> = [];
+
+  for (const item of catalogue) {
+    const phrases = [
+      { value: item.name, source: 'normalized_name' as const },
+      ...(item.catalog_item_aliases ?? []).map((alias) => ({
+        value: alias.alias,
+        source: 'normalized_alias' as const,
+      })),
+    ];
+
+    let best: typeof candidates[number] | null = null;
+    for (const phrase of phrases) {
+      const candidate = productDiscoveryShape(phrase.value);
+      if (candidate.coreTokens.length === 0) continue;
+
+      // If the customer stated a size/weight/volume, a candidate with a
+      // conflicting variant must never be selected.
+      if (
+        query.variantTokens.length > 0 &&
+        !query.variantTokens.every((token) => candidate.variantTokens.includes(token))
+      ) {
+        continue;
+      }
+
+      const querySet = new Set(query.coreTokens);
+      const candidateSet = new Set(candidate.coreTokens);
+      const matched = query.coreTokens.filter((token) => candidateSet.has(token)).length;
+      const coverage = matched / query.coreTokens.length;
+      if (coverage < 0.67) continue;
+
+      const precision = matched / candidate.coreTokens.length;
+      const phraseDice = diceCoefficient(
+        query.coreTokens.join(' '),
+        candidate.coreTokens.join(' '),
+      );
+
+      let score = coverage * 58 + precision * 22 + phraseDice * 20;
+      if (query.coreTokens.every((token) => candidateSet.has(token))) score += 8;
+      if (
+        query.variantTokens.length > 0 &&
+        query.variantTokens.every((token) => candidate.variantTokens.includes(token))
+      ) {
+        score += 8;
+      }
+
+      const current = {
+        item,
+        source: phrase.source,
+        score: Math.min(100, score),
+      };
+      if (!best || current.score > best.score) best = current;
+    }
+
+    if (best) candidates.push(best);
+  }
+
+  return candidates.sort((left, right) =>
+    right.score - left.score ||
+    left.item.name.localeCompare(right.item.name)
+  );
+}
+
+function productDiscoveryShape(value: string): {
+  coreTokens: string[];
+  variantTokens: string[];
+} {
+  const tokens = normalizeProductPhrase(value).split(' ').filter(Boolean);
+  const variantTokens = tokens.filter(isVariantToken);
+  const coreTokens = tokens.filter((token) =>
+    token !== 'of' &&
+    !isPackagingToken(token) &&
+    !isVariantToken(token) &&
+    !/^\d+(?:\.\d+)?$/.test(token) &&
+    !PRODUCT_DISCOVERY_STOPWORDS.has(token)
+  );
+  return {
+    coreTokens: [...new Set(coreTokens)],
+    variantTokens: [...new Set(variantTokens)],
+  };
+}
+
+function isVariantToken(token: string): boolean {
+  return /^\d+(?:\.\d+)?(?:kg|g|l|ml)$/.test(token);
+}
+
+const PRODUCT_DISCOVERY_STOPWORDS = new Set([
+  'a','an','the','please','pls','need','want','buy','give','send','bring',
+  'tomorrow','today','now','me','my','i','we','you','some',
+]);
 
 function normalizeProductPhrase(value: string): string {
   const normalized = value
@@ -2194,9 +2335,46 @@ function normalizeProductPhrase(value: string): string {
 
   return normalized
     .split(' ')
-    .map((token) => normalizePackagingToken(token))
+    .map((token) => normalizeProductToken(normalizePackagingToken(token)))
     .filter(Boolean)
     .join(' ');
+}
+
+function normalizeProductToken(token: string): string {
+  if (!token) return token;
+  if (/^\d+(?:\.\d+)?(?:kg|g|l|ml)$/.test(token)) return token;
+  if (/^\d+(?:\.\d+)?$/.test(token)) return token;
+  if (isPackagingToken(token)) return token;
+
+  const irregular: Record<string,string> = {
+    batteries: 'battery',
+    knives: 'knife',
+    loaves: 'loaf',
+    leaves: 'leaf',
+    potatoes: 'potato',
+    tomatoes: 'tomato',
+  };
+  if (irregular[token]) return irregular[token];
+
+  if (token.length > 4 && token.endsWith('ies')) {
+    return token.slice(0, -3) + 'y';
+  }
+  if (
+    token.length > 4 &&
+    (token.endsWith('ches') || token.endsWith('shes') || token.endsWith('xes') || token.endsWith('zes'))
+  ) {
+    return token.slice(0, -2);
+  }
+  if (
+    token.length > 3 &&
+    token.endsWith('s') &&
+    !token.endsWith('ss') &&
+    !token.endsWith('us') &&
+    !token.endsWith('is')
+  ) {
+    return token.slice(0, -1);
+  }
+  return token;
 }
 
 function productTokenKey(value: string): string {
