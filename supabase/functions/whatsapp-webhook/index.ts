@@ -3,6 +3,7 @@ import { handleCustomerPaymentSelfService } from './payment.ts';
 import {
   normalizeIntentText,
   resolveConversationIntent,
+  type ConversationIntent,
   type IntentDecision,
   type IntentEnquiryContext,
   type IntentOrderContext,
@@ -836,8 +837,8 @@ async function maybeHandleUnifiedConversationIntent({
 
   const [orders, lastOutboundRows, lastInboundRows, lastEnquiry] = await Promise.all([
     loadRecentConversationOrders(tenantId, customerIds),
-    rest<Array<{ event_key: string; message_body: string; created_at: string }>>(
-      '/rest/v1/outbound_notifications?select=event_key,message_body,created_at' +
+    rest<Array<{ event_key: string; message_body: string; created_at: string; source_inbound_message_id: string | null }>>(
+      '/rest/v1/outbound_notifications?select=event_key,message_body,created_at,source_inbound_message_id' +
         '&tenant_id=eq.' + encodeURIComponent(tenantId) +
         '&customer_id=eq.' + encodeURIComponent(customerId) +
         '&order=created_at.desc&limit=1',
@@ -852,16 +853,79 @@ async function maybeHandleUnifiedConversationIntent({
     loadRecentCustomerEnquiry(tenantId, customerId),
   ]);
 
+  const lastOutbound = lastOutboundRows[0] ?? null;
+  const pendingClarificationIntent =
+    lastOutbound?.event_key === 'workflow_clarification' &&
+    lastOutbound.source_inbound_message_id
+      ? await loadIntentForSourceMessage(tenantId, lastOutbound.source_inbound_message_id)
+      : null;
+  const pendingClarificationOrderRefs =
+    lastOutbound?.event_key === 'workflow_clarification'
+      ? extractOrderRefs(lastOutbound.message_body)
+      : [];
+
+  if (
+    pendingClarificationIntent &&
+    pendingClarificationOrderRefs.length > 1 &&
+    isAllClarificationReply(text)
+  ) {
+    const handledAll = await handleAllReadOnlyClarificationReply({
+      tenantId,
+      businessName,
+      customerId,
+      customerWaId,
+      sourceMessageId,
+      fromPhoneNumberId,
+      intent: pendingClarificationIntent,
+      orderRefs: pendingClarificationOrderRefs,
+    });
+    if (handledAll) {
+      const decision: IntentDecision = {
+        intent: pendingClarificationIntent,
+        source: 'context',
+        confidence: 0.99,
+        explicitOrderRef: null,
+        targetOrderRef: null,
+        paymentMethod: null,
+        itemText: null,
+        deliveryText: null,
+        aiModel: null,
+        aiInputTokens: null,
+        aiOutputTokens: null,
+        aiTotalTokens: null,
+      };
+      await recordConversationIntent({
+        tenantId,
+        customerId,
+        sourceMessageId,
+        decision,
+        target: null,
+        text,
+      });
+      return {
+        handled: true,
+        orderTextOverride: null,
+        enquiryId: null,
+        decision,
+      };
+    }
+  }
+
   const decision = await resolveConversationIntent({
     text,
     vocabulary,
     context: {
       orders: orders.map(toIntentOrderContext),
-      lastOutboundEventKey: lastOutboundRows[0]?.event_key ?? null,
-      lastOutboundMessage: lastOutboundRows[0]?.message_body ?? null,
+      lastOutboundEventKey: lastOutbound?.event_key ?? null,
+      lastOutboundMessage: lastOutbound?.message_body ?? null,
       lastInboundMessageId: lastInboundRows[0]?.id ?? null,
       lastInboundMessage: lastInboundRows[0]?.text_body ?? null,
       lastInboundReceivedAt: lastInboundRows[0]?.received_at ?? null,
+      pendingClarificationIntent,
+      pendingClarificationOrderRefs,
+      pendingClarificationCreatedAt: lastOutbound?.event_key === 'workflow_clarification'
+        ? lastOutbound.created_at
+        : null,
       lastEnquiry: toIntentEnquiryContext(lastEnquiry),
     },
   });
@@ -1409,6 +1473,151 @@ function looksLikeUnresolvedCommercialMessage(value: string): boolean {
   if (!normalized || normalized.length < 4) return false;
 
   return /\b(?:buy|want|need|price|cost|how much|sell|stock|available|availability|product|item|bag|bags|piece|pieces|pcs|pack|packs|bottle|bottles|carton|cartons|crate|crates|box|boxes|unit|units|kg|litre|liter)\b/i.test(normalized);
+}
+
+async function loadIntentForSourceMessage(
+  tenantId: string,
+  sourceMessageId: string,
+): Promise<ConversationIntent | null> {
+  const rows = await rest<Array<{ intent: string }>>(
+    '/rest/v1/sellertray_intent_events?select=intent' +
+      '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+      '&source_inbound_message_id=eq.' + encodeURIComponent(sourceMessageId) +
+      '&order=created_at.desc&limit=1',
+  );
+  const intent = rows[0]?.intent ?? null;
+  return isConversationIntent(intent) ? intent : null;
+}
+
+function extractOrderRefs(value: string | null | undefined): string[] {
+  if (!value) return [];
+  const matches = value.match(/\b[A-Z0-9]{3}\/\d{6,}\b/gi) ?? [];
+  return [...new Set(matches.map((ref) => ref.toUpperCase()))];
+}
+
+function isAllClarificationReply(value: string): boolean {
+  const normalized = normalizeIntentText(value);
+  return /^(?:both|all|both of them|all of them|send both|send all|both receipts|all receipts)$/i.test(normalized);
+}
+
+function isConversationIntent(value: string | null): value is ConversationIntent {
+  return value === 'new_order' ||
+    value === 'order_add_items' ||
+    value === 'order_remove_items' ||
+    value === 'order_change_items' ||
+    value === 'order_cancel' ||
+    value === 'payment_options' ||
+    value === 'payment_method_select' ||
+    value === 'payment_claim' ||
+    value === 'payment_status' ||
+    value === 'invoice_request' ||
+    value === 'financial_receipt_request' ||
+    value === 'order_status' ||
+    value === 'delivery_status' ||
+    value === 'delivery_confirm' ||
+    value === 'pickup_request' ||
+    value === 'delivery_instruction' ||
+    value === 'product_price_enquiry' ||
+    value === 'product_availability_enquiry' ||
+    value === 'product_enquiry' ||
+    value === 'catalogue_query' ||
+    value === 'complaint' ||
+    value === 'refund_request' ||
+    value === 'general_chatter' ||
+    value === 'unknown';
+}
+
+async function handleAllReadOnlyClarificationReply(input: {
+  tenantId: string;
+  businessName: string;
+  customerId: string;
+  customerWaId: string;
+  sourceMessageId: string;
+  fromPhoneNumberId: string;
+  intent: ConversationIntent;
+  orderRefs: string[];
+}): Promise<boolean> {
+  if (![
+    'financial_receipt_request',
+    'invoice_request',
+    'order_status',
+    'payment_status',
+    'delivery_status',
+  ].includes(input.intent)) {
+    return false;
+  }
+
+  const customerIds = await resolveCustomerIdsForWhatsApp(
+    input.tenantId,
+    input.customerId,
+    input.customerWaId,
+  );
+
+  for (const ref of input.orderRefs.slice(0, 4)) {
+    if (input.intent === 'financial_receipt_request') {
+      await maybeHandleCustomerSelfService({
+        tenantId: input.tenantId,
+        businessName: input.businessName,
+        customerName: null,
+        customerId: input.customerId,
+        customerWaId: input.customerWaId,
+        sourceMessageId: input.sourceMessageId,
+        fromPhoneNumberId: input.fromPhoneNumberId,
+        text: 'receipt ' + ref,
+      });
+      continue;
+    }
+
+    if (input.intent === 'order_status' || input.intent === 'delivery_status') {
+      await maybeHandleCustomerSelfService({
+        tenantId: input.tenantId,
+        businessName: input.businessName,
+        customerName: null,
+        customerId: input.customerId,
+        customerWaId: input.customerWaId,
+        sourceMessageId: input.sourceMessageId,
+        fromPhoneNumberId: input.fromPhoneNumberId,
+        text: 'status ' + ref,
+      });
+      continue;
+    }
+
+    const order = await findCustomerSupportOrder({
+      tenantId: input.tenantId,
+      customerIds,
+      publicOrderId: ref,
+      completedOnly: false,
+    });
+    if (!order) continue;
+
+    if (input.intent === 'invoice_request') {
+      await handleFinancialDocumentRequest({
+        tenantId: input.tenantId,
+        businessName: input.businessName,
+        customerId: input.customerId,
+        customerWaId: input.customerWaId,
+        sourceMessageId: input.sourceMessageId,
+        fromPhoneNumberId: input.fromPhoneNumberId,
+        order,
+        documentType: 'invoice',
+      });
+      continue;
+    }
+
+    if (input.intent === 'payment_status') {
+      await handleCustomerPaymentSelfService({
+        tenantId: input.tenantId,
+        businessName: input.businessName,
+        customerId: input.customerId,
+        customerWaId: input.customerWaId,
+        sourceMessageId: input.sourceMessageId,
+        fromPhoneNumberId: input.fromPhoneNumberId,
+        text: 'PAYMENT STATUS ' + ref,
+      });
+    }
+  }
+
+  return true;
 }
 
 function resolveConversationTarget(
