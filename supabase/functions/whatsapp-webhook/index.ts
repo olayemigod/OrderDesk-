@@ -1547,27 +1547,7 @@ async function handleAllReadOnlyClarificationReply(input: {
     return false;
   }
 
-  const customerIds = await resolveCustomerIdsForWhatsApp(
-    input.tenantId,
-    input.customerId,
-    input.customerWaId,
-  );
-
   for (const ref of input.orderRefs.slice(0, 4)) {
-    if (input.intent === 'financial_receipt_request') {
-      await maybeHandleCustomerSelfService({
-        tenantId: input.tenantId,
-        businessName: input.businessName,
-        customerName: null,
-        customerId: input.customerId,
-        customerWaId: input.customerWaId,
-        sourceMessageId: input.sourceMessageId,
-        fromPhoneNumberId: input.fromPhoneNumberId,
-        text: 'receipt ' + ref,
-      });
-      continue;
-    }
-
     if (input.intent === 'order_status' || input.intent === 'delivery_status') {
       await maybeHandleCustomerSelfService({
         tenantId: input.tenantId,
@@ -1582,39 +1562,20 @@ async function handleAllReadOnlyClarificationReply(input: {
       continue;
     }
 
-    const order = await findCustomerSupportOrder({
+    const routedText =
+      input.intent === 'financial_receipt_request' ? 'PAYMENT RECEIPT ' + ref :
+      input.intent === 'invoice_request' ? 'INVOICE ' + ref :
+      'PAYMENT STATUS ' + ref;
+
+    await handleCustomerPaymentSelfService({
       tenantId: input.tenantId,
-      customerIds,
-      publicOrderId: ref,
-      completedOnly: false,
+      businessName: input.businessName,
+      customerId: input.customerId,
+      customerWaId: input.customerWaId,
+      sourceMessageId: input.sourceMessageId,
+      fromPhoneNumberId: input.fromPhoneNumberId,
+      text: routedText,
     });
-    if (!order) continue;
-
-    if (input.intent === 'invoice_request') {
-      await handleFinancialDocumentRequest({
-        tenantId: input.tenantId,
-        businessName: input.businessName,
-        customerId: input.customerId,
-        customerWaId: input.customerWaId,
-        sourceMessageId: input.sourceMessageId,
-        fromPhoneNumberId: input.fromPhoneNumberId,
-        order,
-        documentType: 'invoice',
-      });
-      continue;
-    }
-
-    if (input.intent === 'payment_status') {
-      await handleCustomerPaymentSelfService({
-        tenantId: input.tenantId,
-        businessName: input.businessName,
-        customerId: input.customerId,
-        customerWaId: input.customerWaId,
-        sourceMessageId: input.sourceMessageId,
-        fromPhoneNumberId: input.fromPhoneNumberId,
-        text: 'PAYMENT STATUS ' + ref,
-      });
-    }
   }
 
   return true;
