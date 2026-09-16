@@ -161,6 +161,12 @@ Deno.serve(withObservability('whatsapp-webhook', async (request) => {
   }
 
   try {
+    await recordWebhookReceipt(payload);
+  } catch (error) {
+    console.warn('Unable to record WhatsApp webhook receipt diagnostic', error);
+  }
+
+  try {
     // Privacy-by-design boundary: inspect only webhook routing metadata first.
     // Message content/media/order fields are not interpreted until the mapped
     // business has an active consent for the current SellerTray legal versions.
@@ -228,6 +234,39 @@ function constantTimeEqual(left: string, right: string): boolean {
     result |= left.charCodeAt(index) ^ right.charCodeAt(index);
   }
   return result === 0;
+}
+
+
+async function recordWebhookReceipt(payload: JsonRecord): Promise<void> {
+  const entries = Array.isArray(payload.entry) ? payload.entry : [];
+  let changeCount = 0;
+  let messageCount = 0;
+  let statusCount = 0;
+
+  for (const entry of entries) {
+    if (!isRecord(entry) || !Array.isArray(entry.changes)) continue;
+    changeCount += entry.changes.length;
+    for (const change of entry.changes) {
+      if (!isRecord(change) || !isRecord(change.value)) continue;
+      const value = change.value;
+      if (Array.isArray(value.messages)) messageCount += value.messages.length;
+      if (Array.isArray(value.statuses)) statusCount += value.statuses.length;
+    }
+  }
+
+  await rest('/rest/v1/whatsapp_webhook_receipts', {
+    method: 'POST',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      signature_valid: true,
+      phone_number_ids: extractWebhookPhoneNumberIds(payload),
+      entry_count: entries.length,
+      change_count: changeCount,
+      message_count: messageCount,
+      status_count: statusCount,
+      processing_result: 'received',
+    }),
+  });
 }
 
 function extractWebhookPhoneNumberIds(payload: JsonRecord): string[] {
