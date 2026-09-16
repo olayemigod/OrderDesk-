@@ -146,7 +146,7 @@ export async function parseEmbeddedSignupCallback(
 
   const pending = await loadPending();
   if (!pending) {
-    throw new Error('This WhatsApp connection callback is no longer active. Start the connection again.');
+    return null;
   }
 
   if (!tenantId || tenantId !== pending.tenantId) {
