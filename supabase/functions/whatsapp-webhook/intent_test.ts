@@ -380,3 +380,14 @@ Deno.test('no problem is normal chatter', async () => {
   });
   assertEquals(decision.intent, 'general_chatter');
 });
+
+Deno.test('obvious it typo can use immediate enquiry context', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'How much is ot',
+    vocabulary: [],
+    context: baseContext,
+  });
+  assertEquals(decision.intent, 'product_price_enquiry');
+  assertEquals(decision.source, 'context');
+  assertEquals(decision.itemText, 'Rice');
+});
