@@ -47,6 +47,7 @@ export type IntentOrderContext = {
 
 export type IntentEnquiryContext = {
   id: string;
+  sourceInboundMessageId: string | null;
   enquiryType: 'price' | 'availability' | 'product' | 'general';
   productQuery: string | null;
   matchedCatalogItemId: string | null;
@@ -61,6 +62,9 @@ export type IntentConversationContext = {
   orders: IntentOrderContext[];
   lastOutboundEventKey: string | null;
   lastOutboundMessage: string | null;
+  lastInboundMessageId: string | null;
+  lastInboundMessage: string | null;
+  lastInboundReceivedAt: string | null;
   lastEnquiry: IntentEnquiryContext | null;
 };
 
@@ -235,6 +239,12 @@ function ruleDecision(
 ): IntentDecision | null {
   if (!normalized) return emptyDecision('general_chatter', 'rules', 1, explicitOrderRef);
 
+  if (
+    /^(?:ok|okay|alright|noted|okay noted|ok noted|alright noted|thanks|thank you|thank you very much|great|nice|fine|sure|understood|i understand|got it)$/i.test(normalized)
+  ) {
+    return emptyDecision('general_chatter', 'rules', 0.99, explicitOrderRef);
+  }
+
   const paymentSelect = rawText.match(
     /^\s*(?:pay\s+)?(?:[A-Z0-9]{3}\/[0-9]{6,}\s+)?(PAYSTACK|FLUTTERWAVE|FLW|COD|BANK(?:\s*TRANSFER)?|TRANSFER|PICKUP|PAY\s+ON\s+PICKUP)\s*$/i,
   );
@@ -289,7 +299,9 @@ function ruleDecision(
     return emptyDecision('invoice_request', 'rules', 0.97, explicitOrderRef);
   }
 
-  if (/\b(?:payment receipt|financial receipt|send receipt)\b/i.test(normalized)) {
+  if (
+    /\b(?:payment receipt|financial receipt|send (?:me )?(?:the )?receipt|receipt please|need (?:my |the )?receipt|i need (?:my |the )?receipt|can i (?:get|have) (?:my |the )?receipt|give me (?:my |the )?receipt)\b/i.test(normalized)
+  ) {
     return emptyDecision('financial_receipt_request', 'rules', 0.97, explicitOrderRef);
   }
 
@@ -307,7 +319,7 @@ function ruleDecision(
 
   if (
     !looksLikePaymentOptionsLanguage(normalized) &&
-    /\b(?:pick it up|pick it myself|pickup|pick up myself|come and collect)\b/i.test(normalized)
+    /\b(?:pick it up|pick it myself|pickup|pick up myself|come and collect|come collect|come and pick up|come pick up|i will pick up|ill pick up|i can pick up|i will come and pick up|i will come pick up|i will come for it)\b/i.test(normalized)
   ) {
     return emptyDecision('pickup_request', 'rules', 0.94, explicitOrderRef);
   }
@@ -338,16 +350,28 @@ function ruleDecision(
   }
 
   if (/\b(?:how much|what(?:s| is) the price|price of|cost of|how much be|wetin be the price)\b/i.test(normalized)) {
+    const contextualItem = contextualEnquiryItemForPronoun(normalized, context);
     return {
-      ...emptyDecision('product_price_enquiry', 'rules', 0.97, explicitOrderRef),
-      itemText: rawText.trim(),
+      ...emptyDecision(
+        'product_price_enquiry',
+        contextualItem ? 'context' : 'rules',
+        contextualItem ? 0.96 : 0.97,
+        explicitOrderRef,
+      ),
+      itemText: contextualItem ?? rawText.trim(),
     };
   }
 
   if (/\b(?:do you have|do you sell|is .* available|in stock|you get|una get|do you stock)\b/i.test(normalized)) {
+    const contextualItem = contextualEnquiryItemForPronoun(normalized, context);
     return {
-      ...emptyDecision('product_availability_enquiry', 'rules', 0.96, explicitOrderRef),
-      itemText: rawText.trim(),
+      ...emptyDecision(
+        'product_availability_enquiry',
+        contextualItem ? 'context' : 'rules',
+        contextualItem ? 0.95 : 0.96,
+        explicitOrderRef,
+      ),
+      itemText: contextualItem ?? rawText.trim(),
     };
   }
 
@@ -432,6 +456,7 @@ async function resolveWithAi(input: {
               'Distinguish enquiries from purchase commitments carefully. A customer asking "how much is a bag of rice?", "do you have rice?" or "what sizes do you have?" is asking an enquiry and is NOT placing an order. ' +
               'Use product_price_enquiry for price questions, product_availability_enquiry for stock/availability questions, and product_enquiry for other product questions. ' +
               'Use new_order only when the customer expresses purchase commitment or a clear request to supply/buy an item, including follow-ups to a recent enquiry such as "okay give me two", "I will take one", or "send two bags". ' +
+              'If the customer explicitly names a product in the current message, that product wording always takes priority over an older enquiry or order context. ' +
               'Payment, transfer, refund, receipt, invoice, delivery, cancellation, complaint or order-status language is never enough to create a new product order, even when there is a recent enquiry. ' +
               'If meaning is unsafe or genuinely unclear, use unknown. ' +
               'target_order_ref must be one of the supplied order references or null. ' +
@@ -542,6 +567,7 @@ function contextualOrderFromEnquiry(
   if (!enquiry || enquiry.status === 'converted' || enquiry.status === 'dismissed') return null;
   if (!enquiry.matchedCatalogItemId || !enquiry.matchedItemName) return null;
   if (!looksLikeEnquiryFollowUp(normalized)) return null;
+  if (hasExplicitProductWords(normalized)) return null;
 
   const quantity =
     extractFollowUpQuantity(normalized) ??
@@ -553,6 +579,38 @@ function contextualOrderFromEnquiry(
     ...emptyDecision('new_order', 'context', 0.96, null),
     itemText: orderText,
   };
+}
+
+function contextualEnquiryItemForPronoun(
+  normalized: string,
+  context: IntentConversationContext,
+): string | null {
+  const enquiry = context.lastEnquiry;
+  if (!enquiry || !enquiry.matchedItemName || !enquiry.sourceInboundMessageId) return null;
+
+  const pronounOnly =
+    /^(?:how much is (?:it|this|that)|what(?:s| is) the price(?: of (?:it|this|that))?|what does (?:it|this|that) cost|do you have (?:it|this|that|them)|is (?:it|this|that) available)$/i.test(normalized);
+  if (!pronounOnly) return null;
+
+  if (context.lastInboundMessageId !== enquiry.sourceInboundMessageId) return null;
+
+  const enquiryAgeMs = Date.now() - new Date(enquiry.createdAt).getTime();
+  if (!Number.isFinite(enquiryAgeMs) || enquiryAgeMs > 30 * 60 * 1000) return null;
+
+  return enquiry.matchedItemName;
+}
+
+function hasExplicitProductWords(normalized: string): boolean {
+  const stripped = normalized
+    .replace(/\b(?:ok|okay|alright|oya|yes|fine|good|please|pls|abeg|thanks|thank you)\b/g, ' ')
+    .replace(/\b(?:give|send|bring|get|let|make|want|need|take|buy|have|order|include|add)\b/g, ' ')
+    .replace(/\b(?:me|i|ill|will|we|us|my|the|a|an|of|to|for|it|this|that|them|more|previous|last)\b/g, ' ')
+    .replace(/\b(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+(?:\.\d+)?)\b/g, ' ')
+    .replace(/\b(?:piece|pieces|pcs|bag|bags|pack|packs|bottle|bottles|carton|cartons|crate|crates|box|boxes|unit|units|kg|g|litre|liter|litres|liters)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return stripped.length > 1;
 }
 
 function looksLikeEnquiryFollowUp(normalized: string): boolean {
