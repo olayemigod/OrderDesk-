@@ -8,6 +8,9 @@ const baseContext: IntentConversationContext = {
   lastInboundMessageId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   lastInboundMessage: 'How much is rice',
   lastInboundReceivedAt: new Date().toISOString(),
+  pendingClarificationIntent: null,
+  pendingClarificationOrderRefs: [],
+  pendingClarificationCreatedAt: null,
   lastEnquiry: {
     id: '11111111-1111-4111-8111-111111111111',
     sourceInboundMessageId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -279,4 +282,101 @@ Deno.test('pronoun price follow-up does not jump over an intervening customer me
   assertEquals(decision.intent, 'product_price_enquiry');
   assertEquals(decision.source, 'rules');
   assertEquals(decision.itemText, 'How much is it');
+});
+
+Deno.test('receipt clarification accepts numeric order suffix', async () => {
+  const now = new Date().toISOString();
+  const decision = await resolveConversationIntent({
+    text: '0000003',
+    vocabulary: [],
+    context: {
+      ...baseContext,
+      orders: [
+        {
+          id: '33333333-3333-4333-8333-333333333331',
+          publicOrderId: 'REV/000003',
+          status: 'completed',
+          paymentStatus: 'paid',
+          fulfillmentStatus: 'collected',
+          createdAt: now,
+        },
+        {
+          id: '33333333-3333-4333-8333-333333333332',
+          publicOrderId: 'REV/000002',
+          status: 'completed',
+          paymentStatus: 'paid',
+          fulfillmentStatus: 'collected',
+          createdAt: new Date(Date.now() - 60000).toISOString(),
+        },
+      ],
+      pendingClarificationIntent: 'financial_receipt_request',
+      pendingClarificationOrderRefs: ['REV/000003', 'REV/000002'],
+      pendingClarificationCreatedAt: now,
+    },
+  });
+  assertEquals(decision.intent, 'financial_receipt_request');
+  assertEquals(decision.source, 'context');
+  assertEquals(decision.targetOrderRef, 'REV/000003');
+});
+
+Deno.test('receipt clarification accepts latest order', async () => {
+  const now = new Date().toISOString();
+  const decision = await resolveConversationIntent({
+    text: 'Latest order',
+    vocabulary: [],
+    context: {
+      ...baseContext,
+      orders: [
+        {
+          id: '33333333-3333-4333-8333-333333333331',
+          publicOrderId: 'REV/000003',
+          status: 'completed',
+          paymentStatus: 'paid',
+          fulfillmentStatus: 'collected',
+          createdAt: now,
+        },
+        {
+          id: '33333333-3333-4333-8333-333333333332',
+          publicOrderId: 'REV/000002',
+          status: 'completed',
+          paymentStatus: 'paid',
+          fulfillmentStatus: 'collected',
+          createdAt: new Date(Date.now() - 60000).toISOString(),
+        },
+      ],
+      pendingClarificationIntent: 'financial_receipt_request',
+      pendingClarificationOrderRefs: ['REV/000003', 'REV/000002'],
+      pendingClarificationCreatedAt: now,
+    },
+  });
+  assertEquals(decision.intent, 'financial_receipt_request');
+  assertEquals(decision.targetOrderRef, 'REV/000003');
+});
+
+Deno.test('pickup tomorrow wording is recognised', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'I will come and pick tomorrow',
+    vocabulary: [],
+    context: {
+      ...baseContext,
+      orders: [{
+        id: '33333333-3333-4333-8333-333333333333',
+        publicOrderId: 'REV/000004',
+        status: 'accepted',
+        paymentStatus: 'unpaid',
+        fulfillmentStatus: 'unassigned',
+        createdAt: new Date().toISOString(),
+      }],
+    },
+  });
+  assertEquals(decision.intent, 'pickup_request');
+});
+
+Deno.test('no problem is normal chatter', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'No problem',
+    vocabulary: [],
+    context: baseContext,
+  });
+  assertEquals(decision.intent, 'general_chatter');
 });
