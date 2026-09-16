@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
+  Linking,
   Platform,
   Pressable,
   RefreshControl,
@@ -128,6 +129,7 @@ function Workspace() {
   const [selectedOrderId, setSelectedOrderId] = useState('');
   const [ordersEntryFilter, setOrdersEntryFilter] = useState<OrderFilter>('attention');
   const [merchantName, setMerchantName] = useState('there');
+  const [settingsRouteKey, setSettingsRouteKey] = useState(0);
 
   useEffect(() => {
     if (view !== 'home') return undefined;
@@ -149,6 +151,21 @@ function Workspace() {
     setSelectedOrderId('');
     setView('home');
   }, [activeBusiness?.id]);
+
+  useEffect(() => {
+    function routeIncomingUrl(url: string | null) {
+      if (!url || !url.startsWith('sellertray://whatsapp-connect')) return;
+      setView('more');
+      setSettingsRouteKey((value) => value + 1);
+    }
+
+    void Linking.getInitialURL().then(routeIncomingUrl);
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      routeIncomingUrl(url);
+    });
+
+    return () => subscription.remove();
+  }, []);
 
   const selectedOrder = useMemo(
     () => orders.find((order) => order.id === selectedOrderId),
@@ -316,7 +333,12 @@ function Workspace() {
           ) : null}
 
           {view === 'more' ? (
-            <SettingsHub business={activeBusiness} onSaveBusiness={saveProfile} />
+            <SettingsHub
+              business={activeBusiness}
+              onSaveBusiness={saveProfile}
+              initialSection={settingsRouteKey > 0 ? 'whatsapp' : undefined}
+              routeKey={settingsRouteKey}
+            />
           ) : null}
 
           {view === 'notifications' ? (
