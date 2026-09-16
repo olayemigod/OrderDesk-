@@ -74,7 +74,7 @@ export async function completeWhatsAppEmbeddedSignup(input: {
   phoneNumberId: string;
   metaBusinessId?: string | null;
 }): Promise<WhatsAppConnectionStatusPayload> {
-  const result = await invokeConnection({
+  return invokeConnection({
     action: 'complete_embedded_signup',
     tenantId: input.tenantId,
     authorizationCode: input.authorizationCode,
@@ -83,15 +83,12 @@ export async function completeWhatsAppEmbeddedSignup(input: {
     metaBusinessId: input.metaBusinessId ?? null,
     onboardingMethod: 'embedded_signup',
   });
-
-  return normalizeStatusPayload(result);
 }
 
 export async function disconnectWhatsApp(
   tenantId: string,
 ): Promise<WhatsAppConnectionStatusPayload> {
-  const result = await invokeConnection({ action: 'disconnect', tenantId });
-  return normalizeStatusPayload(result);
+  return invokeConnection({ action: 'disconnect', tenantId });
 }
 
 export async function startWhatsAppEmbeddedSignup(
