@@ -1123,15 +1123,16 @@ function OrderDetail({
       : orderGates.error ?? 'SellerTray could not verify the merchant payment policy.',
     paymentMethod: null,
   };
+  const acceptedUnpaidAmendment =
+    order.status === 'accepted' &&
+    (order.paymentStatus === 'unpaid' || order.paymentStatus === 'pending') &&
+    order.amountPaid === 0 &&
+    order.fulfillmentStatus === 'unassigned';
+
   const editable =
     order.status === 'needs_review' ||
     order.status === 'draft' ||
-    (
-      order.source === 'manual' &&
-      order.status === 'accepted' &&
-      order.paymentStatus === 'unpaid' &&
-      order.fulfillmentStatus === 'unassigned'
-    );
+    acceptedUnpaidAmendment;
 
   return (
     <View style={[styles.detailCard, appearance.dark && darkStyles.card]}>
@@ -1162,9 +1163,11 @@ function OrderDetail({
         <Text style={[styles.sectionTitle, appearance.dark && darkStyles.titleText]}>{editable ? 'Review order items' : 'Order items'}</Text>
         {editable ? (
           <Text style={[styles.pageSubtitle, appearance.dark && darkStyles.bodyText]}>
-            {order.source === 'manual'
-              ? 'You can adjust quantities and selling prices while this manual order is unpaid and has not entered fulfilment.'
-              : 'Correct AI interpretation and prices before acceptance.'}
+            {acceptedUnpaidAmendment
+              ? 'Customer-requested changes are allowed while this accepted order is unpaid and fulfilment has not started. SellerTray refreshes the invoice and invalidates any open payment attempt for the previous total.'
+              : order.source === 'manual'
+                ? 'You can adjust quantities and selling prices before acceptance.'
+                : 'Correct AI interpretation and prices before acceptance.'}
           </Text>
         ) : null}
       </View>
