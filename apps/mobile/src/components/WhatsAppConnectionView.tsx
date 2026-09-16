@@ -50,7 +50,9 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
         ? 'pending'
         : connection?.connection?.connectionStatus === 'error'
           ? 'error'
-          : business.whatsappConnectionStatus;
+          : connection?.connection?.connectionStatus === 'disconnected'
+            ? 'not_connected'
+            : business.whatsappConnectionStatus;
   const status = statusCopy[effectiveStatus];
   const connected = effectiveStatus === 'connected';
   const messagingReady = connection?.readiness.messagingReady ?? business.whatsappReadiness.messagingReady;
@@ -197,7 +199,6 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
   }
 
   const processingActive = consent?.consentActive === true;
-  const connectionOperational = messagingReady && processingActive;
 
   return (
     <View style={styles.wrap}>
