@@ -465,7 +465,7 @@ async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[nu
     '/rest/v1/customers?on_conflict=tenant_id,wa_id&select=id',
     {
       method: 'POST',
-      headers: { Prefer: 'resolution=ignore-duplicates,return=representation' },
+      headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
       body: JSON.stringify(customerPayload),
     },
   );
