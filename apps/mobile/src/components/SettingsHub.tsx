@@ -283,7 +283,7 @@ export function SettingsHub({ business, onSaveBusiness }: Props) {
         </View>
       </View>
 
-      <Text style={[styles.buildStamp, appearance.dark && darkStyles.bodyText]}>SellerTray 1.0.0 · Android build 16</Text>
+      <Text style={[styles.buildStamp, appearance.dark && darkStyles.bodyText]}>SellerTray 1.0.0 · Android build 17</Text>
 
       {platformAdmin.overview ? (
         <View style={styles.adminGroup}>
