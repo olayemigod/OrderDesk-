@@ -491,16 +491,40 @@ async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[nu
   };
   if (event.customerName) customerPayload.display_name = event.customerName;
 
-  const customers = await rest<Array<{ id: string }>>(
-    '/rest/v1/customers?on_conflict=tenant_id,wa_id&select=id',
-    {
-      method: 'POST',
-      headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
-      body: JSON.stringify(customerPayload),
-    },
+  let customerId: string | null = null;
+  const existingCustomers = await rest<Array<{ id: string }>>(
+    '/rest/v1/customers?select=id' +
+      '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+      '&wa_id=eq.' + encodeURIComponent(event.waId) +
+      '&limit=1',
   );
-  const customerId = customers[0]?.id;
-  if (!customerId) throw new Error('Customer upsert returned no row.');
+  customerId = existingCustomers[0]?.id ?? null;
+
+  if (!customerId) {
+    try {
+      const createdCustomers = await rest<Array<{ id: string }>>(
+        '/rest/v1/customers?select=id',
+        {
+          method: 'POST',
+          headers: { Prefer: 'return=representation' },
+          body: JSON.stringify(customerPayload),
+        },
+      );
+      customerId = createdCustomers[0]?.id ?? null;
+    } catch (error) {
+      // A concurrent delivery may have created the same customer first.
+      const racedCustomers = await rest<Array<{ id: string }>>(
+        '/rest/v1/customers?select=id' +
+          '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+          '&wa_id=eq.' + encodeURIComponent(event.waId) +
+          '&limit=1',
+      );
+      customerId = racedCustomers[0]?.id ?? null;
+      if (!customerId) throw error;
+    }
+  }
+
+  if (!customerId) throw new Error('Customer lookup/create returned no row.');
 
   const storedMessages = await rest<Array<{ id: string }>>(
     '/rest/v1/inbound_messages?on_conflict=provider_message_id&select=id',
