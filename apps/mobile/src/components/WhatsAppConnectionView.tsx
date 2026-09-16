@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { MerchantBusiness } from '../data/businessRepository';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
@@ -9,6 +9,14 @@ import {
   revokeWhatsAppConsent,
   type WhatsAppConsentStatus,
 } from '../data/whatsappConsentRepository';
+import {
+  completeWhatsAppEmbeddedSignup,
+  disconnectWhatsApp,
+  loadWhatsAppConnectionStatus,
+  parseEmbeddedSignupCallback,
+  startWhatsAppEmbeddedSignup,
+  type WhatsAppConnectionStatusPayload,
+} from '../data/whatsappConnectionRepository';
 
 const statusCopy: Record<MerchantBusiness['whatsappConnectionStatus'], { title: string; text: string }> = {
   not_connected: {
@@ -31,16 +39,41 @@ const statusCopy: Record<MerchantBusiness['whatsappConnectionStatus'], { title: 
 
 export function WhatsAppConnectionView({ business }: { business: MerchantBusiness }) {
   const appearance = useSellerTrayAppearance();
-  const status = statusCopy[business.whatsappConnectionStatus];
-  const connected = business.whatsappConnectionStatus === 'connected';
-  const messagingReady = business.whatsappReadiness.messagingReady;
-  const inboundReady = business.whatsappReadiness.inboundReady;
-  const outboundReady = business.whatsappReadiness.outboundReady;
+  const [connection, setConnection] = useState<WhatsAppConnectionStatusPayload | null>(null);
+  const [connectionLoading, setConnectionLoading] = useState(true);
+  const [connectionBusy, setConnectionBusy] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const effectiveStatus =
+    connection?.connection?.connectionStatus === 'connected'
+      ? 'connected'
+      : connection?.connection?.connectionStatus === 'pending'
+        ? 'pending'
+        : connection?.connection?.connectionStatus === 'error'
+          ? 'error'
+          : business.whatsappConnectionStatus;
+  const status = statusCopy[effectiveStatus];
+  const connected = effectiveStatus === 'connected';
+  const messagingReady = connection?.readiness.messagingReady ?? business.whatsappReadiness.messagingReady;
+  const inboundReady = connection?.readiness.inboundReady ?? business.whatsappReadiness.inboundReady;
+  const outboundReady = connection?.readiness.outboundReady ?? business.whatsappReadiness.outboundReady;
+  const readinessReason = connection?.readiness.reason ?? business.whatsappReadiness.reason;
   const [consent, setConsent] = useState<WhatsAppConsentStatus | null>(null);
   const [consentLoading, setConsentLoading] = useState(true);
   const [consentBusy, setConsentBusy] = useState(false);
   const [consentError, setConsentError] = useState<string | null>(null);
   const isOwner = business.role === 'owner';
+
+  async function refreshConnection() {
+    setConnectionLoading(true);
+    setConnectionError(null);
+    try {
+      setConnection(await loadWhatsAppConnectionStatus(business.id));
+    } catch (error) {
+      setConnectionError(error instanceof Error ? error.message : 'Unable to load WhatsApp connection status.');
+    } finally {
+      setConnectionLoading(false);
+    }
+  }
 
   async function refreshConsent() {
     setConsentLoading(true);
@@ -56,12 +89,86 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
 
   useEffect(() => {
     void refreshConsent();
+    void refreshConnection();
+
+    let active = true;
+
+    async function handleUrl(url: string | null) {
+      if (!active || !url) return;
+      try {
+        const callback = await parseEmbeddedSignupCallback(url);
+        if (!callback) return;
+
+        if (callback.status === 'cancelled') {
+          setConnectionError('WhatsApp connection was cancelled. No changes were made.');
+          return;
+        }
+        if (callback.status === 'error') {
+          setConnectionError(callback.message || 'Meta could not complete WhatsApp signup.');
+          return;
+        }
+        if (callback.tenantId !== business.id) return;
+
+        setConnectionBusy(true);
+        setConnectionError(null);
+        const updated = await completeWhatsAppEmbeddedSignup({
+          tenantId: business.id,
+          authorizationCode: callback.authorizationCode,
+          wabaId: callback.wabaId,
+          phoneNumberId: callback.phoneNumberId,
+          metaBusinessId: callback.metaBusinessId,
+        });
+        if (active) setConnection(updated);
+      } catch (error) {
+        if (active) {
+          setConnectionError(error instanceof Error ? error.message : 'Unable to complete WhatsApp connection.');
+        }
+      } finally {
+        if (active) setConnectionBusy(false);
+      }
+    }
+
+    void Linking.getInitialURL().then(handleUrl);
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      void handleUrl(url);
+    });
+
+    return () => {
+      active = false;
+      subscription.remove();
+    };
   }, [business.id]);
 
   const processingPolicy = useMemo(
     () => consent?.policies.find((policy) => policy.policy_key === 'whatsapp_data_processing') ?? null,
     [consent?.policies],
   );
+
+  async function connectWhatsApp() {
+    if (!isOwner || connectionBusy) return;
+    setConnectionBusy(true);
+    setConnectionError(null);
+    try {
+      await startWhatsAppEmbeddedSignup(business.id);
+    } catch (error) {
+      setConnectionError(error instanceof Error ? error.message : 'Unable to start WhatsApp connection.');
+    } finally {
+      setConnectionBusy(false);
+    }
+  }
+
+  async function disconnectCurrentWhatsApp() {
+    if (!isOwner || connectionBusy) return;
+    setConnectionBusy(true);
+    setConnectionError(null);
+    try {
+      setConnection(await disconnectWhatsApp(business.id));
+    } catch (error) {
+      setConnectionError(error instanceof Error ? error.message : 'Unable to disconnect WhatsApp.');
+    } finally {
+      setConnectionBusy(false);
+    }
+  }
 
   async function acceptConsent() {
     if (!isOwner || consentBusy) return;
@@ -116,7 +223,7 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
             {messagingReady
               ? 'SellerTray has verified both inbound order capture and outbound customer updates for this WhatsApp number.'
               : connected
-                ? business.whatsappReadiness.reason ?? 'SellerTray is still verifying outbound messaging readiness.'
+                ? readinessReason ?? 'SellerTray is still verifying outbound messaging readiness.'
                 : status.text}
           </Text>
           {connected && !processingActive ? (
@@ -126,6 +233,16 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
           ) : null}
         </View>
       </View>
+
+      {connectionError ? (
+        <View style={styles.connectionErrorCard}>
+          <Text style={styles.connectionErrorTitle}>WhatsApp connection needs attention</Text>
+          <Text style={styles.connectionErrorText}>{connectionError}</Text>
+          <Pressable disabled={connectionLoading || connectionBusy} onPress={() => void refreshConnection()}>
+            <Text style={styles.refreshText}>Refresh connection status</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       <View style={styles.readinessGrid}>
         <ReadinessItem label="Inbound" ready={inboundReady} text={inboundReady ? 'Webhook ready' : 'Needs attention'} />
@@ -205,15 +322,30 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
           <Step number="2" title="Connect through SellerTray" text="SellerTray will launch Meta's approved WhatsApp onboarding flow from this screen." />
           <Step number="3" title="Send a test order" text="After connection and authorization, send a real test message from another phone and confirm it appears in Orders." />
 
-          <Pressable disabled style={styles.connectButton}>
-            <Text style={styles.connectButtonText}>Connect WhatsApp</Text>
-            <Text style={styles.connectButtonHint}>Merchant self-service connection is being enabled</Text>
-          </Pressable>
+          {isOwner ? (
+            <Pressable
+              disabled={connectionBusy || connectionLoading}
+              onPress={() => void connectWhatsApp()}
+              style={[styles.connectButton, (connectionBusy || connectionLoading) && styles.disabled]}
+            >
+              {connectionBusy ? <ActivityIndicator color="#FFFFFF" size="small" /> : null}
+              <Text style={styles.connectButtonText}>
+                {connectionBusy ? 'Opening Meta…' : 'Connect WhatsApp'}
+              </Text>
+              <Text style={styles.connectButtonHint}>
+                Continue with Meta's approved WhatsApp Business onboarding
+              </Text>
+            </Pressable>
+          ) : (
+            <Text style={[styles.ownerOnlyText, appearance.dark && darkStyles.bodyText]}>
+              Only the business Owner can connect a WhatsApp Business Account.
+            </Text>
+          )}
 
           <View style={styles.pendingNotice}>
-            <Text style={styles.pendingTitle}>Self-service onboarding is being enabled</Text>
+            <Text style={styles.pendingTitle}>Your Meta credentials stay off this phone</Text>
             <Text style={styles.pendingText}>
-              SellerTray's WhatsApp integration can already operate for configured businesses. Meta Embedded Signup will be enabled here for additional merchants after the required app review, access and onboarding configuration are completed. Merchants should never be asked to configure SellerTray webhooks or API credentials themselves.
+              SellerTray opens Meta's secure signup flow, verifies the selected WhatsApp Business Account and phone number on the server, subscribes the authorized WABA to SellerTray webhooks, and stores the business integration credential encrypted on the backend.
             </Text>
           </View>
         </View>
@@ -227,8 +359,43 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
                 : 'The number is connected, but SellerTray has not verified outbound customer messaging yet.'
               : 'No customer conversation content will be stored or interpreted by SellerTray until the current authorization is active.'}
           </Text>
+
+          {connection?.connection ? (
+            <View style={styles.connectionDetails}>
+              {connection.connection.verifiedName ? (
+                <Detail label="Business name" value={connection.connection.verifiedName} dark={appearance.dark} />
+              ) : null}
+              {connection.connection.displayPhoneNumber ? (
+                <Detail label="WhatsApp number" value={connection.connection.displayPhoneNumber} dark={appearance.dark} />
+              ) : null}
+              {connection.connection.wabaId ? (
+                <Detail label="WABA" value={connection.connection.wabaId} dark={appearance.dark} />
+              ) : null}
+            </View>
+          ) : null}
+
+          {isOwner ? (
+            <Pressable
+              disabled={connectionBusy}
+              onPress={() => void disconnectCurrentWhatsApp()}
+              style={[styles.disconnectButton, appearance.dark && darkStyles.secondaryButton, connectionBusy && styles.disabled]}
+            >
+              <Text style={[styles.disconnectButtonText, appearance.dark && darkStyles.titleText]}>
+                {connectionBusy ? 'Updating…' : 'Disconnect WhatsApp'}
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       )}
+    </View>
+  );
+}
+
+function Detail({ label, value, dark }: { label: string; value: string; dark: boolean }) {
+  return (
+    <View style={styles.detailRow}>
+      <Text style={[styles.detailLabel, dark && darkStyles.bodyText]}>{label}</Text>
+      <Text selectable style={[styles.detailValue, dark && darkStyles.titleText]}>{value}</Text>
     </View>
   );
 }
@@ -306,6 +473,9 @@ const styles = StyleSheet.create({
   warningTitle: { color: '#B54708', fontSize: 12, fontWeight: '900' },
   warningText: { color: '#7A2E0E', fontSize: 12, lineHeight: 14 },
   errorText: { color: '#B42318', fontSize: 12, lineHeight: 15 },
+  connectionErrorCard: { backgroundColor: '#FEF3F2', borderWidth: 1, borderColor: '#FECDCA', borderRadius: 14, padding: 12, gap: 5 },
+  connectionErrorTitle: { color: '#B42318', fontSize: 13, fontWeight: '900' },
+  connectionErrorText: { color: '#912018', fontSize: 12, lineHeight: 18 },
   primaryButton: { minHeight: 46, borderRadius: 11, backgroundColor: '#12B76A', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
   primaryButtonText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
   secondaryButton: { minHeight: 42, borderRadius: 11, borderWidth: 1, borderColor: '#D0D5DD', alignItems: 'center', justifyContent: 'center' },
@@ -321,15 +491,21 @@ const styles = StyleSheet.create({
   stepCopy: { flex: 1 },
   stepTitle: { color: '#344054', fontSize: 12, fontWeight: '900' },
   stepText: { color: '#667085', fontSize: 12, lineHeight: 17, marginTop: 2 },
-  connectButton: { minHeight: 52, borderRadius: 12, backgroundColor: '#E4E7EC', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, opacity: 0.8 },
-  connectButtonText: { color: '#475467', fontSize: 13, fontWeight: '900' },
-  connectButtonHint: { color: '#667085', fontSize: 12, fontWeight: '700', marginTop: 2 },
+  connectButton: { minHeight: 58, borderRadius: 12, backgroundColor: '#12B76A', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, gap: 3 },
+  connectButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
+  connectButtonHint: { color: '#E8FFF3', fontSize: 11.5, fontWeight: '700', marginTop: 1, textAlign: 'center' },
   pendingNotice: { backgroundColor: '#F9FAFB', borderRadius: 12, padding: 12, gap: 4 },
   pendingTitle: { color: '#344054', fontSize: 12, fontWeight: '900' },
   pendingText: { color: '#667085', fontSize: 12, lineHeight: 17 },
-  infoCard: { backgroundColor: '#F9FAFB', borderRadius: 14, padding: 14 },
+  infoCard: { backgroundColor: '#F9FAFB', borderRadius: 14, padding: 14, gap: 10 },
   infoTitle: { color: '#102A43', fontSize: 13, fontWeight: '900' },
   infoText: { color: '#667085', fontSize: 12, lineHeight: 17, marginTop: 4 },
+  connectionDetails: { gap: 7, paddingTop: 3 },
+  detailRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 14 },
+  detailLabel: { color: '#667085', fontSize: 11.5, fontWeight: '700' },
+  detailValue: { color: '#102A43', fontSize: 11.5, fontWeight: '900', flexShrink: 1, textAlign: 'right' },
+  disconnectButton: { minHeight: 42, borderWidth: 1, borderColor: '#FDA29B', borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+  disconnectButtonText: { color: '#B42318', fontSize: 12, fontWeight: '900' },
 });
 
 
