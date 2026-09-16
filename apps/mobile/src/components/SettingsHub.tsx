@@ -43,13 +43,26 @@ type Section =
 type Props = {
   business: MerchantBusiness;
   onSaveBusiness: (businessId: string, input: BusinessProfileInput) => Promise<void>;
+  initialSection?: 'whatsapp';
+  routeKey?: number;
 };
 
-export function SettingsHub({ business, onSaveBusiness }: Props) {
+export function SettingsHub({
+  business,
+  onSaveBusiness,
+  initialSection,
+  routeKey = 0,
+}: Props) {
   const [section, setSection] = useState<Section>('menu');
   const subscription = useSubscriptionAccess(business.id);
   const platformAdmin = usePlatformAdmin();
   const appearance = useSellerTrayAppearance();
+
+  useEffect(() => {
+    if (initialSection === 'whatsapp' && routeKey > 0) {
+      setSection('whatsapp');
+    }
+  }, [initialSection, routeKey]);
 
   useEffect(() => {
     if (Platform.OS !== 'android' || section === 'menu') return undefined;
