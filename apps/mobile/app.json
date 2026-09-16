@@ -11,7 +11,7 @@
     "userInterfaceStyle": "automatic",
     "android": {
       "package": "ng.processedge.sellertray",
-      "versionCode": 17,
+      "versionCode": 18,
       "blockedPermissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
