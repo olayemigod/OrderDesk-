@@ -5,7 +5,8 @@ const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const META_APP_ID = Deno.env.get('META_APP_ID')?.trim() ?? '';
 const META_APP_SECRET = Deno.env.get('META_APP_SECRET')?.trim() ?? '';
 const META_ACCESS_TOKEN = Deno.env.get('META_ACCESS_TOKEN')?.trim() ?? '';
-const META_GRAPH_API_VERSION = Deno.env.get('META_GRAPH_API_VERSION')?.trim() ?? '';
+const META_GRAPH_API_VERSION =
+  Deno.env.get('META_GRAPH_API_VERSION')?.trim() || 'v26.0';
 const META_EMBEDDED_SIGNUP_REDIRECT_URI = Deno.env.get('META_EMBEDDED_SIGNUP_REDIRECT_URI')?.trim() ?? '';
 const WHATSAPP_ENCRYPTION_KEY = Deno.env.get('SELLERTRAY_WHATSAPP_ENCRYPTION_KEY')?.trim() ?? '';
 const enc = new TextEncoder();
