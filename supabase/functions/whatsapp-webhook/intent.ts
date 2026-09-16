@@ -65,6 +65,9 @@ export type IntentConversationContext = {
   lastInboundMessageId: string | null;
   lastInboundMessage: string | null;
   lastInboundReceivedAt: string | null;
+  pendingClarificationIntent: ConversationIntent | null;
+  pendingClarificationOrderRefs: string[];
+  pendingClarificationCreatedAt: string | null;
   lastEnquiry: IntentEnquiryContext | null;
 };
 
@@ -155,6 +158,14 @@ export async function resolveConversationIntent(input: {
   const normalized = normalizeIntentText(input.text);
   const explicitOrderRef = extractOrderRef(input.text);
 
+  const priorityDecision = priorityContextDecision(
+    input.text,
+    normalized,
+    input.context,
+    explicitOrderRef,
+  );
+  if (priorityDecision) return priorityDecision;
+
   const vocabularyDecision = matchVocabulary(normalized, input.vocabulary, explicitOrderRef);
   if (
     vocabularyDecision &&
@@ -180,6 +191,112 @@ export async function resolveConversationIntent(input: {
     return emptyDecision('unknown', 'rules', 1, explicitOrderRef);
   }
   return aiDecision ?? emptyDecision('unknown', 'none', 0, explicitOrderRef);
+}
+
+function priorityContextDecision(
+  rawText: string,
+  normalized: string,
+  context: IntentConversationContext,
+  explicitOrderRef: string | null,
+): IntentDecision | null {
+  if (!normalized) return null;
+
+  const clarification = clarificationReplyDecision(
+    rawText,
+    normalized,
+    context,
+    explicitOrderRef,
+  );
+  if (clarification) return clarification;
+
+  if (
+    /^(?:how much is (?:it|this|that)|what(?:s| is) the price(?: of (?:it|this|that))?|what does (?:it|this|that) cost)$/i.test(normalized)
+  ) {
+    const contextualItem = contextualEnquiryItemForPronoun(normalized, context);
+    if (contextualItem) {
+      return {
+        ...emptyDecision('product_price_enquiry', 'context', 0.98, explicitOrderRef),
+        itemText: contextualItem,
+      };
+    }
+  }
+
+  if (
+    /^(?:do you have (?:it|this|that|them)|is (?:it|this|that) available)$/i.test(normalized)
+  ) {
+    const contextualItem = contextualEnquiryItemForPronoun(normalized, context);
+    if (contextualItem) {
+      return {
+        ...emptyDecision('product_availability_enquiry', 'context', 0.97, explicitOrderRef),
+        itemText: contextualItem,
+      };
+    }
+  }
+
+  return null;
+}
+
+function clarificationReplyDecision(
+  _rawText: string,
+  normalized: string,
+  context: IntentConversationContext,
+  explicitOrderRef: string | null,
+): IntentDecision | null {
+  const intent = context.pendingClarificationIntent;
+  const refs = context.pendingClarificationOrderRefs ?? [];
+  if (!intent || refs.length === 0) return null;
+
+  const createdAt = context.pendingClarificationCreatedAt
+    ? new Date(context.pendingClarificationCreatedAt).getTime()
+    : NaN;
+  if (!Number.isFinite(createdAt) || Date.now() - createdAt > 30 * 60 * 1000) {
+    return null;
+  }
+
+  let targetRef: string | null = null;
+
+  if (explicitOrderRef) {
+    targetRef =
+      refs.find((ref) => ref.toUpperCase() === explicitOrderRef.toUpperCase()) ?? null;
+  }
+
+  if (!targetRef && /^(?:latest|latest order|most recent|most recent order|last order)$/i.test(normalized)) {
+    const candidates = context.orders
+      .filter((order) => refs.some((ref) => ref.toUpperCase() === order.publicOrderId.toUpperCase()))
+      .sort((left, right) =>
+        new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
+      );
+    targetRef = candidates[0]?.publicOrderId ?? refs[0] ?? null;
+  }
+
+  if (!targetRef && /^\d{1,10}$/.test(normalized)) {
+    const numeric = normalized.replace(/^0+/, '') || '0';
+    const matches = refs.filter((ref) => {
+      const suffix = ref.split('/').pop()?.replace(/^0+/, '') || '0';
+      return suffix === numeric;
+    });
+    if (matches.length === 1) targetRef = matches[0];
+  }
+
+  if (!targetRef) {
+    const ordinal = normalized.match(/^(?:the )?(first|second|third|fourth|1|2|3|4)(?: one| order)?$/i);
+    if (ordinal) {
+      const indexMap: Record<string, number> = {
+        first: 0, '1': 0,
+        second: 1, '2': 1,
+        third: 2, '3': 2,
+        fourth: 3, '4': 3,
+      };
+      targetRef = refs[indexMap[ordinal[1].toLowerCase()]] ?? null;
+    }
+  }
+
+  if (!targetRef) return null;
+
+  return {
+    ...emptyDecision(intent, 'context', 0.99, explicitOrderRef),
+    targetOrderRef: targetRef,
+  };
 }
 
 function matchVocabulary(
@@ -240,7 +357,7 @@ function ruleDecision(
   if (!normalized) return emptyDecision('general_chatter', 'rules', 1, explicitOrderRef);
 
   if (
-    /^(?:ok|okay|alright|noted|okay noted|ok noted|alright noted|thanks|thank you|thank you very much|great|nice|fine|sure|understood|i understand|got it)$/i.test(normalized)
+    /^(?:ok|okay|alright|noted|okay noted|ok noted|alright noted|thanks|thank you|thank you very much|great|nice|fine|sure|understood|i understand|got it|no problem|no worries|alright then|okay then)$/i.test(normalized)
   ) {
     return emptyDecision('general_chatter', 'rules', 0.99, explicitOrderRef);
   }
@@ -319,7 +436,7 @@ function ruleDecision(
 
   if (
     !looksLikePaymentOptionsLanguage(normalized) &&
-    /\b(?:pick it up|pick it myself|pickup|pick up myself|come and collect|come collect|come and pick up|come pick up|i will pick up|ill pick up|i can pick up|i will come and pick up|i will come pick up|i will come for it)\b/i.test(normalized)
+    /\b(?:pick it up|pick it myself|pickup|pick up myself|come and collect|come collect|come and pick(?: up)?|come pick(?: up)?|i will pick(?: it)?(?: up)?|ill pick(?: it)?(?: up)?|i can pick(?: it)?(?: up)?|i will come and pick(?: it)?(?: up)?|i will come pick(?: it)?(?: up)?|i will come for it|collect it|collect tomorrow|pick tomorrow)\b/i.test(normalized)
   ) {
     return emptyDecision('pickup_request', 'rules', 0.94, explicitOrderRef);
   }
