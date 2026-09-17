@@ -1,0 +1,59 @@
+/* SellerTray approved brand asset overrides */
+.auth-brand-panel .brand-mark {
+  width: min(320px, 78vw);
+  height: 78px;
+  border-radius: 0;
+  background-color: transparent;
+  background-image: url('https://sellertray.vercel.app/brand/sellertray-logo-v2.png');
+  background-repeat: no-repeat;
+  background-position: left center;
+  background-size: contain;
+  box-shadow: none;
+  color: transparent;
+  font-size: 0;
+}
+
+.topbar .brand-mark.small-mark {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background-color: transparent;
+  background-image: url('https://sellertray.vercel.app/brand/sellertray-app-icon-v2.png');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  box-shadow: none;
+  color: transparent;
+  font-size: 0;
+}
+
+.auth-brand-panel {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(18,183,106,.20), transparent 34%),
+    linear-gradient(145deg, #102A43 0%, #153D57 58%, #0B5F45 100%);
+}
+
+.auth-brand-panel .eyebrow {
+  margin-top: 18px;
+  color: #D9FBE8;
+}
+
+.auth-brand-panel h1 {
+  color: #F8FAFC;
+}
+
+.auth-brand-panel > p:not(.eyebrow) {
+  color: #D9FBE8;
+}
+
+.primary-button,
+.preview-cta {
+  background: #12B76A;
+}
+
+@media (max-width: 760px) {
+  .auth-brand-panel .brand-mark {
+    width: min(260px, 82vw);
+    height: 64px;
+  }
+}
