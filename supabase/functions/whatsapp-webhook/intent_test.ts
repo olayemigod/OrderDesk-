@@ -391,3 +391,125 @@ Deno.test('obvious it typo can use immediate enquiry context', async () => {
   assertEquals(decision.source, 'context');
   assertEquals(decision.itemText, 'Rice');
 });
+
+
+Deno.test('Pidgin pronoun price enquiry uses immediate catalogue context', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'Abeg how much be this?',
+    vocabulary: [],
+    context: baseContext,
+  });
+  assertEquals(decision.intent, 'product_price_enquiry');
+  assertEquals(decision.source, 'context');
+  assertEquals(decision.itemText, 'Rice');
+});
+
+Deno.test('Pidgin availability pronoun uses immediate catalogue context', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'Abeg you get am?',
+    vocabulary: [],
+    context: baseContext,
+  });
+  assertEquals(decision.intent, 'product_availability_enquiry');
+  assertEquals(decision.source, 'context');
+  assertEquals(decision.itemText, 'Rice');
+});
+
+Deno.test('Pidgin purchase commitment is an order and not an enquiry', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'I wan buy 3 rechargeable batteries',
+    vocabulary: [],
+    context: { ...baseContext, lastEnquiry: null },
+  });
+  assertEquals(decision.intent, 'new_order');
+  assertEquals(decision.source, 'rules');
+  assertEquals(decision.itemText, 'I wan buy 3 rechargeable batteries');
+});
+
+Deno.test('Pidgin delivery instruction stays attached to an active order', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'You fit send am tomorrow?',
+    vocabulary: [],
+    context: {
+      ...baseContext,
+      orders: [{
+        id: '33333333-3333-4333-8333-333333333333',
+        publicOrderId: 'NLM/000009',
+        status: 'accepted',
+        paymentStatus: 'unpaid',
+        fulfillmentStatus: 'unassigned',
+        createdAt: new Date().toISOString(),
+      }],
+    },
+  });
+  assertEquals(decision.intent, 'delivery_instruction');
+  assertEquals(decision.source, 'context');
+  assertEquals(decision.deliveryText, 'You fit send am tomorrow?');
+});
+
+Deno.test('Pidgin delivery wording without active order is not fabricated into an order', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'You fit send am tomorrow?',
+    vocabulary: [],
+    context: { ...baseContext, orders: [], lastEnquiry: null },
+  });
+  assertEquals(decision.intent, 'unknown');
+});
+
+Deno.test('Pidgin cancellation phrase maps to order cancellation', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'I no want again',
+    vocabulary: [],
+    context: {
+      ...baseContext,
+      orders: [{
+        id: '33333333-3333-4333-8333-333333333333',
+        publicOrderId: 'NLM/000010',
+        status: 'accepted',
+        paymentStatus: 'unpaid',
+        fulfillmentStatus: 'unassigned',
+        createdAt: new Date().toISOString(),
+      }],
+    },
+  });
+  assertEquals(decision.intent, 'order_cancel');
+});
+
+Deno.test('Pidgin payment claim never means payment verified', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'I don transfer',
+    vocabulary: [],
+    context: {
+      ...baseContext,
+      orders: [{
+        id: '33333333-3333-4333-8333-333333333333',
+        publicOrderId: 'NLM/000011',
+        status: 'accepted',
+        paymentStatus: 'unpaid',
+        fulfillmentStatus: 'unassigned',
+        createdAt: new Date().toISOString(),
+      }],
+    },
+  });
+  assertEquals(decision.intent, 'payment_claim');
+});
+
+Deno.test('Pidgin quantity amendment maps to order change', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'Make am two',
+    vocabulary: [],
+    context: {
+      ...baseContext,
+      orders: [{
+        id: '33333333-3333-4333-8333-333333333333',
+        publicOrderId: 'NLM/000012',
+        status: 'accepted',
+        paymentStatus: 'unpaid',
+        fulfillmentStatus: 'unassigned',
+        createdAt: new Date().toISOString(),
+      }],
+    },
+  });
+  assertEquals(decision.intent, 'order_change_items');
+  assertEquals(decision.itemText, 'make am two');
+});
