@@ -1,18 +1,18 @@
 -- SellerTray P1 privacy hardening phase A: introduce a minimal Realtime activity
 -- stream without breaking older QA builds that still subscribe to inbound_messages.
+-- Keep only one activity row per tenant/customer so this is a bounded refresh signal,
+-- not a second message-history store.
 
 create table if not exists public.conversation_activity_events (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null references public.tenants(id) on delete cascade,
   customer_id uuid not null references public.customers(id) on delete cascade,
-  occurred_at timestamptz not null default now()
+  occurred_at timestamptz not null default now(),
+  unique (tenant_id, customer_id)
 );
 
 create index if not exists conversation_activity_events_tenant_occurred_idx
   on public.conversation_activity_events (tenant_id, occurred_at desc);
-
-create index if not exists conversation_activity_events_tenant_customer_idx
-  on public.conversation_activity_events (tenant_id, customer_id, occurred_at desc);
 
 alter table public.conversation_activity_events enable row level security;
 
@@ -49,6 +49,12 @@ begin
     new.tenant_id,
     new.customer_id,
     coalesce(new.received_at, now())
+  )
+  on conflict (tenant_id, customer_id)
+  do update
+  set occurred_at = greatest(
+    public.conversation_activity_events.occurred_at,
+    excluded.occurred_at
   );
 
   return new;
