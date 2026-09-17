@@ -43,6 +43,9 @@ type OrderRow = {
   fulfillment_status: FulfillmentStatus;
   delivery_provider: string | null;
   delivery_reference: string | null;
+  delivery_contact_name: string | null;
+  delivery_contact_phone: string | null;
+  estimated_delivery_at: string | null;
   delivery_note: string | null;
   dispatched_at: string | null;
   fulfilled_at: string | null;
@@ -127,6 +130,9 @@ function mapOrder(row: OrderRow, notifications: OrderNotification[]): MerchantOr
     fulfillmentStatus: row.fulfillment_status,
     deliveryProvider: row.delivery_provider,
     deliveryReference: row.delivery_reference,
+    deliveryContactName: row.delivery_contact_name,
+    deliveryContactPhone: row.delivery_contact_phone,
+    estimatedDeliveryAt: row.estimated_delivery_at,
     deliveryNote: row.delivery_note,
     dispatchedAt: row.dispatched_at,
     fulfilledAt: row.fulfilled_at,
@@ -183,6 +189,9 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
         fulfillment_status,
         delivery_provider,
         delivery_reference,
+        delivery_contact_name,
+        delivery_contact_phone,
+        estimated_delivery_at,
         delivery_note,
         dispatched_at,
         fulfilled_at,
@@ -272,6 +281,9 @@ export type OrderFulfillmentInput = {
   method: FulfillmentMethod;
   provider?: string | null;
   reference?: string | null;
+  contactName?: string | null;
+  contactPhone?: string | null;
+  estimatedDeliveryAt?: string | null;
   note?: string | null;
 };
 
@@ -287,6 +299,9 @@ async function invokeFulfillmentOperation(
       method: input.method,
       provider: input.provider?.trim() || null,
       reference: input.reference?.trim() || null,
+      contactName: input.contactName?.trim() || null,
+      contactPhone: input.contactPhone?.trim() || null,
+      estimatedDeliveryAt: input.estimatedDeliveryAt || null,
       note: input.note?.trim() || null,
     },
   });
