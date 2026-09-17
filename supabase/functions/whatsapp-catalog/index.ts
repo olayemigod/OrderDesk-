@@ -96,8 +96,10 @@ Deno.serve(async (request) => {
       const grantedScopes = Array.isArray(connection?.granted_scopes)
         ? connection.granted_scopes.filter((value): value is string => typeof value === 'string')
         : [];
-      const businessManagementScopeReady = grantedScopes.includes('business_management');
-      const catalogManagementScopeReady = grantedScopes.includes('catalog_management');
+      const businessManagementScopeReady =
+        connected && grantedScopes.includes('business_management');
+      const catalogManagementScopeReady =
+        connected && grantedScopes.includes('catalog_management');
       const catalogueScopesReady = businessManagementScopeReady && catalogManagementScopeReady;
       const managementApiReady = managementProbe?.succeeded === true;
       const catalogConfigured = Boolean(settings?.catalog_id);
