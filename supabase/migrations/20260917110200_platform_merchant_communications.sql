@@ -70,6 +70,26 @@ alter table public.merchant_notifications add constraint merchant_notifications_
   (cardinality(audience_roles)>0 and audience_roles <@ array['owner','manager','staff']::text[])
 );
 
+-- Direct reads back Realtime subscriptions, so keep SELECT but make the RLS policy
+-- match the same role/expiry rules as the guarded notification RPC.
+drop policy if exists merchant_notifications_member_read on public.merchant_notifications;
+create policy merchant_notifications_member_read
+on public.merchant_notifications
+for select to authenticated
+using (
+  (merchant_notifications.expires_at is null or merchant_notifications.expires_at>now())
+  and exists (
+    select 1
+    from public.tenant_members tm
+    where tm.tenant_id=merchant_notifications.tenant_id
+      and tm.user_id=(select auth.uid())
+      and (
+        merchant_notifications.audience_roles is null
+        or tm.role=any(merchant_notifications.audience_roles)
+      )
+  )
+);
+
 create index if not exists merchant_notifications_campaign_idx
   on public.merchant_notifications(campaign_id)
   where campaign_id is not null;
@@ -275,6 +295,9 @@ begin
   end if;
   if p_severity not in ('info','attention','urgent') then
     raise exception 'Invalid merchant message severity' using errcode='22023';
+  end if;
+  if p_message_type='promotion' and p_severity='urgent' then
+    raise exception 'Promotional messages cannot be marked urgent' using errcode='22023';
   end if;
   if v_title is null or char_length(v_title)>160 then
     raise exception 'Merchant message title must contain 1 to 160 characters' using errcode='22023';
