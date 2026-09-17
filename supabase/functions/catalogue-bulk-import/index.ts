@@ -179,6 +179,7 @@ async function buildPreview(tenantId: string, rows: ParsedRow[]): Promise<Previe
   const importedSkuKeys = new Map<string, number>();
   const importedNameKeys = new Map<string, number>();
   const importedAliasKeys = new Map<string, number>();
+  const targetedExistingItems = new Map<string, number>();
 
   return rows.map((row) => {
     const errors: string[] = [];
@@ -215,6 +216,16 @@ async function buildPreview(tenantId: string, rows: ParsedRow[]): Promise<Previe
     }
 
     const existing = skuMatches[0] ?? nameMatches[0] ?? null;
+
+    if (existing) {
+      const targetId = String(existing.id);
+      const previousRow = targetedExistingItems.get(targetId);
+      if (previousRow) {
+        errors.push('This row targets the same existing product as row ' + previousRow + '.');
+      } else {
+        targetedExistingItems.set(targetId, row.rowNumber);
+      }
+    }
 
     for (const alias of row.aliases) {
       const aliasKey = normalizeKey(alias);
