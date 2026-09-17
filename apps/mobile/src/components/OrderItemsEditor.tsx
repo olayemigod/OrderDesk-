@@ -253,8 +253,6 @@ function GovernedOrderItemEditor({
       tenantId,
       orderItemId: item.id,
       catalogItemId: selected.id,
-      // Do not automatically teach an old/customer-changed product phrase as an alias
-      // for the replacement. Alias learning is only offered on genuinely unmatched items.
       learnAlias: item.matchSource === 'unmatched' && canCreateProduct,
     });
     setChangeOpen(false);
@@ -416,19 +414,13 @@ function AddProductPanel({
   const [createOpen, setCreateOpen] = useState(false);
   const [quantity, setQuantity] = useState('1');
   const [error, setError] = useState<string | null>(null);
-
   const parsedQuantity = useMemo(() => Number(quantity), [quantity]);
 
   async function addProduct(item: CatalogueItem) {
     if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0 || parsedQuantity > 9999) {
       throw new Error('Enter a valid quantity before choosing the product.');
     }
-    await addCatalogueOrderItem({
-      tenantId,
-      orderId,
-      catalogItemId: item.id,
-      quantity: parsedQuantity,
-    });
+    await addCatalogueOrderItem({ tenantId, orderId, catalogItemId: item.id, quantity: parsedQuantity });
     setQuantity('1');
     setOpen(false);
     await onAdded();
@@ -458,12 +450,7 @@ function AddProductPanel({
 
       <View style={styles.quantityField}>
         <Text style={[styles.label, appearance.dark && darkStyles.titleText]}>Quantity</Text>
-        <TextInput
-          value={quantity}
-          onChangeText={setQuantity}
-          keyboardType="decimal-pad"
-          style={[styles.input, styles.quantityInput, appearance.dark && darkStyles.input]}
-        />
+        <TextInput value={quantity} onChangeText={setQuantity} keyboardType="decimal-pad" style={[styles.input, styles.quantityInput, appearance.dark && darkStyles.input]} />
       </View>
 
       <CatalogueProductPicker
@@ -478,9 +465,7 @@ function AddProductPanel({
           <Text style={styles.textButtonText}>{createOpen ? 'Cancel new product' : 'Product not found? Create it'}</Text>
         </Pressable>
       ) : (
-        <Text style={[styles.help, appearance.dark && darkStyles.bodyText]}>
-          Only an Owner or Manager can create a new catalogue product.
-        </Text>
+        <Text style={[styles.help, appearance.dark && darkStyles.bodyText]}>Only an Owner or Manager can create a new catalogue product.</Text>
       )}
 
       {createOpen && canCreateProduct ? (
@@ -539,12 +524,7 @@ function CreateProductForm({
     setBusy(true);
     setError(null);
     try {
-      await onCreate({
-        name: name.trim(),
-        price: amount,
-        sku: sku.trim() || null,
-        category: category.trim() || null,
-      });
+      await onCreate({ name: name.trim(), price: amount, sku: sku.trim() || null, category: category.trim() || null });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to create the product.');
     } finally {
@@ -555,36 +535,11 @@ function CreateProductForm({
   return (
     <View style={[styles.createForm, appearance.dark && darkStyles.subtleCard]}>
       <Text style={[styles.panelTitle, appearance.dark && darkStyles.titleText]}>Create catalogue product</Text>
-      <TextInput
-        value={name}
-        onChangeText={setName}
-        placeholder="Product name"
-        placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
-        style={[styles.input, appearance.dark && darkStyles.input]}
-      />
-      <TextInput
-        value={price}
-        onChangeText={setPrice}
-        keyboardType="decimal-pad"
-        placeholder="Selling price"
-        placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
-        style={[styles.input, appearance.dark && darkStyles.input]}
-      />
+      <TextInput value={name} onChangeText={setName} placeholder="Product name" placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'} style={[styles.input, appearance.dark && darkStyles.input]} />
+      <TextInput value={price} onChangeText={setPrice} keyboardType="decimal-pad" placeholder="Selling price" placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'} style={[styles.input, appearance.dark && darkStyles.input]} />
       <View style={styles.splitRow}>
-        <TextInput
-          value={sku}
-          onChangeText={setSku}
-          placeholder="SKU (optional)"
-          placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
-          style={[styles.input, styles.flexInput, appearance.dark && darkStyles.input]}
-        />
-        <TextInput
-          value={category}
-          onChangeText={setCategory}
-          placeholder="Category"
-          placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
-          style={[styles.input, styles.flexInput, appearance.dark && darkStyles.input]}
-        />
+        <TextInput value={sku} onChangeText={setSku} placeholder="SKU (optional)" placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'} style={[styles.input, styles.flexInput, appearance.dark && darkStyles.input]} />
+        <TextInput value={category} onChangeText={setCategory} placeholder="Category" placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'} style={[styles.input, styles.flexInput, appearance.dark && darkStyles.input]} />
       </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Pressable disabled={busy} onPress={() => void create()} style={styles.primaryButton}>
@@ -618,24 +573,9 @@ function OneOffForm({ item, onSave }: { item: OrderItem; onSave: (name: string, 
 
   return (
     <View style={[styles.createForm, appearance.dark && darkStyles.subtleCard]}>
-      <Text style={[styles.help, appearance.dark && darkStyles.bodyText]}>
-        One-off keeps this order exceptional. It does not teach SellerTray a permanent catalogue product.
-      </Text>
-      <TextInput
-        value={name}
-        onChangeText={setName}
-        placeholder="Customer item wording"
-        placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
-        style={[styles.input, appearance.dark && darkStyles.input]}
-      />
-      <TextInput
-        value={price}
-        onChangeText={setPrice}
-        keyboardType="decimal-pad"
-        placeholder="Selling price"
-        placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
-        style={[styles.input, appearance.dark && darkStyles.input]}
-      />
+      <Text style={[styles.help, appearance.dark && darkStyles.bodyText]}>One-off keeps this order exceptional. It does not teach SellerTray a permanent catalogue product.</Text>
+      <TextInput value={name} onChangeText={setName} placeholder="Customer item wording" placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'} style={[styles.input, appearance.dark && darkStyles.input]} />
+      <TextInput value={price} onChangeText={setPrice} keyboardType="decimal-pad" placeholder="Selling price" placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'} style={[styles.input, appearance.dark && darkStyles.input]} />
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Pressable disabled={busy} onPress={() => void save()} style={styles.primaryButton}>
         <Text style={styles.primaryButtonText}>{busy ? 'Saving…' : 'Approve one-off'}</Text>
@@ -646,37 +586,27 @@ function OneOffForm({ item, onSave }: { item: OrderItem; onSave: (name: string, 
 
 function MatchDetail({ item }: { item: OrderItem }) {
   const appearance = useSellerTrayAppearance();
-  const originalDiffers = Boolean(
-    item.originalName && item.originalName.trim().toLocaleLowerCase() !== item.name.trim().toLocaleLowerCase(),
-  );
+  const originalDiffers = Boolean(item.originalName && item.originalName.trim().toLocaleLowerCase() !== item.name.trim().toLocaleLowerCase());
   const confidence = item.matchConfidence === null ? '' : ` · ${Math.round(item.matchConfidence * 100)}%`;
-
   if (item.matchSource === 'legacy' && !originalDiffers) return null;
 
   return (
     <View style={styles.matchWrap}>
-      <Text style={[styles.matchText, item.matchSource === 'unmatched' && styles.matchWarning]}>
-        {matchLabels[item.matchSource]}{confidence}
-      </Text>
-      {originalDiffers ? (
-        <Text style={[styles.originalText, appearance.dark && darkStyles.bodyText]}>
-          Customer wording: “{item.originalName}”
-        </Text>
-      ) : null}
+      <Text style={[styles.matchText, item.matchSource === 'unmatched' && styles.matchWarning]}>{matchLabels[item.matchSource]}{confidence}</Text>
+      {originalDiffers ? <Text style={[styles.originalText, appearance.dark && darkStyles.bodyText]}>Customer wording: “{item.originalName}”</Text> : null}
     </View>
   );
 }
 
 function formatParserSource(source: MerchantOrder['parserSource']) {
-  if (source === 'openai') return 'AI interpreted';
+  if (source === 'external') return 'AI interpreted';
   if (source === 'fallback') return 'Fallback interpreted';
+  if (source === 'manual') return 'Merchant-entered';
   return 'Earlier order format';
 }
 
 function formatReason(value: string) {
-  return value
-    .replace(/_/g, ' ')
-    .replace(/^./, (letter) => letter.toUpperCase());
+  return value.replace(/_/g, ' ').replace(/^./, (letter) => letter.toUpperCase());
 }
 
 const styles = StyleSheet.create({
