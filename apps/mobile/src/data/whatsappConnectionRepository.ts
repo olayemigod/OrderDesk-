@@ -18,6 +18,7 @@ export type WhatsAppConnectionRecord = {
   onboardingMethod: 'embedded_signup' | 'coexistence' | 'manual' | null;
   credentialMode: 'platform_system_user' | 'business_integration_system_user' | null;
   webhookSubscriptionStatus: string | null;
+  grantedScopes: string[];
   connectedAt: string | null;
   lastVerifiedAt: string | null;
   lastErrorMessage: string | null;
@@ -228,6 +229,7 @@ function normalizeStatusPayload(value: unknown): WhatsAppConnectionStatusPayload
       onboardingMethod: onboardingMethod(rawConnection.onboarding_method),
       credentialMode: credentialMode(rawConnection.credential_mode),
       webhookSubscriptionStatus: optionalString(rawConnection.webhook_subscription_status),
+      grantedScopes: stringArray(rawConnection.granted_scopes),
       connectedAt: optionalString(rawConnection.connected_at),
       lastVerifiedAt: optionalString(rawConnection.last_verified_at),
       lastErrorMessage: optionalString(rawConnection.last_error_message),
@@ -294,6 +296,12 @@ function stringValue(value: unknown): string {
 
 function optionalString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
+    : [];
 }
 
 function connectionStatus(value: unknown): WhatsAppConnectionRecord['connectionStatus'] {
