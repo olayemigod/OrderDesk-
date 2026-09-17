@@ -9,7 +9,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "preflight": "node scripts/release-preflight.mjs && node scripts/meta-import-preflight.mjs",
+    "preflight": "node scripts/release-preflight.mjs && node scripts/meta-import-preflight.mjs && node scripts/delivery-update-preflight.mjs",
     "release:check": "node scripts/release-readiness.mjs"
   },
   "dependencies": {
