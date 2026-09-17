@@ -53,7 +53,7 @@ export function subscribeToConversationActivity(
     .on(
       'postgres_changes',
       {
-        event: 'INSERT',
+        event: '*',
         schema: 'public',
         table: 'conversation_activity_events',
         filter: `tenant_id=eq.${tenantId}`,
