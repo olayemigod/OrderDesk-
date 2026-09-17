@@ -5,6 +5,7 @@ import { AuthGate } from './components/AuthGate';
 import { CreateBusinessView } from './components/CreateBusinessView';
 import { LegalAcceptanceGate } from './components/LegalAcceptanceGate';
 import { PlatformAdminView } from './components/PlatformAdminView';
+import { PlatformMerchantMessageComposer } from './components/PlatformMerchantMessageComposer';
 import { useBusinesses } from './hooks/useBusinesses';
 import { usePlatformAdmin } from './hooks/usePlatformAdmin';
 import { supabase } from './lib/supabase';
@@ -42,6 +43,7 @@ function ProvisioningGate() {
     return (
       <SafeAreaView style={styles.safeArea}>
         <ScrollView contentContainerStyle={styles.adminPage}>
+          <PlatformMerchantMessageComposer overview={platformAdmin.overview} />
           <PlatformAdminView
             overview={platformAdmin.overview}
             audit={platformAdmin.audit}
