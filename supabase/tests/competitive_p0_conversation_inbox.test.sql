@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(23);
+select extensions.plan(30);
 
 select extensions.ok(
   to_regclass('public.conversation_work_states') is not null,
@@ -176,6 +176,59 @@ select extensions.ok(
   and position('estimated_delivery_at' in pg_get_functiondef('public.queue_sellertray_fulfillment_notification()'::regprocedure)) > 0
   and position('reply RECEIVED' in pg_get_functiondef('public.queue_sellertray_fulfillment_notification()'::regprocedure)) > 0,
   'out-for-delivery customer update includes captured dispatch details and receipt confirmation'
+);
+
+select extensions.ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.confirm_sellertray_offline_payment(uuid,uuid,text)',
+    'EXECUTE'
+  ),
+  'authenticated clients cannot call offline payment confirmation directly'
+);
+select extensions.ok(
+  has_function_privilege(
+    'service_role',
+    'public.confirm_sellertray_offline_payment(uuid,uuid,text)',
+    'EXECUTE'
+  ),
+  'service role can execute the governed offline payment confirmation command'
+);
+select extensions.ok(
+  position('tenant_members' in pg_get_functiondef('public.confirm_sellertray_offline_payment(uuid,uuid,text)'::regprocedure)) > 0
+  and position('owner' in pg_get_functiondef('public.confirm_sellertray_offline_payment(uuid,uuid,text)'::regprocedure)) > 0
+  and position('manager' in pg_get_functiondef('public.confirm_sellertray_offline_payment(uuid,uuid,text)'::regprocedure)) > 0,
+  'offline payment confirmation verifies tenant role and restricts manual money authority to Owner or Manager'
+);
+select extensions.ok(
+  to_regclass('public.platform_merchant_campaigns') is not null
+  and (select relrowsecurity from pg_class where oid='public.platform_merchant_campaigns'::regclass)
+  and not has_table_privilege('authenticated','public.platform_merchant_campaigns','SELECT'),
+  'platform merchant campaigns are RLS-enabled and hidden from merchant clients'
+);
+select extensions.ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.platform_admin_publish_merchant_message(uuid,text,text,text,text,uuid[],text[],text,text,timestamptz)',
+    'EXECUTE'
+  )
+  and has_function_privilege(
+    'service_role',
+    'public.platform_admin_publish_merchant_message(uuid,text,text,text,text,uuid[],text[],text,text,timestamptz)',
+    'EXECUTE'
+  ),
+  'platform-wide merchant publishing is service-only'
+);
+select extensions.ok(
+  position('platform_admins' in pg_get_functiondef('public.platform_admin_publish_merchant_message(uuid,text,text,text,text,uuid[],text[],text,text,timestamptz)'::regprocedure)) > 0
+  and position('merchant_message_published' in pg_get_functiondef('public.platform_admin_publish_merchant_message(uuid,text,text,text,text,uuid[],text[],text,text,timestamptz)'::regprocedure)) > 0,
+  'merchant message publishing verifies platform administrator authority and writes an audit event'
+);
+select extensions.ok(
+  position('audience_roles' in pg_get_functiondef('public.sellertray_list_merchant_notifications(uuid,integer)'::regprocedure)) > 0
+  and position('expires_at' in pg_get_functiondef('public.sellertray_list_merchant_notifications(uuid,integer)'::regprocedure)) > 0
+  and position('message_type' in pg_get_functiondef('public.sellertray_list_merchant_notifications(uuid,integer)'::regprocedure)) > 0,
+  'merchant notification inbox respects role audiences, expiry and platform message metadata'
 );
 
 select * from extensions.finish();
