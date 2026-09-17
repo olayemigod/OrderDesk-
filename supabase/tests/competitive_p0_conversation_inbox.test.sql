@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(30);
+select extensions.plan(32);
 
 select extensions.ok(
   to_regclass('public.conversation_work_states') is not null,
@@ -229,6 +229,18 @@ select extensions.ok(
   and position('expires_at' in pg_get_functiondef('public.sellertray_list_merchant_notifications(uuid,integer)'::regprocedure)) > 0
   and position('message_type' in pg_get_functiondef('public.sellertray_list_merchant_notifications(uuid,integer)'::regprocedure)) > 0,
   'merchant notification inbox respects role audiences, expiry and platform message metadata'
+);
+select extensions.ok(
+  (select proconfig = array['search_path=""']::text[]
+   from pg_proc
+   where oid='public.sellertray_list_businesses_for_current_user()'::regprocedure),
+  'business-list SECURITY DEFINER RPC has an empty search path'
+);
+select extensions.ok(
+  position('auth.jwt()' in pg_get_functiondef('public.sellertray_payment_gate_decision(uuid,text)'::regprocedure)) > 0
+  and position('auth.role()' in pg_get_functiondef('public.sellertray_payment_gate_decision(uuid,text)'::regprocedure)) = 0
+  and position('tenant_members' in pg_get_functiondef('public.sellertray_payment_gate_decision(uuid,text)'::regprocedure)) > 0,
+  'payment gate uses JWT role context and still enforces tenant membership for merchant callers'
 );
 
 select * from extensions.finish();
