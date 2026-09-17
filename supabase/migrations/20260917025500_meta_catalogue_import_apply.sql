@@ -29,6 +29,7 @@ declare
   v_category text;
   v_image_url text;
   v_price numeric(14,2);
+  v_is_active boolean;
   v_item_id uuid;
   v_mapping_source text;
   v_match_count integer;
@@ -120,6 +121,11 @@ begin
       raise exception 'Meta row % has an invalid price',v_index using errcode='22023';
     end;
 
+    if jsonb_typeof(v_row->'isActive') <> 'boolean' then
+      raise exception 'Meta row % has an invalid availability state',v_index using errcode='22023';
+    end if;
+    v_is_active := (v_row->>'isActive')::boolean;
+
     if v_retailer_id is null or char_length(v_retailer_id)>160 then
       raise exception 'Meta row % has an invalid retailer ID',v_index using errcode='22023';
     end if;
@@ -168,7 +174,7 @@ begin
             price_ngn=v_price,
             category=coalesce(v_category,category),
             image_url=coalesce(v_image_url,image_url),
-            is_active=true,
+            is_active=v_is_active,
             whatsapp_mapping_source='meta_import',
             whatsapp_last_synced_at=now(),
             updated_at=now()
@@ -211,7 +217,7 @@ begin
           price_ngn=v_price,
           category=coalesce(v_category,category),
           image_url=coalesce(v_image_url,image_url),
-          is_active=true,
+          is_active=v_is_active,
           whatsapp_catalog_id=v_configured_catalog,
           whatsapp_product_retailer_id=v_retailer_id,
           whatsapp_mapping_source='meta_import',
@@ -238,7 +244,7 @@ begin
       whatsapp_mapping_source,whatsapp_last_synced_at,
       created_at,updated_at
     ) values (
-      p_tenant_id,v_name,v_retailer_id,v_category,v_image_url,v_price,true,
+      p_tenant_id,v_name,v_retailer_id,v_category,v_image_url,v_price,v_is_active,
       v_configured_catalog,v_retailer_id,'meta_import',now(),now(),now()
     );
     v_created := v_created + 1;
