@@ -101,12 +101,12 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
         const callback = await parseEmbeddedSignupCallback(url);
         if (!callback) return;
 
-        if (callback.status === 'cancelled') {
-          setConnectionError('WhatsApp connection was cancelled. No changes were made.');
-          return;
-        }
-        if (callback.status === 'error') {
-          setConnectionError(callback.message || 'Meta could not complete WhatsApp signup.');
+        if (callback.status !== 'success') {
+          setConnectionError(
+            callback.status === 'cancelled'
+              ? 'WhatsApp connection was cancelled. No changes were made.'
+              : callback.message || 'Meta could not complete WhatsApp signup.',
+          );
           return;
         }
         if (callback.tenantId !== business.id) return;
