@@ -199,7 +199,7 @@ function LoginScreen() {
   return (
     <div className="auth-shell">
       <section className="auth-brand-panel">
-        <div className="brand-mark">ST</div>
+        <img className="brand-logo" src="https://sellertray.vercel.app/brand/sellertray-logo-v2.png" alt="SellerTray" />
         <p className="eyebrow">ProcessEdge Operations</p>
         <h1>SellerTray Admin</h1>
         <p>Secure platform communications for SellerTray merchants.</p>
@@ -440,7 +440,7 @@ function AdminPortal({ session, overview, audit, onAuditRefresh, onSignOut }: { 
     <div className="portal-shell">
       <header className="topbar">
         <div className="topbar-brand">
-          <div className="brand-mark small-mark">ST</div>
+          <img className="brand-icon small-mark" src="https://sellertray.vercel.app/brand/sellertray-app-icon-v2.png" alt="" aria-hidden="true" />
           <div><strong>SellerTray Admin</strong><span>ProcessEdge</span></div>
         </div>
         <div className="topbar-actions">
@@ -615,7 +615,7 @@ function AdminPortal({ session, overview, audit, onAuditRefresh, onSignOut }: { 
 }
 
 function FullPageStatus({ title, body, error, onRetry }: { title: string; body: string; error?: string | null; onRetry?: () => Promise<void> }) {
-  return <div className="center-shell"><div className="security-card"><div className="brand-mark">ST</div><p className="eyebrow">SellerTray Admin</p><h1>{title}</h1><p className="muted">{body}</p>{error ? <div className="error-banner">{error}</div> : null}{onRetry ? <button className="primary-button" onClick={() => void onRetry()}>Try again</button> : <div className="loader" />}</div></div>;
+  return <div className="center-shell"><div className="security-card"><img className="brand-logo status-logo" src="https://sellertray.vercel.app/brand/sellertray-logo-v2.png" alt="SellerTray" /><p className="eyebrow">SellerTray Admin</p><h1>{title}</h1><p className="muted">{body}</p>{error ? <div className="error-banner">{error}</div> : null}{onRetry ? <button className="primary-button" onClick={() => void onRetry()}>Try again</button> : <div className="loader" />}</div></div>;
 }
 
 function normalizeOverview(value: unknown): PlatformOverview {
