@@ -513,3 +513,146 @@ Deno.test('Pidgin quantity amendment maps to order change', async () => {
   assertEquals(decision.intent, 'order_change_items');
   assertEquals(decision.itemText, 'make am two');
 });
+
+
+Deno.test('Pidgin price wording stays a product enquiry', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'Wetin this cost?',
+    vocabulary: [],
+    context: { ...baseContext, lastEnquiry: null },
+  });
+  assertEquals(decision.intent, 'product_price_enquiry');
+});
+
+Deno.test('Pidgin order status wording is recognised', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'My order nko?',
+    vocabulary: [],
+    context: {
+      ...baseContext,
+      orders: [{
+        id: '33333333-3333-4333-8333-333333333333',
+        publicOrderId: 'NLM/000020',
+        status: 'processing',
+        paymentStatus: 'paid',
+        fulfillmentStatus: 'unassigned',
+        createdAt: new Date().toISOString(),
+      }],
+    },
+  });
+  assertEquals(decision.intent, 'order_status');
+});
+
+Deno.test('Pidgin delivery status wording is recognised', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'Rider nko?',
+    vocabulary: [],
+    context: {
+      ...baseContext,
+      orders: [{
+        id: '33333333-3333-4333-8333-333333333333',
+        publicOrderId: 'NLM/000021',
+        status: 'ready',
+        paymentStatus: 'paid',
+        fulfillmentStatus: 'out_for_delivery',
+        createdAt: new Date().toISOString(),
+      }],
+    },
+  });
+  assertEquals(decision.intent, 'delivery_status');
+});
+
+Deno.test('Pidgin self pickup wording is recognised', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'I go carry am myself',
+    vocabulary: [],
+    context: {
+      ...baseContext,
+      orders: [{
+        id: '33333333-3333-4333-8333-333333333333',
+        publicOrderId: 'NLM/000022',
+        status: 'accepted',
+        paymentStatus: 'unpaid',
+        fulfillmentStatus: 'unassigned',
+        createdAt: new Date().toISOString(),
+      }],
+    },
+  });
+  assertEquals(decision.intent, 'pickup_request');
+});
+
+Deno.test('Pidgin complaint wording is recognised', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'Na wrong thing you send me',
+    vocabulary: [],
+    context: {
+      ...baseContext,
+      orders: [{
+        id: '33333333-3333-4333-8333-333333333333',
+        publicOrderId: 'NLM/000023',
+        status: 'completed',
+        paymentStatus: 'paid',
+        fulfillmentStatus: 'delivered',
+        createdAt: new Date().toISOString(),
+      }],
+    },
+  });
+  assertEquals(decision.intent, 'complaint');
+});
+
+Deno.test('Pidgin refund wording is recognised', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'Abeg refund me',
+    vocabulary: [],
+    context: {
+      ...baseContext,
+      orders: [{
+        id: '33333333-3333-4333-8333-333333333333',
+        publicOrderId: 'NLM/000024',
+        status: 'completed',
+        paymentStatus: 'paid',
+        fulfillmentStatus: 'delivered',
+        createdAt: new Date().toISOString(),
+      }],
+    },
+  });
+  assertEquals(decision.intent, 'refund_request');
+});
+
+Deno.test('Bare dont worry is chatter without destructive cancellation', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'Dont worry',
+    vocabulary: [],
+    context: {
+      ...baseContext,
+      orders: [{
+        id: '33333333-3333-4333-8333-333333333333',
+        publicOrderId: 'NLM/000025',
+        status: 'accepted',
+        paymentStatus: 'unpaid',
+        fulfillmentStatus: 'unassigned',
+        createdAt: new Date().toISOString(),
+      }],
+    },
+  });
+  assertEquals(decision.intent, 'general_chatter');
+});
+
+Deno.test('Explicit Pidgin no-send wording cancels an active order', async () => {
+  const decision = await resolveConversationIntent({
+    text: 'Make una no send am again',
+    vocabulary: [],
+    context: {
+      ...baseContext,
+      orders: [{
+        id: '33333333-3333-4333-8333-333333333333',
+        publicOrderId: 'NLM/000026',
+        status: 'accepted',
+        paymentStatus: 'unpaid',
+        fulfillmentStatus: 'unassigned',
+        createdAt: new Date().toISOString(),
+      }],
+    },
+  });
+  assertEquals(decision.intent, 'order_cancel');
+});
