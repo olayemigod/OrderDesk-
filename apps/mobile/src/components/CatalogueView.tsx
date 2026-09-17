@@ -142,8 +142,8 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
         </View>
         {canEdit && editing === null ? (
           <View style={styles.headingActions}>
-            <Pressable onPress={() => setShowBulkImport((value) => !value)} style={styles.importButton}>
-              <Text style={styles.importButtonText}>{showBulkImport ? 'Hide import' : 'Bulk import'}</Text>
+            <Pressable onPress={() => setShowBulkImport((value) => !value)} style={[styles.importButton, appearance.dark && darkStyles.outlineButton]}>
+              <Text style={[styles.importButtonText, appearance.dark && darkStyles.bodyText]}>{showBulkImport ? 'Hide import' : 'Bulk import'}</Text>
             </Pressable>
             <Pressable onPress={() => setEditing('new')} style={styles.addButton}>
               <Text style={styles.addButtonText}>+ Add product</Text>
