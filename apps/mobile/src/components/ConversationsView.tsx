@@ -307,7 +307,7 @@ export function ConversationsView({
           <View style={styles.sectionHeadingRow}>
             <View style={styles.flex}>
               <Text style={[styles.cardTitle, appearance.dark && styles.darkTitle]}>Conversation history</Text>
-              <Text style={[styles.meta, appearance.dark && styles.darkBody]}>Customer, merchant and SellerTray messages in chronological order.</Text>
+              <Text style={[styles.meta, appearance.dark && styles.darkBody]}>Latest conversation and earlier messages from Customer, merchant and SellerTray in chronological order.</Text>
             </View>
             <Pressable disabled={threadLoading} onPress={() => void refreshThread(selected.customerId)} style={styles.refreshButton}>
               <Ionicons name="refresh-outline" size={17} color="#079455" />
