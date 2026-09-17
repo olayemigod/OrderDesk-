@@ -101,12 +101,12 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
         const callback = await parseEmbeddedSignupCallback(url);
         if (!callback) return;
 
-        if (callback.status === 'cancelled') {
-          setConnectionError('WhatsApp connection was cancelled. No changes were made.');
-          return;
-        }
-        if (callback.status === 'error') {
-          setConnectionError(callback.message || 'Meta could not complete WhatsApp signup.');
+        if (callback.status !== 'success') {
+          setConnectionError(
+            callback.status === 'cancelled'
+              ? 'WhatsApp connection was cancelled. No changes were made.'
+              : callback.message || 'Meta could not complete WhatsApp signup.',
+          );
           return;
         }
         if (callback.tenantId !== business.id) return;
@@ -119,6 +119,7 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
           wabaId: callback.wabaId,
           phoneNumberId: callback.phoneNumberId,
           metaBusinessId: callback.metaBusinessId,
+          onboardingMethod: callback.onboardingMethod,
         });
         if (active) setConnection(updated);
       } catch (error) {
@@ -227,6 +228,11 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
                 ? readinessReason ?? 'SellerTray is still verifying outbound messaging readiness.'
                 : status.text}
           </Text>
+          {connected && connection?.connection?.onboardingMethod === 'coexistence' ? (
+            <Text style={[styles.versionText, appearance.dark && darkStyles.bodyText]}>
+              Coexistence is active: this number can remain available in the WhatsApp Business app while SellerTray uses the authorized Cloud API connection.
+            </Text>
+          ) : null}
           {connected && !processingActive ? (
             <Text style={styles.pausedText}>
               Message processing is paused until the business Owner authorizes the current WhatsApp data-processing terms.
@@ -281,9 +287,7 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
         {consent && !consent.termsPrivacyAccepted ? (
           <View style={styles.warningBox}>
             <Text style={styles.warningTitle}>Current Terms and Privacy acceptance is required first</Text>
-            <Text style={styles.warningText}>
-              The Owner must accept the current SellerTray Terms of Use and Privacy Notice before WhatsApp processing can be authorized.
-            </Text>
+            <Text style={styles.warningText}>The Owner must accept the current SellerTray Terms of Use and Privacy Notice before WhatsApp processing can be authorized.</Text>
           </View>
         ) : null}
 
@@ -299,104 +303,36 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
           </Pressable>
         ) : null}
 
-        {!consentLoading && processingActive && isOwner ? (
-          <Pressable disabled={consentBusy} onPress={() => void revokeConsent()} style={[styles.secondaryButton, appearance.dark && darkStyles.secondaryButton]}>
-            <Text style={[styles.secondaryButtonText, appearance.dark && darkStyles.titleText]}>{consentBusy ? 'Updating…' : 'Revoke authorization'}</Text>
+        {processingActive && isOwner ? (
+          <Pressable
+            disabled={consentBusy}
+            onPress={() => void revokeConsent()}
+            style={[styles.secondaryButton, consentBusy && styles.disabled]}
+          >
+            <Text style={[styles.secondaryButtonText, appearance.dark && darkStyles.titleText]}>{consentBusy ? 'Updating…' : 'Pause WhatsApp processing'}</Text>
           </Pressable>
         ) : null}
-
-        {!consentLoading && !isOwner ? (
-          <Text style={[styles.ownerOnlyText, appearance.dark && darkStyles.bodyText]}>
-            Only the business Owner can accept or revoke this authorization. Managers and Staff can view its status.
-          </Text>
-        ) : null}
-
-        <Pressable onPress={() => void refreshConsent()} disabled={consentLoading || consentBusy}>
-          <Text style={styles.refreshText}>Refresh authorization status</Text>
-        </Pressable>
       </View>
 
-      {!connected ? (
-        <View style={[styles.setupCard, appearance.dark && darkStyles.card]}>
-          <Text style={[styles.setupTitle, appearance.dark && darkStyles.titleText]}>How connection will work</Text>
-          <Step number="1" title="Use a WhatsApp Business number" text="Choose the number customers already use or a dedicated sales number." />
-          <Step number="2" title="Connect through SellerTray" text="SellerTray will launch Meta's approved WhatsApp onboarding flow from this screen." />
-          <Step number="3" title="Send a test order" text="After connection and authorization, send a real test message from another phone and confirm it appears in Orders." />
-
-          {isOwner ? (
-            <Pressable
-              disabled={connectionBusy || connectionLoading}
-              onPress={() => void connectWhatsApp()}
-              style={[styles.connectButton, (connectionBusy || connectionLoading) && styles.disabled]}
-            >
-              {connectionBusy ? <ActivityIndicator color="#FFFFFF" size="small" /> : null}
-              <Text style={styles.connectButtonText}>
-                {connectionBusy ? 'Opening Meta…' : 'Connect WhatsApp'}
-              </Text>
-              <Text style={styles.connectButtonHint}>
-                Continue with Meta's approved WhatsApp Business onboarding
-              </Text>
+      {isOwner ? (
+        <View style={[styles.connectionActions, appearance.dark && darkStyles.card]}>
+          <Text style={[styles.actionTitle, appearance.dark && darkStyles.titleText]}>{connected ? 'Connection controls' : 'Connect through Meta'}</Text>
+          <Text style={[styles.actionText, appearance.dark && darkStyles.bodyText]}>
+            {connected
+              ? 'SellerTray stores Meta credentials only on the backend. Disconnect here before moving this number to another SellerTray business.'
+              : 'If your eligible number is already active in the WhatsApp Business app, Meta can offer Coexistence so you can keep using the app while SellerTray connects.'}
+          </Text>
+          {connected ? (
+            <Pressable disabled={connectionBusy} onPress={() => void disconnectCurrentWhatsApp()} style={[styles.secondaryButton, connectionBusy && styles.disabled]}>
+              <Text style={[styles.secondaryButtonText, appearance.dark && darkStyles.titleText]}>{connectionBusy ? 'Updating…' : 'Disconnect WhatsApp'}</Text>
             </Pressable>
           ) : (
-            <Text style={[styles.ownerOnlyText, appearance.dark && darkStyles.bodyText]}>
-              Only the business Owner can connect a WhatsApp Business Account.
-            </Text>
-          )}
-
-          <View style={styles.pendingNotice}>
-            <Text style={styles.pendingTitle}>Your Meta credentials stay off this phone</Text>
-            <Text style={styles.pendingText}>
-              SellerTray opens Meta's secure signup flow, verifies the selected WhatsApp Business Account and phone number on the server, subscribes the authorized WABA to SellerTray webhooks, and stores the business integration credential encrypted on the backend.
-            </Text>
-          </View>
-        </View>
-      ) : (
-        <View style={[styles.infoCard, appearance.dark && darkStyles.card]}>
-          <Text style={[styles.infoTitle, appearance.dark && darkStyles.titleText]}>{processingActive ? 'Connection is active' : 'Connection is connected but paused'}</Text>
-          <Text style={[styles.infoText, appearance.dark && darkStyles.bodyText]}>
-            {processingActive
-              ? messagingReady
-                ? 'Inbound and outbound WhatsApp messaging are ready. Send a test order and confirm both the order capture and customer update.'
-                : 'The number is connected, but SellerTray has not verified outbound customer messaging yet.'
-              : 'No customer conversation content will be stored or interpreted by SellerTray until the current authorization is active.'}
-          </Text>
-
-          {connection?.connection ? (
-            <View style={styles.connectionDetails}>
-              {connection.connection.verifiedName ? (
-                <Detail label="Business name" value={connection.connection.verifiedName} dark={appearance.dark} />
-              ) : null}
-              {connection.connection.displayPhoneNumber ? (
-                <Detail label="WhatsApp number" value={connection.connection.displayPhoneNumber} dark={appearance.dark} />
-              ) : null}
-              {connection.connection.wabaId ? (
-                <Detail label="WABA" value={connection.connection.wabaId} dark={appearance.dark} />
-              ) : null}
-            </View>
-          ) : null}
-
-          {isOwner ? (
-            <Pressable
-              disabled={connectionBusy}
-              onPress={() => void disconnectCurrentWhatsApp()}
-              style={[styles.disconnectButton, appearance.dark && darkStyles.secondaryButton, connectionBusy && styles.disabled]}
-            >
-              <Text style={[styles.disconnectButtonText, appearance.dark && darkStyles.titleText]}>
-                {connectionBusy ? 'Updating…' : 'Disconnect WhatsApp'}
-              </Text>
+            <Pressable disabled={connectionBusy} onPress={() => void connectWhatsApp()} style={[styles.primaryButton, connectionBusy && styles.disabled]}>
+              <Text style={styles.primaryButtonText}>{connectionBusy ? 'Opening Meta…' : 'Continue with Meta'}</Text>
             </Pressable>
-          ) : null}
+          )}
         </View>
-      )}
-    </View>
-  );
-}
-
-function Detail({ label, value, dark }: { label: string; value: string; dark: boolean }) {
-  return (
-    <View style={styles.detailRow}>
-      <Text style={[styles.detailLabel, dark && darkStyles.bodyText]}>{label}</Text>
-      <Text selectable style={[styles.detailValue, dark && darkStyles.titleText]}>{value}</Text>
+      ) : null}
     </View>
   );
 }
@@ -404,116 +340,67 @@ function Detail({ label, value, dark }: { label: string; value: string; dark: bo
 function ReadinessItem({ label, ready, text }: { label: string; ready: boolean; text: string }) {
   const appearance = useSellerTrayAppearance();
   return (
-    <View style={[styles.readinessItem, ready && styles.readinessItemReady, appearance.dark && darkStyles.card, appearance.dark && ready && darkStyles.successCard]}>
-      <View style={[styles.readinessIcon, ready && styles.readinessIconReady]}>
-        <Text style={[styles.readinessIconText, ready && styles.readinessIconTextReady]}>{ready ? '✓' : '!'}</Text>
-      </View>
-      <View style={styles.readinessCopy}>
-        <Text style={[styles.readinessLabel, appearance.dark && darkStyles.titleText]}>{label}</Text>
-        <Text style={[styles.readinessText, appearance.dark && darkStyles.bodyText]}>{text}</Text>
-      </View>
-    </View>
-  );
-}
-
-function Step({ number, title, text }: { number: string; title: string; text: string }) {
-  const appearance = useSellerTrayAppearance();
-  return (
-    <View style={styles.step}>
-      <View style={styles.stepNumber}><Text style={styles.stepNumberText}>{number}</Text></View>
-      <View style={styles.stepCopy}>
-        <Text style={[styles.stepTitle, appearance.dark && darkStyles.titleText]}>{title}</Text>
-        <Text style={[styles.stepText, appearance.dark && darkStyles.bodyText]}>{text}</Text>
-      </View>
+    <View style={[styles.readinessItem, appearance.dark && darkStyles.card]}>
+      <View style={[styles.readinessDot, ready && styles.readinessDotReady]} />
+      <Text style={[styles.readinessLabel, appearance.dark && darkStyles.titleText]}>{label}</Text>
+      <Text style={[styles.readinessText, appearance.dark && darkStyles.bodyText]}>{text}</Text>
     </View>
   );
 }
 
 function formatDate(value: string): string {
   const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? '—'
-    : new Intl.DateTimeFormat('en-NG', { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
+  return Number.isFinite(date.getTime()) ? date.toLocaleDateString('en-NG') : value;
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: 16 },
-  eyebrow: { color: '#667085', fontSize: 12, fontWeight: '900', letterSpacing: 1.2 },
-  title: { color: '#102A43', fontSize: 28, fontWeight: '900', marginTop: 3 },
-  subtitle: { color: '#667085', fontSize: 14, lineHeight: 21, marginTop: 5 },
-  statusCard: {
-    borderWidth: 1, borderColor: '#FEC84B', backgroundColor: '#FFFAEB', borderRadius: 16,
-    padding: 14, flexDirection: 'row', gap: 11, alignItems: 'flex-start',
-  },
+  wrap: { gap: 14 },
+  eyebrow: { color: '#667085', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+  title: { color: '#102A43', fontSize: 22, fontWeight: '900', marginTop: 2 },
+  subtitle: { color: '#475467', fontSize: 13, lineHeight: 19, marginTop: 5 },
+  statusCard: { flexDirection: 'row', gap: 10, borderWidth: 1, borderColor: '#E4E7EC', backgroundColor: '#FFFFFF', borderRadius: 14, padding: 13 },
   connectedCard: { borderColor: '#ABEFC6', backgroundColor: '#ECFDF3' },
-  dot: { width: 10, height: 10, borderRadius: 99, backgroundColor: '#F79009', marginTop: 4 },
+  dot: { width: 9, height: 9, borderRadius: 5, backgroundColor: '#98A2B3', marginTop: 5 },
   connectedDot: { backgroundColor: '#12B76A' },
-  statusCopy: { flex: 1 },
-  statusTitle: { color: '#102A43', fontSize: 15, fontWeight: '900' },
-  statusText: { color: '#475467', fontSize: 13, lineHeight: 19, marginTop: 4 },
-  pausedText: { color: '#B54708', fontSize: 12, lineHeight: 15, fontWeight: '800', marginTop: 6 },
+  statusCopy: { flex: 1, gap: 3 },
+  statusTitle: { color: '#102A43', fontSize: 14, fontWeight: '900' },
+  statusText: { color: '#475467', fontSize: 12, lineHeight: 18 },
+  pausedText: { color: '#B54708', fontSize: 11, lineHeight: 17, marginTop: 3 },
+  connectionErrorCard: { backgroundColor: '#FEF3F2', borderRadius: 12, padding: 11, gap: 4 },
+  connectionErrorTitle: { color: '#B42318', fontSize: 12, fontWeight: '900' },
+  connectionErrorText: { color: '#B42318', fontSize: 11, lineHeight: 17 },
+  refreshText: { color: '#079455', fontSize: 11, fontWeight: '900', marginTop: 3 },
   readinessGrid: { flexDirection: 'row', gap: 8 },
-  readinessItem: { flex: 1, minWidth: 0, borderWidth: 1, borderColor: '#FEC84B', backgroundColor: '#FFFAEB', borderRadius: 13, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  readinessItemReady: { borderColor: '#ABEFC6', backgroundColor: '#ECFDF3' },
-  readinessIcon: { width: 26, height: 26, borderRadius: 99, backgroundColor: '#FEF0C7', alignItems: 'center', justifyContent: 'center' },
-  readinessIconReady: { backgroundColor: '#D1FADF' },
-  readinessIconText: { color: '#B54708', fontSize: 12, fontWeight: '900' },
-  readinessIconTextReady: { color: '#027A48' },
-  readinessCopy: { flex: 1, minWidth: 0 },
+  readinessItem: { flex: 1, borderWidth: 1, borderColor: '#E4E7EC', backgroundColor: '#FFFFFF', borderRadius: 12, padding: 10 },
+  readinessDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#F04438', marginBottom: 6 },
+  readinessDotReady: { backgroundColor: '#12B76A' },
   readinessLabel: { color: '#102A43', fontSize: 12, fontWeight: '900' },
-  readinessText: { color: '#667085', fontSize: 12, lineHeight: 16, marginTop: 1 },
-  consentCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#FEC84B', borderRadius: 16, padding: 14, gap: 9 },
+  readinessText: { color: '#667085', fontSize: 10, marginTop: 2 },
+  consentCard: { borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 14, padding: 13, gap: 9, backgroundColor: '#FFFFFF' },
   consentActiveCard: { borderColor: '#ABEFC6' },
-  consentHeading: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  consentHeading: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   consentCopy: { flex: 1 },
-  consentEyebrow: { color: '#667085', fontSize: 12, fontWeight: '900', letterSpacing: 1 },
-  consentTitle: { color: '#102A43', fontSize: 16, fontWeight: '900', marginTop: 2 },
-  consentText: { color: '#475467', fontSize: 13, lineHeight: 20 },
-  versionText: { color: '#667085', fontSize: 12, lineHeight: 17 },
-  warningBox: { backgroundColor: '#FFFAEB', borderRadius: 10, padding: 10, gap: 3 },
-  warningTitle: { color: '#B54708', fontSize: 12, fontWeight: '900' },
-  warningText: { color: '#7A2E0E', fontSize: 12, lineHeight: 14 },
-  errorText: { color: '#B42318', fontSize: 12, lineHeight: 15 },
-  connectionErrorCard: { backgroundColor: '#FEF3F2', borderWidth: 1, borderColor: '#FECDCA', borderRadius: 14, padding: 12, gap: 5 },
-  connectionErrorTitle: { color: '#B42318', fontSize: 13, fontWeight: '900' },
-  connectionErrorText: { color: '#912018', fontSize: 12, lineHeight: 18 },
-  primaryButton: { minHeight: 46, borderRadius: 11, backgroundColor: '#12B76A', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  consentEyebrow: { color: '#667085', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  consentTitle: { color: '#102A43', fontSize: 14, fontWeight: '900', marginTop: 2 },
+  consentText: { color: '#475467', fontSize: 12, lineHeight: 18 },
+  versionText: { color: '#667085', fontSize: 10, lineHeight: 15 },
+  warningBox: { backgroundColor: '#FFFAEB', borderRadius: 10, padding: 9 },
+  warningTitle: { color: '#B54708', fontSize: 11, fontWeight: '900' },
+  warningText: { color: '#854A0E', fontSize: 10, lineHeight: 15, marginTop: 2 },
+  errorText: { color: '#B42318', fontSize: 11, lineHeight: 16 },
+  connectionActions: { borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 14, padding: 13, gap: 9, backgroundColor: '#FFFFFF' },
+  actionTitle: { color: '#102A43', fontSize: 14, fontWeight: '900' },
+  actionText: { color: '#475467', fontSize: 12, lineHeight: 18 },
+  primaryButton: { minHeight: 44, borderRadius: 10, backgroundColor: '#12B76A', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 13 },
   primaryButtonText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
-  secondaryButton: { minHeight: 42, borderRadius: 11, borderWidth: 1, borderColor: '#D0D5DD', alignItems: 'center', justifyContent: 'center' },
+  secondaryButton: { minHeight: 44, borderRadius: 10, borderWidth: 1, borderColor: '#D0D5DD', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 13 },
   secondaryButtonText: { color: '#344054', fontSize: 12, fontWeight: '900' },
-  ownerOnlyText: { color: '#667085', fontSize: 12, lineHeight: 15 },
-  refreshText: { color: '#12B76A', fontSize: 13, fontWeight: '900' },
-  disabled: { opacity: 0.45 },
-  setupCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 18, padding: 16, gap: 14 },
-  setupTitle: { color: '#102A43', fontSize: 15, fontWeight: '900' },
-  step: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-  stepNumber: { width: 28, height: 28, borderRadius: 99, backgroundColor: '#ECFDF3', alignItems: 'center', justifyContent: 'center' },
-  stepNumberText: { color: '#079455', fontWeight: '900', fontSize: 12 },
-  stepCopy: { flex: 1 },
-  stepTitle: { color: '#344054', fontSize: 12, fontWeight: '900' },
-  stepText: { color: '#667085', fontSize: 12, lineHeight: 17, marginTop: 2 },
-  connectButton: { minHeight: 58, borderRadius: 12, backgroundColor: '#12B76A', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, gap: 3 },
-  connectButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
-  connectButtonHint: { color: '#E8FFF3', fontSize: 11.5, fontWeight: '700', marginTop: 1, textAlign: 'center' },
-  pendingNotice: { backgroundColor: '#F9FAFB', borderRadius: 12, padding: 12, gap: 4 },
-  pendingTitle: { color: '#344054', fontSize: 12, fontWeight: '900' },
-  pendingText: { color: '#667085', fontSize: 12, lineHeight: 17 },
-  infoCard: { backgroundColor: '#F9FAFB', borderRadius: 14, padding: 14, gap: 10 },
-  infoTitle: { color: '#102A43', fontSize: 13, fontWeight: '900' },
-  infoText: { color: '#667085', fontSize: 12, lineHeight: 17, marginTop: 4 },
-  connectionDetails: { gap: 7, paddingTop: 3 },
-  detailRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 14 },
-  detailLabel: { color: '#667085', fontSize: 11.5, fontWeight: '700' },
-  detailValue: { color: '#102A43', fontSize: 11.5, fontWeight: '900', flexShrink: 1, textAlign: 'right' },
-  disconnectButton: { minHeight: 42, borderWidth: 1, borderColor: '#FDA29B', borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
-  disconnectButtonText: { color: '#B42318', fontSize: 12, fontWeight: '900' },
+  disabled: { opacity: 0.5 },
 });
-
 
 const darkStyles = StyleSheet.create({
   card: { backgroundColor: '#102A43', borderColor: '#344054' },
-  successCard: { backgroundColor: '#12372C', borderColor: '#1C6B4A' },
+  successCard: { backgroundColor: '#163B32', borderColor: '#12B76A' },
   titleText: { color: '#F8FAFC' },
   bodyText: { color: '#D0D5DD' },
-  secondaryButton: { backgroundColor: '#162F46', borderColor: '#667085' },
 });

@@ -5,6 +5,7 @@ import { ActivityIndicator, Image, Platform, Pressable, StyleSheet, Text, TextIn
 
 import type { MerchantBusiness } from '../data/businessRepository';
 import { ChatCatalogueReviewSection } from './ChatCatalogueReviewSection';
+import { CatalogueBulkImport } from './CatalogueBulkImport';
 import type { CatalogueItem, CatalogueItemInput } from '../data/catalogueRepository';
 import { uploadCatalogueImage } from '../data/catalogueRepository';
 import {
@@ -24,6 +25,7 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
   const [query, setQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
+  const [showBulkImport, setShowBulkImport] = useState(false);
   const [showWhatsAppTools, setShowWhatsAppTools] = useState(false);
   const [whatsappStatus, setWhatsappStatus] = useState<WhatsAppCatalogueStatus | null>(null);
   const [whatsappLoading, setWhatsappLoading] = useState(true);
@@ -139,11 +141,24 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
           </Text>
         </View>
         {canEdit && editing === null ? (
-          <Pressable onPress={() => setEditing('new')} style={styles.addButton}>
-            <Text style={styles.addButtonText}>+ Add product</Text>
-          </Pressable>
+          <View style={styles.headingActions}>
+            <Pressable onPress={() => setShowBulkImport((value) => !value)} style={[styles.importButton, appearance.dark && darkStyles.outlineButton]}>
+              <Text style={[styles.importButtonText, appearance.dark && darkStyles.bodyText]}>{showBulkImport ? 'Hide import' : 'Bulk import'}</Text>
+            </Pressable>
+            <Pressable onPress={() => setEditing('new')} style={styles.addButton}>
+              <Text style={styles.addButtonText}>+ Add product</Text>
+            </Pressable>
+          </View>
         ) : null}
       </View>
+
+      {canEdit && showBulkImport ? (
+        <CatalogueBulkImport
+          tenantId={business.id}
+          currency={business.currency}
+          onImported={refresh}
+        />
+      ) : null}
 
       <View style={styles.catalogueSummaryRow}>
         <CatalogueStat icon="cube-outline" label="Products" value={items.length} />
@@ -260,10 +275,23 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
         )}
 
         <View style={[styles.importNotice, appearance.dark && darkStyles.infoCard]}>
-          <Text style={[styles.importNoticeTitle, appearance.dark && darkStyles.titleText]}>Automatic Meta catalogue import is not active yet</Text>
+          <Text style={[styles.importNoticeTitle, appearance.dark && darkStyles.titleText]}>Automatic Meta catalogue import readiness</Text>
           <Text style={[styles.importNoticeText, appearance.dark && darkStyles.bodyText]}>
-            SellerTray will not read or sync a merchant's Meta catalogue using a shared platform credential. Automatic import will only be enabled after tenant-specific Meta asset authorization is verified.
+            {whatsappStatus?.importReadiness?.reason ??
+              "SellerTray will not read or sync a merchant's Meta catalogue using a shared platform credential."}
           </Text>
+          {whatsappStatus?.importReadiness ? (
+            <View style={styles.importReadinessList}>
+              <ImportReadinessLine label="WhatsApp connected" ready={whatsappStatus.importReadiness.connected} />
+              <ImportReadinessLine label="Tenant-owned Meta credential" ready={whatsappStatus.importReadiness.tenantCredentialReady} />
+              <ImportReadinessLine label="Meta business_management scope" ready={whatsappStatus.importReadiness.businessManagementScopeReady} />
+              <ImportReadinessLine label="Meta catalog_management scope" ready={whatsappStatus.importReadiness.catalogManagementScopeReady} />
+              <ImportReadinessLine label="WhatsApp management access" ready={whatsappStatus.importReadiness.managementApiReady} />
+              <ImportReadinessLine label="Catalogue ID configured" ready={whatsappStatus.importReadiness.catalogConfigured} />
+              <ImportReadinessLine label="Catalogue product read access" ready={whatsappStatus.importReadiness.catalogueAssetReady} />
+              <ImportReadinessLine label="Automatic import eligible" ready={whatsappStatus.importReadiness.importReady} />
+            </View>
+          ) : null}
         </View>
 
         {whatsappError ? <Text style={styles.errorText}>{whatsappError}</Text> : null}
@@ -435,6 +463,20 @@ function CatalogueStat({ icon, label, value, positive = false }: { icon: string;
       </View>
       <Text style={[styles.catalogueSummaryValue, appearance.dark && darkStyles.titleText]}>{value}</Text>
       <Text style={[styles.catalogueSummaryLabel, appearance.dark && darkStyles.bodyText]}>{label}</Text>
+    </View>
+  );
+}
+
+function ImportReadinessLine({ label, ready }: { label: string; ready: boolean }) {
+  const appearance = useSellerTrayAppearance();
+  return (
+    <View style={styles.importReadinessRow}>
+      <Ionicons
+        name={ready ? 'checkmark-circle' : 'ellipse-outline'}
+        size={16}
+        color={ready ? '#079455' : '#98A2B3'}
+      />
+      <Text style={[styles.importReadinessText, appearance.dark && darkStyles.bodyText]}>{label}</Text>
     </View>
   );
 }
@@ -741,6 +783,9 @@ const styles = StyleSheet.create({
   manageMappingButton: { minHeight: 36, borderRadius: 10, backgroundColor: '#FFFFFF', paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
   manageMappingButtonText: { color: '#079455', fontSize: 12, fontWeight: '900' },
   headingCopy: { flex: 1 },
+  headingActions: { alignItems: 'flex-end', gap: 7 },
+  importButton: { minHeight: 38, borderRadius: 10, borderWidth: 1, borderColor: '#D0D5DD', backgroundColor: '#FFFFFF', paddingHorizontal: 11, alignItems: 'center', justifyContent: 'center' },
+  importButtonText: { color: '#102A43', fontSize: 12, fontWeight: '900' },
   eyebrow: { color: '#667085', fontSize: 12, fontWeight: '900', letterSpacing: 1.1 },
   title: { color: '#102A43', fontSize: 27, lineHeight: 33, fontWeight: '900', marginTop: 3 },
   titleLarge: { fontSize: 30, lineHeight: 37 },
@@ -820,6 +865,9 @@ const styles = StyleSheet.create({
   importNotice: { backgroundColor: '#FFFFFF', borderRadius: 10, padding: 10, gap: 3 },
   importNoticeTitle: { color: '#344054', fontSize: 12, fontWeight: '900' },
   importNoticeText: { color: '#667085', fontSize: 12, lineHeight: 14 },
+  importReadinessList: { gap: 5, marginTop: 7 },
+  importReadinessRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  importReadinessText: { color: '#475467', fontSize: 11, lineHeight: 16 },
   whatsappItemRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   whatsappItemCopy: { flex: 1 },
   mappingEditor: { backgroundColor: '#F9FAFB', borderRadius: 10, padding: 10, gap: 7 },

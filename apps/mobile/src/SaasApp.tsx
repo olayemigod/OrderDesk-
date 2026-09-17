@@ -18,6 +18,7 @@ import {
 import { AccountDataControls } from './components/AccountDataControls';
 import { BusinessInsightsPanel } from './components/BusinessInsightsPanel';
 import { CatalogueView } from './components/CatalogueView';
+import { ConversationsView } from './components/ConversationsView';
 import { ManualOrderComposer } from './components/ManualOrderComposer';
 import { OrderFulfillmentPanel } from './components/OrderFulfillmentPanel';
 import { OrderPaymentPanel } from './components/OrderPaymentPanel';
@@ -29,7 +30,6 @@ import { SetupGuideCard } from './components/SetupGuideCard';
 import { SellerTrayBrand } from './components/SellerTrayBrand';
 import type { MerchantBusiness } from './data/businessRepository';
 import type { OrderFulfillmentInput, OrderItemInput } from './data/ordersRepository';
-import { sendMerchantPaymentOptions } from './data/orderPaymentsRepository';
 import { orderTotal, type MerchantOrder, type OrderStatus } from './domain/order';
 import { useBusinesses } from './hooks/useBusinesses';
 import { useCatalogue } from './hooks/useCatalogue';
@@ -1129,6 +1129,7 @@ function OrderDetail({
   onRemoveItem: (itemId: string) => Promise<void>;
 }) {
   const appearance = useSellerTrayAppearance();
+  const [amendMode, setAmendMode] = useState(false);
   const total = orderTotal(order);
   const gateRefreshKey = [
     order.status,
@@ -1151,10 +1152,20 @@ function OrderDetail({
     order.amountPaid === 0 &&
     order.fulfillmentStatus === 'unassigned';
 
-  const editable =
+  const reviewEditable =
     order.status === 'needs_review' ||
-    order.status === 'draft' ||
-    acceptedUnpaidAmendment;
+    order.status === 'draft';
+  const editable = reviewEditable || (acceptedUnpaidAmendment && amendMode);
+
+  useEffect(() => {
+    setAmendMode(false);
+  }, [
+    order.id,
+    order.status,
+    order.paymentStatus,
+    order.amountPaid,
+    order.fulfillmentStatus,
+  ]);
 
   return (
     <View style={[styles.detailCard, appearance.dark && darkStyles.card]}>
@@ -1181,12 +1192,48 @@ function OrderDetail({
         <Text style={[styles.messageText, appearance.dark && darkStyles.bodyText]}>{order.customerMessage || 'No message captured.'}</Text>
       </View>
 
+      {acceptedUnpaidAmendment ? (
+        <View style={[styles.amendmentCard, appearance.dark && darkStyles.subtleCard]}>
+          <View style={styles.amendmentHeader}>
+            <View style={styles.amendmentCopy}>
+              <Text style={[styles.amendmentEyebrow, appearance.dark && darkStyles.greenText]}>ACCEPTED · UNPAID</Text>
+              <Text style={[styles.amendmentTitle, appearance.dark && darkStyles.titleText]}>Customer wants to change the order?</Text>
+            </View>
+            <Ionicons name="create-outline" size={22} color={theme.colors.greenDark} />
+          </View>
+          <Text style={[styles.amendmentText, appearance.dark && darkStyles.bodyText]}>
+            Amend the item or quantity before payment or fulfilment starts. SellerTray recalculates the invoice, invalidates any open payment request for the old total, and keeps the order accepted.
+          </Text>
+          <View style={styles.amendmentSteps}>
+            <Text style={[styles.amendmentStep, appearance.dark && darkStyles.bodyText]}>1. Amend items</Text>
+            <Text style={[styles.amendmentStep, appearance.dark && darkStyles.bodyText]}>2. Confirm the new total</Text>
+            <Text style={[styles.amendmentStep, appearance.dark && darkStyles.bodyText]}>3. Resend payment options</Text>
+          </View>
+          <Pressable
+            onPress={() => setAmendMode((value) => !value)}
+            style={[
+              styles.amendmentButton,
+              amendMode && styles.amendmentButtonActive,
+              appearance.dark && !amendMode && darkStyles.outlineButton,
+            ]}
+          >
+            <Text style={[
+              styles.amendmentButtonText,
+              amendMode && styles.amendmentButtonTextActive,
+              appearance.dark && !amendMode && darkStyles.titleText,
+            ]}>
+              {amendMode ? 'Finish amendment' : 'Amend order'}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       <View>
         <Text style={[styles.sectionTitle, appearance.dark && darkStyles.titleText]}>{editable ? 'Review order items' : 'Order items'}</Text>
         {editable ? (
           <Text style={[styles.pageSubtitle, appearance.dark && darkStyles.bodyText]}>
             {acceptedUnpaidAmendment
-              ? 'Customer-requested changes are allowed while this accepted order is unpaid and fulfilment has not started. SellerTray refreshes the invoice and invalidates any open payment attempt for the previous total.'
+              ? 'Change the requested item, quantity or selling price. The payment section below will refresh to the amended invoice total.'
               : order.source === 'manual'
                 ? 'You can adjust quantities and selling prices before acceptance.'
                 : 'Correct AI interpretation and prices before acceptance.'}
@@ -1251,308 +1298,6 @@ function DetailSummary({
     <View style={[styles.detailSummaryCard, appearance.dark && darkStyles.subtleCard, positive && styles.detailSummaryCardPositive, positive && appearance.dark && darkStyles.mintCard]}>
       <Text style={[styles.detailSummaryLabel, appearance.dark && darkStyles.bodyText]}>{label}</Text>
       <Text numberOfLines={1} style={[styles.detailSummaryValue, appearance.dark && darkStyles.titleText, positive && styles.detailSummaryValuePositive]}>{value}</Text>
-    </View>
-  );
-}
-
-function ConversationsView({
-  tenantId,
-  orders,
-  currency,
-  unreadByCustomer,
-  onMarkConversationRead,
-  onOpenOrder,
-}: {
-  orders: MerchantOrder[];
-  currency: string;
-  unreadByCustomer: Map<string, { unreadCount: number; latestReceivedAt: string | null }>;
-  onMarkConversationRead: (customerId: string, through: string | null) => Promise<void>;
-  onOpenOrder: (orderId: string) => void;
-}) {
-  const appearance = useSellerTrayAppearance();
-  const [query, setQuery] = useState('');
-  const [selectedKey, setSelectedKey] = useState('');
-  const [conversationFilter, setConversationFilter] = useState<'all' | 'unread' | 'new' | 'payment' | 'active'>('all');
-  const [showConversationFilters, setShowConversationFilters] = useState(false);
-  const [paymentSendBusyId, setPaymentSendBusyId] = useState<string | null>(null);
-  const [paymentSendNotice, setPaymentSendNotice] = useState<string | null>(null);
-  const [paymentSendError, setPaymentSendError] = useState<string | null>(null);
-
-  async function sendPaymentOptionsFromConversation(orderId: string) {
-    if (paymentSendBusyId) return;
-    setPaymentSendBusyId(orderId);
-    setPaymentSendNotice(null);
-    setPaymentSendError(null);
-    try {
-      const result = await sendMerchantPaymentOptions(tenantId, orderId);
-      setPaymentSendNotice(result.message);
-    } catch (err) {
-      setPaymentSendError(err instanceof Error ? err.message : 'Unable to send payment options.');
-    } finally {
-      setPaymentSendBusyId(null);
-    }
-  }
-
-  const conversations = useMemo(() => {
-    const whatsappOrders = orders
-      .filter((order) => order.source === 'whatsapp')
-      .slice()
-      .sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime());
-
-    const grouped = new Map<string, MerchantOrder[]>();
-    whatsappOrders.forEach((order) => {
-      const key = order.customerId || order.customerPhone;
-      const current = grouped.get(key) ?? [];
-      current.push(order);
-      grouped.set(key, current);
-    });
-
-    return Array.from(grouped.entries()).map(([key, customerOrders]) => {
-      const latest = customerOrders[0];
-      const customerId = latest?.customerId ?? '';
-      const unread = customerId ? unreadByCustomer.get(customerId) : undefined;
-      return {
-        key,
-        customerId,
-        phone: latest?.customerPhone ?? '',
-        name: latest?.customerName ?? latest?.customerPhone ?? 'WhatsApp customer',
-        latest,
-        orders: customerOrders,
-        unreadCount: unread?.unreadCount ?? 0,
-        latestUnreadAt: unread?.latestReceivedAt ?? latest?.receivedAt ?? null,
-      };
-    });
-  }, [orders, unreadByCustomer]);
-
-  const conversationCounts = {
-    all: conversations.length,
-    unread: conversations.filter((conversation) => conversation.unreadCount > 0).length,
-    new: conversations.filter((conversation) =>
-      conversation.orders.some((order) => order.status === 'needs_review' || order.status === 'draft'),
-    ).length,
-    payment: conversations.filter((conversation) =>
-      conversation.orders.some((order) =>
-        ['unpaid', 'pending', 'verification_required', 'payment_issue'].includes(order.paymentStatus) &&
-        !['rejected', 'cancelled'].includes(order.status),
-      ),
-    ).length,
-    active: conversations.filter((conversation) =>
-      conversation.orders.some((order) => ['accepted', 'processing', 'ready'].includes(order.status)),
-    ).length,
-  };
-
-  const normalized = query.trim().toLowerCase();
-  const visible = conversations.filter((conversation) => {
-    const matchesFilter =
-      conversationFilter === 'all' ||
-      (conversationFilter === 'unread' && conversation.unreadCount > 0) ||
-      (conversationFilter === 'new' && conversation.orders.some((order) => order.status === 'needs_review' || order.status === 'draft')) ||
-      (conversationFilter === 'payment' && conversation.orders.some((order) =>
-        ['unpaid', 'pending', 'verification_required', 'payment_issue'].includes(order.paymentStatus) &&
-        !['rejected', 'cancelled'].includes(order.status),
-      )) ||
-      (conversationFilter === 'active' && conversation.orders.some((order) => ['accepted', 'processing', 'ready'].includes(order.status)));
-
-    if (!matchesFilter) return false;
-    if (!normalized) return true;
-    return [conversation.name, conversation.phone, conversation.latest?.customerMessage ?? '']
-      .join(' ')
-      .toLowerCase()
-      .includes(normalized);
-  });
-
-  const selected = conversations.find((conversation) => conversation.key === selectedKey);
-
-  if (selected) {
-    return (
-      <View style={styles.sectionStack}>
-        <Pressable onPress={() => setSelectedKey('')} style={styles.backToListButton}>
-          <Text style={[styles.backToListText, appearance.dark && darkStyles.greenText]}>← Conversations</Text>
-        </Pressable>
-
-        <View style={styles.conversationHeader}>
-          <View style={styles.customerAvatar}>
-            <Text style={styles.customerAvatarText}>{customerInitials(selected.name)}</Text>
-          </View>
-          <View style={styles.orderIdentity}>
-            <Text style={[styles.detailTitle, appearance.dark && darkStyles.titleText]}>{selected.name}</Text>
-            <Text style={[styles.orderMeta, appearance.dark && darkStyles.bodyText]}>{selected.phone}</Text>
-          </View>
-          <Badge label="WhatsApp" positive />
-        </View>
-
-        <View style={[styles.threadNotice, appearance.dark && darkStyles.infoCard]}>
-          <Text style={[styles.threadNoticeTitle, appearance.dark && darkStyles.titleText]}>Captured order messages</Text>
-          <Text style={[styles.threadNoticeText, appearance.dark && darkStyles.bodyText]}>
-            SellerTray shows WhatsApp messages currently attached to orders. Full conversational history will populate through the approved WhatsApp message-history pipeline.
-          </Text>
-        </View>
-
-        {paymentSendNotice ? (
-          <View style={[styles.conversationActionNotice, appearance.dark && darkStyles.mintCard]}>
-            <Text style={[styles.conversationActionNoticeText, appearance.dark && darkStyles.bodyText]}>{paymentSendNotice}</Text>
-          </View>
-        ) : null}
-        {paymentSendError ? (
-          <View style={[styles.conversationActionNotice, styles.conversationActionError, appearance.dark && darkStyles.errorCard]}>
-            <Text style={styles.errorText}>{paymentSendError}</Text>
-          </View>
-        ) : null}
-
-        <View style={styles.conversationThread}>
-          {selected.orders
-            .slice()
-            .reverse()
-            .map((order) => (
-              <View key={order.id} style={[styles.customerBubble, appearance.dark && darkStyles.mintCard]}>
-                <Text style={[styles.bubbleText, appearance.dark && darkStyles.titleText]}>{order.customerMessage || 'Order message captured without text.'}</Text>
-                <View style={styles.bubbleMetaRow}>
-                  <Text style={[styles.bubbleMeta, appearance.dark && darkStyles.mutedText]}>{formatReceivedAt(order.receivedAt)}</Text>
-                  <Text style={[styles.bubbleOrderRef, appearance.dark && darkStyles.greenText]}>{order.publicOrderId}</Text>
-                </View>
-                <View style={[styles.linkedOrderCard, appearance.dark && darkStyles.card]}>
-                  <View style={styles.linkedOrderCopy}>
-                    <Text style={[styles.linkedOrderTitle, appearance.dark && darkStyles.titleText]}>Linked order</Text>
-                    <Text style={[styles.linkedOrderMeta, appearance.dark && darkStyles.bodyText]}>
-                      {order.items.length} item{order.items.length === 1 ? '' : 's'} · {orderTotal(order) === null ? 'Needs pricing' : formatMoney(orderTotal(order) ?? 0, currency)}
-                    </Text>
-                  </View>
-                  <View style={styles.linkedOrderActions}>
-                    {order.paymentStatus !== 'paid' && ['accepted', 'processing', 'ready'].includes(order.status) ? (
-                      <Pressable
-                        disabled={paymentSendBusyId !== null}
-                        onPress={() => void sendPaymentOptionsFromConversation(order.id)}
-                        style={[styles.paymentChatButton, appearance.dark && darkStyles.outlineButton, paymentSendBusyId !== null && styles.disabled]}
-                      >
-                        <Text style={[styles.paymentChatButtonText, appearance.dark && darkStyles.greenText]}>
-                          {paymentSendBusyId === order.id ? 'Sending…' : 'Send payment'}
-                        </Text>
-                      </Pressable>
-                    ) : null}
-                    <Pressable onPress={() => onOpenOrder(order.id)} style={styles.openOrderButton}>
-                      <Text style={styles.openOrderButtonText}>Open</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              </View>
-            ))}
-        </View>
-      </View>
-    );
-  }
-
-  const visibleUnreadMessages = visible.reduce((sum, conversation) => sum + conversation.unreadCount, 0);
-
-  return (
-    <View style={styles.sectionStack}>
-      <View>
-        <Text style={[styles.sectionEyebrow, appearance.dark && darkStyles.bodyText]}>WHATSAPP COMMERCE</Text>
-        <Text style={[styles.pageTitle, appearance.dark && darkStyles.titleText, appearance.textSize === 'large' && styles.pageTitleLarge]}>Conversations</Text>
-        <Text style={[styles.pageSubtitle, appearance.dark && darkStyles.bodyText]}>Customer chats linked to orders, payments and fulfilment activity.</Text>
-      </View>
-
-      <View style={styles.conversationStatsGrid}>
-        <ConversationStat icon="chatbubbles-outline" label="All" value={conversationCounts.all} active={conversationFilter === 'all'} onPress={() => setConversationFilter('all')} />
-        <ConversationStat icon="mail-unread-outline" label="Unread" value={conversationCounts.unread} active={conversationFilter === 'unread'} onPress={() => setConversationFilter('unread')} />
-        <ConversationStat icon="sparkles-outline" label="New orders" value={conversationCounts.new} active={conversationFilter === 'new'} onPress={() => setConversationFilter('new')} />
-        <ConversationStat icon="card-outline" label="Payment" value={conversationCounts.payment} active={conversationFilter === 'payment'} onPress={() => setConversationFilter('payment')} />
-        <ConversationStat icon="cube-outline" label="Active" value={conversationCounts.active} active={conversationFilter === 'active'} onPress={() => setConversationFilter('active')} />
-      </View>
-
-      <View style={styles.searchRow}>
-        <View style={[styles.searchBox, appearance.dark && darkStyles.input]}>
-          <Ionicons name="search-outline" size={19} color={theme.colors.muted} />
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search customer or message"
-            placeholderTextColor={theme.colors.subtle}
-            autoCorrect={false}
-            style={[styles.searchInputEmbedded, appearance.dark && darkStyles.inputText]}
-          />
-        </View>
-        <Pressable
-          onPress={() => setShowConversationFilters((value) => !value)}
-          accessibilityLabel="More conversation filters"
-          style={[styles.filterIconButton, appearance.dark && darkStyles.outlineButton, showConversationFilters && styles.filterIconButtonActive]}
-        >
-          <Ionicons name="options-outline" size={21} color={showConversationFilters ? theme.colors.white : appearance.dark ? theme.colors.mint : theme.colors.navy} />
-        </Pressable>
-      </View>
-
-      {showConversationFilters ? (
-        <View style={[styles.filterPanel, appearance.dark && darkStyles.card]}>
-          <Text style={[styles.filterPanelTitle, appearance.dark && darkStyles.titleText]}>Inbox filters</Text>
-          <View style={styles.filterRow}>
-            <SimpleFilter label="All" active={conversationFilter === 'all'} onPress={() => setConversationFilter('all')} />
-            <SimpleFilter label="Unread" active={conversationFilter === 'unread'} onPress={() => setConversationFilter('unread')} />
-            <SimpleFilter label="New orders" active={conversationFilter === 'new'} onPress={() => setConversationFilter('new')} />
-            <SimpleFilter label="Payment pending" active={conversationFilter === 'payment'} onPress={() => setConversationFilter('payment')} />
-            <SimpleFilter label="In progress" active={conversationFilter === 'active'} onPress={() => setConversationFilter('active')} />
-          </View>
-        </View>
-      ) : null}
-
-      <View style={styles.inboxStatCard}>
-        <View style={styles.inboxStatIcon}>
-          <Ionicons name="logo-whatsapp" size={24} color={theme.colors.white} />
-        </View>
-        <View style={styles.conversationCopy}>
-          <Text style={styles.inboxStatValue}>{visibleUnreadMessages}</Text>
-          <Text style={styles.inboxStatTitle}>Unread messages in this view</Text>
-          <Text style={styles.inboxStatText}>{visible.length} conversation{visible.length === 1 ? '' : 's'} shown.</Text>
-        </View>
-      </View>
-
-      {visible.length === 0 ? (
-        <View style={[styles.emptyCard, appearance.dark && darkStyles.card]}>
-          <Text style={[styles.emptyTitle, appearance.dark && darkStyles.titleText]}>No conversations here</Text>
-          <Text style={[styles.emptyText, appearance.dark && darkStyles.bodyText]}>WhatsApp customers will appear here after SellerTray captures supported messages.</Text>
-        </View>
-      ) : (
-        <View style={[styles.conversationList, appearance.dark && darkStyles.card]}>
-          {visible.map((conversation) => (
-            <Pressable
-              key={conversation.key}
-              onPress={() => {
-                if (conversation.customerId) {
-                  void onMarkConversationRead(conversation.customerId, conversation.latestUnreadAt);
-                }
-                setSelectedKey(conversation.key);
-              }}
-              style={[styles.conversationRow, appearance.dark && darkStyles.rowBorder]}
-            >
-              <View style={styles.customerAvatarSmall}>
-                <Text style={styles.customerAvatarSmallText}>{customerInitials(conversation.name)}</Text>
-              </View>
-              <View style={styles.conversationCopy}>
-                <View style={styles.conversationNameRow}>
-                  <Text style={[styles.conversationName, appearance.dark && darkStyles.titleText]}>{conversation.name}</Text>
-                  <Text style={[styles.conversationTime, appearance.dark && darkStyles.mutedText]}>
-                    {conversation.latest ? formatReceivedAt(conversation.latest.receivedAt) : ''}
-                  </Text>
-                </View>
-                <Text numberOfLines={1} style={[styles.conversationPreview, appearance.dark && darkStyles.bodyText]}>
-                  {conversation.latest?.customerMessage || 'WhatsApp activity captured'}
-                </Text>
-                <Text style={[styles.conversationMeta, appearance.dark && darkStyles.greenText]}>
-                  {conversation.orders.length} linked order{conversation.orders.length === 1 ? '' : 's'}
-                </Text>
-              </View>
-              <View style={styles.conversationRowRight}>
-                {conversation.unreadCount > 0 ? (
-                  <View style={styles.conversationUnreadBadge}>
-                    <Text style={styles.conversationUnreadText}>
-                      {conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}
-                    </Text>
-                  </View>
-                ) : null}
-                <Text style={[styles.conversationChevron, appearance.dark && darkStyles.mutedText]}>›</Text>
-              </View>
-            </Pressable>
-          ))}
-        </View>
-      )}
     </View>
   );
 }
@@ -1991,6 +1736,18 @@ const styles = StyleSheet.create({
   detailSummaryValuePositive: { color: theme.colors.greenDark },
   messageCard: { backgroundColor: '#F9FAFB', borderRadius: 13, padding: 13 },
   messageText: { color: '#344054', fontSize: 13, lineHeight: 20, marginTop: 6 },
+  amendmentCard: { borderWidth: 1, borderColor: '#ABEFC6', backgroundColor: theme.colors.mintSoft, borderRadius: 14, padding: 13, gap: 10 },
+  amendmentHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  amendmentCopy: { flex: 1 },
+  amendmentEyebrow: { color: theme.colors.greenDark, fontSize: 11, fontWeight: '900', letterSpacing: 0.9 },
+  amendmentTitle: { color: theme.colors.navy, fontSize: 15, lineHeight: 20, fontWeight: '900', marginTop: 2 },
+  amendmentText: { color: theme.colors.slate, fontSize: 12, lineHeight: 18 },
+  amendmentSteps: { gap: 3 },
+  amendmentStep: { color: theme.colors.slate, fontSize: 12, lineHeight: 17, fontWeight: '700' },
+  amendmentButton: { minHeight: 42, borderRadius: 10, borderWidth: 1, borderColor: theme.colors.green, backgroundColor: theme.colors.white, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  amendmentButtonActive: { backgroundColor: theme.colors.green, borderColor: theme.colors.green },
+  amendmentButtonText: { color: theme.colors.greenDark, fontSize: 13, fontWeight: '900' },
+  amendmentButtonTextActive: { color: theme.colors.white },
   totalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingTop: 2 },
   totalLabel: { color: '#667085', fontWeight: '800', fontSize: 12 },
   totalValue: { color: '#102A43', fontWeight: '900', fontSize: 19 },

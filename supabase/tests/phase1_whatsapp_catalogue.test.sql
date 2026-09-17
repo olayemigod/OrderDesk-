@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(16);
+select extensions.plan(23);
 select extensions.ok(to_regclass('public.inbound_message_media') is not null,'inbound WhatsApp image metadata table exists');
 select extensions.ok(to_regclass('public.catalogue_capture_candidates') is not null,'catalogue chat candidate table exists');
 select extensions.ok(to_regclass('public.tenant_channel_consents') is not null,'versioned channel consent table exists');
@@ -22,5 +22,71 @@ select extensions.ok(
   and not has_column_privilege('authenticated','public.customers','phone','UPDATE')
   and not has_column_privilege('authenticated','public.customers','wa_id','UPDATE'),
   'customer update grants are limited to safe metadata');
+select extensions.ok(
+  exists(
+    select 1 from information_schema.columns
+    where table_schema='public'
+      and table_name='tenant_whatsapp_connections'
+      and column_name='granted_scopes'
+      and data_type='ARRAY'
+  ),
+  'tenant WhatsApp connection stores exact granted Meta scopes'
+);
+select extensions.ok(
+  not has_column_privilege(
+    'authenticated',
+    'public.tenant_whatsapp_connections',
+    'granted_scopes',
+    'UPDATE'
+  ),
+  'merchant clients cannot forge Meta granted scopes'
+);
+select extensions.ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.set_sellertray_whatsapp_granted_scopes(uuid,uuid,text[])',
+    'EXECUTE'
+  )
+  and has_function_privilege(
+    'service_role',
+    'public.set_sellertray_whatsapp_granted_scopes(uuid,uuid,text[])',
+    'EXECUTE'
+  ),
+  'Meta scope persistence is service-role only'
+);
+select extensions.ok(
+  exists(
+    select 1 from pg_trigger
+    where tgrelid='public.tenant_whatsapp_connections'::regclass
+      and tgname='clear_sellertray_meta_scopes_when_disconnected'
+      and not tgisinternal
+  ),
+  'disconnecting WhatsApp clears stale Meta authorization scopes'
+);
+select extensions.ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.apply_sellertray_meta_catalogue_import(uuid,uuid,text,jsonb)',
+    'EXECUTE'
+  ),
+  'Meta catalogue import apply command is not exposed directly to authenticated clients'
+);
+select extensions.ok(
+  has_function_privilege(
+    'service_role',
+    'public.apply_sellertray_meta_catalogue_import(uuid,uuid,text,jsonb)',
+    'EXECUTE'
+  ),
+  'service role can execute the governed Meta catalogue apply command'
+);
+select extensions.ok(
+  position('is_active=v_is_active' in pg_get_functiondef(
+    'public.apply_sellertray_meta_catalogue_import(uuid,uuid,text,jsonb)'::regprocedure
+  )) > 0
+  and position('v_mapping_source=''manual''' in pg_get_functiondef(
+    'public.apply_sellertray_meta_catalogue_import(uuid,uuid,text,jsonb)'::regprocedure
+  )) > 0,
+  'Meta import preserves Meta availability while protecting manual mappings'
+);
 select * from extensions.finish();
 rollback;

@@ -101,6 +101,12 @@ Deno.serve(async (request) => {
       p_credential_expires_at: tokenInfo.expiresAt,
     });
 
+    const grantedScopes = await rpc<string[]>('set_sellertray_whatsapp_granted_scopes', {
+      p_tenant_id: tenantId,
+      p_actor_user_id: userId,
+      p_scopes: tokenInfo.scopes,
+    });
+
     console.info(JSON.stringify({
       ts: new Date().toISOString(),
       service: 'whatsapp-connection',
@@ -110,6 +116,7 @@ Deno.serve(async (request) => {
       waba_id: wabaId,
       phone_number_id: phoneNumberId,
       credential_fingerprint: fingerprint,
+      granted_scopes: grantedScopes,
     }));
 
     return reply({ ok: true, connection, readiness: await messagingReadiness(connection) }, 200, requestId);
@@ -170,7 +177,7 @@ async function loadSafeConnection(tenantId: string): Promise<J | null> {
   const rows = await rest<J[]>(
     '/rest/v1/tenant_whatsapp_connections?' +
       'select=id,tenant_id,meta_business_id,waba_id,phone_number_id,display_phone_number,verified_name,' +
-      'connection_status,onboarding_method,credential_mode,webhook_subscription_status,connected_at,' +
+      'connection_status,onboarding_method,credential_mode,webhook_subscription_status,granted_scopes,connected_at,' +
       'last_verified_at,disconnected_at,last_error_code,last_error_message,created_at,updated_at' +
       '&tenant_id=eq.' + encodeURIComponent(tenantId) +
       '&limit=1',
@@ -595,7 +602,7 @@ async function exchangeAuthorizationCode(code: string): Promise<string> {
 
 async function inspectAccessToken(
   accessToken: string,
-): Promise<{ expiresAt: string | null }> {
+): Promise<{ expiresAt: string | null; scopes: string[] }> {
   const url = new URL(
     'https://graph.facebook.com/' + encodeURIComponent(META_GRAPH_API_VERSION) + '/debug_token',
   );
@@ -634,7 +641,7 @@ async function inspectAccessToken(
     ? new Date(expiresAtSeconds * 1000).toISOString()
     : null;
 
-  return { expiresAt };
+  return { expiresAt, scopes: [...new Set(scopes.map((scope) => scope.trim().toLocaleLowerCase()).filter(Boolean))].sort() };
 }
 
 async function verifyPhoneBelongsToWaba(

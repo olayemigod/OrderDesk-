@@ -18,6 +18,7 @@ export type WhatsAppConnectionRecord = {
   onboardingMethod: 'embedded_signup' | 'coexistence' | 'manual' | null;
   credentialMode: 'platform_system_user' | 'business_integration_system_user' | null;
   webhookSubscriptionStatus: string | null;
+  grantedScopes: string[];
   connectedAt: string | null;
   lastVerifiedAt: string | null;
   lastErrorMessage: string | null;
@@ -50,8 +51,9 @@ export type EmbeddedSignupCallback =
       tenantId: string;
       authorizationCode: string;
       wabaId: string;
-      phoneNumberId: string;
+      phoneNumberId: string | null;
       metaBusinessId: string | null;
+      onboardingMethod: 'embedded_signup' | 'coexistence';
       state: string;
     }
   | {
@@ -64,31 +66,45 @@ export type EmbeddedSignupCallback =
 export async function loadWhatsAppConnectionStatus(
   tenantId: string,
 ): Promise<WhatsAppConnectionStatusPayload> {
-  return invokeConnection({ action: 'status', tenantId });
+  return invokeFunction('whatsapp-connection', { action: 'status', tenantId });
 }
 
 export async function completeWhatsAppEmbeddedSignup(input: {
   tenantId: string;
   authorizationCode: string;
   wabaId: string;
-  phoneNumberId: string;
+  phoneNumberId?: string | null;
   metaBusinessId?: string | null;
+  onboardingMethod?: 'embedded_signup' | 'coexistence';
 }): Promise<WhatsAppConnectionStatusPayload> {
-  return invokeConnection({
+  const onboardingMethod = input.onboardingMethod === 'coexistence'
+    ? 'coexistence'
+    : 'embedded_signup';
+
+  if (onboardingMethod === 'coexistence' && !input.phoneNumberId) {
+    return invokeFunction('whatsapp-coexistence-connect', {
+      tenantId: input.tenantId,
+      authorizationCode: input.authorizationCode,
+      wabaId: input.wabaId,
+      metaBusinessId: input.metaBusinessId ?? null,
+    });
+  }
+
+  return invokeFunction('whatsapp-connection', {
     action: 'complete_embedded_signup',
     tenantId: input.tenantId,
     authorizationCode: input.authorizationCode,
     wabaId: input.wabaId,
-    phoneNumberId: input.phoneNumberId,
+    phoneNumberId: input.phoneNumberId ?? null,
     metaBusinessId: input.metaBusinessId ?? null,
-    onboardingMethod: 'embedded_signup',
+    onboardingMethod,
   });
 }
 
 export async function disconnectWhatsApp(
   tenantId: string,
 ): Promise<WhatsAppConnectionStatusPayload> {
-  return invokeConnection({ action: 'disconnect', tenantId });
+  return invokeFunction('whatsapp-connection', { action: 'disconnect', tenantId });
 }
 
 export async function startWhatsAppEmbeddedSignup(
@@ -142,24 +158,28 @@ export async function parseEmbeddedSignupCallback(
   }
 
   const pending = await loadPending();
-  if (!pending) {
-    return null;
-  }
+  if (!pending) return null;
 
   if (!tenantId || tenantId !== pending.tenantId) {
     throw new Error('WhatsApp connection returned for a different SellerTray business.');
   }
-
   if (!state || state !== pending.state) {
     throw new Error('WhatsApp connection security check failed. Start the connection again.');
   }
 
   const authorizationCode = parsed.code ?? '';
   const wabaId = parsed.wabaId ?? '';
-  const phoneNumberId = parsed.phoneNumberId ?? '';
+  const rawPhoneNumberId = parsed.phoneNumberId ?? '';
+  const onboardingMethod = parsed.onboardingMethod === 'coexistence'
+    ? 'coexistence'
+    : 'embedded_signup';
+  const phoneNumberId = isMetaId(rawPhoneNumberId) ? rawPhoneNumberId : null;
 
-  if (!authorizationCode || !isMetaId(wabaId) || !isMetaId(phoneNumberId)) {
+  if (!authorizationCode || !isMetaId(wabaId)) {
     throw new Error('Meta did not return the information SellerTray needs to complete WhatsApp setup.');
+  }
+  if (onboardingMethod !== 'coexistence' && !phoneNumberId) {
+    throw new Error('Meta did not return the selected WhatsApp phone number. Start the connection again.');
   }
 
   const age = Date.now() - new Date(pending.startedAt).getTime();
@@ -176,14 +196,16 @@ export async function parseEmbeddedSignupCallback(
     wabaId,
     phoneNumberId,
     metaBusinessId: isMetaId(parsed.metaBusinessId ?? '') ? parsed.metaBusinessId! : null,
+    onboardingMethod,
     state,
   };
 }
 
-async function invokeConnection(
+async function invokeFunction(
+  functionName: 'whatsapp-connection' | 'whatsapp-coexistence-connect',
   body: Record<string, unknown>,
 ): Promise<WhatsAppConnectionStatusPayload> {
-  const { data, error } = await supabase.functions.invoke('whatsapp-connection', { body });
+  const { data, error } = await supabase.functions.invoke(functionName, { body });
   if (error) {
     let message = error.message || 'Unable to update WhatsApp connection.';
     if (error.context && typeof error.context === 'object' && 'clone' in error.context) {
@@ -204,12 +226,10 @@ function normalizeStatusPayload(value: unknown): WhatsAppConnectionStatusPayload
   const row = value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
-
   const rawConnection =
     row.connection && typeof row.connection === 'object' && !Array.isArray(row.connection)
       ? row.connection as Record<string, unknown>
       : null;
-
   const rawReadiness =
     row.readiness && typeof row.readiness === 'object' && !Array.isArray(row.readiness)
       ? row.readiness as Record<string, unknown>
@@ -228,6 +248,7 @@ function normalizeStatusPayload(value: unknown): WhatsAppConnectionStatusPayload
       onboardingMethod: onboardingMethod(rawConnection.onboarding_method),
       credentialMode: credentialMode(rawConnection.credential_mode),
       webhookSubscriptionStatus: optionalString(rawConnection.webhook_subscription_status),
+      grantedScopes: stringArray(rawConnection.granted_scopes),
       connectedAt: optionalString(rawConnection.connected_at),
       lastVerifiedAt: optionalString(rawConnection.last_verified_at),
       lastErrorMessage: optionalString(rawConnection.last_error_message),
@@ -270,9 +291,7 @@ function parseQuery(url: string): Record<string, string> {
   const query = url.slice(queryIndex + 1, fragmentIndex >= 0 ? fragmentIndex : undefined);
   const params = new URLSearchParams(query);
   const out: Record<string, string> = {};
-  params.forEach((value, key) => {
-    out[key] = value;
-  });
+  params.forEach((value, key) => { out[key] = value; });
   return out;
 }
 
@@ -294,6 +313,12 @@ function stringValue(value: unknown): string {
 
 function optionalString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
+    : [];
 }
 
 function connectionStatus(value: unknown): WhatsAppConnectionRecord['connectionStatus'] {

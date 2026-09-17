@@ -178,7 +178,7 @@ const blockedAndroidPermissions = new Set(app.android?.blockedPermissions ?? [])
 for (const permission of requiredBlockedAndroidPermissions) {
   requireValue(blockedAndroidPermissions.has(permission), 'Sensitive Android permission must remain blocked: '+permission);
 }
-requireValue(app.android?.versionCode === 8, 'Android versionCode must be 8 for the merchant-reference QA line');
+requireValue(app.android?.versionCode === 18, 'Android versionCode must be 18 for the current SellerTray QA line');
 requireValue(app.ios?.bundleIdentifier === 'ng.processedge.sellertray', 'iOS bundle ID must match SellerTray identity');
 requireValue(pkg.dependencies?.['expo-notifications'] === '57.0.18', 'SellerTray mobile must pin expo-notifications for native push');
 requireValue(pkg.dependencies?.['expo-constants'] === '57.0.17', 'SellerTray mobile must pin expo-constants for Expo push project identity');
@@ -259,6 +259,17 @@ requireValue(provisionedApp.includes("supabase.auth.signOut({ scope: 'local' })"
 const saasApp = read(join(mobileRoot, 'src/SaasApp.tsx'));
 const settingsHub = read(join(mobileRoot, 'src/components/SettingsHub.tsx'));
 const catalogueView = read(join(mobileRoot, 'src/components/CatalogueView.tsx'));
+const catalogueBulkImport = read(join(mobileRoot, 'src/components/CatalogueBulkImport.tsx'));
+const catalogueImportRepository = read(join(mobileRoot, 'src/data/catalogueImportRepository.ts'));
+const catalogueBulkImportFunction = read(join(repoRoot, 'supabase/functions/catalogue-bulk-import/index.ts'));
+const catalogueBulkImportMigration = read(join(repoRoot, 'supabase/migrations/20260917022500_catalogue_bulk_import_contract.sql'));
+const metaScopeMigration = read(join(repoRoot, 'supabase/migrations/20260917024000_meta_granted_scope_contract.sql'));
+const whatsappConnectionScopeFunction = read(join(repoRoot, 'supabase/functions/whatsapp-connection/index.ts'));
+const whatsappCatalogueScopeFunction = read(join(repoRoot, 'supabase/functions/whatsapp-catalog/index.ts'));
+const conversationsView = read(join(mobileRoot, 'src/components/ConversationsView.tsx'));
+const conversationsRepository = read(join(mobileRoot, 'src/data/conversationsRepository.ts'));
+const merchantConversationAction = read(join(repoRoot, 'supabase/functions/merchant-conversation-action/index.ts'));
+const conversationInboxMigration = read(join(repoRoot, 'supabase/migrations/20260917012000_conversation_operational_inbox.sql'));
 const manualOrderComposer = read(join(mobileRoot, 'src/components/ManualOrderComposer.tsx'));
 const createBusinessView = read(join(mobileRoot, 'src/components/CreateBusinessView.tsx'));
 const businessRepository = read(join(mobileRoot, 'src/data/businessRepository.ts'));
@@ -268,8 +279,38 @@ requireValue(saasApp.includes("supabase.auth.signOut({ scope: 'local' })"), 'Wor
 requireValue(saasApp.includes('label="Catalogue"') && saasApp.includes("onChange('products')"), 'Catalogue must have a first-class bottom tab');
 requireValue(saasApp.includes('label="Conversations"') && saasApp.includes("onChange('inbox')"), 'WhatsApp conversations must have a first-class Conversations bottom tab');
 requireValue(saasApp.includes("if (selectedOrder)") && saasApp.includes("← Orders"), 'Order details must remain a mobile drill-in flow with a visible back action');
-requireValue(saasApp.includes('Captured order messages') && saasApp.includes('Linked order'), 'Inbox must expose captured WhatsApp order messages and linked-order navigation');
-requireValue(saasApp.includes('conversationUnreadBadge') && saasApp.includes('Unread messages in this view'), 'Conversations must expose per-conversation unread bubbles and unread summary');
+requireValue(
+  conversationsView.includes('Latest conversation') && conversationsView.includes('Linked orders'),
+  'Operational inbox must expose customer conversation context and linked-order navigation',
+);
+requireValue(
+  conversationsView.includes('unreadBadge') && conversationsView.includes('unread message'),
+  'Conversations must expose durable per-conversation unread state',
+);
+requireValue(
+  conversationsView.includes('AI handling') &&
+    conversationsView.includes('Needs merchant') &&
+    conversationsView.includes('Merchant handling') &&
+    conversationsView.includes('Waiting customer') &&
+    conversationsView.includes('Take over') &&
+    conversationsView.includes('Return to AI') &&
+    conversationsView.includes('Resolve'),
+  'Conversations must retain the governed AI/human operational inbox states and takeover controls',
+);
+requireValue(
+  conversationsRepository.includes("supabase.functions.invoke('merchant-conversation-action'") &&
+    merchantConversationAction.includes("action !== 'reply'") &&
+    merchantConversationAction.includes("p_action: 'waiting_customer'") &&
+    merchantConversationAction.includes('WHATSAPP_TEMPLATE_REQUIRED') &&
+    merchantConversationAction.includes('sellertray_apply_conversation_service_action'),
+  'Conversation actions must remain behind the authenticated merchant-conversation-action boundary with WhatsApp window enforcement',
+);
+requireValue(
+  conversationInboxMigration.includes("'ai_handling','needs_merchant','merchant_handling','waiting_customer','resolved'") &&
+    conversationInboxMigration.includes('sellertray_list_conversations') &&
+    conversationInboxMigration.includes('sellertray_note_conversation_inbound'),
+  'Operational conversation states and guarded read/write RPCs must remain defined in the database contract',
+);
 requireValue(saasApp.includes('merchantUnreadCount') && saasApp.includes('markAllMerchantNotificationsRead'), 'Notification bell and Activity Center must use durable per-user unread state');
 requireValue(saasApp.includes('usePushNotifications'), 'SellerTray shell must register native merchant push notifications');
 requireValue(catalogueView.includes('Manage') && catalogueView.includes('Search products, categories or SKU'), 'Catalogue must retain merchant-first search and optional WhatsApp mapping controls');
@@ -278,9 +319,42 @@ requireValue(paymentSettingsUi.includes('Transactions') && paymentSettingsUi.inc
 requireValue(saasApp.includes('label="More"') && saasApp.includes("onChange('more')"), 'Business/settings must be separated behind More');
 requireValue(saasApp.includes("paddingBottom: Platform.OS === 'android' ? 46 : 10"), 'Android bottom navigation must retain system-navigation clearance');
 requireValue(settingsHub.includes("BackHandler.addEventListener('hardwareBackPress'"), 'Android settings must support native back navigation');
-requireValue(settingsHub.includes('SellerTray 1.0.0 · Android build 8'), 'More screen must expose the current Android build marker');
+requireValue(settingsHub.includes('SellerTray 1.0.0 · Android build 18'), 'More screen must expose the current Android build marker');
 requireValue(saasApp.includes("StatusBar.currentHeight"), 'Android status-bar safe area must remain enforced in the merchant workspace');
 requireValue(catalogueView.includes('Product name') && catalogueView.includes('Selling price') && catalogueView.includes('Customer words / aliases'), 'Product editor must retain visible field labels and guidance');
+requireValue(
+  catalogueView.includes('Bulk import') &&
+    catalogueBulkImport.includes('Paste from Excel, Sheets or CSV') &&
+    catalogueBulkImport.includes('Preview import') &&
+    catalogueImportRepository.includes("supabase.functions.invoke('catalogue-bulk-import'"),
+  'Catalogue onboarding must retain preview-before-commit bulk import from spreadsheet or CSV data',
+);
+requireValue(
+  catalogueBulkImportFunction.includes("action === 'commit'") &&
+    catalogueBulkImportFunction.includes('Fix catalogue import errors before committing') &&
+    catalogueBulkImportFunction.includes('catalogue_bulk_import') &&
+    catalogueBulkImportMigration.includes('import_sellertray_catalogue_rows') &&
+    catalogueBulkImportMigration.includes("tm.role in ('owner','manager')"),
+  'Catalogue bulk import must remain server-governed, rate-limited and restricted to Owner/Manager',
+);
+requireValue(
+  metaScopeMigration.includes('granted_scopes text[]') &&
+    metaScopeMigration.includes('set_sellertray_whatsapp_granted_scopes') &&
+    metaScopeMigration.includes('to service_role') &&
+    whatsappConnectionScopeFunction.includes('tokenInfo.scopes') &&
+    whatsappConnectionScopeFunction.includes('p_scopes: tokenInfo.scopes') &&
+    whatsappConnectionScopeFunction.includes('granted_scopes') &&
+    whatsappCatalogueScopeFunction.includes("grantedScopes.includes('business_management')") &&
+    whatsappCatalogueScopeFunction.includes("grantedScopes.includes('catalog_management')") &&
+    whatsappCatalogueScopeFunction.includes('probeMetaCatalogueAsset') &&
+    whatsappCatalogueScopeFunction.includes("'/products'") &&
+    whatsappCatalogueScopeFunction.includes("'id,retailer_id,name'") &&
+    whatsappCatalogueScopeFunction.includes('catalogueAssetReady') &&
+    catalogueView.includes('Meta business_management scope') &&
+    catalogueView.includes('Meta catalog_management scope') &&
+    catalogueView.includes('Catalogue product read access'),
+  'Meta catalogue automation must use persisted tenant-granted business/catalog scopes and fail closed when absent',
+);
 requireValue(manualOrderComposer.includes('Create an order') && manualOrderComposer.includes('Customer name') && manualOrderComposer.includes('Products *'), 'Orders must expose guided manual order creation');
 requireValue(
   createBusinessView.includes('Merchant ID') &&
@@ -295,9 +369,13 @@ requireValue(
   'Business provisioning must verify the user token and persist the Merchant ID',
 );
 const orderFulfillmentPanel = read(join(mobileRoot, 'src/components/OrderFulfillmentPanel.tsx'));
+const orderPaymentPanel = read(join(mobileRoot, 'src/components/OrderPaymentPanel.tsx'));
 const ordersRepository = read(join(mobileRoot, 'src/data/ordersRepository.ts'));
 const orderFulfillmentFunction = read(join(repoRoot, 'supabase/functions/order-fulfillment/index.ts'));
 const fulfillmentIntegrityMigration = read(join(repoRoot, 'supabase/migrations/20260912134000_fulfillment_completion_integrity.sql'));
+const acceptedOrderAmendmentMigration = read(join(repoRoot, 'supabase/migrations/20260916125500_accepted_unpaid_order_amendments.sql'));
+const amendmentPaymentSequenceMigration = read(join(repoRoot, 'supabase/migrations/20260916131500_order_amendment_payment_invoice_sequence.sql'));
+const notificationWorkerRuntimeMigration = read(join(repoRoot, 'supabase/migrations/20260917023000_notification_worker_runtime_contract.sql'));
 requireValue(orderFulfillmentPanel.includes('Customer pickup') && orderFulfillmentPanel.includes('Merchant / own rider') && orderFulfillmentPanel.includes('Third-party dispatch'), 'Order fulfillment tracking UI must remain wired');
 requireValue(
   ordersRepository.includes("supabase.functions.invoke('order-fulfillment'") &&
@@ -318,6 +396,34 @@ requireValue(
 );
 requireValue(orderFulfillmentPanel.includes('Mark delivered & complete') && orderFulfillmentPanel.includes('Mark collected & complete'), 'Order completion must retain fulfillment evidence');
 requireValue(orderFulfillmentPanel.includes('Customer confirmed receipt on WhatsApp'), 'Completed orders must show customer receipt-confirmation provenance');
+requireValue(
+  saasApp.includes('Amend order') &&
+    saasApp.includes('Finish amendment') &&
+    saasApp.includes('Resend payment options') &&
+    orderPaymentPanel.includes('Order total changed') &&
+    orderPaymentPanel.includes('Resend payment options on WhatsApp') &&
+    orderPaymentPanel.includes('Invoice total'),
+  'Accepted unpaid order amendment must remain an explicit merchant workflow with refreshed financial guidance',
+);
+requireValue(
+  acceptedOrderAmendmentMigration.includes("v_order.status='accepted'") &&
+    acceptedOrderAmendmentMigration.includes("v_order.payment_status in ('unpaid','pending')") &&
+    acceptedOrderAmendmentMigration.includes("failure_reason='Order amended before payment'") &&
+    amendmentPaymentSequenceMigration.includes("status='cancelled'") &&
+    amendmentPaymentSequenceMigration.includes("pdf_version=d.pdf_version+1"),
+  'Accepted unpaid amendments must remain financially locked to zero-paid/unfulfilled orders and invalidate stale payment requests',
+);
+requireValue(
+  orderFulfillmentPanel.includes('Delivery contact name') &&
+    orderFulfillmentPanel.includes('Contact phone') &&
+    orderFulfillmentPanel.includes('ETA date') &&
+    orderFulfillmentPanel.includes('ETA time') &&
+    ordersRepository.includes('estimatedDeliveryAt') &&
+    orderFulfillmentFunction.includes('delivery_contact_name') &&
+    orderFulfillmentFunction.includes('delivery_contact_phone') &&
+    orderFulfillmentFunction.includes('estimated_delivery_at'),
+  'MVP fulfilment must retain delivery contact and ETA capture through UI, repository and governed server mutation',
+);
 requireValue(
   saasApp.includes('order.publicOrderId') &&
     saasApp.includes('Search orders, customers or products'),
@@ -518,7 +624,6 @@ const flutterwavePaymentWebhook = read(join(repoRoot, 'supabase/functions/flutte
 const merchantPaymentOperations = read(join(repoRoot, 'supabase/functions/merchant-payment-operations/index.ts'));
 const financialDocumentFunction = read(join(repoRoot, 'supabase/functions/financial-document/index.ts'));
 const whatsappPaymentModule = read(join(repoRoot, 'supabase/functions/whatsapp-webhook/payment.ts'));
-const orderPaymentPanel = read(join(mobileRoot, 'src/components/OrderPaymentPanel.tsx'));
 const paymentReconciliationPanel = read(join(mobileRoot, 'src/components/PaymentReconciliationPanel.tsx'));
 const paymentReconciliationRepository = read(join(mobileRoot, 'src/data/paymentReconciliationRepository.ts'));
 const paymentMethodsSettings = read(join(mobileRoot, 'src/components/PaymentMethodsSettings.tsx'));
@@ -713,6 +818,14 @@ requireValue(
     whatsappWebhookFunction.includes('consumeAiRequestBudget') &&
     orderParserFunction.includes('AbortSignal.timeout(6500)'),
   'High-cost AI parsing must retain server-side request budgets and an OpenAI provider deadline',
+);
+requireValue(
+  notificationWorkerRuntimeMigration.includes('sellertray_private.runtime_config') &&
+    notificationWorkerRuntimeMigration.includes('notification_worker_invocations') &&
+    notificationWorkerRuntimeMigration.includes('claim_sellertray_notification_worker_invocation') &&
+    notificationWorkerRuntimeMigration.includes('sellertray-whatsapp-notification-retry') &&
+    notificationWorkerRuntimeMigration.includes('kick_whatsapp_notification_worker'),
+  'WhatsApp notification delivery must retain immediate database invocation plus cron fallback runtime contract',
 );
 requireValue(
   whatsappNotificationWorker.includes('metaFetch') &&
