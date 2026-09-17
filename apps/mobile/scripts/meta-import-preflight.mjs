@@ -39,7 +39,7 @@ requireValue(
     metaImportFunction.includes('retailer_id,name,price,currency,image_url') &&
     metaImportFunction.includes('MAX_PRODUCTS = 500') &&
     metaImportFunction.includes('currencyExponent') &&
-    metaImportFunction.includes('same name') &&
+    metaImportFunction.includes('already has this name') &&
     metaImportFunction.includes('preserve_manual'),
   'Meta import must retain bounded product reads, currency normalization and conservative matching',
 );
