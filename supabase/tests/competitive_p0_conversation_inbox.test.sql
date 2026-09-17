@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(16);
+select extensions.plan(20);
 
 select extensions.ok(
   to_regclass('public.conversation_work_states') is not null,
@@ -111,6 +111,42 @@ select extensions.ok(
       and data_type='timestamp with time zone'
   ),
   'orders store estimated delivery timestamp'
+);
+select extensions.ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.import_sellertray_catalogue_rows(uuid,uuid,jsonb)',
+    'EXECUTE'
+  ),
+  'catalogue bulk import mutation is not exposed directly to authenticated clients'
+);
+select extensions.ok(
+  has_function_privilege(
+    'service_role',
+    'public.import_sellertray_catalogue_rows(uuid,uuid,jsonb)',
+    'EXECUTE'
+  ),
+  'service role can execute the governed catalogue import transaction'
+);
+select extensions.ok(
+  not exists (
+    select 1
+    from public.sellertray_intent_vocab
+    where intent='order_cancel'
+      and active=true
+      and lower(btrim(phrase)) in ('dont worry','no need','leave it')
+  ),
+  'ambiguous social phrases are not active destructive cancellation vocabulary'
+);
+select extensions.ok(
+  exists (
+    select 1
+    from public.sellertray_intent_vocab
+    where intent='general_chatter'
+      and active=true
+      and lower(btrim(phrase))='dont worry'
+  ),
+  'dont worry remains understood as non-destructive chatter'
 );
 
 select * from extensions.finish();
