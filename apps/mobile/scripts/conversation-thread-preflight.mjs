@@ -36,7 +36,7 @@ requireValue(
   view.includes('Conversation history') &&
     view.includes('loadConversationMessages') &&
     view.includes('<ThreadMessage') &&
-    view.includes('Customer, merchant and SellerTray messages in chronological order.') &&
+    view.includes('Latest conversation and earlier messages from Customer, merchant and SellerTray in chronological order.') &&
     view.includes('onMarkConversationRead'),
   'Shared inbox must render full governed thread history and preserve read tracking',
 );
