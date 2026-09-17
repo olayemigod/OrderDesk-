@@ -1,5 +1,5 @@
--- SellerTray P1 privacy hardening: keep merchant realtime refreshes without exposing
--- raw WhatsApp provider payloads or processing internals to authenticated clients.
+-- SellerTray P1 privacy hardening phase A: introduce a minimal Realtime activity
+-- stream without breaking older QA builds that still subscribe to inbound_messages.
 
 create table if not exists public.conversation_activity_events (
   id uuid primary key default gen_random_uuid(),
@@ -66,36 +66,20 @@ after insert on public.inbound_messages
 for each row
 execute function public.emit_conversation_activity_event();
 
--- Merchant clients no longer need direct inbound_messages access. Conversation
--- history and unread counts remain available through guarded SECURITY DEFINER RPCs.
-revoke select on table public.inbound_messages from authenticated;
-drop policy if exists inbound_messages_select_member on public.inbound_messages;
-
--- Realtime now publishes the minimal activity stream, not the raw provider table.
+-- Publish the minimal stream now. Keep inbound_messages temporarily published and
+-- readable for backward compatibility until the matching mobile QA build is installed.
 do $do$
 begin
   if exists (
     select 1 from pg_publication where pubname = 'supabase_realtime'
+  ) and not exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'conversation_activity_events'
   ) then
-    if exists (
-      select 1
-      from pg_publication_tables
-      where pubname = 'supabase_realtime'
-        and schemaname = 'public'
-        and tablename = 'inbound_messages'
-    ) then
-      execute 'alter publication supabase_realtime drop table public.inbound_messages';
-    end if;
-
-    if not exists (
-      select 1
-      from pg_publication_tables
-      where pubname = 'supabase_realtime'
-        and schemaname = 'public'
-        and tablename = 'conversation_activity_events'
-    ) then
-      execute 'alter publication supabase_realtime add table public.conversation_activity_events';
-    end if;
+    execute 'alter publication supabase_realtime add table public.conversation_activity_events';
   end if;
 end
 $do$;
