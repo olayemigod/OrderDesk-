@@ -101,7 +101,6 @@ export type ManualOrderInput = {
   items: ManualOrderLineInput[];
 };
 
-
 function one<T>(value: T | T[] | null): T | null {
   if (Array.isArray(value)) return value[0] ?? null;
   return value;
@@ -354,35 +353,18 @@ export async function updateOrderStatus(
   if (error) throw error;
 }
 
-export async function addOrderItem(orderId: string, item: OrderItemInput): Promise<void> {
-  const { data: order, error: orderError } = await supabase
-    .from('orders')
-    .select('tenant_id')
-    .eq('id', orderId)
-    .single();
-
-  if (orderError) throw orderError;
-  if (!order?.tenant_id) throw new Error('Unable to resolve the order tenant.');
-
-  const { error } = await supabase.from('order_items').insert({
-    tenant_id: order.tenant_id,
-    order_id: orderId,
-    item_name: item.name.trim(),
-    quantity: item.quantity,
-    unit_price: item.unitPrice,
-  });
-
-  if (error) throw error;
+export async function addOrderItem(_orderId: string, _item: OrderItemInput): Promise<void> {
+  throw new Error('Add products from the SellerTray catalogue picker so product identity and price stay governed.');
 }
 
 export async function updateOrderItem(itemId: string, item: OrderItemInput): Promise<void> {
+  if (!Number.isFinite(item.quantity) || item.quantity <= 0 || item.quantity > 9999) {
+    throw new Error('Enter a valid quantity.');
+  }
+
   const { error } = await supabase
     .from('order_items')
-    .update({
-      item_name: item.name.trim(),
-      quantity: item.quantity,
-      unit_price: item.unitPrice,
-    })
+    .update({ quantity: item.quantity })
     .eq('id', itemId);
 
   if (error) throw error;
