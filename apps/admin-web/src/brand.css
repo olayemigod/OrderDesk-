@@ -1,55 +1,41 @@
 /* SellerTray approved brand asset overrides */
 
-/* The legacy <img> elements still point at an external asset. Hide those
-   replaced elements and render the bundled approved logo directly from CSS
-   so the admin UI cannot fall back to a broken-image placeholder. */
-.auth-brand-panel > .brand-logo,
-.security-card > .brand-logo.status-logo {
-  display: none;
-}
-
-.auth-brand-panel::before,
-.security-card:has(> .brand-logo.status-logo)::before {
-  content: '';
+.brand-logo {
   display: block;
   width: 230px;
   height: 230px;
+  padding: 12px;
   box-sizing: border-box;
   border-radius: 22px;
   border: 1px solid rgba(217, 251, 232, .55);
-  background-color: #F8FAFC;
-  background-image: url('/brand/sellertray-admin-logo.webp');
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: calc(100% - 22px) calc(100% - 22px);
+  background: #F8FAFC;
+  object-fit: contain;
+  object-position: center;
   box-shadow: 0 10px 30px rgba(0, 0, 0, .14);
+  color: transparent;
+  font-size: 0;
 }
 
-.security-card:has(> .brand-logo.status-logo)::before {
+.status-logo {
   width: 170px;
   height: 170px;
   margin-inline: auto;
   border-radius: 18px;
-  background-size: calc(100% - 18px) calc(100% - 18px);
 }
 
-/* Avoid a broken external top-bar icon as well. */
 .topbar .brand-icon.small-mark {
-  display: none;
-}
-
-.topbar-brand::before {
-  content: '';
   display: block;
   width: 44px;
   height: 44px;
-  flex: 0 0 44px;
+  padding: 3px;
+  box-sizing: border-box;
   border-radius: 12px;
-  background-color: #F8FAFC;
-  background-image: url('/brand/sellertray-admin-logo.webp');
-  background-repeat: no-repeat;
-  background-position: center 23%;
-  background-size: 54px auto;
+  background: #F8FAFC;
+  object-fit: contain;
+  object-position: center;
+  flex: 0 0 auto;
+  color: transparent;
+  font-size: 0;
 }
 
 .auth-brand-panel {
@@ -77,14 +63,14 @@
 }
 
 @media (max-width: 760px) {
-  .auth-brand-panel::before {
+  .brand-logo {
     width: 180px;
     height: 180px;
+    padding: 9px;
     border-radius: 18px;
-    background-size: calc(100% - 18px) calc(100% - 18px);
   }
 
-  .security-card:has(> .brand-logo.status-logo)::before {
+  .status-logo {
     width: 150px;
     height: 150px;
   }
