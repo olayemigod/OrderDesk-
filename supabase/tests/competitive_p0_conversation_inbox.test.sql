@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(21);
+select extensions.plan(23);
 
 select extensions.ok(
   to_regclass('public.conversation_work_states') is not null,
@@ -73,6 +73,26 @@ select extensions.ok(
     'EXECUTE'
   ),
   'service role can note inbound conversation state'
+);
+select extensions.ok(
+  has_function_privilege(
+    'authenticated',
+    'public.sellertray_list_conversation_messages(uuid,uuid,integer)',
+    'EXECUTE'
+  )
+  and not has_function_privilege(
+    'anon',
+    'public.sellertray_list_conversation_messages(uuid,uuid,integer)',
+    'EXECUTE'
+  ),
+  'conversation history is available only through the authenticated tenant-guarded RPC'
+);
+select extensions.ok(
+  position('inbound_messages' in pg_get_functiondef('public.sellertray_list_conversation_messages(uuid,uuid,integer)'::regprocedure)) > 0
+  and position('outbound_notifications' in pg_get_functiondef('public.sellertray_list_conversation_messages(uuid,uuid,integer)'::regprocedure)) > 0
+  and position('merchant_conversation_reply' in pg_get_functiondef('public.sellertray_list_conversation_messages(uuid,uuid,integer)'::regprocedure)) > 0
+  and position('tenant_members' in pg_get_functiondef('public.sellertray_list_conversation_messages(uuid,uuid,integer)'::regprocedure)) > 0,
+  'conversation history combines customer and outbound messages while retaining tenant membership enforcement'
 );
 select extensions.ok(
   exists (
