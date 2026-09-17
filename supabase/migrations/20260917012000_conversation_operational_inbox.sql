@@ -4,6 +4,9 @@
 
 begin;
 
+create schema if not exists sellertray_private;
+revoke all on schema sellertray_private from public,anon,authenticated;
+
 create table if not exists public.conversation_work_states (
   tenant_id uuid not null references public.tenants(id) on delete cascade,
   customer_id uuid not null,
