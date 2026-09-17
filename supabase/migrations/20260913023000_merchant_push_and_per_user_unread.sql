@@ -3,6 +3,53 @@
 
 begin;
 
+-- Production already had merchant_notifications when this migration was first
+-- applied, but the historical repository did not contain its bootstrap DDL.
+-- Keep the repair idempotent: existing production tables are untouched while a
+-- clean migration replay gets the base relation required by the push/read model.
+create table if not exists public.merchant_notifications (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  event_key text not null,
+  severity text not null default 'info'
+    check (severity in ('info','attention','urgent')),
+  title text not null,
+  body text not null,
+  order_id uuid references public.orders(id) on delete cascade,
+  change_request_id uuid,
+  source_inbound_message_id uuid references public.inbound_messages(id) on delete cascade,
+  is_read boolean not null default false,
+  read_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists merchant_notifications_tenant_created_idx
+  on public.merchant_notifications(tenant_id,created_at desc);
+create index if not exists merchant_notifications_order_idx
+  on public.merchant_notifications(order_id)
+  where order_id is not null;
+create index if not exists merchant_notifications_source_message_idx
+  on public.merchant_notifications(source_inbound_message_id)
+  where source_inbound_message_id is not null;
+
+alter table public.merchant_notifications enable row level security;
+revoke all on table public.merchant_notifications from public,anon,authenticated;
+grant select on table public.merchant_notifications to authenticated;
+grant all on table public.merchant_notifications to service_role;
+
+drop policy if exists merchant_notifications_member_read on public.merchant_notifications;
+create policy merchant_notifications_member_read
+on public.merchant_notifications
+for select to authenticated
+using (
+  exists (
+    select 1 from public.tenant_members tm
+    where tm.tenant_id=merchant_notifications.tenant_id
+      and tm.user_id=(select auth.uid())
+  )
+);
+
 create table if not exists public.merchant_notification_reads (
   notification_id uuid not null references public.merchant_notifications(id) on delete cascade,
   tenant_id uuid not null references public.tenants(id) on delete cascade,
