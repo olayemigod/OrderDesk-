@@ -15,10 +15,14 @@ export type WhatsAppCatalogueSettings = {
 export type WhatsAppCatalogueImportReadiness = {
   connected: boolean;
   tenantCredentialReady: boolean;
+  businessManagementScopeReady: boolean;
+  catalogManagementScopeReady: boolean;
+  catalogueScopesReady: boolean;
   managementApiReady: boolean;
   catalogConfigured: boolean;
   importReady: boolean;
   reason: string | null;
+  grantedScopes: string[];
   managementEvidence: string | null;
   managementCheckedAt: string | null;
 };
