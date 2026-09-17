@@ -70,9 +70,10 @@ export async function invokeJson<T>(
   }
 
   if (!response.ok) {
-    // A definite HTTP failure did not leave us with an ambiguous client-side
-    // timeout. Clear the key so a corrected request can start a new operation.
-    if (publishStorageKey) sessionStorage.removeItem(publishStorageKey);
+    // 4xx is a definite validation/auth rejection, so a corrected request may
+    // start a new operation. Keep the UUID on 5xx because the database may have
+    // committed before the server response failed.
+    if (publishStorageKey && response.status < 500) sessionStorage.removeItem(publishStorageKey);
     if (optionalAuditRequest) return emptyAuditResponse<T>();
     const message = isRecord(payload) && typeof payload.error === 'string'
       ? payload.error
