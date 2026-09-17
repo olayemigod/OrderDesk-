@@ -1646,6 +1646,9 @@ async function handleCustomerProductEnquiry(input: {
   const catalogue = await loadCatalogue(input.tenantId);
   const enquiryText = input.decision.itemText?.trim() || input.text;
   const match = findEnquiryCatalogueMatch(enquiryText, catalogue);
+  const clarificationCandidates = match
+    ? []
+    : findEnquiryClarificationCandidates(enquiryText, catalogue);
   const enquiryType =
     input.decision.intent === 'product_price_enquiry' ? 'price' :
     input.decision.intent === 'product_availability_enquiry' ? 'availability' :
@@ -1671,6 +1674,11 @@ async function handleCustomerProductEnquiry(input: {
         (price !== null ? ' is listed at ' + formatCurrencyAmount(price, input.currency) : ' is in the catalogue') +
         '. Ask for a quantity whenever you are ready to order.';
     }
+  } else if (clarificationCandidates.length >= 2) {
+    responseText =
+      'Sure. We found these catalogue options: ' +
+      formatCatalogueChoiceList(clarificationCandidates.map((candidate) => candidate.item.name)) +
+      '. Which one would you like?';
   } else {
     responseText =
       'Thanks. Please give me a minute — I’ll respond to your enquiry shortly.';
@@ -1726,13 +1734,19 @@ async function handleCustomerProductEnquiry(input: {
     body: JSON.stringify({
       tenant_id: input.tenantId,
       event_key: 'customer_enquiry',
-      severity: match ? 'info' : 'attention',
-      title: match ? 'Customer product enquiry' : 'Customer enquiry needs review',
+      severity: match || clarificationCandidates.length >= 2 ? 'info' : 'attention',
+      title: match
+        ? 'Customer product enquiry'
+        : clarificationCandidates.length >= 2
+          ? 'Catalogue choice sent to customer'
+          : 'Customer enquiry needs review',
       body: (
         input.text +
         (match
           ? ' · Matched: ' + match.item.name
-          : merchantCandidateHint(input.text, catalogue))
+          : clarificationCandidates.length >= 2
+            ? ' · Asked customer to choose: ' + clarificationCandidates.map((candidate) => candidate.item.name).join(', ')
+            : merchantCandidateHint(input.text, catalogue))
       ).slice(0, 1000),
       source_inbound_message_id: input.sourceMessageId,
     }),
@@ -1745,7 +1759,57 @@ async function handleCustomerProductEnquiry(input: {
     enquiryId: rows[0]?.id ?? null,
     enquiryType,
     matchedItemId: match?.item.id ?? null,
+    clarificationCandidateCount: clarificationCandidates.length,
   }));
+}
+
+function findEnquiryClarificationCandidates(
+  text: string,
+  catalogue: CatalogueRow[],
+): Array<{
+  item: CatalogueRow;
+  source: 'normalized_name' | 'normalized_alias';
+  score: number;
+}> {
+  const productQuery = extractEnquiryProductQuery(text);
+  const shape = productDiscoveryShape(productQuery || text);
+  if (shape.coreTokens.length === 0) return [];
+
+  const ranked = fuzzyCatalogueCandidates(productQuery || text, catalogue);
+  const bestScore = ranked[0]?.score ?? 0;
+  if (bestScore < 72) return [];
+
+  const safeFloor = Math.max(72, bestScore - 12);
+  const candidates = ranked
+    .filter((candidate) =>
+      candidate.score >= safeFloor &&
+      catalogueItemSupportsQueryCore(candidate.item, shape.coreTokens)
+    )
+    .slice(0, 4);
+
+  // One strong candidate belongs to normal automatic resolution. Clarification
+  // is only for a genuinely ambiguous set of catalogue-backed choices.
+  return candidates.length >= 2 ? candidates : [];
+}
+
+function catalogueItemSupportsQueryCore(item: CatalogueRow, queryCoreTokens: string[]): boolean {
+  const phrases = [
+    item.name,
+    ...(item.catalog_item_aliases ?? []).map((alias) => alias.alias),
+  ];
+
+  return phrases.some((phrase) => {
+    const candidateTokens = new Set(productDiscoveryShape(phrase).coreTokens);
+    return queryCoreTokens.every((token) => candidateTokens.has(token));
+  });
+}
+
+function formatCatalogueChoiceList(names: string[]): string {
+  const safe = [...new Set(names.map((name) => name.trim()).filter(Boolean))];
+  if (safe.length === 0) return '';
+  if (safe.length === 1) return safe[0];
+  if (safe.length === 2) return safe[0] + ' or ' + safe[1];
+  return safe.slice(0, -1).join(', ') + ', or ' + safe[safe.length - 1];
 }
 
 function findEnquiryCatalogueMatch(
