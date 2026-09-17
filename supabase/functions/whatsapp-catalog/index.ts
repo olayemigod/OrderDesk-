@@ -4,6 +4,8 @@ type J = Record<string, unknown>;
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+const META_GRAPH_API_VERSION = Deno.env.get('META_GRAPH_API_VERSION')?.trim() || 'v26.0';
+const WHATSAPP_ENCRYPTION_KEY = Deno.env.get('SELLERTRAY_WHATSAPP_ENCRYPTION_KEY')?.trim() ?? '';
 const MAX_BODY_BYTES = 65_536;
 
 const cors = {
@@ -71,7 +73,7 @@ Deno.serve(async (request) => {
           .limit(500),
         admin
           .from('tenant_whatsapp_connections')
-          .select('connection_status,credential_mode,waba_id,phone_number_id,onboarding_method,granted_scopes,last_verified_at')
+          .select('connection_status,credential_mode,meta_business_id,waba_id,phone_number_id,onboarding_method,granted_scopes,last_verified_at')
           .eq('tenant_id', tenantId)
           .maybeSingle(),
         admin
@@ -105,6 +107,26 @@ Deno.serve(async (request) => {
         catalogueScopesReady &&
         managementApiReady &&
         catalogConfigured;
+
+      let catalogueAssetReady = false;
+      let catalogueAssetReason: string | null = null;
+      let catalogueAssetEvidence: J | null = null;
+      let catalogueAssetCheckedAt: string | null = null;
+
+      if (baseReady && settings?.catalog_id) {
+        catalogueAssetCheckedAt = new Date().toISOString();
+        try {
+          catalogueAssetEvidence = await probeMetaCatalogueAsset(
+            tenantId,
+            String(settings.catalog_id),
+          );
+          catalogueAssetReady = true;
+        } catch (error) {
+          catalogueAssetReason = sanitizeError(error);
+        }
+      }
+
+      const importReady = baseReady && catalogueAssetReady;
       const importReadiness = {
         connected,
         tenantCredentialReady,
@@ -113,7 +135,8 @@ Deno.serve(async (request) => {
         catalogueScopesReady,
         managementApiReady,
         catalogConfigured,
-        importReady: false,
+        catalogueAssetReady,
+        importReady,
         reason: !connected
           ? 'Connect this business to WhatsApp first.'
           : !tenantCredentialReady
@@ -124,12 +147,14 @@ Deno.serve(async (request) => {
                 ? 'WhatsApp Business management access has not been verified for this tenant.'
                 : !catalogConfigured
                   ? 'Configure the merchant Meta catalogue ID first.'
-                  : baseReady
-                    ? 'Meta catalogue scopes and WhatsApp management access are ready. A dedicated catalogue asset probe is still required before import can be enabled.'
-                    : 'Meta catalogue import is not ready.',
+                  : !catalogueAssetReady
+                    ? catalogueAssetReason ?? 'Meta did not verify access to this catalogue asset.'
+                    : 'Meta catalogue access is verified for this SellerTray business.',
         grantedScopes,
         managementEvidence: managementProbe?.evidence ?? null,
         managementCheckedAt: managementProbe?.created_at ?? null,
+        catalogueAssetEvidence,
+        catalogueAssetCheckedAt,
       };
 
       return reply({
@@ -254,6 +279,179 @@ async function loadMembership(tenantId: string, userId: string): Promise<{ role:
     .maybeSingle();
   if (error) throw error;
   return data?.role ? { role: String(data.role) } : null;
+}
+
+type RuntimeWhatsAppCredential = {
+  credential_mode: 'platform_system_user' | 'business_integration_system_user';
+  credentials_ciphertext: string | null;
+  credentials_iv: string | null;
+  encryption_key_version: number | null;
+  credential_expires_at: string | null;
+};
+
+async function probeMetaCatalogueAsset(
+  tenantId: string,
+  catalogId: string,
+): Promise<J> {
+  if (!WHATSAPP_ENCRYPTION_KEY) {
+    throw new Error('SellerTray WhatsApp credential decryption is not configured.');
+  }
+
+  const { data, error } = await admin!.rpc(
+    'get_sellertray_whatsapp_runtime_credential_by_tenant',
+    { p_tenant_id: tenantId },
+  );
+  if (error) throw error;
+
+  const credential = Array.isArray(data)
+    ? data[0] as RuntimeWhatsAppCredential | undefined
+    : undefined;
+
+  if (!credential || credential.credential_mode !== 'business_integration_system_user') {
+    throw new Error('Tenant-owned Meta catalogue credential is unavailable.');
+  }
+  if (!credential.credentials_ciphertext || !credential.credentials_iv) {
+    throw new Error('Tenant-owned Meta catalogue credential is unavailable.');
+  }
+  if (credential.credential_expires_at) {
+    const expiresAt = new Date(credential.credential_expires_at).getTime();
+    if (Number.isFinite(expiresAt) && expiresAt <= Date.now()) {
+      throw new Error('Tenant-owned Meta credential has expired. Reconnect WhatsApp.');
+    }
+  }
+
+  const payload = await decryptCredential(
+    credential.credentials_ciphertext,
+    credential.credentials_iv,
+  );
+  const accessToken = typeof payload.accessToken === 'string'
+    ? payload.accessToken.trim()
+    : '';
+  if (!accessToken) {
+    throw new Error('Tenant-owned Meta catalogue credential is invalid.');
+  }
+
+  const catalogUrl = new URL(
+    'https://graph.facebook.com/' +
+      encodeURIComponent(META_GRAPH_API_VERSION) +
+      '/' + encodeURIComponent(catalogId),
+  );
+  catalogUrl.searchParams.set('fields', 'id,name,vertical');
+
+  const catalogResponse = await fetch(catalogUrl, {
+    headers: { authorization: 'Bearer ' + accessToken },
+    signal: AbortSignal.timeout(12000),
+  });
+  const catalogPayload = await safeJson(catalogResponse);
+  if (!catalogResponse.ok) {
+    throw new Error(metaError(catalogPayload, 'Meta rejected access to this product catalogue.'));
+  }
+  if (!isRecord(catalogPayload) || String(catalogPayload.id ?? '') !== catalogId) {
+    throw new Error('Meta did not return the configured catalogue.');
+  }
+
+  const productsUrl = new URL(
+    'https://graph.facebook.com/' +
+      encodeURIComponent(META_GRAPH_API_VERSION) +
+      '/' + encodeURIComponent(catalogId) +
+      '/products',
+  );
+  productsUrl.searchParams.set('fields', 'id,retailer_id,name');
+  productsUrl.searchParams.set('limit', '1');
+
+  const productsResponse = await fetch(productsUrl, {
+    headers: { authorization: 'Bearer ' + accessToken },
+    signal: AbortSignal.timeout(12000),
+  });
+  const productsPayload = await safeJson(productsResponse);
+  if (!productsResponse.ok) {
+    throw new Error(metaError(productsPayload, 'Meta rejected product read access for this catalogue.'));
+  }
+
+  const products = isRecord(productsPayload) && Array.isArray(productsPayload.data)
+    ? productsPayload.data
+    : [];
+
+  return {
+    evidence: 'catalogue_and_products_read',
+    catalogId,
+    catalogName: typeof catalogPayload.name === 'string' ? catalogPayload.name : null,
+    vertical: typeof catalogPayload.vertical === 'string' ? catalogPayload.vertical : null,
+    sampleProductCount: products.length,
+  };
+}
+
+async function decryptCredential(ciphertext: string, ivValue: string): Promise<J> {
+  const keyBytes = fromBase64(WHATSAPP_ENCRYPTION_KEY);
+  if (keyBytes.byteLength !== 32) {
+    throw new Error('SellerTray WhatsApp credential decryption is not configured.');
+  }
+  const iv = fromBase64(ivValue);
+  if (iv.byteLength !== 12) {
+    throw new Error('SellerTray WhatsApp credential IV is invalid.');
+  }
+
+  const key = await crypto.subtle.importKey(
+    'raw',
+    keyBytes,
+    { name: 'AES-GCM' },
+    false,
+    ['decrypt'],
+  );
+
+  let plain: ArrayBuffer;
+  try {
+    plain = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      key,
+      fromBase64(ciphertext),
+    );
+  } catch {
+    throw new Error('SellerTray merchant Meta credential could not be decrypted.');
+  }
+
+  try {
+    const value = JSON.parse(new TextDecoder().decode(plain)) as unknown;
+    if (!isRecord(value)) throw new Error('invalid');
+    return value;
+  } catch {
+    throw new Error('SellerTray merchant Meta credential payload is invalid.');
+  }
+}
+
+function fromBase64(value: string): Uint8Array {
+  try {
+    return Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
+  } catch {
+    return new Uint8Array();
+  }
+}
+
+async function safeJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+function metaError(payload: unknown, fallback: string): string {
+  if (isRecord(payload) && isRecord(payload.error)) {
+    const message = typeof payload.error.message === 'string'
+      ? payload.error.message.replace(/\s+/g, ' ').slice(0, 300)
+      : '';
+    const code = typeof payload.error.code === 'number'
+      ? payload.error.code
+      : null;
+    return message
+      ? fallback + (code === null ? ': ' : ' (' + code + '): ') + message
+      : fallback;
+  }
+  return fallback;
+}
+
+function isRecord(value: unknown): value is J {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 async function consumeRateLimit(tenantId: string, userId: string): Promise<boolean> {
