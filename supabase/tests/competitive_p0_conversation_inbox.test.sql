@@ -209,19 +209,19 @@ select extensions.ok(
 select extensions.ok(
   not has_function_privilege(
     'authenticated',
-    'public.platform_admin_publish_merchant_message(uuid,text,text,text,text,uuid[],text[],text,text,timestamptz)',
+    'public.platform_admin_publish_merchant_message(uuid,text,text,text,text,uuid[],text[],text,text,timestamptz,uuid)',
     'EXECUTE'
   )
   and has_function_privilege(
     'service_role',
-    'public.platform_admin_publish_merchant_message(uuid,text,text,text,text,uuid[],text[],text,text,timestamptz)',
+    'public.platform_admin_publish_merchant_message(uuid,text,text,text,text,uuid[],text[],text,text,timestamptz,uuid)',
     'EXECUTE'
   ),
   'platform-wide merchant publishing is service-only'
 );
 select extensions.ok(
-  position('platform_admins' in pg_get_functiondef('public.platform_admin_publish_merchant_message(uuid,text,text,text,text,uuid[],text[],text,text,timestamptz)'::regprocedure)) > 0
-  and position('merchant_message_published' in pg_get_functiondef('public.platform_admin_publish_merchant_message(uuid,text,text,text,text,uuid[],text[],text,text,timestamptz)'::regprocedure)) > 0,
+  position('platform_admins' in pg_get_functiondef('public.platform_admin_publish_merchant_message(uuid,text,text,text,text,uuid[],text[],text,text,timestamptz,uuid)'::regprocedure)) > 0
+  and position('merchant_message_published' in pg_get_functiondef('public.platform_admin_publish_merchant_message(uuid,text,text,text,text,uuid[],text[],text,text,timestamptz,uuid)'::regprocedure)) > 0,
   'merchant message publishing verifies platform administrator authority and writes an audit event'
 );
 select extensions.ok(
