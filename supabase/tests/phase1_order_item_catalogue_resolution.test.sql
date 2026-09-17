@@ -139,16 +139,64 @@ select extensions.ok(
   'one-off resolution is written to commercial action ledger'
 );
 
+create temp table phase1_catalogue_candidate_fixture (
+  tenant_id uuid not null,
+  customer_id uuid not null,
+  order_id uuid
+) on commit drop;
+
+insert into phase1_catalogue_candidate_fixture(tenant_id,customer_id)
+values(gen_random_uuid(),gen_random_uuid());
+
+insert into public.tenants(id,name,slug,merchant_code,subscription_status)
+select tenant_id,
+       'Candidate Trigger Test',
+       'candidate-trigger-'||substr(tenant_id::text,1,8),
+       'CAT',
+       'active'
+from phase1_catalogue_candidate_fixture;
+
+insert into public.customers(id,tenant_id,wa_id,display_name,phone)
+select customer_id,tenant_id,
+       'manual:+2348000000098',
+       'Candidate Test Customer',
+       '+2348000000098'
+from phase1_catalogue_candidate_fixture;
+
+with inserted as (
+  insert into public.orders(
+    tenant_id,customer_id,status,source,customer_note,
+    parser_source,review_reasons,currency,total_amount
+  )
+  select tenant_id,customer_id,'needs_review','manual',
+         'candidate trigger fixture','manual','{}'::text[],'NGN',null
+  from phase1_catalogue_candidate_fixture
+  returning id
+)
+update phase1_catalogue_candidate_fixture f
+set order_id=i.id
+from inserted i;
+
+insert into public.order_items(
+  tenant_id,order_id,item_name,original_item_name,
+  quantity,unit_price,match_source,match_confidence
+)
+select tenant_id,order_id,
+       'Unknown Battery','rechargeable batteries',
+       1,null,'unmatched',0.4
+from phase1_catalogue_candidate_fixture;
+
 select extensions.ok(
   exists(
     select 1
     from public.order_item_catalogue_candidates c
-    join public.order_items oi on oi.id=c.order_item_id
-    where oi.match_source='unmatched'
-      and oi.catalog_item_id is null
+    join phase1_catalogue_candidate_fixture f
+      on f.tenant_id=c.tenant_id
+     and f.order_id=c.order_id
+    where c.customer_wording='rechargeable batteries'
       and c.status='pending'
   ),
-  'existing unmatched order items were backfilled into candidate workflow'
+  'new unmatched order items enter the catalogue candidate workflow'
 );
 
 select * from extensions.finish();
