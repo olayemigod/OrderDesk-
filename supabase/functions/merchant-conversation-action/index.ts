@@ -91,6 +91,32 @@ Deno.serve(async (request) => {
   const message = cleanText(body.message, 1500);
   if (!message) return json({ error: 'Reply message is required' }, 400);
 
+  const rateChecks = await Promise.all([
+    admin.rpc('consume_sellertray_rate_limit', {
+      p_scope: 'merchant_conversation_reply_user',
+      p_key: tenantId + ':' + userId,
+      p_limit: 30,
+      p_window_seconds: 60,
+    }),
+    admin.rpc('consume_sellertray_rate_limit', {
+      p_scope: 'merchant_conversation_reply_tenant',
+      p_key: tenantId,
+      p_limit: 120,
+      p_window_seconds: 60,
+    }),
+    admin.rpc('consume_sellertray_rate_limit', {
+      p_scope: 'merchant_conversation_reply_customer',
+      p_key: tenantId + ':' + customerId,
+      p_limit: 20,
+      p_window_seconds: 60,
+    }),
+  ]);
+  const rateError = rateChecks.find((check) => check.error)?.error;
+  if (rateError) return json({ error: rateError.message }, 400);
+  if (rateChecks.some((check) => check.data !== true)) {
+    return json({ error: 'Too many conversation replies. Wait briefly before sending another message.' }, 429);
+  }
+
   const toWaId = typeof customer.wa_id === 'string' ? customer.wa_id.trim() : '';
   if (!toWaId || toWaId.startsWith('manual:')) {
     return json({ error: 'This customer does not have a WhatsApp destination' }, 400);
