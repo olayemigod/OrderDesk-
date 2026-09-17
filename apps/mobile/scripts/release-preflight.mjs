@@ -178,7 +178,7 @@ const blockedAndroidPermissions = new Set(app.android?.blockedPermissions ?? [])
 for (const permission of requiredBlockedAndroidPermissions) {
   requireValue(blockedAndroidPermissions.has(permission), 'Sensitive Android permission must remain blocked: '+permission);
 }
-requireValue(app.android?.versionCode === 8, 'Android versionCode must be 8 for the merchant-reference QA line');
+requireValue(app.android?.versionCode === 18, 'Android versionCode must be 18 for the current SellerTray QA line');
 requireValue(app.ios?.bundleIdentifier === 'ng.processedge.sellertray', 'iOS bundle ID must match SellerTray identity');
 requireValue(pkg.dependencies?.['expo-notifications'] === '57.0.18', 'SellerTray mobile must pin expo-notifications for native push');
 requireValue(pkg.dependencies?.['expo-constants'] === '57.0.17', 'SellerTray mobile must pin expo-constants for Expo push project identity');
@@ -292,7 +292,8 @@ requireValue(
 );
 requireValue(
   conversationsRepository.includes("supabase.functions.invoke('merchant-conversation-action'") &&
-    merchantConversationAction.includes("action === 'reply'") &&
+    merchantConversationAction.includes("action !== 'reply'") &&
+    merchantConversationAction.includes("p_action: 'waiting_customer'") &&
     merchantConversationAction.includes('WHATSAPP_TEMPLATE_REQUIRED') &&
     merchantConversationAction.includes('sellertray_apply_conversation_service_action'),
   'Conversation actions must remain behind the authenticated merchant-conversation-action boundary with WhatsApp window enforcement',
@@ -311,7 +312,7 @@ requireValue(paymentSettingsUi.includes('Transactions') && paymentSettingsUi.inc
 requireValue(saasApp.includes('label="More"') && saasApp.includes("onChange('more')"), 'Business/settings must be separated behind More');
 requireValue(saasApp.includes("paddingBottom: Platform.OS === 'android' ? 46 : 10"), 'Android bottom navigation must retain system-navigation clearance');
 requireValue(settingsHub.includes("BackHandler.addEventListener('hardwareBackPress'"), 'Android settings must support native back navigation');
-requireValue(settingsHub.includes('SellerTray 1.0.0 · Android build 8'), 'More screen must expose the current Android build marker');
+requireValue(settingsHub.includes('SellerTray 1.0.0 · Android build 18'), 'More screen must expose the current Android build marker');
 requireValue(saasApp.includes("StatusBar.currentHeight"), 'Android status-bar safe area must remain enforced in the merchant workspace');
 requireValue(catalogueView.includes('Product name') && catalogueView.includes('Selling price') && catalogueView.includes('Customer words / aliases'), 'Product editor must retain visible field labels and guidance');
 requireValue(manualOrderComposer.includes('Create an order') && manualOrderComposer.includes('Customer name') && manualOrderComposer.includes('Products *'), 'Orders must expose guided manual order creation');
