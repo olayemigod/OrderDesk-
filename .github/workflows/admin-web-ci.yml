@@ -6,10 +6,18 @@ on:
       - feat/admin-notification-portal
     paths:
       - 'apps/admin-web/**'
+      - 'supabase/functions/platform-merchant-message/**'
+      - 'supabase/migrations/*platform_merchant_message*'
+      - 'supabase/tests/platform_merchant_message*'
+      - 'supabase/tests/competitive_p0_conversation_inbox.test.sql'
       - '.github/workflows/admin-web-ci.yml'
   pull_request:
     paths:
       - 'apps/admin-web/**'
+      - 'supabase/functions/platform-merchant-message/**'
+      - 'supabase/migrations/*platform_merchant_message*'
+      - 'supabase/tests/platform_merchant_message*'
+      - 'supabase/tests/competitive_p0_conversation_inbox.test.sql'
       - '.github/workflows/admin-web-ci.yml'
 
 jobs:
@@ -34,6 +42,9 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Security preflight
+        run: npm run preflight
 
       - name: Production build
         run: npm run build
