@@ -259,6 +259,10 @@ requireValue(provisionedApp.includes("supabase.auth.signOut({ scope: 'local' })"
 const saasApp = read(join(mobileRoot, 'src/SaasApp.tsx'));
 const settingsHub = read(join(mobileRoot, 'src/components/SettingsHub.tsx'));
 const catalogueView = read(join(mobileRoot, 'src/components/CatalogueView.tsx'));
+const catalogueBulkImport = read(join(mobileRoot, 'src/components/CatalogueBulkImport.tsx'));
+const catalogueImportRepository = read(join(mobileRoot, 'src/data/catalogueImportRepository.ts'));
+const catalogueBulkImportFunction = read(join(repoRoot, 'supabase/functions/catalogue-bulk-import/index.ts'));
+const catalogueBulkImportMigration = read(join(repoRoot, 'supabase/migrations/20260917022500_catalogue_bulk_import_contract.sql'));
 const conversationsView = read(join(mobileRoot, 'src/components/ConversationsView.tsx'));
 const conversationsRepository = read(join(mobileRoot, 'src/data/conversationsRepository.ts'));
 const merchantConversationAction = read(join(repoRoot, 'supabase/functions/merchant-conversation-action/index.ts'));
@@ -315,6 +319,21 @@ requireValue(settingsHub.includes("BackHandler.addEventListener('hardwareBackPre
 requireValue(settingsHub.includes('SellerTray 1.0.0 · Android build 18'), 'More screen must expose the current Android build marker');
 requireValue(saasApp.includes("StatusBar.currentHeight"), 'Android status-bar safe area must remain enforced in the merchant workspace');
 requireValue(catalogueView.includes('Product name') && catalogueView.includes('Selling price') && catalogueView.includes('Customer words / aliases'), 'Product editor must retain visible field labels and guidance');
+requireValue(
+  catalogueView.includes('Bulk import') &&
+    catalogueBulkImport.includes('Paste from Excel, Sheets or CSV') &&
+    catalogueBulkImport.includes('Preview import') &&
+    catalogueImportRepository.includes("supabase.functions.invoke('catalogue-bulk-import'"),
+  'Catalogue onboarding must retain preview-before-commit bulk import from spreadsheet or CSV data',
+);
+requireValue(
+  catalogueBulkImportFunction.includes("action === 'commit'") &&
+    catalogueBulkImportFunction.includes('Fix catalogue import errors before committing') &&
+    catalogueBulkImportFunction.includes('catalogue_bulk_import') &&
+    catalogueBulkImportMigration.includes('import_sellertray_catalogue_rows') &&
+    catalogueBulkImportMigration.includes("tm.role in ('owner','manager')"),
+  'Catalogue bulk import must remain server-governed, rate-limited and restricted to Owner/Manager',
+);
 requireValue(manualOrderComposer.includes('Create an order') && manualOrderComposer.includes('Customer name') && manualOrderComposer.includes('Products *'), 'Orders must expose guided manual order creation');
 requireValue(
   createBusinessView.includes('Merchant ID') &&
