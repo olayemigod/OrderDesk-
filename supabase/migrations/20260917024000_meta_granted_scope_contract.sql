@@ -14,6 +14,31 @@ alter table public.tenant_whatsapp_connections
   add constraint tenant_whatsapp_connections_granted_scopes_size_check
   check (cardinality(granted_scopes) <= 64);
 
+create or replace function public.clear_sellertray_meta_scopes_when_disconnected()
+returns trigger
+language plpgsql
+security definer
+set search_path=''
+as $
+begin
+  if new.connection_status <> 'connected' then
+    new.granted_scopes := '{}'::text[];
+  end if;
+  return new;
+end;
+$;
+
+revoke all on function public.clear_sellertray_meta_scopes_when_disconnected()
+from public,anon,authenticated;
+
+drop trigger if exists clear_sellertray_meta_scopes_when_disconnected
+on public.tenant_whatsapp_connections;
+
+create trigger clear_sellertray_meta_scopes_when_disconnected
+before insert or update of connection_status
+on public.tenant_whatsapp_connections
+for each row execute function public.clear_sellertray_meta_scopes_when_disconnected();
+
 create or replace function public.set_sellertray_whatsapp_granted_scopes(
   p_tenant_id uuid,
   p_actor_user_id uuid,
