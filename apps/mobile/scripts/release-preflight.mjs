@@ -259,6 +259,7 @@ requireValue(provisionedApp.includes("supabase.auth.signOut({ scope: 'local' })"
 const saasApp = read(join(mobileRoot, 'src/SaasApp.tsx'));
 const settingsHub = read(join(mobileRoot, 'src/components/SettingsHub.tsx'));
 const catalogueView = read(join(mobileRoot, 'src/components/CatalogueView.tsx'));
+const conversationsView = read(join(mobileRoot, 'src/components/ConversationsView.tsx'));
 const manualOrderComposer = read(join(mobileRoot, 'src/components/ManualOrderComposer.tsx'));
 const createBusinessView = read(join(mobileRoot, 'src/components/CreateBusinessView.tsx'));
 const businessRepository = read(join(mobileRoot, 'src/data/businessRepository.ts'));
@@ -268,8 +269,24 @@ requireValue(saasApp.includes("supabase.auth.signOut({ scope: 'local' })"), 'Wor
 requireValue(saasApp.includes('label="Catalogue"') && saasApp.includes("onChange('products')"), 'Catalogue must have a first-class bottom tab');
 requireValue(saasApp.includes('label="Conversations"') && saasApp.includes("onChange('inbox')"), 'WhatsApp conversations must have a first-class Conversations bottom tab');
 requireValue(saasApp.includes("if (selectedOrder)") && saasApp.includes("← Orders"), 'Order details must remain a mobile drill-in flow with a visible back action');
-requireValue(saasApp.includes('Captured order messages') && saasApp.includes('Linked order'), 'Inbox must expose captured WhatsApp order messages and linked-order navigation');
-requireValue(saasApp.includes('conversationUnreadBadge') && saasApp.includes('Unread messages in this view'), 'Conversations must expose per-conversation unread bubbles and unread summary');
+requireValue(
+  conversationsView.includes('Latest conversation') && conversationsView.includes('Linked orders'),
+  'Operational inbox must expose customer conversation context and linked-order navigation',
+);
+requireValue(
+  conversationsView.includes('unreadBadge') && conversationsView.includes('unread message'),
+  'Conversations must expose durable per-conversation unread state',
+);
+requireValue(
+  conversationsView.includes('AI handling') &&
+    conversationsView.includes('Needs merchant') &&
+    conversationsView.includes('Merchant handling') &&
+    conversationsView.includes('Waiting customer') &&
+    conversationsView.includes('Take over') &&
+    conversationsView.includes('Return to AI') &&
+    conversationsView.includes('Resolve'),
+  'Conversations must retain the governed AI/human operational inbox states and takeover controls',
+);
 requireValue(saasApp.includes('merchantUnreadCount') && saasApp.includes('markAllMerchantNotificationsRead'), 'Notification bell and Activity Center must use durable per-user unread state');
 requireValue(saasApp.includes('usePushNotifications'), 'SellerTray shell must register native merchant push notifications');
 requireValue(catalogueView.includes('Manage') && catalogueView.includes('Search products, categories or SKU'), 'Catalogue must retain merchant-first search and optional WhatsApp mapping controls');
