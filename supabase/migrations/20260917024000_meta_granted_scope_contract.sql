@@ -19,14 +19,14 @@ returns trigger
 language plpgsql
 security definer
 set search_path=''
-as $
+as $scope$
 begin
   if new.connection_status <> 'connected' then
     new.granted_scopes := '{}'::text[];
   end if;
   return new;
 end;
-$;
+$scope$;
 
 revoke all on function public.clear_sellertray_meta_scopes_when_disconnected()
 from public,anon,authenticated;
