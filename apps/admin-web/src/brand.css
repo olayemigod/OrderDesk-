@@ -1,30 +1,25 @@
 /* SellerTray approved brand asset overrides */
-.auth-brand-panel .brand-mark {
+.brand-logo {
+  display: block;
   width: min(320px, 78vw);
-  height: 78px;
-  border-radius: 0;
-  background-color: transparent;
-  background-image: url('/brand/sellertray-logo-v2.svg');
-  background-repeat: no-repeat;
-  background-position: left center;
-  background-size: contain;
-  box-shadow: none;
-  color: transparent;
-  font-size: 0;
+  height: auto;
+  max-height: 78px;
+  object-fit: contain;
+  object-position: left center;
 }
 
-.topbar .brand-mark.small-mark {
+.status-logo {
+  width: min(240px, 70vw);
+  max-height: 60px;
+}
+
+.topbar .brand-icon.small-mark {
+  display: block;
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  background-color: transparent;
-  background-image: url('https://sellertray.vercel.app/brand/sellertray-app-icon-v2.png');
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: contain;
-  box-shadow: none;
-  color: transparent;
-  font-size: 0;
+  object-fit: contain;
+  flex: 0 0 auto;
 }
 
 .auth-brand-panel {
@@ -52,8 +47,12 @@
 }
 
 @media (max-width: 760px) {
-  .auth-brand-panel .brand-mark {
+  .brand-logo {
     width: min(260px, 82vw);
-    height: 64px;
+    max-height: 64px;
+  }
+
+  .status-logo {
+    width: min(220px, 76vw);
   }
 }
