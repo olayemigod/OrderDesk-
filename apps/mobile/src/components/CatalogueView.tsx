@@ -5,6 +5,7 @@ import { ActivityIndicator, Image, Platform, Pressable, StyleSheet, Text, TextIn
 
 import type { MerchantBusiness } from '../data/businessRepository';
 import { ChatCatalogueReviewSection } from './ChatCatalogueReviewSection';
+import { CatalogueBulkImport } from './CatalogueBulkImport';
 import type { CatalogueItem, CatalogueItemInput } from '../data/catalogueRepository';
 import { uploadCatalogueImage } from '../data/catalogueRepository';
 import {
@@ -24,6 +25,7 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
   const [query, setQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
+  const [showBulkImport, setShowBulkImport] = useState(false);
   const [showWhatsAppTools, setShowWhatsAppTools] = useState(false);
   const [whatsappStatus, setWhatsappStatus] = useState<WhatsAppCatalogueStatus | null>(null);
   const [whatsappLoading, setWhatsappLoading] = useState(true);
@@ -139,11 +141,24 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
           </Text>
         </View>
         {canEdit && editing === null ? (
-          <Pressable onPress={() => setEditing('new')} style={styles.addButton}>
-            <Text style={styles.addButtonText}>+ Add product</Text>
-          </Pressable>
+          <View style={styles.headingActions}>
+            <Pressable onPress={() => setShowBulkImport((value) => !value)} style={styles.importButton}>
+              <Text style={styles.importButtonText}>{showBulkImport ? 'Hide import' : 'Bulk import'}</Text>
+            </Pressable>
+            <Pressable onPress={() => setEditing('new')} style={styles.addButton}>
+              <Text style={styles.addButtonText}>+ Add product</Text>
+            </Pressable>
+          </View>
         ) : null}
       </View>
+
+      {canEdit && showBulkImport ? (
+        <CatalogueBulkImport
+          tenantId={business.id}
+          currency={business.currency}
+          onImported={refresh}
+        />
+      ) : null}
 
       <View style={styles.catalogueSummaryRow}>
         <CatalogueStat icon="cube-outline" label="Products" value={items.length} />
@@ -741,6 +756,9 @@ const styles = StyleSheet.create({
   manageMappingButton: { minHeight: 36, borderRadius: 10, backgroundColor: '#FFFFFF', paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
   manageMappingButtonText: { color: '#079455', fontSize: 12, fontWeight: '900' },
   headingCopy: { flex: 1 },
+  headingActions: { alignItems: 'flex-end', gap: 7 },
+  importButton: { minHeight: 38, borderRadius: 10, borderWidth: 1, borderColor: '#D0D5DD', backgroundColor: '#FFFFFF', paddingHorizontal: 11, alignItems: 'center', justifyContent: 'center' },
+  importButtonText: { color: '#102A43', fontSize: 12, fontWeight: '900' },
   eyebrow: { color: '#667085', fontSize: 12, fontWeight: '900', letterSpacing: 1.1 },
   title: { color: '#102A43', fontSize: 27, lineHeight: 33, fontWeight: '900', marginTop: 3 },
   titleLarge: { fontSize: 30, lineHeight: 37 },
