@@ -20,11 +20,14 @@ export type WhatsAppCatalogueImportReadiness = {
   catalogueScopesReady: boolean;
   managementApiReady: boolean;
   catalogConfigured: boolean;
+  catalogueAssetReady: boolean;
   importReady: boolean;
   reason: string | null;
   grantedScopes: string[];
   managementEvidence: string | null;
   managementCheckedAt: string | null;
+  catalogueAssetEvidence: Record<string, unknown> | null;
+  catalogueAssetCheckedAt: string | null;
 };
 
 export type WhatsAppCatalogueStatus = {
