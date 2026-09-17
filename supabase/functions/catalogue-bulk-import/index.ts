@@ -254,14 +254,10 @@ async function buildPreview(tenantId: string, rows: ParsedRow[]): Promise<Previe
 }
 
 function parseCatalogueText(sourceText: string): ParsedRow[] {
-  const clean = sourceText.replace(/
-/g, '
-').replace(//g, '
-').trim();
+  const clean = sourceText.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
   if (!clean) return [];
 
-  const firstLine = clean.split('
-')[0] ?? '';
+  const firstLine = clean.split('\n')[0] ?? '';
   const delimiter = detectDelimiter(firstLine);
   const records = parseDelimited(clean, delimiter);
   if (records.length < 2) {
@@ -329,8 +325,7 @@ function parseDelimited(text: string, delimiter: string): string[][] {
       continue;
     }
 
-    if (!quoted && char === '
-') {
+    if (!quoted && char === '\n') {
       row.push(cell);
       rows.push(row);
       row = [];
@@ -348,10 +343,10 @@ function parseDelimited(text: string, delimiter: string): string[][] {
 }
 
 function detectDelimiter(header: string): string {
-  const tabs = countOutsideQuotes(header, '	');
+  const tabs = countOutsideQuotes(header, '\t');
   const commas = countOutsideQuotes(header, ',');
   const semicolons = countOutsideQuotes(header, ';');
-  if (tabs >= commas && tabs >= semicolons && tabs > 0) return '	';
+  if (tabs >= commas && tabs >= semicolons && tabs > 0) return '\t';
   if (semicolons > commas && semicolons > 0) return ';';
   return ',';
 }
@@ -383,7 +378,7 @@ function cleanMoney(value: string | undefined): string {
     .trim()
     .replace(/[₦$£€]/g, '')
     .replace(/,/g, '')
-    .replace(/s+/g, '');
+    .replace(/\s+/g, '');
 }
 
 function splitAliases(value: string | undefined): string[] {
@@ -398,7 +393,7 @@ function splitAliases(value: string | undefined): string[] {
 }
 
 function cleanCell(value: string | undefined, max: number): string {
-  return (value ?? '').trim().replace(/s+/g, ' ').slice(0, max);
+  return (value ?? '').trim().replace(/\s+/g, ' ').slice(0, max);
 }
 
 function cleanOptional(value: string | undefined, max: number, uppercase = false): string | null {
@@ -409,7 +404,7 @@ function cleanOptional(value: string | undefined, max: number, uppercase = false
 
 function normalizeKey(value: unknown): string {
   return typeof value === 'string'
-    ? value.trim().replace(/s+/g, ' ').toLocaleLowerCase()
+    ? value.trim().replace(/\s+/g, ' ').toLocaleLowerCase()
     : '';
 }
 
