@@ -348,6 +348,7 @@ requireValue(
   'Business provisioning must verify the user token and persist the Merchant ID',
 );
 const orderFulfillmentPanel = read(join(mobileRoot, 'src/components/OrderFulfillmentPanel.tsx'));
+const orderPaymentPanel = read(join(mobileRoot, 'src/components/OrderPaymentPanel.tsx'));
 const ordersRepository = read(join(mobileRoot, 'src/data/ordersRepository.ts'));
 const orderFulfillmentFunction = read(join(repoRoot, 'supabase/functions/order-fulfillment/index.ts'));
 const fulfillmentIntegrityMigration = read(join(repoRoot, 'supabase/migrations/20260912134000_fulfillment_completion_integrity.sql'));
@@ -602,7 +603,6 @@ const flutterwavePaymentWebhook = read(join(repoRoot, 'supabase/functions/flutte
 const merchantPaymentOperations = read(join(repoRoot, 'supabase/functions/merchant-payment-operations/index.ts'));
 const financialDocumentFunction = read(join(repoRoot, 'supabase/functions/financial-document/index.ts'));
 const whatsappPaymentModule = read(join(repoRoot, 'supabase/functions/whatsapp-webhook/payment.ts'));
-const orderPaymentPanel = read(join(mobileRoot, 'src/components/OrderPaymentPanel.tsx'));
 const paymentReconciliationPanel = read(join(mobileRoot, 'src/components/PaymentReconciliationPanel.tsx'));
 const paymentReconciliationRepository = read(join(mobileRoot, 'src/data/paymentReconciliationRepository.ts'));
 const paymentMethodsSettings = read(join(mobileRoot, 'src/components/PaymentMethodsSettings.tsx'));
