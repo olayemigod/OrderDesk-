@@ -5,6 +5,7 @@ on:
     branches:
       - feat/mvp-foundation
       - feat/sellertray-brand-ui-v1
+      - qa/competitive-p0-apk
     paths:
       - 'apps/mobile/**'
       - '.github/workflows/android-qa-apk.yml'
