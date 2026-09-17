@@ -51,8 +51,9 @@ export type EmbeddedSignupCallback =
       tenantId: string;
       authorizationCode: string;
       wabaId: string;
-      phoneNumberId: string;
+      phoneNumberId: string | null;
       metaBusinessId: string | null;
+      onboardingMethod: 'embedded_signup' | 'coexistence';
       state: string;
     }
   | {
@@ -72,17 +73,18 @@ export async function completeWhatsAppEmbeddedSignup(input: {
   tenantId: string;
   authorizationCode: string;
   wabaId: string;
-  phoneNumberId: string;
+  phoneNumberId?: string | null;
   metaBusinessId?: string | null;
+  onboardingMethod?: 'embedded_signup' | 'coexistence';
 }): Promise<WhatsAppConnectionStatusPayload> {
   return invokeConnection({
     action: 'complete_embedded_signup',
     tenantId: input.tenantId,
     authorizationCode: input.authorizationCode,
     wabaId: input.wabaId,
-    phoneNumberId: input.phoneNumberId,
+    phoneNumberId: input.phoneNumberId ?? null,
     metaBusinessId: input.metaBusinessId ?? null,
-    onboardingMethod: 'embedded_signup',
+    onboardingMethod: input.onboardingMethod === 'coexistence' ? 'coexistence' : 'embedded_signup',
   });
 }
 
@@ -143,24 +145,28 @@ export async function parseEmbeddedSignupCallback(
   }
 
   const pending = await loadPending();
-  if (!pending) {
-    return null;
-  }
+  if (!pending) return null;
 
   if (!tenantId || tenantId !== pending.tenantId) {
     throw new Error('WhatsApp connection returned for a different SellerTray business.');
   }
-
   if (!state || state !== pending.state) {
     throw new Error('WhatsApp connection security check failed. Start the connection again.');
   }
 
   const authorizationCode = parsed.code ?? '';
   const wabaId = parsed.wabaId ?? '';
-  const phoneNumberId = parsed.phoneNumberId ?? '';
+  const rawPhoneNumberId = parsed.phoneNumberId ?? '';
+  const onboardingMethod = parsed.onboardingMethod === 'coexistence'
+    ? 'coexistence'
+    : 'embedded_signup';
+  const phoneNumberId = isMetaId(rawPhoneNumberId) ? rawPhoneNumberId : null;
 
-  if (!authorizationCode || !isMetaId(wabaId) || !isMetaId(phoneNumberId)) {
+  if (!authorizationCode || !isMetaId(wabaId)) {
     throw new Error('Meta did not return the information SellerTray needs to complete WhatsApp setup.');
+  }
+  if (onboardingMethod !== 'coexistence' && !phoneNumberId) {
+    throw new Error('Meta did not return the selected WhatsApp phone number. Start the connection again.');
   }
 
   const age = Date.now() - new Date(pending.startedAt).getTime();
@@ -177,6 +183,7 @@ export async function parseEmbeddedSignupCallback(
     wabaId,
     phoneNumberId,
     metaBusinessId: isMetaId(parsed.metaBusinessId ?? '') ? parsed.metaBusinessId! : null,
+    onboardingMethod,
     state,
   };
 }
@@ -272,9 +279,7 @@ function parseQuery(url: string): Record<string, string> {
   const query = url.slice(queryIndex + 1, fragmentIndex >= 0 ? fragmentIndex : undefined);
   const params = new URLSearchParams(query);
   const out: Record<string, string> = {};
-  params.forEach((value, key) => {
-    out[key] = value;
-  });
+  params.forEach((value, key) => { out[key] = value; });
   return out;
 }
 
