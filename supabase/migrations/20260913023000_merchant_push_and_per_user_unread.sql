@@ -3,10 +3,45 @@
 
 begin;
 
--- Production already had merchant_notifications when this migration was first
--- applied, but the historical repository did not contain its bootstrap DDL.
--- Keep the repair idempotent: existing production tables are untouched while a
--- clean migration replay gets the base relation required by the push/read model.
+-- Production already had customer_order_change_requests and
+-- merchant_notifications when this migration was first applied, but the
+-- historical repository did not contain their bootstrap DDL. Keep the repair
+-- idempotent: existing production tables are untouched while a clean migration
+-- replay gets the base relations required by the push/read model.
+
+create table if not exists public.customer_order_change_requests (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  order_id uuid not null references public.orders(id) on delete cascade,
+  customer_id uuid not null references public.customers(id) on delete cascade,
+  source_inbound_message_id uuid not null references public.inbound_messages(id) on delete cascade,
+  request_kind text not null
+    check (request_kind in ('add_items','remove_items','change_items','cancel_order','other')),
+  request_text text not null,
+  parsed_items jsonb not null default '[]'::jsonb
+    check (jsonb_typeof(parsed_items)='array'),
+  status text not null default 'pending'
+    check (status in ('pending','resolved','rejected')),
+  resolved_by_user_id uuid references auth.users(id) on delete set null,
+  resolved_at timestamptz,
+  resolution_note text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (tenant_id,source_inbound_message_id)
+);
+
+create index if not exists customer_order_change_requests_order_idx
+  on public.customer_order_change_requests(tenant_id,order_id,created_at desc);
+create index if not exists customer_order_change_requests_customer_idx
+  on public.customer_order_change_requests(tenant_id,customer_id,created_at desc);
+create index if not exists customer_order_change_requests_pending_idx
+  on public.customer_order_change_requests(tenant_id,created_at desc)
+  where status='pending';
+
+alter table public.customer_order_change_requests enable row level security;
+revoke all on table public.customer_order_change_requests from public,anon,authenticated;
+grant all on table public.customer_order_change_requests to service_role;
+
 create table if not exists public.merchant_notifications (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null references public.tenants(id) on delete cascade,
@@ -16,7 +51,7 @@ create table if not exists public.merchant_notifications (
   title text not null,
   body text not null,
   order_id uuid references public.orders(id) on delete cascade,
-  change_request_id uuid,
+  change_request_id uuid references public.customer_order_change_requests(id) on delete cascade,
   source_inbound_message_id uuid references public.inbound_messages(id) on delete cascade,
   is_read boolean not null default false,
   read_at timestamptz,
