@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(19);
+select extensions.plan(20);
 select extensions.ok(to_regclass('public.inbound_message_media') is not null,'inbound WhatsApp image metadata table exists');
 select extensions.ok(to_regclass('public.catalogue_capture_candidates') is not null,'catalogue chat candidate table exists');
 select extensions.ok(to_regclass('public.tenant_channel_consents') is not null,'versioned channel consent table exists');
@@ -53,6 +53,15 @@ select extensions.ok(
     'EXECUTE'
   ),
   'Meta scope persistence is service-role only'
+);
+select extensions.ok(
+  exists(
+    select 1 from pg_trigger
+    where tgrelid='public.tenant_whatsapp_connections'::regclass
+      and tgname='clear_sellertray_meta_scopes_when_disconnected'
+      and not tgisinternal
+  ),
+  'disconnecting WhatsApp clears stale Meta authorization scopes'
 );
 select * from extensions.finish();
 rollback;
