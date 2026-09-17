@@ -1129,6 +1129,7 @@ function OrderDetail({
   onRemoveItem: (itemId: string) => Promise<void>;
 }) {
   const appearance = useSellerTrayAppearance();
+  const [amendMode, setAmendMode] = useState(false);
   const total = orderTotal(order);
   const gateRefreshKey = [
     order.status,
@@ -1151,10 +1152,20 @@ function OrderDetail({
     order.amountPaid === 0 &&
     order.fulfillmentStatus === 'unassigned';
 
-  const editable =
+  const reviewEditable =
     order.status === 'needs_review' ||
-    order.status === 'draft' ||
-    acceptedUnpaidAmendment;
+    order.status === 'draft';
+  const editable = reviewEditable || (acceptedUnpaidAmendment && amendMode);
+
+  useEffect(() => {
+    setAmendMode(false);
+  }, [
+    order.id,
+    order.status,
+    order.paymentStatus,
+    order.amountPaid,
+    order.fulfillmentStatus,
+  ]);
 
   return (
     <View style={[styles.detailCard, appearance.dark && darkStyles.card]}>
@@ -1181,12 +1192,48 @@ function OrderDetail({
         <Text style={[styles.messageText, appearance.dark && darkStyles.bodyText]}>{order.customerMessage || 'No message captured.'}</Text>
       </View>
 
+      {acceptedUnpaidAmendment ? (
+        <View style={[styles.amendmentCard, appearance.dark && darkStyles.subtleCard]}>
+          <View style={styles.amendmentHeader}>
+            <View style={styles.amendmentCopy}>
+              <Text style={[styles.amendmentEyebrow, appearance.dark && darkStyles.greenText]}>ACCEPTED · UNPAID</Text>
+              <Text style={[styles.amendmentTitle, appearance.dark && darkStyles.titleText]}>Customer wants to change the order?</Text>
+            </View>
+            <Ionicons name="create-outline" size={22} color={theme.colors.greenDark} />
+          </View>
+          <Text style={[styles.amendmentText, appearance.dark && darkStyles.bodyText]}>
+            Amend the item or quantity before payment or fulfilment starts. SellerTray recalculates the invoice, invalidates any open payment request for the old total, and keeps the order accepted.
+          </Text>
+          <View style={styles.amendmentSteps}>
+            <Text style={[styles.amendmentStep, appearance.dark && darkStyles.bodyText]}>1. Amend items</Text>
+            <Text style={[styles.amendmentStep, appearance.dark && darkStyles.bodyText]}>2. Confirm the new total</Text>
+            <Text style={[styles.amendmentStep, appearance.dark && darkStyles.bodyText]}>3. Resend payment options</Text>
+          </View>
+          <Pressable
+            onPress={() => setAmendMode((value) => !value)}
+            style={[
+              styles.amendmentButton,
+              amendMode && styles.amendmentButtonActive,
+              appearance.dark && !amendMode && darkStyles.outlineButton,
+            ]}
+          >
+            <Text style={[
+              styles.amendmentButtonText,
+              amendMode && styles.amendmentButtonTextActive,
+              appearance.dark && !amendMode && darkStyles.titleText,
+            ]}>
+              {amendMode ? 'Finish amendment' : 'Amend order'}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       <View>
         <Text style={[styles.sectionTitle, appearance.dark && darkStyles.titleText]}>{editable ? 'Review order items' : 'Order items'}</Text>
         {editable ? (
           <Text style={[styles.pageSubtitle, appearance.dark && darkStyles.bodyText]}>
             {acceptedUnpaidAmendment
-              ? 'Customer-requested changes are allowed while this accepted order is unpaid and fulfilment has not started. SellerTray refreshes the invoice and invalidates any open payment attempt for the previous total.'
+              ? 'Change the requested item, quantity or selling price. The payment section below will refresh to the amended invoice total.'
               : order.source === 'manual'
                 ? 'You can adjust quantities and selling prices before acceptance.'
                 : 'Correct AI interpretation and prices before acceptance.'}
@@ -1689,6 +1736,18 @@ const styles = StyleSheet.create({
   detailSummaryValuePositive: { color: theme.colors.greenDark },
   messageCard: { backgroundColor: '#F9FAFB', borderRadius: 13, padding: 13 },
   messageText: { color: '#344054', fontSize: 13, lineHeight: 20, marginTop: 6 },
+  amendmentCard: { borderWidth: 1, borderColor: '#ABEFC6', backgroundColor: theme.colors.mintSoft, borderRadius: 14, padding: 13, gap: 10 },
+  amendmentHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  amendmentCopy: { flex: 1 },
+  amendmentEyebrow: { color: theme.colors.greenDark, fontSize: 11, fontWeight: '900', letterSpacing: 0.9 },
+  amendmentTitle: { color: theme.colors.navy, fontSize: 15, lineHeight: 20, fontWeight: '900', marginTop: 2 },
+  amendmentText: { color: theme.colors.slate, fontSize: 12, lineHeight: 18 },
+  amendmentSteps: { gap: 3 },
+  amendmentStep: { color: theme.colors.slate, fontSize: 12, lineHeight: 17, fontWeight: '700' },
+  amendmentButton: { minHeight: 42, borderRadius: 10, borderWidth: 1, borderColor: theme.colors.green, backgroundColor: theme.colors.white, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  amendmentButtonActive: { backgroundColor: theme.colors.green, borderColor: theme.colors.green },
+  amendmentButtonText: { color: theme.colors.greenDark, fontSize: 13, fontWeight: '900' },
+  amendmentButtonTextActive: { color: theme.colors.white },
   totalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingTop: 2 },
   totalLabel: { color: '#667085', fontWeight: '800', fontSize: 12 },
   totalValue: { color: '#102A43', fontWeight: '900', fontSize: 19 },
