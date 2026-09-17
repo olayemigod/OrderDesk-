@@ -364,7 +364,7 @@ function GovernedOrderItemEditor({
                 />
               ) : null}
 
-              {item.matchSource === 'unmatched' ? (
+              {item.matchSource === 'unmatched' && canCreateProduct ? (
                 <>
                   <Pressable onPress={() => setOneOffOpen((value) => !value)} style={styles.textButton}>
                     <Text style={styles.textButtonText}>
@@ -383,6 +383,10 @@ function GovernedOrderItemEditor({
                     />
                   ) : null}
                 </>
+              ) : item.matchSource === 'unmatched' ? (
+                <Text style={[styles.help, appearance.dark && darkStyles.bodyText]}>
+                  A one-off selling price must be approved by an Owner or Manager. You can still resolve this item to an existing catalogue product.
+                </Text>
               ) : null}
             </View>
           ) : null}
