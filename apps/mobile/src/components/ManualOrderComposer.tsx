@@ -137,6 +137,13 @@ export function ManualOrderComposer({ business, onCreate, onCreated }: Props) {
         />
       </Field>
 
+      <View style={styles.field}>
+        <Text style={[styles.label, appearance.dark && darkStyles.titleText]}>Products *</Text>
+        <Text style={[styles.hint, appearance.dark && darkStyles.bodyText]}>
+          Search the catalogue instead of scrolling through the full inventory.
+        </Text>
+      </View>
+
       {catalogueError ? <Text style={styles.error}>{catalogueError}</Text> : null}
       {loading && !activeItems.length ? (
         <Text style={[styles.muted, appearance.dark && darkStyles.bodyText]}>Loading products…</Text>
