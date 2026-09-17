@@ -633,6 +633,22 @@ async function processClaimedInboundMessage({
     return;
   }
 
+  const conversationWorkState = await noteConversationInboundState(
+    tenantId,
+    customerId,
+    false,
+  );
+  if (conversationWorkState === 'merchant_handling' || conversationWorkState === 'needs_merchant') {
+    console.info(JSON.stringify({
+      event: 'sellertray_conversation_automation_paused',
+      tenantId,
+      customerId,
+      sourceMessageId,
+      conversationWorkState,
+    }));
+    return;
+  }
+
   const intentRoute = await maybeHandleUnifiedConversationIntent({
     tenantId,
     businessName: tenant.name,
@@ -1346,6 +1362,7 @@ async function maybeHandleUnifiedConversationIntent({
       intent: decision.intent,
       text,
     });
+    await noteConversationInboundState(tenantId, customerId, true);
     await recordCommercialAction({
       tenantId,
       customerId,
@@ -1761,6 +1778,26 @@ async function handleCustomerProductEnquiry(input: {
     matchedItemId: match?.item.id ?? null,
     clarificationCandidateCount: clarificationCandidates.length,
   }));
+
+  if (!match && clarificationCandidates.length < 2) {
+    await noteConversationInboundState(input.tenantId, input.customerId, true);
+  }
+}
+
+async function noteConversationInboundState(
+  tenantId: string,
+  customerId: string,
+  requiresMerchant: boolean,
+): Promise<string> {
+  const state = await rest<string>('/rest/v1/rpc/sellertray_note_conversation_inbound', {
+    method: 'POST',
+    body: JSON.stringify({
+      p_tenant_id: tenantId,
+      p_customer_id: customerId,
+      p_requires_merchant: requiresMerchant,
+    }),
+  });
+  return typeof state === 'string' ? state : 'ai_handling';
 }
 
 function findEnquiryClarificationCandidates(
