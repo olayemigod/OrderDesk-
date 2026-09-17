@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(5);
+select extensions.plan(6);
 
 select extensions.ok(
   to_regclass('public.conversation_activity_events') is not null
@@ -44,6 +44,20 @@ select extensions.ok(
 select extensions.ok(
   exists (
     select 1
+    from pg_constraint
+    where conrelid='public.conversation_activity_events'::regclass
+      and contype='u'
+      and pg_get_constraintdef(oid) like '%tenant_id, customer_id%'
+  )
+  and position('on conflict (tenant_id, customer_id)' in lower(pg_get_functiondef(
+    'public.emit_conversation_activity_event()'::regprocedure
+  ))) > 0,
+  'activity stream is bounded to one refresh row per tenant/customer'
+);
+
+select extensions.ok(
+  exists (
+    select 1
     from pg_publication_tables
     where pubname='supabase_realtime'
       and schemaname='public'
@@ -56,7 +70,7 @@ select extensions.ok(
       and schemaname='public'
       and tablename='inbound_messages'
   ),
-  'Realtime publishes only the privacy-safe conversation activity stream'
+  'Realtime publishes only the privacy-safe conversation activity stream after cutover'
 );
 
 select * from extensions.finish();
