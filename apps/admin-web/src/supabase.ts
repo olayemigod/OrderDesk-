@@ -24,6 +24,7 @@ export async function invokeJson<T>(
 ): Promise<T> {
   const activeSession = session ?? (await supabase.auth.getSession()).data.session;
   if (!activeSession?.access_token) throw new Error('Your admin session has expired. Sign in again.');
+  const optionalAuditRequest = functionName === 'platform-admin' && body.action === 'audit';
 
   let response: Response;
   try {
@@ -38,6 +39,10 @@ export async function invokeJson<T>(
       body: JSON.stringify(body),
     });
   } catch (error) {
+    // Audit history is supplementary. Never turn a confirmed merchant broadcast
+    // into an apparent publish failure merely because the follow-up audit refresh
+    // timed out or became temporarily unavailable.
+    if (optionalAuditRequest) return emptyAuditResponse<T>();
     if (error instanceof DOMException && error.name === 'TimeoutError') {
       throw new Error('SellerTray did not respond in time. Check the operation status before retrying.');
     }
@@ -55,6 +60,7 @@ export async function invokeJson<T>(
   }
 
   if (!response.ok) {
+    if (optionalAuditRequest) return emptyAuditResponse<T>();
     const message = isRecord(payload) && typeof payload.error === 'string'
       ? payload.error
       : isRecord(payload) && typeof payload.message === 'string'
@@ -64,6 +70,10 @@ export async function invokeJson<T>(
   }
 
   return (payload ?? {}) as T;
+}
+
+function emptyAuditResponse<T>(): T {
+  return { audit: { events: [] } } as T;
 }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
