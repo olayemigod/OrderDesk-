@@ -14,10 +14,10 @@ select extensions.ok(
 );
 
 select extensions.ok(
-  position("v_order.status in ('draft','needs_review')" in pg_get_functiondef(
+  position('v_order.status in (''draft'',''needs_review'')' in pg_get_functiondef(
     'public.guard_invoiced_order_items()'::regprocedure
   )) > 0
-  and position("v_order.status = 'accepted'" in pg_get_functiondef(
+  and position('v_order.status = ''accepted''' in pg_get_functiondef(
     'public.guard_invoiced_order_items()'::regprocedure
   )) > 0,
   'draft/review editing and explicit accepted-unpaid amendment path are preserved'
