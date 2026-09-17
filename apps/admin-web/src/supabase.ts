@@ -11,7 +11,9 @@ export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: true,
+    // This restricted portal accepts password authentication only. Recovery,
+    // magic-link and OAuth URL sessions are not consumed automatically here.
+    detectSessionInUrl: false,
   },
 });
 
@@ -23,15 +25,24 @@ export async function invokeJson<T>(
   const activeSession = session ?? (await supabase.auth.getSession()).data.session;
   if (!activeSession?.access_token) throw new Error('Your admin session has expired. Sign in again.');
 
-  const response = await fetch(`${supabaseUrl}/functions/v1/${encodeURIComponent(functionName)}`, {
-    method: 'POST',
-    headers: {
-      apikey: supabasePublishableKey,
-      authorization: `Bearer ${activeSession.access_token}`,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${supabaseUrl}/functions/v1/${encodeURIComponent(functionName)}`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(15_000),
+      headers: {
+        apikey: supabasePublishableKey,
+        authorization: `Bearer ${activeSession.access_token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'TimeoutError') {
+      throw new Error('SellerTray did not respond in time. Check the operation status before retrying.');
+    }
+    throw error;
+  }
 
   const raw = await response.text();
   let payload: unknown = null;
