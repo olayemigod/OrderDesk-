@@ -346,8 +346,13 @@ requireValue(
     whatsappConnectionScopeFunction.includes('granted_scopes') &&
     whatsappCatalogueScopeFunction.includes("grantedScopes.includes('business_management')") &&
     whatsappCatalogueScopeFunction.includes("grantedScopes.includes('catalog_management')") &&
+    whatsappCatalogueScopeFunction.includes('probeMetaCatalogueAsset') &&
+    whatsappCatalogueScopeFunction.includes("'/products'") &&
+    whatsappCatalogueScopeFunction.includes("'id,retailer_id,name'") &&
+    whatsappCatalogueScopeFunction.includes('catalogueAssetReady') &&
     catalogueView.includes('Meta business_management scope') &&
-    catalogueView.includes('Meta catalog_management scope'),
+    catalogueView.includes('Meta catalog_management scope') &&
+    catalogueView.includes('Catalogue product read access'),
   'Meta catalogue automation must use persisted tenant-granted business/catalog scopes and fail closed when absent',
 );
 requireValue(manualOrderComposer.includes('Create an order') && manualOrderComposer.includes('Customer name') && manualOrderComposer.includes('Products *'), 'Orders must expose guided manual order creation');
