@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(20);
+select extensions.plan(21);
 
 select extensions.ok(
   to_regclass('public.conversation_work_states') is not null,
@@ -147,6 +147,15 @@ select extensions.ok(
       and lower(btrim(phrase))='dont worry'
   ),
   'dont worry remains understood as non-destructive chatter'
+);
+select extensions.ok(
+  position('delivery_provider' in pg_get_functiondef('public.queue_sellertray_fulfillment_notification()'::regprocedure)) > 0
+  and position('delivery_contact_name' in pg_get_functiondef('public.queue_sellertray_fulfillment_notification()'::regprocedure)) > 0
+  and position('delivery_contact_phone' in pg_get_functiondef('public.queue_sellertray_fulfillment_notification()'::regprocedure)) > 0
+  and position('delivery_reference' in pg_get_functiondef('public.queue_sellertray_fulfillment_notification()'::regprocedure)) > 0
+  and position('estimated_delivery_at' in pg_get_functiondef('public.queue_sellertray_fulfillment_notification()'::regprocedure)) > 0
+  and position('reply RECEIVED' in pg_get_functiondef('public.queue_sellertray_fulfillment_notification()'::regprocedure)) > 0,
+  'out-for-delivery customer update includes captured dispatch details and receipt confirmation'
 );
 
 select * from extensions.finish();
