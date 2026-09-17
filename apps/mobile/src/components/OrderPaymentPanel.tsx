@@ -29,6 +29,14 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const financialRefreshKey = [
+    order.paymentStatus,
+    order.paymentConfirmedAt ?? '',
+    order.amountPaid,
+    order.items
+      .map((item) => [item.id, item.name, item.quantity, item.unitPrice ?? ''].join(':'))
+      .join('|'),
+  ].join('::');
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -50,7 +58,7 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
 
   useEffect(() => {
     void refresh();
-  }, [refresh, order.paymentStatus, order.paymentConfirmedAt]);
+  }, [refresh, financialRefreshKey]);
 
   const invoice = useMemo(
     () => documents.find((item) => item.documentType === 'invoice' && item.status === 'issued') ?? null,
@@ -59,6 +67,13 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
   const receipt = useMemo(
     () => documents.find((item) => item.documentType === 'receipt' && item.status === 'issued') ?? null,
     [documents],
+  );
+  const paymentResetByAmendment = useMemo(
+    () => payments.some((payment) =>
+      payment.status === 'cancelled' &&
+      payment.failureReason === 'Order amended before payment'
+    ),
+    [payments],
   );
 
   const offlineMethods = useMemo(
@@ -156,6 +171,7 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
       <View style={[styles.summary, appearance.dark && darkStyles.subtleCard]}>
         <SummaryRow dark={appearance.dark} label="Amount paid" value={formatMoney(order.amountPaid, invoice?.currency ?? 'NGN')} />
         {invoice ? <SummaryRow dark={appearance.dark} label="Invoice" value={invoice.documentReference} /> : null}
+        {invoice ? <SummaryRow dark={appearance.dark} label="Invoice total" value={formatMoney(invoice.amount, invoice.currency)} /> : null}
         {receipt ? <SummaryRow dark={appearance.dark} label="Financial receipt" value={receipt.documentReference} /> : null}
         {order.paymentConfirmedAt ? (
           <SummaryRow dark={appearance.dark} label="Confirmed" value={formatDateTime(order.paymentConfirmedAt)} />
@@ -169,6 +185,15 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
             Staff can record verified offline payments here. For WhatsApp orders, payment choices can also be sent back to the customer.
           </Text>
 
+          {paymentResetByAmendment ? (
+            <View style={[styles.amendmentResetNotice, appearance.dark && darkStyles.amendmentResetNotice]}>
+              <Text style={[styles.amendmentResetTitle, appearance.dark && darkStyles.titleText]}>Order total changed</Text>
+              <Text style={[styles.amendmentResetText, appearance.dark && darkStyles.bodyText]}>
+                SellerTray cancelled the previous open payment request because it used the old total. Send fresh payment options before the customer pays.
+              </Text>
+            </View>
+          ) : null}
+
           {order.source === 'whatsapp' ? (
             <Pressable
               disabled={busyId !== null}
@@ -176,7 +201,11 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
               style={({ pressed }) => [styles.secondaryButton, appearance.dark && darkStyles.secondaryButton, pressed && styles.pressed, busyId !== null && styles.disabled]}
             >
               <Text style={[styles.secondaryText, appearance.dark && darkStyles.titleText]}>
-                {busyId === 'send-options' ? 'Sending…' : 'Send payment options on WhatsApp'}
+                {busyId === 'send-options'
+                  ? 'Sending…'
+                  : paymentResetByAmendment
+                    ? 'Resend payment options on WhatsApp'
+                    : 'Send payment options on WhatsApp'}
               </Text>
             </Pressable>
           ) : null}
@@ -408,6 +437,9 @@ const styles = StyleSheet.create({
   secondaryText: { color: '#344054', fontSize: 13, fontWeight: '900' },
   merchantActions: { borderRadius: 12, borderWidth: 1, borderColor: '#E4E7EC', backgroundColor: '#FFFFFF', padding: 11, gap: 8 },
   merchantActionsTitle: { color: '#102A43', fontSize: 14, fontWeight: '900' },
+  amendmentResetNotice: { borderWidth: 1, borderColor: '#FEDF89', backgroundColor: '#FFF8E7', borderRadius: 10, padding: 10, gap: 3 },
+  amendmentResetTitle: { color: '#7A2E0E', fontSize: 12, fontWeight: '900' },
+  amendmentResetText: { color: '#854A0E', fontSize: 12, lineHeight: 18 },
   recordMethodList: { gap: 7 },
   recordMethodButton: { minHeight: 48, borderRadius: 10, borderWidth: 1, borderColor: '#D0D5DD', backgroundColor: '#FFFFFF', paddingHorizontal: 11, justifyContent: 'center' },
   recordMethodTitle: { color: '#102A43', fontSize: 13, fontWeight: '900' },
@@ -425,4 +457,5 @@ const darkStyles = StyleSheet.create({
   bodyText: { color: '#D0D5DD' },
   mutedText: { color: '#98A2B3' },
   secondaryButton: { backgroundColor: '#162F46', borderColor: '#667085' },
+  amendmentResetNotice: { backgroundColor: '#3D2A12', borderColor: '#B54708' },
 });
