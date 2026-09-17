@@ -5,6 +5,7 @@ import type { MerchantBusiness } from '../data/businessRepository';
 import type { ManualOrderLineInput } from '../data/ordersRepository';
 import { useCatalogue } from '../hooks/useCatalogue';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
+import { CatalogueProductPicker } from './CatalogueProductPicker';
 
 type Props = {
   business: MerchantBusiness;
@@ -28,7 +29,10 @@ export function ManualOrderComposer({ business, onCreate, onCreated }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const activeItems = items.filter((item) => item.isActive && item.price !== null);
+  const activeItems = useMemo(
+    () => items.filter((item) => item.isActive && item.price !== null),
+    [items],
+  );
   const selected = useMemo(
     () => activeItems
       .filter((item) => (quantities[item.id] ?? 0) > 0)
@@ -41,7 +45,10 @@ export function ManualOrderComposer({ business, onCreate, onCreated }: Props) {
   function changeQuantity(itemId: string, delta: number) {
     setQuantities((current) => {
       const next = Math.max(0, Math.min(9999, (current[itemId] ?? 0) + delta));
-      return { ...current, [itemId]: next };
+      const copy = { ...current };
+      if (next === 0) delete copy[itemId];
+      else copy[itemId] = next;
+      return copy;
     });
   }
 
@@ -87,7 +94,7 @@ export function ManualOrderComposer({ business, onCreate, onCreated }: Props) {
           <Text style={styles.eyebrow}>MANUAL ORDER</Text>
           <Text style={[styles.title, appearance.dark && darkStyles.titleText]}>Create an order</Text>
           <Text style={[styles.subtitle, appearance.dark && darkStyles.bodyText]}>
-            Use this for phone, walk-in or manually captured orders. WhatsApp orders will continue to arrive automatically.
+            Search your catalogue and add only the products the customer requested.
           </Text>
         </View>
         <Pressable disabled={submitting} onPress={() => setOpen(false)}>
@@ -100,6 +107,7 @@ export function ManualOrderComposer({ business, onCreate, onCreated }: Props) {
           value={customerName}
           onChangeText={setCustomerName}
           placeholder="e.g. Aisha Bello"
+          placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
           editable={!submitting}
           style={[styles.input, appearance.dark && darkStyles.input, appearance.dark && darkStyles.inputText]}
         />
@@ -110,6 +118,7 @@ export function ManualOrderComposer({ business, onCreate, onCreated }: Props) {
           value={customerPhone}
           onChangeText={setCustomerPhone}
           placeholder="+234..."
+          placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
           keyboardType="phone-pad"
           editable={!submitting}
           style={[styles.input, appearance.dark && darkStyles.input, appearance.dark && darkStyles.inputText]}
@@ -121,35 +130,51 @@ export function ManualOrderComposer({ business, onCreate, onCreated }: Props) {
           value={note}
           onChangeText={setNote}
           placeholder="e.g. Deliver before 4pm"
+          placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
           multiline
           editable={!submitting}
           style={[styles.input, styles.noteInput, appearance.dark && darkStyles.input, appearance.dark && darkStyles.inputText]}
         />
       </Field>
 
-      <View style={styles.productsBlock}>
-        <Text style={[styles.label, appearance.dark && darkStyles.titleText]}>Products *</Text>
-        <Text style={[styles.hint, appearance.dark && darkStyles.bodyText]}>Tap + to add products from your catalogue. Prices are copied automatically.</Text>
+      {catalogueError ? <Text style={styles.error}>{catalogueError}</Text> : null}
+      {loading && !activeItems.length ? (
+        <Text style={[styles.muted, appearance.dark && darkStyles.bodyText]}>Loading products…</Text>
+      ) : null}
+      {!loading && !activeItems.length ? (
+        <Text style={[styles.emptyText, appearance.dark && darkStyles.bodyText]}>
+          No active priced products yet. Add products from the Products tab first.
+        </Text>
+      ) : null}
 
-        {catalogueError ? <Text style={styles.error}>{catalogueError}</Text> : null}
-        {loading && !activeItems.length ? <Text style={[styles.muted, appearance.dark && darkStyles.bodyText]}>Loading products…</Text> : null}
-        {!loading && !activeItems.length ? (
-          <Text style={[styles.emptyText, appearance.dark && darkStyles.bodyText]}>No active priced products yet. Add products from the Products tab first.</Text>
-        ) : null}
+      {activeItems.length ? (
+        <CatalogueProductPicker
+          items={activeItems}
+          currency={business.currency}
+          selectedQuantities={quantities}
+          disabled={submitting}
+          title="Search and add products"
+          hint="Search by product, SKU, category or alias. Similar variants remain separate so you can choose the correct one."
+          onSelect={(item) => changeQuantity(item.id, 1)}
+        />
+      ) : null}
 
-        {activeItems.map((item) => {
-          const quantity = quantities[item.id] ?? 0;
-          return (
-            <View key={item.id} style={[styles.productRow, appearance.dark && darkStyles.productRow, quantity > 0 && styles.productRowSelected, quantity > 0 && appearance.dark && darkStyles.productRowSelected]}>
-              <View style={styles.productCopy}>
+      {selected.length ? (
+        <View style={[styles.basket, appearance.dark && darkStyles.basket]}>
+          <Text style={[styles.basketTitle, appearance.dark && darkStyles.titleText]}>Selected products</Text>
+          {selected.map(({ item, quantity }) => (
+            <View key={item.id} style={styles.selectedRow}>
+              <View style={styles.selectedCopy}>
                 <Text style={[styles.productName, appearance.dark && darkStyles.titleText]}>{item.name}</Text>
-                <Text style={[styles.productPrice, appearance.dark && darkStyles.bodyText]}>{money(item.price ?? 0, business.currency)}</Text>
+                <Text style={[styles.productPrice, appearance.dark && darkStyles.bodyText]}>
+                  {money(item.price ?? 0, business.currency)} each
+                </Text>
               </View>
               <View style={styles.quantityControls}>
                 <Pressable
-                  disabled={submitting || quantity === 0}
+                  disabled={submitting}
                   onPress={() => changeQuantity(item.id, -1)}
-                  style={[styles.qtyButton, appearance.dark && darkStyles.qtyButton, quantity === 0 && styles.disabled]}
+                  style={[styles.qtyButton, appearance.dark && darkStyles.qtyButton]}
                 >
                   <Text style={[styles.qtyButtonText, appearance.dark && darkStyles.titleText]}>−</Text>
                 </Pressable>
@@ -159,18 +184,15 @@ export function ManualOrderComposer({ business, onCreate, onCreated }: Props) {
                   onPress={() => changeQuantity(item.id, 1)}
                   style={[styles.qtyButton, appearance.dark && darkStyles.qtyButton]}
                 >
-                  <Text style={styles.qtyButtonText}>+</Text>
+                  <Text style={[styles.qtyButtonText, appearance.dark && darkStyles.titleText]}>+</Text>
                 </Pressable>
               </View>
             </View>
-          );
-        })}
-      </View>
-
-      {selected.length ? (
-        <View style={styles.totalRow}>
-          <Text style={[styles.totalLabel, appearance.dark && darkStyles.bodyText]}>Order total</Text>
-          <Text style={[styles.total, appearance.dark && darkStyles.titleText]}>{money(total, business.currency)}</Text>
+          ))}
+          <View style={styles.totalRow}>
+            <Text style={[styles.totalLabel, appearance.dark && darkStyles.bodyText]}>Order total</Text>
+            <Text style={[styles.total, appearance.dark && darkStyles.titleText]}>{money(total, business.currency)}</Text>
+          </View>
         </View>
       ) : null}
 
@@ -253,19 +275,10 @@ const styles = StyleSheet.create({
     color: '#102A43',
   },
   noteInput: { minHeight: 76, paddingTop: 12, textAlignVertical: 'top' },
-  productsBlock: { gap: 8 },
-  productRow: {
-    minHeight: 58,
-    borderWidth: 1,
-    borderColor: '#E4E7EC',
-    borderRadius: 12,
-    padding: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  productRowSelected: { borderColor: '#6CE9A6', backgroundColor: '#F5F8FF' },
-  productCopy: { flex: 1 },
+  basket: { borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 12, padding: 11, gap: 9 },
+  basketTitle: { color: '#102A43', fontSize: 13, fontWeight: '900' },
+  selectedRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  selectedCopy: { flex: 1 },
   productName: { color: '#102A43', fontSize: 14, fontWeight: '900' },
   productPrice: { color: '#667085', fontSize: 12, marginTop: 2 },
   quantityControls: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -281,7 +294,7 @@ const styles = StyleSheet.create({
   },
   qtyButtonText: { color: '#102A43', fontSize: 18, fontWeight: '900' },
   qtyValue: { minWidth: 24, textAlign: 'center', color: '#102A43', fontSize: 13, fontWeight: '900' },
-  totalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  totalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 3 },
   totalLabel: { color: '#667085', fontSize: 12, fontWeight: '800' },
   total: { color: '#102A43', fontSize: 18, fontWeight: '900' },
   createButton: {
@@ -301,8 +314,7 @@ const styles = StyleSheet.create({
 
 const darkStyles = StyleSheet.create({
   card: { backgroundColor: '#102A43', borderColor: '#344054' },
-  productRow: { backgroundColor: '#102A43', borderColor: '#344054' },
-  productRowSelected: { backgroundColor: '#12372C', borderColor: '#1C6B4A' },
+  basket: { backgroundColor: '#102A43', borderColor: '#344054' },
   qtyButton: { backgroundColor: '#162F46', borderColor: '#475467' },
   input: { backgroundColor: '#162F46', borderColor: '#475467' },
   inputText: { color: '#F8FAFC' },
