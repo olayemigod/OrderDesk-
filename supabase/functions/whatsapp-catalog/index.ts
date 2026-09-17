@@ -71,7 +71,7 @@ Deno.serve(async (request) => {
           .limit(500),
         admin
           .from('tenant_whatsapp_connections')
-          .select('connection_status,credential_mode,waba_id,phone_number_id,onboarding_method,last_verified_at')
+          .select('connection_status,credential_mode,waba_id,phone_number_id,onboarding_method,granted_scopes,last_verified_at')
           .eq('tenant_id', tenantId)
           .maybeSingle(),
         admin
@@ -91,12 +91,26 @@ Deno.serve(async (request) => {
       const connected = connection?.connection_status === 'connected';
       const tenantCredentialReady =
         connection?.credential_mode === 'business_integration_system_user';
+      const grantedScopes = Array.isArray(connection?.granted_scopes)
+        ? connection.granted_scopes.filter((value): value is string => typeof value === 'string')
+        : [];
+      const businessManagementScopeReady = grantedScopes.includes('business_management');
+      const catalogManagementScopeReady = grantedScopes.includes('catalog_management');
+      const catalogueScopesReady = businessManagementScopeReady && catalogManagementScopeReady;
       const managementApiReady = managementProbe?.succeeded === true;
       const catalogConfigured = Boolean(settings?.catalog_id);
-      const baseReady = connected && tenantCredentialReady && managementApiReady && catalogConfigured;
+      const baseReady =
+        connected &&
+        tenantCredentialReady &&
+        catalogueScopesReady &&
+        managementApiReady &&
+        catalogConfigured;
       const importReadiness = {
         connected,
         tenantCredentialReady,
+        businessManagementScopeReady,
+        catalogManagementScopeReady,
+        catalogueScopesReady,
         managementApiReady,
         catalogConfigured,
         importReady: false,
@@ -104,13 +118,16 @@ Deno.serve(async (request) => {
           ? 'Connect this business to WhatsApp first.'
           : !tenantCredentialReady
             ? 'Automatic catalogue import requires a tenant-owned Meta business integration credential.'
-            : !managementApiReady
-              ? 'WhatsApp Business management access has not been verified for this tenant.'
-              : !catalogConfigured
-                ? 'Configure the merchant Meta catalogue ID first.'
-                : baseReady
-                  ? 'WhatsApp management access is ready. Meta catalogue asset authorization still needs a dedicated catalogue probe before import can be enabled.'
-                  : 'Meta catalogue import is not ready.',
+            : !catalogueScopesReady
+              ? 'This Meta connection did not grant business_management and catalog_management. Reconnect after SellerTray catalogue permissions are available in Meta.'
+              : !managementApiReady
+                ? 'WhatsApp Business management access has not been verified for this tenant.'
+                : !catalogConfigured
+                  ? 'Configure the merchant Meta catalogue ID first.'
+                  : baseReady
+                    ? 'Meta catalogue scopes and WhatsApp management access are ready. A dedicated catalogue asset probe is still required before import can be enabled.'
+                    : 'Meta catalogue import is not ready.',
+        grantedScopes,
         managementEvidence: managementProbe?.evidence ?? null,
         managementCheckedAt: managementProbe?.created_at ?? null,
       };
