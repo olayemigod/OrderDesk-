@@ -351,6 +351,9 @@ const orderFulfillmentPanel = read(join(mobileRoot, 'src/components/OrderFulfill
 const ordersRepository = read(join(mobileRoot, 'src/data/ordersRepository.ts'));
 const orderFulfillmentFunction = read(join(repoRoot, 'supabase/functions/order-fulfillment/index.ts'));
 const fulfillmentIntegrityMigration = read(join(repoRoot, 'supabase/migrations/20260912134000_fulfillment_completion_integrity.sql'));
+const acceptedOrderAmendmentMigration = read(join(repoRoot, 'supabase/migrations/20260916125500_accepted_unpaid_order_amendments.sql'));
+const amendmentPaymentSequenceMigration = read(join(repoRoot, 'supabase/migrations/20260916131500_order_amendment_payment_invoice_sequence.sql'));
+const notificationWorkerRuntimeMigration = read(join(repoRoot, 'supabase/migrations/20260917023000_notification_worker_runtime_contract.sql'));
 requireValue(orderFulfillmentPanel.includes('Customer pickup') && orderFulfillmentPanel.includes('Merchant / own rider') && orderFulfillmentPanel.includes('Third-party dispatch'), 'Order fulfillment tracking UI must remain wired');
 requireValue(
   ordersRepository.includes("supabase.functions.invoke('order-fulfillment'") &&
@@ -371,6 +374,23 @@ requireValue(
 );
 requireValue(orderFulfillmentPanel.includes('Mark delivered & complete') && orderFulfillmentPanel.includes('Mark collected & complete'), 'Order completion must retain fulfillment evidence');
 requireValue(orderFulfillmentPanel.includes('Customer confirmed receipt on WhatsApp'), 'Completed orders must show customer receipt-confirmation provenance');
+requireValue(
+  saasApp.includes('Amend order') &&
+    saasApp.includes('Finish amendment') &&
+    saasApp.includes('Resend payment options') &&
+    orderPaymentPanel.includes('Order total changed') &&
+    orderPaymentPanel.includes('Resend payment options on WhatsApp') &&
+    orderPaymentPanel.includes('Invoice total'),
+  'Accepted unpaid order amendment must remain an explicit merchant workflow with refreshed financial guidance',
+);
+requireValue(
+  acceptedOrderAmendmentMigration.includes("v_order.status='accepted'") &&
+    acceptedOrderAmendmentMigration.includes("v_order.payment_status in ('unpaid','pending')") &&
+    acceptedOrderAmendmentMigration.includes("failure_reason='Order amended before payment'") &&
+    amendmentPaymentSequenceMigration.includes("status='cancelled'") &&
+    amendmentPaymentSequenceMigration.includes("pdf_version=d.pdf_version+1"),
+  'Accepted unpaid amendments must remain financially locked to zero-paid/unfulfilled orders and invalidate stale payment requests',
+);
 requireValue(
   orderFulfillmentPanel.includes('Delivery contact name') &&
     orderFulfillmentPanel.includes('Contact phone') &&
@@ -777,6 +797,14 @@ requireValue(
     whatsappWebhookFunction.includes('consumeAiRequestBudget') &&
     orderParserFunction.includes('AbortSignal.timeout(6500)'),
   'High-cost AI parsing must retain server-side request budgets and an OpenAI provider deadline',
+);
+requireValue(
+  notificationWorkerRuntimeMigration.includes('sellertray_private.runtime_config') &&
+    notificationWorkerRuntimeMigration.includes('notification_worker_invocations') &&
+    notificationWorkerRuntimeMigration.includes('claim_sellertray_notification_worker_invocation') &&
+    notificationWorkerRuntimeMigration.includes('sellertray-whatsapp-notification-retry') &&
+    notificationWorkerRuntimeMigration.includes('kick_whatsapp_notification_worker'),
+  'WhatsApp notification delivery must retain immediate database invocation plus cron fallback runtime contract',
 );
 requireValue(
   whatsappNotificationWorker.includes('metaFetch') &&
