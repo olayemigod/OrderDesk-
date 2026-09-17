@@ -28,6 +28,17 @@ export type ConversationSummary = {
   lastActivityAt: string | null;
 };
 
+export type ConversationMessage = {
+  id: string;
+  direction: 'inbound' | 'outbound';
+  actor: 'customer' | 'merchant' | 'sellertray';
+  text: string;
+  messageType: string;
+  deliveryStatus: string | null;
+  eventKey: string | null;
+  occurredAt: string;
+};
+
 export async function loadConversations(
   tenantId: string,
   limit = 200,
@@ -67,6 +78,45 @@ export async function loadConversations(
       latestOrderPaymentStatus: nullableString(value.latest_order_payment_status),
       lastActivityAt: nullableString(value.last_activity_at),
     } satisfies ConversationSummary];
+  });
+}
+
+export async function loadConversationMessages(
+  tenantId: string,
+  customerId: string,
+  limit = 100,
+): Promise<ConversationMessage[]> {
+  const { data, error } = await supabase.rpc('sellertray_list_conversation_messages', {
+    p_tenant_id: tenantId,
+    p_customer_id: customerId,
+    p_limit: limit,
+  });
+  if (error) throw error;
+  if (!Array.isArray(data)) return [];
+
+  return data.flatMap((value) => {
+    if (!isRecord(value)) return [];
+    const id = stringValue(value.message_id);
+    const direction = value.direction === 'inbound' || value.direction === 'outbound'
+      ? value.direction
+      : null;
+    const actor = value.actor === 'customer' || value.actor === 'merchant' || value.actor === 'sellertray'
+      ? value.actor
+      : null;
+    const text = stringValue(value.message_text);
+    const occurredAt = stringValue(value.occurred_at);
+    if (!id || !direction || !actor || !text || !occurredAt) return [];
+
+    return [{
+      id,
+      direction,
+      actor,
+      text,
+      messageType: stringValue(value.message_type) || 'message',
+      deliveryStatus: nullableString(value.delivery_status),
+      eventKey: nullableString(value.event_key),
+      occurredAt,
+    } satisfies ConversationMessage];
   });
 }
 
