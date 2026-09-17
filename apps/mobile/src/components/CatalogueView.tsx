@@ -288,7 +288,8 @@ export function CatalogueView({ business }: { business: MerchantBusiness }) {
               <ImportReadinessLine label="Meta catalog_management scope" ready={whatsappStatus.importReadiness.catalogManagementScopeReady} />
               <ImportReadinessLine label="WhatsApp management access" ready={whatsappStatus.importReadiness.managementApiReady} />
               <ImportReadinessLine label="Catalogue ID configured" ready={whatsappStatus.importReadiness.catalogConfigured} />
-              <ImportReadinessLine label="Catalogue asset authorization" ready={whatsappStatus.importReadiness.importReady} />
+              <ImportReadinessLine label="Catalogue product read access" ready={whatsappStatus.importReadiness.catalogueAssetReady} />
+              <ImportReadinessLine label="Automatic import eligible" ready={whatsappStatus.importReadiness.importReady} />
             </View>
           ) : null}
         </View>
