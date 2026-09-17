@@ -85,7 +85,7 @@ begin
     v_match_count := 0;
 
     if v_sku is not null then
-      select count(*),min(ci.id)
+      select count(*),(min(ci.id::text))::uuid
       into v_match_count,v_item_id
       from public.catalog_items ci
       where ci.tenant_id=p_tenant_id
@@ -95,7 +95,7 @@ begin
         raise exception 'Row % SKU matches more than one existing product',v_index using errcode='23514';
       end if;
     else
-      select count(*),min(ci.id)
+      select count(*),(min(ci.id::text))::uuid
       into v_match_count,v_item_id
       from public.catalog_items ci
       where ci.tenant_id=p_tenant_id
