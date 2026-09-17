@@ -53,7 +53,7 @@ begin
   on conflict (tenant_id, customer_id)
   do update
   set occurred_at = greatest(
-    public.conversation_activity_events.occurred_at,
+    conversation_activity_events.occurred_at,
     excluded.occurred_at
   );
 
