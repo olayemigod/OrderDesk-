@@ -260,6 +260,9 @@ const saasApp = read(join(mobileRoot, 'src/SaasApp.tsx'));
 const settingsHub = read(join(mobileRoot, 'src/components/SettingsHub.tsx'));
 const catalogueView = read(join(mobileRoot, 'src/components/CatalogueView.tsx'));
 const conversationsView = read(join(mobileRoot, 'src/components/ConversationsView.tsx'));
+const conversationsRepository = read(join(mobileRoot, 'src/data/conversationsRepository.ts'));
+const merchantConversationAction = read(join(repoRoot, 'supabase/functions/merchant-conversation-action/index.ts'));
+const conversationInboxMigration = read(join(repoRoot, 'supabase/migrations/20260917012000_conversation_operational_inbox.sql'));
 const manualOrderComposer = read(join(mobileRoot, 'src/components/ManualOrderComposer.tsx'));
 const createBusinessView = read(join(mobileRoot, 'src/components/CreateBusinessView.tsx'));
 const businessRepository = read(join(mobileRoot, 'src/data/businessRepository.ts'));
@@ -286,6 +289,19 @@ requireValue(
     conversationsView.includes('Return to AI') &&
     conversationsView.includes('Resolve'),
   'Conversations must retain the governed AI/human operational inbox states and takeover controls',
+);
+requireValue(
+  conversationsRepository.includes("supabase.functions.invoke('merchant-conversation-action'") &&
+    merchantConversationAction.includes("action === 'reply'") &&
+    merchantConversationAction.includes('WHATSAPP_TEMPLATE_REQUIRED') &&
+    merchantConversationAction.includes('sellertray_apply_conversation_service_action'),
+  'Conversation actions must remain behind the authenticated merchant-conversation-action boundary with WhatsApp window enforcement',
+);
+requireValue(
+  conversationInboxMigration.includes("'ai_handling','needs_merchant','merchant_handling','waiting_customer','resolved'") &&
+    conversationInboxMigration.includes('sellertray_list_conversations') &&
+    conversationInboxMigration.includes('sellertray_note_conversation_inbound'),
+  'Operational conversation states and guarded read/write RPCs must remain defined in the database contract',
 );
 requireValue(saasApp.includes('merchantUnreadCount') && saasApp.includes('markAllMerchantNotificationsRead'), 'Notification bell and Activity Center must use durable per-user unread state');
 requireValue(saasApp.includes('usePushNotifications'), 'SellerTray shell must register native merchant push notifications');
@@ -335,6 +351,17 @@ requireValue(
 );
 requireValue(orderFulfillmentPanel.includes('Mark delivered & complete') && orderFulfillmentPanel.includes('Mark collected & complete'), 'Order completion must retain fulfillment evidence');
 requireValue(orderFulfillmentPanel.includes('Customer confirmed receipt on WhatsApp'), 'Completed orders must show customer receipt-confirmation provenance');
+requireValue(
+  orderFulfillmentPanel.includes('Delivery contact name') &&
+    orderFulfillmentPanel.includes('Contact phone') &&
+    orderFulfillmentPanel.includes('ETA date') &&
+    orderFulfillmentPanel.includes('ETA time') &&
+    ordersRepository.includes('estimatedDeliveryAt') &&
+    orderFulfillmentFunction.includes('delivery_contact_name') &&
+    orderFulfillmentFunction.includes('delivery_contact_phone') &&
+    orderFulfillmentFunction.includes('estimated_delivery_at'),
+  'MVP fulfilment must retain delivery contact and ETA capture through UI, repository and governed server mutation',
+);
 requireValue(
   saasApp.includes('order.publicOrderId') &&
     saasApp.includes('Search orders, customers or products'),
