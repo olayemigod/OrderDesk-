@@ -263,6 +263,9 @@ const catalogueBulkImport = read(join(mobileRoot, 'src/components/CatalogueBulkI
 const catalogueImportRepository = read(join(mobileRoot, 'src/data/catalogueImportRepository.ts'));
 const catalogueBulkImportFunction = read(join(repoRoot, 'supabase/functions/catalogue-bulk-import/index.ts'));
 const catalogueBulkImportMigration = read(join(repoRoot, 'supabase/migrations/20260917022500_catalogue_bulk_import_contract.sql'));
+const metaScopeMigration = read(join(repoRoot, 'supabase/migrations/20260917024000_meta_granted_scope_contract.sql'));
+const whatsappConnectionScopeFunction = read(join(repoRoot, 'supabase/functions/whatsapp-connection/index.ts'));
+const whatsappCatalogueScopeFunction = read(join(repoRoot, 'supabase/functions/whatsapp-catalog/index.ts'));
 const conversationsView = read(join(mobileRoot, 'src/components/ConversationsView.tsx'));
 const conversationsRepository = read(join(mobileRoot, 'src/data/conversationsRepository.ts'));
 const merchantConversationAction = read(join(repoRoot, 'supabase/functions/merchant-conversation-action/index.ts'));
@@ -333,6 +336,19 @@ requireValue(
     catalogueBulkImportMigration.includes('import_sellertray_catalogue_rows') &&
     catalogueBulkImportMigration.includes("tm.role in ('owner','manager')"),
   'Catalogue bulk import must remain server-governed, rate-limited and restricted to Owner/Manager',
+);
+requireValue(
+  metaScopeMigration.includes('granted_scopes text[]') &&
+    metaScopeMigration.includes('set_sellertray_whatsapp_granted_scopes') &&
+    metaScopeMigration.includes('to service_role') &&
+    whatsappConnectionScopeFunction.includes('tokenInfo.scopes') &&
+    whatsappConnectionScopeFunction.includes('p_scopes: tokenInfo.scopes') &&
+    whatsappConnectionScopeFunction.includes('granted_scopes') &&
+    whatsappCatalogueScopeFunction.includes("grantedScopes.includes('business_management')") &&
+    whatsappCatalogueScopeFunction.includes("grantedScopes.includes('catalog_management')") &&
+    catalogueView.includes('Meta business_management scope') &&
+    catalogueView.includes('Meta catalog_management scope'),
+  'Meta catalogue automation must use persisted tenant-granted business/catalog scopes and fail closed when absent',
 );
 requireValue(manualOrderComposer.includes('Create an order') && manualOrderComposer.includes('Customer name') && manualOrderComposer.includes('Products *'), 'Orders must expose guided manual order creation');
 requireValue(
