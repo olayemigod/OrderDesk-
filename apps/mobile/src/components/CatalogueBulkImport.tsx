@@ -7,6 +7,7 @@ import {
   type CatalogueImportPreview,
 } from '../data/catalogueImportRepository';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
+import { MetaCatalogueImport } from './MetaCatalogueImport';
 
 type Props = {
   tenantId: string;
@@ -19,7 +20,16 @@ const starterTemplate =
   'Semo 5kg,12500,SEM-5KG,Food,semo 5kg|small semo\n' +
   'Semo 25kg,52000,SEM-25KG,Food,semo 25kg|big semo';
 
-export function CatalogueBulkImport({ tenantId, currency, onImported }: Props) {
+export function CatalogueBulkImport(props: Props) {
+  return (
+    <View style={styles.importStack}>
+      <MetaCatalogueImport {...props} />
+      <SpreadsheetCatalogueImport {...props} />
+    </View>
+  );
+}
+
+function SpreadsheetCatalogueImport({ tenantId, currency, onImported }: Props) {
   const appearance = useSellerTrayAppearance();
   const [sourceText, setSourceText] = useState('');
   const [preview, setPreview] = useState<CatalogueImportPreview | null>(null);
@@ -77,7 +87,7 @@ export function CatalogueBulkImport({ tenantId, currency, onImported }: Props) {
 
   return (
     <View style={[styles.card, appearance.dark && darkStyles.card]}>
-      <Text style={[styles.eyebrow, appearance.dark && darkStyles.muted]}>BULK IMPORT</Text>
+      <Text style={[styles.eyebrow, appearance.dark && darkStyles.muted]}>SPREADSHEET / CSV</Text>
       <Text style={[styles.title, appearance.dark && darkStyles.title]}>Paste from Excel, Sheets or CSV</Text>
       <Text style={[styles.body, appearance.dark && darkStyles.body]}>
         Copy rows directly from a spreadsheet or paste CSV. SellerTray previews creates, updates and conflicts before changing your catalogue.
@@ -272,6 +282,7 @@ function formatMoney(value: number, currency: string): string {
 }
 
 const styles = StyleSheet.create({
+  importStack: { gap: 12 },
   card: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
