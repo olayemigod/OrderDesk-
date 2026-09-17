@@ -66,7 +66,7 @@ export type EmbeddedSignupCallback =
 export async function loadWhatsAppConnectionStatus(
   tenantId: string,
 ): Promise<WhatsAppConnectionStatusPayload> {
-  return invokeConnection({ action: 'status', tenantId });
+  return invokeFunction('whatsapp-connection', { action: 'status', tenantId });
 }
 
 export async function completeWhatsAppEmbeddedSignup(input: {
@@ -77,21 +77,34 @@ export async function completeWhatsAppEmbeddedSignup(input: {
   metaBusinessId?: string | null;
   onboardingMethod?: 'embedded_signup' | 'coexistence';
 }): Promise<WhatsAppConnectionStatusPayload> {
-  return invokeConnection({
+  const onboardingMethod = input.onboardingMethod === 'coexistence'
+    ? 'coexistence'
+    : 'embedded_signup';
+
+  if (onboardingMethod === 'coexistence' && !input.phoneNumberId) {
+    return invokeFunction('whatsapp-coexistence-connect', {
+      tenantId: input.tenantId,
+      authorizationCode: input.authorizationCode,
+      wabaId: input.wabaId,
+      metaBusinessId: input.metaBusinessId ?? null,
+    });
+  }
+
+  return invokeFunction('whatsapp-connection', {
     action: 'complete_embedded_signup',
     tenantId: input.tenantId,
     authorizationCode: input.authorizationCode,
     wabaId: input.wabaId,
     phoneNumberId: input.phoneNumberId ?? null,
     metaBusinessId: input.metaBusinessId ?? null,
-    onboardingMethod: input.onboardingMethod === 'coexistence' ? 'coexistence' : 'embedded_signup',
+    onboardingMethod,
   });
 }
 
 export async function disconnectWhatsApp(
   tenantId: string,
 ): Promise<WhatsAppConnectionStatusPayload> {
-  return invokeConnection({ action: 'disconnect', tenantId });
+  return invokeFunction('whatsapp-connection', { action: 'disconnect', tenantId });
 }
 
 export async function startWhatsAppEmbeddedSignup(
@@ -188,10 +201,11 @@ export async function parseEmbeddedSignupCallback(
   };
 }
 
-async function invokeConnection(
+async function invokeFunction(
+  functionName: 'whatsapp-connection' | 'whatsapp-coexistence-connect',
   body: Record<string, unknown>,
 ): Promise<WhatsAppConnectionStatusPayload> {
-  const { data, error } = await supabase.functions.invoke('whatsapp-connection', { body });
+  const { data, error } = await supabase.functions.invoke(functionName, { body });
   if (error) {
     let message = error.message || 'Unable to update WhatsApp connection.';
     if (error.context && typeof error.context === 'object' && 'clone' in error.context) {
@@ -212,12 +226,10 @@ function normalizeStatusPayload(value: unknown): WhatsAppConnectionStatusPayload
   const row = value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
-
   const rawConnection =
     row.connection && typeof row.connection === 'object' && !Array.isArray(row.connection)
       ? row.connection as Record<string, unknown>
       : null;
-
   const rawReadiness =
     row.readiness && typeof row.readiness === 'object' && !Array.isArray(row.readiness)
       ? row.readiness as Record<string, unknown>
