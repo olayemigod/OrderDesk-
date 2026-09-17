@@ -9,27 +9,19 @@ create table if not exists public.conversation_work_states (
   customer_id uuid not null,
   state text not null default 'ai_handling'
     check (state in ('ai_handling','needs_merchant','merchant_handling','waiting_customer','resolved')),
-  assigned_user_id uuid,
+  assigned_user_id uuid references auth.users(id) on delete set null,
   last_state_reason text,
   last_customer_message_at timestamptz,
   last_merchant_reply_at timestamptz,
   resolved_at timestamptz,
-  updated_by_user_id uuid,
+  updated_by_user_id uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   primary key (tenant_id,customer_id),
   constraint conversation_work_states_customer_fk
     foreign key (tenant_id,customer_id)
     references public.customers(tenant_id,id)
-    on delete cascade,
-  constraint conversation_work_states_assignee_fk
-    foreign key (tenant_id,assigned_user_id)
-    references public.tenant_members(tenant_id,user_id)
-    on delete set null,
-  constraint conversation_work_states_updated_by_fk
-    foreign key (tenant_id,updated_by_user_id)
-    references public.tenant_members(tenant_id,user_id)
-    on delete set null
+    on delete cascade
 );
 
 create index if not exists conversation_work_states_queue_idx
@@ -56,27 +48,15 @@ create table if not exists public.conversation_work_events (
     check (from_state is null or from_state in ('ai_handling','needs_merchant','merchant_handling','waiting_customer','resolved')),
   to_state text not null
     check (to_state in ('ai_handling','needs_merchant','merchant_handling','waiting_customer','resolved')),
-  actor_user_id uuid,
-  from_assigned_user_id uuid,
-  to_assigned_user_id uuid,
+  actor_user_id uuid references auth.users(id) on delete set null,
+  from_assigned_user_id uuid references auth.users(id) on delete set null,
+  to_assigned_user_id uuid references auth.users(id) on delete set null,
   note text,
   created_at timestamptz not null default now(),
   constraint conversation_work_events_customer_fk
     foreign key (tenant_id,customer_id)
     references public.customers(tenant_id,id)
-    on delete cascade,
-  constraint conversation_work_events_actor_fk
-    foreign key (tenant_id,actor_user_id)
-    references public.tenant_members(tenant_id,user_id)
-    on delete set null,
-  constraint conversation_work_events_from_assignee_fk
-    foreign key (tenant_id,from_assigned_user_id)
-    references public.tenant_members(tenant_id,user_id)
-    on delete set null,
-  constraint conversation_work_events_to_assignee_fk
-    foreign key (tenant_id,to_assigned_user_id)
-    references public.tenant_members(tenant_id,user_id)
-    on delete set null
+    on delete cascade
 );
 
 create index if not exists conversation_work_events_customer_idx
