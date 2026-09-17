@@ -813,6 +813,7 @@ const styles = StyleSheet.create({
   primaryResolveButton: { minHeight: 44, backgroundColor: '#12B76A', borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
   primaryResolveText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
   error: { color: '#B42318', fontSize: 12, lineHeight: 17 },
+  disabled: { opacity: 0.5 },
 });
 
 const darkStyles = StyleSheet.create({
