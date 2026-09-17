@@ -51,7 +51,12 @@ Deno.serve(async (request) => {
     if (!membership) return reply({ error: 'You do not have access to this business' }, 403, requestId);
 
     if (action === 'status') {
-      const [{ data: settings, error: settingsError }, { data: mapped, error: mappedError }] = await Promise.all([
+      const [
+        { data: settings, error: settingsError },
+        { data: mapped, error: mappedError },
+        { data: connection, error: connectionError },
+        { data: managementProbe, error: probeError },
+      ] = await Promise.all([
         admin
           .from('tenant_whatsapp_catalog_settings')
           .select('tenant_id,catalog_id,catalog_name,sync_mode,is_enabled,last_sync_at,last_sync_status,last_sync_error,updated_at')
@@ -64,15 +69,57 @@ Deno.serve(async (request) => {
           .not('whatsapp_product_retailer_id', 'is', null)
           .order('name', { ascending: true })
           .limit(500),
+        admin
+          .from('tenant_whatsapp_connections')
+          .select('connection_status,credential_mode,waba_id,phone_number_id,onboarding_method,last_verified_at')
+          .eq('tenant_id', tenantId)
+          .maybeSingle(),
+        admin
+          .from('whatsapp_management_probe_events')
+          .select('succeeded,evidence,error_message,created_at')
+          .eq('tenant_id', tenantId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
       ]);
 
       if (settingsError) throw settingsError;
       if (mappedError) throw mappedError;
+      if (connectionError) throw connectionError;
+      if (probeError) throw probeError;
+
+      const connected = connection?.connection_status === 'connected';
+      const tenantCredentialReady =
+        connection?.credential_mode === 'business_integration_system_user';
+      const managementApiReady = managementProbe?.succeeded === true;
+      const catalogConfigured = Boolean(settings?.catalog_id);
+      const baseReady = connected && tenantCredentialReady && managementApiReady && catalogConfigured;
+      const importReadiness = {
+        connected,
+        tenantCredentialReady,
+        managementApiReady,
+        catalogConfigured,
+        importReady: false,
+        reason: !connected
+          ? 'Connect this business to WhatsApp first.'
+          : !tenantCredentialReady
+            ? 'Automatic catalogue import requires a tenant-owned Meta business integration credential.'
+            : !managementApiReady
+              ? 'WhatsApp Business management access has not been verified for this tenant.'
+              : !catalogConfigured
+                ? 'Configure the merchant Meta catalogue ID first.'
+                : baseReady
+                  ? 'WhatsApp management access is ready. Meta catalogue asset authorization still needs a dedicated catalogue probe before import can be enabled.'
+                  : 'Meta catalogue import is not ready.',
+        managementEvidence: managementProbe?.evidence ?? null,
+        managementCheckedAt: managementProbe?.created_at ?? null,
+      };
 
       return reply({
         role: membership.role,
         settings: settings ?? null,
         mappedItems: mapped ?? [],
+        importReadiness,
       }, 200, requestId);
     }
 
