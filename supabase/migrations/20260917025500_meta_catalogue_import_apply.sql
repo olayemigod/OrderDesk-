@@ -48,7 +48,7 @@ begin
   where tm.tenant_id=p_tenant_id
     and tm.user_id=p_actor_user_id;
 
-  if v_role not in ('owner','manager') then
+  if v_role is null or v_role not in ('owner','manager') then
     raise exception 'Only the business Owner or Manager can import a Meta catalogue'
       using errcode='42501';
   end if;
@@ -83,7 +83,7 @@ begin
       using errcode='23514';
   end if;
 
-  if jsonb_typeof(p_rows) <> 'array' then
+  if jsonb_typeof(p_rows) is distinct from 'array' then
     raise exception 'Meta catalogue import rows must be an array' using errcode='22023';
   end if;
   if jsonb_array_length(p_rows) < 1 or jsonb_array_length(p_rows) > 500 then
@@ -121,7 +121,7 @@ begin
       raise exception 'Meta row % has an invalid price',v_index using errcode='22023';
     end;
 
-    if jsonb_typeof(v_row->'isActive') <> 'boolean' then
+    if jsonb_typeof(v_row->'isActive') is distinct from 'boolean' then
       raise exception 'Meta row % has an invalid availability state',v_index using errcode='22023';
     end if;
     v_is_active := (v_row->>'isActive')::boolean;
