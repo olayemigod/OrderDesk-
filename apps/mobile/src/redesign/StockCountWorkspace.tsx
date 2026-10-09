@@ -100,14 +100,8 @@ export function StockCountWorkspace({
   const varianceItems = count?.items.filter(
     (item) => item.varianceQuantity !== null && item.varianceQuantity !== 0,
   ) ?? [];
-  const positiveVariance = varianceItems.reduce(
-    (total, item) => total + Math.max(item.varianceQuantity ?? 0, 0),
-    0,
-  );
-  const negativeVariance = varianceItems.reduce(
-    (total, item) => total + Math.min(item.varianceQuantity ?? 0, 0),
-    0,
-  );
+  const increaseItems = varianceItems.filter((item) => (item.varianceQuantity ?? 0) > 0).length;
+  const decreaseItems = varianceItems.filter((item) => (item.varianceQuantity ?? 0) < 0).length;
 
   async function startNewCount() {
     if (saving) return;
@@ -371,8 +365,8 @@ export function StockCountWorkspace({
       ) : (
         <View style={styles.reviewSummary}>
           <SummaryCard label="Variance items" value={String(varianceItems.length)} dark={dark} />
-          <SummaryCard label="Increase" value={`+${formatQuantity(positiveVariance)}`} dark={dark} />
-          <SummaryCard label="Decrease" value={formatQuantity(negativeVariance)} dark={dark} attention={negativeVariance < 0} />
+          <SummaryCard label="Increase items" value={String(increaseItems)} dark={dark} />
+          <SummaryCard label="Decrease items" value={String(decreaseItems)} dark={dark} attention={decreaseItems > 0} />
         </View>
       )}
 
