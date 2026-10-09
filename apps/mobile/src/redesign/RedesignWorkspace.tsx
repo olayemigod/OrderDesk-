@@ -4,7 +4,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 
 import { SettingsHub } from '../components/SettingsHub';
 import { loadAccessibleBranches, type CommerceBranch } from '../data/commerceRepository';
-import type { MerchantOrder, OrderSource } from '../domain/order';
+import type { MerchantOrder } from '../domain/order';
 import { orderTotal } from '../domain/order';
 import { useBusinesses } from '../hooks/useBusinesses';
 import { useMerchantNotifications } from '../hooks/useMerchantNotifications';
@@ -15,6 +15,7 @@ import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import { HomeDashboard, type HomeAttentionItem } from './HomeDashboard';
 import { InventoryWorkspace } from './InventoryWorkspace';
 import { MobileShell, type SellerTrayPrimaryTab } from './MobileShell';
+import { OrdersWorkspace } from './OrdersWorkspace';
 import { SellWorkspace } from './SellWorkspace';
 
 export default function RedesignWorkspace() {
@@ -199,10 +200,12 @@ export default function RedesignWorkspace() {
       ) : null}
 
       {tab === 'orders' ? (
-        <OrdersSnapshot
+        <OrdersWorkspace
+          tenantId={activeBusiness.id}
           businessCurrency={activeBusiness.currency}
           orders={branchOrders}
           loading={ordersLoading}
+          onChanged={refreshOrders}
         />
       ) : null}
 
@@ -289,89 +292,6 @@ function BranchSwitcher({
   );
 }
 
-function OrdersSnapshot({
-  orders,
-  loading,
-  businessCurrency,
-}: {
-  orders: MerchantOrder[];
-  loading: boolean;
-  businessCurrency: string;
-}) {
-  const appearance = useSellerTrayAppearance();
-
-  return (
-    <View style={styles.stack}>
-      <ScreenHeading
-        eyebrow="ORDERS"
-        title="Orders"
-        subtitle="Review customer orders, payment state and fulfilment progress."
-      />
-
-      {loading && orders.length === 0 ? (
-        <View style={[styles.emptyCard, appearance.dark && darkStyles.card]}>
-          <ActivityIndicator />
-          <Text style={[styles.muted, appearance.dark && darkStyles.bodyText]}>Loading orders…</Text>
-        </View>
-      ) : null}
-
-      {!loading && orders.length === 0 ? (
-        <View style={[styles.emptyCard, appearance.dark && darkStyles.card]}>
-          <Ionicons name="receipt-outline" size={28} color={theme.colors.greenDark} />
-          <Text style={[styles.emptyTitle, appearance.dark && darkStyles.titleText]}>No orders here yet</Text>
-          <Text style={[styles.emptyText, appearance.dark && darkStyles.bodyText]}>
-            Walk-in, POS and WhatsApp orders for this branch will appear here.
-          </Text>
-        </View>
-      ) : null}
-
-      {orders.map((order) => {
-        const total = orderTotal(order);
-        return (
-          <View key={order.id} style={[styles.orderCard, appearance.dark && darkStyles.card]}>
-            <View style={styles.orderTopRow}>
-              <View style={styles.orderIdentity}>
-                <Text style={[styles.customerName, appearance.dark && darkStyles.titleText]}>{order.customerName}</Text>
-                <Text style={[styles.orderMeta, appearance.dark && darkStyles.bodyText]}>
-                  {order.publicOrderId} · {sourceLabel(order.source)}
-                </Text>
-              </View>
-              <Text style={[styles.orderValue, appearance.dark && darkStyles.titleText]}>
-                {total === null ? 'Needs pricing' : formatMoney(total, businessCurrency)}
-              </Text>
-            </View>
-            <View style={styles.orderStateRow}>
-              <StatePill label={titleCase(order.status)} />
-              <StatePill label={titleCase(order.paymentStatus)} positive={order.paymentStatus === 'paid'} />
-              <StatePill label={titleCase(order.fulfillmentStatus)} positive={order.fulfillmentStatus === 'delivered' || order.fulfillmentStatus === 'collected'} />
-            </View>
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
-function ScreenHeading({ eyebrow, title, subtitle }: { eyebrow: string; title: string; subtitle: string }) {
-  const appearance = useSellerTrayAppearance();
-  return (
-    <View style={styles.heading}>
-      <Text style={[styles.eyebrow, appearance.dark && darkStyles.bodyText]}>{eyebrow}</Text>
-      <Text style={[styles.pageTitle, appearance.dark && darkStyles.titleText]}>{title}</Text>
-      <Text style={[styles.pageSubtitle, appearance.dark && darkStyles.bodyText]}>{subtitle}</Text>
-    </View>
-  );
-}
-
-function StatePill({ label, positive = false }: { label: string; positive?: boolean }) {
-  const appearance = useSellerTrayAppearance();
-  return (
-    <View style={[styles.statePill, appearance.dark && darkStyles.subtleCard, positive && styles.statePillPositive]}>
-      <Text style={[styles.statePillText, appearance.dark && darkStyles.bodyText, positive && styles.statePillTextPositive]}>{label}</Text>
-    </View>
-  );
-}
-
 function buildHomeSnapshot(orders: MerchantOrder[]) {
   const today = localDayKey(new Date());
   const todayOrders = orders.filter((order) => localDayKey(new Date(order.receivedAt)) === today);
@@ -380,7 +300,7 @@ function buildHomeSnapshot(orders: MerchantOrder[]) {
   return {
     ordersToday: todayOrders.length,
     salesToday: activeTodayOrders.reduce((sum, order) => sum + (orderTotal(order) ?? 0), 0),
-    collectedToday: activeTodayOrders.reduce((sum, order) => sum + Math.max(0, order.amountPaid), 0),
+    collectedToday: activeTodayOrders.reduce((sum, order) => sum + Math.max(0, order.amountPaid - order.returnedAmount), 0),
     whatsappNeedsReview: orders.filter((order) =>
       order.source === 'whatsapp' && ['needs_review', 'draft'].includes(order.status),
     ).length,
@@ -395,30 +315,9 @@ function buildHomeSnapshot(orders: MerchantOrder[]) {
   };
 }
 
-function sourceLabel(source: OrderSource): string {
-  if (source === 'whatsapp') return 'WhatsApp';
-  if (source === 'pos') return 'POS';
-  return 'Manual';
-}
-
 function localDayKey(date: Date): string {
   if (Number.isNaN(date.getTime())) return '';
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-function titleCase(value: string): string {
-  return value
-    .split('_')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
-
-function formatMoney(value: number, currency: string): string {
-  return new Intl.NumberFormat('en-NG', {
-    style: 'currency',
-    currency,
-    maximumFractionDigits: 0,
-  }).format(value);
 }
 
 const styles = StyleSheet.create({
@@ -447,17 +346,6 @@ const styles = StyleSheet.create({
   emptyCard: { minHeight: 120, borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 18, alignItems: 'center', justifyContent: 'center', gap: 7 },
   emptyTitle: { color: theme.colors.navy, fontSize: 15, fontWeight: '900' },
   emptyText: { color: theme.colors.muted, fontSize: 12, lineHeight: 18, textAlign: 'center' },
-  orderCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 13, gap: 10 },
-  orderTopRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
-  orderIdentity: { flex: 1, minWidth: 0 },
-  customerName: { color: theme.colors.navy, fontSize: 14, fontWeight: '900' },
-  orderMeta: { color: theme.colors.muted, fontSize: 11, marginTop: 3 },
-  orderValue: { color: theme.colors.navy, fontSize: 13, fontWeight: '900' },
-  orderStateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  statePill: { borderRadius: theme.radius.pill, backgroundColor: '#F2F4F7', paddingHorizontal: 8, paddingVertical: 5 },
-  statePillPositive: { backgroundColor: theme.colors.mintSoft },
-  statePillText: { color: theme.colors.slate, fontSize: 10, fontWeight: '800' },
-  statePillTextPositive: { color: theme.colors.greenDark },
 });
 
 const darkStyles = StyleSheet.create({
