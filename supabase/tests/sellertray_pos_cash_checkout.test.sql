@@ -112,6 +112,8 @@ set order_id=public.create_sellertray_pos_order_atomic(
   ))
 );
 
+set local request.jwt.claim.role = 'service_role';
+
 update sellertray_pos_cash_fixture
 set completion=public.complete_sellertray_pos_cash_sale(
   tenant_id,
