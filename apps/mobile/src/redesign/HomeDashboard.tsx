@@ -157,7 +157,7 @@ export function HomeDashboard({
             label="Transfers"
             value={pendingTransferCount}
             hint="pending"
-            onPress={onOpenOrders}
+            onPress={onOpenInventory}
             dark={dark}
           />
         </View>
