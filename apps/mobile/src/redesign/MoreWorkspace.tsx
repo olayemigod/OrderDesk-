@@ -6,18 +6,15 @@ import { SettingsHub } from '../components/SettingsHub';
 import type { BusinessProfileInput, MerchantBusiness } from '../data/businessRepository';
 import type { CashShift } from '../data/cashShiftRepository';
 import type { CommerceBranch } from '../data/commerceRepository';
-import type { MerchantOrder } from '../domain/order';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import { CashShiftWorkspace } from './CashShiftWorkspace';
 import { PrinterWorkspace } from './PrinterWorkspace';
-import { WhatsAppWorkspace } from './WhatsAppWorkspace';
+import { WhatsAppRuntimeWorkspace } from './WhatsAppRuntimeWorkspace';
 
 type Props = {
   business: MerchantBusiness;
   branch: CommerceBranch;
-  branches?: CommerceBranch[];
-  orders?: MerchantOrder[];
   activeShift: CashShift | null;
   cashRouteKey?: number;
   onSaveBusiness: (businessId: string, input: BusinessProfileInput) => Promise<void>;
@@ -28,8 +25,6 @@ type Props = {
 export function MoreWorkspace({
   business,
   branch,
-  branches,
-  orders = [],
   activeShift,
   cashRouteKey = 0,
   onSaveBusiness,
@@ -80,13 +75,11 @@ export function MoreWorkspace({
 
   if (whatsappOpen) {
     return (
-      <WhatsAppWorkspace
+      <WhatsAppRuntimeWorkspace
         business={business}
         branch={branch}
-        branches={branches ?? [branch]}
-        orders={orders}
         onClose={() => setWhatsappOpen(false)}
-        onOpenOrders={onOpenOrders ?? (() => setWhatsappOpen(false))}
+        onOpenOrders={onOpenOrders}
       />
     );
   }
