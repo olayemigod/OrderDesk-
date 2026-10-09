@@ -8,6 +8,7 @@ import type {
   FulfillmentStatus,
   NotificationEventKey,
   OrderNotification,
+  OrderSource,
   OrderStatus,
   ParserSource,
   PaymentStatus,
@@ -36,6 +37,7 @@ type OrderNotificationRow = {
 
 type OrderRow = {
   id: string;
+  branch_id: string;
   public_order_id: string;
   status: OrderStatus;
   status_reason: string | null;
@@ -51,7 +53,7 @@ type OrderRow = {
   payment_status: PaymentStatus;
   amount_paid: number | string;
   payment_confirmed_at: string | null;
-  source: 'whatsapp' | 'manual';
+  source: OrderSource;
   customer_note: string | null;
   parser_confidence: number | string | null;
   parser_source: ParserSource;
@@ -72,6 +74,9 @@ type OrderRow = {
     item_name: string;
     original_item_name: string | null;
     quantity: number | string;
+    selected_uom: string;
+    conversion_factor: number | string;
+    stock_quantity: number | string;
     unit_price: number | string | null;
     match_source: MatchSource;
     match_confidence: number | string | null;
@@ -98,7 +103,6 @@ export type ManualOrderInput = {
   items: ManualOrderLineInput[];
 };
 
-
 function one<T>(value: T | T[] | null): T | null {
   if (Array.isArray(value)) return value[0] ?? null;
   return value;
@@ -116,6 +120,7 @@ function mapOrder(row: OrderRow, notifications: OrderNotification[]): MerchantOr
 
   return {
     id: row.id,
+    branchId: row.branch_id,
     customerId: customer?.id ?? '',
     publicOrderId: row.public_order_id,
     customerName: customer?.display_name || customer?.phone || customer?.wa_id || 'WhatsApp customer',
@@ -161,6 +166,9 @@ function mapOrder(row: OrderRow, notifications: OrderNotification[]): MerchantOr
       name: item.item_name,
       originalName: item.original_item_name,
       quantity: toNumber(item.quantity) ?? 1,
+      selectedUom: item.selected_uom,
+      conversionFactor: toNumber(item.conversion_factor) ?? 1,
+      stockQuantity: toNumber(item.stock_quantity) ?? (toNumber(item.quantity) ?? 1),
       unitPrice: toNumber(item.unit_price),
       matchSource: item.match_source,
       matchConfidence: toNumber(item.match_confidence),
@@ -176,6 +184,7 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
       .from('orders')
       .select(`
         id,
+        branch_id,
         public_order_id,
         status,
         status_reason,
@@ -200,7 +209,7 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
         created_at,
         customers(id, display_name, phone, wa_id),
         inbound_messages!orders_source_message_same_tenant(text_body),
-        order_items(id, catalog_item_id, item_name, original_item_name, quantity, unit_price, match_source, match_confidence),
+        order_items(id, catalog_item_id, item_name, original_item_name, quantity, selected_uom, conversion_factor, stock_quantity, unit_price, match_source, match_confidence),
         order_status_events(id, event_type, from_status, to_status, actor_kind, reason, created_at)
       `)
       .eq('tenant_id', tenantId)
