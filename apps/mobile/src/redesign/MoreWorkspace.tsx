@@ -9,6 +9,7 @@ import type { CommerceBranch } from '../data/commerceRepository';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import { CashShiftWorkspace } from './CashShiftWorkspace';
+import { PrinterWorkspace } from './PrinterWorkspace';
 
 type Props = {
   business: MerchantBusiness;
@@ -30,13 +31,18 @@ export function MoreWorkspace({
   const appearance = useSellerTrayAppearance();
   const dark = appearance.dark;
   const [cashOpen, setCashOpen] = useState(false);
+  const [printerOpen, setPrinterOpen] = useState(false);
 
   useEffect(() => {
-    if (cashRouteKey > 0) setCashOpen(true);
+    if (cashRouteKey > 0) {
+      setPrinterOpen(false);
+      setCashOpen(true);
+    }
   }, [cashRouteKey]);
 
   useEffect(() => {
     setCashOpen(false);
+    setPrinterOpen(false);
   }, [business.id, branch.id]);
 
   if (cashOpen) {
@@ -46,6 +52,17 @@ export function MoreWorkspace({
         branch={branch}
         onClose={() => setCashOpen(false)}
         onShiftChanged={onShiftChanged}
+      />
+    );
+  }
+
+  if (printerOpen) {
+    return (
+      <PrinterWorkspace
+        tenantId={business.id}
+        branch={branch}
+        activeShift={activeShift}
+        onClose={() => setPrinterOpen(false)}
       />
     );
   }
@@ -80,6 +97,22 @@ export function MoreWorkspace({
             {activeShift
               ? `${activeShift.registerName} · Expected cash ${formatMoney(activeShift.expectedCash, activeShift.currency)}`
               : `Open a cashier shift for ${branch.name}, record expenses and reconcile the drawer.`}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
+      </Pressable>
+
+      <Pressable
+        onPress={() => setPrinterOpen(true)}
+        style={({ pressed }) => [styles.operationCard, dark && darkStyles.card, pressed && styles.pressed]}
+      >
+        <View style={[styles.operationIcon, styles.operationIconActive]}>
+          <Ionicons name="print-outline" size={23} color={theme.colors.greenDark} />
+        </View>
+        <View style={styles.operationCopy}>
+          <Text style={[styles.operationTitle, dark && darkStyles.titleText]}>Devices & Printers</Text>
+          <Text style={[styles.operationText, dark && darkStyles.bodyText]}>
+            Set up Bluetooth receipt printers, paper width and test printing for {branch.name}.
           </Text>
         </View>
         <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
