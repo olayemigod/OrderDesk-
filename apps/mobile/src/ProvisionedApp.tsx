@@ -8,6 +8,9 @@ import { PlatformAdminView } from './components/PlatformAdminView';
 import { useBusinesses } from './hooks/useBusinesses';
 import { usePlatformAdmin } from './hooks/usePlatformAdmin';
 import { supabase } from './lib/supabase';
+import RedesignWorkspace from './redesign/RedesignWorkspace';
+
+const mobileRedesignEnabled = process.env.EXPO_PUBLIC_SELLERTRAY_MOBILE_REDESIGN === '1';
 
 export default function ProvisionedApp() {
   return (
@@ -90,7 +93,7 @@ function ProvisioningGate() {
     );
   }
 
-  return <SaasApp />;
+  return mobileRedesignEnabled ? <RedesignWorkspace /> : <SaasApp />;
 }
 
 const styles = StyleSheet.create({
