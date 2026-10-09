@@ -13,9 +13,11 @@ import {
   type InventoryCapabilities,
   type StockCountDetail,
 } from '../data/inventoryRepository';
+import { loadLowStock } from '../data/lowStockRepository';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import { InventoryWorkspace } from './InventoryWorkspace';
+import { LowStockWorkspace } from './LowStockWorkspace';
 import { StockCountWorkspace } from './StockCountWorkspace';
 import { StockTransferWorkspace } from './StockTransferWorkspace';
 
@@ -38,15 +40,18 @@ export function InventoryTabWorkspace({ tenantId, branch }: Props) {
   const [capabilities, setCapabilities] = useState<InventoryCapabilities>(NO_CAPABILITIES);
   const [products, setProducts] = useState<CommerceProduct[]>([]);
   const [activeCount, setActiveCount] = useState<StockCountDetail | null>(null);
+  const [lowStockCount, setLowStockCount] = useState<number | null>(null);
   const [loadingCountAccess, setLoadingCountAccess] = useState(true);
   const [countAccessError, setCountAccessError] = useState<string | null>(null);
   const [countOpen, setCountOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
+  const [lowStockOpen, setLowStockOpen] = useState(false);
   const [inventoryVersion, setInventoryVersion] = useState(0);
 
   async function refreshCountEntry() {
     setLoadingCountAccess(true);
     setCountAccessError(null);
+    setLowStockCount(null);
     try {
       const [nextCapabilities, nextProducts] = await Promise.all([
         loadInventoryCapabilities(tenantId, branch.id),
@@ -54,6 +59,13 @@ export function InventoryTabWorkspace({ tenantId, branch }: Props) {
       ]);
       setCapabilities(nextCapabilities);
       setProducts(nextProducts);
+
+      try {
+        const alerts = await loadLowStock(tenantId, branch.id);
+        setLowStockCount(alerts.length);
+      } catch {
+        setLowStockCount(null);
+      }
 
       if (nextCapabilities.canCountStock || nextCapabilities.canApplyStockCount) {
         try {
@@ -69,6 +81,7 @@ export function InventoryTabWorkspace({ tenantId, branch }: Props) {
       setCapabilities(NO_CAPABILITIES);
       setProducts([]);
       setActiveCount(null);
+      setLowStockCount(null);
       setCountAccessError(err instanceof Error ? err.message : 'Inventory action access could not be verified.');
     } finally {
       setLoadingCountAccess(false);
@@ -78,9 +91,23 @@ export function InventoryTabWorkspace({ tenantId, branch }: Props) {
   useEffect(() => {
     setCountOpen(false);
     setTransferOpen(false);
+    setLowStockOpen(false);
     setInventoryVersion(0);
     void refreshCountEntry();
   }, [tenantId, branch.id]);
+
+  if (lowStockOpen) {
+    return (
+      <LowStockWorkspace
+        tenantId={tenantId}
+        branch={branch}
+        onClose={() => {
+          setLowStockOpen(false);
+          void refreshCountEntry();
+        }}
+      />
+    );
+  }
 
   if (transferOpen) {
     return (
@@ -124,6 +151,40 @@ export function InventoryTabWorkspace({ tenantId, branch }: Props) {
 
   return (
     <View style={styles.stack}>
+      <Pressable
+        onPress={() => setLowStockOpen(true)}
+        style={({ pressed }) => [
+          styles.countCard,
+          dark && darkStyles.card,
+          lowStockCount !== null && lowStockCount > 0 && styles.lowStockCardActive,
+          pressed && styles.pressed,
+        ]}
+      >
+        <View style={[styles.countIcon, lowStockCount !== null && lowStockCount > 0 && styles.lowStockIconActive]}>
+          <Ionicons
+            name={lowStockCount !== null && lowStockCount > 0 ? 'alert-circle-outline' : 'checkmark-circle-outline'}
+            size={22}
+            color={lowStockCount !== null && lowStockCount > 0 ? theme.colors.danger : theme.colors.greenDark}
+          />
+        </View>
+        <View style={styles.countCopy}>
+          <Text style={[styles.countTitle, dark && darkStyles.titleText]}>Low stock</Text>
+          <Text style={[styles.countText, dark && darkStyles.bodyText]}>
+            {lowStockCount === null
+              ? 'Open branch stock alerts.'
+              : lowStockCount === 0
+                ? 'No product is at or below its branch threshold.'
+                : `${lowStockCount} product${lowStockCount === 1 ? '' : 's'} need replenishment attention.`}
+          </Text>
+        </View>
+        {lowStockCount !== null && lowStockCount > 0 ? (
+          <View style={styles.alertCount}>
+            <Text style={styles.alertCountText}>{lowStockCount}</Text>
+          </View>
+        ) : null}
+        <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
+      </Pressable>
+
       <Pressable
         onPress={() => setTransferOpen(true)}
         style={({ pressed }) => [styles.countCard, dark && darkStyles.card, pressed && styles.pressed]}
@@ -202,11 +263,15 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   countCardActive: { borderColor: theme.colors.green, backgroundColor: theme.colors.mintSoft },
+  lowStockCardActive: { borderColor: '#FDA29B', backgroundColor: theme.colors.dangerSoft },
   countIcon: { width: 43, height: 43, borderRadius: 14, backgroundColor: theme.colors.cloud, alignItems: 'center', justifyContent: 'center' },
   countIconActive: { backgroundColor: theme.colors.white },
+  lowStockIconActive: { backgroundColor: theme.colors.white },
   countCopy: { flex: 1, minWidth: 0 },
   countTitle: { color: theme.colors.navy, fontSize: 14, fontWeight: '900' },
   countText: { color: theme.colors.slate, fontSize: 11, lineHeight: 17, marginTop: 2 },
+  alertCount: { minWidth: 25, height: 25, borderRadius: 13, backgroundColor: theme.colors.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  alertCountText: { color: theme.colors.white, fontSize: 10, fontWeight: '900' },
   permissionCard: { borderRadius: theme.radius.md, backgroundColor: theme.colors.cloud, padding: 10, flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   permissionText: { flex: 1, color: theme.colors.muted, fontSize: 11, lineHeight: 17 },
   pressed: { opacity: 0.76 },
