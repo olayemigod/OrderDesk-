@@ -2,22 +2,14 @@ begin;
 
 create table public.tenant_member_capability_events (
   id uuid primary key default gen_random_uuid(),
-  tenant_id uuid not null,
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
   user_id uuid not null,
   capability text not null
     check (capability in ('can_receive_stock','can_adjust_stock')),
   previous_allowed boolean not null,
   new_allowed boolean not null,
   actor_user_id uuid not null,
-  created_at timestamptz not null default now(),
-  constraint tenant_member_capability_events_target_same_tenant
-    foreign key (tenant_id,user_id)
-    references public.tenant_members(tenant_id,user_id)
-    on delete restrict,
-  constraint tenant_member_capability_events_actor_same_tenant
-    foreign key (tenant_id,actor_user_id)
-    references public.tenant_members(tenant_id,user_id)
-    on delete restrict
+  created_at timestamptz not null default now()
 );
 
 create index tenant_member_capability_events_target_idx
