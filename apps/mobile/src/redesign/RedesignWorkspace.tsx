@@ -2,19 +2,18 @@ import { useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { CatalogueView } from '../components/CatalogueView';
 import { SettingsHub } from '../components/SettingsHub';
 import { loadAccessibleBranches, type CommerceBranch } from '../data/commerceRepository';
 import type { MerchantOrder, OrderSource } from '../domain/order';
 import { orderTotal } from '../domain/order';
 import { useBusinesses } from '../hooks/useBusinesses';
-import { useCatalogue } from '../hooks/useCatalogue';
 import { useMerchantNotifications } from '../hooks/useMerchantNotifications';
 import { useOrders } from '../hooks/useOrders';
 import { supabase } from '../lib/supabase';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import { HomeDashboard, type HomeAttentionItem } from './HomeDashboard';
+import { InventoryWorkspace } from './InventoryWorkspace';
 import { MobileShell, type SellerTrayPrimaryTab } from './MobileShell';
 import { SellWorkspace } from './SellWorkspace';
 
@@ -35,7 +34,6 @@ export default function RedesignWorkspace() {
     error: ordersError,
     refresh: refreshOrders,
   } = useOrders(activeBusiness?.id ?? null);
-  const catalogue = useCatalogue(activeBusiness?.id ?? null);
   const notifications = useMerchantNotifications(activeBusiness?.id ?? null);
 
   useEffect(() => {
@@ -132,7 +130,7 @@ export default function RedesignWorkspace() {
     });
   }
 
-  const workspaceError = ordersError || catalogue.error || notifications.error || branchError;
+  const workspaceError = ordersError || notifications.error || branchError;
 
   return (
     <MobileShell
@@ -196,15 +194,7 @@ export default function RedesignWorkspace() {
             }}
           />
         ) : (
-          <View style={[styles.emptyCard, appearance.dark && darkStyles.card]}>
-            {branchLoading ? <ActivityIndicator /> : <Ionicons name="location-outline" size={28} color={theme.colors.greenDark} />}
-            <Text style={[styles.emptyTitle, appearance.dark && darkStyles.titleText]}>
-              {branchLoading ? 'Loading selling location' : 'No selling branch available'}
-            </Text>
-            <Text style={[styles.emptyText, appearance.dark && darkStyles.bodyText]}>
-              {branchLoading ? 'SellerTray is checking your branch access.' : 'Ask a manager to assign an active branch before selling.'}
-            </Text>
-          </View>
+          <BranchRequiredState loading={branchLoading} />
         )
       ) : null}
 
@@ -217,14 +207,14 @@ export default function RedesignWorkspace() {
       ) : null}
 
       {tab === 'inventory' ? (
-        <View style={styles.stack}>
-          <ScreenHeading
-            eyebrow="INVENTORY"
-            title="Products and stock"
-            subtitle={activeBranch ? `Working in ${activeBranch.name}. Product setup stays consistent across your business.` : 'Find products quickly and keep selling information current.'}
+        activeBranch ? (
+          <InventoryWorkspace
+            tenantId={activeBusiness.id}
+            branch={activeBranch}
           />
-          <CatalogueView business={activeBusiness} />
-        </View>
+        ) : (
+          <BranchRequiredState loading={branchLoading} />
+        )
       ) : null}
 
       {tab === 'more' ? (
@@ -234,6 +224,21 @@ export default function RedesignWorkspace() {
         />
       ) : null}
     </MobileShell>
+  );
+}
+
+function BranchRequiredState({ loading }: { loading: boolean }) {
+  const appearance = useSellerTrayAppearance();
+  return (
+    <View style={[styles.emptyCard, appearance.dark && darkStyles.card]}>
+      {loading ? <ActivityIndicator /> : <Ionicons name="location-outline" size={28} color={theme.colors.greenDark} />}
+      <Text style={[styles.emptyTitle, appearance.dark && darkStyles.titleText]}>
+        {loading ? 'Loading branch' : 'No branch available'}
+      </Text>
+      <Text style={[styles.emptyText, appearance.dark && darkStyles.bodyText]}>
+        {loading ? 'SellerTray is checking your branch access.' : 'Ask a manager to assign an active branch before continuing.'}
+      </Text>
+    </View>
   );
 }
 
