@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(12);
+select extensions.plan(13);
 
 create temp table sellertray_operational_lifecycle_fixture (
   tenant_id uuid not null,
@@ -15,7 +15,8 @@ create temp table sellertray_operational_lifecycle_fixture (
   inventory_delete_rejected boolean not null default false,
   return_delete_rejected boolean not null default false,
   capability_event_delete_rejected boolean not null default false,
-  order_item_delete_rejected boolean not null default false
+  order_item_delete_rejected boolean not null default false,
+  order_delete_rejected boolean not null default false
 ) on commit drop;
 
 insert into sellertray_operational_lifecycle_fixture(
@@ -185,6 +186,24 @@ $$;
 select extensions.ok(
   (select order_item_delete_rejected from sellertray_operational_lifecycle_fixture),
   'direct deletion of completed invoiced order items remains financially locked'
+);
+
+do $$
+begin
+  begin
+    delete from public.orders
+    where tenant_id=(select tenant_id from sellertray_operational_lifecycle_fixture)
+      and id=(select order_id from sellertray_operational_lifecycle_fixture);
+  exception when sqlstate '22023' then
+    update sellertray_operational_lifecycle_fixture
+    set order_delete_rejected=true;
+  end;
+end
+$$;
+
+select extensions.ok(
+  (select order_delete_rejected from sellertray_operational_lifecycle_fixture),
+  'direct deletion of a completed invoiced order cannot use the Tenant cascade exception'
 );
 
 select public.archive_sellertray_financial_records(
