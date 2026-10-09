@@ -13,7 +13,7 @@ import { supabase } from '../lib/supabase';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import { HomeDashboard, type HomeAttentionItem } from './HomeDashboard';
-import { InventoryWorkspace } from './InventoryWorkspace';
+import { InventoryTabWorkspace } from './InventoryTabWorkspace';
 import { MobileShell, type SellerTrayPrimaryTab } from './MobileShell';
 import { OrdersWorkspace } from './OrdersWorkspace';
 import { SellWorkspace } from './SellWorkspace';
@@ -212,7 +212,7 @@ export default function RedesignWorkspace() {
 
       {tab === 'inventory' ? (
         activeBranch ? (
-          <InventoryWorkspace
+          <InventoryTabWorkspace
             tenantId={activeBusiness.id}
             branch={activeBranch}
           />
