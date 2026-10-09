@@ -28,6 +28,8 @@ export type PaymentStatus =
   | 'paid'
   | 'payment_issue';
 
+export type ReturnStatus = 'none' | 'returned';
+
 export type OrderSource = 'whatsapp' | 'manual' | 'pos';
 
 export type MatchSource =
@@ -120,6 +122,9 @@ export type MerchantOrder = {
   paymentStatus: PaymentStatus;
   amountPaid: number;
   paymentConfirmedAt: string | null;
+  returnStatus: ReturnStatus;
+  returnedAmount: number;
+  returnedAt: string | null;
   source: OrderSource;
   customerMessage: string;
   confidence: number | null;
