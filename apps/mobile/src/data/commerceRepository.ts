@@ -100,10 +100,13 @@ export async function loadAccessibleBranches(tenantId: string): Promise<Commerce
   }));
 }
 
-export async function loadCommerceProducts(tenantId: string): Promise<CommerceProduct[]> {
+export async function loadCommerceProducts(
+  tenantId: string,
+  options?: { includeInactive?: boolean },
+): Promise<CommerceProduct[]> {
   if (!tenantId) return [];
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('catalog_items')
     .select(`
       id,
@@ -125,9 +128,13 @@ export async function loadCommerceProducts(tenantId: string): Promise<CommercePr
         is_default_purchase
       )
     `)
-    .eq('tenant_id', tenantId)
-    .eq('is_active', true)
-    .order('name', { ascending: true });
+    .eq('tenant_id', tenantId);
+
+  if (!options?.includeInactive) {
+    query = query.eq('is_active', true);
+  }
+
+  const { data, error } = await query.order('name', { ascending: true });
 
   if (error) throw error;
 
