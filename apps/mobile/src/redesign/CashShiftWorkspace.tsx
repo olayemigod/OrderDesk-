@@ -617,7 +617,7 @@ function movementLabel(type: CashMovementType): string {
   return 'Expense';
 }
 
-function movementIcon(type: CashMovementType): string {
+function movementIcon(type: CashMovementType): 'add-circle-outline' | 'remove-circle-outline' | 'receipt-outline' {
   if (type === 'cash_in') return 'add-circle-outline';
   if (type === 'cash_out') return 'remove-circle-outline';
   return 'receipt-outline';
