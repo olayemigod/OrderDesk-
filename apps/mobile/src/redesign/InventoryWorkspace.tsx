@@ -176,7 +176,7 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
       setOperationError('Product units are not available yet. Refresh Inventory and try again.');
       return;
     }
-    const defaultUom = findDefaultOperationUom(selectedProduct);
+    const defaultUom = findDefaultOperationUom(selectedProduct, mode);
     setOperationMode(mode);
     setOperationUomId(defaultUom?.id ?? '');
     setOperationQuantity('');
@@ -220,7 +220,7 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
       const result = await applyInventoryOperation({
         tenantId,
         branchId: branch.id,
-        productId: selected.id,
+        productId: selected.catalogItemId,
         uomId: selectedOperationUom.id,
         operation: operationMode,
         quantity,
@@ -240,7 +240,7 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
       setOperationReason('');
       await Promise.all([
         refreshStock(),
-        refreshMovements(selected.id),
+        refreshMovements(selected.catalogItemId),
       ]);
     } catch (err) {
       setOperationError(err instanceof Error ? err.message : 'Unable to post this stock movement.');
@@ -772,8 +772,14 @@ function SummaryCard({
   );
 }
 
-function findDefaultOperationUom(product: CommerceProduct): CommerceUom | null {
+function findDefaultOperationUom(product: CommerceProduct, mode: InventoryOperation): CommerceUom | null {
+  if (mode === 'receive') {
+    const purchaseUom = product.uoms.find((uom) => uom.isDefaultPurchase);
+    if (purchaseUom) return purchaseUom;
+  }
+
   return product.uoms.find((uom) => uom.name.toLowerCase() === product.stockUom.toLowerCase())
+    ?? product.uoms.find((uom) => uom.isDefaultSelling)
     ?? product.uoms[0]
     ?? null;
 }
