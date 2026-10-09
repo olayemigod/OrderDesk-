@@ -38,22 +38,22 @@ insert into public.catalog_items(id, tenant_id, name, sku, price_ngn, is_active,
 select product_id, tenant_id, 'POS Test Drink', 'POS-DRINK', 100, true, 'Bottle', false
 from sellertray_pos_fixture;
 
-insert into public.catalog_item_uoms(
-  tenant_id,
-  catalog_item_id,
-  uom_name,
-  conversion_factor,
-  selling_price,
-  allow_fractional,
-  is_default_selling
+with inserted_uom as (
+  insert into public.catalog_item_uoms(
+    tenant_id,
+    catalog_item_id,
+    uom_name,
+    conversion_factor,
+    selling_price,
+    allow_fractional,
+    is_default_selling
+  )
+  select tenant_id, product_id, 'Pack', 12, 1050, false, true
+  from sellertray_pos_fixture
+  returning id
 )
-select tenant_id, product_id, 'Pack', 12, 1050, false, true
-from sellertray_pos_fixture
-returning id into temporary table sellertray_pos_pack_uom;
-
-update sellertray_pos_fixture f
-set pack_uom_id = u.id
-from sellertray_pos_pack_uom u;
+update sellertray_pos_fixture
+set pack_uom_id = (select id from inserted_uom);
 
 update sellertray_pos_fixture
 set order_id = public.create_sellertray_pos_order_atomic(
