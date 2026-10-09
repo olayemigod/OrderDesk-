@@ -13,6 +13,7 @@ type Props = {
   businessCurrency: string;
   orders: MerchantOrder[];
   loading: boolean;
+  canReturnCompletedSale: boolean;
   onChanged: () => Promise<void>;
 };
 
@@ -26,6 +27,7 @@ export function OrdersWorkspace({
   businessCurrency,
   orders,
   loading,
+  canReturnCompletedSale,
   onChanged,
 }: Props) {
   const appearance = useSellerTrayAppearance();
@@ -107,7 +109,8 @@ export function OrdersWorkspace({
           && order.status === 'draft'
           && order.paymentStatus === 'unpaid'
           && order.amountPaid === 0;
-        const canReturn = order.source === 'pos'
+        const canReturn = canReturnCompletedSale
+          && order.source === 'pos'
           && order.status === 'completed'
           && order.paymentStatus === 'paid'
           && order.fulfillmentStatus === 'collected'
