@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import {
+  createPosDraft,
   loadCommerceProducts,
   type CommerceBranch,
   type CommerceProduct,
@@ -22,9 +23,10 @@ type Props = {
   tenantId: string;
   branch: CommerceBranch;
   currency: string;
+  onDraftCreated?: (orderId: string) => void;
 };
 
-export function SellWorkspace({ tenantId, branch, currency }: Props) {
+export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Props) {
   const appearance = useSellerTrayAppearance();
   const dark = appearance.dark;
   const [products, setProducts] = useState<CommerceProduct[]>([]);
@@ -33,7 +35,8 @@ export function SellWorkspace({ tenantId, branch, currency }: Props) {
   const [query, setQuery] = useState('');
   const [selectedUomByProduct, setSelectedUomByProduct] = useState<Record<string, string>>({});
   const [cart, setCart] = useState<Record<string, CartLine>>({});
-  const [checkoutNotice, setCheckoutNotice] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -58,7 +61,7 @@ export function SellWorkspace({ tenantId, branch, currency }: Props) {
 
   useEffect(() => {
     setCart({});
-    setCheckoutNotice(false);
+    setCheckoutError(null);
   }, [branch.id]);
 
   const normalizedQuery = query.trim().toLowerCase();
@@ -98,7 +101,7 @@ export function SellWorkspace({ tenantId, branch, currency }: Props) {
     const uom = selectedUom(product);
     if (!uom || uom.sellingPrice === null) return;
     const key = `${product.id}:${uom.id}`;
-    setCheckoutNotice(false);
+    setCheckoutError(null);
     setCart((current) => {
       const existing = current[key];
       const nextQuantity = existing ? existing.quantity + 1 : 1;
@@ -110,7 +113,7 @@ export function SellWorkspace({ tenantId, branch, currency }: Props) {
   }
 
   function changeQuantity(line: CartLine, delta: number) {
-    setCheckoutNotice(false);
+    setCheckoutError(null);
     setCart((current) => {
       const existing = current[line.key];
       if (!existing) return current;
@@ -123,6 +126,29 @@ export function SellWorkspace({ tenantId, branch, currency }: Props) {
       }
       return { ...current, [line.key]: { ...existing, quantity: next } };
     });
+  }
+
+  async function saveForCheckout() {
+    if (saving || cartLines.length === 0) return;
+    setSaving(true);
+    setCheckoutError(null);
+    try {
+      const orderId = await createPosDraft({
+        tenantId,
+        branchId: branch.id,
+        items: cartLines.map((line) => ({
+          catalogItemId: line.product.id,
+          uomId: line.uom.id,
+          quantity: line.quantity,
+        })),
+      });
+      setCart({});
+      onDraftCreated?.(orderId);
+    } catch (err) {
+      setCheckoutError(err instanceof Error ? err.message : 'Unable to prepare this sale.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -287,26 +313,31 @@ export function SellWorkspace({ tenantId, branch, currency }: Props) {
           </View>
         )}
 
-        {checkoutNotice ? (
-          <View style={[styles.checkoutNotice, dark && darkStyles.subtleCard]}>
-            <Ionicons name="information-circle-outline" size={20} color={theme.colors.info} />
-            <Text style={[styles.checkoutNoticeText, dark && darkStyles.bodyText]}>
-              Sales posting is not available on this device yet. Your cart is unchanged.
-            </Text>
+        <View style={[styles.checkoutNotice, dark && darkStyles.subtleCard]}>
+          <Ionicons name="information-circle-outline" size={20} color={theme.colors.info} />
+          <Text style={[styles.checkoutNoticeText, dark && darkStyles.bodyText]}>
+            Saving prepares this sale for checkout. Payment and stock remain unchanged until checkout is completed.
+          </Text>
+        </View>
+
+        {checkoutError ? (
+          <View style={[styles.checkoutError, dark && darkStyles.errorCard]}>
+            <Text style={[styles.errorText, dark && darkStyles.bodyText]}>{checkoutError}</Text>
           </View>
         ) : null}
 
         <Pressable
-          disabled={cartLines.length === 0}
-          onPress={() => setCheckoutNotice(true)}
+          disabled={cartLines.length === 0 || saving}
+          onPress={() => void saveForCheckout()}
           style={({ pressed }) => [
             styles.checkoutButton,
-            cartLines.length === 0 && styles.disabledButton,
-            pressed && cartLines.length > 0 && styles.pressed,
+            (cartLines.length === 0 || saving) && styles.disabledButton,
+            pressed && cartLines.length > 0 && !saving && styles.pressed,
           ]}
         >
-          <Text style={styles.checkoutButtonText}>Checkout</Text>
-          <Ionicons name="arrow-forward" size={19} color={theme.colors.white} />
+          {saving ? <ActivityIndicator color={theme.colors.white} /> : null}
+          <Text style={styles.checkoutButtonText}>{saving ? 'Saving…' : 'Save for checkout'}</Text>
+          {!saving ? <Ionicons name="arrow-forward" size={19} color={theme.colors.white} /> : null}
         </Pressable>
       </View>
     </View>
@@ -331,18 +362,7 @@ const styles = StyleSheet.create({
   eyebrow: { color: theme.colors.muted, fontSize: 11, fontWeight: '900', letterSpacing: 1.05 },
   title: { color: theme.colors.navy, fontSize: 28, lineHeight: 34, fontWeight: '900' },
   subtitle: { color: theme.colors.slate, fontSize: 14, lineHeight: 20 },
-  searchBox: {
-    minHeight: 52,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.md,
-    backgroundColor: theme.colors.white,
-    paddingLeft: 13,
-    paddingRight: 5,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
+  searchBox: { minHeight: 52, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, backgroundColor: theme.colors.white, paddingLeft: 13, paddingRight: 5, flexDirection: 'row', alignItems: 'center', gap: 8 },
   searchInput: { flex: 1, minHeight: 50, color: theme.colors.navy, fontSize: 14, paddingVertical: 0 },
   scanButton: { width: 43, height: 43, borderRadius: 12, backgroundColor: theme.colors.mintSoft, alignItems: 'center', justifyContent: 'center' },
   errorCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#FDA29B', backgroundColor: theme.colors.dangerSoft, padding: 12, flexDirection: 'row', gap: 9 },
@@ -382,6 +402,7 @@ const styles = StyleSheet.create({
   quantityValue: { minWidth: 28, textAlign: 'center', color: theme.colors.navy, fontSize: 12, fontWeight: '900' },
   checkoutNotice: { borderRadius: theme.radius.md, backgroundColor: theme.colors.infoSoft, padding: 11, flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   checkoutNoticeText: { flex: 1, color: theme.colors.slate, fontSize: 11, lineHeight: 17 },
+  checkoutError: { borderRadius: theme.radius.md, backgroundColor: theme.colors.dangerSoft, padding: 10 },
   checkoutButton: { minHeight: 50, borderRadius: 14, backgroundColor: theme.colors.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
   checkoutButtonText: { color: theme.colors.white, fontSize: 14, fontWeight: '900' },
   pressed: { opacity: 0.74 },
