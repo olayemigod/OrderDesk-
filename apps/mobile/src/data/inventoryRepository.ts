@@ -30,8 +30,8 @@ export type StockMovementRow = {
 export type InventoryCapabilities = {
   canReceiveStock: boolean;
   canAdjustStock: boolean;
-  canCountStock: boolean;
-  canApplyStockCount: boolean;
+  canCountStock?: boolean;
+  canApplyStockCount?: boolean;
 };
 
 export type InventoryOperation = 'receive' | 'adjust';
