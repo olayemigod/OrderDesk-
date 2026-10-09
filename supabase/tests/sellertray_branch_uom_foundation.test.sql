@@ -116,7 +116,7 @@ update sellertray_branch_uom_fixture
 set order_id = public.create_sellertray_manual_order_atomic(
   tenant_id,
   'Counter Customer',
-  '+2348000000099',
+  '+2348031234567',
   null,
   jsonb_build_array(jsonb_build_object(
     'catalog_item_id', product_id,
