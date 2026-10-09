@@ -6,36 +6,46 @@ import { SettingsHub } from '../components/SettingsHub';
 import type { BusinessProfileInput, MerchantBusiness } from '../data/businessRepository';
 import type { CashShift } from '../data/cashShiftRepository';
 import type { CommerceBranch } from '../data/commerceRepository';
+import type { MerchantOrder } from '../domain/order';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import { CashShiftWorkspace } from './CashShiftWorkspace';
 import { PrinterWorkspace } from './PrinterWorkspace';
+import { WhatsAppWorkspace } from './WhatsAppWorkspace';
 
 type Props = {
   business: MerchantBusiness;
   branch: CommerceBranch;
+  branches: CommerceBranch[];
+  orders: MerchantOrder[];
   activeShift: CashShift | null;
   cashRouteKey?: number;
   onSaveBusiness: (businessId: string, input: BusinessProfileInput) => Promise<void>;
   onShiftChanged: (shift: CashShift | null) => void;
+  onOpenOrders: () => void;
 };
 
 export function MoreWorkspace({
   business,
   branch,
+  branches,
+  orders,
   activeShift,
   cashRouteKey = 0,
   onSaveBusiness,
   onShiftChanged,
+  onOpenOrders,
 }: Props) {
   const appearance = useSellerTrayAppearance();
   const dark = appearance.dark;
   const [cashOpen, setCashOpen] = useState(false);
   const [printerOpen, setPrinterOpen] = useState(false);
+  const [whatsappOpen, setWhatsappOpen] = useState(false);
 
   useEffect(() => {
     if (cashRouteKey > 0) {
       setPrinterOpen(false);
+      setWhatsappOpen(false);
       setCashOpen(true);
     }
   }, [cashRouteKey]);
@@ -43,6 +53,7 @@ export function MoreWorkspace({
   useEffect(() => {
     setCashOpen(false);
     setPrinterOpen(false);
+    setWhatsappOpen(false);
   }, [business.id, branch.id]);
 
   if (cashOpen) {
@@ -63,6 +74,19 @@ export function MoreWorkspace({
         branch={branch}
         activeShift={activeShift}
         onClose={() => setPrinterOpen(false)}
+      />
+    );
+  }
+
+  if (whatsappOpen) {
+    return (
+      <WhatsAppWorkspace
+        business={business}
+        branch={branch}
+        branches={branches}
+        orders={orders}
+        onClose={() => setWhatsappOpen(false)}
+        onOpenOrders={onOpenOrders}
       />
     );
   }
@@ -97,6 +121,22 @@ export function MoreWorkspace({
             {activeShift
               ? `${activeShift.registerName} · Expected cash ${formatMoney(activeShift.expectedCash, activeShift.currency)}`
               : `Open a cashier shift for ${branch.name}, record expenses and reconcile the drawer.`}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
+      </Pressable>
+
+      <Pressable
+        onPress={() => setWhatsappOpen(true)}
+        style={({ pressed }) => [styles.operationCard, dark && darkStyles.card, pressed && styles.pressed]}
+      >
+        <View style={[styles.operationIcon, styles.operationIconActive]}>
+          <Ionicons name="logo-whatsapp" size={23} color={theme.colors.greenDark} />
+        </View>
+        <View style={styles.operationCopy}>
+          <Text style={[styles.operationTitle, dark && darkStyles.titleText]}>WhatsApp</Text>
+          <Text style={[styles.operationText, dark && darkStyles.bodyText]}>
+            Review WhatsApp order conversations for {branch.name}, unread activity, connection and receiving Branch.
           </Text>
         </View>
         <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
