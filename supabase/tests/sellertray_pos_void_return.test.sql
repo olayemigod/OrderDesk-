@@ -1,10 +1,11 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(21);
+select extensions.plan(22);
 
 create temp table sellertray_pos_return_fixture (
   tenant_id uuid not null,
   actor_user_id uuid not null,
+  staff_user_id uuid not null,
   product_id uuid not null,
   branch_id uuid,
   location_id uuid,
@@ -16,15 +17,21 @@ create temp table sellertray_pos_return_fixture (
   completion jsonb,
   return_result jsonb,
   return_replay jsonb,
-  immutable_rejected boolean not null default false
+  immutable_rejected boolean not null default false,
+  staff_return_rejected boolean not null default false
 ) on commit drop;
 
-insert into sellertray_pos_return_fixture(tenant_id,actor_user_id,product_id)
-values(gen_random_uuid(),gen_random_uuid(),gen_random_uuid());
+insert into sellertray_pos_return_fixture(tenant_id,actor_user_id,staff_user_id,product_id)
+values(gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid());
 
 insert into auth.users(id,email,aud,role,created_at,updated_at)
 select actor_user_id,
   'pos-return-owner-'||substr(actor_user_id::text,1,8)||'@example.com',
+  'authenticated','authenticated',now(),now()
+from sellertray_pos_return_fixture
+union all
+select staff_user_id,
+  'pos-return-staff-'||substr(staff_user_id::text,1,8)||'@example.com',
   'authenticated','authenticated',now(),now()
 from sellertray_pos_return_fixture;
 
@@ -38,7 +45,9 @@ set status='active',trial_ends_at=null,grace_ends_at=null
 where tenant_id=(select tenant_id from sellertray_pos_return_fixture);
 
 insert into public.tenant_members(tenant_id,user_id,role)
-select tenant_id,actor_user_id,'owner' from sellertray_pos_return_fixture;
+select tenant_id,actor_user_id,'owner' from sellertray_pos_return_fixture
+union all
+select tenant_id,staff_user_id,'staff' from sellertray_pos_return_fixture;
 
 update sellertray_pos_return_fixture f
 set branch_id=b.id
@@ -269,6 +278,26 @@ select extensions.ok(
       and l.action_status='applied'
   ),
   'completed return leaves a high-risk commercial audit record'
+);
+
+do $$
+begin
+  begin
+    perform public.return_sellertray_pos_cash_sale(
+      (select tenant_id from sellertray_pos_return_fixture),
+      (select sale_order_id from sellertray_pos_return_fixture),
+      (select staff_user_id from sellertray_pos_return_fixture),
+      'Staff replay should be denied'
+    );
+  exception when sqlstate '42501' then
+    update sellertray_pos_return_fixture set staff_return_rejected=true;
+  end;
+end
+$$;
+
+select extensions.ok(
+  (select staff_return_rejected from sellertray_pos_return_fixture),
+  'staff cannot return or replay a completed POS cash sale'
 );
 
 do $$
