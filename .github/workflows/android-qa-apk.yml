@@ -5,6 +5,7 @@ on:
     branches:
       - feat/mvp-foundation
       - feat/sellertray-brand-ui-v1
+      - feat/sellertray-mobile-shell-v2
     paths:
       - 'apps/mobile/**'
       - '.github/workflows/android-qa-apk.yml'
