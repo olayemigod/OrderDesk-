@@ -170,7 +170,7 @@ export async function openCashShift(input: {
   if (!Number.isFinite(input.openingCash) || input.openingCash < 0) {
     throw new Error('Opening cash cannot be negative.');
   }
-  return invokeShift({
+  return invokeShift<CashShiftActionResult>({
     action: 'open',
     tenantId: input.tenantId,
     branchId: input.branchId,
@@ -196,7 +196,7 @@ export async function recordCashMovement(input: {
     throw new Error('Expense category is required.');
   }
 
-  const result = await invokeShift({
+  return invokeShift<CashMovementResult>({
     action: 'movement',
     tenantId: input.tenantId,
     shiftId: input.shiftId,
@@ -206,11 +206,6 @@ export async function recordCashMovement(input: {
     reason: input.reason.trim(),
     expenseCategory: input.movementType === 'expense' ? input.expenseCategory?.trim() : null,
   }, 'Unable to record this cash activity.');
-
-  if (!isCashMovementResult(result)) {
-    throw new Error('SellerTray returned an invalid cash movement result.');
-  }
-  return result;
 }
 
 export async function closeCashShift(input: {
@@ -223,7 +218,7 @@ export async function closeCashShift(input: {
   if (!Number.isFinite(input.declaredCash) || input.declaredCash < 0) {
     throw new Error('Declared cash cannot be negative.');
   }
-  return invokeShift({
+  return invokeShift<CashShiftActionResult>({
     action: 'close',
     tenantId: input.tenantId,
     shiftId: input.shiftId,
@@ -242,7 +237,7 @@ export async function reviewCashShift(input: {
   if (input.decision === 'follow_up' && !input.note?.trim()) {
     throw new Error('Enter a note for a shift that needs follow-up.');
   }
-  return invokeShift({
+  return invokeShift<CashShiftActionResult>({
     action: 'review',
     tenantId: input.tenantId,
     shiftId: input.shiftId,
@@ -251,13 +246,16 @@ export async function reviewCashShift(input: {
   }, 'Unable to review this cashier shift.');
 }
 
-async function invokeShift(body: Record<string, unknown>, fallback: string): Promise<CashShiftActionResult | CashMovementResult> {
+async function invokeShift<T extends CashShiftActionResult | CashMovementResult>(
+  body: Record<string, unknown>,
+  fallback: string,
+): Promise<T> {
   const { data, error } = await supabase.functions.invoke('cash-shift', { body });
   if (error) throw new Error(await functionErrorMessage(error, fallback));
   if (!data || typeof data !== 'object' || typeof (data as Record<string, unknown>).shiftId !== 'string') {
     throw new Error('SellerTray returned an invalid cashier result.');
   }
-  return data as CashShiftActionResult | CashMovementResult;
+  return data as T;
 }
 
 function parseCashShift(value: unknown): CashShift {
@@ -327,10 +325,6 @@ function parseMovement(value: unknown): CashShiftMovement {
     actorUserId: row.actorUserId,
     createdAt: row.createdAt,
   };
-}
-
-function isCashMovementResult(value: CashShiftActionResult | CashMovementResult): value is CashMovementResult {
-  return 'movementId' in value && typeof value.movementId === 'string';
 }
 
 function noCapabilities(): CashShiftCapabilities {
