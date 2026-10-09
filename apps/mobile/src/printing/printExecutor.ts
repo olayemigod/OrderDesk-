@@ -1,4 +1,4 @@
-import { type PrintJob, updatePrintJob } from '../data/printerRepository';
+import { loadPrintJob, type PrintJob, updatePrintJob } from '../data/printerRepository';
 import { sendBluetoothPrintBytes } from './bluetoothPrinter';
 import { buildEscPosPrintBytes } from './escPosReceipt';
 
@@ -9,16 +9,29 @@ export async function executePreparedPrintJob(tenantId: string, job: PrintJob): 
   }
 
   let started = false;
+  let hardwareWriteCompleted = false;
   try {
     await updatePrintJob({ tenantId, jobId: job.jobId, status: 'printing' });
     started = true;
 
     const bytes = buildEscPosPrintBytes(job.contentSnapshot, job.paperWidthMm);
     await sendBluetoothPrintBytes(job.hardwareIdentifier, bytes);
+    hardwareWriteCompleted = true;
 
-    await updatePrintJob({ tenantId, jobId: job.jobId, status: 'printed' });
+    try {
+      await updatePrintJob({ tenantId, jobId: job.jobId, status: 'printed' });
+    } catch (statusError) {
+      const reconciled = await reconcilePrintedStatus(tenantId, job.jobId);
+      if (!reconciled) throw statusError;
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'The receipt could not be printed.';
+
+    if (hardwareWriteCompleted) {
+      const reconciled = await reconcilePrintedStatus(tenantId, job.jobId);
+      if (reconciled) return;
+    }
+
     if (started) {
       try {
         await updatePrintJob({
@@ -34,6 +47,15 @@ export async function executePreparedPrintJob(tenantId: string, job: PrintJob): 
       }
     }
     throw new Error(message);
+  }
+}
+
+async function reconcilePrintedStatus(tenantId: string, jobId: string): Promise<boolean> {
+  try {
+    const current = await loadPrintJob(tenantId, jobId);
+    return current?.status === 'printed';
+  } catch {
+    return false;
   }
 }
 
