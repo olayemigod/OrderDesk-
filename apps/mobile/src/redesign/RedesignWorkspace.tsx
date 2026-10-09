@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { SettingsHub } from '../components/SettingsHub';
+import { loadActiveCashShift, type CashShift } from '../data/cashShiftRepository';
 import { loadAccessibleBranches, type CommerceBranch } from '../data/commerceRepository';
 import { loadStockTransfers } from '../data/inventoryRepository';
 import { loadLowStock } from '../data/lowStockRepository';
@@ -17,6 +17,7 @@ import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import { HomeDashboard, type HomeAttentionItem } from './HomeDashboard';
 import { InventoryTabWorkspace } from './InventoryTabWorkspace';
 import { MobileShell, type SellerTrayPrimaryTab } from './MobileShell';
+import { MoreWorkspace } from './MoreWorkspace';
 import { OrdersWorkspace } from './OrdersWorkspace';
 import { SellWorkspace } from './SellWorkspace';
 
@@ -34,6 +35,10 @@ export default function RedesignWorkspace() {
   const [pendingTransferCount, setPendingTransferCount] = useState(0);
   const [inventorySummaryLoading, setInventorySummaryLoading] = useState(false);
   const [inventorySummaryError, setInventorySummaryError] = useState<string | null>(null);
+  const [activeCashShift, setActiveCashShift] = useState<CashShift | null>(null);
+  const [cashShiftLoading, setCashShiftLoading] = useState(false);
+  const [cashShiftError, setCashShiftError] = useState<string | null>(null);
+  const [cashRouteKey, setCashRouteKey] = useState(0);
 
   const {
     orders,
@@ -105,6 +110,59 @@ export default function RedesignWorkspace() {
   );
   const home = useMemo(() => buildHomeSnapshot(branchOrders), [branchOrders]);
 
+  async function refreshActiveCashShift(
+    tenantId = activeBusiness?.id ?? '',
+    branchId = activeBranch?.id ?? '',
+    options?: { quiet?: boolean },
+  ): Promise<CashShift | null> {
+    if (!tenantId || !branchId) {
+      setActiveCashShift(null);
+      return null;
+    }
+    if (!options?.quiet) setCashShiftLoading(true);
+    setCashShiftError(null);
+    try {
+      const next = await loadActiveCashShift(tenantId, branchId);
+      setActiveCashShift(next);
+      return next;
+    } catch (err) {
+      setActiveCashShift(null);
+      setCashShiftError(err instanceof Error ? err.message : 'Unable to refresh cashier shift.');
+      return null;
+    } finally {
+      if (!options?.quiet) setCashShiftLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    const tenantId = activeBusiness?.id ?? '';
+    const branchId = activeBranch?.id ?? '';
+    if (!tenantId || !branchId) {
+      setActiveCashShift(null);
+      setCashShiftLoading(false);
+      setCashShiftError(null);
+      return undefined;
+    }
+    let active = true;
+    setCashShiftLoading(true);
+    setCashShiftError(null);
+    void loadActiveCashShift(tenantId, branchId)
+      .then((next) => {
+        if (active) setActiveCashShift(next);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setActiveCashShift(null);
+        setCashShiftError(err instanceof Error ? err.message : 'Unable to refresh cashier shift.');
+      })
+      .finally(() => {
+        if (active) setCashShiftLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [activeBusiness?.id, activeBranch?.id]);
+
   useEffect(() => {
     const tenantId = activeBusiness?.id ?? '';
     const branchId = activeBranch?.id ?? '';
@@ -154,7 +212,22 @@ export default function RedesignWorkspace() {
     );
   }
 
+  function openCashWorkspace() {
+    setTab('more');
+    setCashRouteKey((value) => value + 1);
+  }
+
   const attentionItems: HomeAttentionItem[] = [];
+  if (!cashShiftLoading && activeBranch && !activeCashShift) {
+    attentionItems.push({
+      key: 'cashier-shift',
+      icon: 'cash-outline',
+      title: 'Cashier shift is closed',
+      detail: 'Open a shift before taking counter cash sales.',
+      tone: 'warning',
+      onPress: openCashWorkspace,
+    });
+  }
   if (home.whatsappNeedsReview > 0) {
     attentionItems.push({
       key: 'whatsapp-orders',
@@ -198,7 +271,8 @@ export default function RedesignWorkspace() {
     });
   }
 
-  const workspaceError = ordersError || notifications.error || branchError || inventorySummaryError;
+  const workspaceError = ordersError || notifications.error || branchError || inventorySummaryError || cashShiftError;
+  const workspaceSyncing = branchLoading || inventorySummaryLoading || cashShiftLoading;
 
   return (
     <MobileShell
@@ -208,7 +282,7 @@ export default function RedesignWorkspace() {
       canSwitchBranch={branches.length > 1}
       notificationCount={notifications.unreadCount}
       orderAttentionCount={home.ordersNeedingAttention}
-      syncState={workspaceError ? 'offline' : branchLoading || inventorySummaryLoading ? 'syncing' : 'online'}
+      syncState={workspaceError ? 'offline' : workspaceSyncing ? 'syncing' : 'online'}
       onTabChange={setTab}
       onOpenNotifications={() => setTab('orders')}
       onOpenBranchSwitcher={() => setShowBranchSwitcher((value) => !value)}
@@ -245,6 +319,7 @@ export default function RedesignWorkspace() {
           lowStockCount={lowStockCount}
           pendingWhatsappCount={home.whatsappNeedsReview}
           pendingTransferCount={pendingTransferCount}
+          shiftOpen={cashShiftLoading ? null : Boolean(activeCashShift)}
           attentionItems={attentionItems}
           onNewSale={() => setTab('sell')}
           onOpenOrders={() => setTab('orders')}
@@ -255,14 +330,23 @@ export default function RedesignWorkspace() {
 
       {tab === 'sell' ? (
         activeBranch ? (
-          <SellWorkspace
-            tenantId={activeBusiness.id}
-            branch={activeBranch}
-            currency={activeBusiness.currency}
-            onDraftCreated={() => {
-              void refreshOrders().finally(() => setTab('orders'));
-            }}
-          />
+          cashShiftLoading ? (
+            <ShiftRequiredState loading />
+          ) : activeCashShift ? (
+            <SellWorkspace
+              tenantId={activeBusiness.id}
+              branch={activeBranch}
+              currency={activeBusiness.currency}
+              onDraftCreated={() => {
+                void Promise.all([
+                  refreshOrders(),
+                  refreshActiveCashShift(activeBusiness.id, activeBranch.id, { quiet: true }),
+                ]).finally(() => setTab('orders'));
+              }}
+            />
+          ) : (
+            <ShiftRequiredState onOpenShift={openCashWorkspace} />
+          )
         ) : (
           <BranchRequiredState loading={branchLoading} />
         )
@@ -274,8 +358,13 @@ export default function RedesignWorkspace() {
           businessCurrency={activeBusiness.currency}
           orders={branchOrders}
           loading={ordersLoading}
-          canReturnCompletedSale={activeBusiness.role === 'owner' || activeBusiness.role === 'manager'}
-          onChanged={refreshOrders}
+          canReturnCompletedSale={(activeBusiness.role === 'owner' || activeBusiness.role === 'manager') && Boolean(activeCashShift)}
+          onChanged={async () => {
+            await Promise.all([
+              refreshOrders(),
+              refreshActiveCashShift(activeBusiness.id, activeBranch?.id ?? '', { quiet: true }),
+            ]);
+          }}
         />
       ) : null}
 
@@ -291,12 +380,46 @@ export default function RedesignWorkspace() {
       ) : null}
 
       {tab === 'more' ? (
-        <SettingsHub
-          business={activeBusiness}
-          onSaveBusiness={saveProfile}
-        />
+        activeBranch ? (
+          <MoreWorkspace
+            business={activeBusiness}
+            branch={activeBranch}
+            activeShift={activeCashShift}
+            cashRouteKey={cashRouteKey}
+            onSaveBusiness={saveProfile}
+            onShiftChanged={(next) => {
+              setActiveCashShift(next);
+              setCashShiftError(null);
+            }}
+          />
+        ) : (
+          <BranchRequiredState loading={branchLoading} />
+        )
       ) : null}
     </MobileShell>
+  );
+}
+
+function ShiftRequiredState({ loading = false, onOpenShift }: { loading?: boolean; onOpenShift?: () => void }) {
+  const appearance = useSellerTrayAppearance();
+  return (
+    <View style={[styles.emptyCard, appearance.dark && darkStyles.card]}>
+      {loading ? <ActivityIndicator /> : <Ionicons name="cash-outline" size={30} color={theme.colors.greenDark} />}
+      <Text style={[styles.emptyTitle, appearance.dark && darkStyles.titleText]}>
+        {loading ? 'Checking cashier shift' : 'Open a shift to start selling'}
+      </Text>
+      <Text style={[styles.emptyText, appearance.dark && darkStyles.bodyText]}>
+        {loading
+          ? 'SellerTray is checking the active drawer for this branch.'
+          : 'Counter cash sales are tied to an open register so cash can be reconciled correctly.'}
+      </Text>
+      {!loading && onOpenShift ? (
+        <Pressable onPress={onOpenShift} style={styles.primaryButton}>
+          <Ionicons name="lock-open-outline" size={18} color={theme.colors.white} />
+          <Text style={styles.primaryButtonText}>Open Cash & Shift</Text>
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -416,6 +539,8 @@ const styles = StyleSheet.create({
   emptyCard: { minHeight: 120, borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 18, alignItems: 'center', justifyContent: 'center', gap: 7 },
   emptyTitle: { color: theme.colors.navy, fontSize: 15, fontWeight: '900' },
   emptyText: { color: theme.colors.muted, fontSize: 12, lineHeight: 18, textAlign: 'center' },
+  primaryButton: { minHeight: 44, borderRadius: theme.radius.md, backgroundColor: theme.colors.green, paddingHorizontal: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 5 },
+  primaryButtonText: { color: theme.colors.white, fontSize: 12, fontWeight: '900' },
 });
 
 const darkStyles = StyleSheet.create({
