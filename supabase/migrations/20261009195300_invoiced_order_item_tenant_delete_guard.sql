@@ -20,10 +20,14 @@ begin
   where o.id=v_order_id;
 
   if not found then
-    -- During a governed parent Tenant/Order delete, PostgreSQL may remove the
-    -- parent order before cascading into order_items. There is no surviving
-    -- order to mutate in that path, so allow only the cascading DELETE.
-    if tg_op='DELETE' then
+    -- Governed business deletion removes the Tenant and then cascades through
+    -- Orders -> Order Items. Permit only that parent-Tenant deletion path;
+    -- a direct service-side Order deletion while the Tenant still exists must
+    -- not bypass the financial lock.
+    if tg_op='DELETE'
+       and not exists (
+         select 1 from public.tenants t where t.id=old.tenant_id
+       ) then
       return old;
     end if;
 
