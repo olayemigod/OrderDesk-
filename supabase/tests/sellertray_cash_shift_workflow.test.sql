@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(32);
+select extensions.plan(33);
 
 create temp table sellertray_cash_shift_fixture (
   tenant_id uuid not null,
@@ -181,6 +181,16 @@ select extensions.is(
   1000::numeric,'opening cash is the first expected-cash position'
 );
 
+update sellertray_cash_shift_fixture
+set open_result=public.open_sellertray_cash_shift(
+  tenant_id,branch_id,register_id,1000,staff_user_id
+);
+
+select extensions.is(
+  (select open_result->>'idempotentReplay' from sellertray_cash_shift_fixture),
+  'true','same cashier shift open retry returns the existing shift'
+);
+
 do $$
 begin
   begin
@@ -188,7 +198,7 @@ begin
       (select tenant_id from sellertray_cash_shift_fixture),
       (select branch_id from sellertray_cash_shift_fixture),
       (select register_id from sellertray_cash_shift_fixture),
-      1000,
+      1100,
       (select staff_user_id from sellertray_cash_shift_fixture)
     );
   exception when sqlstate '23514' then
@@ -199,7 +209,7 @@ $$;
 
 select extensions.ok(
   (select duplicate_open_rejected from sellertray_cash_shift_fixture),
-  'a register and cashier cannot accidentally open a second concurrent shift'
+  'a conflicting second open request is rejected'
 );
 
 update sellertray_cash_shift_fixture
