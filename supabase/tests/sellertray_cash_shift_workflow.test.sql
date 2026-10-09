@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(29);
+select extensions.plan(32);
 
 create temp table sellertray_cash_shift_fixture (
   tenant_id uuid not null,
@@ -438,8 +438,13 @@ begin
   begin
     update public.sellertray_shift_cash_movements
     set amount=9999
-    where shift_id=(select shift_id from sellertray_cash_shift_fixture)
-    limit 1;
+    where id=(
+      select m.id
+      from public.sellertray_shift_cash_movements m
+      where m.shift_id=(select shift_id from sellertray_cash_shift_fixture)
+      order by m.created_at,m.id
+      limit 1
+    );
   exception when sqlstate '55000' then
     update sellertray_cash_shift_fixture set movement_update_rejected=true;
   end;
