@@ -128,7 +128,7 @@ with inserted_uom as (
     tenant_id,catalog_item_id,uom_name,conversion_factor,selling_price,
     allow_fractional,is_default_selling,is_default_purchase
   )
-  select tenant_id,product_one_id,'Pack',12,1050,false,false,true
+  select tenant_id,product_one_id,'Pack',12,1050,false,false,false
   from sellertray_stock_count_fixture
   returning id
 )
