@@ -38,7 +38,6 @@
         "android.permission.BODY_SENSORS_BACKGROUND",
         "android.permission.ACTIVITY_RECOGNITION",
         "android.permission.BLUETOOTH_SCAN",
-        "android.permission.BLUETOOTH_CONNECT",
         "android.permission.SCHEDULE_EXACT_ALARM",
         "android.permission.USE_EXACT_ALARM",
         "android.permission.MANAGE_EXTERNAL_STORAGE",
