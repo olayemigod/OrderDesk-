@@ -4,6 +4,8 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 
 import { SettingsHub } from '../components/SettingsHub';
 import { loadAccessibleBranches, type CommerceBranch } from '../data/commerceRepository';
+import { loadStockTransfers } from '../data/inventoryRepository';
+import { loadLowStock } from '../data/lowStockRepository';
 import type { MerchantOrder } from '../domain/order';
 import { orderTotal } from '../domain/order';
 import { useBusinesses } from '../hooks/useBusinesses';
@@ -28,6 +30,10 @@ export default function RedesignWorkspace() {
   const [branchLoading, setBranchLoading] = useState(false);
   const [branchError, setBranchError] = useState<string | null>(null);
   const [showBranchSwitcher, setShowBranchSwitcher] = useState(false);
+  const [lowStockCount, setLowStockCount] = useState(0);
+  const [pendingTransferCount, setPendingTransferCount] = useState(0);
+  const [inventorySummaryLoading, setInventorySummaryLoading] = useState(false);
+  const [inventorySummaryError, setInventorySummaryError] = useState<string | null>(null);
 
   const {
     orders,
@@ -99,6 +105,46 @@ export default function RedesignWorkspace() {
   );
   const home = useMemo(() => buildHomeSnapshot(branchOrders), [branchOrders]);
 
+  useEffect(() => {
+    const tenantId = activeBusiness?.id ?? '';
+    const branchId = activeBranch?.id ?? '';
+    if (!tenantId || !branchId) {
+      setLowStockCount(0);
+      setPendingTransferCount(0);
+      setInventorySummaryLoading(false);
+      setInventorySummaryError(null);
+      return undefined;
+    }
+
+    let active = true;
+    setInventorySummaryLoading(true);
+    setInventorySummaryError(null);
+    void Promise.all([
+      loadLowStock(tenantId, branchId),
+      loadStockTransfers(tenantId, branchId, 100),
+    ])
+      .then(([lowStock, transfers]) => {
+        if (!active) return;
+        setLowStockCount(lowStock.length);
+        setPendingTransferCount(
+          transfers.filter((transfer) => transfer.status === 'draft' || transfer.status === 'dispatched').length,
+        );
+      })
+      .catch((err) => {
+        if (!active) return;
+        setLowStockCount(0);
+        setPendingTransferCount(0);
+        setInventorySummaryError(err instanceof Error ? err.message : 'Unable to refresh inventory status.');
+      })
+      .finally(() => {
+        if (active) setInventorySummaryLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [activeBusiness?.id, activeBranch?.id]);
+
   if (!activeBusiness) {
     return (
       <View style={[styles.centered, appearance.dark && darkStyles.page]}>
@@ -130,8 +176,29 @@ export default function RedesignWorkspace() {
       onPress: () => setTab('orders'),
     });
   }
+  if (lowStockCount > 0) {
+    attentionItems.push({
+      key: 'low-stock',
+      icon: 'cube-outline',
+      title: `${lowStockCount} product${lowStockCount === 1 ? '' : 's'} need replenishment`,
+      detail: 'Review branch stock levels and replenishment targets.',
+      count: lowStockCount,
+      tone: 'warning',
+      onPress: () => setTab('inventory'),
+    });
+  }
+  if (pendingTransferCount > 0) {
+    attentionItems.push({
+      key: 'stock-transfers',
+      icon: 'git-compare-outline',
+      title: `${pendingTransferCount} stock transfer${pendingTransferCount === 1 ? '' : 's'} pending`,
+      detail: 'Review draft or in-transit branch stock movements.',
+      count: pendingTransferCount,
+      onPress: () => setTab('inventory'),
+    });
+  }
 
-  const workspaceError = ordersError || notifications.error || branchError;
+  const workspaceError = ordersError || notifications.error || branchError || inventorySummaryError;
 
   return (
     <MobileShell
@@ -141,7 +208,7 @@ export default function RedesignWorkspace() {
       canSwitchBranch={branches.length > 1}
       notificationCount={notifications.unreadCount}
       orderAttentionCount={home.ordersNeedingAttention}
-      syncState={workspaceError ? 'offline' : branchLoading ? 'syncing' : 'online'}
+      syncState={workspaceError ? 'offline' : branchLoading || inventorySummaryLoading ? 'syncing' : 'online'}
       onTabChange={setTab}
       onOpenNotifications={() => setTab('orders')}
       onOpenBranchSwitcher={() => setShowBranchSwitcher((value) => !value)}
@@ -175,7 +242,9 @@ export default function RedesignWorkspace() {
           salesToday={home.salesToday}
           ordersToday={home.ordersToday}
           amountCollectedToday={home.collectedToday}
+          lowStockCount={lowStockCount}
           pendingWhatsappCount={home.whatsappNeedsReview}
+          pendingTransferCount={pendingTransferCount}
           attentionItems={attentionItems}
           onNewSale={() => setTab('sell')}
           onOpenOrders={() => setTab('orders')}
