@@ -12,6 +12,7 @@ import type {
   OrderStatus,
   ParserSource,
   PaymentStatus,
+  ReturnStatus,
 } from '../domain/order';
 import { supabase } from '../lib/supabase';
 
@@ -53,6 +54,9 @@ type OrderRow = {
   payment_status: PaymentStatus;
   amount_paid: number | string;
   payment_confirmed_at: string | null;
+  return_status: ReturnStatus;
+  returned_amount: number | string;
+  returned_at: string | null;
   source: OrderSource;
   customer_note: string | null;
   parser_confidence: number | string | null;
@@ -140,6 +144,9 @@ function mapOrder(row: OrderRow, notifications: OrderNotification[]): MerchantOr
     paymentStatus: row.payment_status,
     amountPaid: toNumber(row.amount_paid) ?? 0,
     paymentConfirmedAt: row.payment_confirmed_at,
+    returnStatus: row.return_status,
+    returnedAmount: toNumber(row.returned_amount) ?? 0,
+    returnedAt: row.returned_at,
     source: row.source,
     customerMessage: sourceMessage?.text_body || row.customer_note || '',
     confidence: toNumber(row.parser_confidence),
@@ -200,6 +207,9 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
         payment_status,
         amount_paid,
         payment_confirmed_at,
+        return_status,
+        returned_amount,
+        returned_at,
         source,
         customer_note,
         parser_confidence,
