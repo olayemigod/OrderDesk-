@@ -8,3 +8,4 @@ export {
   HomeDashboard,
   type HomeAttentionItem,
 } from './HomeDashboard';
+export { default as RedesignWorkspace } from './RedesignWorkspace';
