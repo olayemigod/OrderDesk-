@@ -2,9 +2,18 @@ import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { loadActiveCashShift } from '../data/cashShiftRepository';
 import { applyPosSaleAction, type PosSaleAction } from '../data/posSaleRepository';
+import {
+  loadPrinters,
+  loadPrintingCapabilities,
+  loadReceiptPrintReference,
+  requestPrintJob,
+  type SellerTrayPrinter,
+} from '../data/printerRepository';
 import type { MerchantOrder, OrderSource } from '../domain/order';
 import { orderTotal } from '../domain/order';
+import { executePreparedPrintJob } from '../printing/printExecutor';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
@@ -35,6 +44,9 @@ export function OrdersWorkspace({
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [printingOrderId, setPrintingOrderId] = useState<string | null>(null);
+  const [printError, setPrintError] = useState<string | null>(null);
+  const [printNotice, setPrintNotice] = useState<string | null>(null);
 
   function beginAction(order: MerchantOrder, action: PosSaleAction) {
     setPending({ orderId: order.id, action });
@@ -76,6 +88,54 @@ export function OrdersWorkspace({
     }
   }
 
+  async function printReceipt(order: MerchantOrder) {
+    if (printingOrderId) return;
+    const branchId = order.branchId;
+    if (!branchId) {
+      setPrintError('This order has no branch for receipt printing.');
+      return;
+    }
+
+    setPrintingOrderId(order.id);
+    setPrintError(null);
+    setPrintNotice(null);
+    try {
+      const capabilities = await loadPrintingCapabilities(tenantId, branchId);
+      if (!capabilities.canPrintReceipt) {
+        throw new Error('You do not have permission to print receipts for this branch.');
+      }
+
+      const receipt = await loadReceiptPrintReference(tenantId, order.id);
+      if (!receipt) {
+        throw new Error('This order does not have an issued payment receipt yet.');
+      }
+
+      const activeShift = await loadActiveCashShift(tenantId, branchId);
+      const printers = await loadPrinters(tenantId, branchId, activeShift?.registerId ?? null);
+      const printer = chooseReceiptPrinter(printers, Boolean(activeShift));
+      if (!printer) {
+        throw new Error(
+          activeShift
+            ? 'No active receipt printer is configured for this register. Set one up in More > Devices & Printers.'
+            : 'Open the cashier shift for this register, or configure one unambiguous active default printer in More > Devices & Printers.',
+        );
+      }
+
+      const job = await requestPrintJob({
+        tenantId,
+        printerId: printer.id,
+        jobType: 'receipt',
+        orderId: order.id,
+      });
+      await executePreparedPrintJob(tenantId, job);
+      setPrintNotice(`Receipt ${receipt.documentReference} printed on ${printer.displayName}.`);
+    } catch (err) {
+      setPrintError(err instanceof Error ? err.message : 'The receipt could not be printed.');
+    } finally {
+      setPrintingOrderId(null);
+    }
+  }
+
   return (
     <View style={styles.stack}>
       <View style={styles.heading}>
@@ -85,6 +145,20 @@ export function OrdersWorkspace({
           Review customer orders, payment state and fulfilment progress.
         </Text>
       </View>
+
+      {printError ? (
+        <View style={[styles.errorCard, appearance.dark && darkStyles.errorCard]}>
+          <Ionicons name="alert-circle-outline" size={18} color={theme.colors.danger} />
+          <Text style={[styles.errorText, appearance.dark && darkStyles.bodyText]}>{printError}</Text>
+        </View>
+      ) : null}
+
+      {printNotice ? (
+        <View style={[styles.noticeCard, appearance.dark && darkStyles.subtleCard]}>
+          <Ionicons name="checkmark-circle-outline" size={18} color={theme.colors.greenDark} />
+          <Text style={[styles.noticeText, appearance.dark && darkStyles.bodyText]}>{printNotice}</Text>
+        </View>
+      ) : null}
 
       {loading && orders.length === 0 ? (
         <View style={[styles.emptyCard, appearance.dark && darkStyles.card]}>
@@ -115,7 +189,9 @@ export function OrdersWorkspace({
           && order.paymentStatus === 'paid'
           && order.fulfillmentStatus === 'collected'
           && order.returnStatus === 'none';
+        const canPrintReceipt = order.paymentStatus === 'paid';
         const action = pending?.orderId === order.id ? pending.action : null;
+        const printing = printingOrderId === order.id;
 
         return (
           <View key={order.id} style={[styles.orderCard, appearance.dark && darkStyles.card]}>
@@ -149,11 +225,21 @@ export function OrdersWorkspace({
               </View>
             ) : null}
 
-            {!action && (canVoid || canReturn) ? (
+            {!action && (canVoid || canReturn || canPrintReceipt) ? (
               <View style={styles.actionRow}>
+                {canPrintReceipt ? (
+                  <Pressable
+                    disabled={saving || printingOrderId !== null}
+                    onPress={() => void printReceipt(order)}
+                    style={[styles.outlineAction, styles.printAction, appearance.dark && darkStyles.outlineButton, (saving || printingOrderId !== null) && styles.disabled]}
+                  >
+                    {printing ? <ActivityIndicator size="small" color={theme.colors.greenDark} /> : <Ionicons name="print-outline" size={17} color={theme.colors.greenDark} />}
+                    <Text style={styles.printActionText}>{printing ? 'Printing…' : 'Print receipt'}</Text>
+                  </Pressable>
+                ) : null}
                 {canVoid ? (
                   <Pressable
-                    disabled={saving}
+                    disabled={saving || printingOrderId !== null}
                     onPress={() => beginAction(order, 'void')}
                     style={[styles.outlineAction, appearance.dark && darkStyles.outlineButton]}
                   >
@@ -163,7 +249,7 @@ export function OrdersWorkspace({
                 ) : null}
                 {canReturn ? (
                   <Pressable
-                    disabled={saving}
+                    disabled={saving || printingOrderId !== null}
                     onPress={() => beginAction(order, 'return')}
                     style={[styles.outlineAction, styles.returnAction, appearance.dark && darkStyles.outlineButton]}
                   >
@@ -237,6 +323,15 @@ export function OrdersWorkspace({
   );
 }
 
+function chooseReceiptPrinter(printers: SellerTrayPrinter[], registerResolved: boolean): SellerTrayPrinter | null {
+  const active = printers.filter((printer) => printer.isActive);
+  if (active.length === 0) return null;
+  if (registerResolved) return active.find((printer) => printer.isDefault) ?? active[0] ?? null;
+  if (active.length === 1) return active[0] ?? null;
+  const defaults = active.filter((printer) => printer.isDefault);
+  return defaults.length === 1 ? defaults[0] ?? null : null;
+}
+
 function StatePill({ label, positive = false }: { label: string; positive?: boolean }) {
   const appearance = useSellerTrayAppearance();
   return (
@@ -290,9 +385,13 @@ const styles = StyleSheet.create({
   statePillTextPositive: { color: theme.colors.greenDark },
   returnedNotice: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#ABEFC6', backgroundColor: theme.colors.mintSoft, padding: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
   returnedText: { flex: 1, color: theme.colors.greenDark, fontSize: 11, lineHeight: 17, fontWeight: '700' },
+  noticeCard: { borderRadius: 11, borderWidth: 1, borderColor: '#ABEFC6', backgroundColor: theme.colors.mintSoft, padding: 9, flexDirection: 'row', alignItems: 'flex-start', gap: 7 },
+  noticeText: { flex: 1, color: theme.colors.greenDark, fontSize: 11, lineHeight: 17, fontWeight: '700' },
   actionRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8 },
   outlineAction: { minHeight: 38, borderRadius: 11, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   outlineActionText: { color: theme.colors.slate, fontSize: 11, fontWeight: '900' },
+  printAction: { borderColor: '#ABEFC6', backgroundColor: theme.colors.mintSoft },
+  printActionText: { color: theme.colors.greenDark, fontSize: 11, fontWeight: '900' },
   returnAction: { borderColor: '#ABEFC6', backgroundColor: theme.colors.mintSoft },
   returnActionText: { color: theme.colors.greenDark, fontSize: 11, fontWeight: '900' },
   actionPanel: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: '#F9FAFB', padding: 11, gap: 9 },
