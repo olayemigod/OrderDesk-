@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import {
+  completePosCashSale,
   createPosDraft,
   loadCommerceProducts,
   type CommerceBranch,
@@ -36,6 +37,8 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
   const [selectedUomByProduct, setSelectedUomByProduct] = useState<Record<string, string>>({});
   const [cart, setCart] = useState<Record<string, CartLine>>({});
   const [saving, setSaving] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [draftOrderId, setDraftOrderId] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -61,6 +64,7 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
 
   useEffect(() => {
     setCart({});
+    setDraftOrderId(null);
     setCheckoutError(null);
   }, [branch.id]);
 
@@ -84,6 +88,7 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
     (sum, line) => sum + line.quantity * (line.uom.sellingPrice ?? 0),
     0,
   );
+  const checkoutLocked = Boolean(draftOrderId);
 
   function selectedUom(product: CommerceProduct): CommerceUom | null {
     const selectedId = selectedUomByProduct[product.id];
@@ -94,10 +99,12 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
   }
 
   function chooseUom(productId: string, uomId: string) {
+    if (checkoutLocked) return;
     setSelectedUomByProduct((current) => ({ ...current, [productId]: uomId }));
   }
 
   function addToCart(product: CommerceProduct) {
+    if (checkoutLocked) return;
     const uom = selectedUom(product);
     if (!uom || uom.sellingPrice === null) return;
     const key = `${product.id}:${uom.id}`;
@@ -113,6 +120,7 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
   }
 
   function changeQuantity(line: CartLine, delta: number) {
+    if (checkoutLocked) return;
     setCheckoutError(null);
     setCart((current) => {
       const existing = current[line.key];
@@ -129,7 +137,7 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
   }
 
   async function saveForCheckout() {
-    if (saving || cartLines.length === 0) return;
+    if (saving || completing || checkoutLocked || cartLines.length === 0) return;
     setSaving(true);
     setCheckoutError(null);
     try {
@@ -142,13 +150,49 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
           quantity: line.quantity,
         })),
       });
-      setCart({});
-      onDraftCreated?.(orderId);
+      setDraftOrderId(orderId);
     } catch (err) {
       setCheckoutError(err instanceof Error ? err.message : 'Unable to prepare this sale.');
     } finally {
       setSaving(false);
     }
+  }
+
+  function confirmCashReceived() {
+    if (!draftOrderId || completing) return;
+    Alert.alert(
+      'Confirm cash received',
+      `Complete this sale only after receiving ${formatMoney(total, currency)} in cash. Stock will be deducted immediately.`,
+      [
+        { text: 'Not yet', style: 'cancel' },
+        { text: 'Cash received', onPress: () => void completeCashSale() },
+      ],
+    );
+  }
+
+  async function completeCashSale() {
+    if (!draftOrderId || completing) return;
+    const orderId = draftOrderId;
+    setCompleting(true);
+    setCheckoutError(null);
+    try {
+      await completePosCashSale(tenantId, orderId);
+      setCart({});
+      setDraftOrderId(null);
+      onDraftCreated?.(orderId);
+    } catch (err) {
+      setCheckoutError(err instanceof Error ? err.message : 'Unable to complete this cash sale.');
+    } finally {
+      setCompleting(false);
+    }
+  }
+
+  function openSavedSale() {
+    if (!draftOrderId || completing) return;
+    const orderId = draftOrderId;
+    setCart({});
+    setDraftOrderId(null);
+    onDraftCreated?.(orderId);
   }
 
   return (
@@ -161,7 +205,7 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
         </Text>
       </View>
 
-      <View style={[styles.searchBox, dark && darkStyles.input]}>
+      <View style={[styles.searchBox, dark && darkStyles.input, checkoutLocked && styles.lockedControl]}>
         <Ionicons name="search-outline" size={20} color={theme.colors.muted} />
         <TextInput
           value={query}
@@ -169,9 +213,10 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
           placeholder="Search product, SKU or barcode"
           placeholderTextColor={theme.colors.subtle}
           autoCorrect={false}
+          editable={!checkoutLocked}
           style={[styles.searchInput, dark && darkStyles.inputText]}
         />
-        <Pressable accessibilityLabel="Scan barcode" style={styles.scanButton}>
+        <Pressable disabled={checkoutLocked} accessibilityLabel="Scan barcode" style={styles.scanButton}>
           <Ionicons name="barcode-outline" size={23} color={theme.colors.greenDark} />
         </Pressable>
       </View>
@@ -203,9 +248,9 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
       <View style={styles.productList}>
         {visibleProducts.map((product) => {
           const uom = selectedUom(product);
-          const canAdd = Boolean(uom && uom.sellingPrice !== null);
+          const canAdd = Boolean(uom && uom.sellingPrice !== null && !checkoutLocked);
           return (
-            <View key={product.id} style={[styles.productCard, dark && darkStyles.card]}>
+            <View key={product.id} style={[styles.productCard, dark && darkStyles.card, checkoutLocked && styles.lockedControl]}>
               <View style={styles.productTopRow}>
                 <View style={styles.productIdentity}>
                   <Text style={[styles.productName, dark && darkStyles.titleText]}>{product.name}</Text>
@@ -225,6 +270,7 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
                   {product.uoms.map((candidate) => (
                     <Pressable
                       key={candidate.id}
+                      disabled={checkoutLocked}
                       onPress={() => chooseUom(product.id, candidate.id)}
                       style={[
                         styles.uomChip,
@@ -300,11 +346,11 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
                   </Text>
                 </View>
                 <View style={styles.quantityControls}>
-                  <Pressable onPress={() => changeQuantity(line, -1)} style={styles.quantityButton}>
+                  <Pressable disabled={checkoutLocked} onPress={() => changeQuantity(line, -1)} style={[styles.quantityButton, checkoutLocked && styles.disabledButton]}>
                     <Ionicons name="remove" size={18} color={theme.colors.navy} />
                   </Pressable>
                   <Text style={[styles.quantityValue, dark && darkStyles.titleText]}>{formatQuantity(line.quantity)}</Text>
-                  <Pressable onPress={() => changeQuantity(line, 1)} style={styles.quantityButton}>
+                  <Pressable disabled={checkoutLocked} onPress={() => changeQuantity(line, 1)} style={[styles.quantityButton, checkoutLocked && styles.disabledButton]}>
                     <Ionicons name="add" size={18} color={theme.colors.navy} />
                   </Pressable>
                 </View>
@@ -313,12 +359,26 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
           </View>
         )}
 
-        <View style={[styles.checkoutNotice, dark && darkStyles.subtleCard]}>
-          <Ionicons name="information-circle-outline" size={20} color={theme.colors.info} />
-          <Text style={[styles.checkoutNoticeText, dark && darkStyles.bodyText]}>
-            Saving prepares this sale for checkout. Payment and stock remain unchanged until checkout is completed.
-          </Text>
-        </View>
+        {draftOrderId ? (
+          <View style={[styles.savedCheckoutCard, dark && darkStyles.subtleCard]}>
+            <View style={styles.savedCheckoutIcon}>
+              <Ionicons name="checkmark-circle-outline" size={22} color={theme.colors.greenDark} />
+            </View>
+            <View style={styles.savedCheckoutCopy}>
+              <Text style={[styles.savedCheckoutTitle, dark && darkStyles.titleText]}>Sale saved for checkout</Text>
+              <Text style={[styles.checkoutNoticeText, dark && darkStyles.bodyText]}>
+                Items and prices are now locked. Confirm cash only after the full amount has been received.
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <View style={[styles.checkoutNotice, dark && darkStyles.subtleCard]}>
+            <Ionicons name="information-circle-outline" size={20} color={theme.colors.info} />
+            <Text style={[styles.checkoutNoticeText, dark && darkStyles.bodyText]}>
+              Saving prepares this sale for checkout. Payment and stock remain unchanged until checkout is completed.
+            </Text>
+          </View>
+        )}
 
         {checkoutError ? (
           <View style={[styles.checkoutError, dark && darkStyles.errorCard]}>
@@ -326,19 +386,39 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
           </View>
         ) : null}
 
-        <Pressable
-          disabled={cartLines.length === 0 || saving}
-          onPress={() => void saveForCheckout()}
-          style={({ pressed }) => [
-            styles.checkoutButton,
-            (cartLines.length === 0 || saving) && styles.disabledButton,
-            pressed && cartLines.length > 0 && !saving && styles.pressed,
-          ]}
-        >
-          {saving ? <ActivityIndicator color={theme.colors.white} /> : null}
-          <Text style={styles.checkoutButtonText}>{saving ? 'Saving…' : 'Save for checkout'}</Text>
-          {!saving ? <Ionicons name="arrow-forward" size={19} color={theme.colors.white} /> : null}
-        </Pressable>
+        {!draftOrderId ? (
+          <Pressable
+            disabled={cartLines.length === 0 || saving || completing}
+            onPress={() => void saveForCheckout()}
+            style={({ pressed }) => [
+              styles.checkoutButton,
+              (cartLines.length === 0 || saving || completing) && styles.disabledButton,
+              pressed && cartLines.length > 0 && !saving && !completing && styles.pressed,
+            ]}
+          >
+            {saving ? <ActivityIndicator color={theme.colors.white} /> : null}
+            <Text style={styles.checkoutButtonText}>{saving ? 'Saving…' : 'Save for checkout'}</Text>
+            {!saving ? <Ionicons name="arrow-forward" size={19} color={theme.colors.white} /> : null}
+          </Pressable>
+        ) : (
+          <View style={styles.checkoutActions}>
+            <Pressable
+              disabled={completing}
+              onPress={confirmCashReceived}
+              style={({ pressed }) => [
+                styles.checkoutButton,
+                completing && styles.disabledButton,
+                pressed && !completing && styles.pressed,
+              ]}
+            >
+              {completing ? <ActivityIndicator color={theme.colors.white} /> : <Ionicons name="cash-outline" size={20} color={theme.colors.white} />}
+              <Text style={styles.checkoutButtonText}>{completing ? 'Completing sale…' : 'Cash received · Complete sale'}</Text>
+            </Pressable>
+            <Pressable disabled={completing} onPress={openSavedSale} style={styles.secondaryButton}>
+              <Text style={styles.secondaryButtonText}>View saved sale</Text>
+            </Pressable>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -387,6 +467,7 @@ const styles = StyleSheet.create({
   addButton: { alignSelf: 'flex-end', minHeight: 40, minWidth: 92, borderRadius: 12, backgroundColor: theme.colors.green, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
   addButtonText: { color: theme.colors.white, fontSize: 12, fontWeight: '900' },
   disabledButton: { opacity: 0.42 },
+  lockedControl: { opacity: 0.58 },
   cartCard: { borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 14, gap: 12 },
   cartHeadingRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
   cartTitle: { color: theme.colors.navy, fontSize: 17, fontWeight: '900', marginTop: 2 },
@@ -402,9 +483,16 @@ const styles = StyleSheet.create({
   quantityValue: { minWidth: 28, textAlign: 'center', color: theme.colors.navy, fontSize: 12, fontWeight: '900' },
   checkoutNotice: { borderRadius: theme.radius.md, backgroundColor: theme.colors.infoSoft, padding: 11, flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   checkoutNoticeText: { flex: 1, color: theme.colors.slate, fontSize: 11, lineHeight: 17 },
+  savedCheckoutCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#ABEFC6', backgroundColor: theme.colors.mintSoft, padding: 11, flexDirection: 'row', alignItems: 'flex-start', gap: 9 },
+  savedCheckoutIcon: { width: 30, height: 30, borderRadius: 10, backgroundColor: theme.colors.white, alignItems: 'center', justifyContent: 'center' },
+  savedCheckoutCopy: { flex: 1, gap: 2 },
+  savedCheckoutTitle: { color: theme.colors.navy, fontSize: 12, fontWeight: '900' },
   checkoutError: { borderRadius: theme.radius.md, backgroundColor: theme.colors.dangerSoft, padding: 10 },
+  checkoutActions: { gap: 8 },
   checkoutButton: { minHeight: 50, borderRadius: 14, backgroundColor: theme.colors.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
   checkoutButtonText: { color: theme.colors.white, fontSize: 14, fontWeight: '900' },
+  secondaryButton: { minHeight: 44, borderRadius: 13, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, alignItems: 'center', justifyContent: 'center' },
+  secondaryButtonText: { color: theme.colors.greenDark, fontSize: 12, fontWeight: '900' },
   pressed: { opacity: 0.74 },
 });
 
