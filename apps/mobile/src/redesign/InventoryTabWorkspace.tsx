@@ -47,7 +47,7 @@ export function InventoryTabWorkspace({ tenantId, branch }: Props) {
     try {
       const [nextCapabilities, nextProducts] = await Promise.all([
         loadInventoryCapabilities(tenantId, branch.id),
-        loadCommerceProducts(tenantId),
+        loadCommerceProducts(tenantId, { includeInactive: true }),
       ]);
       setCapabilities(nextCapabilities);
       setProducts(nextProducts);
