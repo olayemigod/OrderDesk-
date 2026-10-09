@@ -30,6 +30,8 @@ export type StockMovementRow = {
 export type InventoryCapabilities = {
   canReceiveStock: boolean;
   canAdjustStock: boolean;
+  canCountStock: boolean;
+  canApplyStockCount: boolean;
 };
 
 export type InventoryOperation = 'receive' | 'adjust';
@@ -62,6 +64,64 @@ export type InventoryOperationResult = {
   idempotentReplay: boolean;
 };
 
+export type StockCountStatus = 'counting' | 'review' | 'applied' | 'cancelled';
+
+export type StockCountItem = {
+  itemId: string;
+  productId: string;
+  productName: string;
+  stockUom: string;
+  captured: boolean;
+  selectedUom: string | null;
+  countedQuantity: number | null;
+  conversionFactor: number | null;
+  countedStockQuantity: number | null;
+  expectedStockQuantity: number | null;
+  varianceQuantity: number | null;
+  capturedAt: string | null;
+};
+
+export type StockCountDetail = {
+  countId: string;
+  branchId: string;
+  reference: string;
+  reason: string;
+  status: StockCountStatus;
+  startedAt: string;
+  submittedAt: string | null;
+  appliedAt: string | null;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+  totalItems: number;
+  capturedItems: number;
+  items: StockCountItem[];
+};
+
+export type StockCountActionResult = {
+  countId: string;
+  status: StockCountStatus;
+  idempotentReplay?: boolean;
+  totalItems?: number;
+  capturedItems?: number;
+  varianceItems?: number;
+  inventoryMovementCount?: number;
+};
+
+export type StartStockCountInput = {
+  tenantId: string;
+  branchId: string;
+  reference: string;
+  reason: string;
+};
+
+export type CaptureStockCountInput = {
+  tenantId: string;
+  countId: string;
+  productId: string;
+  uomId: string;
+  quantity: number;
+};
+
 type StockRpcRow = {
   catalog_item_id: string;
   item_name: string;
@@ -92,6 +152,8 @@ type MovementRpcRow = {
 type CapabilityRpcRow = {
   can_receive_stock: boolean;
   can_adjust_stock: boolean;
+  can_count_stock: boolean;
+  can_apply_stock_count: boolean;
 };
 
 export async function loadBranchStock(
@@ -158,7 +220,12 @@ export async function loadInventoryCapabilities(
   branchId: string,
 ): Promise<InventoryCapabilities> {
   if (!tenantId || !branchId) {
-    return { canReceiveStock: false, canAdjustStock: false };
+    return {
+      canReceiveStock: false,
+      canAdjustStock: false,
+      canCountStock: false,
+      canApplyStockCount: false,
+    };
   }
 
   const { data, error } = await supabase.rpc('get_sellertray_inventory_capabilities', {
@@ -171,6 +238,8 @@ export async function loadInventoryCapabilities(
   return {
     canReceiveStock: row?.can_receive_stock === true,
     canAdjustStock: row?.can_adjust_stock === true,
+    canCountStock: row?.can_count_stock === true,
+    canApplyStockCount: row?.can_apply_stock_count === true,
   };
 }
 
@@ -213,6 +282,112 @@ export async function applyInventoryOperation(
   return data;
 }
 
+export async function loadActiveStockCount(
+  tenantId: string,
+  branchId: string,
+): Promise<StockCountDetail | null> {
+  if (!tenantId || !branchId) return null;
+  const { data, error } = await supabase.rpc('get_sellertray_active_stock_count', {
+    p_tenant_id: tenantId,
+    p_branch_id: branchId,
+  });
+  if (error) throw error;
+  if (data === null) return null;
+  return parseStockCountDetail(data);
+}
+
+export async function loadStockCount(
+  tenantId: string,
+  countId: string,
+): Promise<StockCountDetail | null> {
+  if (!tenantId || !countId) return null;
+  const { data, error } = await supabase.rpc('get_sellertray_stock_count', {
+    p_tenant_id: tenantId,
+    p_stock_count_id: countId,
+  });
+  if (error) throw error;
+  if (data === null) return null;
+  return parseStockCountDetail(data);
+}
+
+export async function startStockCount(
+  input: StartStockCountInput,
+): Promise<StockCountActionResult> {
+  if (!input.tenantId || !input.branchId) throw new Error('Business and branch are required.');
+  if (!input.reference.trim()) throw new Error('Reference is required.');
+  if (!input.reason.trim()) throw new Error('Reason is required.');
+  return invokeStockCount({
+    action: 'start',
+    tenantId: input.tenantId,
+    branchId: input.branchId,
+    reference: input.reference.trim(),
+    reason: input.reason.trim(),
+  }, 'Unable to start this stock count.');
+}
+
+export async function captureStockCountItem(
+  input: CaptureStockCountInput,
+): Promise<StockCountActionResult> {
+  if (!input.tenantId || !input.countId || !input.productId || !input.uomId) {
+    throw new Error('Stock count, product and unit are required.');
+  }
+  if (!Number.isFinite(input.quantity) || input.quantity < 0) {
+    throw new Error('Counted quantity cannot be negative.');
+  }
+  return invokeStockCount({
+    action: 'capture',
+    tenantId: input.tenantId,
+    countId: input.countId,
+    productId: input.productId,
+    uomId: input.uomId,
+    quantity: input.quantity,
+  }, 'Unable to save this counted quantity.');
+}
+
+export async function submitStockCount(
+  tenantId: string,
+  countId: string,
+): Promise<StockCountActionResult> {
+  return invokeStockCount(
+    { action: 'submit', tenantId, countId },
+    'Unable to submit this stock count for review.',
+  );
+}
+
+export async function applyStockCount(
+  tenantId: string,
+  countId: string,
+): Promise<StockCountActionResult> {
+  return invokeStockCount(
+    { action: 'apply', tenantId, countId },
+    'Unable to apply this stock count.',
+  );
+}
+
+export async function cancelStockCount(
+  tenantId: string,
+  countId: string,
+  reason: string,
+): Promise<StockCountActionResult> {
+  if (!reason.trim()) throw new Error('Cancellation reason is required.');
+  return invokeStockCount(
+    { action: 'cancel', tenantId, countId, reason: reason.trim() },
+    'Unable to cancel this stock count.',
+  );
+}
+
+async function invokeStockCount(
+  body: Record<string, unknown>,
+  fallback: string,
+): Promise<StockCountActionResult> {
+  const { data, error } = await supabase.functions.invoke('stock-count', { body });
+  if (error) throw new Error(await functionErrorMessage(error, fallback));
+  if (!isStockCountActionResult(data)) {
+    throw new Error('SellerTray returned an invalid stock count result.');
+  }
+  return data;
+}
+
 async function functionErrorMessage(error: unknown, fallback: string): Promise<string> {
   let message = error instanceof Error && error.message ? error.message : fallback;
   if (!error || typeof error !== 'object' || !('context' in error)) return message;
@@ -244,6 +419,85 @@ function isInventoryOperationResult(value: unknown): value is InventoryOperation
     && typeof row.quantityOnHand === 'number'
     && typeof row.reference === 'string'
     && typeof row.idempotentReplay === 'boolean';
+}
+
+function isStockCountActionResult(value: unknown): value is StockCountActionResult {
+  if (!value || typeof value !== 'object') return false;
+  const row = value as Record<string, unknown>;
+  return typeof row.countId === 'string'
+    && (row.status === 'counting' || row.status === 'review'
+      || row.status === 'applied' || row.status === 'cancelled');
+}
+
+function parseStockCountDetail(value: unknown): StockCountDetail {
+  if (!value || typeof value !== 'object') {
+    throw new Error('SellerTray returned an invalid stock count.');
+  }
+  const row = value as Record<string, unknown>;
+  if (typeof row.countId !== 'string'
+      || typeof row.branchId !== 'string'
+      || typeof row.reference !== 'string'
+      || typeof row.reason !== 'string'
+      || (row.status !== 'counting' && row.status !== 'review'
+        && row.status !== 'applied' && row.status !== 'cancelled')
+      || typeof row.startedAt !== 'string'
+      || !Array.isArray(row.items)) {
+    throw new Error('SellerTray returned an invalid stock count.');
+  }
+
+  const items = row.items.map((raw) => parseStockCountItem(raw));
+  return {
+    countId: row.countId,
+    branchId: row.branchId,
+    reference: row.reference,
+    reason: row.reason,
+    status: row.status,
+    startedAt: row.startedAt,
+    submittedAt: typeof row.submittedAt === 'string' ? row.submittedAt : null,
+    appliedAt: typeof row.appliedAt === 'string' ? row.appliedAt : null,
+    cancelledAt: typeof row.cancelledAt === 'string' ? row.cancelledAt : null,
+    cancelReason: typeof row.cancelReason === 'string' ? row.cancelReason : null,
+    totalItems: typeof row.totalItems === 'number' ? row.totalItems : items.length,
+    capturedItems: typeof row.capturedItems === 'number'
+      ? row.capturedItems
+      : items.filter((item) => item.captured).length,
+    items,
+  };
+}
+
+function parseStockCountItem(value: unknown): StockCountItem {
+  if (!value || typeof value !== 'object') {
+    throw new Error('SellerTray returned an invalid stock count item.');
+  }
+  const row = value as Record<string, unknown>;
+  if (typeof row.itemId !== 'string'
+      || typeof row.productId !== 'string'
+      || typeof row.productName !== 'string'
+      || typeof row.stockUom !== 'string'
+      || typeof row.captured !== 'boolean') {
+    throw new Error('SellerTray returned an invalid stock count item.');
+  }
+
+  return {
+    itemId: row.itemId,
+    productId: row.productId,
+    productName: row.productName,
+    stockUom: row.stockUom,
+    captured: row.captured,
+    selectedUom: typeof row.selectedUom === 'string' ? row.selectedUom : null,
+    countedQuantity: toNullableNumber(row.countedQuantity),
+    conversionFactor: toNullableNumber(row.conversionFactor),
+    countedStockQuantity: toNullableNumber(row.countedStockQuantity),
+    expectedStockQuantity: toNullableNumber(row.expectedStockQuantity),
+    varianceQuantity: toNullableNumber(row.varianceQuantity),
+    capturedAt: typeof row.capturedAt === 'string' ? row.capturedAt : null,
+  };
+}
+
+function toNullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function toNumber(value: number | string): number {
