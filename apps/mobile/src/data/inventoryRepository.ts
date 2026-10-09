@@ -32,6 +32,7 @@ export type InventoryCapabilities = {
   canAdjustStock: boolean;
   canCountStock?: boolean;
   canApplyStockCount?: boolean;
+  canTransferStock?: boolean;
 };
 
 export type InventoryOperation = 'receive' | 'adjust';
@@ -122,6 +123,72 @@ export type CaptureStockCountInput = {
   quantity: number;
 };
 
+export type StockTransferStatus = 'draft' | 'dispatched' | 'received' | 'cancelled';
+
+export type StockTransferListRow = {
+  id: string;
+  reference: string;
+  status: StockTransferStatus;
+  sourceBranchId: string;
+  sourceBranchName: string;
+  destinationBranchId: string;
+  destinationBranchName: string;
+  itemCount: number;
+  createdAt: string;
+  dispatchedAt: string | null;
+  receivedAt: string | null;
+};
+
+export type StockTransferItem = {
+  itemId: string;
+  productId: string;
+  productName: string;
+  stockUom: string;
+  selectedUom: string;
+  quantity: number;
+  conversionFactor: number;
+  stockQuantity: number;
+};
+
+export type StockTransferDetail = {
+  transferId: string;
+  reference: string;
+  reason: string;
+  status: StockTransferStatus;
+  sourceBranchId: string;
+  sourceBranchName: string;
+  destinationBranchId: string;
+  destinationBranchName: string;
+  createdAt: string;
+  dispatchedAt: string | null;
+  receivedAt: string | null;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+  items: StockTransferItem[];
+};
+
+export type StockTransferActionResult = {
+  transferId: string;
+  status: StockTransferStatus;
+  reference?: string;
+  itemCount?: number;
+  inventoryMovementCount?: number;
+  idempotentReplay: boolean;
+};
+
+export type CreateStockTransferInput = {
+  tenantId: string;
+  sourceBranchId: string;
+  destinationBranchId: string;
+  reference: string;
+  reason: string;
+  items: Array<{
+    catalogItemId: string;
+    uomId: string;
+    quantity: number;
+  }>;
+};
+
 type StockRpcRow = {
   catalog_item_id: string;
   item_name: string;
@@ -154,6 +221,21 @@ type CapabilityRpcRow = {
   can_adjust_stock: boolean;
   can_count_stock: boolean;
   can_apply_stock_count: boolean;
+  can_transfer_stock: boolean;
+};
+
+type StockTransferRpcRow = {
+  id: string;
+  reference: string;
+  status: StockTransferStatus;
+  source_branch_id: string;
+  source_branch_name: string;
+  destination_branch_id: string;
+  destination_branch_name: string;
+  item_count: number | string;
+  created_at: string;
+  dispatched_at: string | null;
+  received_at: string | null;
 };
 
 export async function loadBranchStock(
@@ -225,6 +307,7 @@ export async function loadInventoryCapabilities(
       canAdjustStock: false,
       canCountStock: false,
       canApplyStockCount: false,
+      canTransferStock: false,
     };
   }
 
@@ -240,6 +323,7 @@ export async function loadInventoryCapabilities(
     canAdjustStock: row?.can_adjust_stock === true,
     canCountStock: row?.can_count_stock === true,
     canApplyStockCount: row?.can_apply_stock_count === true,
+    canTransferStock: row?.can_transfer_stock === true,
   };
 }
 
@@ -376,6 +460,108 @@ export async function cancelStockCount(
   );
 }
 
+export async function loadStockTransfers(
+  tenantId: string,
+  branchId: string,
+  limit = 50,
+): Promise<StockTransferListRow[]> {
+  if (!tenantId || !branchId) return [];
+  const { data, error } = await supabase.rpc('get_sellertray_stock_transfers', {
+    p_tenant_id: tenantId,
+    p_branch_id: branchId,
+    p_limit: limit,
+  });
+  if (error) throw error;
+
+  return ((data ?? []) as StockTransferRpcRow[]).map((row) => ({
+    id: row.id,
+    reference: row.reference,
+    status: row.status,
+    sourceBranchId: row.source_branch_id,
+    sourceBranchName: row.source_branch_name,
+    destinationBranchId: row.destination_branch_id,
+    destinationBranchName: row.destination_branch_name,
+    itemCount: toNumber(row.item_count),
+    createdAt: row.created_at,
+    dispatchedAt: row.dispatched_at,
+    receivedAt: row.received_at,
+  }));
+}
+
+export async function loadStockTransfer(
+  tenantId: string,
+  transferId: string,
+): Promise<StockTransferDetail | null> {
+  if (!tenantId || !transferId) return null;
+  const { data, error } = await supabase.rpc('get_sellertray_stock_transfer', {
+    p_tenant_id: tenantId,
+    p_stock_transfer_id: transferId,
+  });
+  if (error) throw error;
+  if (data === null) return null;
+  return parseStockTransferDetail(data);
+}
+
+export async function createStockTransfer(
+  input: CreateStockTransferInput,
+): Promise<StockTransferActionResult> {
+  if (!input.tenantId || !input.sourceBranchId || !input.destinationBranchId) {
+    throw new Error('Business, source branch and destination branch are required.');
+  }
+  if (input.sourceBranchId === input.destinationBranchId) {
+    throw new Error('Choose a different destination branch.');
+  }
+  if (!input.reference.trim()) throw new Error('Reference is required.');
+  if (!input.reason.trim()) throw new Error('Reason is required.');
+  if (input.items.length === 0) throw new Error('Add at least one product.');
+  if (input.items.some((item) => !item.catalogItemId || !item.uomId
+      || !Number.isFinite(item.quantity) || item.quantity <= 0)) {
+    throw new Error('Every transfer product needs a valid unit and quantity.');
+  }
+
+  return invokeStockTransfer({
+    action: 'create',
+    tenantId: input.tenantId,
+    sourceBranchId: input.sourceBranchId,
+    destinationBranchId: input.destinationBranchId,
+    reference: input.reference.trim(),
+    reason: input.reason.trim(),
+    items: input.items,
+  }, 'Unable to save this stock transfer.');
+}
+
+export async function dispatchStockTransfer(
+  tenantId: string,
+  transferId: string,
+): Promise<StockTransferActionResult> {
+  return invokeStockTransfer(
+    { action: 'dispatch', tenantId, transferId },
+    'Unable to dispatch this stock transfer.',
+  );
+}
+
+export async function receiveStockTransfer(
+  tenantId: string,
+  transferId: string,
+): Promise<StockTransferActionResult> {
+  return invokeStockTransfer(
+    { action: 'receive', tenantId, transferId },
+    'Unable to receive this stock transfer.',
+  );
+}
+
+export async function cancelStockTransfer(
+  tenantId: string,
+  transferId: string,
+  reason: string,
+): Promise<StockTransferActionResult> {
+  if (!reason.trim()) throw new Error('Cancellation reason is required.');
+  return invokeStockTransfer(
+    { action: 'cancel', tenantId, transferId, reason: reason.trim() },
+    'Unable to cancel this stock transfer.',
+  );
+}
+
 async function invokeStockCount(
   body: Record<string, unknown>,
   fallback: string,
@@ -384,6 +570,18 @@ async function invokeStockCount(
   if (error) throw new Error(await functionErrorMessage(error, fallback));
   if (!isStockCountActionResult(data)) {
     throw new Error('SellerTray returned an invalid stock count result.');
+  }
+  return data;
+}
+
+async function invokeStockTransfer(
+  body: Record<string, unknown>,
+  fallback: string,
+): Promise<StockTransferActionResult> {
+  const { data, error } = await supabase.functions.invoke('stock-transfer', { body });
+  if (error) throw new Error(await functionErrorMessage(error, fallback));
+  if (!isStockTransferActionResult(data)) {
+    throw new Error('SellerTray returned an invalid stock transfer result.');
   }
   return data;
 }
@@ -427,6 +625,15 @@ function isStockCountActionResult(value: unknown): value is StockCountActionResu
   return typeof row.countId === 'string'
     && (row.status === 'counting' || row.status === 'review'
       || row.status === 'applied' || row.status === 'cancelled');
+}
+
+function isStockTransferActionResult(value: unknown): value is StockTransferActionResult {
+  if (!value || typeof value !== 'object') return false;
+  const row = value as Record<string, unknown>;
+  return typeof row.transferId === 'string'
+    && (row.status === 'draft' || row.status === 'dispatched'
+      || row.status === 'received' || row.status === 'cancelled')
+    && typeof row.idempotentReplay === 'boolean';
 }
 
 function parseStockCountDetail(value: unknown): StockCountDetail {
@@ -491,6 +698,73 @@ function parseStockCountItem(value: unknown): StockCountItem {
     expectedStockQuantity: toNullableNumber(row.expectedStockQuantity),
     varianceQuantity: toNullableNumber(row.varianceQuantity),
     capturedAt: typeof row.capturedAt === 'string' ? row.capturedAt : null,
+  };
+}
+
+function parseStockTransferDetail(value: unknown): StockTransferDetail {
+  if (!value || typeof value !== 'object') {
+    throw new Error('SellerTray returned an invalid stock transfer.');
+  }
+  const row = value as Record<string, unknown>;
+  if (typeof row.transferId !== 'string'
+      || typeof row.reference !== 'string'
+      || typeof row.reason !== 'string'
+      || (row.status !== 'draft' && row.status !== 'dispatched'
+        && row.status !== 'received' && row.status !== 'cancelled')
+      || typeof row.sourceBranchId !== 'string'
+      || typeof row.sourceBranchName !== 'string'
+      || typeof row.destinationBranchId !== 'string'
+      || typeof row.destinationBranchName !== 'string'
+      || typeof row.createdAt !== 'string'
+      || !Array.isArray(row.items)) {
+    throw new Error('SellerTray returned an invalid stock transfer.');
+  }
+
+  return {
+    transferId: row.transferId,
+    reference: row.reference,
+    reason: row.reason,
+    status: row.status,
+    sourceBranchId: row.sourceBranchId,
+    sourceBranchName: row.sourceBranchName,
+    destinationBranchId: row.destinationBranchId,
+    destinationBranchName: row.destinationBranchName,
+    createdAt: row.createdAt,
+    dispatchedAt: typeof row.dispatchedAt === 'string' ? row.dispatchedAt : null,
+    receivedAt: typeof row.receivedAt === 'string' ? row.receivedAt : null,
+    cancelledAt: typeof row.cancelledAt === 'string' ? row.cancelledAt : null,
+    cancelReason: typeof row.cancelReason === 'string' ? row.cancelReason : null,
+    items: row.items.map((raw) => parseStockTransferItem(raw)),
+  };
+}
+
+function parseStockTransferItem(value: unknown): StockTransferItem {
+  if (!value || typeof value !== 'object') {
+    throw new Error('SellerTray returned an invalid stock transfer item.');
+  }
+  const row = value as Record<string, unknown>;
+  if (typeof row.itemId !== 'string'
+      || typeof row.productId !== 'string'
+      || typeof row.productName !== 'string'
+      || typeof row.stockUom !== 'string'
+      || typeof row.selectedUom !== 'string') {
+    throw new Error('SellerTray returned an invalid stock transfer item.');
+  }
+  const quantity = toNullableNumber(row.quantity);
+  const conversionFactor = toNullableNumber(row.conversionFactor);
+  const stockQuantity = toNullableNumber(row.stockQuantity);
+  if (quantity === null || conversionFactor === null || stockQuantity === null) {
+    throw new Error('SellerTray returned an invalid stock transfer item.');
+  }
+  return {
+    itemId: row.itemId,
+    productId: row.productId,
+    productName: row.productName,
+    stockUom: row.stockUom,
+    selectedUom: row.selectedUom,
+    quantity,
+    conversionFactor,
+    stockQuantity,
   };
 }
 
