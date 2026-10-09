@@ -44,6 +44,16 @@ export type CreatePosDraftInput = {
   items: PosDraftLine[];
 };
 
+export type PosCashCheckoutResult = {
+  orderId: string;
+  paymentId: string;
+  status: 'completed';
+  paymentStatus: 'paid';
+  fulfillmentStatus: 'collected';
+  inventoryMovementCount: number;
+  idempotentReplay: boolean;
+};
+
 type BranchRow = {
   id: string;
   code: string;
@@ -166,18 +176,7 @@ export async function createPosDraft(input: CreatePosDraftInput): Promise<string
     },
   });
 
-  if (error) {
-    let message = error.message || 'Unable to prepare this sale.';
-    if (error.context && typeof error.context === 'object' && 'clone' in error.context) {
-      try {
-        const payload = await (error.context as Response).clone().json() as { error?: string };
-        if (payload?.error) message = payload.error;
-      } catch {
-        // Keep the SDK message.
-      }
-    }
-    throw new Error(message);
-  }
+  if (error) throw new Error(await functionErrorMessage(error, 'Unable to prepare this sale.'));
 
   const orderId =
     data && typeof data === 'object' && 'orderId' in data && typeof data.orderId === 'string'
@@ -186,6 +185,59 @@ export async function createPosDraft(input: CreatePosDraftInput): Promise<string
 
   if (!orderId) throw new Error('SellerTray returned an invalid sale reference.');
   return orderId;
+}
+
+export async function completePosCashSale(
+  tenantId: string,
+  orderId: string,
+): Promise<PosCashCheckoutResult> {
+  if (!tenantId) throw new Error('Business is required.');
+  if (!orderId) throw new Error('Sale is required.');
+
+  const { data, error } = await supabase.functions.invoke('pos-checkout', {
+    body: {
+      tenantId,
+      orderId,
+      paymentMethod: 'cash',
+    },
+  });
+
+  if (error) throw new Error(await functionErrorMessage(error, 'Unable to complete this cash sale.'));
+
+  if (!isPosCashCheckoutResult(data)) {
+    throw new Error('SellerTray returned an invalid checkout result.');
+  }
+
+  return data;
+}
+
+async function functionErrorMessage(error: unknown, fallback: string): Promise<string> {
+  let message = error instanceof Error && error.message ? error.message : fallback;
+  if (!error || typeof error !== 'object' || !('context' in error)) return message;
+
+  const context = (error as { context?: unknown }).context;
+  if (!context || typeof context !== 'object' || !('clone' in context)) return message;
+
+  try {
+    const payload = await (context as Response).clone().json() as { error?: string };
+    if (payload?.error) message = payload.error;
+  } catch {
+    // Keep the SDK message.
+  }
+  return message;
+}
+
+function isPosCashCheckoutResult(value: unknown): value is PosCashCheckoutResult {
+  if (!value || typeof value !== 'object') return false;
+  const row = value as Record<string, unknown>;
+  return row.orderId !== undefined
+    && typeof row.orderId === 'string'
+    && typeof row.paymentId === 'string'
+    && row.status === 'completed'
+    && row.paymentStatus === 'paid'
+    && row.fulfillmentStatus === 'collected'
+    && typeof row.inventoryMovementCount === 'number'
+    && typeof row.idempotentReplay === 'boolean';
 }
 
 function cleanOptional(value: string | null | undefined): string | null {
