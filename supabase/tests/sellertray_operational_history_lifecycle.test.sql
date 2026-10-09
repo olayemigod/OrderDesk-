@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(10);
+select extensions.plan(12);
 
 create temp table sellertray_operational_lifecycle_fixture (
   tenant_id uuid not null,
@@ -14,7 +14,8 @@ create temp table sellertray_operational_lifecycle_fixture (
   return_id uuid,
   inventory_delete_rejected boolean not null default false,
   return_delete_rejected boolean not null default false,
-  capability_event_delete_rejected boolean not null default false
+  capability_event_delete_rejected boolean not null default false,
+  order_item_delete_rejected boolean not null default false
 ) on commit drop;
 
 insert into sellertray_operational_lifecycle_fixture(
@@ -168,8 +169,37 @@ select extensions.ok(
   'permission audit history remains undeletable while the Tenant exists'
 );
 
+do $$
+begin
+  begin
+    delete from public.order_items
+    where tenant_id=(select tenant_id from sellertray_operational_lifecycle_fixture)
+      and order_id=(select order_id from sellertray_operational_lifecycle_fixture);
+  exception when sqlstate '23514' then
+    update sellertray_operational_lifecycle_fixture
+    set order_item_delete_rejected=true;
+  end;
+end
+$$;
+
+select extensions.ok(
+  (select order_item_delete_rejected from sellertray_operational_lifecycle_fixture),
+  'direct deletion of completed invoiced order items remains financially locked'
+);
+
 select public.archive_sellertray_financial_records(
   (select tenant_id from sellertray_operational_lifecycle_fixture)
+);
+
+select extensions.is(
+  (
+    select count(*)::integer
+    from sellertray_private.financial_retention_records r
+    where r.source_tenant_id=(select tenant_id from sellertray_operational_lifecycle_fixture)
+      and r.record_kind='refund'
+  ),
+  1,
+  'cash refund evidence is retained before governed business deletion'
 );
 
 delete from public.tenants
@@ -217,7 +247,7 @@ select extensions.is(
     where pr.tenant_id=(select tenant_id from sellertray_operational_lifecycle_fixture)
   ),
   0,
-  'Tenant deletion removes return refund evidence'
+  'Tenant deletion removes operational refund rows after retention archive'
 );
 
 select extensions.is(
