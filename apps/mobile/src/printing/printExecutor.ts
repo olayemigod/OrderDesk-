@@ -1,0 +1,48 @@
+import { type PrintJob, updatePrintJob } from '../data/printerRepository';
+import { sendBluetoothPrintBytes } from './bluetoothPrinter';
+import { buildEscPosPrintBytes } from './escPosReceipt';
+
+export async function executePreparedPrintJob(tenantId: string, job: PrintJob): Promise<void> {
+  if (!tenantId) throw new Error('Business is required to print.');
+  if (job.status !== 'requested') {
+    throw new Error('This print attempt has already started. Create a new reprint if another copy is needed.');
+  }
+
+  let started = false;
+  try {
+    await updatePrintJob({ tenantId, jobId: job.jobId, status: 'printing' });
+    started = true;
+
+    const bytes = buildEscPosPrintBytes(job.contentSnapshot, job.paperWidthMm);
+    await sendBluetoothPrintBytes(job.hardwareIdentifier, bytes);
+
+    await updatePrintJob({ tenantId, jobId: job.jobId, status: 'printed' });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'The receipt could not be printed.';
+    if (started) {
+      try {
+        await updatePrintJob({
+          tenantId,
+          jobId: job.jobId,
+          status: 'failed',
+          failureCode: classifyPrintFailure(message),
+          failureMessage: message,
+        });
+      } catch {
+        // The commercial transaction is already complete. A status-sync failure
+        // must never become a reason to replay or roll back the sale.
+      }
+    }
+    throw new Error(message);
+  }
+}
+
+function classifyPrintFailure(message: string): string {
+  const value = message.toLowerCase();
+  if (value.includes('permission')) return 'BLUETOOTH_PERMISSION';
+  if (value.includes('turn on bluetooth') || value.includes('bluetooth is unavailable')) return 'BLUETOOTH_UNAVAILABLE';
+  if (value.includes('not paired')) return 'PRINTER_NOT_PAIRED';
+  if (value.includes('expo go') || value.includes('installed sellertray')) return 'NATIVE_BUILD_REQUIRED';
+  if (value.includes('address is invalid')) return 'PRINTER_IDENTITY_INVALID';
+  return 'PRINT_FAILED';
+}
