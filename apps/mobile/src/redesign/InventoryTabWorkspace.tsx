@@ -17,6 +17,7 @@ import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import { InventoryWorkspace } from './InventoryWorkspace';
 import { StockCountWorkspace } from './StockCountWorkspace';
+import { StockTransferWorkspace } from './StockTransferWorkspace';
 
 type Props = {
   tenantId: string;
@@ -28,6 +29,7 @@ const NO_CAPABILITIES: InventoryCapabilities = {
   canAdjustStock: false,
   canCountStock: false,
   canApplyStockCount: false,
+  canTransferStock: false,
 };
 
 export function InventoryTabWorkspace({ tenantId, branch }: Props) {
@@ -39,6 +41,7 @@ export function InventoryTabWorkspace({ tenantId, branch }: Props) {
   const [loadingCountAccess, setLoadingCountAccess] = useState(true);
   const [countAccessError, setCountAccessError] = useState<string | null>(null);
   const [countOpen, setCountOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
   const [inventoryVersion, setInventoryVersion] = useState(0);
 
   async function refreshCountEntry() {
@@ -66,7 +69,7 @@ export function InventoryTabWorkspace({ tenantId, branch }: Props) {
       setCapabilities(NO_CAPABILITIES);
       setProducts([]);
       setActiveCount(null);
-      setCountAccessError(err instanceof Error ? err.message : 'Stock count access could not be verified.');
+      setCountAccessError(err instanceof Error ? err.message : 'Inventory action access could not be verified.');
     } finally {
       setLoadingCountAccess(false);
     }
@@ -74,9 +77,29 @@ export function InventoryTabWorkspace({ tenantId, branch }: Props) {
 
   useEffect(() => {
     setCountOpen(false);
+    setTransferOpen(false);
     setInventoryVersion(0);
     void refreshCountEntry();
   }, [tenantId, branch.id]);
+
+  if (transferOpen) {
+    return (
+      <StockTransferWorkspace
+        tenantId={tenantId}
+        branch={branch}
+        products={products}
+        capabilities={capabilities}
+        onInventoryChanged={() => {
+          setInventoryVersion((value) => value + 1);
+        }}
+        onClose={() => {
+          setTransferOpen(false);
+          setInventoryVersion((value) => value + 1);
+          void refreshCountEntry();
+        }}
+      />
+    );
+  }
 
   if (countOpen) {
     return (
@@ -101,6 +124,24 @@ export function InventoryTabWorkspace({ tenantId, branch }: Props) {
 
   return (
     <View style={styles.stack}>
+      <Pressable
+        onPress={() => setTransferOpen(true)}
+        style={({ pressed }) => [styles.countCard, dark && darkStyles.card, pressed && styles.pressed]}
+      >
+        <View style={styles.countIcon}>
+          <Ionicons name="git-compare-outline" size={22} color={theme.colors.greenDark} />
+        </View>
+        <View style={styles.countCopy}>
+          <Text style={[styles.countTitle, dark && darkStyles.titleText]}>Stock transfers</Text>
+          <Text style={[styles.countText, dark && darkStyles.bodyText]}>
+            {capabilities.canTransferStock
+              ? 'Move stock between accessible branches and confirm dispatch or receipt.'
+              : 'View incoming and outgoing transfer history for this branch.'}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
+      </Pressable>
+
       {loadingCountAccess ? (
         <View style={[styles.countCard, dark && darkStyles.card]}>
           <ActivityIndicator size="small" />
@@ -133,7 +174,7 @@ export function InventoryTabWorkspace({ tenantId, branch }: Props) {
         <View style={[styles.permissionCard, dark && darkStyles.subtleCard]}>
           <Ionicons name="shield-outline" size={18} color={theme.colors.muted} />
           <Text style={[styles.permissionText, dark && darkStyles.bodyText]}>
-            Stock count access could not be verified. Inventory viewing remains available.
+            Inventory action access could not be verified. Inventory viewing remains available.
           </Text>
         </View>
       ) : null}
