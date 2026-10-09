@@ -48,7 +48,7 @@ with inserted_uom as (
     allow_fractional,
     is_default_selling
   )
-  select tenant_id, product_id, 'Pack', 12, 1050, false, true
+  select tenant_id, product_id, 'Pack', 12, 1050, false, false
   from sellertray_pos_fixture
   returning id
 )
