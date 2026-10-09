@@ -15,6 +15,7 @@ export type CommerceUom = {
   barcode: string | null;
   allowFractional: boolean;
   isDefaultSelling: boolean;
+  isDefaultPurchase: boolean;
 };
 
 export type CommerceProduct = {
@@ -78,6 +79,7 @@ type ProductRow = {
     barcode: string | null;
     allow_fractional: boolean;
     is_default_selling: boolean;
+    is_default_purchase: boolean;
   }> | null;
 };
 
@@ -119,7 +121,8 @@ export async function loadCommerceProducts(tenantId: string): Promise<CommercePr
         selling_price,
         barcode,
         allow_fractional,
-        is_default_selling
+        is_default_selling,
+        is_default_purchase
       )
     `)
     .eq('tenant_id', tenantId)
@@ -146,9 +149,11 @@ export async function loadCommerceProducts(tenantId: string): Promise<CommercePr
         barcode: uom.barcode,
         allowFractional: uom.allow_fractional,
         isDefaultSelling: uom.is_default_selling,
+        isDefaultPurchase: uom.is_default_purchase,
       }))
       .sort((left, right) => {
         if (left.isDefaultSelling !== right.isDefaultSelling) return left.isDefaultSelling ? -1 : 1;
+        if (left.isDefaultPurchase !== right.isDefaultPurchase) return left.isDefaultPurchase ? -1 : 1;
         if (left.conversionFactor !== right.conversionFactor) return left.conversionFactor - right.conversionFactor;
         return left.name.localeCompare(right.name);
       }),
