@@ -90,6 +90,8 @@ set order_id=public.create_sellertray_pos_order_atomic(
   ))
 );
 
+set local request.jwt.claim.role = 'service_role';
+
 select public.complete_sellertray_pos_cash_sale(
   tenant_id,order_id,owner_user_id
 )
@@ -164,6 +166,10 @@ $$;
 select extensions.ok(
   (select capability_event_delete_rejected from sellertray_operational_lifecycle_fixture),
   'permission audit history remains undeletable while the Tenant exists'
+);
+
+select public.archive_sellertray_financial_records(
+  (select tenant_id from sellertray_operational_lifecycle_fixture)
 );
 
 delete from public.tenants
