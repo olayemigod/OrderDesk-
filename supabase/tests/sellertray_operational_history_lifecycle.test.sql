@@ -113,8 +113,13 @@ do $$
 begin
   begin
     delete from public.inventory_movements
-    where tenant_id=(select tenant_id from sellertray_operational_lifecycle_fixture)
-    limit 1;
+    where id=(
+      select im.id
+      from public.inventory_movements im
+      where im.tenant_id=(select tenant_id from sellertray_operational_lifecycle_fixture)
+      order by im.created_at,im.id
+      limit 1
+    );
   exception when sqlstate '55000' then
     update sellertray_operational_lifecycle_fixture
     set inventory_delete_rejected=true;
