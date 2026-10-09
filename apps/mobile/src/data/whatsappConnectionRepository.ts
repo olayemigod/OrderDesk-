@@ -55,7 +55,13 @@ export type EmbeddedSignupCallback =
       state: string;
     }
   | {
-      status: 'cancelled' | 'error';
+      status: 'cancelled';
+      tenantId: string | null;
+      state: string | null;
+      message: string | null;
+    }
+  | {
+      status: 'error';
       tenantId: string | null;
       state: string | null;
       message: string | null;
