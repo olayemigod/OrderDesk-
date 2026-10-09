@@ -33,6 +33,7 @@ export default function RedesignWorkspace() {
     orders,
     loading: ordersLoading,
     error: ordersError,
+    refresh: refreshOrders,
   } = useOrders(activeBusiness?.id ?? null);
   const catalogue = useCatalogue(activeBusiness?.id ?? null);
   const notifications = useMerchantNotifications(activeBusiness?.id ?? null);
@@ -190,6 +191,9 @@ export default function RedesignWorkspace() {
             tenantId={activeBusiness.id}
             branch={activeBranch}
             currency={activeBusiness.currency}
+            onDraftCreated={() => {
+              void refreshOrders().finally(() => setTab('orders'));
+            }}
           />
         ) : (
           <View style={[styles.emptyCard, appearance.dark && darkStyles.card]}>
@@ -421,17 +425,7 @@ const styles = StyleSheet.create({
   eyebrow: { color: theme.colors.muted, fontSize: 11, fontWeight: '900', letterSpacing: 1.05 },
   pageTitle: { color: theme.colors.navy, fontSize: 28, lineHeight: 34, fontWeight: '900' },
   pageSubtitle: { color: theme.colors.slate, fontSize: 14, lineHeight: 20 },
-  errorCard: {
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: '#FDA29B',
-    backgroundColor: theme.colors.dangerSoft,
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    marginBottom: 14,
-  },
+  errorCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#FDA29B', backgroundColor: theme.colors.dangerSoft, padding: 12, flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 14 },
   errorCopy: { flex: 1 },
   errorTitle: { color: '#B42318', fontSize: 13, fontWeight: '900' },
   errorText: { color: '#912018', fontSize: 11, lineHeight: 17, marginTop: 2 },
@@ -445,27 +439,10 @@ const styles = StyleSheet.create({
   branchCopy: { flex: 1 },
   branchName: { color: theme.colors.navy, fontSize: 13, fontWeight: '900' },
   branchCode: { color: theme.colors.muted, fontSize: 11, marginTop: 2 },
-  emptyCard: {
-    minHeight: 120,
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.white,
-    padding: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-  },
+  emptyCard: { minHeight: 120, borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 18, alignItems: 'center', justifyContent: 'center', gap: 7 },
   emptyTitle: { color: theme.colors.navy, fontSize: 15, fontWeight: '900' },
   emptyText: { color: theme.colors.muted, fontSize: 12, lineHeight: 18, textAlign: 'center' },
-  orderCard: {
-    borderRadius: theme.radius.md,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.white,
-    padding: 13,
-    gap: 10,
-  },
+  orderCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 13, gap: 10 },
   orderTopRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
   orderIdentity: { flex: 1, minWidth: 0 },
   customerName: { color: theme.colors.navy, fontSize: 14, fontWeight: '900' },
