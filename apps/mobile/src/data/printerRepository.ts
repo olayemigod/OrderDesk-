@@ -1,0 +1,458 @@
+import { supabase } from '../lib/supabase';
+
+export type SellerTrayPrinter = {
+  id: string;
+  registerId: string;
+  registerName: string;
+  displayName: string;
+  transport: 'bluetooth';
+  hardwareIdentifier: string;
+  paperWidthMm: 58 | 80;
+  isDefault: boolean;
+  isActive: boolean;
+};
+
+export type PrintingCapabilities = {
+  canPrintReceipt: boolean;
+  canManageDevices: boolean;
+};
+
+export type ReceiptPrintReference = {
+  documentId: string;
+  documentReference: string;
+  amount: number;
+  currency: string;
+  issuedAt: string;
+};
+
+export type ReceiptPrintItem = {
+  name: string;
+  quantity: number;
+  uom: string;
+  unitPrice: number;
+  lineTotal: number;
+};
+
+export type ReceiptPrintSnapshot = {
+  formatVersion: number;
+  documentType: 'receipt';
+  businessName: string;
+  businessEmail: string | null;
+  businessPhone: string | null;
+  branchName: string;
+  registerName: string;
+  orderReference: string;
+  receiptReference: string;
+  issuedAt: string;
+  customerName: string;
+  customerPhone: string | null;
+  currency: string;
+  amountPaid: number;
+  paymentMethod: string;
+  paymentProvider: string;
+  paymentReference: string | null;
+  paymentConfirmedAt: string | null;
+  items: ReceiptPrintItem[];
+  footer: string;
+};
+
+export type TestPrintSnapshot = {
+  formatVersion: number;
+  documentType: 'test';
+  title: string;
+  businessName: string;
+  branchName: string;
+  registerName: string;
+  printerName: string;
+  paperWidthMm: 58 | 80;
+  requestedAt: string;
+  footer: string;
+};
+
+export type PrintContentSnapshot = ReceiptPrintSnapshot | TestPrintSnapshot;
+export type PrintJobStatus = 'requested' | 'printing' | 'printed' | 'failed';
+export type PrintJobType = 'receipt' | 'test';
+
+export type PrintJob = {
+  jobId: string;
+  status: PrintJobStatus;
+  jobType: PrintJobType;
+  orderId: string | null;
+  financialDocumentId: string | null;
+  printerId: string;
+  printerName: string;
+  transport: 'bluetooth';
+  hardwareIdentifier: string;
+  paperWidthMm: 58 | 80;
+  contentSnapshot: PrintContentSnapshot;
+  requestedAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  failedAt: string | null;
+  failureCode: string | null;
+  failureMessage: string | null;
+  idempotentReplay?: boolean;
+};
+
+type PrinterRpcRow = {
+  id: string;
+  register_id: string;
+  register_name: string;
+  display_name: string;
+  transport: 'bluetooth';
+  hardware_identifier: string;
+  paper_width_mm: number;
+  is_default: boolean;
+  is_active: boolean;
+};
+
+type CapabilityRpcRow = {
+  can_print_receipt: boolean;
+  can_manage_devices: boolean;
+};
+
+type ReceiptRpcRow = {
+  document_id: string;
+  document_reference: string;
+  amount: number | string;
+  currency: string;
+  issued_at: string;
+};
+
+export async function loadPrintingCapabilities(
+  tenantId: string,
+  branchId: string,
+): Promise<PrintingCapabilities> {
+  if (!tenantId || !branchId) return { canPrintReceipt: false, canManageDevices: false };
+  const { data, error } = await supabase.rpc('get_sellertray_printing_capabilities', {
+    p_tenant_id: tenantId,
+    p_branch_id: branchId,
+  });
+  if (error) throw error;
+  const row = ((data ?? []) as CapabilityRpcRow[])[0];
+  return {
+    canPrintReceipt: row?.can_print_receipt === true,
+    canManageDevices: row?.can_manage_devices === true,
+  };
+}
+
+export async function loadPrinters(
+  tenantId: string,
+  branchId: string,
+  registerId?: string | null,
+): Promise<SellerTrayPrinter[]> {
+  if (!tenantId || !branchId) return [];
+  const { data, error } = await supabase.rpc('get_sellertray_printers', {
+    p_tenant_id: tenantId,
+    p_branch_id: branchId,
+    p_register_id: registerId ?? null,
+  });
+  if (error) throw error;
+  return ((data ?? []) as PrinterRpcRow[]).map((row) => ({
+    id: row.id,
+    registerId: row.register_id,
+    registerName: row.register_name,
+    displayName: row.display_name,
+    transport: row.transport,
+    hardwareIdentifier: row.hardware_identifier,
+    paperWidthMm: row.paper_width_mm === 80 ? 80 : 58,
+    isDefault: row.is_default === true,
+    isActive: row.is_active === true,
+  }));
+}
+
+export async function loadReceiptPrintReference(
+  tenantId: string,
+  orderId: string,
+): Promise<ReceiptPrintReference | null> {
+  if (!tenantId || !orderId) return null;
+  const { data, error } = await supabase.rpc('get_sellertray_receipt_for_order', {
+    p_tenant_id: tenantId,
+    p_order_id: orderId,
+  });
+  if (error) throw error;
+  const row = ((data ?? []) as ReceiptRpcRow[])[0];
+  if (!row) return null;
+  return {
+    documentId: row.document_id,
+    documentReference: row.document_reference,
+    amount: toNumber(row.amount),
+    currency: row.currency,
+    issuedAt: row.issued_at,
+  };
+}
+
+export async function savePrinter(input: {
+  tenantId: string;
+  printerId?: string | null;
+  branchId: string;
+  registerId: string;
+  displayName: string;
+  hardwareIdentifier: string;
+  paperWidthMm: 58 | 80;
+  isDefault: boolean;
+  isActive: boolean;
+}): Promise<SellerTrayPrinter> {
+  if (!input.tenantId || !input.branchId || !input.registerId) {
+    throw new Error('Business, branch and register are required.');
+  }
+  if (!input.displayName.trim()) throw new Error('Printer name is required.');
+  if (!input.hardwareIdentifier.trim()) throw new Error('Bluetooth printer identity is required.');
+
+  const data = await invokePrinter({
+    action: 'save_printer',
+    tenantId: input.tenantId,
+    printerId: input.printerId ?? null,
+    branchId: input.branchId,
+    registerId: input.registerId,
+    displayName: input.displayName.trim(),
+    hardwareIdentifier: input.hardwareIdentifier.trim(),
+    paperWidthMm: input.paperWidthMm,
+    isDefault: input.isDefault,
+    isActive: input.isActive,
+  }, 'Unable to save this printer.');
+
+  if (!isPrinterState(data)) throw new Error('SellerTray returned an invalid printer result.');
+  return {
+    id: data.printerId,
+    registerId: data.registerId,
+    registerName: '',
+    displayName: data.displayName,
+    transport: data.transport,
+    hardwareIdentifier: data.hardwareIdentifier,
+    paperWidthMm: data.paperWidthMm,
+    isDefault: data.isDefault,
+    isActive: data.isActive,
+  };
+}
+
+export async function requestPrintJob(input: {
+  tenantId: string;
+  printerId: string;
+  jobType: PrintJobType;
+  orderId?: string | null;
+  requestKey?: string;
+}): Promise<PrintJob> {
+  if (!input.tenantId || !input.printerId) throw new Error('Business and printer are required.');
+  if (input.jobType === 'receipt' && !input.orderId) throw new Error('Receipt order is required.');
+  const data = await invokePrinter({
+    action: 'request_print',
+    tenantId: input.tenantId,
+    printerId: input.printerId,
+    jobType: input.jobType,
+    orderId: input.jobType === 'receipt' ? input.orderId : null,
+    requestKey: input.requestKey ?? createPrintRequestKey(input.jobType),
+  }, 'Unable to prepare this print.');
+  return parsePrintJob(data);
+}
+
+export async function updatePrintJob(input: {
+  tenantId: string;
+  jobId: string;
+  status: 'printing' | 'printed' | 'failed';
+  failureCode?: string | null;
+  failureMessage?: string | null;
+}): Promise<{ jobId: string; status: PrintJobStatus; idempotentReplay: boolean }> {
+  if (!input.tenantId || !input.jobId) throw new Error('Business and print job are required.');
+  if (input.status === 'failed' && !input.failureMessage?.trim()) {
+    throw new Error('Printer failure message is required.');
+  }
+  const data = await invokePrinter({
+    action: 'update_print',
+    tenantId: input.tenantId,
+    jobId: input.jobId,
+    status: input.status,
+    failureCode: input.status === 'failed' ? input.failureCode?.trim() || null : null,
+    failureMessage: input.status === 'failed' ? input.failureMessage?.trim() || null : null,
+  }, 'Unable to update this print attempt.');
+  if (typeof data.jobId !== 'string'
+      || (data.status !== 'requested' && data.status !== 'printing' && data.status !== 'printed' && data.status !== 'failed')) {
+    throw new Error('SellerTray returned an invalid print status.');
+  }
+  return {
+    jobId: data.jobId,
+    status: data.status,
+    idempotentReplay: data.idempotentReplay === true,
+  };
+}
+
+export async function loadPrintJob(tenantId: string, jobId: string): Promise<PrintJob | null> {
+  if (!tenantId || !jobId) return null;
+  const { data, error } = await supabase.rpc('get_sellertray_print_job', {
+    p_tenant_id: tenantId,
+    p_job_id: jobId,
+  });
+  if (error) throw error;
+  if (data === null) return null;
+  return parsePrintJob(data as Record<string, unknown>);
+}
+
+export function createPrintRequestKey(kind: PrintJobType): string {
+  return `${kind}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+async function invokePrinter(
+  body: Record<string, unknown>,
+  fallback: string,
+): Promise<Record<string, unknown>> {
+  const { data, error } = await supabase.functions.invoke('printer', { body });
+  if (error) throw new Error(await functionErrorMessage(error, fallback));
+  if (!data || typeof data !== 'object') throw new Error('SellerTray returned an invalid printer response.');
+  return data as Record<string, unknown>;
+}
+
+function isPrinterState(value: Record<string, unknown>): value is Record<string, unknown> & {
+  printerId: string;
+  registerId: string;
+  displayName: string;
+  transport: 'bluetooth';
+  hardwareIdentifier: string;
+  paperWidthMm: 58 | 80;
+  isDefault: boolean;
+  isActive: boolean;
+} {
+  return typeof value.printerId === 'string'
+    && typeof value.registerId === 'string'
+    && typeof value.displayName === 'string'
+    && value.transport === 'bluetooth'
+    && typeof value.hardwareIdentifier === 'string'
+    && (value.paperWidthMm === 58 || value.paperWidthMm === 80)
+    && typeof value.isDefault === 'boolean'
+    && typeof value.isActive === 'boolean';
+}
+
+function parsePrintJob(value: Record<string, unknown>): PrintJob {
+  if (typeof value.jobId !== 'string'
+      || (value.status !== 'requested' && value.status !== 'printing' && value.status !== 'printed' && value.status !== 'failed')
+      || (value.jobType !== 'receipt' && value.jobType !== 'test')
+      || typeof value.printerId !== 'string'
+      || typeof value.printerName !== 'string'
+      || value.transport !== 'bluetooth'
+      || typeof value.hardwareIdentifier !== 'string'
+      || (value.paperWidthMm !== 58 && value.paperWidthMm !== 80)) {
+    throw new Error('SellerTray returned an invalid print job.');
+  }
+  const snapshot = parseSnapshot(value.contentSnapshot);
+  return {
+    jobId: value.jobId,
+    status: value.status,
+    jobType: value.jobType,
+    orderId: typeof value.orderId === 'string' ? value.orderId : null,
+    financialDocumentId: typeof value.financialDocumentId === 'string' ? value.financialDocumentId : null,
+    printerId: value.printerId,
+    printerName: value.printerName,
+    transport: value.transport,
+    hardwareIdentifier: value.hardwareIdentifier,
+    paperWidthMm: value.paperWidthMm,
+    contentSnapshot: snapshot,
+    requestedAt: typeof value.requestedAt === 'string' ? value.requestedAt : null,
+    startedAt: typeof value.startedAt === 'string' ? value.startedAt : null,
+    completedAt: typeof value.completedAt === 'string' ? value.completedAt : null,
+    failedAt: typeof value.failedAt === 'string' ? value.failedAt : null,
+    failureCode: typeof value.failureCode === 'string' ? value.failureCode : null,
+    failureMessage: typeof value.failureMessage === 'string' ? value.failureMessage : null,
+    idempotentReplay: value.idempotentReplay === true,
+  };
+}
+
+function parseSnapshot(value: unknown): PrintContentSnapshot {
+  if (!value || typeof value !== 'object') throw new Error('SellerTray returned an invalid print snapshot.');
+  const row = value as Record<string, unknown>;
+  if (row.documentType === 'test') {
+    if (typeof row.title !== 'string'
+        || typeof row.businessName !== 'string'
+        || typeof row.branchName !== 'string'
+        || typeof row.registerName !== 'string'
+        || typeof row.printerName !== 'string'
+        || (row.paperWidthMm !== 58 && row.paperWidthMm !== 80)
+        || typeof row.requestedAt !== 'string'
+        || typeof row.footer !== 'string') {
+      throw new Error('SellerTray returned an invalid test print snapshot.');
+    }
+    return {
+      formatVersion: toNumber(row.formatVersion),
+      documentType: 'test',
+      title: row.title,
+      businessName: row.businessName,
+      branchName: row.branchName,
+      registerName: row.registerName,
+      printerName: row.printerName,
+      paperWidthMm: row.paperWidthMm,
+      requestedAt: row.requestedAt,
+      footer: row.footer,
+    };
+  }
+
+  if (row.documentType !== 'receipt'
+      || typeof row.businessName !== 'string'
+      || typeof row.branchName !== 'string'
+      || typeof row.registerName !== 'string'
+      || typeof row.orderReference !== 'string'
+      || typeof row.receiptReference !== 'string'
+      || typeof row.issuedAt !== 'string'
+      || typeof row.customerName !== 'string'
+      || typeof row.currency !== 'string'
+      || typeof row.paymentMethod !== 'string'
+      || typeof row.paymentProvider !== 'string'
+      || typeof row.footer !== 'string'
+      || !Array.isArray(row.items)) {
+    throw new Error('SellerTray returned an invalid receipt print snapshot.');
+  }
+
+  return {
+    formatVersion: toNumber(row.formatVersion),
+    documentType: 'receipt',
+    businessName: row.businessName,
+    businessEmail: typeof row.businessEmail === 'string' ? row.businessEmail : null,
+    businessPhone: typeof row.businessPhone === 'string' ? row.businessPhone : null,
+    branchName: row.branchName,
+    registerName: row.registerName,
+    orderReference: row.orderReference,
+    receiptReference: row.receiptReference,
+    issuedAt: row.issuedAt,
+    customerName: row.customerName,
+    customerPhone: typeof row.customerPhone === 'string' ? row.customerPhone : null,
+    currency: row.currency,
+    amountPaid: toNumber(row.amountPaid),
+    paymentMethod: row.paymentMethod,
+    paymentProvider: row.paymentProvider,
+    paymentReference: typeof row.paymentReference === 'string' ? row.paymentReference : null,
+    paymentConfirmedAt: typeof row.paymentConfirmedAt === 'string' ? row.paymentConfirmedAt : null,
+    items: row.items.map((item) => parseReceiptItem(item)),
+    footer: row.footer,
+  };
+}
+
+function parseReceiptItem(value: unknown): ReceiptPrintItem {
+  if (!value || typeof value !== 'object') throw new Error('SellerTray returned an invalid receipt line.');
+  const row = value as Record<string, unknown>;
+  if (typeof row.name !== 'string' || typeof row.uom !== 'string') {
+    throw new Error('SellerTray returned an invalid receipt line.');
+  }
+  return {
+    name: row.name,
+    quantity: toNumber(row.quantity),
+    uom: row.uom,
+    unitPrice: toNumber(row.unitPrice),
+    lineTotal: toNumber(row.lineTotal),
+  };
+}
+
+function toNumber(value: unknown): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+async function functionErrorMessage(error: unknown, fallback: string): Promise<string> {
+  let message = error instanceof Error && error.message ? error.message : fallback;
+  if (!error || typeof error !== 'object' || !('context' in error)) return message;
+  const context = (error as { context?: unknown }).context;
+  if (!context || typeof context !== 'object' || !('clone' in context)) return message;
+  try {
+    const payload = await (context as Response).clone().json() as { error?: string };
+    if (payload?.error) message = payload.error;
+  } catch {
+    // Keep the SDK message.
+  }
+  return message;
+}
