@@ -16,20 +16,20 @@ import { WhatsAppWorkspace } from './WhatsAppWorkspace';
 type Props = {
   business: MerchantBusiness;
   branch: CommerceBranch;
-  branches: CommerceBranch[];
-  orders: MerchantOrder[];
+  branches?: CommerceBranch[];
+  orders?: MerchantOrder[];
   activeShift: CashShift | null;
   cashRouteKey?: number;
   onSaveBusiness: (businessId: string, input: BusinessProfileInput) => Promise<void>;
   onShiftChanged: (shift: CashShift | null) => void;
-  onOpenOrders: () => void;
+  onOpenOrders?: () => void;
 };
 
 export function MoreWorkspace({
   business,
   branch,
   branches,
-  orders,
+  orders = [],
   activeShift,
   cashRouteKey = 0,
   onSaveBusiness,
@@ -83,10 +83,10 @@ export function MoreWorkspace({
       <WhatsAppWorkspace
         business={business}
         branch={branch}
-        branches={branches}
+        branches={branches ?? [branch]}
         orders={orders}
         onClose={() => setWhatsappOpen(false)}
-        onOpenOrders={onOpenOrders}
+        onOpenOrders={onOpenOrders ?? (() => setWhatsappOpen(false))}
       />
     );
   }
