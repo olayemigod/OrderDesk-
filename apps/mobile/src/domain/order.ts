@@ -28,6 +28,8 @@ export type PaymentStatus =
   | 'paid'
   | 'payment_issue';
 
+export type OrderSource = 'whatsapp' | 'manual' | 'pos';
+
 export type MatchSource =
   | 'legacy'
   | 'catalogue_name'
@@ -88,6 +90,9 @@ export type OrderItem = {
   name: string;
   originalName: string | null;
   quantity: number;
+  selectedUom: string;
+  conversionFactor: number;
+  stockQuantity: number;
   unitPrice: number | null;
   matchSource: MatchSource;
   matchConfidence: number | null;
@@ -95,6 +100,7 @@ export type OrderItem = {
 
 export type MerchantOrder = {
   id: string;
+  branchId: string;
   customerId: string;
   publicOrderId: string;
   customerName: string;
@@ -114,7 +120,7 @@ export type MerchantOrder = {
   paymentStatus: PaymentStatus;
   amountPaid: number;
   paymentConfirmedAt: string | null;
-  source: 'whatsapp' | 'manual';
+  source: OrderSource;
   customerMessage: string;
   confidence: number | null;
   parserSource: ParserSource;
