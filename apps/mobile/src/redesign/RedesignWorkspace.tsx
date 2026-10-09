@@ -205,6 +205,7 @@ export default function RedesignWorkspace() {
           businessCurrency={activeBusiness.currency}
           orders={branchOrders}
           loading={ordersLoading}
+          canReturnCompletedSale={activeBusiness.role === 'owner' || activeBusiness.role === 'manager'}
           onChanged={refreshOrders}
         />
       ) : null}
