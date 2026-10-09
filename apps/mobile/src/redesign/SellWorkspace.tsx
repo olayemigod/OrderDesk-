@@ -10,6 +10,7 @@ import {
   type CommerceProduct,
   type CommerceUom,
 } from '../data/commerceRepository';
+import { loadBranchStock, type BranchStockRow } from '../data/inventoryRepository';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
@@ -20,6 +21,13 @@ type CartLine = {
   quantity: number;
 };
 
+type StockShortage = {
+  productName: string;
+  stockUom: string;
+  required: number;
+  available: number;
+};
+
 type Props = {
   tenantId: string;
   branch: CommerceBranch;
@@ -27,12 +35,17 @@ type Props = {
   onDraftCreated?: (orderId: string) => void;
 };
 
+const STOCK_EPSILON = 0.000001;
+
 export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Props) {
   const appearance = useSellerTrayAppearance();
   const dark = appearance.dark;
   const [products, setProducts] = useState<CommerceProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [stockRows, setStockRows] = useState<BranchStockRow[]>([]);
+  const [stockLoading, setStockLoading] = useState(true);
+  const [stockError, setStockError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [selectedUomByProduct, setSelectedUomByProduct] = useState<Record<string, string>>({});
   const [cart, setCart] = useState<Record<string, CartLine>>({});
@@ -68,6 +81,28 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
     setCheckoutError(null);
   }, [branch.id]);
 
+  useEffect(() => {
+    let active = true;
+    setStockLoading(true);
+    setStockError(null);
+    void loadBranchStock(tenantId, branch.id)
+      .then((rows) => {
+        if (!active) return;
+        setStockRows(rows);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setStockRows([]);
+        setStockError(err instanceof Error ? err.message : 'Unable to load branch stock.');
+      })
+      .finally(() => {
+        if (active) setStockLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [tenantId, branch.id]);
+
   const normalizedQuery = query.trim().toLowerCase();
   const visibleProducts = useMemo(() => {
     if (!normalizedQuery) return products;
@@ -82,6 +117,10 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
     });
   }, [normalizedQuery, products]);
 
+  const stockByProduct = useMemo(
+    () => new Map(stockRows.map((row) => [row.catalogItemId, row])),
+    [stockRows],
+  );
   const cartLines = Object.values(cart);
   const itemCount = cartLines.reduce((sum, line) => sum + line.quantity, 0);
   const total = cartLines.reduce(
@@ -89,6 +128,8 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
     0,
   );
   const checkoutLocked = Boolean(draftOrderId);
+  const stockReady = !stockLoading && !stockError;
+  const cartShortage = stockReady ? findStockShortage(cartLines, stockRows) : null;
 
   function selectedUom(product: CommerceProduct): CommerceUom | null {
     const selectedId = selectedUomByProduct[product.id];
@@ -98,15 +139,34 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
       ?? null;
   }
 
+  function stockQuantityInCart(productId: string): number {
+    return cartLines.reduce(
+      (sum, line) => line.product.id === productId
+        ? sum + line.quantity * line.uom.conversionFactor
+        : sum,
+      0,
+    );
+  }
+
   function chooseUom(productId: string, uomId: string) {
     if (checkoutLocked) return;
     setSelectedUomByProduct((current) => ({ ...current, [productId]: uomId }));
   }
 
   function addToCart(product: CommerceProduct) {
-    if (checkoutLocked) return;
+    if (checkoutLocked || !stockReady) return;
     const uom = selectedUom(product);
     if (!uom || uom.sellingPrice === null) return;
+
+    const onHand = stockByProduct.get(product.id)?.quantityOnHand ?? 0;
+    const requested = stockQuantityInCart(product.id) + uom.conversionFactor;
+    if (requested > onHand + STOCK_EPSILON) {
+      setCheckoutError(
+        `Not enough ${product.name} at ${branch.name}. ${formatQuantity(onHand)} ${product.stockUom} is available.`,
+      );
+      return;
+    }
+
     const key = `${product.id}:${uom.id}`;
     setCheckoutError(null);
     setCart((current) => {
@@ -120,12 +180,24 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
   }
 
   function changeQuantity(line: CartLine, delta: number) {
-    if (checkoutLocked) return;
+    if (checkoutLocked || !stockReady) return;
     setCheckoutError(null);
+    const step = line.uom.allowFractional ? 0.5 : 1;
+
+    if (delta > 0) {
+      const onHand = stockByProduct.get(line.product.id)?.quantityOnHand ?? 0;
+      const requested = stockQuantityInCart(line.product.id) + step * line.uom.conversionFactor;
+      if (requested > onHand + STOCK_EPSILON) {
+        setCheckoutError(
+          `Not enough ${line.product.name} at ${branch.name}. ${formatQuantity(onHand)} ${line.product.stockUom} is available.`,
+        );
+        return;
+      }
+    }
+
     setCart((current) => {
       const existing = current[line.key];
       if (!existing) return current;
-      const step = existing.uom.allowFractional ? 0.5 : 1;
       const next = Math.max(0, existing.quantity + delta * step);
       if (next <= 0) {
         const copy = { ...current };
@@ -136,11 +208,38 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
     });
   }
 
+  async function refreshBranchStock(): Promise<BranchStockRow[]> {
+    setStockLoading(true);
+    setStockError(null);
+    try {
+      const rows = await loadBranchStock(tenantId, branch.id);
+      setStockRows(rows);
+      return rows;
+    } catch (err) {
+      setStockRows([]);
+      const message = err instanceof Error ? err.message : 'Unable to load branch stock.';
+      setStockError(message);
+      throw err;
+    } finally {
+      setStockLoading(false);
+    }
+  }
+
   async function saveForCheckout() {
-    if (saving || completing || checkoutLocked || cartLines.length === 0) return;
+    if (saving || completing || checkoutLocked || cartLines.length === 0 || !stockReady) return;
     setSaving(true);
     setCheckoutError(null);
     try {
+      const latestStock = await refreshBranchStock();
+      const shortage = findStockShortage(cartLines, latestStock);
+      if (shortage) {
+        throw new Error(
+          `Not enough ${shortage.productName} at ${branch.name}. `
+          + `${formatQuantity(shortage.available)} ${shortage.stockUom} is available; `
+          + `${formatQuantity(shortage.required)} is needed.`,
+        );
+      }
+
       const orderId = await createPosDraft({
         tenantId,
         branchId: branch.id,
@@ -179,6 +278,11 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
       await completePosCashSale(tenantId, orderId);
       setCart({});
       setDraftOrderId(null);
+      try {
+        await refreshBranchStock();
+      } catch {
+        setStockError('Sale completed, but branch stock could not be refreshed. Refresh stock before starting another sale.');
+      }
       onDraftCreated?.(orderId);
     } catch (err) {
       setCheckoutError(err instanceof Error ? err.message : 'Unable to complete this cash sale.');
@@ -201,7 +305,7 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
         <Text style={[styles.eyebrow, dark && darkStyles.bodyText]}>SELL</Text>
         <Text style={[styles.title, dark && darkStyles.titleText]}>New Sale</Text>
         <Text style={[styles.subtitle, dark && darkStyles.bodyText]}>
-          Selling from {branch.name}. Prices follow the unit selected for each product.
+          Selling from {branch.name}. Prices follow the selected unit and availability follows this branch’s stock.
         </Text>
       </View>
 
@@ -228,6 +332,24 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
         </View>
       ) : null}
 
+      {stockError ? (
+        <View style={[styles.errorCard, dark && darkStyles.errorCard]}>
+          <Ionicons name="alert-circle-outline" size={21} color={theme.colors.danger} />
+          <View style={styles.errorCopy}>
+            <Text style={[styles.errorText, dark && darkStyles.bodyText]}>
+              Branch stock is unavailable. Selling is paused until availability can be verified.
+            </Text>
+            <Pressable
+              disabled={stockLoading || completing}
+              onPress={() => void refreshBranchStock().catch(() => undefined)}
+              style={styles.retryStockButton}
+            >
+              <Text style={styles.retryStockText}>{stockLoading ? 'Checking…' : 'Check stock again'}</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+
       {loading && products.length === 0 ? (
         <View style={[styles.emptyCard, dark && darkStyles.card]}>
           <ActivityIndicator />
@@ -248,7 +370,18 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
       <View style={styles.productList}>
         {visibleProducts.map((product) => {
           const uom = selectedUom(product);
-          const canAdd = Boolean(uom && uom.sellingPrice !== null && !checkoutLocked);
+          const stockRow = stockByProduct.get(product.id);
+          const onHand = stockRow?.quantityOnHand ?? 0;
+          const inCart = stockQuantityInCart(product.id);
+          const remaining = Math.max(0, onHand - inCart);
+          const enoughForSelectedUom = Boolean(uom && remaining + STOCK_EPSILON >= uom.conversionFactor);
+          const canAdd = Boolean(
+            uom
+            && uom.sellingPrice !== null
+            && !checkoutLocked
+            && stockReady
+            && enoughForSelectedUom,
+          );
           return (
             <View key={product.id} style={[styles.productCard, dark && darkStyles.card, checkoutLocked && styles.lockedControl]}>
               <View style={styles.productTopRow}>
@@ -262,6 +395,21 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
                   {uom?.sellingPrice === null || !uom
                     ? 'No price'
                     : formatMoney(uom.sellingPrice, currency)}
+                </Text>
+              </View>
+
+              <View style={[styles.stockBadge, !stockLoading && stockReady && onHand <= 0 && styles.stockBadgeOut]}>
+                <Ionicons
+                  name={stockLoading ? 'hourglass-outline' : onHand <= 0 ? 'alert-circle-outline' : 'cube-outline'}
+                  size={15}
+                  color={!stockLoading && stockReady && onHand <= 0 ? '#B42318' : theme.colors.greenDark}
+                />
+                <Text style={[styles.stockBadgeText, dark && darkStyles.bodyText, !stockLoading && stockReady && onHand <= 0 && styles.stockBadgeTextOut]}>
+                  {stockLoading
+                    ? 'Checking branch stock…'
+                    : stockError
+                      ? 'Stock unavailable'
+                      : `${formatQuantity(onHand)} ${product.stockUom} on hand${inCart > 0 ? ` · ${formatQuantity(remaining)} left after cart` : ''}`}
                 </Text>
               </View>
 
@@ -297,6 +445,7 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
               {uom ? (
                 <Text style={[styles.conversionText, dark && darkStyles.bodyText]}>
                   1 {uom.name} = {formatQuantity(uom.conversionFactor)} {product.stockUom}
+                  {stockReady && !enoughForSelectedUom ? ` · Not enough stock for 1 ${uom.name}` : ''}
                 </Text>
               ) : null}
 
@@ -334,30 +483,43 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
           </Text>
         ) : (
           <View style={styles.cartLines}>
-            {cartLines.map((line) => (
-              <View key={line.key} style={[styles.cartLine, dark && darkStyles.subtleCard]}>
-                <View style={styles.cartLineCopy}>
-                  <Text style={[styles.cartLineName, dark && darkStyles.titleText]}>{line.product.name}</Text>
-                  <Text style={[styles.cartLineMeta, dark && darkStyles.bodyText]}>
-                    {line.uom.name} · {formatQuantity(line.quantity * line.uom.conversionFactor)} {line.product.stockUom} stock quantity
-                  </Text>
-                  <Text style={[styles.cartLinePrice, dark && darkStyles.titleText]}>
-                    {formatMoney(line.quantity * (line.uom.sellingPrice ?? 0), currency)}
-                  </Text>
+            {cartLines.map((line) => {
+              const onHand = stockByProduct.get(line.product.id)?.quantityOnHand ?? 0;
+              return (
+                <View key={line.key} style={[styles.cartLine, dark && darkStyles.subtleCard]}>
+                  <View style={styles.cartLineCopy}>
+                    <Text style={[styles.cartLineName, dark && darkStyles.titleText]}>{line.product.name}</Text>
+                    <Text style={[styles.cartLineMeta, dark && darkStyles.bodyText]}>
+                      {line.uom.name} · {formatQuantity(line.quantity * line.uom.conversionFactor)} {line.product.stockUom} stock quantity
+                      {stockReady ? ` · ${formatQuantity(onHand)} on hand` : ''}
+                    </Text>
+                    <Text style={[styles.cartLinePrice, dark && darkStyles.titleText]}>
+                      {formatMoney(line.quantity * (line.uom.sellingPrice ?? 0), currency)}
+                    </Text>
+                  </View>
+                  <View style={styles.quantityControls}>
+                    <Pressable disabled={checkoutLocked || !stockReady} onPress={() => changeQuantity(line, -1)} style={[styles.quantityButton, (checkoutLocked || !stockReady) && styles.disabledButton]}>
+                      <Ionicons name="remove" size={18} color={theme.colors.navy} />
+                    </Pressable>
+                    <Text style={[styles.quantityValue, dark && darkStyles.titleText]}>{formatQuantity(line.quantity)}</Text>
+                    <Pressable disabled={checkoutLocked || !stockReady} onPress={() => changeQuantity(line, 1)} style={[styles.quantityButton, (checkoutLocked || !stockReady) && styles.disabledButton]}>
+                      <Ionicons name="add" size={18} color={theme.colors.navy} />
+                    </Pressable>
+                  </View>
                 </View>
-                <View style={styles.quantityControls}>
-                  <Pressable disabled={checkoutLocked} onPress={() => changeQuantity(line, -1)} style={[styles.quantityButton, checkoutLocked && styles.disabledButton]}>
-                    <Ionicons name="remove" size={18} color={theme.colors.navy} />
-                  </Pressable>
-                  <Text style={[styles.quantityValue, dark && darkStyles.titleText]}>{formatQuantity(line.quantity)}</Text>
-                  <Pressable disabled={checkoutLocked} onPress={() => changeQuantity(line, 1)} style={[styles.quantityButton, checkoutLocked && styles.disabledButton]}>
-                    <Ionicons name="add" size={18} color={theme.colors.navy} />
-                  </Pressable>
-                </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
         )}
+
+        {cartShortage && !checkoutLocked ? (
+          <View style={[styles.stockWarningCard, dark && darkStyles.errorCard]}>
+            <Ionicons name="alert-circle-outline" size={20} color={theme.colors.danger} />
+            <Text style={[styles.errorText, dark && darkStyles.bodyText]}>
+              {cartShortage.productName} exceeds current branch stock. Reduce the quantity before checkout.
+            </Text>
+          </View>
+        ) : null}
 
         {draftOrderId ? (
           <View style={[styles.savedCheckoutCard, dark && darkStyles.subtleCard]}>
@@ -367,7 +529,7 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
             <View style={styles.savedCheckoutCopy}>
               <Text style={[styles.savedCheckoutTitle, dark && darkStyles.titleText]}>Sale saved for checkout</Text>
               <Text style={[styles.checkoutNoticeText, dark && darkStyles.bodyText]}>
-                Items and prices are now locked. Confirm cash only after the full amount has been received.
+                Items and prices are now locked. Confirm cash only after the full amount has been received. Final stock is checked again during completion.
               </Text>
             </View>
           </View>
@@ -375,7 +537,7 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
           <View style={[styles.checkoutNotice, dark && darkStyles.subtleCard]}>
             <Ionicons name="information-circle-outline" size={20} color={theme.colors.info} />
             <Text style={[styles.checkoutNoticeText, dark && darkStyles.bodyText]}>
-              Saving prepares this sale for checkout. Payment and stock remain unchanged until checkout is completed.
+              SellerTray rechecks branch stock before saving, and checkout validates stock again before any payment or stock movement is committed.
             </Text>
           </View>
         )}
@@ -388,17 +550,19 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
 
         {!draftOrderId ? (
           <Pressable
-            disabled={cartLines.length === 0 || saving || completing}
+            disabled={cartLines.length === 0 || saving || completing || !stockReady || Boolean(cartShortage)}
             onPress={() => void saveForCheckout()}
             style={({ pressed }) => [
               styles.checkoutButton,
-              (cartLines.length === 0 || saving || completing) && styles.disabledButton,
-              pressed && cartLines.length > 0 && !saving && !completing && styles.pressed,
+              (cartLines.length === 0 || saving || completing || !stockReady || Boolean(cartShortage)) && styles.disabledButton,
+              pressed && cartLines.length > 0 && !saving && !completing && stockReady && !cartShortage && styles.pressed,
             ]}
           >
-            {saving ? <ActivityIndicator color={theme.colors.white} /> : null}
-            <Text style={styles.checkoutButtonText}>{saving ? 'Saving…' : 'Save for checkout'}</Text>
-            {!saving ? <Ionicons name="arrow-forward" size={19} color={theme.colors.white} /> : null}
+            {saving || stockLoading ? <ActivityIndicator color={theme.colors.white} /> : null}
+            <Text style={styles.checkoutButtonText}>
+              {saving ? 'Checking stock…' : stockLoading ? 'Checking stock…' : 'Save for checkout'}
+            </Text>
+            {!saving && !stockLoading ? <Ionicons name="arrow-forward" size={19} color={theme.colors.white} /> : null}
           </Pressable>
         ) : (
           <View style={styles.checkoutActions}>
@@ -424,6 +588,31 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
   );
 }
 
+function findStockShortage(lines: CartLine[], rows: BranchStockRow[]): StockShortage | null {
+  const availableByProduct = new Map(rows.map((row) => [row.catalogItemId, row.quantityOnHand]));
+  const requested = new Map<string, StockShortage>();
+
+  for (const line of lines) {
+    const stockQuantity = line.quantity * line.uom.conversionFactor;
+    const current = requested.get(line.product.id);
+    if (current) {
+      current.required += stockQuantity;
+      continue;
+    }
+    requested.set(line.product.id, {
+      productName: line.product.name,
+      stockUom: line.product.stockUom,
+      required: stockQuantity,
+      available: availableByProduct.get(line.product.id) ?? 0,
+    });
+  }
+
+  for (const shortage of requested.values()) {
+    if (shortage.required > shortage.available + STOCK_EPSILON) return shortage;
+  }
+  return null;
+}
+
 function formatMoney(value: number, currency: string): string {
   return new Intl.NumberFormat('en-NG', {
     style: 'currency',
@@ -446,7 +635,10 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, minHeight: 50, color: theme.colors.navy, fontSize: 14, paddingVertical: 0 },
   scanButton: { width: 43, height: 43, borderRadius: 12, backgroundColor: theme.colors.mintSoft, alignItems: 'center', justifyContent: 'center' },
   errorCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#FDA29B', backgroundColor: theme.colors.dangerSoft, padding: 12, flexDirection: 'row', gap: 9 },
+  errorCopy: { flex: 1, gap: 8 },
   errorText: { flex: 1, color: '#912018', fontSize: 12, lineHeight: 18 },
+  retryStockButton: { alignSelf: 'flex-start', minHeight: 34, borderRadius: 10, backgroundColor: theme.colors.white, paddingHorizontal: 11, alignItems: 'center', justifyContent: 'center' },
+  retryStockText: { color: theme.colors.greenDark, fontSize: 11, fontWeight: '900' },
   emptyCard: { minHeight: 120, borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 18, alignItems: 'center', justifyContent: 'center', gap: 7 },
   emptyTitle: { color: theme.colors.navy, fontSize: 15, fontWeight: '900' },
   muted: { color: theme.colors.muted, fontSize: 12, lineHeight: 18 },
@@ -457,6 +649,10 @@ const styles = StyleSheet.create({
   productName: { color: theme.colors.navy, fontSize: 15, fontWeight: '900' },
   productMeta: { color: theme.colors.muted, fontSize: 11, lineHeight: 17, marginTop: 2 },
   productPrice: { color: theme.colors.navy, fontSize: 14, fontWeight: '900' },
+  stockBadge: { alignSelf: 'flex-start', minHeight: 30, borderRadius: theme.radius.pill, backgroundColor: theme.colors.mintSoft, paddingHorizontal: 9, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  stockBadgeOut: { backgroundColor: theme.colors.dangerSoft },
+  stockBadgeText: { color: theme.colors.greenDark, fontSize: 10.5, fontWeight: '800' },
+  stockBadgeTextOut: { color: '#B42318' },
   uomRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   uomChip: { minHeight: 34, borderRadius: theme.radius.pill, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center' },
   uomChipActive: { borderColor: theme.colors.green, backgroundColor: theme.colors.mintSoft },
@@ -481,6 +677,7 @@ const styles = StyleSheet.create({
   quantityControls: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   quantityButton: { width: 32, height: 32, borderRadius: 10, backgroundColor: theme.colors.mintSoft, alignItems: 'center', justifyContent: 'center' },
   quantityValue: { minWidth: 28, textAlign: 'center', color: theme.colors.navy, fontSize: 12, fontWeight: '900' },
+  stockWarningCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#FDA29B', backgroundColor: theme.colors.dangerSoft, padding: 10, flexDirection: 'row', gap: 8 },
   checkoutNotice: { borderRadius: theme.radius.md, backgroundColor: theme.colors.infoSoft, padding: 11, flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   checkoutNoticeText: { flex: 1, color: theme.colors.slate, fontSize: 11, lineHeight: 17 },
   savedCheckoutCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#ABEFC6', backgroundColor: theme.colors.mintSoft, padding: 11, flexDirection: 'row', alignItems: 'flex-start', gap: 9 },
