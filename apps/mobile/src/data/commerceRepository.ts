@@ -29,6 +29,21 @@ export type CommerceProduct = {
   uoms: CommerceUom[];
 };
 
+export type PosDraftLine = {
+  catalogItemId: string;
+  uomId: string;
+  quantity: number;
+};
+
+export type CreatePosDraftInput = {
+  tenantId: string;
+  branchId: string;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  note?: string | null;
+  items: PosDraftLine[];
+};
+
 type BranchRow = {
   id: string;
   code: string;
@@ -128,6 +143,54 @@ export async function loadCommerceProducts(tenantId: string): Promise<CommercePr
         return left.name.localeCompare(right.name);
       }),
   }));
+}
+
+export async function createPosDraft(input: CreatePosDraftInput): Promise<string> {
+  if (!input.tenantId) throw new Error('Business is required.');
+  if (!input.branchId) throw new Error('Branch is required.');
+  if (input.items.length === 0) throw new Error('Add at least one product.');
+
+  const { data, error } = await supabase.functions.invoke('merchant-order', {
+    body: {
+      mode: 'pos',
+      tenantId: input.tenantId,
+      branchId: input.branchId,
+      customerName: cleanOptional(input.customerName),
+      customerPhone: cleanOptional(input.customerPhone),
+      note: cleanOptional(input.note),
+      items: input.items.map((item) => ({
+        catalogItemId: item.catalogItemId,
+        uomId: item.uomId,
+        quantity: item.quantity,
+      })),
+    },
+  });
+
+  if (error) {
+    let message = error.message || 'Unable to prepare this sale.';
+    if (error.context && typeof error.context === 'object' && 'clone' in error.context) {
+      try {
+        const payload = await (error.context as Response).clone().json() as { error?: string };
+        if (payload?.error) message = payload.error;
+      } catch {
+        // Keep the SDK message.
+      }
+    }
+    throw new Error(message);
+  }
+
+  const orderId =
+    data && typeof data === 'object' && 'orderId' in data && typeof data.orderId === 'string'
+      ? data.orderId
+      : null;
+
+  if (!orderId) throw new Error('SellerTray returned an invalid sale reference.');
+  return orderId;
+}
+
+function cleanOptional(value: string | null | undefined): string | null {
+  const clean = value?.trim() ?? '';
+  return clean || null;
 }
 
 function toNumber(value: number | string | null): number | null {
