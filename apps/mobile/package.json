@@ -10,7 +10,8 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "preflight": "node scripts/release-preflight-runner.mjs && node scripts/ai-brief-preflight.mjs && node scripts/offline-reliability-preflight.mjs",
-    "release:check": "node scripts/release-readiness.mjs"
+    "release:check": "node scripts/release-readiness.mjs",
+    "audit:prod": "npm audit --omit=dev --audit-level=high"
   },
   "dependencies": {
     "@expo/metro-runtime": "57.0.15",
