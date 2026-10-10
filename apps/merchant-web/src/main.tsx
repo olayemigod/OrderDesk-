@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import App from './App';
+import MerchantApp from './MerchantApp';
 import './styles.css';
 import './products.css';
 import './team.css';
@@ -11,6 +11,6 @@ if (!root) throw new Error('SellerTray could not start.');
 
 createRoot(root).render(
   <StrictMode>
-    <App />
+    <MerchantApp />
   </StrictMode>,
 );
