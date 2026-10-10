@@ -39,45 +39,70 @@ select extensions.ok(
 insert into public.tenants(id,name,slug)
 values('a1000000-0000-4000-8000-000000000001','AI Budget Test','ai-budget-test');
 
-select extensions.ok(
-  (public.reserve_sellertray_ai_brief_provider_call(
-    'a1000000-0000-4000-8000-000000000001',
-    'a2000000-0000-4000-8000-000000000001',
-    2
-  )->>'allowed')::boolean
-  and not (public.reserve_sellertray_ai_brief_provider_call(
-    'a1000000-0000-4000-8000-000000000001',
-    'a2000000-0000-4000-8000-000000000001',
-    2
-  )->>'allowed')::boolean,
-  'first request reserves capacity and an exact replay cannot reserve it twice'
-);
+create temporary table ai_budget_results(
+  step text primary key,
+  payload jsonb not null
+) on commit drop;
 
-select extensions.is(
+insert into ai_budget_results(step,payload)
+values(
+  'first',
   public.reserve_sellertray_ai_brief_provider_call(
     'a1000000-0000-4000-8000-000000000001',
     'a2000000-0000-4000-8000-000000000001',
     2
-  )->>'reason',
+  )
+);
+
+insert into ai_budget_results(step,payload)
+values(
+  'replay',
+  public.reserve_sellertray_ai_brief_provider_call(
+    'a1000000-0000-4000-8000-000000000001',
+    'a2000000-0000-4000-8000-000000000001',
+    2
+  )
+);
+
+insert into ai_budget_results(step,payload)
+values(
+  'second',
+  public.reserve_sellertray_ai_brief_provider_call(
+    'a1000000-0000-4000-8000-000000000001',
+    'a2000000-0000-4000-8000-000000000002',
+    2
+  )
+);
+
+insert into ai_budget_results(step,payload)
+values(
+  'over_budget',
+  public.reserve_sellertray_ai_brief_provider_call(
+    'a1000000-0000-4000-8000-000000000001',
+    'a2000000-0000-4000-8000-000000000003',
+    2
+  )
+);
+
+select extensions.ok(
+  ((select payload from ai_budget_results where step='first')->>'allowed')::boolean
+  and not ((select payload from ai_budget_results where step='replay')->>'allowed')::boolean,
+  'first request reserves capacity and an exact replay cannot reserve it twice'
+);
+
+select extensions.is(
+  (select payload->>'reason' from ai_budget_results where step='replay'),
   'request_already_reserved',
   'exact request replay is identified explicitly'
 );
 
 select extensions.ok(
-  (public.reserve_sellertray_ai_brief_provider_call(
-    'a1000000-0000-4000-8000-000000000001',
-    'a2000000-0000-4000-8000-000000000002',
-    2
-  )->>'allowed')::boolean,
+  ((select payload from ai_budget_results where step='second')->>'allowed')::boolean,
   'second distinct request can reserve the remaining daily capacity'
 );
 
 select extensions.is(
-  public.reserve_sellertray_ai_brief_provider_call(
-    'a1000000-0000-4000-8000-000000000001',
-    'a2000000-0000-4000-8000-000000000003',
-    2
-  )->>'reason',
+  (select payload->>'reason' from ai_budget_results where step='over_budget'),
   'daily_budget_reached',
   'daily provider cap rejects the next distinct request'
 );
