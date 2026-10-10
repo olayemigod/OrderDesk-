@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 const appRoot = process.cwd();
 const supabaseClient = readFileSync(resolve(appRoot, 'src/supabase.ts'), 'utf8');
 const app = readFileSync(resolve(appRoot, 'src/App.tsx'), 'utf8');
+const products = readFileSync(resolve(appRoot, 'src/ProductsManagement.tsx'), 'utf8');
 const vercel = readFileSync(resolve(appRoot, 'vercel.json'), 'utf8');
 const failures = [];
 
@@ -11,7 +12,7 @@ function requireValue(condition, message) {
   if (!condition) failures.push(message);
 }
 
-const browserSource = `${supabaseClient}\n${app}`;
+const browserSource = `${supabaseClient}\n${app}\n${products}`;
 requireValue(
   !browserSource.includes('SERVICE_ROLE') &&
     !browserSource.includes('SUPABASE_SECRET') &&
@@ -41,6 +42,25 @@ requireValue(
     app.includes('get_sellertray_branch_stock') &&
     app.includes('get_sellertray_cash_shift_history'),
   'Merchant Web must consume shared SellerTray Branch, reporting, inventory and cashier read models.',
+);
+
+requireValue(
+  app.includes('<ProductsManagement') &&
+    products.includes("rpc('save_sellertray_product'") &&
+    products.includes("rpc('set_sellertray_product_active'") &&
+    products.includes("rpc('save_sellertray_product_uom'") &&
+    products.includes("rpc('delete_sellertray_product_uom'"),
+  'Products and Pricing must use the shared governed product and UOM commands.',
+);
+
+requireValue(
+  !products.includes("from('catalog_item_uoms').insert") &&
+    !products.includes("from('catalog_item_uoms').update") &&
+    !products.includes("from('catalog_item_uoms').delete") &&
+    !products.includes("from('catalog_items').insert") &&
+    !products.includes("from('catalog_items').update") &&
+    !products.includes("from('catalog_items').delete"),
+  'Merchant Web must not bypass product and UOM command invariants with raw browser writes.',
 );
 
 requireValue(
