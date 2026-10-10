@@ -66,6 +66,7 @@ type PurchaseDetail = {
 };
 type SupplierDraft = Omit<Supplier, 'id'>;
 type LineDraft = { key: string; catalogItemId: string; uomId: string; quantity: string; unitCost: string };
+type CommandLine = { catalogItemId: string; uomId: string; quantity: number; unitCost: number };
 type PurchaseDraft = { reference: string; branchId: string; supplierId: string; expectedDate: string; notes: string; items: LineDraft[] };
 
 type ProductRow = {
@@ -247,7 +248,7 @@ export default function PurchasingManagement({ tenantId, currency }: { tenantId:
   async function saveDraft(event: FormEvent) {
     event.preventDefault();
     if (!draft.branchId || !draft.supplierId) return setError('Choose a Branch and Supplier.');
-    const lines = draft.items.map(toCommandLine).filter(Boolean);
+    const lines = draft.items.map(toCommandLine).filter(isCommandLine);
     if (!lines.length || lines.length !== draft.items.length) return setError('Every purchase line needs a product, unit, positive quantity and valid cost.');
     const duplicate = new Set(lines.map((line) => `${line.catalogItemId}:${line.uomId}`)).size !== lines.length;
     if (duplicate) return setError('The same product and unit can appear only once on a purchase order.');
@@ -422,7 +423,8 @@ function emptyLine(): LineDraft { return { key: crypto.randomUUID(), catalogItem
 function clean(value: string): string | null { const next = value.trim(); return next || null; }
 function positive(value: string): number { const parsed = Number(value); return Number.isFinite(parsed) && parsed > 0 ? parsed : 0; }
 function nonNegative(value: string): number { const parsed = Number(value); return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0; }
-function toCommandLine(row: LineDraft): { catalogItemId: string; uomId: string; quantity: number; unitCost: number } | null { const quantity = positive(row.quantity); const unitCost = nonNegative(row.unitCost); return row.catalogItemId && row.uomId && quantity > 0 ? { catalogItemId: row.catalogItemId, uomId: row.uomId, quantity, unitCost } : null; }
+function toCommandLine(row: LineDraft): CommandLine | null { const quantity = positive(row.quantity); const unitCost = nonNegative(row.unitCost); return row.catalogItemId && row.uomId && quantity > 0 ? { catalogItemId: row.catalogItemId, uomId: row.uomId, quantity, unitCost } : null; }
+function isCommandLine(value: CommandLine | null): value is CommandLine { return value !== null; }
 function mapSupplier(row: Record<string, unknown>): Supplier { return { id: String(row.id ?? ''), name: String(row.name ?? 'Supplier'), contactName: text(row.contact_name), phone: text(row.phone), email: text(row.email), address: text(row.address), notes: text(row.notes), isActive: row.is_active === true }; }
 function mapProduct(row: ProductRow): Product { return { id: row.id, name: row.name, sku: row.sku, stockUom: row.stock_uom, uoms: (row.catalog_item_uoms ?? []).map((unit) => ({ id: unit.id, name: unit.uom_name, conversionFactor: numberValue(unit.conversion_factor), isDefaultPurchase: unit.is_default_purchase })).sort((a, b) => Number(b.isDefaultPurchase) - Number(a.isDefaultPurchase) || a.name.localeCompare(b.name)) }; }
 function mapOrder(row: Record<string, unknown>): PurchaseOrderRow { return { id: String(row.id ?? ''), reference: String(row.reference ?? 'Purchase Order'), status: String(row.status ?? 'draft'), branchId: String(row.branch_id ?? ''), branchName: String(row.branch_name ?? 'Branch'), supplierId: String(row.supplier_id ?? ''), supplierName: String(row.supplier_name ?? 'Supplier'), currency: String(row.currency ?? 'NGN'), totalAmount: numberValue(row.total_amount), itemCount: numberValue(row.item_count), expectedDate: nullableText(row.expected_date), createdAt: String(row.created_at ?? '') }; }
