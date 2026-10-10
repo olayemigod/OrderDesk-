@@ -209,8 +209,10 @@ requireValue(
 
 requireValue(
   settings.includes('Secret values are encrypted by SellerTray and are never displayed again after submission.') &&
-    !settings.includes('secretKey: selectedMethod') &&
-    !settings.includes('secretHash: selectedMethod'),
+    settings.includes('secretKey: secretKey.trim()') &&
+    settings.includes("? secretHash.trim() : null") &&
+    !settings.includes('credentials_ciphertext') &&
+    !settings.includes('credentials_iv'),
   'Gateway credentials must be write-only browser inputs sent to the encrypted payment-settings service.',
 );
 
