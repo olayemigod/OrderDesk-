@@ -4,7 +4,9 @@ import { resolve } from 'node:path';
 const appRoot = process.cwd();
 const supabaseClient = readFileSync(resolve(appRoot, 'src/supabase.ts'), 'utf8');
 const app = readFileSync(resolve(appRoot, 'src/App.tsx'), 'utf8');
+const management = readFileSync(resolve(appRoot, 'src/ManagementPage.tsx'), 'utf8');
 const products = readFileSync(resolve(appRoot, 'src/ProductsManagement.tsx'), 'utf8');
+const team = readFileSync(resolve(appRoot, 'src/TeamBranchesManagement.tsx'), 'utf8');
 const vercel = readFileSync(resolve(appRoot, 'vercel.json'), 'utf8');
 const failures = [];
 
@@ -12,7 +14,7 @@ function requireValue(condition, message) {
   if (!condition) failures.push(message);
 }
 
-const browserSource = `${supabaseClient}\n${app}\n${products}`;
+const browserSource = `${supabaseClient}\n${app}\n${management}\n${products}\n${team}`;
 requireValue(
   !browserSource.includes('SERVICE_ROLE') &&
     !browserSource.includes('SUPABASE_SECRET') &&
@@ -45,7 +47,7 @@ requireValue(
 );
 
 requireValue(
-  app.includes('<ProductsManagement') &&
+  management.includes('<ProductsManagement') &&
     products.includes("rpc('save_sellertray_product'") &&
     products.includes("rpc('set_sellertray_product_active'") &&
     products.includes("rpc('save_sellertray_product_uom'") &&
@@ -61,6 +63,39 @@ requireValue(
     !products.includes("from('catalog_items').update") &&
     !products.includes("from('catalog_items').delete"),
   'Merchant Web must not bypass product and UOM command invariants with raw browser writes.',
+);
+
+requireValue(
+  management.includes('<TeamBranchesManagement') &&
+    team.includes("functions.invoke('team-management'") &&
+    team.includes("rpc('get_sellertray_manageable_branches'") &&
+    team.includes("rpc('get_sellertray_team_access_matrix'") &&
+    team.includes("rpc('save_sellertray_branch'") &&
+    team.includes("rpc('set_sellertray_member_branch_access'") &&
+    team.includes("rpc('reset_sellertray_member_branch_access'") &&
+    team.includes("rpc('set_sellertray_member_capability_for_current_user'"),
+  'Team and Branches must use the shared team service and governed Branch/capability commands.',
+);
+
+requireValue(
+  !team.includes("from('branches').insert") &&
+    !team.includes("from('branches').update") &&
+    !team.includes("from('branches').delete") &&
+    !team.includes("from('branch_user_access').insert") &&
+    !team.includes("from('branch_user_access').update") &&
+    !team.includes("from('branch_user_access').delete") &&
+    !team.includes("from('tenant_member_capabilities').insert") &&
+    !team.includes("from('tenant_member_capabilities').update") &&
+    !team.includes("from('tenant_member_capabilities').delete"),
+  'Merchant Web must not bypass Team, Branch or capability command invariants with raw browser writes.',
+);
+
+requireValue(
+  team.includes('Use default Branch only') &&
+    team.includes('usesDefaultBranchFallback') &&
+    team.includes("team.actorRole === 'owner'") &&
+    team.includes("team.actorRole === 'manager'"),
+  'Team and Branches must preserve default-Branch fallback and the Owner/Manager governance hierarchy.',
 );
 
 requireValue(
