@@ -1,0 +1,94 @@
+name: One-time AI Brief Wire
+
+on:
+  push:
+    branches:
+      - feat/sellertray-merchant-web-v1
+    paths:
+      - .github/workflows/ai-brief-wire-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  wire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/sellertray-merchant-web-v1
+          fetch-depth: 0
+      - name: Wire AI Brief navigation and security checks
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          app_path = Path('apps/merchant-web/src/MerchantApp.tsx')
+          text = app_path.read_text()
+          replacements = [
+              (
+                  "type Page = 'overview' | 'orders' | 'inventory' | 'purchasing' | 'cash' | 'whatsapp' | 'reports' | 'products' | 'team' | 'devices' | 'settings';",
+                  "type Page = 'overview' | 'orders' | 'inventory' | 'purchasing' | 'cash' | 'whatsapp' | 'reports' | 'ai' | 'products' | 'team' | 'devices' | 'settings';",
+              ),
+              (
+                  "  { id: 'reports', label: 'Reports' },\n  { id: 'products', label: 'Products & Pricing', section: 'Management' },",
+                  "  { id: 'reports', label: 'Reports' },\n  { id: 'ai', label: 'AI Brief' },\n  { id: 'products', label: 'Products & Pricing', section: 'Management' },",
+              ),
+              ("{index === 6 ? <div className=\"nav-divider\" /> : null}", "{index === 7 ? <div className=\"nav-divider\" /> : null}"),
+              (
+                  "{(page === 'products' || page === 'purchasing' || page === 'team' || page === 'devices' || page === 'settings') && <ManagementPage page={page}",
+                  "{(page === 'products' || page === 'purchasing' || page === 'ai' || page === 'team' || page === 'devices' || page === 'settings') && <ManagementPage page={page}",
+              ),
+          ]
+          for old, new in replacements:
+              if text.count(old) != 1:
+                  raise SystemExit(f'Expected exactly one MerchantApp match for {old[:90]!r}; found {text.count(old)}')
+              text = text.replace(old, new)
+          app_path.write_text(text)
+
+          function_path = Path('supabase/functions/ai-brief/index.ts')
+          function_text = function_path.read_text()
+          old_prompt = "Do not provide legal, tax or accounting conclusions. "
+          new_prompt = "Do not provide legal, tax or accounting conclusions. Do not name or infer a currency from numeric values because currency is outside this bounded AI context. "
+          if function_text.count(old_prompt) != 1:
+              raise SystemExit(f'Expected one AI system-prompt match, found {function_text.count(old_prompt)}')
+          function_text = function_text.replace(old_prompt, new_prompt)
+          old_amount = "function formatAmount(value: number): string { return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 2 }).format(value); }"
+          new_amount = "function formatAmount(value: number): string { return new Intl.NumberFormat('en-NG', { maximumFractionDigits: 2 }).format(value); }"
+          if function_text.count(old_amount) != 1:
+              raise SystemExit(f'Expected one deterministic amount formatter match, found {function_text.count(old_amount)}')
+          function_path.write_text(function_text.replace(old_amount, new_amount))
+
+          preflight_path = Path('apps/merchant-web/scripts/security-preflight.mjs')
+          preflight = preflight_path.read_text()
+          additions = [
+              (
+                  "const purchasing = readFileSync(resolve(appRoot, 'src/PurchasingManagement.tsx'), 'utf8');",
+                  "const purchasing = readFileSync(resolve(appRoot, 'src/PurchasingManagement.tsx'), 'utf8');\nconst aiBrief = readFileSync(resolve(appRoot, 'src/AiBriefManagement.tsx'), 'utf8');\nconst aiFunction = readFileSync(resolve(appRoot, '../../supabase/functions/ai-brief/index.ts'), 'utf8');",
+              ),
+              (
+                  "const browserSource = `${supabaseClient}\\n${main}\\n${app}\\n${management}\\n${products}\\n${purchasing}\\n${team}",
+                  "const browserSource = `${supabaseClient}\\n${main}\\n${app}\\n${management}\\n${products}\\n${purchasing}\\n${aiBrief}\\n${team}",
+              ),
+          ]
+          for old, new in additions:
+              if preflight.count(old) != 1:
+                  raise SystemExit(f'Expected exactly one preflight match for {old[:90]!r}; found {preflight.count(old)}')
+              preflight = preflight.replace(old, new)
+
+          marker = "requireValue(\n  app.includes(\"{ id: 'purchasing', label: 'Purchasing' }\")"
+          if preflight.count(marker) != 1:
+              raise SystemExit(f'Expected one Purchasing preflight marker, found {preflight.count(marker)}')
+          guard = """requireValue(\n  app.includes(\"{ id: 'ai', label: 'AI Brief' }\") &&\n    management.includes('<AiBriefManagement') &&\n    aiBrief.includes(\"functions.invoke('ai-brief'\") &&\n    aiBrief.includes(\"rpc('get_sellertray_ai_brief_usage'\"),\n  'AI Brief must use the governed Edge Function and management-only usage summary.',\n);\n\nrequireValue(\n  !aiBrief.includes(\"from('orders').insert\") &&\n    !aiBrief.includes(\"from('orders').update\") &&\n    !aiBrief.includes(\"from('inventory_movements').insert\") &&\n    !aiBrief.includes(\"from('order_payments').update\"),\n  'AI Brief browser code must remain read-only and cannot mutate commerce, stock or payments.',\n);\n\nrequireValue(\n  aiFunction.includes(\"userRpc<J>('sellertray_report_center'\") &&\n    aiFunction.includes(\"serviceRpc<boolean>('orderdesk_subscription_can_write'\") &&\n    aiFunction.includes('SELLERTRAY_AI_BRIEF_DAILY_LIMIT') &&\n    aiFunction.includes('topCustomers: anonymizeCustomers') &&\n    aiFunction.includes('store: false') &&\n    aiFunction.includes(\"reasoning: { effort: 'none' }\") &&\n    !aiFunction.includes(\"save_sellertray_\") &&\n    !aiFunction.includes(\"post_sellertray_purchase_receipt\") &&\n    !aiFunction.includes(\"record_sellertray_inventory_movement\") &&\n    !aiFunction.includes('tools:'),\n  'AI Brief server boundary must be report-only, budgeted, privacy-minimized and tool-free.',\n);\n\n"""
+          preflight = preflight.replace(marker, guard + marker)
+          preflight_path.write_text(preflight)
+          PY
+
+          rm .github/workflows/ai-brief-wire-once.yml
+          git config user.name "sellertray-automation"
+          git config user.email "sellertray-automation@users.noreply.github.com"
+          git add apps/merchant-web/src/MerchantApp.tsx apps/merchant-web/scripts/security-preflight.mjs supabase/functions/ai-brief/index.ts .github/workflows/ai-brief-wire-once.yml
+          git diff --cached --check
+          git commit -m "Wire governed AI Brief into Merchant Web"
+          git push origin HEAD:feat/sellertray-merchant-web-v1
