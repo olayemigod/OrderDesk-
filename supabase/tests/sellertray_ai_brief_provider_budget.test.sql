@@ -36,8 +36,8 @@ select extensions.ok(
   'reservation command serializes tenant-day budget checks and handles replay/cap outcomes'
 );
 
-insert into public.tenants(id,name,slug)
-values('a1000000-0000-4000-8000-000000000001','AI Budget Test','ai-budget-test');
+insert into public.tenants(id,name,slug,merchant_code)
+values('a1000000-0000-4000-8000-000000000001','AI Budget Test','ai-budget-test','AIB');
 
 create temporary table ai_budget_results(
   step text primary key,
