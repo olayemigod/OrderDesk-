@@ -10,6 +10,7 @@ import type { MerchantOrder } from '../domain/order';
 import { orderTotal } from '../domain/order';
 import { useBusinesses } from '../hooks/useBusinesses';
 import { useMerchantNotifications } from '../hooks/useMerchantNotifications';
+import { useOfflineSalesSync } from '../hooks/useOfflineSalesSync';
 import { useOrders } from '../hooks/useOrders';
 import { supabase } from '../lib/supabase';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
@@ -24,6 +25,7 @@ import { SellWorkspace } from './SellWorkspace';
 export default function RedesignWorkspace() {
   const appearance = useSellerTrayAppearance();
   const { activeBusiness, saveProfile } = useBusinesses();
+  const offline = useOfflineSalesSync();
   const [tab, setTab] = useState<SellerTrayPrimaryTab>('home');
   const [merchantName, setMerchantName] = useState('there');
   const [branches, setBranches] = useState<CommerceBranch[]>([]);
@@ -40,6 +42,7 @@ export default function RedesignWorkspace() {
   const [cashShiftError, setCashShiftError] = useState<string | null>(null);
   const [cashRouteKey, setCashRouteKey] = useState(0);
   const [whatsappRouteKey, setWhatsappRouteKey] = useState(0);
+  const [syncRouteKey, setSyncRouteKey] = useState(0);
 
   const {
     orders,
@@ -223,6 +226,11 @@ export default function RedesignWorkspace() {
     setWhatsappRouteKey((value) => value + 1);
   }
 
+  function openSyncWorkspace() {
+    setTab('more');
+    setSyncRouteKey((value) => value + 1);
+  }
+
   const attentionItems: HomeAttentionItem[] = [];
   if (!cashShiftLoading && activeBranch && !activeCashShift) {
     attentionItems.push({
@@ -232,6 +240,17 @@ export default function RedesignWorkspace() {
       detail: 'Open a shift before taking counter cash sales.',
       tone: 'warning',
       onPress: openCashWorkspace,
+    });
+  }
+  if (offline.openCount > 0) {
+    attentionItems.push({
+      key: 'held-sales-sync',
+      icon: 'cloud-upload-outline',
+      title: `${offline.openCount} held sale${offline.openCount === 1 ? '' : 's'} waiting`,
+      detail: 'Sync or review held sales. They are not paid or completed until processed online.',
+      count: offline.openCount,
+      tone: 'warning',
+      onPress: openSyncWorkspace,
     });
   }
   if (home.whatsappNeedsReview > 0) {
@@ -279,6 +298,11 @@ export default function RedesignWorkspace() {
 
   const workspaceError = ordersError || notifications.error || branchError || inventorySummaryError || cashShiftError;
   const workspaceSyncing = branchLoading || inventorySummaryLoading || cashShiftLoading;
+  const syncState = offline.connectionState === 'offline'
+    ? 'offline'
+    : offline.syncing || workspaceSyncing
+      ? 'syncing'
+      : 'online';
 
   return (
     <MobileShell
@@ -288,7 +312,7 @@ export default function RedesignWorkspace() {
       canSwitchBranch={branches.length > 1}
       notificationCount={notifications.unreadCount}
       orderAttentionCount={home.ordersNeedingAttention}
-      syncState={workspaceError ? 'offline' : workspaceSyncing ? 'syncing' : 'online'}
+      syncState={syncState}
       onTabChange={setTab}
       onOpenNotifications={() => setTab('orders')}
       onOpenBranchSwitcher={() => setShowBranchSwitcher((value) => !value)}
@@ -306,7 +330,7 @@ export default function RedesignWorkspace() {
 
       {workspaceError ? (
         <View style={[styles.errorCard, appearance.dark && darkStyles.errorCard]}>
-          <Ionicons name="cloud-offline-outline" size={22} color={theme.colors.danger} />
+          <Ionicons name="alert-circle-outline" size={22} color={theme.colors.danger} />
           <View style={styles.errorCopy}>
             <Text style={[styles.errorTitle, appearance.dark && darkStyles.titleText]}>Some information could not refresh</Text>
             <Text style={[styles.errorText, appearance.dark && darkStyles.bodyText]}>{workspaceError}</Text>
@@ -341,8 +365,10 @@ export default function RedesignWorkspace() {
           ) : activeCashShift ? (
             <SellWorkspace
               tenantId={activeBusiness.id}
+              actorUserId={offline.actorUserId}
               branch={activeBranch}
               currency={activeBusiness.currency}
+              onOfflineSaleQueued={() => void offline.refresh()}
               onDraftCreated={() => {
                 void Promise.all([
                   refreshOrders(),
@@ -388,14 +414,19 @@ export default function RedesignWorkspace() {
             business={activeBusiness}
             branch={activeBranch}
             activeShift={activeCashShift}
+            offlineSales={offline.sales}
+            offlineSyncing={offline.syncing}
             cashRouteKey={cashRouteKey}
             whatsappRouteKey={whatsappRouteKey}
+            syncRouteKey={syncRouteKey}
             onSaveBusiness={saveProfile}
             onShiftChanged={(next) => {
               setActiveCashShift(next);
               setCashShiftError(null);
             }}
             onOpenOrders={() => setTab('orders')}
+            onSyncOfflineSales={() => offline.syncNow()}
+            onDiscardOfflineSale={offline.discard}
           />
         ) : (
           <BranchRequiredState loading={branchLoading} />
@@ -410,13 +441,9 @@ function ShiftRequiredState({ loading = false, onOpenShift }: { loading?: boolea
   return (
     <View style={[styles.emptyCard, appearance.dark && darkStyles.card]}>
       {loading ? <ActivityIndicator /> : <Ionicons name="cash-outline" size={30} color={theme.colors.greenDark} />}
-      <Text style={[styles.emptyTitle, appearance.dark && darkStyles.titleText]}>
-        {loading ? 'Checking cashier shift' : 'Open a shift to start selling'}
-      </Text>
+      <Text style={[styles.emptyTitle, appearance.dark && darkStyles.titleText]}>{loading ? 'Checking cashier shift' : 'Open a shift to start selling'}</Text>
       <Text style={[styles.emptyText, appearance.dark && darkStyles.bodyText]}>
-        {loading
-          ? 'SellerTray is checking the active drawer for this branch.'
-          : 'Counter cash sales are tied to an open register so cash can be reconciled correctly.'}
+        {loading ? 'SellerTray is checking the active drawer for this branch.' : 'Counter cash sales are tied to an open register so cash can be reconciled correctly.'}
       </Text>
       {!loading && onOpenShift ? (
         <Pressable onPress={onOpenShift} style={styles.primaryButton}>
@@ -433,9 +460,7 @@ function BranchRequiredState({ loading }: { loading: boolean }) {
   return (
     <View style={[styles.emptyCard, appearance.dark && darkStyles.card]}>
       {loading ? <ActivityIndicator /> : <Ionicons name="location-outline" size={28} color={theme.colors.greenDark} />}
-      <Text style={[styles.emptyTitle, appearance.dark && darkStyles.titleText]}>
-        {loading ? 'Loading branch' : 'No branch available'}
-      </Text>
+      <Text style={[styles.emptyTitle, appearance.dark && darkStyles.titleText]}>{loading ? 'Loading branch' : 'No branch available'}</Text>
       <Text style={[styles.emptyText, appearance.dark && darkStyles.bodyText]}>
         {loading ? 'SellerTray is checking your branch access.' : 'Ask a manager to assign an active branch before continuing.'}
       </Text>
@@ -443,43 +468,23 @@ function BranchRequiredState({ loading }: { loading: boolean }) {
   );
 }
 
-function BranchSwitcher({
-  branches,
-  activeBranchId,
-  onSelect,
-}: {
-  branches: CommerceBranch[];
-  activeBranchId: string;
-  onSelect: (branchId: string) => void;
-}) {
+function BranchSwitcher({ branches, activeBranchId, onSelect }: { branches: CommerceBranch[]; activeBranchId: string; onSelect: (branchId: string) => void }) {
   const appearance = useSellerTrayAppearance();
   return (
     <View style={[styles.branchSwitcher, appearance.dark && darkStyles.card]}>
       <Text style={[styles.branchSwitcherTitle, appearance.dark && darkStyles.titleText]}>Choose branch</Text>
-      <Text style={[styles.branchSwitcherText, appearance.dark && darkStyles.bodyText]}>
-        Sales, orders and stock activity will use the selected branch.
-      </Text>
+      <Text style={[styles.branchSwitcherText, appearance.dark && darkStyles.bodyText]}>Sales, orders and stock activity will use the selected branch.</Text>
       <View style={styles.branchList}>
         {branches.map((branch) => {
           const active = branch.id === activeBranchId;
-          return (
-            <Pressable
-              key={branch.id}
-              onPress={() => onSelect(branch.id)}
-              style={[styles.branchRow, appearance.dark && darkStyles.subtleCard, active && styles.branchRowActive]}
-            >
-              <View style={styles.branchIcon}>
-                <Ionicons name="storefront-outline" size={19} color={theme.colors.greenDark} />
-              </View>
-              <View style={styles.branchCopy}>
-                <Text style={[styles.branchName, appearance.dark && darkStyles.titleText]}>{branch.name}</Text>
-                <Text style={[styles.branchCode, appearance.dark && darkStyles.bodyText]}>
-                  {branch.code}{branch.isDefault ? ' · Default' : ''}
-                </Text>
-              </View>
-              {active ? <Ionicons name="checkmark-circle" size={21} color={theme.colors.green} /> : null}
-            </Pressable>
-          );
+          return <Pressable key={branch.id} onPress={() => onSelect(branch.id)} style={[styles.branchRow, appearance.dark && darkStyles.subtleCard, active && styles.branchRowActive]}>
+            <View style={styles.branchIcon}><Ionicons name="storefront-outline" size={19} color={theme.colors.greenDark} /></View>
+            <View style={styles.branchCopy}>
+              <Text style={[styles.branchName, appearance.dark && darkStyles.titleText]}>{branch.name}</Text>
+              <Text style={[styles.branchCode, appearance.dark && darkStyles.bodyText]}>{branch.code}{branch.isDefault ? ' · Default' : ''}</Text>
+            </View>
+            {active ? <Ionicons name="checkmark-circle" size={21} color={theme.colors.green} /> : null}
+          </Pressable>;
         })}
       </View>
     </View>
@@ -495,17 +500,9 @@ function buildHomeSnapshot(orders: MerchantOrder[]) {
     ordersToday: todayOrders.length,
     salesToday: activeTodayOrders.reduce((sum, order) => sum + (orderTotal(order) ?? 0), 0),
     collectedToday: activeTodayOrders.reduce((sum, order) => sum + Math.max(0, order.amountPaid - order.returnedAmount), 0),
-    whatsappNeedsReview: orders.filter((order) =>
-      order.source === 'whatsapp' && ['needs_review', 'draft'].includes(order.status),
-    ).length,
-    paymentIssues: orders.filter((order) =>
-      ['verification_required', 'payment_issue'].includes(order.paymentStatus) &&
-      !['rejected', 'cancelled'].includes(order.status),
-    ).length,
-    ordersNeedingAttention: orders.filter((order) =>
-      ['needs_review', 'draft'].includes(order.status) ||
-      ['verification_required', 'payment_issue'].includes(order.paymentStatus),
-    ).length,
+    whatsappNeedsReview: orders.filter((order) => order.source === 'whatsapp' && ['needs_review', 'draft'].includes(order.status)).length,
+    paymentIssues: orders.filter((order) => ['verification_required', 'payment_issue'].includes(order.paymentStatus) && !['rejected', 'cancelled'].includes(order.status)).length,
+    ordersNeedingAttention: orders.filter((order) => ['needs_review', 'draft'].includes(order.status) || ['verification_required', 'payment_issue'].includes(order.paymentStatus)).length,
   };
 }
 
