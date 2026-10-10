@@ -44,6 +44,23 @@ export async function loadOrderItemCatalogueCandidates(
   });
 }
 
+export async function addCatalogueOrderItem(input: {
+  tenantId: string;
+  orderId: string;
+  catalogItemId: string;
+  quantity: number;
+}): Promise<string> {
+  const { data, error } = await supabase.rpc('sellertray_add_catalogue_order_item', {
+    p_tenant_id: input.tenantId,
+    p_order_id: input.orderId,
+    p_catalog_item_id: input.catalogItemId,
+    p_quantity: input.quantity,
+  });
+  if (error) throw error;
+  if (typeof data !== 'string') throw new Error('SellerTray did not return the new order item.');
+  return data;
+}
+
 export async function matchOrderItemToCatalogue(input: {
   tenantId: string;
   orderItemId: string;

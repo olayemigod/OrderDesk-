@@ -31,6 +31,10 @@ export function OrderFulfillmentPanel({
   const [method, setMethod] = useState<FulfillmentMethod | null>(order.fulfillmentMethod);
   const [provider, setProvider] = useState(order.deliveryProvider ?? '');
   const [reference, setReference] = useState(order.deliveryReference ?? '');
+  const [contactName, setContactName] = useState(order.deliveryContactName ?? '');
+  const [contactPhone, setContactPhone] = useState(order.deliveryContactPhone ?? '');
+  const [etaDate, setEtaDate] = useState(formatEtaDate(order.estimatedDeliveryAt));
+  const [etaTime, setEtaTime] = useState(formatEtaTime(order.estimatedDeliveryAt));
   const [note, setNote] = useState(order.deliveryNote ?? '');
   const [pending, setPending] = useState<'start' | 'complete' | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +43,10 @@ export function OrderFulfillmentPanel({
     setMethod(order.fulfillmentMethod);
     setProvider(order.deliveryProvider ?? '');
     setReference(order.deliveryReference ?? '');
+    setContactName(order.deliveryContactName ?? '');
+    setContactPhone(order.deliveryContactPhone ?? '');
+    setEtaDate(formatEtaDate(order.estimatedDeliveryAt));
+    setEtaTime(formatEtaTime(order.estimatedDeliveryAt));
     setNote(order.deliveryNote ?? '');
     setPending(null);
     setError(null);
@@ -48,6 +56,9 @@ export function OrderFulfillmentPanel({
     order.fulfillmentStatus,
     order.deliveryProvider,
     order.deliveryReference,
+    order.deliveryContactName,
+    order.deliveryContactPhone,
+    order.estimatedDeliveryAt,
     order.deliveryNote,
   ]);
 
@@ -72,7 +83,10 @@ export function OrderFulfillmentPanel({
           </Text>
         )}
         {order.deliveryProvider ? <Text style={[styles.summaryLine, appearance.dark && darkStyles.bodyText]}>Delivery by: {order.deliveryProvider}</Text> : null}
-        {order.deliveryReference ? <Text style={[styles.summaryLine, appearance.dark && darkStyles.bodyText]}>Reference / phone: {order.deliveryReference}</Text> : null}
+        {order.deliveryContactName ? <Text style={[styles.summaryLine, appearance.dark && darkStyles.bodyText]}>Contact: {order.deliveryContactName}</Text> : null}
+        {order.deliveryContactPhone ? <Text style={[styles.summaryLine, appearance.dark && darkStyles.bodyText]}>Phone: {order.deliveryContactPhone}</Text> : null}
+        {order.deliveryReference ? <Text style={[styles.summaryLine, appearance.dark && darkStyles.bodyText]}>Reference: {order.deliveryReference}</Text> : null}
+        {order.estimatedDeliveryAt ? <Text style={[styles.summaryLine, appearance.dark && darkStyles.bodyText]}>Estimated delivery: {formatDateTime(order.estimatedDeliveryAt)}</Text> : null}
         {order.deliveryNote ? <Text style={[styles.summaryLine, appearance.dark && darkStyles.bodyText]}>Note: {order.deliveryNote}</Text> : null}
         {order.fulfillmentConfirmedBy === 'customer_whatsapp' ? (
           <Text style={styles.customerConfirmed}>Customer confirmed receipt on WhatsApp</Text>
@@ -90,8 +104,14 @@ export function OrderFulfillmentPanel({
 
   const inDelivery = order.fulfillmentStatus === 'out_for_delivery';
 
+  const eta = parseLocalEta(etaDate, etaTime);
+
   async function run(action: 'start' | 'complete', operation: () => Promise<void>) {
     if (pending) return;
+    if (eta.error) {
+      setError(eta.error);
+      return;
+    }
     setPending(action);
     setError(null);
     try {
@@ -108,6 +128,9 @@ export function OrderFulfillmentPanel({
         method,
         provider: provider.trim() || null,
         reference: reference.trim() || null,
+        contactName: contactName.trim() || null,
+        contactPhone: contactPhone.trim() || null,
+        estimatedDeliveryAt: eta.value,
         note: note.trim() || null,
       }
     : null;
@@ -121,7 +144,10 @@ export function OrderFulfillmentPanel({
         <Text style={[styles.help, appearance.dark && darkStyles.bodyText]}>SellerTray keeps this order active until the merchant confirms delivery.</Text>
         {liveMethod ? <Text style={[styles.summaryLine, appearance.dark && darkStyles.bodyText]}>Method: {methodLabels[liveMethod]}</Text> : null}
         {order.deliveryProvider ? <Text style={[styles.summaryLine, appearance.dark && darkStyles.bodyText]}>Delivery by: {order.deliveryProvider}</Text> : null}
-        {order.deliveryReference ? <Text style={[styles.summaryLine, appearance.dark && darkStyles.bodyText]}>Reference / phone: {order.deliveryReference}</Text> : null}
+        {order.deliveryContactName ? <Text style={[styles.summaryLine, appearance.dark && darkStyles.bodyText]}>Contact: {order.deliveryContactName}</Text> : null}
+        {order.deliveryContactPhone ? <Text style={[styles.summaryLine, appearance.dark && darkStyles.bodyText]}>Phone: {order.deliveryContactPhone}</Text> : null}
+        {order.deliveryReference ? <Text style={[styles.summaryLine, appearance.dark && darkStyles.bodyText]}>Reference: {order.deliveryReference}</Text> : null}
+        {order.estimatedDeliveryAt ? <Text style={[styles.summaryLine, appearance.dark && darkStyles.bodyText]}>ETA: {formatDateTime(order.estimatedDeliveryAt)}</Text> : null}
         {order.deliveryNote ? <Text style={[styles.summaryLine, appearance.dark && darkStyles.bodyText]}>Note: {order.deliveryNote}</Text> : null}
         {order.dispatchedAt ? <Text style={[styles.timeText, appearance.dark && darkStyles.bodyText]}>Dispatched {formatDateTime(order.dispatchedAt)}</Text> : null}
 
@@ -145,6 +171,9 @@ export function OrderFulfillmentPanel({
                 method: liveMethod,
                 provider: order.deliveryProvider,
                 reference: order.deliveryReference,
+                contactName: order.deliveryContactName,
+                contactPhone: order.deliveryContactPhone,
+                estimatedDeliveryAt: order.estimatedDeliveryAt,
                 note: order.deliveryNote,
               }),
             );
@@ -205,17 +234,74 @@ export function OrderFulfillmentPanel({
           </View>
 
           <View style={styles.field}>
-            <Text style={[styles.label, appearance.dark && darkStyles.titleText]}>Reference or rider phone</Text>
-            <Text style={[styles.fieldHelp, appearance.dark && darkStyles.bodyText]}>Optional dispatch reference, tracking number or contact.</Text>
+            <Text style={[styles.label, appearance.dark && darkStyles.titleText]}>Delivery contact name</Text>
+            <Text style={[styles.fieldHelp, appearance.dark && darkStyles.bodyText]}>Optional rider, staff member or dispatch contact.</Text>
             <TextInput
-              value={reference}
-              onChangeText={setReference}
-              placeholder="Reference / phone"
+              value={contactName}
+              onChangeText={setContactName}
+              placeholder="Contact name"
               placeholderTextColor={appearance.dark ? '#667085' : '#98A2B3'}
               maxLength={120}
               style={[styles.input, appearance.dark && darkStyles.input]}
             />
           </View>
+
+          <View style={styles.field}>
+            <Text style={[styles.label, appearance.dark && darkStyles.titleText]}>Contact phone</Text>
+            <Text style={[styles.fieldHelp, appearance.dark && darkStyles.bodyText]}>Optional number the merchant or customer can use for this delivery.</Text>
+            <TextInput
+              value={contactPhone}
+              onChangeText={setContactPhone}
+              placeholder="Phone number"
+              placeholderTextColor={appearance.dark ? '#667085' : '#98A2B3'}
+              keyboardType="phone-pad"
+              maxLength={50}
+              style={[styles.input, appearance.dark && darkStyles.input]}
+            />
+          </View>
+
+          <View style={styles.field}>
+            <Text style={[styles.label, appearance.dark && darkStyles.titleText]}>Dispatch reference</Text>
+            <Text style={[styles.fieldHelp, appearance.dark && darkStyles.bodyText]}>Optional tracking or dispatch reference.</Text>
+            <TextInput
+              value={reference}
+              onChangeText={setReference}
+              placeholder="Tracking / dispatch reference"
+              placeholderTextColor={appearance.dark ? '#667085' : '#98A2B3'}
+              maxLength={120}
+              style={[styles.input, appearance.dark && darkStyles.input]}
+            />
+          </View>
+
+          <View style={styles.etaRow}>
+            <View style={styles.etaField}>
+              <Text style={[styles.label, appearance.dark && darkStyles.titleText]}>ETA date</Text>
+              <TextInput
+                value={etaDate}
+                onChangeText={setEtaDate}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={appearance.dark ? '#667085' : '#98A2B3'}
+                keyboardType="numbers-and-punctuation"
+                maxLength={10}
+                style={[styles.input, appearance.dark && darkStyles.input]}
+              />
+            </View>
+            <View style={styles.etaField}>
+              <Text style={[styles.label, appearance.dark && darkStyles.titleText]}>ETA time</Text>
+              <TextInput
+                value={etaTime}
+                onChangeText={setEtaTime}
+                placeholder="HH:MM"
+                placeholderTextColor={appearance.dark ? '#667085' : '#98A2B3'}
+                keyboardType="numbers-and-punctuation"
+                maxLength={5}
+                style={[styles.input, appearance.dark && darkStyles.input]}
+              />
+            </View>
+          </View>
+          <Text style={[styles.fieldHelp, appearance.dark && darkStyles.bodyText]}>
+            ETA is optional. Enter both date and time if you want SellerTray to record it.
+          </Text>
         </View>
       ) : null}
 
@@ -324,6 +410,55 @@ function formatDateTime(value: string) {
   }).format(date);
 }
 
+function formatEtaDate(value: string | null): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const year = String(date.getFullYear()).padStart(4, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return year + '-' + month + '-' + day;
+}
+
+function formatEtaTime(value: string | null): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
+}
+
+function parseLocalEta(dateValue: string, timeValue: string): { value: string | null; error: string | null } {
+  const dateText = dateValue.trim();
+  const timeText = timeValue.trim();
+  if (!dateText && !timeText) return { value: null, error: null };
+  if (!dateText || !timeText) return { value: null, error: 'Enter both ETA date and ETA time, or leave both blank.' };
+
+  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateText);
+  const timeMatch = /^(\d{2}):(\d{2})$/.exec(timeText);
+  if (!dateMatch || !timeMatch) {
+    return { value: null, error: 'ETA must use YYYY-MM-DD and HH:MM.' };
+  }
+
+  const year = Number(dateMatch[1]);
+  const month = Number(dateMatch[2]);
+  const day = Number(dateMatch[3]);
+  const hour = Number(timeMatch[1]);
+  const minute = Number(timeMatch[2]);
+  const date = new Date(year, month - 1, day, hour, minute, 0, 0);
+
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day ||
+    date.getHours() !== hour ||
+    date.getMinutes() !== minute
+  ) {
+    return { value: null, error: 'Enter a valid ETA date and time.' };
+  }
+
+  return { value: date.toISOString(), error: null };
+}
+
 const styles = StyleSheet.create({
   card: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 14, padding: 14, gap: 11 },
   deliveryCard: { backgroundColor: '#EFF8FF', borderWidth: 1, borderColor: '#B2DDFF', borderRadius: 14, padding: 14, gap: 8 },
@@ -338,6 +473,8 @@ const styles = StyleSheet.create({
   methodTextActive: { color: '#079455' },
   fields: { gap: 10 },
   field: { gap: 5 },
+  etaRow: { flexDirection: 'row', gap: 10 },
+  etaField: { flex: 1, gap: 5 },
   label: { color: '#344054', fontSize: 14, fontWeight: '900' },
   fieldHelp: { color: '#667085', fontSize: 12, lineHeight: 18 },
   input: { minHeight: 44, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 10, paddingHorizontal: 11, backgroundColor: '#FFFFFF', color: '#102A43' },

@@ -106,6 +106,9 @@ export type MerchantOrder = {
   fulfillmentStatus: FulfillmentStatus;
   deliveryProvider: string | null;
   deliveryReference: string | null;
+  deliveryContactName: string | null;
+  deliveryContactPhone: string | null;
+  estimatedDeliveryAt: string | null;
   deliveryNote: string | null;
   dispatchedAt: string | null;
   fulfilledAt: string | null;

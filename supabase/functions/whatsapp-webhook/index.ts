@@ -633,6 +633,22 @@ async function processClaimedInboundMessage({
     return;
   }
 
+  const conversationWorkState = await noteConversationInboundState(
+    tenantId,
+    customerId,
+    false,
+  );
+  if (conversationWorkState === 'merchant_handling' || conversationWorkState === 'needs_merchant') {
+    console.info(JSON.stringify({
+      event: 'sellertray_conversation_automation_paused',
+      tenantId,
+      customerId,
+      sourceMessageId,
+      conversationWorkState,
+    }));
+    return;
+  }
+
   const intentRoute = await maybeHandleUnifiedConversationIntent({
     tenantId,
     businessName: tenant.name,
@@ -789,6 +805,12 @@ type ConversationOrderRow = {
   updated_at: string;
 };
 
+type EnquiryClarificationCandidate = {
+  id: string;
+  name: string;
+  price: number | string | null;
+};
+
 type ConversationEnquiryRow = {
   id: string;
   source_inbound_message_id: string | null;
@@ -798,6 +820,7 @@ type ConversationEnquiryRow = {
   matched_catalog_item_id: string | null;
   matched_item_name: string | null;
   quoted_price: number | string | null;
+  clarification_candidates: EnquiryClarificationCandidate[] | null;
   currency: string;
   created_at: string;
 };
@@ -909,6 +932,21 @@ async function maybeHandleUnifiedConversationIntent({
         decision,
       };
     }
+  }
+
+  const variantSelection = await maybeHandleEnquiryVariantSelection({
+    tenantId,
+    businessName,
+    currency,
+    customerId,
+    customerWaId,
+    sourceMessageId,
+    fromPhoneNumberId,
+    text,
+    enquiry: lastEnquiry,
+  });
+  if (variantSelection) {
+    return variantSelection;
   }
 
   const decision = await resolveConversationIntent({
@@ -1346,6 +1384,7 @@ async function maybeHandleUnifiedConversationIntent({
       intent: decision.intent,
       text,
     });
+    await noteConversationInboundState(tenantId, customerId, true);
     await recordCommercialAction({
       tenantId,
       customerId,
@@ -1430,7 +1469,7 @@ async function loadRecentCustomerEnquiry(
 ): Promise<ConversationEnquiryRow | null> {
   const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
   const rows = await rest<ConversationEnquiryRow[]>(
-    '/rest/v1/customer_enquiries?select=id,source_inbound_message_id,enquiry_type,status,product_query,matched_catalog_item_id,matched_item_name,quoted_price,currency,created_at' +
+    '/rest/v1/customer_enquiries?select=id,source_inbound_message_id,enquiry_type,status,product_query,matched_catalog_item_id,matched_item_name,quoted_price,clarification_candidates,currency,created_at' +
       '&tenant_id=eq.' + encodeURIComponent(tenantId) +
       '&customer_id=eq.' + encodeURIComponent(customerId) +
       '&status=in.(open,replied)' +
@@ -1646,6 +1685,9 @@ async function handleCustomerProductEnquiry(input: {
   const catalogue = await loadCatalogue(input.tenantId);
   const enquiryText = input.decision.itemText?.trim() || input.text;
   const match = findEnquiryCatalogueMatch(enquiryText, catalogue);
+  const clarificationCandidates = match
+    ? []
+    : findEnquiryClarificationCandidates(enquiryText, catalogue);
   const enquiryType =
     input.decision.intent === 'product_price_enquiry' ? 'price' :
     input.decision.intent === 'product_availability_enquiry' ? 'availability' :
@@ -1671,6 +1713,11 @@ async function handleCustomerProductEnquiry(input: {
         (price !== null ? ' is listed at ' + formatCurrencyAmount(price, input.currency) : ' is in the catalogue') +
         '. Ask for a quantity whenever you are ready to order.';
     }
+  } else if (clarificationCandidates.length >= 2) {
+    responseText =
+      'Sure. We found these catalogue options: ' +
+      formatCatalogueChoiceList(clarificationCandidates.map((candidate) => candidate.item.name)) +
+      '. Which one would you like?';
   } else {
     responseText =
       'Thanks. Please give me a minute — I’ll respond to your enquiry shortly.';
@@ -1694,6 +1741,11 @@ async function handleCustomerProductEnquiry(input: {
         matched_catalog_item_id: match?.item.id ?? null,
         matched_item_name: match?.item.name ?? null,
         quoted_price: match ? toNumber(match.item.price_ngn) : null,
+        clarification_candidates: clarificationCandidates.map((candidate) => ({
+          id: candidate.item.id,
+          name: candidate.item.name,
+          price: toNumber(candidate.item.price_ngn),
+        })),
         currency: input.currency,
         response_text: responseText.slice(0, 2000),
         replied_at: null,
@@ -1726,13 +1778,19 @@ async function handleCustomerProductEnquiry(input: {
     body: JSON.stringify({
       tenant_id: input.tenantId,
       event_key: 'customer_enquiry',
-      severity: match ? 'info' : 'attention',
-      title: match ? 'Customer product enquiry' : 'Customer enquiry needs review',
+      severity: match || clarificationCandidates.length >= 2 ? 'info' : 'attention',
+      title: match
+        ? 'Customer product enquiry'
+        : clarificationCandidates.length >= 2
+          ? 'Catalogue choice sent to customer'
+          : 'Customer enquiry needs review',
       body: (
         input.text +
         (match
           ? ' · Matched: ' + match.item.name
-          : merchantCandidateHint(input.text, catalogue))
+          : clarificationCandidates.length >= 2
+            ? ' · Asked customer to choose: ' + clarificationCandidates.map((candidate) => candidate.item.name).join(', ')
+            : merchantCandidateHint(input.text, catalogue))
       ).slice(0, 1000),
       source_inbound_message_id: input.sourceMessageId,
     }),
@@ -1745,7 +1803,289 @@ async function handleCustomerProductEnquiry(input: {
     enquiryId: rows[0]?.id ?? null,
     enquiryType,
     matchedItemId: match?.item.id ?? null,
+    clarificationCandidateCount: clarificationCandidates.length,
   }));
+
+  if (!match && clarificationCandidates.length < 2) {
+    await noteConversationInboundState(input.tenantId, input.customerId, true);
+  }
+}
+
+async function noteConversationInboundState(
+  tenantId: string,
+  customerId: string,
+  requiresMerchant: boolean,
+): Promise<string> {
+  const state = await rest<string>('/rest/v1/rpc/sellertray_note_conversation_inbound', {
+    method: 'POST',
+    body: JSON.stringify({
+      p_tenant_id: tenantId,
+      p_customer_id: customerId,
+      p_requires_merchant: requiresMerchant,
+    }),
+  });
+  return typeof state === 'string' ? state : 'ai_handling';
+}
+
+async function maybeHandleEnquiryVariantSelection(input: {
+  tenantId: string;
+  businessName: string;
+  currency: string;
+  customerId: string;
+  customerWaId: string;
+  sourceMessageId: string;
+  fromPhoneNumberId: string;
+  text: string;
+  enquiry: ConversationEnquiryRow | null;
+}): Promise<IntentRouteResult | null> {
+  const enquiry = input.enquiry;
+  const candidates = enquiry?.clarification_candidates ?? [];
+  if (!enquiry || candidates.length < 2 || enquiry.matched_catalog_item_id) return null;
+
+  const selected = selectEnquiryClarificationCandidate(input.text, candidates);
+  if (!selected) return null;
+
+  const price = toNumber(selected.price);
+  const now = new Date().toISOString();
+  const normalized = normalizeIntentText(input.text);
+  const orderLike = /\b(?:need|want|take|give|send|bring|buy|order|make it|add|include)\b/i.test(normalized);
+  const quantity = requestedQuantityOutsideVariant(input.text);
+  const intent: IntentDecision['intent'] =
+    enquiry.enquiry_type === 'price'
+      ? 'product_price_enquiry'
+      : enquiry.enquiry_type === 'availability'
+        ? 'product_availability_enquiry'
+        : 'product_enquiry';
+
+  await rest('/rest/v1/customer_enquiries?id=eq.' + encodeURIComponent(enquiry.id) +
+    '&tenant_id=eq.' + encodeURIComponent(input.tenantId), {
+    method: 'PATCH',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      matched_catalog_item_id: selected.id,
+      matched_item_name: selected.name,
+      quoted_price: price,
+      clarification_candidates: [],
+      updated_at: now,
+    }),
+  });
+
+  if (orderLike) {
+    const decision: IntentDecision = {
+      intent: 'new_order',
+      source: 'context',
+      confidence: 0.99,
+      explicitOrderRef: null,
+      targetOrderRef: null,
+      paymentMethod: null,
+      itemText: String(quantity ?? 1) + ' ' + selected.name,
+      deliveryText: null,
+      aiModel: null,
+      aiInputTokens: null,
+      aiOutputTokens: null,
+      aiTotalTokens: null,
+    };
+    await recordConversationIntent({
+      tenantId: input.tenantId,
+      customerId: input.customerId,
+      sourceMessageId: input.sourceMessageId,
+      decision,
+      target: null,
+      text: input.text,
+    });
+    return {
+      handled: false,
+      orderTextOverride: decision.itemText,
+      enquiryId: enquiry.id,
+      decision,
+    };
+  }
+
+  const responseText =
+    enquiry.enquiry_type === 'price'
+      ? selected.name +
+        (price !== null ? ' is listed at ' + formatCurrencyAmount(price, input.currency) : ' is in the catalogue') +
+        '. If you want to order it, tell me the quantity.'
+      : enquiry.enquiry_type === 'availability'
+        ? 'Yes, ' + selected.name + ' is in ' + input.businessName + '\'s catalogue' +
+          (price !== null ? ' at ' + formatCurrencyAmount(price, input.currency) : '') +
+          '. The merchant will confirm current stock availability. If you want to order it, tell me the quantity.'
+        : selected.name +
+          (price !== null ? ' is listed at ' + formatCurrencyAmount(price, input.currency) : ' is in the catalogue') +
+          '. Tell me the quantity whenever you are ready to order.';
+
+  await rest('/rest/v1/customer_enquiries?id=eq.' + encodeURIComponent(enquiry.id) +
+    '&tenant_id=eq.' + encodeURIComponent(input.tenantId), {
+    method: 'PATCH',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      status: 'replied',
+      response_text: responseText.slice(0, 2000),
+      replied_at: now,
+      updated_at: now,
+    }),
+  });
+
+  await rest('/rest/v1/outbound_notifications', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
+    body: JSON.stringify({
+      tenant_id: input.tenantId,
+      customer_id: input.customerId,
+      source_inbound_message_id: input.sourceMessageId,
+      event_key: 'customer_enquiry_reply',
+      delivery_status: 'pending',
+      from_phone_number_id: input.fromPhoneNumberId,
+      to_wa_id: input.customerWaId,
+      message_body: responseText.slice(0, 2000),
+      conversation_window_expires_at: new Date(Date.now() + 86400000).toISOString(),
+    }),
+  });
+  await kickNotificationWorker();
+
+  const decision: IntentDecision = {
+    intent,
+    source: 'context',
+    confidence: 0.99,
+    explicitOrderRef: null,
+    targetOrderRef: null,
+    paymentMethod: null,
+    itemText: selected.name,
+    deliveryText: null,
+    aiModel: null,
+    aiInputTokens: null,
+    aiOutputTokens: null,
+    aiTotalTokens: null,
+  };
+  await recordConversationIntent({
+    tenantId: input.tenantId,
+    customerId: input.customerId,
+    sourceMessageId: input.sourceMessageId,
+    decision,
+    target: null,
+    text: input.text,
+  });
+  await recordCommercialAction({
+    tenantId: input.tenantId,
+    customerId: input.customerId,
+    sourceMessageId: input.sourceMessageId,
+    decision,
+    targetOrderId: null,
+    actionType: 'catalogue_variant_resolved',
+    riskClass: 'low',
+    policyResult: 'allowed',
+    actionStatus: 'applied',
+    metadata: {
+      enquiry_id: enquiry.id,
+      catalog_item_id: selected.id,
+      catalog_item_name: selected.name,
+    },
+  });
+
+  return {
+    handled: true,
+    orderTextOverride: null,
+    enquiryId: enquiry.id,
+    decision,
+  };
+}
+
+function selectEnquiryClarificationCandidate(
+  text: string,
+  candidates: EnquiryClarificationCandidate[],
+): EnquiryClarificationCandidate | null {
+  const query = productDiscoveryShape(text);
+  const normalized = normalizeProductPhrase(text);
+
+  const exact = candidates.filter((candidate) => {
+    const candidateNormalized = normalizeProductPhrase(candidate.name);
+    return normalized === candidateNormalized || normalized.includes(candidateNormalized);
+  });
+  if (exact.length === 1) return exact[0];
+
+  if (query.variantTokens.length > 0) {
+    const byVariant = candidates.filter((candidate) => {
+      const shape = productDiscoveryShape(candidate.name);
+      return query.variantTokens.every((token) => shape.variantTokens.includes(token));
+    });
+    if (byVariant.length === 1) return byVariant[0];
+  }
+
+  if (query.coreTokens.length > 0) {
+    const byCore = candidates.filter((candidate) =>
+      catalogueItemSupportsQueryCore(
+        {
+          id: candidate.id,
+          name: candidate.name,
+          price_ngn: candidate.price,
+          catalog_item_aliases: [],
+        },
+        query.coreTokens,
+      )
+    );
+    if (byCore.length === 1) return byCore[0];
+  }
+
+  return null;
+}
+
+function requestedQuantityOutsideVariant(text: string): number | null {
+  const tokens = normalizeProductPhrase(text).split(' ').filter(Boolean);
+  for (const token of tokens) {
+    if (!/^\d+(?:\.\d+)?$/.test(token)) continue;
+    const value = Number(token);
+    if (Number.isFinite(value) && value > 0 && value <= 9999) return value;
+  }
+  return null;
+}
+
+function findEnquiryClarificationCandidates(
+  text: string,
+  catalogue: CatalogueRow[],
+): Array<{
+  item: CatalogueRow;
+  source: 'normalized_name' | 'normalized_alias';
+  score: number;
+}> {
+  const productQuery = extractEnquiryProductQuery(text);
+  const shape = productDiscoveryShape(productQuery || text);
+  if (shape.coreTokens.length === 0) return [];
+
+  const ranked = fuzzyCatalogueCandidates(productQuery || text, catalogue);
+  const bestScore = ranked[0]?.score ?? 0;
+  if (bestScore < 72) return [];
+
+  const safeFloor = Math.max(72, bestScore - 12);
+  const candidates = ranked
+    .filter((candidate) =>
+      candidate.score >= safeFloor &&
+      catalogueItemSupportsQueryCore(candidate.item, shape.coreTokens)
+    )
+    .slice(0, 4);
+
+  // One strong candidate belongs to normal automatic resolution. Clarification
+  // is only for a genuinely ambiguous set of catalogue-backed choices.
+  return candidates.length >= 2 ? candidates : [];
+}
+
+function catalogueItemSupportsQueryCore(item: CatalogueRow, queryCoreTokens: string[]): boolean {
+  const phrases = [
+    item.name,
+    ...(item.catalog_item_aliases ?? []).map((alias) => alias.alias),
+  ];
+
+  return phrases.some((phrase) => {
+    const candidateTokens = new Set(productDiscoveryShape(phrase).coreTokens);
+    return queryCoreTokens.every((token) => candidateTokens.has(token));
+  });
+}
+
+function formatCatalogueChoiceList(names: string[]): string {
+  const safe = [...new Set(names.map((name) => name.trim()).filter(Boolean))];
+  if (safe.length === 0) return '';
+  if (safe.length === 1) return safe[0];
+  if (safe.length === 2) return safe[0] + ' or ' + safe[1];
+  return safe.slice(0, -1).join(', ') + ', or ' + safe[safe.length - 1];
 }
 
 function findEnquiryCatalogueMatch(

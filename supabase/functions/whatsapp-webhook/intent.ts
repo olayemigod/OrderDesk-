@@ -210,7 +210,7 @@ function priorityContextDecision(
   if (clarification) return clarification;
 
   if (
-    /^(?:how much is (?:it|ot|this|that)|what(?:s| is) the price(?: of (?:it|this|that))?|what does (?:it|this|that) cost)$/i.test(normalized)
+    /^(?:(?:abeg|please|pls)\s+)?(?:how much (?:is|be) (?:it|ot|this|that|am)|what(?:s| is) the price(?: of (?:it|this|that))?|what does (?:it|this|that) cost)$/i.test(normalized)
   ) {
     const contextualItem = contextualEnquiryItemForPronoun(normalized, context);
     if (contextualItem) {
@@ -222,7 +222,7 @@ function priorityContextDecision(
   }
 
   if (
-    /^(?:do you have (?:it|this|that|them)|is (?:it|this|that) available)$/i.test(normalized)
+    /^(?:(?:abeg|please|pls)\s+)?(?:do you have (?:it|this|that|them)|is (?:it|this|that) available|you get (?:it|this|that|am)|una get (?:it|this|that|am)|(?:it|this|that|am) dey available)$/i.test(normalized)
   ) {
     const contextualItem = contextualEnquiryItemForPronoun(normalized, context);
     if (contextualItem) {
@@ -387,25 +387,28 @@ function ruleDecision(
     return emptyDecision('complaint', 'rules', 0.94, explicitOrderRef);
   }
 
-  if (/\b(?:cancel|stop)\b.*\b(?:order|it|this)\b/i.test(normalized)) {
-    return emptyDecision('order_cancel', 'rules', 0.96, explicitOrderRef);
+  if (
+    /\b(?:cancel|stop)\b.*\b(?:order|it|this)\b/i.test(normalized) ||
+    /^(?:(?:abeg|please|pls)\s+)?(?:i no want(?: am| this)? again|i no need(?: am| this)? again|no need again|no send am again|abeg no send am|leave am|leave the order)$/i.test(normalized)
+  ) {
+    return emptyDecision('order_cancel', 'rules', 0.97, explicitOrderRef);
   }
 
-  if (/^(?:remove|take out|delete)\b/i.test(normalized)) {
+  if (/^(?:remove|take out|delete|comot)\b/i.test(normalized)) {
     return {
       ...emptyDecision('order_remove_items', 'rules', 0.95, explicitOrderRef),
       itemText: normalized,
     };
   }
 
-  if (/^(?:add|include)\b/i.test(normalized)) {
+  if (/^(?:add|include|join)\b/i.test(normalized)) {
     return {
       ...emptyDecision('order_add_items', 'rules', 0.93, explicitOrderRef),
       itemText: normalized,
     };
   }
 
-  if (/\b(?:change|replace|instead|make it)\b/i.test(normalized) && context.orders.length > 0) {
+  if (/\b(?:change|replace|instead|make it|make am|reduce am|increase am|change am)\b/i.test(normalized) && context.orders.length > 0) {
     return {
       ...emptyDecision('order_change_items', 'context', 0.9, explicitOrderRef),
       itemText: normalized,
@@ -426,11 +429,21 @@ function ruleDecision(
     return emptyDecision('order_status', 'rules', 0.98, explicitOrderRef);
   }
 
-  if (/\b(?:where is the rider|has the rider left|on the way|delivery status)\b/i.test(normalized)) {
+  if (/\b(?:where is the rider|has the rider left|on the way|delivery status|where rider dey|rider dey where|how far rider)\b/i.test(normalized)) {
     return emptyDecision('delivery_status', 'rules', 0.96, explicitOrderRef);
   }
 
-  if (/\b(?:received|got it|it has arrived|i got it|i received it)\b/i.test(normalized)) {
+  if (
+    /\b(?:you fit send am|make rider bring am|send am tomorrow|bring am tomorrow|send am go|bring am come)\b/i.test(normalized) &&
+    context.orders.some((order) => !['completed', 'cancelled', 'rejected'].includes(order.status))
+  ) {
+    return {
+      ...emptyDecision('delivery_instruction', 'context', 0.95, explicitOrderRef),
+      deliveryText: rawText.trim(),
+    };
+  }
+
+  if (/\b(?:received|got it|it has arrived|i got it|i received it|i don receive am|don receive|i don collect am|i don get am|e don reach)\b/i.test(normalized)) {
     return emptyDecision('delivery_confirm', 'rules', 0.93, explicitOrderRef);
   }
 
@@ -466,7 +479,7 @@ function ruleDecision(
     };
   }
 
-  if (/\b(?:how much|what(?:s| is) the price|price of|cost of|how much be|wetin be the price)\b/i.test(normalized)) {
+  if (/\b(?:how much|what(?:s| is) the price|price of|cost of|how much be|how much e be|wetin be the price)\b/i.test(normalized)) {
     const contextualItem = contextualEnquiryItemForPronoun(normalized, context);
     return {
       ...emptyDecision(
@@ -479,7 +492,7 @@ function ruleDecision(
     };
   }
 
-  if (/\b(?:do you have|do you sell|is .* available|in stock|you get|una get|do you stock)\b/i.test(normalized)) {
+  if (/\b(?:do you have|do you sell|is .* available|in stock|you get|una get|do you stock|dey available|dey stock)\b/i.test(normalized)) {
     const contextualItem = contextualEnquiryItemForPronoun(normalized, context);
     return {
       ...emptyDecision(
@@ -663,7 +676,7 @@ function looksLikeNewOrder(normalized: string): boolean {
   if (/\b(?:how much|price|cost|available|availability|do you have|do you sell|in stock|tell me about|what size|which size)\b/i.test(normalized)) {
     return false;
   }
-  if (/\b(?:i want|i need|i need to buy|send me|give me|get me|bring me|i wan buy|i wan get|i go take|ill take|i will take|let me have|order)\b/i.test(normalized)) {
+  if (/\b(?:i want|i need|i need to buy|send me|give me|get me|bring me|i wan buy|i wan get|i wan take|i go take|ill take|i will take|let me have|make una send me|make you send me|order)\b/i.test(normalized)) {
     return true;
   }
   const quantityWord = /\b(?:one|two|three|four|five|six|seven|eight|nine|ten|a dozen|half dozen|\d+)\b/i;
@@ -706,7 +719,7 @@ function contextualEnquiryItemForPronoun(
   if (!enquiry || !enquiry.matchedItemName || !enquiry.sourceInboundMessageId) return null;
 
   const pronounOnly =
-    /^(?:how much is (?:it|ot|this|that)|what(?:s| is) the price(?: of (?:it|this|that))?|what does (?:it|this|that) cost|do you have (?:it|this|that|them)|is (?:it|this|that) available)$/i.test(normalized);
+    /^(?:(?:abeg|please|pls)\s+)?(?:how much (?:is|be) (?:it|ot|this|that|am)|what(?:s| is) the price(?: of (?:it|this|that))?|what does (?:it|this|that) cost|do you have (?:it|this|that|them)|is (?:it|this|that) available|you get (?:it|this|that|am)|una get (?:it|this|that|am)|(?:it|this|that|am) dey available)$/i.test(normalized);
   if (!pronounOnly) return null;
 
   if (context.lastInboundMessageId !== enquiry.sourceInboundMessageId) return null;
@@ -732,16 +745,16 @@ function hasExplicitProductWords(normalized: string): boolean {
 
 function looksLikeEnquiryFollowUp(normalized: string): boolean {
   if (looksLikeNonOrderWorkflow(normalized)) return false;
-  return /^(?:(?:ok|okay|alright|oya|yes|fine|good)\s+)?(?:give me|send me|bring me|i(?:ll| will)? take|let me have|make it|i want|i need|i go take)\b/i.test(normalized) ||
+  return /^(?:(?:ok|okay|alright|oya|yes|fine|good)\s+)?(?:give me|send me|bring me|i(?:ll| will)? take|let me have|make it|make am|i want|i need|i go take|i wan take|i wan buy|abeg give me|abeg send me)\b/i.test(normalized) ||
     /^(?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\b.*\b(?:please|abeg|thanks)?$/i.test(normalized);
 }
 
 function looksLikePaymentClaimLanguage(normalized: string): boolean {
-  return /\b(?:i have paid|ive paid|i paid|already paid|payment made|payment done|payment sent|sent payment|i have transferred|ive transferred|i transferred|i don transfer|don pay|transfer done|transferred already|sent the money|sent money|money sent)\b/i.test(normalized);
+  return /\b(?:i have paid|ive paid|i paid|already paid|payment made|payment done|payment sent|sent payment|i have transferred|ive transferred|i transferred|i don transfer|i don pay|don pay|money don send|transfer done|transferred already|sent the money|sent money|money sent)\b/i.test(normalized);
 }
 
 function looksLikePaymentOptionsLanguage(normalized: string): boolean {
-  return /\b(?:i want to pay|i wan pay|want to pay|make i pay|how can i pay|how do i pay|how to pay|where can i pay|where should i transfer|where do i transfer|can i transfer|i will transfer|ill transfer|pay by|pay with|payment options|payment details|bank details|account details|account number|send account|send me account|bank transfer|paystack|flutterwave|cash on delivery|pay on delivery|paying on delivery|pay when delivered|pay when it arrives|pay when it gets here|pay when i receive|pay on pickup|pay at pickup|pay when i pick|pay when i collect|pay on collection)\b/i.test(normalized);
+  return /\b(?:i want to pay|i wan pay|want to pay|make i pay|how can i pay|how do i pay|how to pay|where can i pay|where should i transfer|where do i transfer|where i fit transfer|which account make i pay|which account make i send am|can i transfer|i will transfer|ill transfer|pay by|pay with|payment options|payment details|bank details|account details|account number|send account|send me account|bank transfer|paystack|flutterwave|cash on delivery|pay on delivery|paying on delivery|pay when delivered|pay when it arrives|pay when it gets here|pay when i receive|pay on pickup|pay at pickup|pay when i pick|pay when i collect|pay on collection)\b/i.test(normalized);
 }
 
 function paymentMethodFromSentence(normalized: string): string | null {

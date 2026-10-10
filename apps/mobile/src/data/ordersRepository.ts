@@ -43,6 +43,9 @@ type OrderRow = {
   fulfillment_status: FulfillmentStatus;
   delivery_provider: string | null;
   delivery_reference: string | null;
+  delivery_contact_name: string | null;
+  delivery_contact_phone: string | null;
+  estimated_delivery_at: string | null;
   delivery_note: string | null;
   dispatched_at: string | null;
   fulfilled_at: string | null;
@@ -98,7 +101,6 @@ export type ManualOrderInput = {
   items: ManualOrderLineInput[];
 };
 
-
 function one<T>(value: T | T[] | null): T | null {
   if (Array.isArray(value)) return value[0] ?? null;
   return value;
@@ -127,6 +129,9 @@ function mapOrder(row: OrderRow, notifications: OrderNotification[]): MerchantOr
     fulfillmentStatus: row.fulfillment_status,
     deliveryProvider: row.delivery_provider,
     deliveryReference: row.delivery_reference,
+    deliveryContactName: row.delivery_contact_name,
+    deliveryContactPhone: row.delivery_contact_phone,
+    estimatedDeliveryAt: row.estimated_delivery_at,
     deliveryNote: row.delivery_note,
     dispatchedAt: row.dispatched_at,
     fulfilledAt: row.fulfilled_at,
@@ -183,6 +188,9 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
         fulfillment_status,
         delivery_provider,
         delivery_reference,
+        delivery_contact_name,
+        delivery_contact_phone,
+        estimated_delivery_at,
         delivery_note,
         dispatched_at,
         fulfilled_at,
@@ -272,6 +280,9 @@ export type OrderFulfillmentInput = {
   method: FulfillmentMethod;
   provider?: string | null;
   reference?: string | null;
+  contactName?: string | null;
+  contactPhone?: string | null;
+  estimatedDeliveryAt?: string | null;
   note?: string | null;
 };
 
@@ -287,6 +298,9 @@ async function invokeFulfillmentOperation(
       method: input.method,
       provider: input.provider?.trim() || null,
       reference: input.reference?.trim() || null,
+      contactName: input.contactName?.trim() || null,
+      contactPhone: input.contactPhone?.trim() || null,
+      estimatedDeliveryAt: input.estimatedDeliveryAt || null,
       note: input.note?.trim() || null,
     },
   });
@@ -339,35 +353,18 @@ export async function updateOrderStatus(
   if (error) throw error;
 }
 
-export async function addOrderItem(orderId: string, item: OrderItemInput): Promise<void> {
-  const { data: order, error: orderError } = await supabase
-    .from('orders')
-    .select('tenant_id')
-    .eq('id', orderId)
-    .single();
-
-  if (orderError) throw orderError;
-  if (!order?.tenant_id) throw new Error('Unable to resolve the order tenant.');
-
-  const { error } = await supabase.from('order_items').insert({
-    tenant_id: order.tenant_id,
-    order_id: orderId,
-    item_name: item.name.trim(),
-    quantity: item.quantity,
-    unit_price: item.unitPrice,
-  });
-
-  if (error) throw error;
+export async function addOrderItem(_orderId: string, _item: OrderItemInput): Promise<void> {
+  throw new Error('Add products from the SellerTray catalogue picker so product identity and price stay governed.');
 }
 
 export async function updateOrderItem(itemId: string, item: OrderItemInput): Promise<void> {
+  if (!Number.isFinite(item.quantity) || item.quantity <= 0 || item.quantity > 9999) {
+    throw new Error('Enter a valid quantity.');
+  }
+
   const { error } = await supabase
     .from('order_items')
-    .update({
-      item_name: item.name.trim(),
-      quantity: item.quantity,
-      unit_price: item.unitPrice,
-    })
+    .update({ quantity: item.quantity })
     .eq('id', itemId);
 
   if (error) throw error;

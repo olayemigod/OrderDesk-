@@ -12,9 +12,28 @@ export type WhatsAppCatalogueSettings = {
   updated_at: string;
 };
 
+export type WhatsAppCatalogueImportReadiness = {
+  connected: boolean;
+  tenantCredentialReady: boolean;
+  businessManagementScopeReady: boolean;
+  catalogManagementScopeReady: boolean;
+  catalogueScopesReady: boolean;
+  managementApiReady: boolean;
+  catalogConfigured: boolean;
+  catalogueAssetReady: boolean;
+  importReady: boolean;
+  reason: string | null;
+  grantedScopes: string[];
+  managementEvidence: string | null;
+  managementCheckedAt: string | null;
+  catalogueAssetEvidence: Record<string, unknown> | null;
+  catalogueAssetCheckedAt: string | null;
+};
+
 export type WhatsAppCatalogueStatus = {
   role: string;
   settings: WhatsAppCatalogueSettings | null;
+  importReadiness?: WhatsAppCatalogueImportReadiness;
   mappedItems: Array<{
     id: string;
     name: string;

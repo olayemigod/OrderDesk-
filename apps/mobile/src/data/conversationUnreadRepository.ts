@@ -52,7 +52,12 @@ export function subscribeToConversationActivity(
     .channel(`merchant-conversation-unread-${tenantId}`)
     .on(
       'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'inbound_messages', filter: `tenant_id=eq.${tenantId}` },
+      {
+        event: '*',
+        schema: 'public',
+        table: 'conversation_activity_events',
+        filter: `tenant_id=eq.${tenantId}`,
+      },
       onChange,
     )
     .subscribe();

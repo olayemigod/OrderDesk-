@@ -47,6 +47,14 @@ Deno.serve(async (req: Request) => {
   try {
     const memberRole = await membershipRole(tenantId, userId);
     if (!memberRole) return json({ error: 'SellerTray tenant membership required' }, 403);
+
+    if (
+      (action === 'record_offline' || action === 'confirm_offline') &&
+      !['owner', 'manager'].includes(memberRole)
+    ) {
+      return json({ error: 'Owner or Manager permission is required to record or confirm an offline payment' }, 403);
+    }
+
     const requestedBy = memberRole === 'staff' ? 'staff' : 'merchant';
 
     const userAllowed = await consumeRateLimit('merchant_payment_user', userId, 30, 60);
@@ -178,7 +186,7 @@ Deno.serve(async (req: Request) => {
     });
   } catch (error) {
     const message = error instanceof Error ? sanitize(error.message) : 'Payment operation failed';
-    const status = /membership|required|Only offline|not awaiting|read-only/i.test(message)
+    const status = /membership|required|Only offline|not awaiting|read-only|Owner or Manager/i.test(message)
       ? 403
       : /not found/i.test(message)
         ? 404
@@ -324,7 +332,6 @@ async function queueMerchantPaymentOptions(
   };
 }
 
-
 function buildPaymentOptionLines(methods: Array<{ method_type: string; display_name: string }>): string[] {
   let bankIndex = 0;
   return methods.map((method, index) => {
@@ -386,7 +393,6 @@ async function callRuntime(paymentId: string): Promise<J> {
   }
   return payload;
 }
-
 
 async function auditPaymentAction(input: {
   tenantId: string;

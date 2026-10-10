@@ -48,6 +48,9 @@ Deno.serve(withObservability('order-fulfillment', async (request) => {
   const method = cleanMethod(body.method);
   const provider = cleanOptionalText(body.provider, 120);
   const reference = cleanOptionalText(body.reference, 120);
+  const contactName = cleanOptionalText(body.contactName, 120);
+  const contactPhone = cleanOptionalText(body.contactPhone, 50);
+  const estimatedDeliveryAt = cleanOptionalTimestamp(body.estimatedDeliveryAt);
   const note = cleanOptionalText(body.note, 300);
 
   if (!action || !orderId || !method) {
@@ -56,7 +59,7 @@ Deno.serve(withObservability('order-fulfillment', async (request) => {
 
   const { data: order, error: orderError } = await admin
     .from('orders')
-    .select('id,tenant_id,customer_id,public_order_id,status,payment_status,amount_paid,total_amount,currency,fulfillment_method,fulfillment_status,delivery_provider,delivery_reference,delivery_note,dispatched_at,fulfilled_at,fulfillment_confirmed_by')
+    .select('id,tenant_id,customer_id,public_order_id,status,payment_status,amount_paid,total_amount,currency,fulfillment_method,fulfillment_status,delivery_provider,delivery_reference,delivery_contact_name,delivery_contact_phone,estimated_delivery_at,delivery_note,dispatched_at,fulfilled_at,fulfillment_confirmed_by')
     .eq('id', orderId)
     .maybeSingle();
 
@@ -110,6 +113,9 @@ Deno.serve(withObservability('order-fulfillment', async (request) => {
         fulfillment_status: 'out_for_delivery',
         delivery_provider: provider,
         delivery_reference: reference,
+        delivery_contact_name: contactName,
+        delivery_contact_phone: contactPhone,
+        estimated_delivery_at: estimatedDeliveryAt,
         delivery_note: note,
         dispatched_at: now,
         fulfilled_at: null,
@@ -119,7 +125,7 @@ Deno.serve(withObservability('order-fulfillment', async (request) => {
       .eq('tenant_id', tenantId)
       .eq('status', 'ready')
       .eq('fulfillment_status', 'unassigned')
-      .select('id,tenant_id,customer_id,public_order_id,status,payment_status,amount_paid,total_amount,currency,fulfillment_method,fulfillment_status,delivery_provider,delivery_reference,delivery_note,dispatched_at,fulfilled_at,fulfillment_confirmed_by')
+      .select('id,tenant_id,customer_id,public_order_id,status,payment_status,amount_paid,total_amount,currency,fulfillment_method,fulfillment_status,delivery_provider,delivery_reference,delivery_contact_name,delivery_contact_phone,estimated_delivery_at,delivery_note,dispatched_at,fulfilled_at,fulfillment_confirmed_by')
       .maybeSingle();
 
     if (updateError) return json({ error: updateError.message }, 400);
@@ -134,6 +140,9 @@ Deno.serve(withObservability('order-fulfillment', async (request) => {
       action: 'start_delivery',
       provider,
       reference,
+      contactName,
+      contactPhone,
+      estimatedDeliveryAt,
       note,
     });
 
@@ -166,6 +175,9 @@ Deno.serve(withObservability('order-fulfillment', async (request) => {
         customer_confirmation_message_id: null,
         delivery_provider: null,
         delivery_reference: null,
+        delivery_contact_name: null,
+        delivery_contact_phone: null,
+        estimated_delivery_at: null,
         delivery_note: note,
         fulfilled_at: now,
         updated_at: now,
@@ -174,7 +186,7 @@ Deno.serve(withObservability('order-fulfillment', async (request) => {
       .eq('tenant_id', tenantId)
       .eq('status', 'ready')
       .eq('fulfillment_status', 'unassigned')
-      .select('id,tenant_id,customer_id,public_order_id,status,payment_status,amount_paid,total_amount,currency,fulfillment_method,fulfillment_status,delivery_provider,delivery_reference,delivery_note,dispatched_at,fulfilled_at,fulfillment_confirmed_by')
+      .select('id,tenant_id,customer_id,public_order_id,status,payment_status,amount_paid,total_amount,currency,fulfillment_method,fulfillment_status,delivery_provider,delivery_reference,delivery_contact_name,delivery_contact_phone,estimated_delivery_at,delivery_note,dispatched_at,fulfilled_at,fulfillment_confirmed_by')
       .maybeSingle();
 
     if (updateError) return json({ error: updateError.message }, 400);
@@ -189,6 +201,9 @@ Deno.serve(withObservability('order-fulfillment', async (request) => {
       action: 'complete_fulfillment',
       provider: null,
       reference: null,
+      contactName: null,
+      contactPhone: null,
+      estimatedDeliveryAt: null,
       note,
     });
 
@@ -219,7 +234,7 @@ Deno.serve(withObservability('order-fulfillment', async (request) => {
     .eq('status', 'ready')
     .eq('fulfillment_status', 'out_for_delivery')
     .eq('fulfillment_method', method)
-    .select('id,tenant_id,customer_id,public_order_id,status,payment_status,amount_paid,total_amount,currency,fulfillment_method,fulfillment_status,delivery_provider,delivery_reference,delivery_note,dispatched_at,fulfilled_at,fulfillment_confirmed_by')
+    .select('id,tenant_id,customer_id,public_order_id,status,payment_status,amount_paid,total_amount,currency,fulfillment_method,fulfillment_status,delivery_provider,delivery_reference,delivery_contact_name,delivery_contact_phone,estimated_delivery_at,delivery_note,dispatched_at,fulfilled_at,fulfillment_confirmed_by')
     .maybeSingle();
 
   if (updateError) return json({ error: updateError.message }, 400);
@@ -234,6 +249,9 @@ Deno.serve(withObservability('order-fulfillment', async (request) => {
     action: 'complete_fulfillment',
     provider: updated.delivery_provider ?? provider,
     reference: updated.delivery_reference ?? reference,
+    contactName: updated.delivery_contact_name ?? contactName,
+    contactPhone: updated.delivery_contact_phone ?? contactPhone,
+    estimatedDeliveryAt: updated.estimated_delivery_at ?? estimatedDeliveryAt,
     note: updated.delivery_note ?? note,
   });
 
@@ -249,6 +267,9 @@ async function recordFulfillmentCommercialAction(input: {
   action: Action;
   provider: string | null;
   reference: string | null;
+  contactName: string | null;
+  contactPhone: string | null;
+  estimatedDeliveryAt: string | null;
   note: string | null;
 }): Promise<void> {
   if (!admin) return;
@@ -293,6 +314,9 @@ async function recordFulfillmentCommercialAction(input: {
         public_order_id: input.orderAfter.public_order_id ?? null,
         delivery_provider: input.provider,
         delivery_reference: input.reference,
+        delivery_contact_name: input.contactName,
+        delivery_contact_phone: input.contactPhone,
+        estimated_delivery_at: input.estimatedDeliveryAt,
         note: input.note,
       },
       applied_at: appliedAt,
@@ -316,6 +340,9 @@ function fulfillmentState(order: Record<string, unknown>): Record<string, unknow
     fulfillment_status: order.fulfillment_status ?? null,
     delivery_provider: order.delivery_provider ?? null,
     delivery_reference: order.delivery_reference ?? null,
+    delivery_contact_name: order.delivery_contact_name ?? null,
+    delivery_contact_phone: order.delivery_contact_phone ?? null,
+    estimated_delivery_at: order.estimated_delivery_at ?? null,
     dispatched_at: order.dispatched_at ?? null,
     fulfilled_at: order.fulfilled_at ?? null,
     fulfillment_confirmed_by: order.fulfillment_confirmed_by ?? null,
@@ -345,6 +372,14 @@ function cleanOptionalText(value: unknown, maxLength: number): string | null {
   if (typeof value !== 'string') return null;
   const clean = value.trim().replace(/\s+/g, ' ');
   return clean ? clean.slice(0, maxLength) : null;
+}
+
+function cleanOptionalTimestamp(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value !== 'string') return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
 }
 
 async function readRequestTextLimited(
