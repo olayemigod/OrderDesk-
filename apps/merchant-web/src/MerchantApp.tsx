@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import AiInsights from './AiInsights';
 import ManagementPage from './ManagementPage';
+import PurchasingManagement from './PurchasingManagement';
 import ReportCenter from './ReportCenter';
 import WhatsAppManagement from './WhatsAppManagement';
 import { errorMessage, numberValue, supabase } from './supabase';
 
 type MerchantRole = 'owner' | 'manager' | 'staff';
 type ManagementRole = 'owner' | 'manager';
-type Page = 'overview' | 'orders' | 'inventory' | 'cash' | 'whatsapp' | 'reports' | 'products' | 'team' | 'devices' | 'settings';
+type Page = 'overview' | 'orders' | 'inventory' | 'cash' | 'whatsapp' | 'reports' | 'ai' | 'products' | 'purchasing' | 'team' | 'devices' | 'settings';
 type Business = {
   id: string;
   name: string;
@@ -72,7 +74,9 @@ const NAV: Array<{ id: Page; label: string; section?: string }> = [
   { id: 'cash', label: 'Cash & Shifts' },
   { id: 'whatsapp', label: 'WhatsApp' },
   { id: 'reports', label: 'Reports' },
+  { id: 'ai', label: 'Ask SellerTray' },
   { id: 'products', label: 'Products & Pricing', section: 'Management' },
+  { id: 'purchasing', label: 'Purchasing & Suppliers' },
   { id: 'team', label: 'Team & Branches' },
   { id: 'devices', label: 'Devices & Printers' },
   { id: 'settings', label: 'Settings' },
@@ -264,7 +268,7 @@ export default function MerchantApp() {
         {NAV.map((item, index) => <div key={item.id}>
           {item.section ? <p className="nav-section">{item.section}</p> : null}
           <button className={page === item.id ? 'nav-button active' : 'nav-button'} onClick={() => setPage(item.id)}><span>{initials(item.label)}</span>{item.label}</button>
-          {index === 5 ? <div className="nav-divider" /> : null}
+          {index === 6 ? <div className="nav-divider" /> : null}
         </div>)}
       </nav>
       <div className="sidebar-foot"><p>{session.user.email}</p><button className="text-button" onClick={() => void signOut()}>Sign out</button></div>
@@ -295,6 +299,8 @@ export default function MerchantApp() {
       {page === 'cash' && <Cash business={business} branch={branch} rows={workspace.shifts} />}
       {page === 'whatsapp' && <WhatsAppManagement tenantId={business.id} role={managementRole} branches={branches} connectionStatusHint={business.whatsappConnectionStatus} />}
       {page === 'reports' && <Reports business={business} report={workspace.report} />}
+      {page === 'ai' && <AiInsights tenantId={business.id} />}
+      {page === 'purchasing' && <PurchasingManagement tenantId={business.id} currency={business.currency} />}
       {(page === 'products' || page === 'team' || page === 'devices' || page === 'settings') && <ManagementPage page={page} tenantId={business.id} currency={business.currency} onBranchesChanged={refresh} />}
     </main>
   </div>;
