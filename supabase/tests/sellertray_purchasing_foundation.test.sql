@@ -75,6 +75,15 @@ from public.branches b where b.tenant_id=f.tenant_id and b.is_default=true;
 insert into public.catalog_items(id,tenant_id,name,sku,price_ngn,is_active,stock_uom,allow_fractional_stock)
 select product_id,tenant_id,'Purchase Test Drink','PUR-DRINK',150,true,'Bottle',false
 from sellertray_purchase_fixture;
+
+-- Product creation bootstraps Stock UOM as the initial Purchase UOM. This fixture
+-- deliberately makes Pack the Purchase UOM before placing the PO.
+update public.catalog_item_uoms u
+set is_default_purchase=false
+where u.tenant_id=(select tenant_id from sellertray_purchase_fixture)
+  and u.catalog_item_id=(select product_id from sellertray_purchase_fixture)
+  and u.is_default_purchase=true;
+
 with u as (
   insert into public.catalog_item_uoms(tenant_id,catalog_item_id,uom_name,conversion_factor,selling_price,allow_fractional,is_default_selling,is_default_purchase)
   select tenant_id,product_id,'Pack',12,1500,false,false,true from sellertray_purchase_fixture
