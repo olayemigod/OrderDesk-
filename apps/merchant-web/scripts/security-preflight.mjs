@@ -3,10 +3,12 @@ import { resolve } from 'node:path';
 
 const appRoot = process.cwd();
 const supabaseClient = readFileSync(resolve(appRoot, 'src/supabase.ts'), 'utf8');
-const app = readFileSync(resolve(appRoot, 'src/App.tsx'), 'utf8');
+const main = readFileSync(resolve(appRoot, 'src/main.tsx'), 'utf8');
+const app = readFileSync(resolve(appRoot, 'src/MerchantApp.tsx'), 'utf8');
 const management = readFileSync(resolve(appRoot, 'src/ManagementPage.tsx'), 'utf8');
 const products = readFileSync(resolve(appRoot, 'src/ProductsManagement.tsx'), 'utf8');
 const team = readFileSync(resolve(appRoot, 'src/TeamBranchesManagement.tsx'), 'utf8');
+const whatsapp = readFileSync(resolve(appRoot, 'src/WhatsAppManagement.tsx'), 'utf8');
 const vercel = readFileSync(resolve(appRoot, 'vercel.json'), 'utf8');
 const failures = [];
 
@@ -14,13 +16,19 @@ function requireValue(condition, message) {
   if (!condition) failures.push(message);
 }
 
-const browserSource = `${supabaseClient}\n${app}\n${management}\n${products}\n${team}`;
+const browserSource = `${supabaseClient}\n${main}\n${app}\n${management}\n${products}\n${team}\n${whatsapp}`;
 requireValue(
   !browserSource.includes('SERVICE_ROLE') &&
     !browserSource.includes('SUPABASE_SECRET') &&
     !browserSource.includes('platform-admin') &&
     !browserSource.includes('platform-merchant-message'),
   'Merchant Web must not contain service credentials or ProcessEdge platform-admin operations.',
+);
+
+requireValue(
+  main.includes("import MerchantApp from './MerchantApp'") &&
+    main.includes('<MerchantApp />'),
+  'Merchant Web entrypoint must render the governed MerchantApp shell.',
 );
 
 requireValue(
@@ -96,6 +104,23 @@ requireValue(
     team.includes("team.actorRole === 'owner'") &&
     team.includes("team.actorRole === 'manager'"),
   'Team and Branches must preserve default-Branch fallback and the Owner/Manager governance hierarchy.',
+);
+
+requireValue(
+  app.includes('<WhatsAppManagement') &&
+    whatsapp.includes("rpc('get_sellertray_whatsapp_management_route'") &&
+    whatsapp.includes("functions.invoke('whatsapp-connection'") &&
+    whatsapp.includes("rpc('set_sellertray_whatsapp_branch'"),
+  'WhatsApp management must use the safe route read model, shared status service and governed receiving-Branch command.',
+);
+
+requireValue(
+  !whatsapp.includes("from('tenant_whatsapp_connections').insert") &&
+    !whatsapp.includes("from('tenant_whatsapp_connections').update") &&
+    !whatsapp.includes("from('tenant_whatsapp_connections').delete") &&
+    whatsapp.includes('Owner-only security action') &&
+    whatsapp.includes('Managers can review status and change the receiving Branch'),
+  'Merchant Web must not bypass WhatsApp connection security or expose Manager credential mutation.',
 );
 
 requireValue(
