@@ -1,25 +1,31 @@
 import { useEffect, useState } from 'react';
 import DevicesPrintersManagement from './DevicesPrintersManagement';
 import ProductsManagement from './ProductsManagement';
+import PurchasingManagement from './PurchasingManagement';
 import SettingsManagement from './SettingsManagement';
 import TeamBranchesManagement from './TeamBranchesManagement';
 import { errorMessage, supabase } from './supabase';
 
-type ManagementPageId = 'products' | 'team' | 'devices' | 'settings';
+type ManagementPageId = 'products' | 'purchasing' | 'team' | 'devices' | 'settings';
 type Branch = { id: string; name: string; isDefault: boolean };
 
 export default function ManagementPage({
   page,
   tenantId,
   currency,
+  branchId,
+  branchName,
   onBranchesChanged,
 }: {
   page: ManagementPageId;
   tenantId: string;
   currency: string;
+  branchId?: string;
+  branchName?: string;
   onBranchesChanged?: () => void | Promise<void>;
 }) {
   if (page === 'products') return <ProductsManagement tenantId={tenantId} currency={currency} />;
+  if (page === 'purchasing') return <PurchasingManagement tenantId={tenantId} branchId={branchId ?? ''} branchName={branchName ?? ''} currency={currency} />;
   if (page === 'team') return <TeamBranchesManagement tenantId={tenantId} onBranchesChanged={onBranchesChanged} />;
   if (page === 'devices') return <DeviceManagement tenantId={tenantId} />;
   return <SettingsManagement tenantId={tenantId} />;
