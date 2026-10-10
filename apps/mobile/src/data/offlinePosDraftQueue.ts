@@ -22,7 +22,6 @@ export async function savePendingPosDraft(input: {
   branchId: string;
   requestId: string;
   items: PosDraftLine[];
-  lastError?: string | null;
 }): Promise<void> {
   if (!isUuid(input.tenantId) || !isUuid(input.branchId) || !isUuid(input.requestId)) {
     throw new Error('Pending sale identity is invalid.');
@@ -41,9 +40,24 @@ export async function savePendingPosDraft(input: {
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
     attemptCount: (existing?.attemptCount ?? 0) + 1,
-    lastError: cleanError(input.lastError),
+    lastError: existing?.lastError ?? null,
   };
   await AsyncStorage.setItem(key, JSON.stringify(envelope));
+}
+
+export async function markPendingPosDraftError(
+  tenantId: string,
+  requestId: string,
+  error: string | null | undefined,
+): Promise<void> {
+  const key = queueKey(tenantId, requestId);
+  const existing = await readEnvelope(key);
+  if (!existing) return;
+  await AsyncStorage.setItem(key, JSON.stringify({
+    ...existing,
+    updatedAt: new Date().toISOString(),
+    lastError: cleanError(error),
+  } satisfies PendingPosDraftSync));
 }
 
 export async function removePendingPosDraft(tenantId: string, requestId: string): Promise<void> {
