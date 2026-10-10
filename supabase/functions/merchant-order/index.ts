@@ -55,6 +55,7 @@ Deno.serve(async (request) => {
   const customerName = cleanText(body.customerName, 120);
   const customerPhone = normalizePhone(body.customerPhone);
   const note = cleanText(body.note, 500);
+  const requestIdProvided = body.requestId !== undefined && body.requestId !== null;
   const requestId = cleanUuid(body.requestId);
 
   if (!tenantId) return json({ error: 'Business is required' }, 400);
@@ -74,6 +75,7 @@ Deno.serve(async (request) => {
     const lines = parsePosLines(body.items);
 
     if (!branchId) return json({ error: 'Branch is required' }, 400);
+    if (requestIdProvided && !requestId) return json({ error: 'Sale request identity is invalid' }, 400);
     if (!lines.length) return json({ error: 'Add at least one product' }, 400);
     if ((customerName === null) !== (customerPhone === null)) {
       return json({ error: 'Enter both customer name and phone, or leave both blank for a walk-in sale' }, 400);
