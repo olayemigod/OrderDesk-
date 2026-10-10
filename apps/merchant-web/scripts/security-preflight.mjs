@@ -30,7 +30,8 @@ requireValue(
 requireValue(
   app.includes('sellertray_list_businesses_for_current_user') &&
     app.includes("const MANAGEMENT_ROLES: MerchantRole[] = ['owner', 'manager']") &&
-    app.includes('StaffBoundary'),
+    app.includes('managementBusinesses.length === 0') &&
+    app.includes('Use SellerTray mobile for daily operations'),
   'Merchant Web must resolve SellerTray membership and keep management access limited to Owners and Managers.',
 );
 
