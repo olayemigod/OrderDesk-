@@ -33,14 +33,14 @@
   border-radius: 14px;
   padding: 14px 16px;
   background: var(--surface);
-  color: var(--text);
+  color: var(--navy);
   font: inherit;
   line-height: 1.5;
 }
 
 .ai-question-input:focus {
-  outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
-  border-color: var(--accent);
+  outline: 2px solid rgba(18, 183, 106, .2);
+  border-color: var(--green);
 }
 
 .ai-suggestions {
@@ -52,15 +52,15 @@
 .ai-suggestion {
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: var(--surface-subtle);
-  color: var(--text);
+  background: var(--surface-alt);
+  color: var(--navy);
   padding: 8px 12px;
   cursor: pointer;
   font: inherit;
 }
 
 .ai-suggestion:hover:not(:disabled) {
-  border-color: var(--accent);
+  border-color: var(--green);
 }
 
 .ai-suggestion:disabled {
