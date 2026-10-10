@@ -1,4 +1,9 @@
 import { supabase } from '../lib/supabase';
+import {
+  markPendingPosDraftError,
+  removePendingPosDraft,
+  savePendingPosDraft,
+} from './offlinePosDraftQueue';
 
 export type CommerceBranch = {
   id: string;
@@ -194,12 +199,28 @@ export async function createPosDraft(input: CreatePosDraftInput): Promise<string
     ?? createSellerTrayRequestId();
   if (!input.requestId) pendingPosDraftRequestIds.set(retryKey, requestId);
 
+  const canPersistForSync = body.customerName === null
+    && body.customerPhone === null
+    && body.note === null;
+  if (canPersistForSync) {
+    await savePendingPosDraft({
+      tenantId: input.tenantId,
+      branchId: input.branchId,
+      requestId,
+      items: body.items,
+    }).catch(() => undefined);
+  }
+
   const { data, error } = await supabase.functions.invoke('merchant-order', {
     body: { ...body, requestId },
   });
 
   if (error) {
-    throw new Error(await functionErrorMessage(error, 'Unable to prepare this sale.'));
+    const message = await functionErrorMessage(error, 'Unable to prepare this sale.');
+    if (canPersistForSync) {
+      await markPendingPosDraftError(input.tenantId, requestId, message).catch(() => undefined);
+    }
+    throw new Error(message);
   }
 
   const orderId =
@@ -207,8 +228,18 @@ export async function createPosDraft(input: CreatePosDraftInput): Promise<string
       ? data.orderId
       : null;
 
-  if (!orderId) throw new Error('SellerTray returned an invalid sale reference.');
+  if (!orderId) {
+    const message = 'SellerTray returned an invalid sale reference.';
+    if (canPersistForSync) {
+      await markPendingPosDraftError(input.tenantId, requestId, message).catch(() => undefined);
+    }
+    throw new Error(message);
+  }
+
   if (!input.requestId) pendingPosDraftRequestIds.delete(retryKey);
+  if (canPersistForSync) {
+    await removePendingPosDraft(input.tenantId, requestId).catch(() => undefined);
+  }
   return orderId;
 }
 
