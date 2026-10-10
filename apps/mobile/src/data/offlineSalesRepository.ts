@@ -221,6 +221,18 @@ export async function loadBranchStockCache(
   return readCache<BranchStockRow[]>(`${STOCK_KEY_PREFIX}${tenantId}:${branchId}`);
 }
 
+export function isLikelyConnectivityError(error: unknown): boolean {
+  if (error instanceof PosDraftRequestError) return error.kind === 'network';
+  if (error instanceof TypeError) return true;
+  if (error && typeof error === 'object' && 'code' in error) return false;
+  const message = error instanceof Error
+    ? error.message
+    : error && typeof error === 'object' && 'message' in error && typeof (error as { message?: unknown }).message === 'string'
+      ? String((error as { message: string }).message)
+      : String(error ?? '');
+  return /network request failed|failed to fetch|fetch failed|networkerror|connection.*failed|failed to send a request to the edge function/i.test(message);
+}
+
 function classifySyncFailure(error: unknown): { status: 'pending' | 'needs_review' | 'failed'; message: string } {
   if (error instanceof PosDraftRequestError) {
     if (error.kind === 'network') {
@@ -230,6 +242,9 @@ function classifySyncFailure(error: unknown): { status: 'pending' | 'needs_revie
       return { status: 'needs_review', message: error.message || 'Sale details need review before syncing.' };
     }
     return { status: 'failed', message: error.message || 'SellerTray could not sync this held sale.' };
+  }
+  if (isLikelyConnectivityError(error)) {
+    return { status: 'pending', message: 'Waiting for a connection.' };
   }
   return {
     status: 'failed',
