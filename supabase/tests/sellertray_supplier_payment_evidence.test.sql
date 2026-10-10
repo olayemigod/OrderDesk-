@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(22);
+select extensions.plan(23);
 
 select extensions.ok(
   to_regclass('public.sellertray_supplier_payments') is not null
