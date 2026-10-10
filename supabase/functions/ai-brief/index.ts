@@ -264,7 +264,7 @@ async function generateBrief(contextText: string, question: string | null): Prom
           content:
             'You are SellerTray AI Brief, a read-only decision-support assistant for a merchant Owner or Manager. ' +
             'Use only the supplied SellerTray report JSON. Never invent orders, customers, prices, payments, stock, branches, forecasts or causes. ' +
-            'Do not claim causation from correlation. Do not provide legal, tax or accounting conclusions. ' +
+            'Do not claim causation from correlation. Do not provide legal, tax or accounting conclusions. Do not name or infer a currency from numeric values because currency is outside this bounded AI context. ' +
             'Every attention/opportunity item must cite one or more supplied source keys. ' +
             'Prioritize concrete operational attention: payment verification/failures, unusual cash variance, weak completion, channel concentration or meaningful branch differences when supported. ' +
             'Opportunities must be modest and directly supported by the report. If evidence is insufficient, say so. ' +
@@ -670,7 +670,7 @@ function boundedInteger(value: unknown, min: number, max: number): number | null
 function uuid(value: unknown): string | null { const clean = text(value); return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clean) ? clean : null; }
 function briefDays(value: unknown): 7 | 30 | 90 { return value === 7 || value === 90 ? value : 30; }
 function formatCount(value: number): string { return new Intl.NumberFormat('en-NG', { maximumFractionDigits: 0 }).format(value); }
-function formatAmount(value: number): string { return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 2 }).format(value); }
+function formatAmount(value: number): string { return new Intl.NumberFormat('en-NG', { maximumFractionDigits: 2 }).format(value); }
 
 function reply(payload: J, status = 200): Response {
   return new Response(JSON.stringify(payload), {

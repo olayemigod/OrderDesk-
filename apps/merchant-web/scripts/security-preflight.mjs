@@ -8,6 +8,8 @@ const app = readFileSync(resolve(appRoot, 'src/MerchantApp.tsx'), 'utf8');
 const management = readFileSync(resolve(appRoot, 'src/ManagementPage.tsx'), 'utf8');
 const products = readFileSync(resolve(appRoot, 'src/ProductsManagement.tsx'), 'utf8');
 const purchasing = readFileSync(resolve(appRoot, 'src/PurchasingManagement.tsx'), 'utf8');
+const aiBrief = readFileSync(resolve(appRoot, 'src/AiBriefManagement.tsx'), 'utf8');
+const aiFunction = readFileSync(resolve(appRoot, '../../supabase/functions/ai-brief/index.ts'), 'utf8');
 const team = readFileSync(resolve(appRoot, 'src/TeamBranchesManagement.tsx'), 'utf8');
 const whatsapp = readFileSync(resolve(appRoot, 'src/WhatsAppManagement.tsx'), 'utf8');
 const devices = readFileSync(resolve(appRoot, 'src/DevicesPrintersManagement.tsx'), 'utf8');
@@ -20,7 +22,7 @@ function requireValue(condition, message) {
   if (!condition) failures.push(message);
 }
 
-const browserSource = `${supabaseClient}\n${main}\n${app}\n${management}\n${products}\n${purchasing}\n${team}\n${whatsapp}\n${devices}\n${reports}\n${settings}`;
+const browserSource = `${supabaseClient}\n${main}\n${app}\n${management}\n${products}\n${purchasing}\n${aiBrief}\n${team}\n${whatsapp}\n${devices}\n${reports}\n${settings}`;
 requireValue(
   !browserSource.includes('SERVICE_ROLE') &&
     !browserSource.includes('SUPABASE_SECRET') &&
@@ -75,6 +77,36 @@ requireValue(
     !products.includes("from('catalog_items').update") &&
     !products.includes("from('catalog_items').delete"),
   'Merchant Web must not bypass product and UOM command invariants with raw browser writes.',
+);
+
+requireValue(
+  app.includes("{ id: 'ai', label: 'AI Brief' }") &&
+    management.includes('<AiBriefManagement') &&
+    aiBrief.includes("functions.invoke('ai-brief'") &&
+    aiBrief.includes("rpc('get_sellertray_ai_brief_usage'"),
+  'AI Brief must use the governed Edge Function and management-only usage summary.',
+);
+
+requireValue(
+  !aiBrief.includes("from('orders').insert") &&
+    !aiBrief.includes("from('orders').update") &&
+    !aiBrief.includes("from('inventory_movements').insert") &&
+    !aiBrief.includes("from('order_payments').update"),
+  'AI Brief browser code must remain read-only and cannot mutate commerce, stock or payments.',
+);
+
+requireValue(
+  aiFunction.includes("userRpc<J>('sellertray_report_center'") &&
+    aiFunction.includes("serviceRpc<boolean>('orderdesk_subscription_can_write'") &&
+    aiFunction.includes('SELLERTRAY_AI_BRIEF_DAILY_LIMIT') &&
+    aiFunction.includes('topCustomers: anonymizeCustomers') &&
+    aiFunction.includes('store: false') &&
+    aiFunction.includes("reasoning: { effort: 'none' }") &&
+    !aiFunction.includes("save_sellertray_") &&
+    !aiFunction.includes("post_sellertray_purchase_receipt") &&
+    !aiFunction.includes("record_sellertray_inventory_movement") &&
+    !aiFunction.includes('tools:'),
+  'AI Brief server boundary must be report-only, budgeted, privacy-minimized and tool-free.',
 );
 
 requireValue(
