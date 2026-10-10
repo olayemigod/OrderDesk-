@@ -9,6 +9,7 @@ const management = readFileSync(resolve(appRoot, 'src/ManagementPage.tsx'), 'utf
 const products = readFileSync(resolve(appRoot, 'src/ProductsManagement.tsx'), 'utf8');
 const team = readFileSync(resolve(appRoot, 'src/TeamBranchesManagement.tsx'), 'utf8');
 const whatsapp = readFileSync(resolve(appRoot, 'src/WhatsAppManagement.tsx'), 'utf8');
+const devices = readFileSync(resolve(appRoot, 'src/DevicesPrintersManagement.tsx'), 'utf8');
 const vercel = readFileSync(resolve(appRoot, 'vercel.json'), 'utf8');
 const failures = [];
 
@@ -16,7 +17,7 @@ function requireValue(condition, message) {
   if (!condition) failures.push(message);
 }
 
-const browserSource = `${supabaseClient}\n${main}\n${app}\n${management}\n${products}\n${team}\n${whatsapp}`;
+const browserSource = `${supabaseClient}\n${main}\n${app}\n${management}\n${products}\n${team}\n${whatsapp}\n${devices}`;
 requireValue(
   !browserSource.includes('SERVICE_ROLE') &&
     !browserSource.includes('SUPABASE_SECRET') &&
@@ -121,6 +122,37 @@ requireValue(
     whatsapp.includes('Owner-only security action') &&
     whatsapp.includes('Managers can review status and change the receiving Branch'),
   'Merchant Web must not bypass WhatsApp connection security or expose Manager credential mutation.',
+);
+
+requireValue(
+  management.includes('<DevicesPrintersManagement') &&
+    management.includes("rpc('get_sellertray_accessible_branches'") &&
+    devices.includes("rpc('get_sellertray_device_management_overview'") &&
+    devices.includes("rpc('save_sellertray_register'") &&
+    devices.includes("functions.invoke('printer'") &&
+    devices.includes("action: 'save_printer'"),
+  'Devices and Printers must use shared Branch reads and governed register/printer management commands.',
+);
+
+requireValue(
+  !devices.includes("from('sellertray_registers').insert") &&
+    !devices.includes("from('sellertray_registers').update") &&
+    !devices.includes("from('sellertray_registers').delete") &&
+    !devices.includes("from('sellertray_printers').insert") &&
+    !devices.includes("from('sellertray_printers').update") &&
+    !devices.includes("from('sellertray_printers').delete") &&
+    !devices.includes("from('sellertray_print_jobs').insert") &&
+    !devices.includes("from('sellertray_print_jobs').update") &&
+    !devices.includes("from('sellertray_print_jobs').delete") &&
+    !devices.includes("action: 'request_print'") &&
+    !devices.includes("action: 'update_print'"),
+  'Merchant Web must not bypass device commands or execute Bluetooth print jobs from the browser.',
+);
+
+requireValue(
+  devices.includes('Bluetooth pairing and test printing remain on SellerTray mobile') &&
+    devices.includes('Test prints and receipt printing run from the Android app'),
+  'Devices management must keep Bluetooth discovery and print execution on mobile.',
 );
 
 requireValue(
