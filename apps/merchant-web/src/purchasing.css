@@ -1,0 +1,219 @@
+.management-switch-row,
+.purchasing-heading,
+.purchase-order-row,
+.supplier-row,
+.purchase-line,
+.receive-lines label,
+.receipt-history > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.management-switch-row {
+  flex-wrap: wrap;
+}
+
+.purchase-branch-select {
+  min-width: 220px;
+}
+
+.purchasing-columns {
+  align-items: start;
+}
+
+.purchase-editor,
+.purchase-detail,
+.receive-panel,
+.receipt-history {
+  display: grid;
+  gap: 18px;
+}
+
+.purchase-lines {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 18px;
+}
+
+.purchase-line {
+  display: grid;
+  grid-template-columns: minmax(170px, 1.4fr) minmax(140px, 1fr) minmax(100px, .7fr) minmax(120px, .8fr) minmax(150px, 1fr) auto;
+  align-items: end;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+
+.purchase-line label,
+.receive-grid label,
+.receive-lines label,
+.form-grid label {
+  display: grid;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.line-stock-preview {
+  display: grid;
+  gap: 5px;
+  align-self: center;
+}
+
+.line-stock-preview span,
+.receive-lines small,
+.supplier-row span,
+.purchase-order-row span,
+.receipt-history span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.purchase-actions,
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.supplier-list,
+.purchase-order-list,
+.receive-lines,
+.receipt-history {
+  display: grid;
+  gap: 8px;
+}
+
+.supplier-row,
+.purchase-order-row {
+  width: 100%;
+  padding: 12px 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.supplier-row > div:first-child,
+.purchase-order-row > div:first-child,
+.purchase-order-meta {
+  display: grid;
+  gap: 4px;
+}
+
+.purchase-order-meta {
+  justify-items: end;
+}
+
+.purchase-order-row.active {
+  padding-inline: 12px;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+
+.count-badge {
+  min-width: 32px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.receive-panel {
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+
+.receive-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.receive-lines label {
+  grid-template-columns: 1fr minmax(110px, 160px);
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.receive-lines label > span {
+  display: grid;
+  gap: 3px;
+}
+
+.receipt-history {
+  border-top: 1px solid var(--border);
+  padding-top: 18px;
+}
+
+.receipt-history > div {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.success-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(18, 183, 106, .35);
+  border-radius: 12px;
+  background: rgba(18, 183, 106, .08);
+}
+
+.success-banner button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.compact-button {
+  min-height: 34px;
+  padding: 7px 10px;
+}
+
+@media (max-width: 1100px) {
+  .purchase-line {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .management-switch-row,
+  .purchasing-heading,
+  .supplier-row,
+  .purchase-order-row,
+  .receipt-history > div {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .purchase-line,
+  .receive-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .receive-lines label {
+    grid-template-columns: 1fr;
+  }
+
+  .purchase-order-meta {
+    justify-items: start;
+  }
+}
