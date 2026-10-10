@@ -32,6 +32,15 @@ type ProviderUsage = {
   totalTokens: number | null;
 };
 
+type ProviderReservation = {
+  allowed: boolean;
+  replayed: boolean;
+  reason: string | null;
+  dailyLimit: number;
+  providerCallsToday: number;
+  remainingProviderCalls: number;
+};
+
 type AttemptOutcome =
   | 'success'
   | 'provider_error'
@@ -197,13 +206,46 @@ Deno.serve(async (request) => {
     return reply(resultPayload(requestId, days, fallback, 'deterministic', budget, 'AI provider is not configured.'), 200);
   }
 
-  if (providerCallsToday >= DAILY_LIMIT) {
+  let reservation: ProviderReservation;
+  try {
+    reservation = await reserveProviderCall(tenantId, requestId);
+  } catch (error) {
+    console.error('AI Brief budget reservation failed', error);
     const fallback = deterministicBrief(context, question);
     await recordAttempt({
       tenantId, userId, requestId, days, questionPresent: Boolean(question), outcome: 'daily_budget_fallback',
       providerCalled: false, providerStatus: null, usage: null, contextBytes, fingerprint, durationMs: 0,
     });
-    return reply(resultPayload(requestId, days, fallback, 'deterministic', budget, 'Daily AI generation budget reached. Verified metrics are shown instead.'), 200);
+    return reply(resultPayload(
+      requestId, days, fallback, 'deterministic', budget,
+      'AI budget control was unavailable. SellerTray did not call the AI provider and returned verified metrics instead.',
+    ), 200);
+  }
+
+  const reservedBudget = {
+    dailyLimit: reservation.dailyLimit,
+    providerCallsToday: reservation.providerCallsToday,
+    remainingProviderCalls: reservation.remainingProviderCalls,
+  };
+
+  if (!reservation.allowed) {
+    const fallback = deterministicBrief(context, question);
+    if (!reservation.replayed) {
+      await recordAttempt({
+        tenantId, userId, requestId, days, questionPresent: Boolean(question), outcome: 'daily_budget_fallback',
+        providerCalled: false, providerStatus: null, usage: null, contextBytes, fingerprint, durationMs: 0,
+      });
+    }
+    return reply(resultPayload(
+      requestId,
+      days,
+      fallback,
+      'deterministic',
+      reservedBudget,
+      reservation.replayed
+        ? 'This AI request was already reserved. SellerTray did not call the provider again and returned verified metrics instead.'
+        : 'Daily AI generation budget reached. Verified metrics are shown instead.',
+    ), 200);
   }
 
   const started = Date.now();
@@ -219,7 +261,7 @@ Deno.serve(async (request) => {
       days,
       generated.brief,
       'ai',
-      { ...budget, providerCallsToday: providerCallsToday + 1, remainingProviderCalls: Math.max(0, DAILY_LIMIT - providerCallsToday - 1) },
+      reservedBudget,
       null,
       generated.usage.model,
     ), 200);
@@ -239,7 +281,7 @@ Deno.serve(async (request) => {
       days,
       fallback,
       'deterministic',
-      { ...budget, providerCallsToday: providerCallsToday + 1, remainingProviderCalls: Math.max(0, DAILY_LIMIT - providerCallsToday - 1) },
+      reservedBudget,
       'AI generation was unavailable. SellerTray returned a verified metrics fallback.',
     ), 200);
   }
@@ -498,13 +540,28 @@ async function tenantRole(tenantId: string, userId: string): Promise<string | nu
 }
 
 async function countProviderCallsToday(tenantId: string): Promise<number> {
-  const start = new Date();
-  start.setUTCHours(0, 0, 0, 0);
+  const day = new Date().toISOString().slice(0, 10);
   const rows = await serviceRest<Array<{ id: string }>>(
-    `/rest/v1/sellertray_ai_brief_attempts?select=id&tenant_id=eq.${encodeURIComponent(tenantId)}` +
-      `&provider_called=eq.true&created_at=gte.${encodeURIComponent(start.toISOString())}&limit=${DAILY_LIMIT + 1}`,
+    `/rest/v1/sellertray_ai_brief_provider_reservations?select=id&tenant_id=eq.${encodeURIComponent(tenantId)}` +
+      `&reserved_on=eq.${encodeURIComponent(day)}&limit=${DAILY_LIMIT + 1}`,
   );
   return rows.length;
+}
+
+async function reserveProviderCall(tenantId: string, requestId: string): Promise<ProviderReservation> {
+  const raw = await serviceRpc<J>('reserve_sellertray_ai_brief_provider_call', {
+    p_tenant_id: tenantId,
+    p_request_id: requestId,
+    p_daily_limit: DAILY_LIMIT,
+  });
+  return {
+    allowed: raw.allowed === true,
+    replayed: raw.replayed === true,
+    reason: typeof raw.reason === 'string' ? raw.reason : null,
+    dailyLimit: Math.max(1, Math.trunc(finite(raw.dailyLimit)) || DAILY_LIMIT),
+    providerCallsToday: Math.max(0, Math.trunc(finite(raw.providerCallsToday))),
+    remainingProviderCalls: Math.max(0, Math.trunc(finite(raw.remainingProviderCalls))),
+  };
 }
 
 async function userRpc<T>(name: string, body: J, authorization: string): Promise<T> {
