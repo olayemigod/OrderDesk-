@@ -30,6 +30,10 @@ type SupplierPayment = {
   paymentDate: string;
   notes: string | null;
   createdAt: string;
+  reversed: boolean;
+  reversalId: string | null;
+  reversalReason: string | null;
+  reversedAt: string | null;
 };
 
 type PaymentSummary = {
@@ -52,6 +56,8 @@ export default function SupplierFinanceManagement({ tenantId, currency }: { tena
   const [reference, setReference] = useState('');
   const [paymentDate, setPaymentDate] = useState(today());
   const [notes, setNotes] = useState('');
+  const [reversingPaymentId, setReversingPaymentId] = useState('');
+  const [reversalReason, setReversalReason] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +82,8 @@ export default function SupplierFinanceManagement({ tenantId, currency }: { tena
   }, [supplierId, supplierOrders, purchaseOrderId]);
 
   useEffect(() => {
+    setReversingPaymentId('');
+    setReversalReason('');
     if (purchaseOrderId) void loadSummary(purchaseOrderId);
     else setSummary(null);
   }, [purchaseOrderId]);
@@ -150,7 +158,12 @@ export default function SupplierFinanceManagement({ tenantId, currency }: { tena
       if (rpcError) throw rpcError;
       const payload = object(data);
       const replay = payload.idempotentReplay === true;
-      setMessage(replay ? 'This payment was already recorded. No duplicate was created.' : 'Supplier payment recorded.');
+      const reversed = payload.reversed === true;
+      setMessage(replay
+        ? reversed
+          ? 'This payment reference already exists but has been reversed. No duplicate was created.'
+          : 'This payment was already recorded. No duplicate was created.'
+        : 'Supplier payment recorded.');
       setAmount('');
       setReference('');
       setNotes('');
@@ -158,6 +171,37 @@ export default function SupplierFinanceManagement({ tenantId, currency }: { tena
       await loadSummary(purchaseOrderId);
     } catch (cause) {
       setError(errorMessage(cause, 'Unable to record Supplier payment.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function reversePayment(paymentId: string) {
+    const reason = reversalReason.trim();
+    if (!reason) {
+      setError('Enter the reason for reversing this Supplier payment.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const { data, error: rpcError } = await supabase.rpc('reverse_sellertray_supplier_payment', {
+        p_tenant_id: tenantId,
+        p_supplier_payment_id: paymentId,
+        p_reason: reason,
+      });
+      if (rpcError) throw rpcError;
+      const payload = object(data);
+      setMessage(payload.idempotentReplay === true
+        ? 'This Supplier payment was already reversed. No duplicate reversal was created.'
+        : 'Supplier payment reversed. The original payment remains in history and the outstanding balance was restored.');
+      setReversingPaymentId('');
+      setReversalReason('');
+      await load();
+      if (purchaseOrderId) await loadSummary(purchaseOrderId);
+    } catch (cause) {
+      setError(errorMessage(cause, 'Unable to reverse Supplier payment.'));
     } finally {
       setBusy(false);
     }
@@ -189,7 +233,7 @@ export default function SupplierFinanceManagement({ tenantId, currency }: { tena
     <div className="two-column purchasing-columns">
       <article className="panel">
         <div className="panel-head"><div><p className="eyebrow">Business-wide</p><h3>Supplier balances</h3></div><span className="count-badge">{balances.length}</span></div>
-        {loading ? <p className="muted">Loading Supplier balances…</p> : balances.length ? <div className="supplier-list">{balances.map((balance) => <button key={balance.supplierId} className={supplierId === balance.supplierId ? 'supplier-row active' : 'supplier-row'} onClick={() => setSupplierId(balance.supplierId)}><div><strong>{balance.supplierName}</strong><span>{balance.lastPaymentDate ? `Last payment ${dateLabel(balance.lastPaymentDate)}` : 'No Supplier payment recorded'}</span></div><div className="purchase-order-meta"><strong>{money(balance.outstandingAmount, currency)}</strong><span>{money(balance.receivedValue, currency)} received</span></div></button>)}</div> : <Empty title="No Supplier balances yet" body="Receive a Purchase Order to create Supplier outstanding value." />}
+        {loading ? <p className="muted">Loading Supplier balances…</p> : balances.length ? <div className="supplier-list">{balances.map((balance) => <button key={balance.supplierId} className={supplierId === balance.supplierId ? 'supplier-row active' : 'supplier-row'} onClick={() => setSupplierId(balance.supplierId)}><div><strong>{balance.supplierName}</strong><span>{balance.lastPaymentDate ? `Last payment ${dateLabel(balance.lastPaymentDate)}` : 'No active Supplier payment recorded'}</span></div><div className="purchase-order-meta"><strong>{money(balance.outstandingAmount, currency)}</strong><span>{money(balance.receivedValue, currency)} received</span></div></button>)}</div> : <Empty title="No Supplier balances yet" body="Receive a Purchase Order to create Supplier outstanding value." />}
       </article>
 
       <article className="panel supplier-payment-panel">
@@ -198,7 +242,7 @@ export default function SupplierFinanceManagement({ tenantId, currency }: { tena
           <label className="full-field">Received Purchase Order<select value={purchaseOrderId} onChange={(event) => setPurchaseOrderId(event.target.value)}><option value="">Choose Purchase Order</option>{supplierOrders.map((order) => <option key={order.id} value={order.id}>{order.purchaseNumber} · {order.branchName} · {dateLabel(order.orderDate)}</option>)}</select></label>
           <label>Amount ({currency})<input inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder={summary ? String(summary.outstandingAmount) : '0'} /></label>
           <label>Payment method<select value={method} onChange={(event) => setMethod(event.target.value as typeof method)}><option value="bank_transfer">Bank Transfer</option><option value="card">Card</option><option value="other">Other</option></select></label>
-          <label>Payment date<input type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} /></label>
+          <label>Payment date<input type="date" max={today()} value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} /></label>
           <label>Reference<input value={reference} onChange={(event) => setReference(event.target.value)} placeholder="Transfer, card or payment reference" /></label>
           <label className="full-field">Notes<textarea rows={2} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
         </div>
@@ -209,7 +253,8 @@ export default function SupplierFinanceManagement({ tenantId, currency }: { tena
 
     {summary ? <article className="panel">
       <div className="panel-head"><div><p className="eyebrow">{selectedOrder?.purchaseNumber ?? 'Purchase Order'}</p><h3>Payment history</h3></div><strong>{money(summary.outstandingAmount, currency)} outstanding</strong></div>
-      {summary.payments.length ? <div className="table-wrap"><table><thead><tr><th>Date</th><th>Method</th><th>Reference</th><th>Notes</th><th>Amount</th></tr></thead><tbody>{summary.payments.map((payment) => <tr key={payment.id}><td>{dateLabel(payment.paymentDate)}</td><td>{methodLabel(payment.method)}</td><td>{payment.reference}</td><td>{payment.notes ?? '—'}</td><td><strong>{money(payment.amount, payment.currency || currency)}</strong></td></tr>)}</tbody></table></div> : <Empty title="No payments recorded" body="Record a payment only when the Supplier has actually been paid." />}
+      {summary.payments.length ? <div className="table-wrap"><table><thead><tr><th>Date</th><th>Method</th><th>Reference</th><th>Notes</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead><tbody>{summary.payments.map((payment) => <tr key={payment.id} className={payment.reversed ? 'reversed-payment-row' : ''}><td>{dateLabel(payment.paymentDate)}</td><td>{methodLabel(payment.method)}</td><td>{payment.reference}</td><td>{payment.notes ?? '—'}</td><td><strong>{money(payment.amount, payment.currency || currency)}</strong></td><td>{payment.reversed ? <span className="status-pill bad">Reversed</span> : <span className="status-pill good">Recorded</span>}{payment.reversed && payment.reversalReason ? <div className="reversal-note">{payment.reversalReason}{payment.reversedAt ? ` · ${dateTime(payment.reversedAt)}` : ''}</div> : null}</td><td>{payment.reversed ? '—' : reversingPaymentId === payment.id ? <div className="reversal-editor"><textarea rows={2} value={reversalReason} onChange={(event) => setReversalReason(event.target.value)} placeholder="Reason for reversal" /><div><button className="secondary-button compact-button" disabled={busy} onClick={() => { setReversingPaymentId(''); setReversalReason(''); }}>Cancel</button><button className="danger-button compact-button" disabled={busy || !reversalReason.trim()} onClick={() => void reversePayment(payment.id)}>{busy ? 'Reversing' : 'Confirm reversal'}</button></div></div> : <button className="text-button danger-text" disabled={busy} onClick={() => { setReversingPaymentId(payment.id); setReversalReason(''); }}>Reverse payment</button>}</td></tr>)}</tbody></table></div> : <Empty title="No payments recorded" body="Record a payment only when the Supplier has actually been paid." />}
+      <p className="muted finance-audit-note">Recorded Supplier payments are never edited or deleted. If an entry was made in error, use Reverse payment with a reason so the original evidence remains visible.</p>
     </article> : null}
   </div>;
 }
@@ -237,6 +282,7 @@ function parseSummary(value: unknown): PaymentSummary {
     payments: rows(row.payments).map((payment) => ({
       id: text(payment.id), amount: numberValue(payment.amount), currency: text(payment.currency), method: text(payment.method),
       reference: text(payment.reference), paymentDate: text(payment.paymentDate), notes: optionalText(payment.notes), createdAt: text(payment.createdAt),
+      reversed: payment.reversed === true, reversalId: optionalText(payment.reversalId), reversalReason: optionalText(payment.reversalReason), reversedAt: optionalText(payment.reversedAt),
     })).filter((payment) => payment.id),
   };
 }
@@ -248,6 +294,7 @@ function optionalText(value: unknown): string | null { const clean = text(value)
 function today(): string { return new Date().toISOString().slice(0,10); }
 function money(value: number, currency: string): string { return new Intl.NumberFormat('en-NG', { style: 'currency', currency: currency || 'NGN', maximumFractionDigits: 2 }).format(value); }
 function dateLabel(value: string): string { const date = new Date(`${value}T00:00:00`); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium' }).format(date); }
+function dateTime(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(date); }
 function methodLabel(value: string): string { return value.replace(/_/g,' ').replace(/\b\w/g,(letter) => letter.toUpperCase()); }
 function Metric({ label, value }: { label: string; value: string }) { return <article className="metric-card"><span>{label}</span><strong>{value}</strong></article>; }
 function Empty({ title, body }: { title: string; body: string }) { return <div className="empty-state"><strong>{title}</strong><p>{body}</p></div>; }
