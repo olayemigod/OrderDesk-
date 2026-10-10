@@ -12,6 +12,10 @@ const whatsapp = readFileSync(resolve(appRoot, 'src/WhatsAppManagement.tsx'), 'u
 const devices = readFileSync(resolve(appRoot, 'src/DevicesPrintersManagement.tsx'), 'utf8');
 const reports = readFileSync(resolve(appRoot, 'src/ReportCenter.tsx'), 'utf8');
 const settings = readFileSync(resolve(appRoot, 'src/SettingsManagement.tsx'), 'utf8');
+const purchasing = readFileSync(resolve(appRoot, 'src/PurchasingManagement.tsx'), 'utf8');
+const purchasingOperations = readFileSync(resolve(appRoot, 'src/PurchasingOperationsManagement.tsx'), 'utf8');
+const supplierPayments = readFileSync(resolve(appRoot, 'src/SupplierPaymentManagement.tsx'), 'utf8');
+const supplierPaymentsCenter = readFileSync(resolve(appRoot, 'src/SupplierPaymentsCenter.tsx'), 'utf8');
 const vercel = readFileSync(resolve(appRoot, 'vercel.json'), 'utf8');
 const failures = [];
 
@@ -19,7 +23,7 @@ function requireValue(condition, message) {
   if (!condition) failures.push(message);
 }
 
-const browserSource = `${supabaseClient}\n${main}\n${app}\n${management}\n${products}\n${team}\n${whatsapp}\n${devices}\n${reports}\n${settings}`;
+const browserSource = `${supabaseClient}\n${main}\n${app}\n${management}\n${products}\n${team}\n${whatsapp}\n${devices}\n${reports}\n${settings}\n${purchasing}\n${purchasingOperations}\n${supplierPayments}\n${supplierPaymentsCenter}`;
 requireValue(
   !browserSource.includes('SERVICE_ROLE') &&
     !browserSource.includes('SUPABASE_SECRET') &&
@@ -214,6 +218,40 @@ requireValue(
     !settings.includes('credentials_ciphertext') &&
     !settings.includes('credentials_iv'),
   'Gateway credentials must be write-only browser inputs sent to the encrypted payment-settings service.',
+);
+
+requireValue(
+  purchasing.includes("import PurchasingOperationsManagement from './PurchasingOperationsManagement'") &&
+    purchasing.includes("import SupplierPaymentsCenter from './SupplierPaymentsCenter'") &&
+    purchasingOperations.includes("rpc('save_sellertray_supplier'") &&
+    purchasingOperations.includes("rpc('save_sellertray_purchase_order'") &&
+    purchasingOperations.includes("rpc('place_sellertray_purchase_order'") &&
+    supplierPayments.includes("rpc('get_sellertray_purchase_payment_summary'") &&
+    supplierPayments.includes("rpc('record_sellertray_supplier_payment'") &&
+    supplierPayments.includes("rpc('reverse_sellertray_supplier_payment'") &&
+    supplierPaymentsCenter.includes("rpc('get_sellertray_supplier_outstanding_summary'"),
+  'Purchasing must use governed Supplier, Purchase Order and supplier payment commands.',
+);
+
+requireValue(
+  !browserSource.includes("from('sellertray_suppliers').insert") &&
+    !browserSource.includes("from('sellertray_suppliers').update") &&
+    !browserSource.includes("from('sellertray_suppliers').delete") &&
+    !browserSource.includes("from('sellertray_purchase_orders').insert") &&
+    !browserSource.includes("from('sellertray_purchase_orders').update") &&
+    !browserSource.includes("from('sellertray_purchase_orders').delete") &&
+    !browserSource.includes("from('sellertray_purchase_order_items').insert") &&
+    !browserSource.includes("from('sellertray_purchase_order_items').update") &&
+    !browserSource.includes("from('sellertray_purchase_order_items').delete") &&
+    !browserSource.includes("from('sellertray_supplier_payments')") &&
+    !browserSource.includes("from('sellertray_supplier_payment_reversals')"),
+  'Merchant Web must not bypass purchasing or supplier-payment governance with raw browser writes/reads.',
+);
+
+requireValue(
+  supplierPayments.includes('Cash entries here do not change a cashier drawer or accounting ledger.') &&
+    supplierPaymentsCenter.includes('They do not create accounting entries or change cashier drawer balances.'),
+  'Supplier payment surfaces must state the non-accounting and non-cash-drawer boundary.',
 );
 
 requireValue(
