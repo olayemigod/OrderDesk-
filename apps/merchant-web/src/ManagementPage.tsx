@@ -3,6 +3,7 @@ import DevicesPrintersManagement from './DevicesPrintersManagement';
 import ProductsManagement from './ProductsManagement';
 import PurchasingManagement from './PurchasingManagement';
 import SettingsManagement from './SettingsManagement';
+import SupplierFinanceManagement from './SupplierFinanceManagement';
 import TeamBranchesManagement from './TeamBranchesManagement';
 import { errorMessage, supabase } from './supabase';
 
@@ -27,7 +28,7 @@ export default function ManagementPage({
 }
 
 function CatalogueAndPurchasing({ tenantId, currency }: { tenantId: string; currency: string }) {
-  const [section, setSection] = useState<'products' | 'purchasing'>('products');
+  const [section, setSection] = useState<'products' | 'purchasing' | 'supplier_balances'>('products');
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchId, setBranchId] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -57,13 +58,14 @@ function CatalogueAndPurchasing({ tenantId, currency }: { tenantId: string; curr
       <div className="segmented-control">
         <button className={section === 'products' ? 'active' : ''} onClick={() => setSection('products')}>Products & Pricing</button>
         <button className={section === 'purchasing' ? 'active' : ''} onClick={() => setSection('purchasing')}>Purchasing</button>
+        <button className={section === 'supplier_balances' ? 'active' : ''} onClick={() => setSection('supplier_balances')}>Supplier Balances</button>
       </div>
       {section === 'purchasing' && branches.length ? <label className="select-field purchase-branch-select"><span>Purchase Branch</span><select value={branch?.id ?? ''} onChange={(event) => setBranchId(event.target.value)}>{branches.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label> : null}
     </div>
     {error ? <div className="error-banner compact">{error}</div> : null}
-    {section === 'products'
-      ? <ProductsManagement tenantId={tenantId} currency={currency} />
-      : <PurchasingManagement tenantId={tenantId} branchId={branch?.id ?? ''} branchName={branch?.name ?? ''} currency={currency} />}
+    {section === 'products' ? <ProductsManagement tenantId={tenantId} currency={currency} /> : null}
+    {section === 'purchasing' ? <PurchasingManagement tenantId={tenantId} branchId={branch?.id ?? ''} branchName={branch?.name ?? ''} currency={currency} /> : null}
+    {section === 'supplier_balances' ? <SupplierFinanceManagement tenantId={tenantId} currency={currency} /> : null}
   </div>;
 }
 
