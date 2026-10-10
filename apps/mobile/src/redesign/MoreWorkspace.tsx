@@ -8,6 +8,7 @@ import type { CashShift } from '../data/cashShiftRepository';
 import type { CommerceBranch } from '../data/commerceRepository';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
+import { AiBriefWorkspace } from './AiBriefWorkspace';
 import { CashShiftWorkspace } from './CashShiftWorkspace';
 import { PrinterWorkspace } from './PrinterWorkspace';
 import { WhatsAppRuntimeWorkspace } from './WhatsAppRuntimeWorkspace';
@@ -38,11 +39,14 @@ export function MoreWorkspace({
   const [cashOpen, setCashOpen] = useState(false);
   const [printerOpen, setPrinterOpen] = useState(false);
   const [whatsappOpen, setWhatsappOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const canUseAiBrief = business.role === 'owner' || business.role === 'manager';
 
   useEffect(() => {
     if (cashRouteKey > 0) {
       setPrinterOpen(false);
       setWhatsappOpen(false);
+      setAiOpen(false);
       setCashOpen(true);
     }
   }, [cashRouteKey]);
@@ -51,6 +55,7 @@ export function MoreWorkspace({
     if (whatsappRouteKey > 0) {
       setCashOpen(false);
       setPrinterOpen(false);
+      setAiOpen(false);
       setWhatsappOpen(true);
     }
   }, [whatsappRouteKey]);
@@ -59,6 +64,7 @@ export function MoreWorkspace({
     setCashOpen(false);
     setPrinterOpen(false);
     setWhatsappOpen(false);
+    setAiOpen(false);
   }, [business.id, branch.id]);
 
   if (cashOpen) {
@@ -92,6 +98,10 @@ export function MoreWorkspace({
         onOpenOrders={onOpenOrders}
       />
     );
+  }
+
+  if (aiOpen && canUseAiBrief) {
+    return <AiBriefWorkspace tenantId={business.id} onClose={() => setAiOpen(false)} />;
   }
 
   return (
@@ -144,6 +154,24 @@ export function MoreWorkspace({
         </View>
         <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
       </Pressable>
+
+      {canUseAiBrief ? (
+        <Pressable
+          onPress={() => setAiOpen(true)}
+          style={({ pressed }) => [styles.operationCard, dark && darkStyles.card, pressed && styles.pressed]}
+        >
+          <View style={[styles.operationIcon, styles.operationIconActive]}>
+            <Ionicons name="sparkles-outline" size={23} color={theme.colors.greenDark} />
+          </View>
+          <View style={styles.operationCopy}>
+            <Text style={[styles.operationTitle, dark && darkStyles.titleText]}>AI Brief</Text>
+            <Text style={[styles.operationText, dark && darkStyles.bodyText]}>
+              Get a business-wide summary, attention signals and source-backed answers from SellerTray reports.
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
+        </Pressable>
+      ) : null}
 
       <Pressable
         onPress={() => setPrinterOpen(true)}
