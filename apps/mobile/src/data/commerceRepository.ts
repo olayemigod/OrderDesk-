@@ -42,6 +42,7 @@ export type CreatePosDraftInput = {
   customerName?: string | null;
   customerPhone?: string | null;
   note?: string | null;
+  requestId?: string | null;
   items: PosDraftLine[];
 };
 
@@ -82,6 +83,8 @@ type ProductRow = {
     is_default_purchase: boolean;
   }> | null;
 };
+
+const pendingPosDraftRequestIds = new Map<string, string>();
 
 export async function loadAccessibleBranches(tenantId: string): Promise<CommerceBranch[]> {
   if (!tenantId) return [];
@@ -172,23 +175,32 @@ export async function createPosDraft(input: CreatePosDraftInput): Promise<string
   if (!input.branchId) throw new Error('Branch is required.');
   if (input.items.length === 0) throw new Error('Add at least one product.');
 
+  const body = {
+    mode: 'pos' as const,
+    tenantId: input.tenantId,
+    branchId: input.branchId,
+    customerName: cleanOptional(input.customerName),
+    customerPhone: cleanOptional(input.customerPhone),
+    note: cleanOptional(input.note),
+    items: input.items.map((item) => ({
+      catalogItemId: item.catalogItemId,
+      uomId: item.uomId,
+      quantity: item.quantity,
+    })),
+  };
+  const retryKey = JSON.stringify(body);
+  const requestId = input.requestId
+    ?? pendingPosDraftRequestIds.get(retryKey)
+    ?? createSellerTrayRequestId();
+  if (!input.requestId) pendingPosDraftRequestIds.set(retryKey, requestId);
+
   const { data, error } = await supabase.functions.invoke('merchant-order', {
-    body: {
-      mode: 'pos',
-      tenantId: input.tenantId,
-      branchId: input.branchId,
-      customerName: cleanOptional(input.customerName),
-      customerPhone: cleanOptional(input.customerPhone),
-      note: cleanOptional(input.note),
-      items: input.items.map((item) => ({
-        catalogItemId: item.catalogItemId,
-        uomId: item.uomId,
-        quantity: item.quantity,
-      })),
-    },
+    body: { ...body, requestId },
   });
 
-  if (error) throw new Error(await functionErrorMessage(error, 'Unable to prepare this sale.'));
+  if (error) {
+    throw new Error(await functionErrorMessage(error, 'Unable to prepare this sale.'));
+  }
 
   const orderId =
     data && typeof data === 'object' && 'orderId' in data && typeof data.orderId === 'string'
@@ -196,6 +208,7 @@ export async function createPosDraft(input: CreatePosDraftInput): Promise<string
       : null;
 
   if (!orderId) throw new Error('SellerTray returned an invalid sale reference.');
+  if (!input.requestId) pendingPosDraftRequestIds.delete(retryKey);
   return orderId;
 }
 
@@ -221,6 +234,32 @@ export async function completePosCashSale(
   }
 
   return data;
+}
+
+export function createSellerTrayRequestId(): string {
+  const runtimeCrypto = (globalThis as typeof globalThis & {
+    crypto?: {
+      randomUUID?: () => string;
+      getRandomValues?: (array: Uint8Array) => Uint8Array;
+    };
+  }).crypto;
+  const generated = runtimeCrypto?.randomUUID?.();
+  if (generated && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(generated)) {
+    return generated;
+  }
+
+  const bytes = new Uint8Array(16);
+  if (runtimeCrypto?.getRandomValues) {
+    runtimeCrypto.getRandomValues(bytes);
+  } else {
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = Math.floor(Math.random() * 256);
+    }
+  }
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 async function functionErrorMessage(error: unknown, fallback: string): Promise<string> {
