@@ -1,0 +1,79 @@
+name: One-time wire offline catalogue
+
+on:
+  push:
+    branches:
+      - feat/sellertray-merchant-web-v1
+    paths:
+      - .github/workflows/one-time-wire-offline-catalogue.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/sellertray-merchant-web-v1
+          fetch-depth: 0
+      - name: Wire resilient catalogue load
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('apps/mobile/src/redesign/SellWorkspace.tsx')
+          text = path.read_text()
+
+          replacements = [
+            (
+              "  createPosDraft,\n  loadCommerceProducts,\n  type CommerceBranch,",
+              "  createPosDraft,\n  type CommerceBranch,",
+            ),
+            (
+              "} from '../data/commerceRepository';\nimport { loadBranchStock, type BranchStockRow } from '../data/inventoryRepository';",
+              "} from '../data/commerceRepository';\nimport { loadBranchStock, type BranchStockRow } from '../data/inventoryRepository';\nimport { loadCommerceProductsResilient } from '../data/offlineCommerceCache';",
+            ),
+            (
+              "  const [error, setError] = useState<string | null>(null);\n  const [stockRows, setStockRows] = useState<BranchStockRow[]>([]);",
+              "  const [error, setError] = useState<string | null>(null);\n  const [productSource, setProductSource] = useState<'live' | 'cache'>('live');\n  const [productCachedAt, setProductCachedAt] = useState<string | null>(null);\n  const [stockRows, setStockRows] = useState<BranchStockRow[]>([]);",
+            ),
+            (
+              "    setLoading(true);\n    setError(null);\n    void loadCommerceProducts(tenantId)\n      .then((rows) => {\n        if (!active) return;\n        setProducts(rows);\n      })",
+              "    setLoading(true);\n    setError(null);\n    setProductSource('live');\n    setProductCachedAt(null);\n    void loadCommerceProductsResilient(tenantId)\n      .then((result) => {\n        if (!active) return;\n        setProducts(result.products);\n        setProductSource(result.source);\n        setProductCachedAt(result.cachedAt);\n      })",
+            ),
+            (
+              "      </View>\n\n      <View style={[styles.searchBox, dark && darkStyles.input, checkoutLocked && styles.lockedControl]}>",
+              "      </View>\n\n      {productSource === 'cache' ? (\n        <View style={[styles.cacheCard, dark && darkStyles.cacheCard]}>\n          <Ionicons name=\"cloud-offline-outline\" size={20} color={theme.colors.info} />\n          <View style={styles.cacheCopy}>\n            <Text style={[styles.cacheTitle, dark && darkStyles.titleText]}>Cached catalogue</Text>\n            <Text style={[styles.cacheText, dark && darkStyles.bodyText]}>\n              Showing products and prices saved {formatCachedCatalogueTime(productCachedAt)}. Live Branch stock is still required before selling.\n            </Text>\n          </View>\n        </View>\n      ) : null}\n\n      <View style={[styles.searchBox, dark && darkStyles.input, checkoutLocked && styles.lockedControl]}>",
+            ),
+            (
+              "function formatQuantity(value: number): string {\n  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(3)));\n}\n\nconst styles = StyleSheet.create({",
+              "function formatQuantity(value: number): string {\n  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(3)));\n}\n\nfunction formatCachedCatalogueTime(value: string | null): string {\n  if (!value) return 'recently';\n  const date = new Date(value);\n  if (Number.isNaN(date.getTime())) return 'recently';\n  return date.toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' });\n}\n\nconst styles = StyleSheet.create({",
+            ),
+            (
+              "  subtitle: { color: theme.colors.slate, fontSize: 14, lineHeight: 20 },\n  searchBox:",
+              "  subtitle: { color: theme.colors.slate, fontSize: 14, lineHeight: 20 },\n  cacheCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#B2DDFF', backgroundColor: theme.colors.infoSoft, padding: 11, flexDirection: 'row', alignItems: 'flex-start', gap: 8 },\n  cacheCopy: { flex: 1, gap: 2 },\n  cacheTitle: { color: theme.colors.navy, fontSize: 12, fontWeight: '900' },\n  cacheText: { color: theme.colors.slate, fontSize: 11, lineHeight: 17 },\n  searchBox:",
+            ),
+            (
+              "const darkStyles = StyleSheet.create({\n  card:",
+              "const darkStyles = StyleSheet.create({\n  cacheCard: { backgroundColor: '#102A43', borderColor: '#175CD3' },\n  card:",
+            ),
+          ]
+
+          for old, new in replacements:
+            count = text.count(old)
+            if count != 1:
+              raise SystemExit(f'Expected exactly one match, found {count}: {old[:80]!r}')
+            text = text.replace(old, new, 1)
+
+          path.write_text(text)
+          PY
+      - name: Commit bounded wiring
+        run: |
+          git config user.name "sellertray-agent"
+          git config user.email "sellertray-agent@users.noreply.github.com"
+          git add apps/mobile/src/redesign/SellWorkspace.tsx
+          git diff --cached --check
+          git commit -m "Wire cached catalogue into Sell"
+          git push origin HEAD:feat/sellertray-merchant-web-v1
