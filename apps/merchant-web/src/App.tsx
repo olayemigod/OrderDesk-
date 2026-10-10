@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import ProductsManagement from './ProductsManagement';
+import ManagementPage from './ManagementPage';
 import { errorMessage, numberValue, supabase } from './supabase';
 
 type MerchantRole = 'owner' | 'manager' | 'staff';
@@ -239,10 +239,7 @@ export default function App() {
       {page === 'cash' && <Cash business={business} branch={branch} rows={workspace.shifts} />}
       {page === 'whatsapp' && <WhatsApp business={business} />}
       {page === 'reports' && <Reports business={business} report={workspace.report} />}
-      {page === 'products' && <ProductsManagement tenantId={business.id} currency={business.currency} />}
-      {page === 'team' && <Placeholder title="Team & Branches" body="Manage Branches, staff assignments and capabilities. SellerTray continues to enforce Branch authority on the server." />}
-      {page === 'devices' && <Placeholder title="Devices & Printers" body="Review registers, receipt printers and print-job history without changing completed sales." />}
-      {page === 'settings' && <Placeholder title="Settings" body="Business profile, payments, WhatsApp configuration and merchant preferences will live here." />}
+      {(page === 'products' || page === 'team' || page === 'devices' || page === 'settings') && <ManagementPage page={page} tenantId={business.id} currency={business.currency} onBranchesChanged={refresh} />}
     </main>
   </div>;
 }
