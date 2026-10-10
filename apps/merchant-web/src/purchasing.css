@@ -26,7 +26,8 @@
 .purchase-editor,
 .purchase-detail,
 .receive-panel,
-.receipt-history {
+.receipt-history,
+.supplier-payment-panel {
   display: grid;
   gap: 18px;
 }
@@ -102,6 +103,14 @@
   cursor: pointer;
 }
 
+.supplier-row.active,
+.purchase-order-row.active {
+  padding-inline: 12px;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+
 .supplier-row > div:first-child,
 .purchase-order-row > div:first-child,
 .purchase-order-meta {
@@ -111,13 +120,6 @@
 
 .purchase-order-meta {
   justify-items: end;
-}
-
-.purchase-order-row.active {
-  padding-inline: 12px;
-  border: 1px solid var(--accent);
-  border-radius: 12px;
-  background: var(--surface-soft);
 }
 
 .count-badge {
@@ -188,6 +190,38 @@
   padding: 7px 10px;
 }
 
+.supplier-balance-grid,
+.supplier-payment-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.supplier-payment-summary {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+
+.supplier-payment-summary span {
+  display: grid;
+  gap: 5px;
+}
+
+.supplier-payment-summary small {
+  color: var(--muted);
+}
+
+.info-banner {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 @media (max-width: 1100px) {
   .purchase-line {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -205,7 +239,9 @@
   }
 
   .purchase-line,
-  .receive-grid {
+  .receive-grid,
+  .supplier-balance-grid,
+  .supplier-payment-summary {
     grid-template-columns: 1fr;
   }
 
