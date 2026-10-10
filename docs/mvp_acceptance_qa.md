@@ -9,9 +9,13 @@ This checklist is the release acceptance boundary for the current SellerTray MVP
 - Merchant Web stacked PR: #10
 - Validated Android QA build commit: `b2b37bd9842458dc37efe9346ef00031821fa23c`
 - QA artifact: `sellertray-qa-b2b37bd9842458dc37efe9346ef00031821fa23c`
-- Artifact SHA-256: `5776c7b6dc1f92b7b10aa267ab0a2009f97a8fe18f8e073ba799fa1f92dfd774`
+- APK SHA-256: `6cc8aacf51d27f1ea87ad60857bfe70e9b79ace5068d01cb013d8c9a04175300`
+- GitHub Actions artifact/archive digest: `5776c7b6dc1f92b7b10aa267ab0a2009f97a8fe18f8e073ba799fa1f92dfd774`
+- APK size: `74,543,807` bytes
 - Android package: `com.orderdesk.app`
 - Android versionCode: `18`
+
+The APK-specific hash above is taken from the uploaded `.sha256` sidecar and independently recalculated from the downloaded APK. The GitHub Actions artifact digest is retained separately because it represents the uploaded artifact archive, not the APK file itself.
 
 A later Merchant Web-only CI commit does not change the validated mobile APK bytes.
 
