@@ -1,0 +1,40 @@
+name: One-time Purchasing Fixture Repair
+
+on:
+  push:
+    branches:
+      - feat/sellertray-merchant-web-v1
+    paths:
+      - .github/workflows/purchasing-fixture-repair-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/sellertray-merchant-web-v1
+          fetch-depth: 0
+      - name: Correct Purchase UOM fixture
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('supabase/tests/sellertray_purchasing_foundation.test.sql')
+          text = path.read_text()
+          old = """insert into public.catalog_items(id,tenant_id,name,sku,price_ngn,is_active,stock_uom,allow_fractional_stock)\nselect product_id,tenant_id,'Purchase Test Drink','PUR-DRINK',150,true,'Bottle',false\nfrom sellertray_purchase_fixture;\nwith u as ("""
+          new = """insert into public.catalog_items(id,tenant_id,name,sku,price_ngn,is_active,stock_uom,allow_fractional_stock)\nselect product_id,tenant_id,'Purchase Test Drink','PUR-DRINK',150,true,'Bottle',false\nfrom sellertray_purchase_fixture;\n\n-- Product creation bootstraps Stock UOM as the initial Purchase UOM. This fixture\n-- deliberately makes Pack the Purchase UOM before placing the PO.\nupdate public.catalog_item_uoms u\nset is_default_purchase=false\nwhere u.tenant_id=(select tenant_id from sellertray_purchase_fixture)\n  and u.catalog_item_id=(select product_id from sellertray_purchase_fixture)\n  and u.is_default_purchase=true;\n\nwith u as ("""
+          if text.count(old) != 1:
+              raise SystemExit(f'Expected one fixture match, found {text.count(old)}')
+          path.write_text(text.replace(old, new))
+          PY
+          rm .github/workflows/purchasing-fixture-repair-once.yml
+          git config user.name "sellertray-automation"
+          git config user.email "sellertray-automation@users.noreply.github.com"
+          git add supabase/tests/sellertray_purchasing_foundation.test.sql .github/workflows/purchasing-fixture-repair-once.yml
+          git diff --cached --check
+          git commit -m "Fix Purchasing default UOM fixture"
+          git push origin HEAD:feat/sellertray-merchant-web-v1
