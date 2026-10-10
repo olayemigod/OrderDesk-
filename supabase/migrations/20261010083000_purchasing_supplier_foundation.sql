@@ -162,7 +162,7 @@ create table public.purchase_receipt_items (
     foreign key (tenant_id,inventory_movement_id)
     references public.inventory_movements(tenant_id,id)
     on delete restrict,
-  constraint purchase_receipt_items_stock_quantity_check
+  constraint purchase_receipt_items_conversion_check
     check (round(stock_quantity::numeric,6)=round((source_quantity*conversion_factor)::numeric,6))
 );
 
