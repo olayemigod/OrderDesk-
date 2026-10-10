@@ -1,0 +1,51 @@
+name: Merchant Web CI
+
+on:
+  push:
+    branches:
+      - feat/sellertray-merchant-web-v1
+    paths:
+      - 'apps/merchant-web/**'
+      - '.github/workflows/merchant-web-ci.yml'
+  pull_request:
+    paths:
+      - 'apps/merchant-web/**'
+      - '.github/workflows/merchant-web-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/merchant-web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Security preflight
+        run: npm run preflight
+      - name: Production build
+        run: npm run build
+
+  dependency-audit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/merchant-web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
