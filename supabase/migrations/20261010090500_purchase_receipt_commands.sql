@@ -59,12 +59,16 @@ begin
   where tm.tenant_id=p_tenant_id and tm.user_id=v_user_id;
   if v_role is null then raise exception 'SellerTray business membership required' using errcode='42501'; end if;
 
-  select po,s.name,b.name into v_po,v_supplier_name,v_branch_name
+  select * into v_po
   from public.sellertray_purchase_orders po
-  join public.sellertray_suppliers s on s.tenant_id=po.tenant_id and s.id=po.supplier_id
-  join public.branches b on b.tenant_id=po.tenant_id and b.id=po.branch_id
   where po.tenant_id=p_tenant_id and po.id=p_purchase_order_id;
   if not found then raise exception 'Purchase order not found' using errcode='P0002'; end if;
+
+  select s.name,b.name into v_supplier_name,v_branch_name
+  from public.sellertray_suppliers s
+  join public.branches b on b.tenant_id=p_tenant_id and b.id=v_po.branch_id
+  where s.tenant_id=p_tenant_id and s.id=v_po.supplier_id;
+  if not found then raise exception 'Purchase order supplier or Branch is unavailable' using errcode='P0002'; end if;
 
   if v_role='staff' and (
     v_po.status not in ('ordered','partially_received')
