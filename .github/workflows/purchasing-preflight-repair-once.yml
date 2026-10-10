@@ -1,0 +1,40 @@
+name: One-time Purchasing Preflight Repair
+
+on:
+  push:
+    branches:
+      - feat/sellertray-merchant-web-v1
+    paths:
+      - .github/workflows/purchasing-preflight-repair-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/sellertray-merchant-web-v1
+          fetch-depth: 0
+      - name: Repair exact Purchasing preflight match
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('apps/merchant-web/scripts/security-preflight.mjs')
+          text = path.read_text()
+          old = '    purchasing.includes("rpc(\'submit_sellertray_purchase_order\'") &&'
+          new = '    purchasing.includes("submit_sellertray_purchase_order") &&'
+          if text.count(old) != 1:
+              raise SystemExit(f'Expected one preflight match, found {text.count(old)}')
+          path.write_text(text.replace(old, new))
+          PY
+          rm .github/workflows/purchasing-preflight-repair-once.yml
+          git config user.name "sellertray-automation"
+          git config user.email "sellertray-automation@users.noreply.github.com"
+          git add apps/merchant-web/scripts/security-preflight.mjs .github/workflows/purchasing-preflight-repair-once.yml
+          git diff --cached --check
+          git commit -m "Fix Purchasing preflight command detection"
+          git push origin HEAD:feat/sellertray-merchant-web-v1
