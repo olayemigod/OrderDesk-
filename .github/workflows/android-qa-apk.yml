@@ -6,6 +6,7 @@ on:
       - feat/mvp-foundation
       - feat/sellertray-brand-ui-v1
       - feat/sellertray-mobile-shell-v2
+      - feat/sellertray-merchant-web-v1
     paths:
       - 'apps/mobile/**'
       - '.github/workflows/android-qa-apk.yml'
@@ -28,6 +29,7 @@ jobs:
     env:
       EXPO_PUBLIC_SUPABASE_URL: https://eujxswjspolugrzlsjnn.supabase.co
       EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_NlNRn9grGvfwZ1cYP09OvA_XSHOA-3I
+      EXPO_PUBLIC_SELLERTRAY_MOBILE_REDESIGN: '1'
 
     steps:
       - name: Checkout
@@ -51,6 +53,9 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: SellerTray release preflight
+        run: npm run preflight
 
       - name: Generate Android native project
         run: npx expo prebuild --platform android --clean --no-install
