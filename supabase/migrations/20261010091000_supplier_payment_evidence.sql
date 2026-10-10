@@ -402,7 +402,7 @@ begin
   left join per_purchase pp on pp.supplier_id=s.id
   where s.tenant_id=p_tenant_id
   group by s.id,s.name
-  order by outstanding_amount desc,s.name,s.id;
+  order by 6 desc,s.name,s.id;
 end;
 $$;
 
