@@ -11,6 +11,8 @@ const team = readFileSync(resolve(appRoot, 'src/TeamBranchesManagement.tsx'), 'u
 const whatsapp = readFileSync(resolve(appRoot, 'src/WhatsAppManagement.tsx'), 'utf8');
 const devices = readFileSync(resolve(appRoot, 'src/DevicesPrintersManagement.tsx'), 'utf8');
 const reports = readFileSync(resolve(appRoot, 'src/ReportCenter.tsx'), 'utf8');
+const salesReports = readFileSync(resolve(appRoot, 'src/SalesReportCenter.tsx'), 'utf8');
+const procurementReports = readFileSync(resolve(appRoot, 'src/ProcurementReportCenter.tsx'), 'utf8');
 const settings = readFileSync(resolve(appRoot, 'src/SettingsManagement.tsx'), 'utf8');
 const purchasing = readFileSync(resolve(appRoot, 'src/PurchasingManagement.tsx'), 'utf8');
 const purchasingOperations = readFileSync(resolve(appRoot, 'src/PurchasingOperationsManagement.tsx'), 'utf8');
@@ -23,7 +25,7 @@ function requireValue(condition, message) {
   if (!condition) failures.push(message);
 }
 
-const browserSource = `${supabaseClient}\n${main}\n${app}\n${management}\n${products}\n${team}\n${whatsapp}\n${devices}\n${reports}\n${settings}\n${purchasing}\n${purchasingOperations}\n${supplierPayments}\n${supplierPaymentsCenter}`;
+const browserSource = `${supabaseClient}\n${main}\n${app}\n${management}\n${products}\n${team}\n${whatsapp}\n${devices}\n${reports}\n${salesReports}\n${procurementReports}\n${settings}\n${purchasing}\n${purchasingOperations}\n${supplierPayments}\n${supplierPaymentsCenter}`;
 requireValue(
   !browserSource.includes('SERVICE_ROLE') &&
     !browserSource.includes('SUPABASE_SECRET') &&
@@ -164,18 +166,43 @@ requireValue(
 requireValue(
   app.includes("import ReportCenter from './ReportCenter'") &&
     app.includes('<ReportCenter tenantId={business.id} currency={business.currency}') &&
-    reports.includes("rpc('sellertray_report_center'") &&
-    reports.includes('Branch comparison') &&
-    reports.includes('Payment methods') &&
-    reports.includes('Top customers'),
-  'Report Center must use the shared server-side reporting read model for management drill-down.',
+    reports.includes("import SalesReportCenter from './SalesReportCenter'") &&
+    reports.includes("import ProcurementReportCenter from './ProcurementReportCenter'") &&
+    reports.includes('Sales & Operations') &&
+    reports.includes('Purchasing'),
+  'Report Center must expose separate Sales & Operations and Purchasing views through one management surface.',
 );
 
 requireValue(
-  !reports.includes("from('orders')") &&
-    !reports.includes("from('order_payments')") &&
-    !reports.includes("from('sellertray_cash_shifts')"),
-  'Report Center must not reproduce reporting business calculations with raw browser queries.',
+  salesReports.includes("rpc('sellertray_report_center'") &&
+    salesReports.includes('Branch comparison') &&
+    salesReports.includes('Payment methods') &&
+    salesReports.includes('Top customers') &&
+    procurementReports.includes("rpc('sellertray_report_center'") &&
+    procurementReports.includes('Procurement by Branch') &&
+    procurementReports.includes('Supplier Outstanding') &&
+    procurementReports.includes('procurementSummary') &&
+    procurementReports.includes('branchProcurement') &&
+    procurementReports.includes('purchaseStatus') &&
+    procurementReports.includes('supplierOutstanding'),
+  'Both Report Center views must consume the shared sellertray_report_center server read model.',
+);
+
+requireValue(
+  !salesReports.includes("from('orders')") &&
+    !salesReports.includes("from('order_payments')") &&
+    !salesReports.includes("from('sellertray_cash_shifts')") &&
+    !procurementReports.includes("from('sellertray_purchase_orders')") &&
+    !procurementReports.includes("from('sellertray_supplier_payments')") &&
+    !procurementReports.includes("from('sellertray_supplier_payment_reversals')") &&
+    !procurementReports.includes("from('sellertray_purchase_receipts')"),
+  'Report Center must not reproduce sales or procurement business calculations with raw browser queries.',
+);
+
+requireValue(
+  procurementReports.includes('Purchase, receiving and supplier-payment activity follow the selected period.') &&
+    procurementReports.includes('Supplier outstanding is the current unpaid balance across placed Purchase Orders.'),
+  'Procurement reporting must distinguish period activity from current supplier outstanding state.',
 );
 
 requireValue(
