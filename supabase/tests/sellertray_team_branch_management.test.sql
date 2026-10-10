@@ -116,7 +116,7 @@ select extensions.ok(
       and lower(pg_get_functiondef(p.oid)) like '%v_had_any_assignment%'
       and lower(pg_get_functiondef(p.oid)) like '%v_default_branch_id%'
       and lower(pg_get_functiondef(p.oid)) like '%not v_target_is_default%'
-      and lower(pg_get_functiondef(p.oid)) like '%v_default_branch_id,true%'
+      and regexp_replace(lower(pg_get_functiondef(p.oid)), '\s+', '', 'g') like '%v_default_branch_id,true%'
   ),
   'first custom Staff Branch grant preserves inherited default-Branch access'
 );
