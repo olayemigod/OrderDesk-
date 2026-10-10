@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import MerchantApp from './MerchantApp';
 import './styles.css';
 import './products.css';
+import './purchasing.css';
 import './team.css';
 import './whatsapp.css';
 import './devices.css';
