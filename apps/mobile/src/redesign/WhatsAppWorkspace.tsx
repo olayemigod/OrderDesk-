@@ -5,12 +5,14 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { WhatsAppConnectionView } from '../components/WhatsAppConnectionView';
 import type { MerchantBusiness } from '../data/businessRepository';
 import type { CommerceBranch } from '../data/commerceRepository';
+import { sendMerchantPaymentOptions } from '../data/orderPaymentsRepository';
 import {
   loadWhatsAppBranchRoute,
   setWhatsAppBranchRoute,
   type WhatsAppBranchRoute,
 } from '../data/whatsappBranchRepository';
 import type { MerchantOrder } from '../domain/order';
+import { orderTotal } from '../domain/order';
 import { useConversationUnreadCounts } from '../hooks/useConversationUnreadCounts';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
@@ -21,7 +23,7 @@ type Props = {
   branches: CommerceBranch[];
   orders: MerchantOrder[];
   onClose: () => void;
-  onOpenOrders: () => void;
+  onOpenOrders: (customerId?: string) => void;
 };
 
 type ConversationRow = {
@@ -32,6 +34,9 @@ type ConversationRow = {
   attentionCount: number;
   latestAt: string;
   latestMessage: string;
+  paymentOrderId: string | null;
+  paymentOrderReference: string | null;
+  paymentOrderAt: string | null;
 };
 
 export function WhatsAppWorkspace({
@@ -49,6 +54,9 @@ export function WhatsAppWorkspace({
   const [routeLoading, setRouteLoading] = useState(true);
   const [routeBusy, setRouteBusy] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
+  const [paymentBusyOrderId, setPaymentBusyOrderId] = useState<string | null>(null);
+  const [paymentNotice, setPaymentNotice] = useState<string | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   const whatsappOrders = useMemo(
     () => orders.filter((order) => order.source === 'whatsapp' && order.branchId === branch.id),
@@ -79,6 +87,12 @@ export function WhatsAppWorkspace({
     };
   }, [business.id]);
 
+  useEffect(() => {
+    setPaymentBusyOrderId(null);
+    setPaymentNotice(null);
+    setPaymentError(null);
+  }, [business.id, branch.id]);
+
   async function routeToCurrentBranch() {
     if (!canManageRoute || !route || routedHere || routeBusy) return;
     setRouteBusy(true);
@@ -101,7 +115,23 @@ export function WhatsAppWorkspace({
         // Opening shared Orders must not be blocked if read-state sync fails.
       }
     }
-    onOpenOrders();
+    onOpenOrders(row.customerId);
+  }
+
+  async function sendPaymentOptions(row: ConversationRow) {
+    if (!row.paymentOrderId || paymentBusyOrderId) return;
+    setPaymentBusyOrderId(row.paymentOrderId);
+    setPaymentNotice(null);
+    setPaymentError(null);
+    try {
+      const result = await sendMerchantPaymentOptions(business.id, row.paymentOrderId);
+      const reference = row.paymentOrderReference ? ` for ${row.paymentOrderReference}` : '';
+      setPaymentNotice(result.message || `Payment options sent${reference}.`);
+    } catch (error) {
+      setPaymentError(error instanceof Error ? error.message : 'Unable to send payment options.');
+    } finally {
+      setPaymentBusyOrderId(null);
+    }
   }
 
   return (
@@ -172,6 +202,13 @@ export function WhatsAppWorkspace({
         </View>
 
         {unread.error ? <Text style={styles.errorText}>{unread.error}</Text> : null}
+        {paymentError ? <Text style={styles.errorText}>{paymentError}</Text> : null}
+        {paymentNotice ? (
+          <View style={[styles.noticeCard, dark && darkStyles.noticeCard]}>
+            <Ionicons name="checkmark-circle-outline" size={17} color={theme.colors.greenDark} />
+            <Text style={styles.noticeText}>{paymentNotice}</Text>
+          </View>
+        ) : null}
 
         {conversations.length === 0 ? (
           <View style={[styles.emptyCard, dark && darkStyles.card]}>
@@ -185,12 +222,9 @@ export function WhatsAppWorkspace({
 
         {conversations.map((row) => {
           const unreadCount = unread.unreadByCustomer.get(row.customerId)?.unreadCount ?? 0;
+          const paymentBusy = row.paymentOrderId !== null && paymentBusyOrderId === row.paymentOrderId;
           return (
-            <Pressable
-              key={row.customerId}
-              onPress={() => void openConversation(row)}
-              style={({ pressed }) => [styles.conversationCard, dark && darkStyles.card, pressed && styles.pressed]}
-            >
+            <View key={row.customerId} style={[styles.conversationCard, dark && darkStyles.card]}>
               <View style={styles.conversationTop}>
                 <View style={styles.avatar}>
                   <Text style={styles.avatarText}>{initials(row.customerName)}</Text>
@@ -204,7 +238,6 @@ export function WhatsAppWorkspace({
                   </View>
                   <Text style={[styles.customerPhone, dark && darkStyles.bodyText]}>{row.customerPhone || 'WhatsApp customer'}</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color={theme.colors.subtle} />
               </View>
 
               <Text style={[styles.messageText, dark && darkStyles.bodyText]} numberOfLines={2}>
@@ -217,11 +250,34 @@ export function WhatsAppWorkspace({
                 </Text>
                 {row.attentionCount > 0 ? (
                   <Text style={styles.attentionText}>{row.attentionCount} need attention</Text>
-                ) : (
-                  <Text style={styles.openText}>Open Orders</Text>
-                )}
+                ) : null}
               </View>
-            </Pressable>
+
+              <View style={styles.actionRow}>
+                <Pressable
+                  onPress={() => void openConversation(row)}
+                  style={({ pressed }) => [styles.secondaryButton, dark && darkStyles.secondaryButton, pressed && styles.pressed]}
+                >
+                  <Ionicons name="receipt-outline" size={16} color={dark ? theme.colors.cloud : theme.colors.navy} />
+                  <Text style={[styles.secondaryButtonText, dark && darkStyles.titleText]}>Open Orders</Text>
+                </Pressable>
+
+                {row.paymentOrderId ? (
+                  <Pressable
+                    disabled={Boolean(paymentBusyOrderId)}
+                    onPress={() => void sendPaymentOptions(row)}
+                    style={({ pressed }) => [styles.paymentButton, (pressed || paymentBusyOrderId) && styles.disabled]}
+                  >
+                    {paymentBusy ? (
+                      <ActivityIndicator size="small" color={theme.colors.white} />
+                    ) : (
+                      <Ionicons name="card-outline" size={16} color={theme.colors.white} />
+                    )}
+                    <Text style={styles.paymentButtonText}>{paymentBusy ? 'Sending…' : 'Send payment'}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
           );
         })}
       </View>
@@ -239,6 +295,7 @@ function groupConversations(orders: MerchantOrder[]): ConversationRow[] {
   for (const order of orders) {
     const existing = grouped.get(order.customerId);
     const needsAttention = order.status === 'needs_review' || order.paymentStatus === 'verification_required' || order.paymentStatus === 'payment_issue';
+    const eligibleForPayment = isPaymentOptionEligible(order);
     if (!existing) {
       grouped.set(order.customerId, {
         customerId: order.customerId,
@@ -248,6 +305,9 @@ function groupConversations(orders: MerchantOrder[]): ConversationRow[] {
         attentionCount: needsAttention ? 1 : 0,
         latestAt: order.receivedAt,
         latestMessage: order.customerMessage,
+        paymentOrderId: eligibleForPayment ? order.id : null,
+        paymentOrderReference: eligibleForPayment ? order.publicOrderId : null,
+        paymentOrderAt: eligibleForPayment ? order.receivedAt : null,
       });
       continue;
     }
@@ -259,10 +319,25 @@ function groupConversations(orders: MerchantOrder[]): ConversationRow[] {
       existing.customerName = order.customerName;
       existing.customerPhone = order.customerPhone;
     }
+    if (
+      eligibleForPayment &&
+      (!existing.paymentOrderAt || new Date(order.receivedAt).getTime() > new Date(existing.paymentOrderAt).getTime())
+    ) {
+      existing.paymentOrderId = order.id;
+      existing.paymentOrderReference = order.publicOrderId;
+      existing.paymentOrderAt = order.receivedAt;
+    }
   }
   return [...grouped.values()].sort(
     (a, b) => new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime(),
   );
+}
+
+function isPaymentOptionEligible(order: MerchantOrder): boolean {
+  if (!['accepted', 'processing', 'ready'].includes(order.status)) return false;
+  if (order.paymentStatus !== 'unpaid') return false;
+  const total = orderTotal(order);
+  return total !== null && total > order.amountPaid;
 }
 
 function initials(name: string): string {
@@ -301,6 +376,8 @@ const styles = StyleSheet.create({
   routeActiveRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   routeActiveText: { color: theme.colors.greenDark, fontSize: 11, fontWeight: '800', flex: 1 },
   errorText: { color: theme.colors.danger, fontSize: 11, lineHeight: 17, fontWeight: '700' },
+  noticeCard: { borderRadius: 12, borderWidth: 1, borderColor: '#ABEFC6', backgroundColor: theme.colors.mintSoft, padding: 9, flexDirection: 'row', alignItems: 'flex-start', gap: 7 },
+  noticeText: { flex: 1, color: theme.colors.greenDark, fontSize: 11, lineHeight: 17, fontWeight: '700' },
   section: { gap: 9 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   sectionLabel: { color: theme.colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 1 },
@@ -323,7 +400,11 @@ const styles = StyleSheet.create({
   conversationFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   metaText: { color: theme.colors.muted, fontSize: 10, flexShrink: 1 },
   attentionText: { color: '#B54708', fontSize: 10, fontWeight: '900' },
-  openText: { color: theme.colors.greenDark, fontSize: 10, fontWeight: '900' },
+  actionRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  secondaryButton: { minHeight: 38, borderRadius: 10, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.cloud, paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  secondaryButtonText: { color: theme.colors.navy, fontSize: 10, fontWeight: '900' },
+  paymentButton: { minHeight: 38, borderRadius: 10, backgroundColor: theme.colors.green, paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  paymentButtonText: { color: theme.colors.white, fontSize: 10, fontWeight: '900' },
   flexOne: { flex: 1, minWidth: 0 },
   pressed: { opacity: 0.76 },
   disabled: { opacity: 0.45 },
@@ -331,6 +412,8 @@ const styles = StyleSheet.create({
 
 const darkStyles = StyleSheet.create({
   card: { backgroundColor: theme.colors.navy, borderColor: '#344054' },
+  noticeCard: { backgroundColor: '#0F3A2A', borderColor: '#067647' },
+  secondaryButton: { backgroundColor: '#162F46', borderColor: '#344054' },
   titleText: { color: theme.colors.cloud },
   bodyText: { color: '#D0D5DD' },
 });
