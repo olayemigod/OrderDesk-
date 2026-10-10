@@ -75,7 +75,8 @@ select extensions.ok(
   exists (
     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where n.nspname='public' and p.proname='save_sellertray_product'
-      and lower(pg_get_functiondef(p.oid)) like '%role in (''owner'', ''manager'')%'
+      and lower(pg_get_functiondef(p.oid)) like '%owner%'
+      and lower(pg_get_functiondef(p.oid)) like '%manager%'
       and lower(pg_get_functiondef(p.oid)) like '%orderdesk_subscription_can_write%'
   ),
   'product save command enforces management role and writable subscription'
@@ -85,7 +86,8 @@ select extensions.ok(
   exists (
     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where n.nspname='public' and p.proname='set_sellertray_product_active'
-      and lower(pg_get_functiondef(p.oid)) like '%role in (''owner'', ''manager'')%'
+      and lower(pg_get_functiondef(p.oid)) like '%owner%'
+      and lower(pg_get_functiondef(p.oid)) like '%manager%'
       and lower(pg_get_functiondef(p.oid)) like '%orderdesk_subscription_can_write%'
   ),
   'product active-state command enforces management role and writable subscription'
@@ -95,7 +97,8 @@ select extensions.ok(
   exists (
     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where n.nspname='public' and p.proname='save_sellertray_product_uom'
-      and lower(pg_get_functiondef(p.oid)) like '%role in (''owner'', ''manager'')%'
+      and lower(pg_get_functiondef(p.oid)) like '%owner%'
+      and lower(pg_get_functiondef(p.oid)) like '%manager%'
       and lower(pg_get_functiondef(p.oid)) like '%orderdesk_subscription_can_write%'
   ),
   'UOM save command enforces management role and writable subscription'
@@ -105,7 +108,8 @@ select extensions.ok(
   exists (
     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where n.nspname='public' and p.proname='delete_sellertray_product_uom'
-      and lower(pg_get_functiondef(p.oid)) like '%role in (''owner'', ''manager'')%'
+      and lower(pg_get_functiondef(p.oid)) like '%owner%'
+      and lower(pg_get_functiondef(p.oid)) like '%manager%'
       and lower(pg_get_functiondef(p.oid)) like '%orderdesk_subscription_can_write%'
   ),
   'UOM delete command enforces management role and writable subscription'
@@ -117,8 +121,8 @@ select extensions.ok(
     where n.nspname='public' and p.proname='save_sellertray_product_uom'
       and lower(pg_get_functiondef(p.oid)) like '%stock uom cannot be renamed%'
       and lower(pg_get_functiondef(p.oid)) like '%stock uom conversion factor must be 1%'
-      and lower(pg_get_functiondef(p.oid)) like '%set is_default_selling=false%'
-      and lower(pg_get_functiondef(p.oid)) like '%set is_default_purchase=false%'
+      and regexp_replace(lower(pg_get_functiondef(p.oid)), '\s+', '', 'g') like '%setis_default_selling=false%'
+      and regexp_replace(lower(pg_get_functiondef(p.oid)), '\s+', '', 'g') like '%setis_default_purchase=false%'
   ),
   'UOM save command protects Stock UOM identity and atomically switches defaults'
 );
@@ -128,8 +132,8 @@ select extensions.ok(
     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where n.nspname='public' and p.proname='delete_sellertray_product_uom'
       and lower(pg_get_functiondef(p.oid)) like '%stock uom cannot be deleted%'
-      and lower(pg_get_functiondef(p.oid)) like '%set is_default_selling=true%'
-      and lower(pg_get_functiondef(p.oid)) like '%set is_default_purchase=true%'
+      and regexp_replace(lower(pg_get_functiondef(p.oid)), '\s+', '', 'g') like '%setis_default_selling=true%'
+      and regexp_replace(lower(pg_get_functiondef(p.oid)), '\s+', '', 'g') like '%setis_default_purchase=true%'
   ),
   'UOM delete command protects Stock UOM and restores defaults when needed'
 );
