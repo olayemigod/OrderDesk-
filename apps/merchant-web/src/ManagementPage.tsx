@@ -13,18 +13,16 @@ export default function ManagementPage({
   tenantId,
   currency,
   onBranchesChanged,
-  onBusinessChanged,
 }: {
   page: ManagementPageId;
   tenantId: string;
   currency: string;
   onBranchesChanged?: () => void | Promise<void>;
-  onBusinessChanged?: () => void | Promise<void>;
 }) {
   if (page === 'products') return <ProductsManagement tenantId={tenantId} currency={currency} />;
   if (page === 'team') return <TeamBranchesManagement tenantId={tenantId} onBranchesChanged={onBranchesChanged} />;
   if (page === 'devices') return <DeviceManagement tenantId={tenantId} />;
-  return <SettingsManagement tenantId={tenantId} onBusinessChanged={onBusinessChanged} />;
+  return <SettingsManagement tenantId={tenantId} />;
 }
 
 function DeviceManagement({ tenantId }: { tenantId: string }) {
