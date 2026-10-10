@@ -1,0 +1,123 @@
+.ai-insights-page {
+  max-width: 1180px;
+}
+
+.ai-question-panel form {
+  display: grid;
+  gap: 18px;
+}
+
+.ai-question-head,
+.ai-submit-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.ai-question-head h3,
+.ai-result-section h4 {
+  margin: 0;
+}
+
+.ai-period {
+  min-width: 180px;
+}
+
+.ai-question-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 112px;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.5;
+}
+
+.ai-question-input:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-color: var(--accent);
+}
+
+.ai-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.ai-suggestion {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-subtle);
+  color: var(--text);
+  padding: 8px 12px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.ai-suggestion:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.ai-suggestion:disabled {
+  cursor: not-allowed;
+  opacity: .6;
+}
+
+.ai-submit-row .muted {
+  max-width: 720px;
+}
+
+.ai-answer-panel {
+  display: grid;
+  gap: 20px;
+}
+
+.ai-answer {
+  margin: 0;
+  font-size: 1.08rem;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.ai-result-section {
+  border-top: 1px solid var(--border);
+  padding-top: 18px;
+}
+
+.ai-result-section ul {
+  margin: 10px 0 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+}
+
+.ai-generated {
+  margin: 0;
+  font-size: .82rem;
+}
+
+.ai-empty {
+  text-align: center;
+  padding: 38px 24px;
+}
+
+@media (max-width: 760px) {
+  .ai-question-head,
+  .ai-submit-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ai-period {
+    width: 100%;
+  }
+
+  .ai-submit-row .primary-button {
+    width: 100%;
+  }
+}
