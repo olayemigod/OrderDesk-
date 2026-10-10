@@ -66,6 +66,42 @@ jobs:
           cd android
           ./gradlew assembleRelease --no-daemon
 
+      - name: Verify QA APK identity, signature, and permissions
+        run: |
+          set -euo pipefail
+          APK='android/app/build/outputs/apk/release/app-release.apk'
+          test -s "$APK"
+          unzip -tq "$APK" >/dev/null
+
+          BUILD_TOOLS_DIR="$(find "${ANDROID_HOME}/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          test -n "$BUILD_TOOLS_DIR"
+          test -x "$BUILD_TOOLS_DIR/apksigner"
+          test -x "$BUILD_TOOLS_DIR/aapt"
+
+          "$BUILD_TOOLS_DIR/apksigner" verify --verbose "$APK"
+
+          EXPECTED_PACKAGE="$(node -p "require('./app.json').expo.android.package")"
+          EXPECTED_VERSION_CODE="$(node -p "require('./app.json').expo.android.versionCode")"
+          BADGING="$("$BUILD_TOOLS_DIR/aapt" dump badging "$APK" | head -n 1)"
+          echo "$BADGING"
+          echo "$BADGING" | grep -F "package: name='${EXPECTED_PACKAGE}'"
+          echo "$BADGING" | grep -F "versionCode='${EXPECTED_VERSION_CODE}'"
+
+          PERMISSIONS="$("$BUILD_TOOLS_DIR/aapt" dump permissions "$APK")"
+          echo "$PERMISSIONS"
+          echo "$PERMISSIONS" | grep -F 'android.permission.BLUETOOTH_CONNECT'
+
+          for forbidden in \
+            android.permission.BLUETOOTH_SCAN \
+            android.permission.ACCESS_COARSE_LOCATION \
+            android.permission.ACCESS_FINE_LOCATION \
+            android.permission.ACCESS_BACKGROUND_LOCATION; do
+            if echo "$PERMISSIONS" | grep -Fq "$forbidden"; then
+              echo "Forbidden QA APK permission present: $forbidden" >&2
+              exit 1
+            fi
+          done
+
       - name: Stage QA APK
         run: |
           mkdir -p qa-artifact
