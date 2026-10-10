@@ -73,11 +73,11 @@ select extensions.ok(
 select extensions.ok(
   exists (
     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-    where n.nspname='public' and p.proname='get_active_sellertray_stock_count'
+    where n.nspname='public' and p.proname='get_sellertray_active_stock_count'
   )
   and not exists (
     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-    where n.nspname='public' and p.proname='get_active_sellertray_stock_count'
+    where n.nspname='public' and p.proname='get_sellertray_active_stock_count'
       and lower(pg_get_functiondef(p.oid)) like '%sellertray_user_can_read_branch%'
   ),
   'active stock-count lookup does not use historical Branch authority'
