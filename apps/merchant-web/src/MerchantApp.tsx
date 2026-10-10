@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import ManagementPage from './ManagementPage';
+import ReportCenter from './ReportCenter';
 import WhatsAppManagement from './WhatsAppManagement';
 import { errorMessage, numberValue, supabase } from './supabase';
 
@@ -392,12 +393,8 @@ function Cash({ business, branch, rows }: { business: Business; branch: Branch |
   </PageTable>;
 }
 
-function Reports({ business, report }: { business: Business; report: Report | null }) {
-  return <div className="page-stack">
-    <Heading eyebrow="Last 30 days" title="Reports" note="This view uses the shared SellerTray reporting read model." />
-    <div className="metric-grid"><Metric label="Orders" value={String(report?.ordersTotal ?? 0)} note={`${report?.completed ?? 0} completed`} /><Metric label="Order value" value={money(report?.orderValue ?? 0, business.currency)} note="Business-wide" /><Metric label="Paid value" value={money(report?.paidValue ?? 0, business.currency)} note={`${report?.awaitingPayment ?? 0} awaiting`} /><Metric label="WhatsApp orders" value={String(report?.whatsappOrders ?? 0)} note="Shared commerce core" /></div>
-    <Placeholder title="Report Center" body="Branch comparison, sales, payments, inventory, cashier, customer and channel reports will use server-side reporting read models rather than duplicated browser calculations." />
-  </div>;
+function Reports({ business }: { business: Business; report: Report | null }) {
+  return <ReportCenter tenantId={business.id} currency={business.currency} />;
 }
 
 function Select({ label, value, onChange, disabled, children }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean; children: ReactNode }) {
@@ -410,7 +407,6 @@ function Table({ headers, children }: { headers: string[]; children: ReactNode }
 function Metric({ label, value, note }: { label: string; value: string; note: string }) { return <article className="metric-card"><span>{label}</span><strong>{value}</strong><small>{note}</small></article>; }
 function Stat({ label, value }: { label: string; value: number }) { return <div className="status-stat"><span>{label}</span><strong>{value}</strong></div>; }
 function Attention({ label, value, onClick }: { label: string; value: number; onClick: () => void }) { return <button className="attention-row" onClick={onClick}><span>{label}</span><strong>{value}</strong></button>; }
-function Placeholder({ title: heading, body }: { title: string; body: string }) { return <article className="panel placeholder-panel"><div className="placeholder-mark">{initials(heading)}</div><div><h3>{heading}</h3><p className="muted">{body}</p></div></article>; }
 function Empty({ title: heading, body }: { title: string; body: string }) { return <div className="empty-state"><strong>{heading}</strong><p>{body}</p></div>; }
 function Pill({ value }: { value: string }) { const text = value.toLowerCase(); const tone = /paid|completed|connected|reviewed|active/.test(text) ? 'good' : /failed|cancel|error|past_due/.test(text) ? 'bad' : 'neutral'; return <span className={`status-pill ${tone}`}>{statusText(value)}</span>; }
 function Status({ title: heading, body, action }: { title: string; body: string; action?: ReactNode }) { return <div className="status-page"><div className="status-card"><div className="brand-mark large">S</div><p className="eyebrow">SellerTray</p><h1>{heading}</h1><p>{body}</p>{action}</div></div>; }
