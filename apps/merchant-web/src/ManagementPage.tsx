@@ -1,3 +1,4 @@
+import DevicesPrintersManagement from './DevicesPrintersManagement';
 import ProductsManagement from './ProductsManagement';
 import TeamBranchesManagement from './TeamBranchesManagement';
 
@@ -7,16 +8,20 @@ export default function ManagementPage({
   page,
   tenantId,
   currency,
+  branchId,
+  branchName,
   onBranchesChanged,
 }: {
   page: ManagementPageId;
   tenantId: string;
   currency: string;
+  branchId: string;
+  branchName: string;
   onBranchesChanged?: () => void | Promise<void>;
 }) {
   if (page === 'products') return <ProductsManagement tenantId={tenantId} currency={currency} />;
   if (page === 'team') return <TeamBranchesManagement tenantId={tenantId} onBranchesChanged={onBranchesChanged} />;
-  if (page === 'devices') return <Placeholder title="Devices & Printers" body="Review registers, receipt printers and print-job history without changing completed sales." />;
+  if (page === 'devices') return <DevicesPrintersManagement tenantId={tenantId} branchId={branchId} branchName={branchName} />;
   return <Placeholder title="Settings" body="Business profile, payments, WhatsApp configuration and merchant preferences will live here." />;
 }
 
