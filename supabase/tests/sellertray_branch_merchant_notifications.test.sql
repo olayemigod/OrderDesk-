@@ -11,16 +11,20 @@ create temp table sellertray_notification_branch_fixture (
   second_branch_id uuid,
   default_message_id uuid not null,
   second_message_id uuid not null,
-  default_notification_id uuid,
-  second_notification_id uuid,
-  business_notification_id uuid,
+  default_notification_id uuid not null,
+  second_notification_id uuid not null,
+  business_notification_id uuid not null,
   staff_cross_branch_mark_rejected boolean not null default false
 ) on commit drop;
 
 insert into sellertray_notification_branch_fixture(
-  tenant_id,owner_user_id,staff_user_id,customer_id,default_message_id,second_message_id
+  tenant_id,owner_user_id,staff_user_id,customer_id,default_message_id,second_message_id,
+  default_notification_id,second_notification_id,business_notification_id
 )
-values(gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid());
+values(
+  gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),
+  gen_random_uuid(),gen_random_uuid(),gen_random_uuid()
+);
 
 insert into auth.users(id,email,aud,role,created_at,updated_at)
 select owner_user_id,'notification-owner-'||substr(owner_user_id::text,1,8)||'@example.com','authenticated','authenticated',now(),now()
@@ -70,34 +74,22 @@ select second_message_id,tenant_id,customer_id,second_branch_id,'wamid.notificat
 from sellertray_notification_branch_fixture;
 
 insert into public.merchant_notifications(
-  tenant_id,event_key,severity,title,body,source_inbound_message_id
+  id,tenant_id,event_key,severity,title,body,source_inbound_message_id
 )
-select tenant_id,'new_whatsapp_message','attention','Default Branch message','Default Branch attention',default_message_id
-from sellertray_notification_branch_fixture
-returning id into temp table sellertray_default_notification_returning;
-
-update sellertray_notification_branch_fixture
-set default_notification_id=(select id from sellertray_default_notification_returning limit 1);
+select default_notification_id,tenant_id,'new_whatsapp_message','attention','Default Branch message','Default Branch attention',default_message_id
+from sellertray_notification_branch_fixture;
 
 insert into public.merchant_notifications(
-  tenant_id,event_key,severity,title,body,source_inbound_message_id
+  id,tenant_id,event_key,severity,title,body,source_inbound_message_id
 )
-select tenant_id,'new_whatsapp_message','attention','Second Branch message','Second Branch attention',second_message_id
-from sellertray_notification_branch_fixture
-returning id into temp table sellertray_second_notification_returning;
-
-update sellertray_notification_branch_fixture
-set second_notification_id=(select id from sellertray_second_notification_returning limit 1);
+select second_notification_id,tenant_id,'new_whatsapp_message','attention','Second Branch message','Second Branch attention',second_message_id
+from sellertray_notification_branch_fixture;
 
 insert into public.merchant_notifications(
-  tenant_id,event_key,severity,title,body
+  id,tenant_id,event_key,severity,title,body
 )
-select tenant_id,'payment_gate_blocked','attention','Business notice','Management attention'
-from sellertray_notification_branch_fixture
-returning id into temp table sellertray_business_notification_returning;
-
-update sellertray_notification_branch_fixture
-set business_notification_id=(select id from sellertray_business_notification_returning limit 1);
+select business_notification_id,tenant_id,'payment_gate_blocked','attention','Business notice','Management attention'
+from sellertray_notification_branch_fixture;
 
 select extensions.ok(
   exists (
