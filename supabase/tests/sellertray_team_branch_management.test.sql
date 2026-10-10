@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(16);
+select extensions.plan(17);
 
 select extensions.is(
   (
@@ -112,9 +112,21 @@ select extensions.ok(
 select extensions.ok(
   exists (
     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='public' and p.proname='set_sellertray_member_branch_access'
+      and lower(pg_get_functiondef(p.oid)) like '%v_had_any_assignment%'
+      and lower(pg_get_functiondef(p.oid)) like '%v_default_branch_id%'
+      and lower(pg_get_functiondef(p.oid)) like '%not v_target_is_default%'
+      and lower(pg_get_functiondef(p.oid)) like '%v_default_branch_id,true%'
+  ),
+  'first custom Staff Branch grant preserves inherited default-Branch access'
+);
+
+select extensions.ok(
+  exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where n.nspname='public' and p.proname='reset_sellertray_member_branch_access'
       and lower(pg_get_functiondef(p.oid)) like '%sellertray_branch_access_events%'
-      and lower(pg_get_functiondef(p.oid)) like '%delete from public.branch_user_access%'
+      and regexp_replace(lower(pg_get_functiondef(p.oid)), '\s+', '', 'g') like '%deletefrompublic.branch_user_access%'
   ),
   'Branch reset records history before restoring default-Branch fallback'
 );
@@ -180,7 +192,7 @@ select extensions.ok(
     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where n.nspname='public' and p.proname='set_sellertray_member_branch_access'
       and lower(pg_get_functiondef(p.oid)) like '%is_active%'
-      and lower(pg_get_functiondef(p.oid)) like '%p_can_operate=false%'
+      and regexp_replace(lower(pg_get_functiondef(p.oid)), '\s+', '', 'g') like '%p_can_operate=false%'
   ),
   'new operating access cannot be granted to an inactive Branch'
 );
