@@ -1,0 +1,161 @@
+.purchasing-workspace .purchase-actions,
+.purchase-row-actions,
+.purchase-submit,
+.purchase-lines-head,
+.purchase-receipt-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.purchasing-workspace .secondary-button.selected {
+  border-color: var(--green);
+  box-shadow: 0 0 0 2px rgba(18,183,106,.10);
+}
+
+.purchase-message {
+  border: 1px solid #abefc6;
+  border-radius: 10px;
+  padding: 11px 13px;
+  color: #087443;
+  background: #ecfdf3;
+  font-size: .84rem;
+}
+:root[data-theme="dark"] .purchase-message {
+  color: #75e0aa;
+  background: #123829;
+  border-color: #246646;
+}
+
+.purchase-split {
+  display: grid;
+  grid-template-columns: minmax(0,1.45fr) minmax(320px,.75fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.purchase-form {
+  display: grid;
+  gap: 14px;
+}
+.purchase-form label,
+.purchase-receive label {
+  display: grid;
+  gap: 6px;
+  color: var(--slate);
+  font-size: .76rem;
+  font-weight: 750;
+}
+.purchase-form input,
+.purchase-form select,
+.purchase-form textarea,
+.purchase-receive input {
+  width: 100%;
+  min-height: 41px;
+  padding: 8px 11px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--navy);
+  background: var(--surface-alt);
+  outline: 0;
+}
+.purchase-form textarea { min-height: 78px; resize: vertical; }
+.purchase-form input:focus,
+.purchase-form select:focus,
+.purchase-form textarea:focus,
+.purchase-receive input:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(18,183,106,.12);
+}
+.purchase-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 12px;
+}
+
+.purchase-lines {
+  display: grid;
+  gap: 10px;
+  padding-top: 4px;
+}
+.purchase-lines-head { justify-content: space-between; }
+.purchase-line {
+  display: grid;
+  grid-template-columns: minmax(180px,1.5fr) minmax(150px,1.1fr) minmax(100px,.6fr) minmax(125px,.8fr) auto;
+  gap: 9px;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface-alt);
+}
+.purchase-submit {
+  justify-content: space-between;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.purchase-submit span,
+.purchase-submit strong { display: block; }
+.purchase-submit strong { margin-top: 4px; font-size: 1.18rem; }
+
+.purchasing-workspace td small,
+.purchase-receipt-row small,
+.purchase-receive-line small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: .7rem;
+}
+.purchase-row-actions { justify-content: flex-end; }
+.purchase-detail-actions { margin-top: 16px; }
+
+.purchase-receive {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface-alt);
+}
+.purchase-receive .purchase-form-grid p { margin: 4px 0 0; color: var(--slate); font-size: .8rem; line-height: 1.45; }
+.purchase-receive-line {
+  grid-template-columns: minmax(0,1fr) 150px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.purchase-receive-line:last-of-type { border-bottom: 0; }
+.purchase-receive-line input { justify-self: end; }
+
+.purchase-receipt-history {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.purchase-receipt-history h3 { font-size: .95rem; }
+.purchase-receipt-row {
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.purchase-receipt-row:last-child { border-bottom: 0; }
+.purchase-receipt-row > div:last-child { text-align: right; }
+.purchase-receipt-row span,
+.purchase-receipt-row strong { display: block; }
+.purchase-receipt-row span { color: var(--muted); font-size: .75rem; margin-bottom: 3px; }
+
+@media (max-width: 1080px) {
+  .purchase-split { grid-template-columns: 1fr; }
+  .purchase-line { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .purchase-line > .text-button { justify-self: start; }
+}
+
+@media (max-width: 680px) {
+  .purchase-form-grid,
+  .purchase-line { grid-template-columns: 1fr; }
+  .purchase-receive-line { grid-template-columns: 1fr; }
+  .purchase-receive-line input { justify-self: stretch; }
+  .purchasing-workspace .section-heading { align-items: flex-start; flex-direction: column; }
+}
