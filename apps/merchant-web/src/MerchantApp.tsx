@@ -7,7 +7,7 @@ import { errorMessage, numberValue, supabase } from './supabase';
 
 type MerchantRole = 'owner' | 'manager' | 'staff';
 type ManagementRole = 'owner' | 'manager';
-type Page = 'overview' | 'orders' | 'inventory' | 'cash' | 'whatsapp' | 'reports' | 'products' | 'team' | 'devices' | 'settings';
+type Page = 'overview' | 'orders' | 'inventory' | 'purchasing' | 'cash' | 'whatsapp' | 'reports' | 'products' | 'team' | 'devices' | 'settings';
 type Business = {
   id: string;
   name: string;
@@ -69,6 +69,7 @@ const NAV: Array<{ id: Page; label: string; section?: string }> = [
   { id: 'overview', label: 'Overview' },
   { id: 'orders', label: 'Orders' },
   { id: 'inventory', label: 'Inventory' },
+  { id: 'purchasing', label: 'Purchasing' },
   { id: 'cash', label: 'Cash & Shifts' },
   { id: 'whatsapp', label: 'WhatsApp' },
   { id: 'reports', label: 'Reports' },
@@ -264,7 +265,7 @@ export default function MerchantApp() {
         {NAV.map((item, index) => <div key={item.id}>
           {item.section ? <p className="nav-section">{item.section}</p> : null}
           <button className={page === item.id ? 'nav-button active' : 'nav-button'} onClick={() => setPage(item.id)}><span>{initials(item.label)}</span>{item.label}</button>
-          {index === 5 ? <div className="nav-divider" /> : null}
+          {index === 6 ? <div className="nav-divider" /> : null}
         </div>)}
       </nav>
       <div className="sidebar-foot"><p>{session.user.email}</p><button className="text-button" onClick={() => void signOut()}>Sign out</button></div>
@@ -295,7 +296,7 @@ export default function MerchantApp() {
       {page === 'cash' && <Cash business={business} branch={branch} rows={workspace.shifts} />}
       {page === 'whatsapp' && <WhatsAppManagement tenantId={business.id} role={managementRole} branches={branches} connectionStatusHint={business.whatsappConnectionStatus} />}
       {page === 'reports' && <Reports business={business} report={workspace.report} />}
-      {(page === 'products' || page === 'team' || page === 'devices' || page === 'settings') && <ManagementPage page={page} tenantId={business.id} currency={business.currency} onBranchesChanged={refresh} />}
+      {(page === 'products' || page === 'purchasing' || page === 'team' || page === 'devices' || page === 'settings') && <ManagementPage page={page} tenantId={business.id} currency={business.currency} branchId={branch?.id ?? ''} branchName={branch?.name ?? 'Branch'} onBranchesChanged={refresh} />}
     </main>
   </div>;
 }
