@@ -7,6 +7,7 @@ const main = readFileSync(resolve(appRoot, 'src/main.tsx'), 'utf8');
 const app = readFileSync(resolve(appRoot, 'src/MerchantApp.tsx'), 'utf8');
 const management = readFileSync(resolve(appRoot, 'src/ManagementPage.tsx'), 'utf8');
 const products = readFileSync(resolve(appRoot, 'src/ProductsManagement.tsx'), 'utf8');
+const purchasing = readFileSync(resolve(appRoot, 'src/PurchasingManagement.tsx'), 'utf8');
 const team = readFileSync(resolve(appRoot, 'src/TeamBranchesManagement.tsx'), 'utf8');
 const whatsapp = readFileSync(resolve(appRoot, 'src/WhatsAppManagement.tsx'), 'utf8');
 const devices = readFileSync(resolve(appRoot, 'src/DevicesPrintersManagement.tsx'), 'utf8');
@@ -19,7 +20,7 @@ function requireValue(condition, message) {
   if (!condition) failures.push(message);
 }
 
-const browserSource = `${supabaseClient}\n${main}\n${app}\n${management}\n${products}\n${team}\n${whatsapp}\n${devices}\n${reports}\n${settings}`;
+const browserSource = `${supabaseClient}\n${main}\n${app}\n${management}\n${products}\n${purchasing}\n${team}\n${whatsapp}\n${devices}\n${reports}\n${settings}`;
 requireValue(
   !browserSource.includes('SERVICE_ROLE') &&
     !browserSource.includes('SUPABASE_SECRET') &&
@@ -74,6 +75,40 @@ requireValue(
     !products.includes("from('catalog_items').update") &&
     !products.includes("from('catalog_items').delete"),
   'Merchant Web must not bypass product and UOM command invariants with raw browser writes.',
+);
+
+requireValue(
+  management.includes('<PurchasingManagement') &&
+    management.includes('Purchase Branch') &&
+    purchasing.includes("rpc('get_sellertray_suppliers'") &&
+    purchasing.includes("rpc('get_sellertray_purchase_orders'") &&
+    purchasing.includes("rpc('get_sellertray_purchase_order_detail'") &&
+    purchasing.includes("rpc('save_sellertray_supplier'") &&
+    purchasing.includes("rpc('save_sellertray_purchase_order'") &&
+    purchasing.includes("rpc('submit_sellertray_purchase_order'") &&
+    purchasing.includes("rpc('cancel_sellertray_purchase_order'") &&
+    purchasing.includes("rpc('receive_sellertray_purchase_order'"),
+  'Purchasing must use the shared Supplier, Purchase Order and receiving commands.',
+);
+
+requireValue(
+  !purchasing.includes("from('suppliers').insert") &&
+    !purchasing.includes("from('suppliers').update") &&
+    !purchasing.includes("from('suppliers').delete") &&
+    !purchasing.includes("from('purchase_orders').insert") &&
+    !purchasing.includes("from('purchase_orders').update") &&
+    !purchasing.includes("from('purchase_orders').delete") &&
+    !purchasing.includes("from('purchase_order_items').insert") &&
+    !purchasing.includes("from('purchase_receipts').insert") &&
+    !purchasing.includes("from('inventory_movements').insert"),
+  'Merchant Web must not bypass purchasing or stock-ledger commands with raw browser writes.',
+);
+
+requireValue(
+  purchasing.includes('Enter only what is physically present') &&
+    purchasing.includes('Stock impact when fully received') &&
+    purchasing.includes('Purchase UOM'),
+  'Purchasing must make Purchase UOM conversion and physical receiving intent visible to merchants.',
 );
 
 requireValue(
