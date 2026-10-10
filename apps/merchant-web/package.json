@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "typecheck": "tsc --noEmit --pretty false",
-    "preflight": "node scripts/security-preflight.mjs",
+    "preflight": "node scripts/security-preflight.mjs && node scripts/ai-governance-preflight.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview"
   },
