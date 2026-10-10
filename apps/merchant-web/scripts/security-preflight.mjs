@@ -10,6 +10,7 @@ const products = readFileSync(resolve(appRoot, 'src/ProductsManagement.tsx'), 'u
 const team = readFileSync(resolve(appRoot, 'src/TeamBranchesManagement.tsx'), 'utf8');
 const whatsapp = readFileSync(resolve(appRoot, 'src/WhatsAppManagement.tsx'), 'utf8');
 const devices = readFileSync(resolve(appRoot, 'src/DevicesPrintersManagement.tsx'), 'utf8');
+const reports = readFileSync(resolve(appRoot, 'src/ReportCenter.tsx'), 'utf8');
 const vercel = readFileSync(resolve(appRoot, 'vercel.json'), 'utf8');
 const failures = [];
 
@@ -17,7 +18,7 @@ function requireValue(condition, message) {
   if (!condition) failures.push(message);
 }
 
-const browserSource = `${supabaseClient}\n${main}\n${app}\n${management}\n${products}\n${team}\n${whatsapp}\n${devices}`;
+const browserSource = `${supabaseClient}\n${main}\n${app}\n${management}\n${products}\n${team}\n${whatsapp}\n${devices}\n${reports}`;
 requireValue(
   !browserSource.includes('SERVICE_ROLE') &&
     !browserSource.includes('SUPABASE_SECRET') &&
@@ -153,6 +154,23 @@ requireValue(
   devices.includes('Bluetooth pairing and test printing remain on SellerTray mobile') &&
     devices.includes('Test prints and receipt printing run from the Android app'),
   'Devices management must keep Bluetooth discovery and print execution on mobile.',
+);
+
+requireValue(
+  app.includes("import ReportCenter from './ReportCenter'") &&
+    app.includes('<ReportCenter tenantId={business.id} currency={business.currency}') &&
+    reports.includes("rpc('sellertray_report_center'") &&
+    reports.includes('Branch comparison') &&
+    reports.includes('Payment methods') &&
+    reports.includes('Top customers'),
+  'Report Center must use the shared server-side reporting read model for management drill-down.',
+);
+
+requireValue(
+  !reports.includes("from('orders')") &&
+    !reports.includes("from('order_payments')") &&
+    !reports.includes("from('sellertray_cash_shifts')"),
+  'Report Center must not reproduce reporting business calculations with raw browser queries.',
 );
 
 requireValue(
