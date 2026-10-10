@@ -1,0 +1,21 @@
+.report-center { min-width: 0; }
+.report-heading { align-items: flex-end; }
+.report-heading .select-field { min-width: 170px; }
+.report-two-column { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.report-subline { display: block; margin-top: 4px; color: var(--muted); font-weight: 500; }
+.compact-table { min-width: 520px; }
+.report-attention { display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+.report-attention-grid { width: min(520px, 100%); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+
+@media (max-width: 980px) {
+  .report-two-column { grid-template-columns: 1fr; }
+  .report-attention { align-items: stretch; flex-direction: column; }
+  .report-attention-grid { width: 100%; }
+}
+
+@media (max-width: 700px) {
+  .report-heading { align-items: stretch; flex-direction: column; }
+  .report-heading .select-field { width: 100%; }
+  .report-heading .select-field select { width: 100%; }
+  .report-attention-grid { grid-template-columns: 1fr; }
+}
