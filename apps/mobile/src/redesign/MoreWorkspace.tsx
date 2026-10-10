@@ -11,6 +11,7 @@ import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import { AiBriefWorkspace } from './AiBriefWorkspace';
 import { CashShiftWorkspace } from './CashShiftWorkspace';
 import { PrinterWorkspace } from './PrinterWorkspace';
+import { SyncStatusWorkspace } from './SyncStatusWorkspace';
 import { WhatsAppRuntimeWorkspace } from './WhatsAppRuntimeWorkspace';
 
 type Props = {
@@ -40,6 +41,7 @@ export function MoreWorkspace({
   const [printerOpen, setPrinterOpen] = useState(false);
   const [whatsappOpen, setWhatsappOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
+  const [syncOpen, setSyncOpen] = useState(false);
   const canUseAiBrief = business.role === 'owner' || business.role === 'manager';
 
   useEffect(() => {
@@ -47,6 +49,7 @@ export function MoreWorkspace({
       setPrinterOpen(false);
       setWhatsappOpen(false);
       setAiOpen(false);
+      setSyncOpen(false);
       setCashOpen(true);
     }
   }, [cashRouteKey]);
@@ -56,6 +59,7 @@ export function MoreWorkspace({
       setCashOpen(false);
       setPrinterOpen(false);
       setAiOpen(false);
+      setSyncOpen(false);
       setWhatsappOpen(true);
     }
   }, [whatsappRouteKey]);
@@ -65,6 +69,7 @@ export function MoreWorkspace({
     setPrinterOpen(false);
     setWhatsappOpen(false);
     setAiOpen(false);
+    setSyncOpen(false);
   }, [business.id, branch.id]);
 
   if (cashOpen) {
@@ -96,6 +101,17 @@ export function MoreWorkspace({
         branch={branch}
         onClose={() => setWhatsappOpen(false)}
         onOpenOrders={onOpenOrders}
+      />
+    );
+  }
+
+  if (syncOpen) {
+    return (
+      <SyncStatusWorkspace
+        tenantId={business.id}
+        branch={branch}
+        onClose={() => setSyncOpen(false)}
+        onOpenOrders={onOpenOrders ? () => onOpenOrders() : undefined}
       />
     );
   }
@@ -150,6 +166,22 @@ export function MoreWorkspace({
           <Text style={[styles.operationTitle, dark && darkStyles.titleText]}>WhatsApp</Text>
           <Text style={[styles.operationText, dark && darkStyles.bodyText]}>
             Review WhatsApp order conversations for {branch.name}, unread activity, connection and receiving Branch.
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
+      </Pressable>
+
+      <Pressable
+        onPress={() => setSyncOpen(true)}
+        style={({ pressed }) => [styles.operationCard, dark && darkStyles.card, pressed && styles.pressed]}
+      >
+        <View style={[styles.operationIcon, styles.operationIconActive]}>
+          <Ionicons name="sync-outline" size={23} color={theme.colors.greenDark} />
+        </View>
+        <View style={styles.operationCopy}>
+          <Text style={[styles.operationTitle, dark && darkStyles.titleText]}>Sync Status</Text>
+          <Text style={[styles.operationText, dark && darkStyles.bodyText]}>
+            Review draft-sale saves on this device that still need a confirmed SellerTray response for {branch.name}.
           </Text>
         </View>
         <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
