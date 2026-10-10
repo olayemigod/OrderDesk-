@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import DevicesPrintersManagement from './DevicesPrintersManagement';
 import ProductsManagement from './ProductsManagement';
+import SettingsManagement from './SettingsManagement';
 import TeamBranchesManagement from './TeamBranchesManagement';
 import { errorMessage, supabase } from './supabase';
 
@@ -12,16 +13,18 @@ export default function ManagementPage({
   tenantId,
   currency,
   onBranchesChanged,
+  onBusinessChanged,
 }: {
   page: ManagementPageId;
   tenantId: string;
   currency: string;
   onBranchesChanged?: () => void | Promise<void>;
+  onBusinessChanged?: () => void | Promise<void>;
 }) {
   if (page === 'products') return <ProductsManagement tenantId={tenantId} currency={currency} />;
   if (page === 'team') return <TeamBranchesManagement tenantId={tenantId} onBranchesChanged={onBranchesChanged} />;
   if (page === 'devices') return <DeviceManagement tenantId={tenantId} />;
-  return <Placeholder title="Settings" body="Business profile, payments, WhatsApp configuration and merchant preferences will live here." />;
+  return <SettingsManagement tenantId={tenantId} onBusinessChanged={onBusinessChanged} />;
 }
 
 function DeviceManagement({ tenantId }: { tenantId: string }) {
@@ -56,12 +59,4 @@ function DeviceManagement({ tenantId }: { tenantId: string }) {
     <label className="select-field device-branch-select"><span>Printer Branch</span><select value={branch?.id ?? ''} onChange={(event) => setBranchId(event.target.value)}>{branches.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
     <DevicesPrintersManagement tenantId={tenantId} branchId={branch?.id ?? ''} branchName={branch?.name ?? ''} />
   </div>;
-}
-
-function Placeholder({ title, body }: { title: string; body: string }) {
-  return <article className="panel placeholder-panel"><div className="placeholder-mark">{initials(title)}</div><div><h3>{title}</h3><p className="muted">{body}</p></div></article>;
-}
-
-function initials(value: string): string {
-  return value.split(/\s|&/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('');
 }
