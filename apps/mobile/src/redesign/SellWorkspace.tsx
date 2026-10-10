@@ -5,12 +5,12 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View 
 import {
   completePosCashSale,
   createPosDraft,
-  loadCommerceProducts,
   type CommerceBranch,
   type CommerceProduct,
   type CommerceUom,
 } from '../data/commerceRepository';
 import { loadBranchStock, type BranchStockRow } from '../data/inventoryRepository';
+import { loadCommerceProductsResilient } from '../data/offlineCommerceCache';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
@@ -43,6 +43,8 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
   const [products, setProducts] = useState<CommerceProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [productSource, setProductSource] = useState<'live' | 'cache'>('live');
+  const [productCachedAt, setProductCachedAt] = useState<string | null>(null);
   const [stockRows, setStockRows] = useState<BranchStockRow[]>([]);
   const [stockLoading, setStockLoading] = useState(true);
   const [stockError, setStockError] = useState<string | null>(null);
@@ -58,10 +60,14 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
     let active = true;
     setLoading(true);
     setError(null);
-    void loadCommerceProducts(tenantId)
-      .then((rows) => {
+    setProductSource('live');
+    setProductCachedAt(null);
+    void loadCommerceProductsResilient(tenantId)
+      .then((result) => {
         if (!active) return;
-        setProducts(rows);
+        setProducts(result.products);
+        setProductSource(result.source);
+        setProductCachedAt(result.cachedAt);
       })
       .catch((err) => {
         if (!active) return;
@@ -308,6 +314,18 @@ export function SellWorkspace({ tenantId, branch, currency, onDraftCreated }: Pr
           Selling from {branch.name}. Prices follow the selected unit and availability follows this branch’s stock.
         </Text>
       </View>
+
+      {productSource === 'cache' ? (
+        <View style={[styles.cacheCard, dark && darkStyles.cacheCard]}>
+          <Ionicons name="cloud-offline-outline" size={20} color={theme.colors.info} />
+          <View style={styles.cacheCopy}>
+            <Text style={[styles.cacheTitle, dark && darkStyles.titleText]}>Cached catalogue</Text>
+            <Text style={[styles.cacheText, dark && darkStyles.bodyText]}>
+              Showing products and prices saved {formatCachedCatalogueTime(productCachedAt)}. Live Branch stock is still required before selling.
+            </Text>
+          </View>
+        </View>
+      ) : null}
 
       <View style={[styles.searchBox, dark && darkStyles.input, checkoutLocked && styles.lockedControl]}>
         <Ionicons name="search-outline" size={20} color={theme.colors.muted} />
@@ -625,12 +643,23 @@ function formatQuantity(value: number): string {
   return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(3)));
 }
 
+function formatCachedCatalogueTime(value: string | null): string {
+  if (!value) return 'recently';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'recently';
+  return date.toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
 const styles = StyleSheet.create({
   stack: { gap: 14 },
   heading: { gap: 3 },
   eyebrow: { color: theme.colors.muted, fontSize: 11, fontWeight: '900', letterSpacing: 1.05 },
   title: { color: theme.colors.navy, fontSize: 28, lineHeight: 34, fontWeight: '900' },
   subtitle: { color: theme.colors.slate, fontSize: 14, lineHeight: 20 },
+  cacheCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#B2DDFF', backgroundColor: theme.colors.infoSoft, padding: 11, flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  cacheCopy: { flex: 1, gap: 2 },
+  cacheTitle: { color: theme.colors.navy, fontSize: 12, fontWeight: '900' },
+  cacheText: { color: theme.colors.slate, fontSize: 11, lineHeight: 17 },
   searchBox: { minHeight: 52, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, backgroundColor: theme.colors.white, paddingLeft: 13, paddingRight: 5, flexDirection: 'row', alignItems: 'center', gap: 8 },
   searchInput: { flex: 1, minHeight: 50, color: theme.colors.navy, fontSize: 14, paddingVertical: 0 },
   scanButton: { width: 43, height: 43, borderRadius: 12, backgroundColor: theme.colors.mintSoft, alignItems: 'center', justifyContent: 'center' },
@@ -694,6 +723,7 @@ const styles = StyleSheet.create({
 });
 
 const darkStyles = StyleSheet.create({
+  cacheCard: { backgroundColor: '#102A43', borderColor: '#175CD3' },
   card: { backgroundColor: theme.colors.navy, borderColor: '#344054' },
   subtleCard: { backgroundColor: '#162F46', borderColor: '#344054' },
   input: { backgroundColor: theme.colors.navy, borderColor: '#475467' },
