@@ -7,6 +7,7 @@ import './team.css';
 import './whatsapp.css';
 import './devices.css';
 import './reports.css';
+import './settings.css';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('SellerTray could not start.');
