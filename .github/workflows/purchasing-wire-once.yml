@@ -1,0 +1,81 @@
+name: One-time Purchasing Wire
+
+on:
+  push:
+    branches:
+      - feat/sellertray-merchant-web-v1
+    paths:
+      - .github/workflows/purchasing-wire-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  wire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/sellertray-merchant-web-v1
+          fetch-depth: 0
+      - name: Wire Purchasing navigation and preflight
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          app_path = Path('apps/merchant-web/src/MerchantApp.tsx')
+          text = app_path.read_text()
+          replacements = [
+              (
+                  "type Page = 'overview' | 'orders' | 'inventory' | 'cash' | 'whatsapp' | 'reports' | 'products' | 'team' | 'devices' | 'settings';",
+                  "type Page = 'overview' | 'orders' | 'inventory' | 'purchasing' | 'cash' | 'whatsapp' | 'reports' | 'products' | 'team' | 'devices' | 'settings';",
+              ),
+              (
+                  "  { id: 'inventory', label: 'Inventory' },\n  { id: 'cash', label: 'Cash & Shifts' },",
+                  "  { id: 'inventory', label: 'Inventory' },\n  { id: 'purchasing', label: 'Purchasing' },\n  { id: 'cash', label: 'Cash & Shifts' },",
+              ),
+              ("{index === 5 ? <div className=\"nav-divider\" /> : null}", "{index === 6 ? <div className=\"nav-divider\" /> : null}"),
+              (
+                  "{(page === 'products' || page === 'team' || page === 'devices' || page === 'settings') && <ManagementPage page={page} tenantId={business.id} currency={business.currency} onBranchesChanged={refresh} />}",
+                  "{(page === 'products' || page === 'purchasing' || page === 'team' || page === 'devices' || page === 'settings') && <ManagementPage page={page} tenantId={business.id} currency={business.currency} branchId={branch?.id ?? ''} branchName={branch?.name ?? 'Branch'} onBranchesChanged={refresh} />}",
+              ),
+          ]
+          for old, new in replacements:
+              if text.count(old) != 1:
+                  raise SystemExit(f'Expected exactly one MerchantApp match for: {old[:80]!r}; found {text.count(old)}')
+              text = text.replace(old, new)
+          app_path.write_text(text)
+
+          preflight_path = Path('apps/merchant-web/scripts/security-preflight.mjs')
+          preflight = preflight_path.read_text()
+          changes = [
+              (
+                  "const products = readFileSync(resolve(appRoot, 'src/ProductsManagement.tsx'), 'utf8');",
+                  "const products = readFileSync(resolve(appRoot, 'src/ProductsManagement.tsx'), 'utf8');\nconst purchasing = readFileSync(resolve(appRoot, 'src/PurchasingManagement.tsx'), 'utf8');",
+              ),
+              (
+                  "const browserSource = `${supabaseClient}\\n${main}\\n${app}\\n${management}\\n${products}\\n${team}\\n${whatsapp}\\n${devices}\\n${reports}\\n${settings}`;",
+                  "const browserSource = `${supabaseClient}\\n${main}\\n${app}\\n${management}\\n${products}\\n${purchasing}\\n${team}\\n${whatsapp}\\n${devices}\\n${reports}\\n${settings}`;",
+              ),
+          ]
+          for old, new in changes:
+              if preflight.count(old) != 1:
+                  raise SystemExit(f'Expected exactly one preflight match for: {old[:80]!r}; found {preflight.count(old)}')
+              preflight = preflight.replace(old, new)
+
+          marker = "requireValue(\n  management.includes('<TeamBranchesManagement')"
+          if preflight.count(marker) != 1:
+              raise SystemExit(f'Expected exactly one Team preflight marker; found {preflight.count(marker)}')
+          purchasing_guard = """requireValue(\n  app.includes(\"{ id: 'purchasing', label: 'Purchasing' }\") &&\n    management.includes('<PurchasingManagement') &&\n    purchasing.includes(\"rpc('get_sellertray_suppliers'\") &&\n    purchasing.includes(\"rpc('get_sellertray_purchase_orders'\") &&\n    purchasing.includes(\"rpc('save_sellertray_supplier'\") &&\n    purchasing.includes(\"rpc('save_sellertray_purchase_order'\") &&\n    purchasing.includes(\"rpc('submit_sellertray_purchase_order'\") &&\n    purchasing.includes(\"rpc('post_sellertray_purchase_receipt'\"),\n  'Purchasing must use the shared governed Supplier, Purchase Order and Purchase Receipt commands.',\n);\n\nrequireValue(\n  !purchasing.includes(\"from('suppliers').insert\") &&\n    !purchasing.includes(\"from('suppliers').update\") &&\n    !purchasing.includes(\"from('purchase_orders').insert\") &&\n    !purchasing.includes(\"from('purchase_orders').update\") &&\n    !purchasing.includes(\"from('purchase_receipts').insert\") &&\n    !purchasing.includes(\"from('purchase_receipts').update\") &&\n    !purchasing.includes(\"from('inventory_movements').insert\"),\n  'Merchant Web must not bypass purchasing or inventory commands with raw browser writes.',\n);\n\n"""
+          preflight = preflight.replace(marker, purchasing_guard + marker)
+          preflight_path.write_text(preflight)
+          PY
+
+          rm .github/workflows/purchasing-wire-once.yml
+          git config user.name "sellertray-automation"
+          git config user.email "sellertray-automation@users.noreply.github.com"
+          git add apps/merchant-web/src/MerchantApp.tsx apps/merchant-web/scripts/security-preflight.mjs .github/workflows/purchasing-wire-once.yml
+          git diff --cached --check
+          git commit -m "Wire Purchasing into Merchant Web"
+          git push origin HEAD:feat/sellertray-merchant-web-v1
