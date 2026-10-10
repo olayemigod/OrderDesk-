@@ -4,7 +4,10 @@ import { resolve } from 'node:path';
 const appRoot = process.cwd();
 const cache = readFileSync(resolve(appRoot, 'src/data/offlineCommerceCache.ts'), 'utf8');
 const commerce = readFileSync(resolve(appRoot, 'src/data/commerceRepository.ts'), 'utf8');
+const queue = readFileSync(resolve(appRoot, 'src/data/offlinePosDraftQueue.ts'), 'utf8');
 const sell = readFileSync(resolve(appRoot, 'src/redesign/SellWorkspace.tsx'), 'utf8');
+const sync = readFileSync(resolve(appRoot, 'src/redesign/SyncStatusWorkspace.tsx'), 'utf8');
+const more = readFileSync(resolve(appRoot, 'src/redesign/MoreWorkspace.tsx'), 'utf8');
 const merchantOrder = readFileSync(resolve(appRoot, '../../supabase/functions/merchant-order/index.ts'), 'utf8');
 const idempotencyMigration = readFileSync(
   resolve(appRoot, '../../supabase/migrations/20261010213000_pos_draft_request_idempotency.sql'),
@@ -48,7 +51,7 @@ requireValue(
     !cache.includes('order_payments') &&
     !cache.includes('completePosCashSale') &&
     !cache.includes('createPosDraft'),
-  'The first offline slice must not cache inventory truth or queue commercial/payment mutations.',
+  'Catalogue cache must never become inventory truth or a commercial/payment queue.',
 );
 
 requireValue(
@@ -61,12 +64,54 @@ requireValue(
 );
 
 requireValue(
+  commerce.includes('body.customerName === null') &&
+    commerce.includes('body.customerPhone === null') &&
+    commerce.includes('body.note === null') &&
+    commerce.includes('savePendingPosDraft') &&
+    commerce.includes('markPendingPosDraftError') &&
+    commerce.includes('removePendingPosDraft'),
+  'Durable pending sync must be limited to walk-in drafts without local customer identity or notes.',
+);
+
+requireValue(
+  queue.includes("const KEY_PREFIX = 'sellertray.sync.pos-draft.v1'") &&
+    queue.includes('MAX_PENDING_AGE_MS = 7 * 24 * 60 * 60 * 1000') &&
+    queue.includes('requestId: string') &&
+    queue.includes('branchId: string') &&
+    queue.includes('items: PosDraftLine[]') &&
+    queue.includes('attemptCount: number') &&
+    !queue.includes('customerName') &&
+    !queue.includes('customerPhone') &&
+    !queue.includes('sellingPrice') &&
+    !queue.includes('quantityOnHand') &&
+    !queue.includes('payment') &&
+    !queue.includes('receipt'),
+  'Pending sync envelopes must stay minimal: request/Branch/items only, with no PII, prices, stock, payment or receipt state.',
+);
+
+requireValue(
+  sync.includes('Draft sync only') &&
+    sync.includes('It never confirms cash, deducts stock, or issues a receipt.') &&
+    sync.includes('Retry draft save') &&
+    sync.includes('Discard local retry') &&
+    sync.includes('createPosDraft') &&
+    !sync.includes('completePosCashSale'),
+  'Sync Status must keep retries explicit and draft-only.',
+);
+
+requireValue(
+  more.includes('Sync Status') && more.includes('<SyncStatusWorkspace'),
+  'Pending draft sync must be visible from the mobile More workspace.',
+);
+
+requireValue(
   merchantOrder.includes("create_sellertray_pos_order_idempotent") &&
     merchantOrder.includes('p_request_id: requestId') &&
+    merchantOrder.includes('requestIdProvided && !requestId') &&
     merchantOrder.includes('idempotentReplay') &&
     merchantOrder.includes("/already used for different sale details/i.test(message) ? 409 : 400") &&
     merchantOrder.includes("create_sellertray_pos_order_atomic"),
-  'Merchant POS boundary must use the idempotent command when a request key is supplied while retaining legacy caller compatibility.',
+  'Merchant POS boundary must fail closed on malformed request identity, use idempotent creation for keyed requests, and retain legacy caller compatibility only when the key is absent.',
 );
 
 requireValue(
@@ -81,10 +126,11 @@ requireValue(
 );
 
 requireValue(
-  !commerce.includes('AsyncStorage') &&
-    !commerce.includes('completePosCashSale(tenantId, orderId).catch') &&
-    !commerce.includes('offlineQueue'),
-  'POS retry idempotency must not silently become a durable offline sale or payment queue.',
+  !queue.includes('setInterval') &&
+    !queue.includes('Background') &&
+    !sync.includes('useEffect(() => void retry') &&
+    !commerce.includes('completePosCashSale(tenantId, orderId).catch'),
+  'Pending drafts must not auto-sync or auto-complete payments/stock in the background.',
 );
 
 if (failures.length) {
