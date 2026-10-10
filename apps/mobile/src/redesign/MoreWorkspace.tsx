@@ -17,9 +17,10 @@ type Props = {
   branch: CommerceBranch;
   activeShift: CashShift | null;
   cashRouteKey?: number;
+  whatsappRouteKey?: number;
   onSaveBusiness: (businessId: string, input: BusinessProfileInput) => Promise<void>;
   onShiftChanged: (shift: CashShift | null) => void;
-  onOpenOrders?: () => void;
+  onOpenOrders?: (customerId?: string) => void;
 };
 
 export function MoreWorkspace({
@@ -27,6 +28,7 @@ export function MoreWorkspace({
   branch,
   activeShift,
   cashRouteKey = 0,
+  whatsappRouteKey = 0,
   onSaveBusiness,
   onShiftChanged,
   onOpenOrders,
@@ -44,6 +46,14 @@ export function MoreWorkspace({
       setCashOpen(true);
     }
   }, [cashRouteKey]);
+
+  useEffect(() => {
+    if (whatsappRouteKey > 0) {
+      setCashOpen(false);
+      setPrinterOpen(false);
+      setWhatsappOpen(true);
+    }
+  }, [whatsappRouteKey]);
 
   useEffect(() => {
     setCashOpen(false);
