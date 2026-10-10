@@ -55,6 +55,7 @@ Deno.serve(async (request) => {
   const customerName = cleanText(body.customerName, 120);
   const customerPhone = normalizePhone(body.customerPhone);
   const note = cleanText(body.note, 500);
+  const requestId = cleanUuid(body.requestId);
 
   if (!tenantId) return json({ error: 'Business is required' }, 400);
 
@@ -107,21 +108,47 @@ Deno.serve(async (request) => {
       }
     }
 
-    const { data: orderId, error: createError } = await admin.rpc('create_sellertray_pos_order_atomic', {
-      p_tenant_id: tenantId,
-      p_branch_id: branchId,
-      p_customer_name: customerName,
-      p_customer_phone: customerPhone,
-      p_note: note,
-      p_items: lines.map((line) => ({
-        catalog_item_id: line.catalogItemId,
-        uom_id: line.uomId,
-        quantity: line.quantity,
-      })),
-    });
+    const rpcItems = lines.map((line) => ({
+      catalog_item_id: line.catalogItemId,
+      uom_id: line.uomId,
+      quantity: line.quantity,
+    }));
+    let orderId: string | null = null;
+    let idempotentReplay = false;
+    let createErrorMessage: string | null = null;
 
-    if (createError || typeof orderId !== 'string') {
-      return json({ error: createError?.message ?? 'Unable to create sale' }, 400);
+    if (requestId) {
+      const { data: createResult, error: createError } = await admin.rpc('create_sellertray_pos_order_idempotent', {
+        p_tenant_id: tenantId,
+        p_branch_id: branchId,
+        p_customer_name: customerName,
+        p_customer_phone: customerPhone,
+        p_note: note,
+        p_items: rpcItems,
+        p_request_id: requestId,
+      });
+      if (createError) createErrorMessage = createError.message;
+      if (createResult && typeof createResult === 'object' && !Array.isArray(createResult)) {
+        const row = createResult as JsonRecord;
+        if (typeof row.orderId === 'string') orderId = row.orderId;
+        idempotentReplay = row.idempotentReplay === true;
+      }
+    } else {
+      const { data: createdOrderId, error: createError } = await admin.rpc('create_sellertray_pos_order_atomic', {
+        p_tenant_id: tenantId,
+        p_branch_id: branchId,
+        p_customer_name: customerName,
+        p_customer_phone: customerPhone,
+        p_note: note,
+        p_items: rpcItems,
+      });
+      if (createError) createErrorMessage = createError.message;
+      if (typeof createdOrderId === 'string') orderId = createdOrderId;
+    }
+
+    if (createErrorMessage || !orderId) {
+      const message = createErrorMessage ?? 'Unable to create sale';
+      return json({ error: message }, /already used for different sale details/i.test(message) ? 409 : 400);
     }
 
     await writeOrderCreationAudit({
@@ -134,10 +161,15 @@ Deno.serve(async (request) => {
       customerName: customerName ?? 'Walk-in Customer',
       customerPhone,
       lineCount: lines.length,
-      metadata: { source: 'pos', branch_id: branchId },
+      metadata: {
+        source: 'pos',
+        branch_id: branchId,
+        request_id: requestId,
+        idempotent_replay: idempotentReplay,
+      },
     });
 
-    return json({ orderId, status: 'draft', source: 'pos' }, 201);
+    return json({ orderId, status: 'draft', source: 'pos', idempotentReplay }, idempotentReplay ? 200 : 201);
   }
 
   const lines = parseManualLines(body.items);
