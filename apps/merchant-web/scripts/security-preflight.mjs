@@ -11,6 +11,7 @@ const team = readFileSync(resolve(appRoot, 'src/TeamBranchesManagement.tsx'), 'u
 const whatsapp = readFileSync(resolve(appRoot, 'src/WhatsAppManagement.tsx'), 'utf8');
 const devices = readFileSync(resolve(appRoot, 'src/DevicesPrintersManagement.tsx'), 'utf8');
 const reports = readFileSync(resolve(appRoot, 'src/ReportCenter.tsx'), 'utf8');
+const settings = readFileSync(resolve(appRoot, 'src/SettingsManagement.tsx'), 'utf8');
 const vercel = readFileSync(resolve(appRoot, 'vercel.json'), 'utf8');
 const failures = [];
 
@@ -18,7 +19,7 @@ function requireValue(condition, message) {
   if (!condition) failures.push(message);
 }
 
-const browserSource = `${supabaseClient}\n${main}\n${app}\n${management}\n${products}\n${team}\n${whatsapp}\n${devices}\n${reports}`;
+const browserSource = `${supabaseClient}\n${main}\n${app}\n${management}\n${products}\n${team}\n${whatsapp}\n${devices}\n${reports}\n${settings}`;
 requireValue(
   !browserSource.includes('SERVICE_ROLE') &&
     !browserSource.includes('SUPABASE_SECRET') &&
@@ -171,6 +172,46 @@ requireValue(
     !reports.includes("from('order_payments')") &&
     !reports.includes("from('sellertray_cash_shifts')"),
   'Report Center must not reproduce reporting business calculations with raw browser queries.',
+);
+
+requireValue(
+  management.includes('<SettingsManagement') &&
+    settings.includes("from('tenants').update") &&
+    settings.includes("rpc('sellertray_get_operational_policy'") &&
+    settings.includes("rpc('sellertray_save_operational_policy'") &&
+    settings.includes("functions.invoke('payment-settings'") &&
+    settings.includes("action: 'connect_gateway'") &&
+    settings.includes("action: 'disconnect_gateway'"),
+  'Settings must reuse the shared business profile, operational policy and payment-settings boundaries.',
+);
+
+requireValue(
+  !settings.includes("from('merchant_payment_methods').insert") &&
+    !settings.includes("from('merchant_payment_methods').update") &&
+    !settings.includes("from('merchant_payment_methods').delete") &&
+    !settings.includes("from('merchant_operational_policies').insert") &&
+    !settings.includes("from('merchant_operational_policies').update") &&
+    !settings.includes("from('merchant_operational_policies').delete") &&
+    !settings.includes('credentials_ciphertext') &&
+    !settings.includes('credentials_iv'),
+  'Merchant Web must not bypass payment/policy services or read encrypted gateway credentials.',
+);
+
+requireValue(
+  settings.includes("business_email: clean(profile.businessEmail)") &&
+    settings.includes("business_phone: clean(profile.businessPhone)") &&
+    settings.includes("business_type: clean(profile.businessType)") &&
+    settings.includes("logo_url: clean(profile.logoUrl)") &&
+    settings.includes('currency,') &&
+    settings.includes('timezone,'),
+  'Business profile updates must remain inside the established tenant profile columns.',
+);
+
+requireValue(
+  settings.includes('Secret values are encrypted by SellerTray and are never displayed again after submission.') &&
+    !settings.includes('secretKey: selectedMethod') &&
+    !settings.includes('secretHash: selectedMethod'),
+  'Gateway credentials must be write-only browser inputs sent to the encrypted payment-settings service.',
 );
 
 requireValue(
