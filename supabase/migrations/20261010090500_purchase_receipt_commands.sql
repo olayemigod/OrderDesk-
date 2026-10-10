@@ -161,12 +161,16 @@ begin
     raise exception 'SellerTray subscription is read-only' using errcode='42501';
   end if;
 
-  select po,s.name into v_po,v_supplier_name
+  select * into v_po
   from public.sellertray_purchase_orders po
-  join public.sellertray_suppliers s on s.tenant_id=po.tenant_id and s.id=po.supplier_id
   where po.tenant_id=p_tenant_id and po.id=p_purchase_order_id
-  for update of po;
+  for update;
   if not found then raise exception 'Purchase order not found' using errcode='P0002'; end if;
+
+  select s.name into v_supplier_name
+  from public.sellertray_suppliers s
+  where s.tenant_id=p_tenant_id and s.id=v_po.supplier_id;
+  if not found then raise exception 'Purchase order supplier is unavailable' using errcode='P0002'; end if;
 
   if not public.sellertray_user_can_operate_branch(p_tenant_id,v_po.branch_id,v_user_id) then
     raise exception 'You do not have access to receive stock for this Branch' using errcode='42501';
