@@ -10,6 +10,7 @@ import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import { CashShiftWorkspace } from './CashShiftWorkspace';
 import { PrinterWorkspace } from './PrinterWorkspace';
+import { PurchaseReceivingWorkspace } from './PurchaseReceivingWorkspace';
 import { WhatsAppRuntimeWorkspace } from './WhatsAppRuntimeWorkspace';
 
 type Props = {
@@ -36,29 +37,33 @@ export function MoreWorkspace({
   const appearance = useSellerTrayAppearance();
   const dark = appearance.dark;
   const [cashOpen, setCashOpen] = useState(false);
+  const [purchaseReceivingOpen, setPurchaseReceivingOpen] = useState(false);
   const [printerOpen, setPrinterOpen] = useState(false);
   const [whatsappOpen, setWhatsappOpen] = useState(false);
 
+  function closeOperationalWorkspaces() {
+    setCashOpen(false);
+    setPurchaseReceivingOpen(false);
+    setPrinterOpen(false);
+    setWhatsappOpen(false);
+  }
+
   useEffect(() => {
     if (cashRouteKey > 0) {
-      setPrinterOpen(false);
-      setWhatsappOpen(false);
+      closeOperationalWorkspaces();
       setCashOpen(true);
     }
   }, [cashRouteKey]);
 
   useEffect(() => {
     if (whatsappRouteKey > 0) {
-      setCashOpen(false);
-      setPrinterOpen(false);
+      closeOperationalWorkspaces();
       setWhatsappOpen(true);
     }
   }, [whatsappRouteKey]);
 
   useEffect(() => {
-    setCashOpen(false);
-    setPrinterOpen(false);
-    setWhatsappOpen(false);
+    closeOperationalWorkspaces();
   }, [business.id, branch.id]);
 
   if (cashOpen) {
@@ -68,6 +73,16 @@ export function MoreWorkspace({
         branch={branch}
         onClose={() => setCashOpen(false)}
         onShiftChanged={onShiftChanged}
+      />
+    );
+  }
+
+  if (purchaseReceivingOpen) {
+    return (
+      <PurchaseReceivingWorkspace
+        tenantId={business.id}
+        branch={branch}
+        onClose={() => setPurchaseReceivingOpen(false)}
       />
     );
   }
@@ -105,7 +120,10 @@ export function MoreWorkspace({
       </View>
 
       <Pressable
-        onPress={() => setCashOpen(true)}
+        onPress={() => {
+          closeOperationalWorkspaces();
+          setCashOpen(true);
+        }}
         style={({ pressed }) => [styles.operationCard, dark && darkStyles.card, pressed && styles.pressed]}
       >
         <View style={[styles.operationIcon, activeShift && styles.operationIconActive]}>
@@ -130,7 +148,29 @@ export function MoreWorkspace({
       </Pressable>
 
       <Pressable
-        onPress={() => setWhatsappOpen(true)}
+        onPress={() => {
+          closeOperationalWorkspaces();
+          setPurchaseReceivingOpen(true);
+        }}
+        style={({ pressed }) => [styles.operationCard, dark && darkStyles.card, pressed && styles.pressed]}
+      >
+        <View style={[styles.operationIcon, styles.operationIconActive]}>
+          <Ionicons name="cube-outline" size={23} color={theme.colors.greenDark} />
+        </View>
+        <View style={styles.operationCopy}>
+          <Text style={[styles.operationTitle, dark && darkStyles.titleText]}>Purchase Receiving</Text>
+          <Text style={[styles.operationText, dark && darkStyles.bodyText]}>
+            Receive placed Purchase Orders for {branch.name} and post the confirmed quantities into stock.
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
+      </Pressable>
+
+      <Pressable
+        onPress={() => {
+          closeOperationalWorkspaces();
+          setWhatsappOpen(true);
+        }}
         style={({ pressed }) => [styles.operationCard, dark && darkStyles.card, pressed && styles.pressed]}
       >
         <View style={[styles.operationIcon, styles.operationIconActive]}>
@@ -146,7 +186,10 @@ export function MoreWorkspace({
       </Pressable>
 
       <Pressable
-        onPress={() => setPrinterOpen(true)}
+        onPress={() => {
+          closeOperationalWorkspaces();
+          setPrinterOpen(true);
+        }}
         style={({ pressed }) => [styles.operationCard, dark && darkStyles.card, pressed && styles.pressed]}
       >
         <View style={[styles.operationIcon, styles.operationIconActive]}>
