@@ -30,8 +30,8 @@ select extensions.ok(
   exists(
     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where n.nspname='public' and p.proname='sellertray_report_center'
-      and lower(pg_get_functiondef(p.oid)) like '%greatest(1, least(coalesce(p_days, 30), 365))%'
-      and lower(pg_get_functiondef(p.oid)) like '%make_interval(days => v_days)%'
+      and regexp_replace(lower(pg_get_functiondef(p.oid)), '\s+', '', 'g') like '%greatest(1,least(coalesce(p_days,30),365))%'
+      and regexp_replace(lower(pg_get_functiondef(p.oid)), '\s+', '', 'g') like '%make_interval(days=>v_days)%'
   ),
   'Report Center procurement uses the shared bounded report period'
 );
@@ -109,8 +109,8 @@ select extensions.ok(
   exists(
     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where n.nspname='public' and p.proname='sellertray_report_center'
-      and lower(pg_get_functiondef(p.oid)) like '%po.created_at >= v_since%'
-      and lower(pg_get_functiondef(p.oid)) like '%sp.paid_at >= v_since%'
+      and regexp_replace(lower(pg_get_functiondef(p.oid)), '\s+', '', 'g') like '%po.created_at>=v_since%'
+      and regexp_replace(lower(pg_get_functiondef(p.oid)), '\s+', '', 'g') like '%p.paid_at>=v_since%'
   ),
   'period procurement and supplier-payment activity are date bounded server-side'
 );
