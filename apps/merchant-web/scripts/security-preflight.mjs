@@ -84,7 +84,7 @@ requireValue(
     purchasing.includes("rpc('get_sellertray_purchase_orders'") &&
     purchasing.includes("rpc('save_sellertray_supplier'") &&
     purchasing.includes("rpc('save_sellertray_purchase_order'") &&
-    purchasing.includes("rpc('submit_sellertray_purchase_order'") &&
+    purchasing.includes("submit_sellertray_purchase_order") &&
     purchasing.includes("rpc('post_sellertray_purchase_receipt'"),
   'Purchasing must use the shared governed Supplier, Purchase Order and Purchase Receipt commands.',
 );
