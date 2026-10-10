@@ -90,7 +90,7 @@ select extensions.ok(
     where n.nspname='public' and p.proname='get_sellertray_device_management_overview'
       and lower(pg_get_functiondef(p.oid)) like '%sellertray_print_jobs%'
       and lower(pg_get_functiondef(p.oid)) like '%limit 50%'
-      and lower(pg_get_functiondef(p.oid)) like '%failurmessage%' = false
+      and lower(pg_get_functiondef(p.oid)) like '%failure_message%'
   ),
   'device management read model includes bounded print-job history'
 );
