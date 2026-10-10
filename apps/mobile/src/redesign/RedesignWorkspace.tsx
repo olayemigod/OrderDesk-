@@ -39,6 +39,7 @@ export default function RedesignWorkspace() {
   const [cashShiftLoading, setCashShiftLoading] = useState(false);
   const [cashShiftError, setCashShiftError] = useState<string | null>(null);
   const [cashRouteKey, setCashRouteKey] = useState(0);
+  const [whatsappRouteKey, setWhatsappRouteKey] = useState(0);
 
   const {
     orders,
@@ -217,6 +218,11 @@ export default function RedesignWorkspace() {
     setCashRouteKey((value) => value + 1);
   }
 
+  function openWhatsAppWorkspace() {
+    setTab('more');
+    setWhatsappRouteKey((value) => value + 1);
+  }
+
   const attentionItems: HomeAttentionItem[] = [];
   if (!cashShiftLoading && activeBranch && !activeCashShift) {
     attentionItems.push({
@@ -233,9 +239,9 @@ export default function RedesignWorkspace() {
       key: 'whatsapp-orders',
       icon: 'logo-whatsapp',
       title: `${home.whatsappNeedsReview} WhatsApp order${home.whatsappNeedsReview === 1 ? '' : 's'} need review`,
-      detail: 'Review customer requests before processing them.',
+      detail: 'Review customer conversations and requests before processing them.',
       count: home.whatsappNeedsReview,
-      onPress: () => setTab('orders'),
+      onPress: openWhatsAppWorkspace,
     });
   }
   if (home.paymentIssues > 0) {
@@ -324,7 +330,7 @@ export default function RedesignWorkspace() {
           onNewSale={() => setTab('sell')}
           onOpenOrders={() => setTab('orders')}
           onOpenInventory={() => setTab('inventory')}
-          onOpenWhatsapp={() => setTab('orders')}
+          onOpenWhatsapp={openWhatsAppWorkspace}
         />
       ) : null}
 
@@ -370,10 +376,7 @@ export default function RedesignWorkspace() {
 
       {tab === 'inventory' ? (
         activeBranch ? (
-          <InventoryTabWorkspace
-            tenantId={activeBusiness.id}
-            branch={activeBranch}
-          />
+          <InventoryTabWorkspace tenantId={activeBusiness.id} branch={activeBranch} />
         ) : (
           <BranchRequiredState loading={branchLoading} />
         )
@@ -386,11 +389,13 @@ export default function RedesignWorkspace() {
             branch={activeBranch}
             activeShift={activeCashShift}
             cashRouteKey={cashRouteKey}
+            whatsappRouteKey={whatsappRouteKey}
             onSaveBusiness={saveProfile}
             onShiftChanged={(next) => {
               setActiveCashShift(next);
               setCashShiftError(null);
             }}
+            onOpenOrders={() => setTab('orders')}
           />
         ) : (
           <BranchRequiredState loading={branchLoading} />
@@ -461,11 +466,7 @@ function BranchSwitcher({
             <Pressable
               key={branch.id}
               onPress={() => onSelect(branch.id)}
-              style={[
-                styles.branchRow,
-                appearance.dark && darkStyles.subtleCard,
-                active && styles.branchRowActive,
-              ]}
+              style={[styles.branchRow, appearance.dark && darkStyles.subtleCard, active && styles.branchRowActive]}
             >
               <View style={styles.branchIcon}>
                 <Ionicons name="storefront-outline" size={19} color={theme.colors.greenDark} />
@@ -515,13 +516,7 @@ function localDayKey(date: Date): string {
 
 const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, padding: 24, backgroundColor: theme.colors.cloud },
-  page: { backgroundColor: theme.colors.cloud },
-  stack: { gap: 14 },
   muted: { color: theme.colors.muted, fontSize: 12 },
-  heading: { gap: 3 },
-  eyebrow: { color: theme.colors.muted, fontSize: 11, fontWeight: '900', letterSpacing: 1.05 },
-  pageTitle: { color: theme.colors.navy, fontSize: 28, lineHeight: 34, fontWeight: '900' },
-  pageSubtitle: { color: theme.colors.slate, fontSize: 14, lineHeight: 20 },
   errorCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#FDA29B', backgroundColor: theme.colors.dangerSoft, padding: 12, flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 14 },
   errorCopy: { flex: 1 },
   errorTitle: { color: '#B42318', fontSize: 13, fontWeight: '900' },
