@@ -13,7 +13,7 @@ type Props = {
   business: MerchantBusiness;
   branch: CommerceBranch;
   onClose: () => void;
-  onOpenOrders?: () => void;
+  onOpenOrders?: (customerId?: string) => void;
 };
 
 export function WhatsAppRuntimeWorkspace({ business, branch, onClose, onOpenOrders }: Props) {
@@ -55,7 +55,7 @@ export function WhatsAppRuntimeWorkspace({ business, branch, onClose, onOpenOrde
         branches={branches}
         orders={orders.orders}
         onClose={onClose}
-        onOpenOrders={onOpenOrders ?? onClose}
+        onOpenOrders={onOpenOrders ?? (() => onClose())}
       />
     </View>
   );
