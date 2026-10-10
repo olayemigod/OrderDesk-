@@ -21,6 +21,9 @@ jobs:
     defaults:
       run:
         working-directory: apps/merchant-web
+    env:
+      VITE_SUPABASE_URL: https://eujxswjspolugrzlsjnn.supabase.co
+      VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_NlNRn9grGvfwZ1cYP09OvA_XSHOA-3I
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -34,6 +37,56 @@ jobs:
         run: npm run preflight
       - name: Production build
         run: npm run build
+      - name: Browser smoke
+        run: |
+          set -euo pipefail
+          CHROME="$(command -v google-chrome-stable || command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          if [ -z "$CHROME" ]; then
+            echo 'Headless Chrome is required for SellerTray Merchant Web browser smoke.' >&2
+            exit 1
+          fi
+
+          npm run preview -- --host 127.0.0.1 --port 4173 >/tmp/sellertray-merchant-preview.log 2>&1 &
+          PREVIEW_PID=$!
+          trap 'kill "$PREVIEW_PID" >/dev/null 2>&1 || true' EXIT
+
+          ready=0
+          for _ in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:4173/ >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            cat /tmp/sellertray-merchant-preview.log >&2 || true
+            echo 'SellerTray Merchant Web preview did not become ready.' >&2
+            exit 1
+          fi
+
+          "$CHROME" \
+            --headless=new \
+            --no-sandbox \
+            --disable-gpu \
+            --disable-dev-shm-usage \
+            --virtual-time-budget=5000 \
+            --dump-dom \
+            http://127.0.0.1:4173/ \
+            >/tmp/sellertray-merchant-dom.html \
+            2>/tmp/sellertray-merchant-chrome.log
+
+          grep -Fq 'SellerTray' /tmp/sellertray-merchant-dom.html
+          grep -Fq 'Merchant Management' /tmp/sellertray-merchant-dom.html
+          grep -Fq '>Sign in<' /tmp/sellertray-merchant-dom.html
+          grep -Fq 'type="email"' /tmp/sellertray-merchant-dom.html
+          grep -Fq 'type="password"' /tmp/sellertray-merchant-dom.html
+          grep -Fq '>Continue<' /tmp/sellertray-merchant-dom.html
+
+          if grep -Eq 'Uncaught|ReferenceError|TypeError|Missing VITE_SUPABASE' /tmp/sellertray-merchant-chrome.log; then
+            cat /tmp/sellertray-merchant-chrome.log >&2
+            echo 'SellerTray Merchant Web emitted a fatal browser bootstrap error.' >&2
+            exit 1
+          fi
 
   dependency-audit:
     runs-on: ubuntu-latest
