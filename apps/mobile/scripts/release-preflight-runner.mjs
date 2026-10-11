@@ -9,13 +9,14 @@ const runtimePath = path.join(scriptsDir, '.release-preflight.runtime.mjs');
 const appPath = path.join(mobileRoot, 'app.json');
 const provisionedAppPath = path.join(mobileRoot, 'src', 'ProvisionedApp.tsx');
 const redesignWorkspacePath = path.join(mobileRoot, 'src', 'redesign', 'RedesignWorkspace.tsx');
+const moreWorkspacePath = path.join(mobileRoot, 'src', 'redesign', 'MoreWorkspace.tsx');
 const printerManifestPath = path.join(mobileRoot, 'modules', 'sellertray-bluetooth-printer', 'android', 'src', 'main', 'AndroidManifest.xml');
 const printerModulePath = path.join(mobileRoot, 'modules', 'sellertray-bluetooth-printer', 'android', 'src', 'main', 'java', 'ng', 'processedge', 'sellertray', 'bluetooth', 'SellerTrayBluetoothPrinterModule.kt');
 
 const staleVersionCheck = "requireValue(app.android?.versionCode === 8, 'Android versionCode must be 8 for the merchant-reference QA line');";
 const currentVersionCheck = `requireValue(\n  Number.isInteger(app.android?.versionCode) && app.android.versionCode > 0,\n  'Android versionCode must be a positive integer',\n);`;
 const staleSettingsCheck = "requireValue(settingsHub.includes('SellerTray 1.0.0 · Android build 8'), 'More screen must expose the current Android build marker');";
-const currentSettingsCheck = `requireValue(\n  settingsHub.includes('SellerTray ' + app.version + ' · Android build ' + app.android.versionCode),\n  'More screen must expose the current Android build marker',\n);`;
+const currentSettingsCheck = `requireValue(\n  moreWorkspace.includes('SellerTray ' + app.version + ' · Android build ' + app.android.versionCode),\n  'Redesigned More screen must expose the current Android build marker',\n);`;
 const staleBluetoothConnectBlockEntry = '  "android.permission.BLUETOOTH_CONNECT",\n';
 
 const app = JSON.parse(fs.readFileSync(appPath, 'utf8')).expo;
@@ -41,6 +42,7 @@ const redesignWorkspace = fs.readFileSync(redesignWorkspacePath, 'utf8');
 for (const label of ['Home', 'Sell', 'Orders', 'Inventory', 'More']) {
   if (!redesignWorkspace.includes(label)) throw new Error(`Redesign workspace is missing required primary navigation label: ${label}`);
 }
+const moreWorkspace = fs.readFileSync(moreWorkspacePath, 'utf8');
 
 let source = fs.readFileSync(sourcePath, 'utf8');
 if (source.split(staleVersionCheck).length !== 2) throw new Error('Expected exactly one legacy Android version check in release preflight');
