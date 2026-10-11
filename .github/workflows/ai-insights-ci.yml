@@ -1,0 +1,28 @@
+name: SellerTray AI CI
+
+on:
+  push:
+    branches:
+      - feat/sellertray-ai-insights-v1
+    paths:
+      - 'supabase/functions/merchant-ai/**'
+      - '.github/workflows/ai-insights-ci.yml'
+  pull_request:
+    paths:
+      - 'supabase/functions/merchant-ai/**'
+      - '.github/workflows/ai-insights-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  edge-typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Typecheck merchant AI Edge Function
+        run: deno check supabase/functions/merchant-ai/index.ts

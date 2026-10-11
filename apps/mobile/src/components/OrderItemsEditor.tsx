@@ -812,6 +812,7 @@ const styles = StyleSheet.create({
   useProductText: { color: '#079455', fontSize: 12, fontWeight: '900' },
   primaryResolveButton: { minHeight: 44, backgroundColor: '#12B76A', borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
   primaryResolveText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
+  disabled: { opacity: 0.45 },
   error: { color: '#B42318', fontSize: 12, lineHeight: 17 },
 });
 

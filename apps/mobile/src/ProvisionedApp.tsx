@@ -1,6 +1,5 @@
 import { ActivityIndicator, Platform, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 
-import SaasApp from './SaasApp';
 import { AuthGate } from './components/AuthGate';
 import { CreateBusinessView } from './components/CreateBusinessView';
 import { LegalAcceptanceGate } from './components/LegalAcceptanceGate';
@@ -8,6 +7,7 @@ import { PlatformAdminView } from './components/PlatformAdminView';
 import { useBusinesses } from './hooks/useBusinesses';
 import { usePlatformAdmin } from './hooks/usePlatformAdmin';
 import { supabase } from './lib/supabase';
+import RedesignWorkspace from './redesign/RedesignWorkspace';
 
 export default function ProvisionedApp() {
   return (
@@ -90,7 +90,7 @@ function ProvisioningGate() {
     );
   }
 
-  return <SaasApp />;
+  return <RedesignWorkspace />;
 }
 
 const styles = StyleSheet.create({

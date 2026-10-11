@@ -1,0 +1,15 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'ng.processedge.sellertray'
+version = '1.0.0'
+
+android {
+  namespace "ng.processedge.sellertray.bluetooth"
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}

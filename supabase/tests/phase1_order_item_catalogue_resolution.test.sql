@@ -139,6 +139,45 @@ select extensions.ok(
   'one-off resolution is written to commercial action ledger'
 );
 
+do $$
+declare
+  v_tenant_id uuid := gen_random_uuid();
+  v_customer_id uuid := gen_random_uuid();
+  v_order_id uuid := gen_random_uuid();
+begin
+  insert into public.tenants(
+    id,name,slug,merchant_code,subscription_status
+  ) values (
+    v_tenant_id,
+    'Catalogue Candidate Test',
+    'catalogue-candidate-' || substr(v_tenant_id::text,1,8),
+    'CAT',
+    'active'
+  );
+
+  update public.tenant_subscriptions
+  set status='active',trial_ends_at=null,grace_ends_at=null
+  where tenant_id=v_tenant_id;
+
+  insert into public.customers(id,tenant_id,wa_id,display_name,phone)
+  values(v_customer_id,v_tenant_id,'test-candidate-wa','Candidate Customer','+2348037654321');
+
+  insert into public.orders(
+    id,tenant_id,customer_id,status,source,parser_source,review_reasons
+  ) values (
+    v_order_id,v_tenant_id,v_customer_id,'needs_review','manual','manual','{}'::text[]
+  );
+
+  insert into public.order_items(
+    tenant_id,order_id,catalog_item_id,item_name,original_item_name,
+    quantity,unit_price,match_source,match_confidence
+  ) values (
+    v_tenant_id,v_order_id,null,'Unknown Sachet','unknown sachet',
+    1,null,'unmatched',0
+  );
+end
+$$;
+
 select extensions.ok(
   exists(
     select 1
@@ -147,8 +186,9 @@ select extensions.ok(
     where oi.match_source='unmatched'
       and oi.catalog_item_id is null
       and c.status='pending'
+      and c.customer_wording='unknown sachet'
   ),
-  'existing unmatched order items were backfilled into candidate workflow'
+  'unmatched order items enter the candidate workflow'
 );
 
 select * from extensions.finish();

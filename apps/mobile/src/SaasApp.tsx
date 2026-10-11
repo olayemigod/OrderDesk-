@@ -1263,6 +1263,7 @@ function ConversationsView({
   onMarkConversationRead,
   onOpenOrder,
 }: {
+  tenantId: string;
   orders: MerchantOrder[];
   currency: string;
   unreadByCustomer: Map<string, { unreadCount: number; latestReceivedAt: string | null }>;
@@ -2077,6 +2078,7 @@ const styles = StyleSheet.create({
   muted: { color: '#667085', fontSize: 13 },
   primaryButton: { minHeight: 44, borderRadius: 11, backgroundColor: '#12B76A', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
   primaryButtonText: { color: '#FFFFFF', fontWeight: '900' },
+  disabled: { opacity: 0.45 },
 });
 
 const darkStyles = StyleSheet.create({
