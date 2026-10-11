@@ -54,7 +54,7 @@ jobs:
         run: npm run typecheck
 
       - name: SellerTray release preflight
-        run: npm run release:preflight
+        run: npm run preflight
 
       - name: Generate Android native project
         run: npx expo prebuild --platform android --clean --no-install
