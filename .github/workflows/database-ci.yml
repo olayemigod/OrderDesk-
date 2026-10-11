@@ -12,7 +12,9 @@ on:
     paths:
       - 'supabase/migrations/**'
       - 'supabase/tests/**'
+      - 'supabase/functions/**'
       - 'supabase/config.toml'
+      - 'apps/mobile/src/data/**'
       - '.github/workflows/database-ci.yml'
   push:
     branches:
@@ -20,7 +22,9 @@ on:
     paths:
       - 'supabase/migrations/**'
       - 'supabase/tests/**'
+      - 'supabase/functions/**'
       - 'supabase/config.toml'
+      - 'apps/mobile/src/data/**'
       - '.github/workflows/database-ci.yml'
 
 jobs:

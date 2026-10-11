@@ -17,7 +17,7 @@ insert into sellertray_offline_replay_fixture(tenant_id,product_id)
 values(gen_random_uuid(),gen_random_uuid());
 
 insert into public.tenants(id,name,slug,merchant_code,subscription_status)
-select tenant_id,'Offline Replay Validation','offline-replay-'||substr(tenant_id::text,1,8),'OFFREP','active'
+select tenant_id,'Offline Replay Validation','offline-replay-'||substr(tenant_id::text,1,8),'ORV','active'
 from sellertray_offline_replay_fixture;
 
 update public.tenant_subscriptions
