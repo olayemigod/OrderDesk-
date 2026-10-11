@@ -34,16 +34,33 @@ export type PosDraftLine = {
   catalogItemId: string;
   uomId: string;
   quantity: number;
+  expectedSellingPrice: number;
+  expectedConversionFactor: number;
 };
 
 export type CreatePosDraftInput = {
   tenantId: string;
   branchId: string;
+  clientReference?: string | null;
   customerName?: string | null;
   customerPhone?: string | null;
   note?: string | null;
   items: PosDraftLine[];
 };
+
+export type PosDraftFailureKind = 'network' | 'conflict' | 'rejected' | 'server';
+
+export class PosDraftRequestError extends Error {
+  readonly kind: PosDraftFailureKind;
+  readonly status: number | null;
+
+  constructor(message: string, kind: PosDraftFailureKind, status: number | null = null) {
+    super(message);
+    this.name = 'PosDraftRequestError';
+    this.kind = kind;
+    this.status = status;
+  }
+}
 
 export type PosCashCheckoutResult = {
   orderId: string;
@@ -172,11 +189,13 @@ export async function createPosDraft(input: CreatePosDraftInput): Promise<string
   if (!input.branchId) throw new Error('Branch is required.');
   if (input.items.length === 0) throw new Error('Add at least one product.');
 
+  const clientReference = cleanOptional(input.clientReference);
   const { data, error } = await supabase.functions.invoke('merchant-order', {
     body: {
       mode: 'pos',
       tenantId: input.tenantId,
       branchId: input.branchId,
+      clientReference,
       customerName: cleanOptional(input.customerName),
       customerPhone: cleanOptional(input.customerPhone),
       note: cleanOptional(input.note),
@@ -184,18 +203,20 @@ export async function createPosDraft(input: CreatePosDraftInput): Promise<string
         catalogItemId: item.catalogItemId,
         uomId: item.uomId,
         quantity: item.quantity,
+        expectedSellingPrice: item.expectedSellingPrice,
+        expectedConversionFactor: item.expectedConversionFactor,
       })),
     },
   });
 
-  if (error) throw new Error(await functionErrorMessage(error, 'Unable to prepare this sale.'));
+  if (error) throw await posDraftError(error, 'Unable to prepare this sale.');
 
-  const orderId =
-    data && typeof data === 'object' && 'orderId' in data && typeof data.orderId === 'string'
-      ? data.orderId
-      : null;
-
-  if (!orderId) throw new Error('SellerTray returned an invalid sale reference.');
+  const row = data && typeof data === 'object' ? data as Record<string, unknown> : {};
+  const orderId = typeof row.orderId === 'string' ? row.orderId : null;
+  if (!orderId) throw new PosDraftRequestError('SellerTray returned an invalid sale reference.', 'server');
+  if (clientReference && row.clientReference !== clientReference) {
+    throw new PosDraftRequestError('SellerTray returned a different sale reference.', 'server');
+  }
   return orderId;
 }
 
@@ -221,6 +242,48 @@ export async function completePosCashSale(
   }
 
   return data;
+}
+
+export function createPosClientReference(): string {
+  const bytes = new Uint8Array(16);
+  const now = Date.now();
+  for (let index = 0; index < bytes.length; index += 1) {
+    const timeByte = index < 6 ? (now / (2 ** (index * 8))) & 0xff : 0;
+    bytes[index] = (Math.floor(Math.random() * 256) ^ timeByte) & 0xff;
+  }
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+export function isPosDraftNetworkError(error: unknown): boolean {
+  return error instanceof PosDraftRequestError && error.kind === 'network';
+}
+
+async function posDraftError(error: unknown, fallback: string): Promise<PosDraftRequestError> {
+  const baseMessage = error instanceof Error && error.message ? error.message : fallback;
+  if (error && typeof error === 'object' && 'context' in error) {
+    const context = (error as { context?: unknown }).context;
+    if (context instanceof Response) {
+      const status = context.status;
+      let message = baseMessage;
+      try {
+        const payload = await context.clone().json() as { error?: string };
+        if (payload?.error) message = payload.error;
+      } catch {
+        // Keep SDK message.
+      }
+      if (status === 409) return new PosDraftRequestError(message, 'conflict', status);
+      if (status >= 500) return new PosDraftRequestError(message, 'server', status);
+      return new PosDraftRequestError(message, 'rejected', status);
+    }
+  }
+
+  if (/network request failed|failed to fetch|fetch failed|networkerror|failed to send a request to the edge function/i.test(baseMessage)) {
+    return new PosDraftRequestError('SellerTray could not reach the server.', 'network');
+  }
+  return new PosDraftRequestError(baseMessage || fallback, 'server');
 }
 
 async function functionErrorMessage(error: unknown, fallback: string): Promise<string> {

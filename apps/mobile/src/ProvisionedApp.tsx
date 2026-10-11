@@ -1,6 +1,5 @@
 import { ActivityIndicator, Platform, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 
-import SaasApp from './SaasApp';
 import { AuthGate } from './components/AuthGate';
 import { CreateBusinessView } from './components/CreateBusinessView';
 import { LegalAcceptanceGate } from './components/LegalAcceptanceGate';
@@ -9,8 +8,6 @@ import { useBusinesses } from './hooks/useBusinesses';
 import { usePlatformAdmin } from './hooks/usePlatformAdmin';
 import { supabase } from './lib/supabase';
 import RedesignWorkspace from './redesign/RedesignWorkspace';
-
-const mobileRedesignEnabled = process.env.EXPO_PUBLIC_SELLERTRAY_MOBILE_REDESIGN === '1';
 
 export default function ProvisionedApp() {
   return (
@@ -93,7 +90,7 @@ function ProvisioningGate() {
     );
   }
 
-  return mobileRedesignEnabled ? <RedesignWorkspace /> : <SaasApp />;
+  return <RedesignWorkspace />;
 }
 
 const styles = StyleSheet.create({
