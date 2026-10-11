@@ -9,6 +9,8 @@ type ManualLine = {
 
 type PosLine = ManualLine & {
   uomId: string;
+  expectedSellingPrice: number | null;
+  expectedConversionFactor: number | null;
 };
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
@@ -70,12 +72,23 @@ Deno.serve(async (request) => {
 
   if (mode === 'pos') {
     const branchId = cleanUuid(body.branchId);
+    const clientReferenceProvided = body.clientReference !== undefined && body.clientReference !== null;
+    const clientReference = cleanUuid(body.clientReference);
     const lines = parsePosLines(body.items);
 
     if (!branchId) return json({ error: 'Branch is required' }, 400);
+    if (clientReferenceProvided && !clientReference) {
+      return json({ error: 'Sale reference is invalid' }, 400);
+    }
     if (!lines.length) return json({ error: 'Add at least one product' }, 400);
     if ((customerName === null) !== (customerPhone === null)) {
       return json({ error: 'Enter both customer name and phone, or leave both blank for a walk-in sale' }, 400);
+    }
+    if (
+      clientReference
+      && lines.some((line) => line.expectedSellingPrice === null || line.expectedConversionFactor === null)
+    ) {
+      return json({ error: 'Offline-ready sale lines require the displayed price and unit conversion' }, 400);
     }
 
     const { data: branch, error: branchError } = await admin
@@ -107,7 +120,10 @@ Deno.serve(async (request) => {
       }
     }
 
-    const { data: orderId, error: createError } = await admin.rpc('create_sellertray_pos_order_atomic', {
+    const rpcName = clientReference
+      ? 'create_sellertray_pos_order_idempotent'
+      : 'create_sellertray_pos_order_atomic';
+    const rpcArgs: JsonRecord = {
       p_tenant_id: tenantId,
       p_branch_id: branchId,
       p_customer_name: customerName,
@@ -117,11 +133,20 @@ Deno.serve(async (request) => {
         catalog_item_id: line.catalogItemId,
         uom_id: line.uomId,
         quantity: line.quantity,
+        ...(clientReference ? {
+          expected_selling_price: line.expectedSellingPrice,
+          expected_conversion_factor: line.expectedConversionFactor,
+        } : {}),
       })),
-    });
+      ...(clientReference ? { p_client_reference: clientReference } : {}),
+    };
+
+    const { data: orderId, error: createError } = await admin.rpc(rpcName, rpcArgs);
 
     if (createError || typeof orderId !== 'string') {
-      return json({ error: createError?.message ?? 'Unable to create sale' }, 400);
+      const message = createError?.message ?? 'Unable to create sale';
+      const status = /needs review|reused with different details/i.test(message) ? 409 : 400;
+      return json({ error: message }, status);
     }
 
     await writeOrderCreationAudit({
@@ -134,10 +159,19 @@ Deno.serve(async (request) => {
       customerName: customerName ?? 'Walk-in Customer',
       customerPhone,
       lineCount: lines.length,
-      metadata: { source: 'pos', branch_id: branchId },
+      metadata: {
+        source: 'pos',
+        branch_id: branchId,
+        ...(clientReference ? { client_reference: clientReference } : {}),
+      },
     });
 
-    return json({ orderId, status: 'draft', source: 'pos' }, 201);
+    return json({
+      orderId,
+      status: 'draft',
+      source: 'pos',
+      ...(clientReference ? { clientReference } : {}),
+    }, 201);
   }
 
   const lines = parseManualLines(body.items);
@@ -269,8 +303,16 @@ function parsePosLines(value: unknown): PosLine[] {
     const catalogItemId = cleanUuid(row.catalogItemId);
     const uomId = cleanUuid(row.uomId);
     const quantity = typeof row.quantity === 'number' ? row.quantity : Number(row.quantity);
+    const expectedSellingPrice = optionalNonNegativeNumber(row.expectedSellingPrice);
+    const expectedConversionFactor = optionalPositiveNumber(row.expectedConversionFactor);
     if (!catalogItemId || !uomId || !Number.isFinite(quantity) || quantity <= 0 || quantity > 9999) continue;
-    lines.push({ catalogItemId, uomId, quantity });
+    lines.push({
+      catalogItemId,
+      uomId,
+      quantity,
+      expectedSellingPrice,
+      expectedConversionFactor,
+    });
   }
   return lines;
 }
@@ -281,6 +323,18 @@ function normalizePhone(value: unknown): string | null {
   if (!clean) return null;
   if (!/^\+?[0-9]{7,15}$/.test(clean)) return null;
   return clean;
+}
+
+function optionalNonNegativeNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function optionalPositiveNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
 function cleanText(value: unknown, max: number): string | null {

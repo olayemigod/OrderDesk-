@@ -6,92 +6,107 @@ import { SettingsHub } from '../components/SettingsHub';
 import type { BusinessProfileInput, MerchantBusiness } from '../data/businessRepository';
 import type { CashShift } from '../data/cashShiftRepository';
 import type { CommerceBranch } from '../data/commerceRepository';
+import type { OfflinePosSale } from '../data/offlineSalesRepository';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import { CashShiftWorkspace } from './CashShiftWorkspace';
 import { PrinterWorkspace } from './PrinterWorkspace';
+import { PurchaseReceivingWorkspace } from './PurchaseReceivingWorkspace';
+import { SyncStatusWorkspace } from './SyncStatusWorkspace';
 import { WhatsAppRuntimeWorkspace } from './WhatsAppRuntimeWorkspace';
 
 type Props = {
   business: MerchantBusiness;
   branch: CommerceBranch;
   activeShift: CashShift | null;
+  offlineSales: OfflinePosSale[];
+  offlineSyncing: boolean;
   cashRouteKey?: number;
   whatsappRouteKey?: number;
+  syncRouteKey?: number;
   onSaveBusiness: (businessId: string, input: BusinessProfileInput) => Promise<void>;
   onShiftChanged: (shift: CashShift | null) => void;
   onOpenOrders?: (customerId?: string) => void;
+  onSyncOfflineSales: () => Promise<void>;
+  onDiscardOfflineSale: (clientReference: string) => Promise<void>;
 };
 
 export function MoreWorkspace({
   business,
   branch,
   activeShift,
+  offlineSales,
+  offlineSyncing,
   cashRouteKey = 0,
   whatsappRouteKey = 0,
+  syncRouteKey = 0,
   onSaveBusiness,
   onShiftChanged,
   onOpenOrders,
+  onSyncOfflineSales,
+  onDiscardOfflineSale,
 }: Props) {
   const appearance = useSellerTrayAppearance();
   const dark = appearance.dark;
   const [cashOpen, setCashOpen] = useState(false);
+  const [purchaseReceivingOpen, setPurchaseReceivingOpen] = useState(false);
   const [printerOpen, setPrinterOpen] = useState(false);
   const [whatsappOpen, setWhatsappOpen] = useState(false);
+  const [syncOpen, setSyncOpen] = useState(false);
+  const openSyncCount = offlineSales.filter((sale) => sale.status !== 'synced').length;
+  const reviewCount = offlineSales.filter((sale) => sale.status === 'needs_review' || sale.status === 'failed').length;
+
+  function closeOperationalWorkspaces() {
+    setCashOpen(false);
+    setPurchaseReceivingOpen(false);
+    setPrinterOpen(false);
+    setWhatsappOpen(false);
+    setSyncOpen(false);
+  }
 
   useEffect(() => {
     if (cashRouteKey > 0) {
-      setPrinterOpen(false);
-      setWhatsappOpen(false);
+      closeOperationalWorkspaces();
       setCashOpen(true);
     }
   }, [cashRouteKey]);
 
   useEffect(() => {
     if (whatsappRouteKey > 0) {
-      setCashOpen(false);
-      setPrinterOpen(false);
+      closeOperationalWorkspaces();
       setWhatsappOpen(true);
     }
   }, [whatsappRouteKey]);
 
   useEffect(() => {
-    setCashOpen(false);
-    setPrinterOpen(false);
-    setWhatsappOpen(false);
+    if (syncRouteKey > 0) {
+      closeOperationalWorkspaces();
+      setSyncOpen(true);
+    }
+  }, [syncRouteKey]);
+
+  useEffect(() => {
+    closeOperationalWorkspaces();
   }, [business.id, branch.id]);
 
   if (cashOpen) {
-    return (
-      <CashShiftWorkspace
-        tenantId={business.id}
-        branch={branch}
-        onClose={() => setCashOpen(false)}
-        onShiftChanged={onShiftChanged}
-      />
-    );
+    return <CashShiftWorkspace tenantId={business.id} branch={branch} onClose={() => setCashOpen(false)} onShiftChanged={onShiftChanged} />;
+  }
+
+  if (purchaseReceivingOpen) {
+    return <PurchaseReceivingWorkspace tenantId={business.id} branch={branch} onClose={() => setPurchaseReceivingOpen(false)} />;
   }
 
   if (printerOpen) {
-    return (
-      <PrinterWorkspace
-        tenantId={business.id}
-        branch={branch}
-        activeShift={activeShift}
-        onClose={() => setPrinterOpen(false)}
-      />
-    );
+    return <PrinterWorkspace tenantId={business.id} branch={branch} activeShift={activeShift} onClose={() => setPrinterOpen(false)} />;
   }
 
   if (whatsappOpen) {
-    return (
-      <WhatsAppRuntimeWorkspace
-        business={business}
-        branch={branch}
-        onClose={() => setWhatsappOpen(false)}
-        onOpenOrders={onOpenOrders}
-      />
-    );
+    return <WhatsAppRuntimeWorkspace business={business} branch={branch} onClose={() => setWhatsappOpen(false)} onOpenOrders={onOpenOrders} />;
+  }
+
+  if (syncOpen) {
+    return <SyncStatusWorkspace sales={offlineSales} syncing={offlineSyncing} onSync={onSyncOfflineSales} onDiscard={onDiscardOfflineSale} onClose={() => setSyncOpen(false)} />;
   }
 
   return (
@@ -104,59 +119,61 @@ export function MoreWorkspace({
         </Text>
       </View>
 
-      <Pressable
-        onPress={() => setCashOpen(true)}
-        style={({ pressed }) => [styles.operationCard, dark && darkStyles.card, pressed && styles.pressed]}
-      >
+      <Pressable onPress={() => { closeOperationalWorkspaces(); setCashOpen(true); }} style={({ pressed }) => [styles.operationCard, dark && darkStyles.card, pressed && styles.pressed]}>
         <View style={[styles.operationIcon, activeShift && styles.operationIconActive]}>
           <Ionicons name="cash-outline" size={23} color={theme.colors.greenDark} />
         </View>
         <View style={styles.operationCopy}>
           <View style={styles.operationTitleRow}>
             <Text style={[styles.operationTitle, dark && darkStyles.titleText]}>Cash & Shift</Text>
-            <View style={[styles.statusPill, !activeShift && styles.statusPillClosed]}>
-              <Text style={[styles.statusText, !activeShift && styles.statusTextClosed]}>
-                {activeShift ? 'Open' : 'Closed'}
-              </Text>
-            </View>
+            <View style={[styles.statusPill, !activeShift && styles.statusPillClosed]}><Text style={[styles.statusText, !activeShift && styles.statusTextClosed]}>{activeShift ? 'Open' : 'Closed'}</Text></View>
           </View>
           <Text style={[styles.operationText, dark && darkStyles.bodyText]}>
-            {activeShift
-              ? `${activeShift.registerName} · Expected cash ${formatMoney(activeShift.expectedCash, activeShift.currency)}`
-              : `Open a cashier shift for ${branch.name}, record expenses and reconcile the drawer.`}
+            {activeShift ? `${activeShift.registerName} · Expected cash ${formatMoney(activeShift.expectedCash, activeShift.currency)}` : `Open a cashier shift for ${branch.name}, record expenses and reconcile the drawer.`}
           </Text>
         </View>
         <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
       </Pressable>
 
-      <Pressable
-        onPress={() => setWhatsappOpen(true)}
-        style={({ pressed }) => [styles.operationCard, dark && darkStyles.card, pressed && styles.pressed]}
-      >
-        <View style={[styles.operationIcon, styles.operationIconActive]}>
-          <Ionicons name="logo-whatsapp" size={23} color={theme.colors.greenDark} />
+      <Pressable onPress={() => { closeOperationalWorkspaces(); setSyncOpen(true); }} style={({ pressed }) => [styles.operationCard, dark && darkStyles.card, pressed && styles.pressed]}>
+        <View style={[styles.operationIcon, openSyncCount > 0 && styles.operationIconWarning]}>
+          <Ionicons name={offlineSyncing ? 'sync-outline' : openSyncCount > 0 ? 'cloud-upload-outline' : 'cloud-done-outline'} size={23} color={openSyncCount > 0 ? theme.colors.warning : theme.colors.greenDark} />
         </View>
+        <View style={styles.operationCopy}>
+          <View style={styles.operationTitleRow}>
+            <Text style={[styles.operationTitle, dark && darkStyles.titleText]}>Sync Status</Text>
+            {openSyncCount > 0 ? <View style={[styles.statusPill, reviewCount > 0 && styles.statusPillWarning]}><Text style={[styles.statusText, reviewCount > 0 && styles.statusTextWarning]}>{openSyncCount} waiting</Text></View> : null}
+          </View>
+          <Text style={[styles.operationText, dark && darkStyles.bodyText]}>
+            {offlineSyncing ? 'SellerTray is revalidating held sales with the server.' : openSyncCount > 0 ? `${openSyncCount} held sale${openSyncCount === 1 ? '' : 's'} need sync or review. No held sale is treated as paid.` : 'No held sales are waiting to sync.'}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
+      </Pressable>
+
+      <Pressable onPress={() => { closeOperationalWorkspaces(); setPurchaseReceivingOpen(true); }} style={({ pressed }) => [styles.operationCard, dark && darkStyles.card, pressed && styles.pressed]}>
+        <View style={[styles.operationIcon, styles.operationIconActive]}><Ionicons name="cube-outline" size={23} color={theme.colors.greenDark} /></View>
+        <View style={styles.operationCopy}>
+          <Text style={[styles.operationTitle, dark && darkStyles.titleText]}>Purchase Receiving</Text>
+          <Text style={[styles.operationText, dark && darkStyles.bodyText]}>Receive placed Purchase Orders for {branch.name} and post the confirmed quantities into stock.</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
+      </Pressable>
+
+      <Pressable onPress={() => { closeOperationalWorkspaces(); setWhatsappOpen(true); }} style={({ pressed }) => [styles.operationCard, dark && darkStyles.card, pressed && styles.pressed]}>
+        <View style={[styles.operationIcon, styles.operationIconActive]}><Ionicons name="logo-whatsapp" size={23} color={theme.colors.greenDark} /></View>
         <View style={styles.operationCopy}>
           <Text style={[styles.operationTitle, dark && darkStyles.titleText]}>WhatsApp</Text>
-          <Text style={[styles.operationText, dark && darkStyles.bodyText]}>
-            Review WhatsApp order conversations for {branch.name}, unread activity, connection and receiving Branch.
-          </Text>
+          <Text style={[styles.operationText, dark && darkStyles.bodyText]}>Review WhatsApp order conversations for {branch.name}, unread activity, connection and receiving Branch.</Text>
         </View>
         <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
       </Pressable>
 
-      <Pressable
-        onPress={() => setPrinterOpen(true)}
-        style={({ pressed }) => [styles.operationCard, dark && darkStyles.card, pressed && styles.pressed]}
-      >
-        <View style={[styles.operationIcon, styles.operationIconActive]}>
-          <Ionicons name="print-outline" size={23} color={theme.colors.greenDark} />
-        </View>
+      <Pressable onPress={() => { closeOperationalWorkspaces(); setPrinterOpen(true); }} style={({ pressed }) => [styles.operationCard, dark && darkStyles.card, pressed && styles.pressed]}>
+        <View style={[styles.operationIcon, styles.operationIconActive]}><Ionicons name="print-outline" size={23} color={theme.colors.greenDark} /></View>
         <View style={styles.operationCopy}>
           <Text style={[styles.operationTitle, dark && darkStyles.titleText]}>Devices & Printers</Text>
-          <Text style={[styles.operationText, dark && darkStyles.bodyText]}>
-            Set up Bluetooth receipt printers, paper width and test printing for {branch.name}.
-          </Text>
+          <Text style={[styles.operationText, dark && darkStyles.bodyText]}>Set up Bluetooth receipt printers, paper width and test printing for {branch.name}.</Text>
         </View>
         <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
       </Pressable>
@@ -165,17 +182,15 @@ export function MoreWorkspace({
         <Text style={[styles.sectionLabel, dark && darkStyles.bodyText]}>BUSINESS</Text>
         <SettingsHub business={business} onSaveBusiness={onSaveBusiness} />
       </View>
+
+      <Text style={[styles.buildStamp, dark && darkStyles.bodyText]}>SellerTray 1.0.0 · Android build 19</Text>
     </View>
   );
 }
 
 function formatMoney(value: number, currency: string): string {
   try {
-    return new Intl.NumberFormat('en-NG', {
-      style: 'currency',
-      currency,
-      maximumFractionDigits: 2,
-    }).format(value);
+    return new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 2 }).format(value);
   } catch {
     return `${currency} ${value.toFixed(2)}`;
   }
@@ -187,36 +202,23 @@ const styles = StyleSheet.create({
   eyebrow: { color: theme.colors.muted, fontSize: 11, fontWeight: '900', letterSpacing: 1.05 },
   title: { color: theme.colors.navy, fontSize: 27, lineHeight: 33, fontWeight: '900' },
   subtitle: { color: theme.colors.slate, fontSize: 13, lineHeight: 19 },
-  operationCard: {
-    minHeight: 92,
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    backgroundColor: theme.colors.white,
-    padding: 13,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  operationIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    backgroundColor: theme.colors.cloud,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  operationCard: { minHeight: 92, borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 13, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  operationIcon: { width: 46, height: 46, borderRadius: 14, backgroundColor: theme.colors.cloud, alignItems: 'center', justifyContent: 'center' },
   operationIconActive: { backgroundColor: theme.colors.mintSoft },
+  operationIconWarning: { backgroundColor: '#FFFAEB' },
   operationCopy: { flex: 1, minWidth: 0 },
   operationTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   operationTitle: { color: theme.colors.navy, fontSize: 15, fontWeight: '900', flexShrink: 1 },
   operationText: { color: theme.colors.slate, fontSize: 11, lineHeight: 17, marginTop: 3 },
   statusPill: { borderRadius: 14, backgroundColor: theme.colors.mintSoft, paddingHorizontal: 8, paddingVertical: 3 },
   statusPillClosed: { backgroundColor: theme.colors.cloud },
+  statusPillWarning: { backgroundColor: '#FEF0C7' },
   statusText: { color: theme.colors.greenDark, fontSize: 10, fontWeight: '900' },
   statusTextClosed: { color: theme.colors.muted },
+  statusTextWarning: { color: '#B54708' },
   settingsBlock: { gap: 8 },
   sectionLabel: { color: theme.colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  buildStamp: { color: theme.colors.muted, fontSize: 11, fontWeight: '700', textAlign: 'center', marginTop: 2 },
   pressed: { opacity: 0.76 },
 });
 
