@@ -1,0 +1,48 @@
+name: SellerTray Offline CI
+
+on:
+  push:
+    branches:
+      - feat/sellertray-offline-reliability-v1
+    paths:
+      - 'supabase/functions/merchant-order/**'
+      - 'supabase/migrations/20261010101500_pos_draft_client_idempotency.sql'
+      - 'supabase/migrations/20261010101600_offline_pos_replay_validation.sql'
+      - 'apps/mobile/src/data/offlineSalesRepository.ts'
+      - 'apps/mobile/src/data/commerceRepository.ts'
+      - 'apps/mobile/src/hooks/useOfflineSalesSync.ts'
+      - 'apps/mobile/src/redesign/SellWorkspace.tsx'
+      - 'apps/mobile/src/redesign/SyncStatusWorkspace.tsx'
+      - 'apps/mobile/src/redesign/MoreWorkspace.tsx'
+      - 'apps/mobile/src/redesign/RedesignWorkspace.tsx'
+      - 'apps/mobile/scripts/offline-preflight.mjs'
+      - '.github/workflows/offline-reliability-ci.yml'
+  pull_request:
+    paths:
+      - 'supabase/functions/merchant-order/**'
+      - 'supabase/migrations/20261010101500_pos_draft_client_idempotency.sql'
+      - 'supabase/migrations/20261010101600_offline_pos_replay_validation.sql'
+      - 'apps/mobile/src/data/offlineSalesRepository.ts'
+      - 'apps/mobile/src/data/commerceRepository.ts'
+      - 'apps/mobile/src/hooks/useOfflineSalesSync.ts'
+      - 'apps/mobile/src/redesign/SellWorkspace.tsx'
+      - 'apps/mobile/src/redesign/SyncStatusWorkspace.tsx'
+      - 'apps/mobile/src/redesign/MoreWorkspace.tsx'
+      - 'apps/mobile/src/redesign/RedesignWorkspace.tsx'
+      - 'apps/mobile/scripts/offline-preflight.mjs'
+      - '.github/workflows/offline-reliability-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  edge-typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Typecheck merchant-order Edge Function
+        run: deno check supabase/functions/merchant-order/index.ts

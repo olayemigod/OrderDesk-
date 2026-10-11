@@ -6,6 +6,7 @@ on:
       - feat/mvp-foundation
       - feat/sellertray-brand-ui-v1
       - feat/sellertray-mobile-shell-v2
+      - fix/sellertray-redesign-integration
     paths:
       - 'apps/mobile/**'
       - '.github/workflows/android-qa-apk.yml'
@@ -52,6 +53,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: SellerTray release preflight
+        run: npm run preflight
+
       - name: Generate Android native project
         run: npx expo prebuild --platform android --clean --no-install
 
@@ -66,6 +70,7 @@ jobs:
           mkdir -p qa-artifact
           cp android/app/build/outputs/apk/release/app-release.apk qa-artifact/sellertray-qa.apk
           sha256sum qa-artifact/sellertray-qa.apk > qa-artifact/sellertray-qa.apk.sha256
+          printf '%s\n' "${GITHUB_SHA}" > qa-artifact/source-commit.txt
 
       - name: Upload QA APK
         uses: actions/upload-artifact@v4
@@ -74,5 +79,6 @@ jobs:
           path: |
             apps/mobile/qa-artifact/sellertray-qa.apk
             apps/mobile/qa-artifact/sellertray-qa.apk.sha256
+            apps/mobile/qa-artifact/source-commit.txt
           if-no-files-found: error
           retention-days: 14
