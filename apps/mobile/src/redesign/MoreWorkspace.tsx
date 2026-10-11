@@ -182,6 +182,8 @@ export function MoreWorkspace({
         <Text style={[styles.sectionLabel, dark && darkStyles.bodyText]}>BUSINESS</Text>
         <SettingsHub business={business} onSaveBusiness={onSaveBusiness} />
       </View>
+
+      <Text style={[styles.buildStamp, dark && darkStyles.bodyText]}>SellerTray 1.0.0 · Android build 19</Text>
     </View>
   );
 }
@@ -216,6 +218,7 @@ const styles = StyleSheet.create({
   statusTextWarning: { color: '#B54708' },
   settingsBlock: { gap: 8 },
   sectionLabel: { color: theme.colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  buildStamp: { color: theme.colors.muted, fontSize: 11, fontWeight: '700', textAlign: 'center', marginTop: 2 },
   pressed: { opacity: 0.76 },
 });
 
