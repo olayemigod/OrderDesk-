@@ -19,7 +19,7 @@ insert into sellertray_offline_pos_fixture(tenant_id,product_id,client_reference
 values(gen_random_uuid(),gen_random_uuid(),gen_random_uuid());
 
 insert into public.tenants(id,name,slug,merchant_code,subscription_status)
-select tenant_id,'SellerTray Offline POS Test','sellertray-offline-pos-'||substr(tenant_id::text,1,8),'OFFPOS','active'
+select tenant_id,'SellerTray Offline POS Test','sellertray-offline-pos-'||substr(tenant_id::text,1,8),'OFP','active'
 from sellertray_offline_pos_fixture;
 
 update public.tenant_subscriptions
