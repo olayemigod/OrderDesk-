@@ -100,4 +100,4 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: Audit production dependencies
-        run: npm audit --omit=dev --audit-level=high
+        run: node scripts/dependency-audit-policy.mjs
