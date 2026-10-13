@@ -130,6 +130,15 @@ export async function loadCashShiftCapabilities(
   };
 }
 
+export async function loadCashWriteAccess(tenantId: string): Promise<boolean> {
+  if (!tenantId) return false;
+  const { data, error } = await supabase.rpc('orderdesk_subscription_can_write', {
+    p_tenant_id: tenantId,
+  });
+  if (error) throw error;
+  return data === true;
+}
+
 export async function loadActiveCashShift(
   tenantId: string,
   branchId: string,
