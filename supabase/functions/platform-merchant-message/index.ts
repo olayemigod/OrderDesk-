@@ -45,15 +45,24 @@ Deno.serve(async (request) => {
   const expiresAt = optionalIsoDate(body.expiresAt);
   const tenantIds = optionalUuidArray(body.tenantIds);
   const audienceRoles = optionalEnumArray<MerchantRole>(body.audienceRoles, ['owner', 'manager', 'staff']);
+  const requestId = body.requestId === undefined || body.requestId === null
+    ? null
+    : cleanUuid(body.requestId);
 
   if (!messageType || !severity || !title || !messageBody) {
     return json({ error: 'messageType, severity, title and body are required' }, 400);
+  }
+  if (body.requestId !== undefined && body.requestId !== null && !requestId) {
+    return json({ error: 'requestId must be a valid UUID' }, 400);
   }
   if (body.tenantIds !== undefined && body.tenantIds !== null && tenantIds === null) {
     return json({ error: 'tenantIds must be a non-empty array of valid tenant IDs' }, 400);
   }
   if (body.audienceRoles !== undefined && body.audienceRoles !== null && audienceRoles === null) {
     return json({ error: 'audienceRoles must contain owner, manager or staff' }, 400);
+  }
+  if ((actionLabel === null) !== (actionUrl === null)) {
+    return json({ error: 'actionLabel and actionUrl must be supplied together' }, 400);
   }
   if (body.expiresAt !== undefined && body.expiresAt !== null && !expiresAt) {
     return json({ error: 'expiresAt must be a valid future timestamp' }, 400);
@@ -74,6 +83,7 @@ Deno.serve(async (request) => {
       p_action_label: actionLabel,
       p_action_url: actionUrl,
       p_expires_at: expiresAt,
+      p_request_id: requestId,
     });
     return json({ ok: true, ...result });
   } catch (error) {
