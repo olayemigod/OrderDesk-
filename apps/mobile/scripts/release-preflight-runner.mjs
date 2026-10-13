@@ -1,9 +1,10 @@
-﻿import { spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
 const scriptsDir = import.meta.dirname;
 const mobileRoot = path.resolve(scriptsDir, '..');
+const repoRoot = path.resolve(mobileRoot, '../..');
 const sourcePath = path.join(scriptsDir, 'release-preflight.mjs');
 const runtimePath = path.join(scriptsDir, '.release-preflight.runtime.mjs');
 const appPath = path.join(mobileRoot, 'app.json');
@@ -13,6 +14,27 @@ const moreWorkspacePath = path.join(mobileRoot, 'src', 'redesign', 'MoreWorkspac
 const printerManifestPath = path.join(mobileRoot, 'modules', 'sellertray-bluetooth-printer', 'android', 'src', 'main', 'AndroidManifest.xml');
 const printerModulePath = path.join(mobileRoot, 'modules', 'sellertray-bluetooth-printer', 'android', 'src', 'main', 'java', 'ng', 'processedge', 'sellertray', 'bluetooth', 'SellerTrayBluetoothPrinterModule.kt');
 
+const staleOrderChangeCheck = `requireValue(
+  orderChangeRequestFunction.includes("admin.auth.getUser(token)") &&
+    orderChangeRequestFunction.includes("request_kind === 'add_items'") &&
+    orderChangeRequestFunction.includes("request_kind === 'cancel_order'") &&
+    orderChangeRequestFunction.includes('For remove/change requests') &&
+    orderChangeRequestFunction.includes('tenant_members'),
+  'Merchant order-change actions must remain authenticated, tenant-scoped and explicit',
+);`;
+
+const currentOrderChangeCheck = `const orderChangeGovernanceMigration = read(join(repoRoot, 'supabase/migrations/20261013100000_order_change_governance.sql'));
+requireValue(
+  orderChangeRequestFunction.includes("admin.auth.getUser(token)") &&
+    orderChangeRequestFunction.includes("'resolve_sellertray_customer_order_change'") &&
+    orderChangeRequestFunction.includes('p_actor_user_id: userId') &&
+    orderChangeGovernanceMigration.includes('create or replace function public.resolve_sellertray_customer_order_change') &&
+    orderChangeGovernanceMigration.includes("'can_manage_orders'") &&
+    orderChangeGovernanceMigration.includes('sellertray_user_can_access_branch') &&
+    orderChangeGovernanceMigration.includes("v_action not in ('apply','resolve','reject')") &&
+    orderChangeGovernanceMigration.includes("v_request.status not in ('pending','reviewed')"),
+  'Merchant order-change actions must remain authenticated, tenant-scoped, branch-authorized and retry-safe',
+);`;
 
 const app = JSON.parse(fs.readFileSync(appPath, 'utf8')).expo;
 const blockedPermissions = new Set(app.android?.blockedPermissions ?? []);
@@ -42,6 +64,8 @@ const expectedBuildMarker = `Android build ${app.android?.versionCode}`;
 if (!moreWorkspace.includes('SellerTray ') || !moreWorkspace.includes(expectedBuildMarker)) throw new Error('Redesigned More screen must expose the current Android build marker');
 
 let source = fs.readFileSync(sourcePath, 'utf8');
+if (source.split(staleOrderChangeCheck).length !== 2) throw new Error('Expected exactly one legacy order-change governance check in release preflight');
+source = source.replace(staleOrderChangeCheck, currentOrderChangeCheck);
 
 fs.writeFileSync(runtimePath, source);
 try {
