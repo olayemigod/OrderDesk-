@@ -29,6 +29,7 @@ jobs:
     env:
       EXPO_PUBLIC_SUPABASE_URL: https://eujxswjspolugrzlsjnn.supabase.co
       EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_NlNRn9grGvfwZ1cYP09OvA_XSHOA-3I
+      SELLERTRAY_QA_SIGNING_CERT_SHA256: fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c
 
     steps:
       - name: Checkout
@@ -59,6 +60,14 @@ jobs:
       - name: Generate Android native project
         run: npx expo prebuild --platform android --clean --no-install
 
+      - name: Verify QA signing lineage
+        run: |
+          actual="$(keytool -exportcert -alias androiddebugkey -keystore android/app/debug.keystore -storepass android | sha256sum | awk '{print $1}')"
+          if [ "$actual" != "$SELLERTRAY_QA_SIGNING_CERT_SHA256" ]; then
+            echo "SellerTray QA signing certificate changed: $actual" >&2
+            exit 1
+          fi
+
       - name: Build standalone QA release APK
         run: |
           chmod +x android/gradlew
@@ -71,6 +80,9 @@ jobs:
           cp android/app/build/outputs/apk/release/app-release.apk qa-artifact/sellertray-qa.apk
           sha256sum qa-artifact/sellertray-qa.apk > qa-artifact/sellertray-qa.apk.sha256
           printf '%s\n' "${GITHUB_SHA}" > qa-artifact/source-commit.txt
+          node -p "require('./app.json').expo.android.versionCode" > qa-artifact/version-code.txt
+          printf '%s\n' "ng.processedge.sellertray" > qa-artifact/package-name.txt
+          printf '%s\n' "$SELLERTRAY_QA_SIGNING_CERT_SHA256" > qa-artifact/signing-cert-sha256.txt
 
       - name: Upload QA APK
         uses: actions/upload-artifact@v4
@@ -80,5 +92,8 @@ jobs:
             apps/mobile/qa-artifact/sellertray-qa.apk
             apps/mobile/qa-artifact/sellertray-qa.apk.sha256
             apps/mobile/qa-artifact/source-commit.txt
+            apps/mobile/qa-artifact/version-code.txt
+            apps/mobile/qa-artifact/package-name.txt
+            apps/mobile/qa-artifact/signing-cert-sha256.txt
           if-no-files-found: error
           retention-days: 14
