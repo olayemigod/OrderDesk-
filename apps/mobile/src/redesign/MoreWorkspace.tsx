@@ -183,7 +183,7 @@ export function MoreWorkspace({
         <SettingsHub business={business} onSaveBusiness={onSaveBusiness} />
       </View>
 
-      <Text style={[styles.buildStamp, dark && darkStyles.bodyText]}>SellerTray 1.0.0 · Android build 19</Text>
+      <Text style={[styles.buildStamp, dark && darkStyles.bodyText]}>SellerTray 1.0.0 · Android build 20</Text>
     </View>
   );
 }
