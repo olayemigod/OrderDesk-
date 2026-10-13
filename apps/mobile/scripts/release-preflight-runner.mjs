@@ -39,6 +39,9 @@ requireValue(
   'Merchant order-change actions must remain authenticated, tenant-scoped, branch-authorized and retry-safe',
 );`;
 
+const staleVersionCodeCheck = "requireValue(app.android?.versionCode === 19, 'Android versionCode must be 19 for the merchant-reference QA line');";
+const currentVersionCodeCheck = "requireValue(app.android?.versionCode === 20, 'Android versionCode must be 20 for the merchant-reference QA line');";
+
 const app = JSON.parse(fs.readFileSync(appPath, 'utf8')).expo;
 const blockedPermissions = new Set(app.android?.blockedPermissions ?? []);
 if (blockedPermissions.has('android.permission.BLUETOOTH_CONNECT')) throw new Error('Bluetooth printer connection must not be blocked when the SellerTray printer module is enabled');
@@ -69,6 +72,8 @@ if (!moreWorkspace.includes('SellerTray ') || !moreWorkspace.includes(expectedBu
 let source = fs.readFileSync(sourcePath, 'utf8');
 if (source.split(staleOrderChangeCheck).length !== 2) throw new Error('Expected exactly one legacy order-change governance check in release preflight');
 source = source.replace(staleOrderChangeCheck, currentOrderChangeCheck);
+if (source.split(staleVersionCodeCheck).length !== 2) throw new Error('Expected exactly one build 19 QA version guard in release preflight');
+source = source.replace(staleVersionCodeCheck, currentVersionCodeCheck);
 
 fs.writeFileSync(runtimePath, source);
 try {
