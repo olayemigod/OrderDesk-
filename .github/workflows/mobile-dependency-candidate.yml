@@ -1,0 +1,66 @@
+name: Mobile Dependency Candidate
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/mobile-dependency-candidate.yml'
+      - 'apps/mobile/package.json'
+      - 'apps/mobile/package-lock.json'
+
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Capture current audit
+        run: npm audit --omit=dev --json > audit-before.json || true
+
+      - name: Generate non-breaking audit-fix candidate
+        run: npm audit fix --package-lock-only --omit=dev --no-fund || true
+
+      - name: Capture candidate audit
+        run: npm audit --omit=dev --json > audit-after.json || true
+
+      - name: Summarize candidate
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          for (const name of ['audit-before.json', 'audit-after.json']) {
+            const report = JSON.parse(fs.readFileSync(name, 'utf8'));
+            const v = report.metadata?.vulnerabilities ?? {};
+            console.log(name, JSON.stringify(v));
+            for (const [pkg, finding] of Object.entries(report.vulnerabilities ?? {})) {
+              if (['high', 'critical'].includes(finding.severity)) {
+                console.log(pkg, finding.severity, 'fixAvailable=', JSON.stringify(finding.fixAvailable), 'via=', JSON.stringify(finding.via));
+              }
+            }
+          }
+          NODE
+
+      - name: Upload candidate evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: sellertray-mobile-dependency-candidate-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 2
+          path: |
+            apps/mobile/package-lock.json
+            apps/mobile/audit-before.json
+            apps/mobile/audit-after.json
