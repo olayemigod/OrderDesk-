@@ -7,6 +7,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/mobile-dependency-candidate.yml'
+      - 'apps/mobile/scripts/dependency-audit-policy.mjs'
 
 jobs:
   apply-candidate:

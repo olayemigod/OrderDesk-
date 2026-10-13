@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 
 const exceptions = new Map([
   [
-    'GHSA-vfj7-8cjw-p6xm',
+    'GHSA-VFJ7-8CJW-P6XM',
     {
       packageName: 'braces',
       version: '3.0.3',
@@ -13,7 +13,7 @@ const exceptions = new Map([
     },
   ],
   [
-    'GHSA-86w9-cpqp-85rv',
+    'GHSA-86W9-CPQP-85RV',
     {
       packageName: 'node-forge',
       version: '1.4.0',
@@ -70,6 +70,8 @@ const advisoryIdsFor = (packageName, seen = new Set()) => {
     }
 
     if (!via || typeof via !== 'object') continue;
+    if (!['high', 'critical'].includes(via.severity)) continue;
+
     const match = String(via.url ?? '').match(/GHSA-[0-9a-z-]+/i);
     if (match) ids.add(match[0].toUpperCase());
   }
@@ -87,7 +89,7 @@ for (const [packageName, finding] of blocking) {
 
   const advisoryIds = [...advisoryIdsFor(packageName)];
   if (!advisoryIds.length) {
-    failures.push(`${packageName}: high finding has no traceable advisory identity`);
+    failures.push(`${packageName}: high finding has no traceable high-severity advisory identity`);
     continue;
   }
 
