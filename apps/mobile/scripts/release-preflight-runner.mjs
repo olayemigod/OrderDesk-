@@ -24,15 +24,18 @@ const staleOrderChangeCheck = `requireValue(
 );`;
 
 const currentOrderChangeCheck = `const orderChangeGovernanceMigration = read(join(repoRoot, 'supabase/migrations/20261013100000_order_change_governance.sql'));
+const orderChangeBranchConvergenceMigration = read(join(repoRoot, 'supabase/migrations/20261013120317_order_change_branch_authority_convergence.sql'));
 requireValue(
   orderChangeRequestFunction.includes("admin.auth.getUser(token)") &&
     orderChangeRequestFunction.includes("'resolve_sellertray_customer_order_change'") &&
     orderChangeRequestFunction.includes('p_actor_user_id: userId') &&
     orderChangeGovernanceMigration.includes('create or replace function public.resolve_sellertray_customer_order_change') &&
     orderChangeGovernanceMigration.includes("'can_manage_orders'") &&
-    orderChangeGovernanceMigration.includes('sellertray_user_can_access_branch') &&
     orderChangeGovernanceMigration.includes("v_action not in ('apply','resolve','reject')") &&
-    orderChangeGovernanceMigration.includes("v_request.status not in ('pending','reviewed')"),
+    orderChangeBranchConvergenceMigration.includes('create or replace function public.resolve_sellertray_customer_order_change') &&
+    orderChangeBranchConvergenceMigration.includes('sellertray_user_can_operate_branch') &&
+    !orderChangeBranchConvergenceMigration.includes('sellertray_user_can_access_branch') &&
+    orderChangeBranchConvergenceMigration.includes("v_request.status not in ('pending','reviewed')"),
   'Merchant order-change actions must remain authenticated, tenant-scoped, branch-authorized and retry-safe',
 );`;
 
