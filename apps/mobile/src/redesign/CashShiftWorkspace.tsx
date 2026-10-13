@@ -9,6 +9,7 @@ import {
   loadCashRegisters,
   loadCashShift,
   loadCashShiftCapabilities,
+  loadCashWriteAccess,
   openCashShift,
   recordCashMovement,
   reviewCashShift,
@@ -42,6 +43,8 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
   const dark = appearance.dark;
   const [registers, setRegisters] = useState<CashRegister[]>([]);
   const [capabilities, setCapabilities] = useState<CashShiftCapabilities>(NO_CAPABILITIES);
+  const [capabilitiesLoaded, setCapabilitiesLoaded] = useState(false);
+  const [canWrite, setCanWrite] = useState<boolean | null>(null);
   const [shift, setShift] = useState<CashShift | null>(null);
   const [history, setHistory] = useState<CashShiftHistoryRow[]>([]);
   const [reviewShift, setReviewShift] = useState<CashShift | null>(null);
@@ -65,32 +68,69 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
   async function refresh(options?: { quiet?: boolean }) {
     if (!options?.quiet) setLoading(true);
     setError(null);
-    try {
-      const [nextRegisters, nextCapabilities, nextShift, nextHistory] = await Promise.all([
-        loadCashRegisters(tenantId, branch.id),
-        loadCashShiftCapabilities(tenantId, branch.id),
-        loadActiveCashShift(tenantId, branch.id),
-        loadCashShiftHistory(tenantId, branch.id, 30),
-      ]);
-      setRegisters(nextRegisters);
-      setCapabilities(nextCapabilities);
-      setShift(nextShift);
-      setHistory(nextHistory);
+
+    const [registerResult, capabilityResult, writeResult, shiftResult, historyResult] = await Promise.allSettled([
+      loadCashRegisters(tenantId, branch.id),
+      loadCashShiftCapabilities(tenantId, branch.id),
+      loadCashWriteAccess(tenantId),
+      loadActiveCashShift(tenantId, branch.id),
+      loadCashShiftHistory(tenantId, branch.id, 30),
+    ] as const);
+    const errors: string[] = [];
+
+    if (registerResult.status === 'fulfilled') {
+      setRegisters(registerResult.value);
       setSelectedRegisterId((current) => {
-        if (nextRegisters.some((entry) => entry.id === current)) return current;
-        return nextRegisters.find((entry) => entry.isDefault)?.id ?? nextRegisters[0]?.id ?? '';
+        if (registerResult.value.some((entry) => entry.id === current)) return current;
+        return registerResult.value.find((entry) => entry.isDefault)?.id ?? registerResult.value[0]?.id ?? '';
       });
-      onShiftChanged?.(nextShift);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to load cash and shift information.');
-    } finally {
-      if (!options?.quiet) setLoading(false);
+    } else {
+      setRegisters([]);
+      setSelectedRegisterId('');
+      errors.push('Unable to refresh registers.');
     }
+
+    if (capabilityResult.status === 'fulfilled') {
+      setCapabilities(capabilityResult.value);
+      setCapabilitiesLoaded(true);
+    } else {
+      setCapabilities(NO_CAPABILITIES);
+      setCapabilitiesLoaded(false);
+      errors.push('Unable to confirm cashier permissions.');
+    }
+
+    if (writeResult.status === 'fulfilled') {
+      setCanWrite(writeResult.value);
+    } else {
+      setCanWrite(null);
+      errors.push('Unable to confirm whether cash actions are available.');
+    }
+
+    if (shiftResult.status === 'fulfilled') {
+      setShift(shiftResult.value);
+      onShiftChanged?.(shiftResult.value);
+    } else {
+      setShift(null);
+      errors.push('Unable to refresh the current cashier shift.');
+    }
+
+    if (historyResult.status === 'fulfilled') {
+      setHistory(historyResult.value);
+    } else {
+      setHistory([]);
+      errors.push('Unable to refresh cashier history.');
+    }
+
+    if (errors.length > 0) setError(errors.join(' '));
+    if (!options?.quiet) setLoading(false);
   }
 
   useEffect(() => {
     setShift(null);
     setHistory([]);
+    setCapabilities(NO_CAPABILITIES);
+    setCapabilitiesLoaded(false);
+    setCanWrite(null);
     setReviewShift(null);
     setCloseMode(false);
     setMovementMode(null);
@@ -104,12 +144,18 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
 
   async function handleOpenShift() {
     if (saving) return;
-    const amount = Number(openingCash);
+    if (canWrite !== true) {
+      setError(canWrite === false
+        ? 'This business is read-only. Reactivate the SellerTray subscription to open a cashier shift.'
+        : 'SellerTray could not confirm whether cash actions are available. Refresh and try again.');
+      return;
+    }
+    const amount = parseCashInput(openingCash);
     if (!selectedRegisterId) {
       setError('Choose a register before opening the shift.');
       return;
     }
-    if (openingCash.trim() === '' || !Number.isFinite(amount) || amount < 0) {
+    if (amount === null || amount < 0) {
       setError('Enter a valid opening cash amount.');
       return;
     }
@@ -144,6 +190,10 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
 
   async function handleMovement() {
     if (!shift || !movementMode || saving) return;
+    if (canWrite !== true) {
+      setError('This business is read-only. Reactivate the SellerTray subscription before recording cash activity.');
+      return;
+    }
     const amount = Number(movementAmount);
     if (movementAmount.trim() === '' || !Number.isFinite(amount) || amount <= 0) {
       setError('Enter an amount greater than zero.');
@@ -196,6 +246,10 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
 
   async function handleCloseShift() {
     if (!shift || saving) return;
+    if (canWrite !== true) {
+      setError('This business is read-only. Reactivate the SellerTray subscription before closing this shift.');
+      return;
+    }
     const amount = Number(declaredCash);
     if (declaredCash.trim() === '' || !Number.isFinite(amount) || amount < 0) {
       setError('Enter the cash physically counted in the drawer.');
@@ -244,6 +298,10 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
 
   async function handleReview() {
     if (!reviewShift || saving) return;
+    if (canWrite !== true) {
+      setError('This business is read-only. Reactivate the SellerTray subscription before saving a shift review.');
+      return;
+    }
     if (reviewDecision === 'follow_up' && !reviewNote.trim()) {
       setError('Enter what needs follow-up.');
       return;
@@ -292,6 +350,7 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
           </Text>
         </View>
         {error ? <MessageCard text={error} error dark={dark} /> : null}
+        {canWrite === false ? <MessageCard text="This business is read-only. Shift details remain available, but review decisions cannot be saved until the subscription is reactivated." error dark={dark} /> : null}
         <View style={styles.metricGrid}>
           <MetricCard label="Expected" value={formatMoney(reviewShift.expectedCash, reviewShift.currency)} dark={dark} />
           <MetricCard label="Declared" value={formatMoney(reviewShift.declaredCash ?? 0, reviewShift.currency)} dark={dark} />
@@ -319,7 +378,7 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
             multiline
             style={[styles.input, styles.multiline, dark && darkStyles.input]}
           />
-          <PrimaryButton label="Save review" loading={saving} onPress={() => void handleReview()} />
+          <PrimaryButton label="Save review" loading={saving} disabled={canWrite !== true} onPress={() => void handleReview()} />
         </View>
       </View>
     );
@@ -337,6 +396,7 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
       </View>
 
       {error ? <MessageCard text={error} error dark={dark} /> : null}
+      {canWrite === false ? <MessageCard text="This business is read-only. You can review cashier information, but cash actions are unavailable until the subscription is reactivated." error dark={dark} /> : null}
       {notice ? <MessageCard text={notice} dark={dark} /> : null}
 
       {!shift ? (
@@ -348,7 +408,13 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
             </View>
             <Ionicons name="lock-open-outline" size={23} color={theme.colors.greenDark} />
           </View>
-          {!capabilities.canOpenShift ? (
+          {canWrite === false ? (
+            <Text style={[styles.helper, dark && darkStyles.bodyText]}>Cashier actions are unavailable while this business is read-only. Reactivate the SellerTray subscription to continue.</Text>
+          ) : canWrite === null ? (
+            <Text style={[styles.helper, dark && darkStyles.bodyText]}>SellerTray could not confirm whether cash actions are available. Refresh and try again.</Text>
+          ) : !capabilitiesLoaded ? (
+            <Text style={[styles.helper, dark && darkStyles.bodyText]}>Cashier permissions could not be confirmed. Refresh and try again.</Text>
+          ) : !capabilities.canOpenShift ? (
             <Text style={[styles.helper, dark && darkStyles.bodyText]}>You do not have permission to open a cashier shift.</Text>
           ) : registers.length === 0 ? (
             <Text style={[styles.helper, dark && darkStyles.bodyText]}>No active register is available for this branch.</Text>
@@ -370,6 +436,7 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
               <TextInput
                 value={openingCash}
                 onChangeText={setOpeningCash}
+                onEndEditing={() => setOpeningCash(normalizeCashInput(openingCash))}
                 keyboardType="decimal-pad"
                 placeholder="0"
                 placeholderTextColor={theme.colors.subtle}
@@ -404,7 +471,12 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
             </Text>
           </View>
 
-          {movementMode ? (
+          {canWrite !== true ? (
+            <View style={[styles.infoCard, dark && darkStyles.subtleCard]}>
+              <Text style={[styles.infoTitle, dark && darkStyles.titleText]}>Cash actions unavailable</Text>
+              <Text style={[styles.infoText, dark && darkStyles.bodyText]}>Reactivate the SellerTray subscription before recording expenses, cash in, cash out or closing this shift.</Text>
+            </View>
+          ) : movementMode ? (
             <View style={[styles.formCard, dark && darkStyles.card]}>
               <View style={styles.sectionRow}>
                 <Text style={[styles.sectionTitle, dark && darkStyles.titleText]}>{movementLabel(movementMode)}</Text>
@@ -461,7 +533,7 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
             </View>
           )}
 
-          {closeMode ? (
+          {canWrite === true && closeMode ? (
             <View style={[styles.formCard, dark && darkStyles.card]}>
               <Text style={[styles.sectionTitle, dark && darkStyles.titleText]}>Close shift</Text>
               <Text style={[styles.helper, dark && darkStyles.bodyText]}>
@@ -555,9 +627,10 @@ function BackButton({ dark, onPress, label = 'More' }: { dark: boolean; onPress:
   );
 }
 
-function PrimaryButton({ label, loading, onPress, compact = false }: { label: string; loading?: boolean; onPress: () => void; compact?: boolean }) {
+function PrimaryButton({ label, loading, disabled = false, onPress, compact = false }: { label: string; loading?: boolean; disabled?: boolean; onPress: () => void; compact?: boolean }) {
+  const unavailable = loading || disabled;
   return (
-    <Pressable disabled={loading} onPress={onPress} style={({ pressed }) => [styles.primaryButton, compact && styles.flexButton, pressed && styles.pressed, loading && styles.disabled]}>
+    <Pressable disabled={unavailable} onPress={onPress} style={({ pressed }) => [styles.primaryButton, compact && styles.flexButton, pressed && !unavailable && styles.pressed, unavailable && styles.disabled]}>
       {loading ? <ActivityIndicator color={theme.colors.white} size="small" /> : null}
       <Text style={styles.primaryButtonText}>{label}</Text>
     </Pressable>
@@ -644,6 +717,19 @@ function formatSignedMoney(value: number, currency: string): string {
 
 function formatQuantity(value: number): string {
   return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(2)));
+}
+
+function parseCashInput(value: string): number | null {
+  const normalized = value.replace(/,/g, '').trim();
+  if (!normalized || !/^\d+(?:\.\d{0,2})?$/.test(normalized)) return null;
+  const amount = Number(normalized);
+  return Number.isFinite(amount) ? amount : null;
+}
+
+function normalizeCashInput(value: string): string {
+  const amount = parseCashInput(value);
+  if (amount === null) return value.trim();
+  return new Intl.NumberFormat('en-NG', { maximumFractionDigits: 2 }).format(amount);
 }
 
 function formatDateTime(value: string | null): string {
