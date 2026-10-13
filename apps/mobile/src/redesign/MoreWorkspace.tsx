@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -115,7 +115,7 @@ export function MoreWorkspace({
         <Text style={[styles.eyebrow, dark && darkStyles.bodyText]}>MORE</Text>
         <Text style={[styles.title, dark && darkStyles.titleText]}>Operations & settings</Text>
         <Text style={[styles.subtitle, dark && darkStyles.bodyText]}>
-          Manage today’s store work and business settings from one place.
+          Manage today's store work and business settings from one place.
         </Text>
       </View>
 

@@ -166,7 +166,6 @@ const requiredBlockedAndroidPermissions = [
   "android.permission.BODY_SENSORS_BACKGROUND",
   "android.permission.ACTIVITY_RECOGNITION",
   "android.permission.BLUETOOTH_SCAN",
-  "android.permission.BLUETOOTH_CONNECT",
   "android.permission.SCHEDULE_EXACT_ALARM",
   "android.permission.USE_EXACT_ALARM",
   "android.permission.MANAGE_EXTERNAL_STORAGE",
@@ -178,7 +177,7 @@ const blockedAndroidPermissions = new Set(app.android?.blockedPermissions ?? [])
 for (const permission of requiredBlockedAndroidPermissions) {
   requireValue(blockedAndroidPermissions.has(permission), 'Sensitive Android permission must remain blocked: '+permission);
 }
-requireValue(app.android?.versionCode === 8, 'Android versionCode must be 8 for the merchant-reference QA line');
+requireValue(app.android?.versionCode === 19, 'Android versionCode must be 19 for the merchant-reference QA line');
 requireValue(app.ios?.bundleIdentifier === 'ng.processedge.sellertray', 'iOS bundle ID must match SellerTray identity');
 requireValue(pkg.dependencies?.['expo-notifications'] === '57.0.18', 'SellerTray mobile must pin expo-notifications for native push');
 requireValue(pkg.dependencies?.['expo-constants'] === '57.0.17', 'SellerTray mobile must pin expo-constants for Expo push project identity');
@@ -267,7 +266,7 @@ requireValue(settingsHub.includes('<AccountDataControls business={business} />')
 requireValue(saasApp.includes("supabase.auth.signOut({ scope: 'local' })"), 'Workspace quick sign-out must be device-local');
 requireValue(saasApp.includes('label="Catalogue"') && saasApp.includes("onChange('products')"), 'Catalogue must have a first-class bottom tab');
 requireValue(saasApp.includes('label="Conversations"') && saasApp.includes("onChange('inbox')"), 'WhatsApp conversations must have a first-class Conversations bottom tab');
-requireValue(saasApp.includes("if (selectedOrder)") && saasApp.includes("← Orders"), 'Order details must remain a mobile drill-in flow with a visible back action');
+requireValue(saasApp.includes("if (selectedOrder)") && saasApp.includes("Orders"), 'Order details must remain a mobile drill-in flow with a visible back action');
 requireValue(saasApp.includes('Captured order messages') && saasApp.includes('Linked order'), 'Inbox must expose captured WhatsApp order messages and linked-order navigation');
 requireValue(saasApp.includes('conversationUnreadBadge') && saasApp.includes('Unread messages in this view'), 'Conversations must expose per-conversation unread bubbles and unread summary');
 requireValue(saasApp.includes('merchantUnreadCount') && saasApp.includes('markAllMerchantNotificationsRead'), 'Notification bell and Activity Center must use durable per-user unread state');
@@ -278,7 +277,7 @@ requireValue(paymentSettingsUi.includes('Transactions') && paymentSettingsUi.inc
 requireValue(saasApp.includes('label="More"') && saasApp.includes("onChange('more')"), 'Business/settings must be separated behind More');
 requireValue(saasApp.includes("paddingBottom: Platform.OS === 'android' ? 46 : 10"), 'Android bottom navigation must retain system-navigation clearance');
 requireValue(settingsHub.includes("BackHandler.addEventListener('hardwareBackPress'"), 'Android settings must support native back navigation');
-requireValue(settingsHub.includes('SellerTray 1.0.0 · Android build 8'), 'More screen must expose the current Android build marker');
+requireValue(read(join(mobileRoot, 'src/redesign/MoreWorkspace.tsx')).includes('Android build '+app.android.versionCode), 'More screen must expose the current Android build marker');
 requireValue(saasApp.includes("StatusBar.currentHeight"), 'Android status-bar safe area must remain enforced in the merchant workspace');
 requireValue(catalogueView.includes('Product name') && catalogueView.includes('Selling price') && catalogueView.includes('Customer words / aliases'), 'Product editor must retain visible field labels and guidance');
 requireValue(manualOrderComposer.includes('Create an order') && manualOrderComposer.includes('Customer name') && manualOrderComposer.includes('Products *'), 'Orders must expose guided manual order creation');
@@ -422,6 +421,13 @@ const whatsappWebhookFunction = read(join(repoRoot, 'supabase/functions/whatsapp
 const whatsappConnectionFunction = read(join(repoRoot, 'supabase/functions/whatsapp-connection/index.ts'));
 const whatsappConnectionMigration = read(join(repoRoot, 'supabase/migrations/20260912235000_whatsapp_multi_merchant_connections.sql'));
 const catalogueFromChatFunction = read(join(repoRoot, 'supabase/functions/catalogue-from-chat/index.ts'));
+const orderChangeRequestFunction = read(join(repoRoot, 'supabase/functions/order-change-request/index.ts'));
+const orderChangeNotificationMigration = read(join(repoRoot, 'supabase/migrations/20260913002145_customer_order_change_notifications.sql'));
+const orderChangeRealtimeMigration = read(join(repoRoot, 'supabase/migrations/20260913014500_order_change_request_realtime.sql'));
+const merchantNotificationsRepository = read(join(mobileRoot, 'src/data/merchantNotificationsRepository.ts'));
+const orderChangeRequestsRepository = read(join(mobileRoot, 'src/data/orderChangeRequestsRepository.ts'));
+const merchantNotificationsHook = read(join(mobileRoot, 'src/hooks/useMerchantNotifications.ts'));
+const orderChangeRequestsHook = read(join(mobileRoot, 'src/hooks/useOrderChangeRequests.ts'));
 
 const whatsappTemplateMigration = read(join(repoRoot, 'supabase/migrations/20260912171500_whatsapp_template_dispatch.sql'));
 requireValue(
@@ -441,6 +447,54 @@ requireValue(
   whatsappWebhookFunction.includes('if (enrichedItems.length === 0)') &&
     whatsappWebhookFunction.includes("event: 'whatsapp_message_not_an_order'"),
   'Ordinary WhatsApp conversations must not create zero-item SellerTray orders',
+);
+requireValue(
+  whatsappWebhookFunction.includes('maybeRecordCustomerOrderChangeRequest') &&
+    whatsappWebhookFunction.includes('detectOrderChangeKind') &&
+    whatsappWebhookFunction.includes("return 'cancel_order'") &&
+    whatsappWebhookFunction.includes("return 'add_items'") &&
+    whatsappWebhookFunction.includes('softCancellation') &&
+    whatsappWebhookFunction.includes('no\\s+need') &&
+    whatsappWebhookFunction.includes('never\\s*mind'),
+  'WhatsApp order-change and soft-cancellation language must route to governed merchant review',
+);
+requireValue(
+  orderChangeNotificationMigration.includes('customer_order_change_requests') &&
+    orderChangeNotificationMigration.includes('merchant_notifications') &&
+    orderChangeNotificationMigration.includes('order_change_request_received') &&
+    orderChangeNotificationMigration.includes('notification_worker_invocations') &&
+    orderChangeNotificationMigration.includes('kick_whatsapp_notification_worker') &&
+    orderChangeNotificationMigration.includes('sellertray-whatsapp-notification-retry') &&
+    orderChangeRealtimeMigration.includes('customer_order_change_requests'),
+  'Customer order-change requests must generate realtime merchant alerts and durable WhatsApp dispatch',
+);
+requireValue(
+  orderChangeRequestFunction.includes("admin.auth.getUser(token)") &&
+    orderChangeRequestFunction.includes("request_kind === 'add_items'") &&
+    orderChangeRequestFunction.includes("request_kind === 'cancel_order'") &&
+    orderChangeRequestFunction.includes('For remove/change requests') &&
+    orderChangeRequestFunction.includes('tenant_members'),
+  'Merchant order-change actions must remain authenticated, tenant-scoped and explicit',
+);
+requireValue(
+  merchantNotificationsRepository.includes('merchant_notifications') &&
+    merchantNotificationsRepository.includes('postgres_changes') &&
+    orderChangeRequestsRepository.includes('order-change-request') &&
+    orderChangeRequestsRepository.includes('customer_order_change_requests') &&
+    merchantNotificationsHook.includes('unreadCount') &&
+    orderChangeRequestsHook.includes('runAction') &&
+    saasApp.includes('Customer requested an order change') === false &&
+    saasApp.includes('MerchantNotificationsView') &&
+    saasApp.includes('Apply additions') &&
+    saasApp.includes('Confirm cancellation') &&
+    saasApp.includes('Mark handled'),
+  'SellerTray mobile must surface realtime actionable merchant alerts without hard-coded test content',
+);
+requireValue(
+  whatsappNotificationWorker.includes('claim_sellertray_notification_worker_invocation') &&
+    whatsappNotificationWorker.includes('readRequestTextLimited(request, 8192)') &&
+    whatsappNotificationWorker.includes("Deno.env.get('META_GRAPH_API_VERSION')?.trim() || 'v22.0'"),
+  'WhatsApp notification worker must support single-use server tickets and a stable Graph API baseline',
 );
 requireValue(
   whatsappConnectionMigration.includes('phone_number_id text unique') &&
@@ -943,9 +997,39 @@ requireValue(
 
 const releaseRunbook = read(join(repoRoot, 'docs/release_runbook.md'));
 const lifecycle = read(join(repoRoot, 'docs/data_lifecycle.md'));
+const metaTechProviderRunbook = read(join(repoRoot, 'docs/meta_tech_provider_approval.md'));
+const metaAppReviewSubmission = read(join(repoRoot, 'docs/meta_app_review_submission.md'));
+const commercialPricingProposal = read(join(repoRoot, 'docs/commercial_pricing_proposal.md'));
+const whatsappConnectionView = read(join(mobileRoot, 'src/components/WhatsAppConnectionView.tsx'));
 requireValue(releaseRunbook.includes('ng.processedge.sellertray'), 'Release runbook must record the frozen Android package');
 requireValue(releaseRunbook.includes('sellertray://auth-confirm'), 'Release runbook must record SellerTray Auth redirects');
 requireValue(lifecycle.includes('https://sellertray.vercel.app/account-deletion'), 'Data lifecycle must record the public deletion resource');
+requireValue(
+  metaTechProviderRunbook.includes('Meta Tech Provider') &&
+    metaTechProviderRunbook.includes('Embedded Signup') &&
+    metaTechProviderRunbook.includes('whatsapp_business_management') &&
+    metaTechProviderRunbook.includes('whatsapp_business_messaging') &&
+    metaTechProviderRunbook.includes('SellerTray does not require a Meta payment method just to connect WhatsApp'),
+  'Meta Tech Provider approval/evidence runbook must remain complete',
+);
+requireValue(
+  metaAppReviewSubmission.includes('Permission: whatsapp_business_management') &&
+    metaAppReviewSubmission.includes('Permission: whatsapp_business_messaging') &&
+    metaAppReviewSubmission.includes('Reviewer test account') &&
+    metaAppReviewSubmission.includes('does not require a merchant to add a Meta payment method just to connect'),
+  'Meta App Review submission packet must remain reviewer-ready and secret-safe',
+);
+requireValue(
+  commercialPricingProposal.includes('Meta WhatsApp Business Platform charges are **not included**') &&
+    commercialPricingProposal.includes('No hidden pass-through markup'),
+  'Commercial pricing must keep Meta messaging charges separate from SellerTray billing',
+);
+requireValue(
+  whatsappConnectionView.includes('Meta WhatsApp charges are separate') &&
+    whatsappConnectionView.includes('SellerTray does not require a Meta payment method just to connect WhatsApp') &&
+    whatsappConnectionView.includes('SellerTray subscription and AI-usage charges are billed separately'),
+  'WhatsApp onboarding must disclose Meta and SellerTray billing separation',
+);
 
 const legacyUiPhrases = [
   'Opening OrderDesk',
@@ -978,6 +1062,8 @@ const forbiddenSecretPatterns = [
   /WHATSAPP_ACCESS_TOKEN/g,
   /META_ACCESS_TOKEN/g,
   /META_WEBHOOK_VERIFY_TOKEN/g,
+  /META_APP_SECRET/g,
+  /SELLERTRAY_WHATSAPP_ENCRYPTION_KEY/g,
   /ORDER_PARSER_TOKEN/g,
   /WORKER_TOKEN/g,
   /sb_secret_[A-Za-z0-9_-]+/g,

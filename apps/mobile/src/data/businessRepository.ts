@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+﻿import { supabase } from '../lib/supabase';
 
 export type OnboardingStatus = 'profile' | 'catalogue' | 'whatsapp' | 'test_order' | 'ready';
 export type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'grace' | 'suspended' | 'cancelled';
@@ -109,7 +109,6 @@ export async function loadBusinesses(): Promise<MerchantBusiness[]> {
     whatsappConnectionStatus: row.whatsapp_connection_status,
     whatsappReadiness: fallbackWhatsAppReadiness(row.whatsapp_connection_status),
   } satisfies MerchantBusiness));
-
   const readiness = await Promise.all(
     businesses.map(async (business) => {
       try {

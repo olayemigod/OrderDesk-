@@ -1,4 +1,4 @@
-type J = Record<string, unknown>;
+﻿type J = Record<string, unknown>;
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -261,7 +261,6 @@ async function messagingReadiness(connection: J | null): Promise<J> {
         readinessEvidence: 'live_delivery',
       };
     }
-
     return {
       inboundReady,
       outboundReady: false,
@@ -459,7 +458,6 @@ async function latestSuccessfulOutbound(tenantId: string, phoneNumberId: string)
     return null;
   }
 }
-
 async function runtimeAccessToken(connection: J, phoneNumberId: string): Promise<string> {
   const mode = connection.credential_mode;
   if (mode === 'platform_system_user') {

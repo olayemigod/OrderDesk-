@@ -359,7 +359,7 @@ export default function TeamBranchesManagement({ tenantId, onBranchesChanged }: 
   }
 
   if (loading && branches.length === 0 && team.members.length === 0) {
-    return <div className="panel team-loading">Loading Team and Branches…</div>;
+    return <div className="panel team-loading">Loading Team and Branchesâ€¦</div>;
   }
 
   return <div className="page-stack">
@@ -398,7 +398,7 @@ export default function TeamBranchesManagement({ tenantId, onBranchesChanged }: 
             <label className="check-field"><input type="checkbox" checked={branchDraft.isActive} disabled={branchDraft.isDefault} onChange={(event) => setBranchDraft((current) => ({ ...current, isActive: event.target.checked }))} />Active Branch</label>
           </div>
           {selectedBranch?.isDefault ? <p className="muted governance-note">To archive the default Branch, first make another active Branch the default.</p> : null}
-          <div className="form-actions"><button className="primary-button" disabled={saving}>{saving ? 'Saving…' : 'Save Branch'}</button></div>
+          <div className="form-actions"><button className="primary-button" disabled={saving}>{saving ? 'Savingâ€¦' : 'Save Branch'}</button></div>
         </form>
       </div>
     </section>
@@ -408,16 +408,16 @@ export default function TeamBranchesManagement({ tenantId, onBranchesChanged }: 
       <form className="panel invite-form" onSubmit={invite}>
         <Field label="Email address"><input type="email" required value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="person@example.com" /></Field>
         {team.actorRole === 'owner' ? <label className="field"><span>Role</span><select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as InviteRole)}><option value="staff">Staff</option><option value="manager">Manager</option></select></label> : <div className="role-lock"><span>Role</span><strong>Staff</strong></div>}
-        <button className="primary-button" disabled={saving}>{saving ? 'Working…' : 'Invite team member'}</button>
+        <button className="primary-button" disabled={saving}>{saving ? 'Workingâ€¦' : 'Invite team member'}</button>
       </form>
 
-      {team.invitations.length ? <article className="panel invitation-panel"><div className="panel-head"><div><p className="eyebrow">Pending</p><h3>Invitations</h3></div></div>{team.invitations.map((invitation) => <div className="invitation-row" key={invitation.id}><span><strong>{invitation.email}</strong><small>{title(invitation.role)} · expires {dateOnly(invitation.expiresAt)}</small></span><button className="text-button" disabled={saving || (team.actorRole === 'manager' && invitation.role !== 'staff')} onClick={() => void cancelInvitation(invitation)}>Cancel</button></div>)}</article> : null}
+      {team.invitations.length ? <article className="panel invitation-panel"><div className="panel-head"><div><p className="eyebrow">Pending</p><h3>Invitations</h3></div></div>{team.invitations.map((invitation) => <div className="invitation-row" key={invitation.id}><span><strong>{invitation.email}</strong><small>{title(invitation.role)} Â· expires {dateOnly(invitation.expiresAt)}</small></span><button className="text-button" disabled={saving || (team.actorRole === 'manager' && invitation.role !== 'staff')} onClick={() => void cancelInvitation(invitation)}>Cancel</button></div>)}</article> : null}
 
       <div className="team-management-grid">
         <div className="panel member-list">
           {team.members.map((member) => <button key={member.userId} className={selectedMemberId === member.userId ? 'member-row active' : 'member-row'} onClick={() => setSelectedMemberId(member.userId)}>
             <span className="member-avatar">{member.email.slice(0, 1).toUpperCase()}</span>
-            <span><strong>{member.email || 'Team member'}</strong><small>{title(member.role)} · joined {dateOnly(member.joinedAt)}</small></span>
+            <span><strong>{member.email || 'Team member'}</strong><small>{title(member.role)} Â· joined {dateOnly(member.joinedAt)}</small></span>
             {member.userId === actorUserId ? <em>You</em> : null}
           </button>)}
         </div>
@@ -436,7 +436,7 @@ export default function TeamBranchesManagement({ tenantId, onBranchesChanged }: 
               <div className="access-grid">{branches.map((branch) => {
                 const checked = selectedAccess.usesDefaultBranchFallback ? branch.isDefault && branch.isActive : selectedAccess.branchAccess[branch.id] === true;
                 const disabled = !canManageMember(selectedMember) || saving || (!branch.isActive && !checked);
-                return <label className={checked ? 'access-card checked' : 'access-card'} key={branch.id}><input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => void setBranchAccess(selectedMember, branch, event.target.checked)} /><span><strong>{branch.name}</strong><small>{branch.code}{branch.isDefault ? ' · Default' : ''}{!branch.isActive ? ' · Archived' : ''}</small></span></label>;
+                return <label className={checked ? 'access-card checked' : 'access-card'} key={branch.id}><input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => void setBranchAccess(selectedMember, branch, event.target.checked)} /><span><strong>{branch.name}</strong><small>{branch.code}{branch.isDefault ? ' Â· Default' : ''}{!branch.isActive ? ' Â· Archived' : ''}</small></span></label>;
               })}</div>
             </article> : null}
 
@@ -516,6 +516,6 @@ function title(value: string): string {
 
 function dateOnly(value: string): string {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
+  if (Number.isNaN(date.getTime())) return 'â€”';
   return new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium' }).format(date);
 }

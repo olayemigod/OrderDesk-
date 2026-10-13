@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
@@ -35,6 +35,7 @@ import { useBusinesses } from './hooks/useBusinesses';
 import { useCatalogue } from './hooks/useCatalogue';
 import { useConversationUnreadCounts } from './hooks/useConversationUnreadCounts';
 import { useMerchantNotifications } from './hooks/useMerchantNotifications';
+import { useOrderChangeRequests } from './hooks/useOrderChangeRequests';
 import { useOrders } from './hooks/useOrders';
 import { useOrderGateStatus } from './hooks/useOrderGateStatus';
 import { usePushNotifications } from './hooks/usePushNotifications';
@@ -108,6 +109,13 @@ function Workspace() {
     editItem,
     removeItem,
   } = useOrders(activeBusiness?.id ?? null);
+  const {
+    requests: orderChangeRequests,
+    busyId: orderChangeRequestBusyId,
+    error: orderChangeRequestError,
+    refresh: refreshOrderChangeRequests,
+    runAction: runOrderChangeRequestAction,
+  } = useOrderChangeRequests(activeBusiness?.id ?? null);
   const catalogue = useCatalogue(activeBusiness?.id ?? null);
   const {
     notifications: merchantNotifications,
@@ -200,6 +208,7 @@ function Workspace() {
       refresh(),
       refreshMerchantNotifications(),
       refreshConversationUnread(),
+      refreshOrderChangeRequests(),
     ]);
   }
 
@@ -207,7 +216,7 @@ function Workspace() {
     return (
       <SafeAreaView style={styles.centered}>
         <ActivityIndicator size="large" />
-        <Text style={styles.muted}>Opening SellerTray…</Text>
+        <Text style={styles.muted}>Opening SellerTrayâ€¦</Text>
       </SafeAreaView>
     );
   }
@@ -231,7 +240,7 @@ function Workspace() {
     );
   }
 
-  const pageError = businessesError || error || merchantNotificationsError || conversationUnreadError;
+  const pageError = businessesError || error || merchantNotificationsError || conversationUnreadError || orderChangeRequestError;
 
   return (
     <SafeAreaView style={[styles.safeArea, appearance.dark && darkStyles.safeArea]}>
@@ -260,6 +269,8 @@ function Workspace() {
           <WorkspaceContextHeader
             business={activeBusiness}
             businesses={businesses}
+            unreadCount={merchantUnreadCount}
+            onOpenNotifications={() => setView('notifications')}
             onSelectBusiness={selectBusiness}
           />
 
@@ -330,6 +341,27 @@ function Workspace() {
 
           {view === 'products' ? (
             <CatalogueView business={activeBusiness} />
+          ) : null}
+
+          {view === 'notifications' ? (
+            <MerchantNotificationsView
+              notifications={merchantNotifications}
+              changeRequests={orderChangeRequests}
+              loading={merchantNotificationsLoading}
+              busyRequestId={orderChangeRequestBusyId}
+              onMarkAllRead={() => void markAllMerchantNotificationsRead()}
+              onRequestAction={async (notificationId, requestId, action) => {
+                await runOrderChangeRequestAction(requestId, action);
+                await markMerchantNotificationRead(notificationId);
+              }}
+              onOpenOrder={(notificationId, orderId) => {
+                void markMerchantNotificationRead(notificationId);
+                if (orderId) {
+                  setSelectedOrderId(orderId);
+                  setView('orders');
+                }
+              }}
+            />
           ) : null}
 
           {view === 'more' ? (
@@ -406,10 +438,14 @@ function PinnedBrandHeader({
 function WorkspaceContextHeader({
   business,
   businesses,
+  unreadCount,
+  onOpenNotifications,
   onSelectBusiness,
 }: {
   business: MerchantBusiness;
   businesses: MerchantBusiness[];
+  unreadCount: number;
+  onOpenNotifications: () => void;
   onSelectBusiness: (businessId: string) => Promise<void>;
 }) {
   const appearance = useSellerTrayAppearance();
@@ -418,7 +454,7 @@ function WorkspaceContextHeader({
       <View style={styles.merchantIdentity}>
         <Text style={[styles.businessName, appearance.dark && darkStyles.titleText, appearance.textSize === 'large' && styles.businessNameLarge]}>{business.name}</Text>
         <Text style={[styles.workspaceMeta, appearance.dark && darkStyles.bodyText]}>
-          {business.role.toUpperCase()} · {subscriptionLabels[business.subscriptionStatus]}
+          {business.role.toUpperCase()} Â· {subscriptionLabels[business.subscriptionStatus]}
         </Text>
       </View>
 
@@ -458,7 +494,7 @@ function WorkspaceContextHeader({
             business.whatsappReadiness.messagingReady
               ? 'WhatsApp ready'
               : business.whatsappConnectionStatus === 'connected'
-                ? 'WhatsApp connected · outbound pending'
+                ? 'WhatsApp connected Â· outbound pending'
                 : whatsappLabels[business.whatsappConnectionStatus]
           }
           positive={business.whatsappReadiness.messagingReady}
@@ -466,6 +502,186 @@ function WorkspaceContextHeader({
         <Badge label={`${subscriptionLabels[business.subscriptionStatus]} plan`} />
       </View>
     </>
+  );
+}
+
+function MerchantNotificationsView({
+  notifications,
+  changeRequests,
+  loading,
+  busyRequestId,
+  onMarkAllRead,
+  onRequestAction,
+  onOpenOrder,
+}: {
+  notifications: Array<{
+    id: string;
+    title: string;
+    body: string;
+    orderId: string | null;
+    changeRequestId: string | null;
+    isRead: boolean;
+    createdAt: string;
+    severity: 'info' | 'attention' | 'urgent';
+  }>;
+  changeRequests: Array<{
+    id: string;
+    orderId: string | null;
+    requestKind: 'add_items' | 'remove_items' | 'change_items' | 'cancel_order' | 'other';
+    requestText: string;
+    parsedItems: Array<{
+      itemName: string;
+      quantity: number;
+      unitPrice: number | null;
+    }>;
+    status: 'pending' | 'reviewed' | 'resolved' | 'rejected';
+  }>;
+  loading: boolean;
+  busyRequestId: string | null;
+  onMarkAllRead: () => void;
+  onRequestAction: (
+    notificationId: string,
+    requestId: string,
+    action: 'apply' | 'resolve' | 'reject',
+  ) => Promise<void>;
+  onOpenOrder: (notificationId: string, orderId: string | null) => void;
+}) {
+  const unreadCount = notifications.filter((notification) => !notification.isRead).length;
+
+  return (
+    <View style={styles.sectionStack}>
+      <View>
+        <Text style={styles.sectionEyebrow}>MERCHANT ALERTS</Text>
+        <Text style={styles.pageTitle}>Notifications</Text>
+        <Text style={styles.pageSubtitle}>
+          Customer requests and new WhatsApp orders that need merchant attention.
+        </Text>
+      </View>
+
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>
+          {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+        </Text>
+        {unreadCount > 0 ? (
+          <Pressable onPress={onMarkAllRead}>
+            <Text style={styles.linkText}>Mark all read</Text>
+          </Pressable>
+        ) : null}
+      </View>
+
+      {loading && notifications.length === 0 ? (
+        <View style={styles.loadingCard}>
+          <ActivityIndicator />
+          <Text style={styles.muted}>Loading notificationsâ€¦</Text>
+        </View>
+      ) : null}
+
+      {!loading && notifications.length === 0 ? (
+        <View style={styles.emptyCard}>
+          <Text style={styles.emptyTitle}>No merchant alerts yet</Text>
+          <Text style={styles.emptyText}>
+            New WhatsApp orders and customer order-change requests will appear here.
+          </Text>
+        </View>
+      ) : null}
+
+      <View style={styles.notificationCardList}>
+        {notifications.map((notification) => {
+          const changeRequest = notification.changeRequestId
+            ? changeRequests.find((candidate) => candidate.id === notification.changeRequestId)
+            : null;
+          const requestBusy = Boolean(changeRequest && busyRequestId === changeRequest.id);
+          const canApply = Boolean(
+            changeRequest &&
+            changeRequest.status === 'pending' &&
+            (changeRequest.requestKind === 'add_items' || changeRequest.requestKind === 'cancel_order'),
+          );
+
+          return (
+            <View
+              key={notification.id}
+              style={[
+                styles.notificationCard,
+                !notification.isRead && styles.notificationCardUnread,
+              ]}
+            >
+              <Pressable onPress={() => onOpenOrder(notification.id, notification.orderId)}>
+                <View style={styles.notificationCardTop}>
+                  <Text style={styles.notificationTitle}>{notification.title}</Text>
+                  {!notification.isRead ? <View style={styles.notificationCardUnreadDot} /> : null}
+                </View>
+                <Text style={styles.notificationBody}>{notification.body}</Text>
+                <Text style={styles.notificationMeta}>
+                  {new Date(notification.createdAt).toLocaleString()}
+                </Text>
+              </Pressable>
+
+              {changeRequest ? (
+                <View style={styles.changeRequestCard}>
+                  <Text style={styles.changeRequestKind}>
+                    {changeRequest.requestKind.replaceAll('_', ' ').toUpperCase()}
+                  </Text>
+                  <Text style={styles.changeRequestText}>{changeRequest.requestText}</Text>
+
+                  {changeRequest.parsedItems.length > 0 ? (
+                    <View style={styles.changeRequestItems}>
+                      {changeRequest.parsedItems.map((item, index) => (
+                        <Text key={`${changeRequest.id}-${index}`} style={styles.changeRequestItem}>
+                          {item.quantity} Ã— {item.itemName}
+                          {item.unitPrice === null ? ' Â· price review needed' : ''}
+                        </Text>
+                      ))}
+                    </View>
+                  ) : null}
+
+                  {changeRequest.status === 'pending' ? (
+                    <View style={styles.changeRequestActions}>
+                      <Pressable
+                        onPress={() => onOpenOrder(notification.id, notification.orderId)}
+                        disabled={requestBusy}
+                        style={styles.secondaryButton}
+                      >
+                        <Text style={styles.secondaryButtonText}>Open order</Text>
+                      </Pressable>
+                      {canApply ? (
+                        <Pressable
+                          onPress={() => void onRequestAction(notification.id, changeRequest.id, 'apply')}
+                          disabled={requestBusy}
+                          style={[styles.primarySmallButton, requestBusy && styles.buttonDisabled]}
+                        >
+                          <Text style={styles.primarySmallButtonText}>
+                            {changeRequest.requestKind === 'cancel_order' ? 'Confirm cancellation' : 'Apply additions'}
+                          </Text>
+                        </Pressable>
+                      ) : (
+                        <Pressable
+                          onPress={() => void onRequestAction(notification.id, changeRequest.id, 'resolve')}
+                          disabled={requestBusy}
+                          style={[styles.primarySmallButton, requestBusy && styles.buttonDisabled]}
+                        >
+                          <Text style={styles.primarySmallButtonText}>Mark handled</Text>
+                        </Pressable>
+                      )}
+                      <Pressable
+                        onPress={() => void onRequestAction(notification.id, changeRequest.id, 'reject')}
+                        disabled={requestBusy}
+                        style={styles.rejectSmallButton}
+                      >
+                        <Text style={styles.rejectSmallButtonText}>Reject request</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <Text style={styles.changeRequestResolved}>
+                      Request {changeRequest.status}.
+                    </Text>
+                  )}
+                </View>
+              ) : null}
+            </View>
+          );
+        })}
+      </View>
+    </View>
   );
 }
 
@@ -844,7 +1060,7 @@ function OrdersView({
     return (
       <View style={styles.sectionStack}>
         <Pressable onPress={() => onSelectOrder('')} style={styles.backToListButton}>
-          <Text style={[styles.backToListText, appearance.dark && darkStyles.greenText]}>← Orders</Text>
+          <Text style={[styles.backToListText, appearance.dark && darkStyles.greenText]}>â† Orders</Text>
         </Pressable>
         <OrderDetail
           order={selectedOrder}
@@ -1041,7 +1257,7 @@ function OrderList({
     return (
       <View style={[styles.loadingCard, appearance.dark && darkStyles.card]}>
         <ActivityIndicator />
-        <Text style={[styles.muted, appearance.dark && darkStyles.bodyText]}>Loading orders…</Text>
+        <Text style={[styles.muted, appearance.dark && darkStyles.bodyText]}>Loading ordersâ€¦</Text>
       </View>
     );
   }
@@ -1070,7 +1286,7 @@ function OrderList({
             <View style={styles.orderTopRow}>
               <View style={styles.orderIdentity}>
                 <Text style={[styles.customerName, appearance.dark && darkStyles.titleText]}>{order.customerName}</Text>
-                <Text numberOfLines={1} style={[styles.orderId, appearance.dark && darkStyles.bodyText]}>{order.publicOrderId} · {formatReceivedAt(order.receivedAt)}</Text>
+                <Text numberOfLines={1} style={[styles.orderId, appearance.dark && darkStyles.bodyText]}>{order.publicOrderId} Â· {formatReceivedAt(order.receivedAt)}</Text>
               </View>
               <View style={styles.orderRight}>
                 <StatusPill status={order.status} />
@@ -1084,7 +1300,7 @@ function OrderList({
             </Text>
             {order.statusReason ? <Text numberOfLines={1} style={styles.closureMeta}>Reason: {order.statusReason}</Text> : null}
             <Text style={[styles.orderMeta, appearance.dark && darkStyles.mutedText]}>
-              {order.items.length} item{order.items.length === 1 ? '' : 's'} · {order.source === 'whatsapp' ? 'WhatsApp' : 'Manual'} · {order.confidence === null ? 'Unscored' : `${Math.round(order.confidence * 100)}% parsed`}{reviewChecks > 0 ? ` · ${reviewChecks} initial review check${reviewChecks === 1 ? '' : 's'}` : ''}
+              {order.items.length} item{order.items.length === 1 ? '' : 's'} Â· {order.source === 'whatsapp' ? 'WhatsApp' : 'Manual'} Â· {order.confidence === null ? 'Unscored' : `${Math.round(order.confidence * 100)}% parsed`}{reviewChecks > 0 ? ` Â· ${reviewChecks} initial review check${reviewChecks === 1 ? '' : 's'}` : ''}
             </Text>
           </Pressable>
         );
@@ -1141,7 +1357,7 @@ function OrderDetail({
   const unavailableGate = {
     allowed: false,
     reason: orderGates.loading
-      ? 'Checking merchant payment policy…'
+      ? 'Checking merchant payment policyâ€¦'
       : orderGates.error ?? 'SellerTray could not verify the merchant payment policy.',
     paymentMethod: null,
   };
@@ -1165,7 +1381,7 @@ function OrderDetail({
         <View style={styles.orderIdentity}>
           <Text style={[styles.detailTitle, appearance.dark && darkStyles.titleText]}>{order.customerName}</Text>
           <Text style={styles.publicOrderId}>{order.publicOrderId}</Text>
-          <Text style={[styles.orderMeta, appearance.dark && darkStyles.bodyText]}>{order.customerPhone} · {formatReceivedAt(order.receivedAt)}</Text>
+          <Text style={[styles.orderMeta, appearance.dark && darkStyles.bodyText]}>{order.customerPhone} Â· {formatReceivedAt(order.receivedAt)}</Text>
         </View>
         <StatusPill status={order.status} />
       </View>
@@ -1368,7 +1584,7 @@ function ConversationsView({
     return (
       <View style={styles.sectionStack}>
         <Pressable onPress={() => setSelectedKey('')} style={styles.backToListButton}>
-          <Text style={[styles.backToListText, appearance.dark && darkStyles.greenText]}>← Conversations</Text>
+          <Text style={[styles.backToListText, appearance.dark && darkStyles.greenText]}>â† Conversations</Text>
         </Pressable>
 
         <View style={styles.conversationHeader}>
@@ -1415,7 +1631,7 @@ function ConversationsView({
                   <View style={styles.linkedOrderCopy}>
                     <Text style={[styles.linkedOrderTitle, appearance.dark && darkStyles.titleText]}>Linked order</Text>
                     <Text style={[styles.linkedOrderMeta, appearance.dark && darkStyles.bodyText]}>
-                      {order.items.length} item{order.items.length === 1 ? '' : 's'} · {orderTotal(order) === null ? 'Needs pricing' : formatMoney(orderTotal(order) ?? 0, currency)}
+                      {order.items.length} item{order.items.length === 1 ? '' : 's'} Â· {orderTotal(order) === null ? 'Needs pricing' : formatMoney(orderTotal(order) ?? 0, currency)}
                     </Text>
                   </View>
                   <View style={styles.linkedOrderActions}>
@@ -1426,7 +1642,7 @@ function ConversationsView({
                         style={[styles.paymentChatButton, appearance.dark && darkStyles.outlineButton, paymentSendBusyId !== null && styles.disabled]}
                       >
                         <Text style={[styles.paymentChatButtonText, appearance.dark && darkStyles.greenText]}>
-                          {paymentSendBusyId === order.id ? 'Sending…' : 'Send payment'}
+                          {paymentSendBusyId === order.id ? 'Sendingâ€¦' : 'Send payment'}
                         </Text>
                       </Pressable>
                     ) : null}
@@ -1548,7 +1764,7 @@ function ConversationsView({
                     </Text>
                   </View>
                 ) : null}
-                <Text style={[styles.conversationChevron, appearance.dark && darkStyles.mutedText]}>›</Text>
+                <Text style={[styles.conversationChevron, appearance.dark && darkStyles.mutedText]}>â€º</Text>
               </View>
             </Pressable>
           ))}
@@ -1588,7 +1804,7 @@ function NotificationCenterView({
   return (
     <View style={styles.sectionStack}>
       <Pressable onPress={onBack} style={styles.backToListButton}>
-        <Text style={[styles.backToListText, appearance.dark && darkStyles.greenText]}>← Home</Text>
+        <Text style={[styles.backToListText, appearance.dark && darkStyles.greenText]}>â† Home</Text>
       </Pressable>
       <View>
         <Text style={[styles.sectionEyebrow, appearance.dark && darkStyles.bodyText]}>ACTIVITY CENTER</Text>
@@ -1622,7 +1838,7 @@ function NotificationCenterView({
       {loading && notifications.length === 0 ? (
         <View style={[styles.emptyCard, appearance.dark && darkStyles.card]}>
           <ActivityIndicator />
-          <Text style={[styles.emptyText, appearance.dark && darkStyles.bodyText]}>Loading notifications…</Text>
+          <Text style={[styles.emptyText, appearance.dark && darkStyles.bodyText]}>Loading notificationsâ€¦</Text>
         </View>
       ) : null}
 
@@ -1962,6 +2178,28 @@ const styles = StyleSheet.create({
   filterCount: { minWidth: 18, borderRadius: 999, paddingHorizontal: 5, paddingVertical: 1, overflow: 'hidden', textAlign: 'center', backgroundColor: '#F2F4F7', color: '#475467', fontSize: 12, fontWeight: '900' },
   filterCountActive: { backgroundColor: '#12B76A', color: '#FFFFFF' },
   resultMeta: { color: '#667085', fontSize: 12, fontWeight: '700' },
+  notificationCardList: { gap: 9 },
+  notificationCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EAECF0', borderRadius: 15, padding: 13, gap: 5 },
+  notificationCardUnread: { borderColor: '#12B76A', backgroundColor: '#F6FEF9' },
+  notificationCardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  notificationTitle: { flex: 1, color: '#101828', fontSize: 13, fontWeight: '900' },
+  notificationBody: { color: '#475467', fontSize: 12, lineHeight: 18 },
+  notificationMeta: { color: '#98A2B3', fontSize: 9, fontWeight: '700' },
+  notificationCardUnreadDot: { width: 8, height: 8, borderRadius: 999, backgroundColor: '#12B76A' },
+  changeRequestCard: { marginTop: 7, borderTopWidth: 1, borderTopColor: '#EAECF0', paddingTop: 10, gap: 7 },
+  changeRequestKind: { color: '#B54708', fontSize: 9, fontWeight: '900', letterSpacing: 0.8 },
+  changeRequestText: { color: '#344054', fontSize: 12, lineHeight: 18, fontWeight: '700' },
+  changeRequestItems: { backgroundColor: '#F9FAFB', borderRadius: 10, padding: 9, gap: 4 },
+  changeRequestItem: { color: '#475467', fontSize: 11, lineHeight: 16 },
+  changeRequestActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 2 },
+  secondaryButton: { minHeight: 34, borderRadius: 9, borderWidth: 1, borderColor: '#D0D5DD', backgroundColor: '#FFFFFF', justifyContent: 'center', paddingHorizontal: 10 },
+  secondaryButtonText: { color: '#344054', fontSize: 10, fontWeight: '900' },
+  primarySmallButton: { minHeight: 34, borderRadius: 9, backgroundColor: '#12B76A', justifyContent: 'center', paddingHorizontal: 10 },
+  primarySmallButtonText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
+  rejectSmallButton: { minHeight: 34, borderRadius: 9, borderWidth: 1, borderColor: '#FDA29B', backgroundColor: '#FFF5F4', justifyContent: 'center', paddingHorizontal: 10 },
+  rejectSmallButtonText: { color: '#B42318', fontSize: 10, fontWeight: '900' },
+  changeRequestResolved: { color: '#667085', fontSize: 10, fontWeight: '800' },
+  buttonDisabled: { opacity: 0.55 },
   orderList: { gap: 9 },
   orderCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 15, padding: 13 },
   orderCardSelected: { borderColor: '#12B76A', borderWidth: 2 },

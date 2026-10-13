@@ -1,4 +1,4 @@
-import type { MerchantOrder } from '../domain/order';
+﻿import type { MerchantOrder } from '../domain/order';
 
 export const demoOrders: MerchantOrder[] = [
   {

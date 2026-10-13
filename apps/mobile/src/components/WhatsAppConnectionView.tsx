@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { MerchantBusiness } from '../data/businessRepository';
@@ -199,6 +199,7 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
   }
 
   const processingActive = consent?.consentActive === true;
+  const connectionOperational = messagingReady && processingActive;
 
   return (
     <View style={styles.wrap}>
@@ -217,7 +218,7 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
             {messagingReady
               ? 'WhatsApp messaging ready'
               : connected
-                ? 'WhatsApp connected · messaging setup incomplete'
+                ? 'WhatsApp connected - messaging setup incomplete'
                 : status.title}
           </Text>
           <Text style={[styles.statusText, appearance.dark && darkStyles.bodyText]}>
@@ -250,6 +251,13 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
         <ReadinessItem label="Outbound" ready={outboundReady} text={outboundReady ? 'Messaging active' : 'Needs attention'} />
       </View>
 
+      <View style={[styles.providerBillingCard, appearance.dark && darkStyles.card]}>
+        <Text style={[styles.providerBillingTitle, appearance.dark && darkStyles.titleText]}>Meta WhatsApp charges are separate</Text>
+        <Text style={[styles.providerBillingText, appearance.dark && darkStyles.bodyText]}>
+          SellerTray does not require a Meta payment method just to connect WhatsApp. If you later use Meta-billable WhatsApp Business Platform messages, Meta may require billing setup and charges them under Meta’s current pricing. SellerTray subscription and AI-usage charges are billed separately.
+        </Text>
+      </View>
+
       <View style={[styles.consentCard, processingActive && styles.consentActiveCard, appearance.dark && darkStyles.card]}>
         <View style={styles.consentHeading}>
           <View style={styles.consentCopy}>
@@ -268,13 +276,13 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
 
         {processingPolicy ? (
           <Text style={[styles.versionText, appearance.dark && darkStyles.bodyText]}>
-            Policy version {processingPolicy.version} · Effective {formatDate(processingPolicy.effective_at)}
+            Policy version {processingPolicy.version} - Effective
           </Text>
         ) : null}
 
         {consent?.consent ? (
           <Text style={[styles.versionText, appearance.dark && darkStyles.bodyText]}>
-            Accepted {formatDate(consent.consent.accepted_at)} · {consent.consent.scopes.length} approved processing scopes
+            Accepted {formatDate(consent.consent.accepted_at)} -
           </Text>
         ) : null}
 
@@ -295,13 +303,13 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
             onPress={() => void acceptConsent()}
             style={[styles.primaryButton, (consentBusy || !consent?.termsPrivacyAccepted) && styles.disabled]}
           >
-            <Text style={styles.primaryButtonText}>{consentBusy ? 'Authorizing…' : 'Authorize WhatsApp processing'}</Text>
+            <Text style={styles.primaryButtonText}>{consentBusy ? 'Authorizing...' : 'Authorize WhatsApp processing'}</Text>
           </Pressable>
         ) : null}
 
         {!consentLoading && processingActive && isOwner ? (
           <Pressable disabled={consentBusy} onPress={() => void revokeConsent()} style={[styles.secondaryButton, appearance.dark && darkStyles.secondaryButton]}>
-            <Text style={[styles.secondaryButtonText, appearance.dark && darkStyles.titleText]}>{consentBusy ? 'Updating…' : 'Revoke authorization'}</Text>
+            <Text style={[styles.secondaryButtonText, appearance.dark && darkStyles.titleText]}>{consentBusy ? 'Updating...' : 'Revoke authorization'}</Text>
           </Pressable>
         ) : null}
 
@@ -331,7 +339,7 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
             >
               {connectionBusy ? <ActivityIndicator color="#FFFFFF" size="small" /> : null}
               <Text style={styles.connectButtonText}>
-                {connectionBusy ? 'Opening Meta…' : 'Connect WhatsApp'}
+                {connectionBusy ? 'Opening Meta...' : 'Connect WhatsApp'}
               </Text>
               <Text style={styles.connectButtonHint}>
                 Continue with Meta's approved WhatsApp Business onboarding
@@ -382,7 +390,7 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
               style={[styles.disconnectButton, appearance.dark && darkStyles.secondaryButton, connectionBusy && styles.disabled]}
             >
               <Text style={[styles.disconnectButtonText, appearance.dark && darkStyles.titleText]}>
-                {connectionBusy ? 'Updating…' : 'Disconnect WhatsApp'}
+                {connectionBusy ? 'Opening Meta...' : 'Connect WhatsApp'}
               </Text>
             </Pressable>
           ) : null}
@@ -406,7 +414,7 @@ function ReadinessItem({ label, ready, text }: { label: string; ready: boolean; 
   return (
     <View style={[styles.readinessItem, ready && styles.readinessItemReady, appearance.dark && darkStyles.card, appearance.dark && ready && darkStyles.successCard]}>
       <View style={[styles.readinessIcon, ready && styles.readinessIconReady]}>
-        <Text style={[styles.readinessIconText, ready && styles.readinessIconTextReady]}>{ready ? '✓' : '!'}</Text>
+        <Text style={[styles.readinessIconText, ready && styles.readinessIconTextReady]}>{ready ? 'OK' : '!'}</Text>
       </View>
       <View style={styles.readinessCopy}>
         <Text style={[styles.readinessLabel, appearance.dark && darkStyles.titleText]}>{label}</Text>
@@ -432,7 +440,7 @@ function Step({ number, title, text }: { number: string; title: string; text: st
 function formatDate(value: string): string {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
-    ? '—'
+    ? 'â€”'
     : new Intl.DateTimeFormat('en-NG', { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
 }
 
@@ -462,6 +470,9 @@ const styles = StyleSheet.create({
   readinessCopy: { flex: 1, minWidth: 0 },
   readinessLabel: { color: '#102A43', fontSize: 12, fontWeight: '900' },
   readinessText: { color: '#667085', fontSize: 12, lineHeight: 16, marginTop: 1 },
+  providerBillingCard: { backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#EAECF0', borderRadius: 14, padding: 13, gap: 4 },
+  providerBillingTitle: { color: '#101828', fontSize: 12, fontWeight: '900' },
+  providerBillingText: { color: '#667085', fontSize: 10, lineHeight: 16 },
   consentCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#FEC84B', borderRadius: 16, padding: 14, gap: 9 },
   consentActiveCard: { borderColor: '#ABEFC6' },
   consentHeading: { flexDirection: 'row', alignItems: 'center', gap: 10 },

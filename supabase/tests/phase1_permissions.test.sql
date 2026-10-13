@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(52);
+select extensions.plan(66);
 
 select extensions.ok((select relrowsecurity from pg_class where oid='public.orders'::regclass),'orders keeps RLS enabled');
 select extensions.ok((select relrowsecurity from pg_class where oid='public.order_items'::regclass),'order_items keeps RLS enabled');
@@ -33,6 +33,21 @@ select extensions.ok(
   ),
   'WhatsApp Phone Number ID is unique across SellerTray connection records'
 );
+
+select extensions.ok((select relrowsecurity from pg_class where oid='public.customer_order_change_requests'::regclass),'customer_order_change_requests keeps RLS enabled');
+select extensions.ok((select relrowsecurity from pg_class where oid='public.merchant_notifications'::regclass),'merchant_notifications keeps RLS enabled');
+select extensions.ok(has_table_privilege('authenticated','public.customer_order_change_requests','SELECT'),'merchant members may read customer order-change requests');
+select extensions.ok(not has_table_privilege('authenticated','public.customer_order_change_requests','INSERT'),'authenticated clients cannot forge customer order-change requests');
+select extensions.ok(not has_table_privilege('authenticated','public.customer_order_change_requests','UPDATE'),'authenticated clients cannot directly resolve customer order-change requests');
+select extensions.ok(has_table_privilege('authenticated','public.merchant_notifications','SELECT'),'merchant members may read in-app notifications');
+select extensions.ok(not has_table_privilege('authenticated','public.merchant_notifications','INSERT'),'authenticated clients cannot forge merchant notifications');
+select extensions.ok(has_column_privilege('authenticated','public.merchant_notifications','is_read','UPDATE'),'authenticated merchants may mark notifications read');
+select extensions.ok(not has_column_privilege('authenticated','public.merchant_notifications','body','UPDATE'),'authenticated merchants cannot rewrite notification content');
+select extensions.ok(not has_table_privilege('anon','sellertray_private.notification_worker_invocations','SELECT'),'anonymous role cannot read notification worker tickets');
+select extensions.ok(not has_table_privilege('authenticated','sellertray_private.notification_worker_invocations','SELECT'),'authenticated clients cannot read notification worker tickets');
+select extensions.ok(not has_table_privilege('authenticated','sellertray_private.runtime_config','SELECT'),'authenticated clients cannot read private runtime configuration');
+select extensions.ok(not has_function_privilege('authenticated','public.claim_sellertray_notification_worker_invocation(uuid)','EXECUTE'),'notification worker tickets are service-only');
+select extensions.ok(has_function_privilege('service_role','public.claim_sellertray_notification_worker_invocation(uuid)','EXECUTE'),'service role may claim single-use notification worker tickets');
 
 select extensions.ok(not has_table_privilege('authenticated','public.customers','UPDATE'),'authenticated clients cannot directly update customer identity rows');
 select extensions.ok(has_function_privilege('authenticated','public.update_sellertray_customer_profile(uuid,uuid,text,text)','EXECUTE'),'authenticated clients use the governed customer-profile RPC');
