@@ -55,8 +55,9 @@ requireValue(
   'Mobile inventory repository must require and send the hidden command identity',
 );
 requireValue(
-  references.includes('createInventoryOperationCommandId') &&
-    references.includes('invop:${kind}:'),
+  references.includes('function createHiddenCommandId(prefix: string)') &&
+    references.includes('createInventoryOperationCommandId') &&
+    references.includes('return createHiddenCommandId(`invop:${kind}`)'),
   'Mobile must generate a non-user-facing inventory command identity',
 );
 requireValue(
