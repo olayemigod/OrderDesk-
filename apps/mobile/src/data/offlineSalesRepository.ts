@@ -18,12 +18,15 @@ export type OfflineSaleLine = PosDraftLine & {
 };
 
 export type OfflinePosSale = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   clientReference: string;
   actorUserId: string;
   tenantId: string;
   branchId: string;
   branchName: string;
+  customerId: string | null;
+  customerName: string | null;
+  customerPhone: string | null;
   currency: string;
   lines: OfflineSaleLine[];
   total: number;
@@ -57,6 +60,9 @@ export async function queueOfflinePosSale(input: {
   tenantId: string;
   branchId: string;
   branchName: string;
+  customerId?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
   currency: string;
   lines: OfflineSaleLine[];
   total: number;
@@ -72,12 +78,15 @@ export async function queueOfflinePosSale(input: {
 
   const now = new Date().toISOString();
   const next: OfflinePosSale = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     clientReference: input.clientReference,
     actorUserId: input.actorUserId,
     tenantId: input.tenantId,
     branchId: input.branchId,
     branchName: input.branchName,
+    customerId: cleanNullable(input.customerId),
+    customerName: cleanNullable(input.customerName),
+    customerPhone: cleanNullable(input.customerPhone),
     currency: input.currency,
     lines: input.lines,
     total: input.total,
@@ -127,6 +136,9 @@ export async function syncOfflinePosSales(
         tenantId: candidate.tenantId,
         branchId: candidate.branchId,
         clientReference: candidate.clientReference,
+        customerId: candidate.customerId,
+        customerName: candidate.customerName,
+        customerPhone: candidate.customerPhone,
         items: candidate.lines.map((line) => ({
           catalogItemId: line.catalogItemId,
           uomId: line.uomId,
@@ -206,18 +218,11 @@ export async function loadCommerceProductCache(tenantId: string): Promise<Offlin
   return readCache<CommerceProduct[]>(`${CATALOG_KEY_PREFIX}${tenantId}`);
 }
 
-export async function saveBranchStockCache(
-  tenantId: string,
-  branchId: string,
-  rows: BranchStockRow[],
-): Promise<void> {
+export async function saveBranchStockCache(tenantId: string, branchId: string, rows: BranchStockRow[]): Promise<void> {
   await writeCache(`${STOCK_KEY_PREFIX}${tenantId}:${branchId}`, rows);
 }
 
-export async function loadBranchStockCache(
-  tenantId: string,
-  branchId: string,
-): Promise<OfflineCache<BranchStockRow[]> | null> {
+export async function loadBranchStockCache(tenantId: string, branchId: string): Promise<OfflineCache<BranchStockRow[]> | null> {
   return readCache<BranchStockRow[]>(`${STOCK_KEY_PREFIX}${tenantId}:${branchId}`);
 }
 
@@ -235,21 +240,12 @@ export function isLikelyConnectivityError(error: unknown): boolean {
 
 function classifySyncFailure(error: unknown): { status: 'pending' | 'needs_review' | 'failed'; message: string } {
   if (error instanceof PosDraftRequestError) {
-    if (error.kind === 'network') {
-      return { status: 'pending', message: 'Waiting for a connection.' };
-    }
-    if (error.kind === 'conflict' || error.kind === 'rejected') {
-      return { status: 'needs_review', message: error.message || 'Sale details need review before syncing.' };
-    }
+    if (error.kind === 'network') return { status: 'pending', message: 'Waiting for a connection.' };
+    if (error.kind === 'conflict' || error.kind === 'rejected') return { status: 'needs_review', message: error.message || 'Sale details need review before syncing.' };
     return { status: 'failed', message: error.message || 'SellerTray could not sync this held sale.' };
   }
-  if (isLikelyConnectivityError(error)) {
-    return { status: 'pending', message: 'Waiting for a connection.' };
-  }
-  return {
-    status: 'failed',
-    message: error instanceof Error && error.message ? error.message : 'SellerTray could not sync this held sale.',
-  };
+  if (isLikelyConnectivityError(error)) return { status: 'pending', message: 'Waiting for a connection.' };
+  return { status: 'failed', message: error instanceof Error && error.message ? error.message : 'SellerTray could not sync this held sale.' };
 }
 
 function replaceIntent(rows: OfflinePosSale[], clientReference: string, next: OfflinePosSale): OfflinePosSale[] {
@@ -283,9 +279,9 @@ async function writeOutbox(rows: OfflinePosSale[]): Promise<void> {
 
 function parseOfflineSale(value: unknown): OfflinePosSale[] {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
-  const row = value as Partial<OfflinePosSale>;
+  const row = value as Record<string, unknown>;
   if (
-    row.schemaVersion !== 1
+    (row.schemaVersion !== 1 && row.schemaVersion !== 2)
     || typeof row.clientReference !== 'string'
     || typeof row.actorUserId !== 'string'
     || typeof row.tenantId !== 'string'
@@ -299,15 +295,41 @@ function parseOfflineSale(value: unknown): OfflinePosSale[] {
     || typeof row.createdAt !== 'string'
     || typeof row.updatedAt !== 'string'
   ) return [];
-  return [row as OfflinePosSale];
+
+  return [{
+    schemaVersion: 2,
+    clientReference: row.clientReference,
+    actorUserId: row.actorUserId,
+    tenantId: row.tenantId,
+    branchId: row.branchId,
+    branchName: row.branchName,
+    customerId: row.schemaVersion === 2 ? nullableString(row.customerId) : null,
+    customerName: row.schemaVersion === 2 ? nullableString(row.customerName) : null,
+    customerPhone: row.schemaVersion === 2 ? nullableString(row.customerPhone) : null,
+    currency: row.currency,
+    lines: row.lines as OfflineSaleLine[],
+    total: row.total,
+    status: row.status,
+    attempts: row.attempts,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    lastAttemptAt: nullableString(row.lastAttemptAt),
+    lastError: nullableString(row.lastError),
+    orderId: nullableString(row.orderId),
+  }];
 }
 
 function isOfflineStatus(value: unknown): value is OfflineSaleStatus {
-  return value === 'pending'
-    || value === 'syncing'
-    || value === 'needs_review'
-    || value === 'failed'
-    || value === 'synced';
+  return value === 'pending' || value === 'syncing' || value === 'needs_review' || value === 'failed' || value === 'synced';
+}
+
+function cleanNullable(value: string | null | undefined): string | null {
+  const clean = value?.trim() ?? '';
+  return clean || null;
+}
+
+function nullableString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value : null;
 }
 
 async function writeCache<T>(key: string, data: T): Promise<void> {
