@@ -78,19 +78,32 @@ export class PosDraftRequestError extends Error {
   }
 }
 
-export type PosCheckoutResult = {
+type PosCheckoutResultBase = {
   orderId: string;
   paymentId: string;
   paymentMethodId: string | null;
-  methodType: string;
-  status: 'completed';
-  paymentStatus: 'paid';
-  fulfillmentStatus: 'collected';
+  methodType: PosPaymentMethodType;
   inventoryMovementCount: number;
   idempotentReplay: boolean;
 };
 
-export type PosCashCheckoutResult = PosCheckoutResult;
+export type PosSettledCheckoutResult = PosCheckoutResultBase & {
+  status: 'completed';
+  paymentStatus: 'paid';
+  fulfillmentStatus: 'collected';
+};
+
+export type PosPendingPaymentCheckoutResult = PosCheckoutResultBase & {
+  methodType: 'bank_transfer';
+  status: 'awaiting_payment_confirmation';
+  paymentStatus: 'unpaid';
+  fulfillmentStatus: string;
+  inventoryMovementCount: 0;
+};
+
+export type PosCheckoutResult = PosSettledCheckoutResult | PosPendingPaymentCheckoutResult;
+
+export type PosCashCheckoutResult = PosSettledCheckoutResult;
 
 type BranchRow = {
   id: string;
@@ -250,13 +263,15 @@ export async function completePosSale(tenantId: string, orderId: string, payment
   if (!tenantId) throw new Error('Business is required.');
   if (!orderId) throw new Error('Sale is required.');
   const { data, error } = await supabase.functions.invoke('pos-checkout', { body: { tenantId, orderId, paymentMethodId } });
-  if (error) throw new Error(await functionErrorMessage(error, 'Unable to complete this sale.'));
+  if (error) throw new Error(await functionErrorMessage(error, 'Unable to process this payment.'));
   if (!isPosCheckoutResult(data)) throw new Error('SellerTray returned an invalid checkout result.');
   return data;
 }
 
 export async function completePosCashSale(tenantId: string, orderId: string): Promise<PosCashCheckoutResult> {
-  return completePosSale(tenantId, orderId, null);
+  const result = await completePosSale(tenantId, orderId, null);
+  if (result.status !== 'completed') throw new Error('SellerTray cash checkout did not settle the sale.');
+  return result;
 }
 
 export function createPosClientReference(): string {
@@ -313,15 +328,23 @@ async function functionErrorMessage(error: unknown, fallback: string): Promise<s
 function isPosCheckoutResult(value: unknown): value is PosCheckoutResult {
   if (!value || typeof value !== 'object') return false;
   const row = value as Record<string, unknown>;
-  return typeof row.orderId === 'string'
+  const common = typeof row.orderId === 'string'
     && typeof row.paymentId === 'string'
     && (row.paymentMethodId === null || row.paymentMethodId === undefined || typeof row.paymentMethodId === 'string')
-    && typeof row.methodType === 'string'
-    && row.status === 'completed'
-    && row.paymentStatus === 'paid'
-    && row.fulfillmentStatus === 'collected'
+    && (row.methodType === 'cash' || row.methodType === 'bank_transfer' || row.methodType === 'card_terminal')
+    && typeof row.fulfillmentStatus === 'string'
     && typeof row.inventoryMovementCount === 'number'
     && typeof row.idempotentReplay === 'boolean';
+  if (!common) return false;
+
+  const settled = row.status === 'completed'
+    && row.paymentStatus === 'paid'
+    && row.fulfillmentStatus === 'collected';
+  const awaitingBankTransfer = row.methodType === 'bank_transfer'
+    && row.status === 'awaiting_payment_confirmation'
+    && row.paymentStatus === 'unpaid'
+    && row.inventoryMovementCount === 0;
+  return settled || awaitingBankTransfer;
 }
 
 function cleanOptional(value: string | null | undefined): string | null {
