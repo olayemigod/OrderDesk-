@@ -61,6 +61,26 @@ requireValue(
   'order-fulfillment must authenticate the user and delegate authority, payment policy and transactional fulfillment state to the governed database command',
 );`;
 
+const staleManualOrderCheck = `requireValue(
+  merchantOrderFunction.includes("admin.auth.getUser(token)") &&
+    merchantOrderFunction.includes("tenant_members") &&
+    merchantOrderFunction.includes("create_sellertray_manual_order_atomic"),
+  'Manual order creation must remain a trusted authenticated atomic server flow',
+);`;
+
+const currentManualOrderCheck = `const merchantOrderCreationMigration = read(join(repoRoot, 'supabase/migrations/20261014193000_merchant_order_creation_authority.sql'));
+requireValue(
+  merchantOrderFunction.includes("admin.auth.getUser(token)") &&
+    merchantOrderFunction.includes("admin.rpc('create_sellertray_merchant_order_atomic'") &&
+    merchantOrderFunction.includes('p_actor_user_id: userId') &&
+    merchantOrderFunction.includes('p_branch_id: branchId') &&
+    merchantOrderCreationMigration.includes("'can_manage_orders'") &&
+    merchantOrderCreationMigration.includes('sellertray_user_can_operate_branch') &&
+    merchantOrderCreationMigration.includes('resolve_sellertray_pos_customer') &&
+    merchantOrderCreationMigration.includes('commercial_action_ledger'),
+  'Manual order creation must remain an authenticated Branch-aware governed transaction with shared Customer identity and audit',
+);`;
+
 const staleVersionCodeCheck = "requireValue(app.android?.versionCode === 19, 'Android versionCode must be 19 for the merchant-reference QA line');";
 const currentVersionCodeCheck = "requireValue(app.android?.versionCode === 22, 'Android versionCode must be 22 for the merchant-reference QA line');";
 
@@ -96,6 +116,8 @@ if (source.split(staleOrderChangeCheck).length !== 2) throw new Error('Expected 
 source = source.replace(staleOrderChangeCheck, currentOrderChangeCheck);
 if (source.split(staleFulfillmentCheck).length !== 2) throw new Error('Expected exactly one legacy fulfillment governance check in release preflight');
 source = source.replace(staleFulfillmentCheck, currentFulfillmentCheck);
+if (source.split(staleManualOrderCheck).length !== 2) throw new Error('Expected exactly one legacy manual-order governance check in release preflight');
+source = source.replace(staleManualOrderCheck, currentManualOrderCheck);
 if (source.split(staleVersionCodeCheck).length !== 2) throw new Error('Expected exactly one build 19 QA version guard in release preflight');
 source = source.replace(staleVersionCodeCheck, currentVersionCodeCheck);
 
