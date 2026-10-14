@@ -75,44 +75,40 @@ select extensions.ok(
   exists (
     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where n.nspname='public' and p.proname='save_sellertray_product'
-      and lower(pg_get_functiondef(p.oid)) like '%owner%'
-      and lower(pg_get_functiondef(p.oid)) like '%manager%'
+      and lower(pg_get_functiondef(p.oid)) like '%sellertray_user_can_manage_products%'
       and lower(pg_get_functiondef(p.oid)) like '%orderdesk_subscription_can_write%'
   ),
-  'product save command enforces management role and writable subscription'
+  'product save command enforces shared product capability and writable subscription'
 );
 
 select extensions.ok(
   exists (
     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where n.nspname='public' and p.proname='set_sellertray_product_active'
-      and lower(pg_get_functiondef(p.oid)) like '%owner%'
-      and lower(pg_get_functiondef(p.oid)) like '%manager%'
+      and lower(pg_get_functiondef(p.oid)) like '%sellertray_user_can_manage_products%'
       and lower(pg_get_functiondef(p.oid)) like '%orderdesk_subscription_can_write%'
   ),
-  'product active-state command enforces management role and writable subscription'
+  'product active-state command enforces shared product capability and writable subscription'
 );
 
 select extensions.ok(
   exists (
     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where n.nspname='public' and p.proname='save_sellertray_product_uom'
-      and lower(pg_get_functiondef(p.oid)) like '%owner%'
-      and lower(pg_get_functiondef(p.oid)) like '%manager%'
+      and lower(pg_get_functiondef(p.oid)) like '%sellertray_user_can_manage_products%'
       and lower(pg_get_functiondef(p.oid)) like '%orderdesk_subscription_can_write%'
   ),
-  'UOM save command enforces management role and writable subscription'
+  'UOM save command enforces shared product capability and writable subscription'
 );
 
 select extensions.ok(
   exists (
     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where n.nspname='public' and p.proname='delete_sellertray_product_uom'
-      and lower(pg_get_functiondef(p.oid)) like '%owner%'
-      and lower(pg_get_functiondef(p.oid)) like '%manager%'
+      and lower(pg_get_functiondef(p.oid)) like '%sellertray_user_can_manage_products%'
       and lower(pg_get_functiondef(p.oid)) like '%orderdesk_subscription_can_write%'
   ),
-  'UOM delete command enforces management role and writable subscription'
+  'UOM delete command enforces shared product capability and writable subscription'
 );
 
 select extensions.ok(
