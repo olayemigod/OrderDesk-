@@ -15,7 +15,9 @@ function requireValue(condition, message) {
 
 const migration = read(join(repoRoot, 'supabase/migrations/20261014184500_branch_customer_payment_convergence.sql'));
 const authorityMigration = read(join(repoRoot, 'supabase/migrations/20261014190000_payment_operation_branch_authority.sql'));
+const actionAuthorityReader = read(join(repoRoot, 'supabase/migrations/20261014190500_payment_action_authority_reader.sql'));
 const paymentMethodsRepository = read(join(mobileRoot, 'src/data/paymentMethodsRepository.ts'));
+const orderPaymentsRepository = read(join(mobileRoot, 'src/data/orderPaymentsRepository.ts'));
 const orderPaymentPanel = read(join(mobileRoot, 'src/components/OrderPaymentPanel.tsx'));
 const merchantPaymentOperations = read(join(repoRoot, 'supabase/functions/merchant-payment-operations/index.ts'));
 const whatsappPayment = read(join(repoRoot, 'supabase/functions/whatsapp-webhook/payment.ts'));
@@ -45,14 +47,35 @@ requireValue(
   'Manual confirmation must reuse human payment authority without losing POS transfer settlement',
 );
 requireValue(
+  actionAuthorityReader.includes('get_sellertray_order_payment_authority') &&
+    actionAuthorityReader.includes('auth.uid()') &&
+    actionAuthorityReader.includes('sellertray_user_can_manage_order_payment') &&
+    actionAuthorityReader.includes('to authenticated,service_role'),
+  'Mobile action authority reader must bind the decision to the signed-in user without exposing the internal predicate',
+);
+requireValue(
   paymentMethodsRepository.includes("supabase.rpc('get_sellertray_branch_customer_payment_methods'") &&
     paymentMethodsRepository.includes('p_branch_id: branchId'),
   'Mobile payment repository must load customer payment methods through the guarded Branch RPC',
 );
 requireValue(
+  orderPaymentsRepository.includes("supabase.rpc('get_sellertray_order_payment_authority'") &&
+    orderPaymentsRepository.includes('p_tenant_id: tenantId') &&
+    orderPaymentsRepository.includes('p_order_id: orderId'),
+  'Mobile payment actions must query current-user payment authority through the authenticated reader',
+);
+requireValue(
   orderPaymentPanel.includes('loadBranchCustomerPaymentMethods(tenantId, order.branchId)') &&
     !orderPaymentPanel.includes('loadPaymentMethods(tenantId)'),
   'Order payment panel must use the order Branch instead of tenant-wide payment methods',
+);
+requireValue(
+  orderPaymentPanel.includes('allowed = await canManageOrderPayment(tenantId, order.id)') &&
+    orderPaymentPanel.includes("if (allowed && order.source !== 'pos')") &&
+    orderPaymentPanel.includes("displayedPaymentStatus !== 'paid' && canManagePaymentActions") &&
+    orderPaymentPanel.includes('const confirmable = canManagePaymentActions && offline') &&
+    orderPaymentPanel.includes('const verifiable = canManagePaymentActions && gateway'),
+  'Order payment panel must preserve read-only history while hiding payment mutations when authority is unavailable',
 );
 requireValue(
   merchantPaymentOperations.includes("rpc<Array<{ method_type: string; display_name: string }>>('sellertray_branch_customer_payment_methods'") &&
