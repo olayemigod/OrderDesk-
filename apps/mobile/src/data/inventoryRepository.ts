@@ -44,6 +44,7 @@ export type InventoryOperationInput = {
   productId: string;
   uomId: string;
   operation: InventoryOperation;
+  commandId: string;
   quantity: number;
   adjustmentDirection?: InventoryAdjustmentDirection | null;
   reference: string;
@@ -334,6 +335,7 @@ export async function applyInventoryOperation(
   if (!input.branchId) throw new Error('Branch is required.');
   if (!input.productId) throw new Error('Product is required.');
   if (!input.uomId) throw new Error('Unit is required.');
+  if (!input.commandId.trim()) throw new Error('Restart this stock action and try again.');
   if (!Number.isFinite(input.quantity) || input.quantity <= 0) {
     throw new Error('Quantity must be greater than zero.');
   }
@@ -350,6 +352,7 @@ export async function applyInventoryOperation(
       productId: input.productId,
       uomId: input.uomId,
       operation: input.operation,
+      commandId: input.commandId.trim(),
       quantity: input.quantity,
       adjustmentDirection: input.operation === 'adjust' ? input.adjustmentDirection : null,
       reference: input.reference.trim(),
