@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ComponentProps } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 
-type QuickProductDraft = {
+export type QuickProductDraft = {
   name: string;
   sku: string;
   category: string;
@@ -86,12 +86,12 @@ export function QuickProductCreateSheet({ visible, barcode, saving, error, onClo
   </Modal>;
 }
 
-function Field({ label, required = false, ...props }: { label: string; required?: boolean } & React.ComponentProps<typeof TextInput>) {
+function Field({ label, required = false, ...props }: { label: string; required?: boolean } & ComponentProps<typeof TextInput>) {
   return <View style={styles.field}><Text style={styles.label}>{label}{required ? ' *' : ''}</Text><TextInput autoCorrect={false} placeholderTextColor={theme.colors.subtle} {...props} style={styles.input} /></View>;
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: theme.colors.background, paddingTop: 18 },
+  screen: { flex: 1, backgroundColor: theme.colors.cloud, paddingTop: 18 },
   header: { paddingHorizontal: 18, paddingBottom: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
   content: { paddingHorizontal: 18, paddingBottom: 38, gap: 14 },
   eyebrow: { color: theme.colors.muted, fontSize: 11, fontWeight: '900', letterSpacing: 1 },
@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
   infoTitle: { color: theme.colors.greenDark, fontWeight: '900', fontSize: 12 },
   barcode: { color: theme.colors.navy, fontSize: 17, fontWeight: '900', letterSpacing: 0.5 },
   help: { color: theme.colors.slate, fontSize: 13, lineHeight: 19 },
-  errorCard: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', borderRadius: 14, borderWidth: 1, borderColor: theme.colors.dangerBorder, backgroundColor: theme.colors.dangerSoft, padding: 12 },
+  errorCard: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', borderRadius: 14, borderWidth: 1, borderColor: theme.colors.danger, backgroundColor: theme.colors.dangerSoft, padding: 12 },
   errorText: { flex: 1, color: theme.colors.danger, fontSize: 12, lineHeight: 18, fontWeight: '700' },
   field: { gap: 6 },
   label: { color: theme.colors.navy, fontSize: 12, fontWeight: '900' },
