@@ -493,47 +493,15 @@ async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[nu
     return;
   }
 
-  const customerPayload: JsonRecord = {
-    tenant_id: tenantId,
-    wa_id: event.waId,
-    phone: event.waId,
-  };
-  if (event.customerName) customerPayload.display_name = event.customerName;
-
-  let customerId: string | null = null;
-  const existingCustomers = await rest<Array<{ id: string }>>(
-    '/rest/v1/customers?select=id' +
-      '&tenant_id=eq.' + encodeURIComponent(tenantId) +
-      '&wa_id=eq.' + encodeURIComponent(event.waId) +
-      '&limit=1',
-  );
-  customerId = existingCustomers[0]?.id ?? null;
-
-  if (!customerId) {
-    try {
-      const createdCustomers = await rest<Array<{ id: string }>>(
-        '/rest/v1/customers?select=id',
-        {
-          method: 'POST',
-          headers: { Prefer: 'return=representation' },
-          body: JSON.stringify(customerPayload),
-        },
-      );
-      customerId = createdCustomers[0]?.id ?? null;
-    } catch (error) {
-      // A concurrent delivery may have created the same customer first.
-      const racedCustomers = await rest<Array<{ id: string }>>(
-        '/rest/v1/customers?select=id' +
-          '&tenant_id=eq.' + encodeURIComponent(tenantId) +
-          '&wa_id=eq.' + encodeURIComponent(event.waId) +
-          '&limit=1',
-      );
-      customerId = racedCustomers[0]?.id ?? null;
-      if (!customerId) throw error;
-    }
-  }
-
-  if (!customerId) throw new Error('Customer lookup/create returned no row.');
+  const customerId = await rest<string>('/rest/v1/rpc/resolve_sellertray_whatsapp_customer', {
+  method: 'POST',
+  body: JSON.stringify({
+    p_tenant_id: tenantId,
+    p_wa_id: event.waId,
+    p_display_name: event.customerName,
+  }),
+});
+if (!customerId) throw new Error('Unable to resolve WhatsApp customer.');
 
   const storedMessages = await rest<Array<{ id: string }>>(
     '/rest/v1/inbound_messages?on_conflict=provider_message_id&select=id',
