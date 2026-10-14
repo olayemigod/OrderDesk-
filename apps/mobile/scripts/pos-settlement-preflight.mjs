@@ -58,24 +58,27 @@ requireValue(
   'Payment inbox confirmation copy must match governed POS bank-transfer finalisation',
 );
 
-const posRecordGuard = merchantPaymentOperations.indexOf("if (order.source === 'pos')");
-const createOfflinePayment = merchantPaymentOperations.indexOf("create_sellertray_order_payment_for_method");
-const paymentAuthorityCheck = merchantPaymentOperations.indexOf("rpc<boolean>('sellertray_user_can_manage_order_payment'");
+const recordOfflineAction = merchantPaymentOperations.indexOf("if (action === 'record_offline')");
+const posRecordGuard = merchantPaymentOperations.indexOf("if (order.source === 'pos')", recordOfflineAction);
+const paymentAuthorityCheck = merchantPaymentOperations.indexOf('await assertHumanPaymentAuthority(tenantId, userId, order);', recordOfflineAction);
+const createOfflinePayment = merchantPaymentOperations.indexOf("create_sellertray_order_payment_for_method", recordOfflineAction);
 requireValue(
-  posRecordGuard >= 0 && createOfflinePayment >= 0 && posRecordGuard < createOfflinePayment,
+  recordOfflineAction >= 0 && posRecordGuard > recordOfflineAction && createOfflinePayment > posRecordGuard,
   'Merchant payment operations must reject POS record_offline before a duplicate payment can be created',
 );
 requireValue(
-  paymentAuthorityCheck >= 0 && createOfflinePayment >= 0 && paymentAuthorityCheck < createOfflinePayment,
+  paymentAuthorityCheck > posRecordGuard && createOfflinePayment > paymentAuthorityCheck &&
+    merchantPaymentOperations.includes("rpc<boolean>('sellertray_user_can_manage_order_payment'"),
   'Merchant payment operations must authorize payment capability and Branch scope before creating a payment attempt',
 );
 requireValue(
-  orderPaymentPanel.includes("const canRecordNewOfflinePayment = order.source !== 'pos'") &&
-    orderPaymentPanel.includes("if (order.source === 'pos') return;") &&
+  orderPaymentPanel.includes("const canRecordNewOfflinePayment = canManagePaymentActions && order.source !== 'pos'") &&
+    orderPaymentPanel.includes("if (!canManagePaymentActions || order.source === 'pos') return;") &&
     orderPaymentPanel.includes('confirm the existing POS transfer attempt') === false &&
     orderPaymentPanel.includes('Confirm that existing transfer below') &&
+    orderPaymentPanel.includes('const confirmable = canManagePaymentActions && offline') &&
     orderPaymentPanel.includes('recheck stock, mark the payment paid, complete collection, deduct stock'),
-  'Order payment panel must confirm the existing POS payment instead of recording a second one',
+  'Order payment panel must confirm the existing POS payment instead of recording a second one and must hide mutation controls without authority',
 );
 requireValue(
   orderPaymentPanel.includes("const displayedPaymentStatus: MerchantOrder['paymentStatus'] = receipt ? 'paid' : order.paymentStatus") &&
