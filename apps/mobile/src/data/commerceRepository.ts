@@ -31,6 +31,20 @@ export type CommerceProduct = {
   uoms: CommerceUom[];
 };
 
+export type PosPaymentMethodType = 'cash' | 'bank_transfer' | 'card_terminal';
+
+export type PosPaymentMethod = {
+  paymentMethodId: string | null;
+  methodType: PosPaymentMethodType;
+  displayName: string;
+  sortOrder: number;
+  isDefault: boolean;
+  bankName: string | null;
+  bankAccountName: string | null;
+  bankAccountNumber: string | null;
+  instructions: string | null;
+};
+
 export type PosDraftLine = {
   catalogItemId: string;
   uomId: string;
@@ -63,9 +77,11 @@ export class PosDraftRequestError extends Error {
   }
 }
 
-export type PosCashCheckoutResult = {
+export type PosCheckoutResult = {
   orderId: string;
   paymentId: string;
+  paymentMethodId: string | null;
+  methodType: string;
   status: 'completed';
   paymentStatus: 'paid';
   fulfillmentStatus: 'collected';
@@ -73,11 +89,25 @@ export type PosCashCheckoutResult = {
   idempotentReplay: boolean;
 };
 
+export type PosCashCheckoutResult = PosCheckoutResult;
+
 type BranchRow = {
   id: string;
   code: string;
   name: string;
   is_default: boolean;
+};
+
+type PosPaymentMethodRow = {
+  payment_method_id: string | null;
+  method_type: PosPaymentMethodType;
+  display_name: string;
+  sort_order: number;
+  is_default: boolean;
+  bank_name: string | null;
+  bank_account_name: string | null;
+  bank_account_number: string | null;
+  instructions: string | null;
 };
 
 type ProductRow = {
@@ -115,6 +145,29 @@ export async function loadAccessibleBranches(tenantId: string): Promise<Commerce
     code: row.code,
     name: row.name,
     isDefault: row.is_default,
+  }));
+}
+
+export async function loadBranchPosPaymentMethods(
+  tenantId: string,
+  branchId: string,
+): Promise<PosPaymentMethod[]> {
+  if (!tenantId || !branchId) return [];
+  const { data, error } = await supabase.rpc('get_sellertray_branch_pos_payment_methods', {
+    p_tenant_id: tenantId,
+    p_branch_id: branchId,
+  });
+  if (error) throw error;
+  return ((data ?? []) as PosPaymentMethodRow[]).map((row) => ({
+    paymentMethodId: row.payment_method_id,
+    methodType: row.method_type,
+    displayName: row.display_name,
+    sortOrder: Number(row.sort_order ?? 100),
+    isDefault: row.is_default === true,
+    bankName: row.bank_name,
+    bankAccountName: row.bank_account_name,
+    bankAccountNumber: row.bank_account_number,
+    instructions: row.instructions,
   }));
 }
 
@@ -222,10 +275,11 @@ export async function createPosDraft(input: CreatePosDraftInput): Promise<string
   return orderId;
 }
 
-export async function completePosCashSale(
+export async function completePosSale(
   tenantId: string,
   orderId: string,
-): Promise<PosCashCheckoutResult> {
+  paymentMethodId: string | null,
+): Promise<PosCheckoutResult> {
   if (!tenantId) throw new Error('Business is required.');
   if (!orderId) throw new Error('Sale is required.');
 
@@ -233,17 +287,24 @@ export async function completePosCashSale(
     body: {
       tenantId,
       orderId,
-      paymentMethod: 'cash',
+      paymentMethodId,
     },
   });
 
-  if (error) throw new Error(await functionErrorMessage(error, 'Unable to complete this cash sale.'));
+  if (error) throw new Error(await functionErrorMessage(error, 'Unable to complete this sale.'));
 
-  if (!isPosCashCheckoutResult(data)) {
+  if (!isPosCheckoutResult(data)) {
     throw new Error('SellerTray returned an invalid checkout result.');
   }
 
   return data;
+}
+
+export async function completePosCashSale(
+  tenantId: string,
+  orderId: string,
+): Promise<PosCashCheckoutResult> {
+  return completePosSale(tenantId, orderId, null);
 }
 
 export function createPosClientReference(): string {
@@ -304,12 +365,13 @@ async function functionErrorMessage(error: unknown, fallback: string): Promise<s
   return message;
 }
 
-function isPosCashCheckoutResult(value: unknown): value is PosCashCheckoutResult {
+function isPosCheckoutResult(value: unknown): value is PosCheckoutResult {
   if (!value || typeof value !== 'object') return false;
   const row = value as Record<string, unknown>;
-  return row.orderId !== undefined
-    && typeof row.orderId === 'string'
+  return typeof row.orderId === 'string'
     && typeof row.paymentId === 'string'
+    && (row.paymentMethodId === null || row.paymentMethodId === undefined || typeof row.paymentMethodId === 'string')
+    && typeof row.methodType === 'string'
     && row.status === 'completed'
     && row.paymentStatus === 'paid'
     && row.fulfillmentStatus === 'collected'
