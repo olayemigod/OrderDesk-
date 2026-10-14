@@ -26,11 +26,14 @@ requireValue(
   'Sell must queue held sales with a stable client reference and displayed price/UOM snapshots without claiming payment.',
 );
 
+const preparePaymentIndex = sell.indexOf('async function continueToPayment()');
+const completePaymentIndex = sell.indexOf('async function completeSelectedSale()');
 requireValue(
-  sell.includes('completePosSale') &&
+  preparePaymentIndex >= 0 &&
+    completePaymentIndex > preparePaymentIndex &&
+    sell.includes('const orderId = await createPosDraft(currentDraftInput(clientReference));') &&
     sell.includes('if (!draftOrderId || completing || !selectedPayment) return;') &&
-    sell.includes('await completePosSale(tenantId, orderId, selectedPayment.paymentMethodId)') &&
-    sell.indexOf('createPosDraft') < sell.indexOf('completePosSale'),
+    sell.includes('await completePosSale(tenantId, orderId, selectedPayment.paymentMethodId);'),
   'Payment completion must remain gated by a server-created draft order and selected governed Branch payment method.',
 );
 
