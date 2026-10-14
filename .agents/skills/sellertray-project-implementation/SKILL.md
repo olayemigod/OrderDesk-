@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.4"
+  version: "0.1.5"
   status: governing
 ---
 
@@ -169,6 +169,22 @@ Order-line rules:
 3. Draft order edits must go through a governed server/domain command; clients must not write order-item rows directly.
 4. A draft edit must preserve branch authority, capability checks, current UOM/price validation and audit history.
 5. Once payment, financial-document or inventory activity exists, order lines must not be silently rewritten as if they were still an untouched draft.
+
+## Customer identity and selling context
+
+Customer identity is shared commerce truth across POS, merchant web, WhatsApp and reporting. Walk-in sales are supported, but SellerTray must not force every POS transaction into a walk-in customer when the merchant needs customer-level history or outstanding-balance tracking.
+
+Rules:
+
+1. Sell defaults to **Walk-in Customer** but the cashier may search and select an existing Customer before checkout.
+2. The cashier may create a new Customer in selling context using merchant-facing identity fields; the committed sale/order must immediately reference that shared Customer.
+3. An explicitly selected Customer ID wins over name/phone matching. Clients must not recreate a selected WhatsApp Customer as a separate manual/POS Customer.
+4. New name/phone entry may reuse one unambiguous existing Customer with the same canonical phone identity. If multiple records match, fail closed and require explicit selection rather than guessing or silently merging history.
+5. Phone comparison may normalise superficial formatting such as an optional leading `+`; do not invent country-code transformations or assume `080...` and `234...` are the same identity without an explicit governed rule.
+6. POS and WhatsApp must converge on one Customer record. When a POS-created phone later becomes a WhatsApp sender, preserve the existing Customer ID and history rather than creating channel-specific duplicates.
+7. Customer choice is part of the sale snapshot and must survive idempotent retry and offline replay. A branch change or completed/cleared sale must invalidate stale customer context safely.
+8. Customer-linked orders, payments, invoices/receipts and outstanding amounts must remain attributable to that Customer so merchant web can support customer history, receivables and balance follow-up. Walk-in sales remain intentionally unassigned to a named Customer.
+9. Do not expose direct customer-table writes from mobile clients. Customer creation/reuse and identity convergence belong behind governed server/domain commands.
 
 ## Inventory
 
