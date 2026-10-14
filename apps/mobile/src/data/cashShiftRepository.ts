@@ -219,12 +219,14 @@ export async function recordCashMovement(input: {
   tenantId: string;
   shiftId: string;
   movementType: CashMovementType;
+  commandId: string;
   amount: number;
   reference: string;
   reason: string;
   expenseCategory?: string | null;
 }): Promise<CashMovementResult> {
   if (!input.tenantId || !input.shiftId) throw new Error('Business and cashier shift are required.');
+  if (!input.commandId.trim()) throw new Error('Restart this cash activity and try again.');
   if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error('Amount must be greater than zero.');
   if (!input.reference.trim()) throw new Error('Reference is required.');
   if (!input.reason.trim()) throw new Error('Reason is required.');
@@ -237,6 +239,7 @@ export async function recordCashMovement(input: {
     tenantId: input.tenantId,
     shiftId: input.shiftId,
     movementType: input.movementType,
+    commandId: input.commandId.trim(),
     amount: input.amount,
     reference: input.reference.trim(),
     reason: input.reason.trim(),
