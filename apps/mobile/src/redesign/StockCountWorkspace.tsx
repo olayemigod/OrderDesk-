@@ -17,6 +17,7 @@ import {
 } from '../data/inventoryRepository';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
+import { createOperationalReference } from './operationalReference';
 
 type Props = {
   tenantId: string;
@@ -42,8 +43,8 @@ export function StockCountWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [reference, setReference] = useState('');
-  const [reason, setReason] = useState('');
+  const [reference, setReference] = useState(() => createOperationalReference('stock_count'));
+  const [reason, setReason] = useState('Scheduled stock count');
   const [query, setQuery] = useState('');
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [countUomId, setCountUomId] = useState('');
@@ -69,8 +70,8 @@ export function StockCountWorkspace({
 
   useEffect(() => {
     setCount(null);
-    setReference('');
-    setReason('');
+    setReference(createOperationalReference('stock_count'));
+    setReason('Scheduled stock count');
     setEditingProductId(null);
     setCancelMode(false);
     setConfirmApply(false);
@@ -98,7 +99,7 @@ export function StockCountWorkspace({
     : null;
 
   const varianceItems = count?.items.filter(
-    (item) => item.varianceQuantity !== null && item.varianceQuantity !== 0,
+    (item) => item.varianceQuantity !== null && Math.abs(item.varianceQuantity) > 0.000001,
   ) ?? [];
   const increaseItems = varianceItems.filter((item) => (item.varianceQuantity ?? 0) > 0).length;
   const decreaseItems = varianceItems.filter((item) => (item.varianceQuantity ?? 0) < 0).length;
@@ -106,7 +107,7 @@ export function StockCountWorkspace({
   async function startNewCount() {
     if (saving) return;
     if (!reference.trim()) {
-      setError('Enter a reference for this stock count.');
+      setError('Reference is required. Generate one or enter an external reference.');
       return;
     }
     if (!reason.trim()) {
@@ -118,12 +119,7 @@ export function StockCountWorkspace({
     setError(null);
     setNotice(null);
     try {
-      const result = await startStockCount({
-        tenantId,
-        branchId: branch.id,
-        reference,
-        reason,
-      });
+      const result = await startStockCount({ tenantId, branchId: branch.id, reference, reason });
       await refreshCount(result.countId);
       setNotice(result.idempotentReplay ? 'This stock count was already started.' : 'Stock count started.');
     } catch (err) {
@@ -207,10 +203,7 @@ export function StockCountWorkspace({
     setNotice(null);
     try {
       const result = await applyStockCount(tenantId, count.countId);
-      await Promise.all([
-        refreshCount(count.countId),
-        Promise.resolve(onInventoryChanged()),
-      ]);
+      await Promise.all([refreshCount(count.countId), Promise.resolve(onInventoryChanged())]);
       setConfirmApply(false);
       setNotice(
         result.inventoryMovementCount === 0
@@ -238,7 +231,7 @@ export function StockCountWorkspace({
       await refreshCount(count.countId);
       setCancelMode(false);
       setCancelReason('');
-      setNotice('Stock count cancelled. No stock quantity was changed.');
+      setNotice('Stock count cancelled. No inventory movements were posted.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to cancel this stock count.');
     } finally {
@@ -246,393 +239,212 @@ export function StockCountWorkspace({
     }
   }
 
-  if (loading && !count) {
-    return (
-      <View style={styles.stack}>
-        <BackButton dark={dark} onPress={onClose} />
-        <View style={[styles.emptyCard, dark && darkStyles.card]}>
-          <ActivityIndicator />
-          <Text style={[styles.muted, dark && darkStyles.bodyText]}>Loading stock count…</Text>
-        </View>
-      </View>
-    );
-  }
-
-  if (!count) {
-    return (
-      <View style={styles.stack}>
-        <BackButton dark={dark} onPress={onClose} />
-        <View style={styles.heading}>
-          <Text style={[styles.eyebrow, dark && darkStyles.bodyText]}>STOCK COUNT</Text>
-          <Text style={[styles.title, dark && darkStyles.titleText]}>Count stock at {branch.name}</Text>
-          <Text style={[styles.subtitle, dark && darkStyles.bodyText]}>
-            Count every product first. SellerTray will show expected quantities and variances only after capture is complete.
-          </Text>
-        </View>
-
-        {error ? <MessageCard text={error} error dark={dark} /> : null}
-        {notice ? <MessageCard text={notice} dark={dark} /> : null}
-
-        {!capabilities.canCountStock ? (
-          <View style={[styles.infoCard, dark && darkStyles.subtleCard]}>
-            <Ionicons name="lock-closed-outline" size={20} color={theme.colors.greenDark} />
-            <Text style={[styles.infoText, dark && darkStyles.bodyText]}>
-              You can view inventory, but you do not have permission to start a physical stock count.
-            </Text>
-          </View>
-        ) : (
-          <View style={[styles.formCard, dark && darkStyles.card]}>
-            <Text style={[styles.sectionTitle, dark && darkStyles.titleText]}>Start stock count</Text>
-            <FieldLabel dark={dark}>Reference</FieldLabel>
-            <TextInput
-              value={reference}
-              onChangeText={setReference}
-              placeholder="e.g. October month-end count"
-              placeholderTextColor={theme.colors.subtle}
-              style={[styles.input, dark && darkStyles.input]}
-            />
-            <FieldLabel dark={dark}>Reason</FieldLabel>
-            <TextInput
-              value={reason}
-              onChangeText={setReason}
-              placeholder="Why is this count being done?"
-              placeholderTextColor={theme.colors.subtle}
-              multiline
-              style={[styles.input, styles.multilineInput, dark && darkStyles.input]}
-            />
-            <Pressable
-              disabled={saving}
-              onPress={() => void startNewCount()}
-              style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed, saving && styles.disabled]}
-            >
-              {saving ? <ActivityIndicator color={theme.colors.white} /> : <Ionicons name="clipboard-outline" size={19} color={theme.colors.white} />}
-              <Text style={styles.primaryButtonText}>Start count</Text>
-            </Pressable>
-          </View>
-        )}
-      </View>
-    );
-  }
-
-  if (count.status === 'applied' || count.status === 'cancelled') {
-    const applied = count.status === 'applied';
-    return (
-      <View style={styles.stack}>
-        <BackButton dark={dark} onPress={onClose} />
-        <View style={[styles.completeCard, dark && darkStyles.card]}>
-          <View style={[styles.completeIcon, !applied && styles.cancelledIcon]}>
-            <Ionicons name={applied ? 'checkmark-circle-outline' : 'close-circle-outline'} size={34} color={applied ? theme.colors.greenDark : theme.colors.muted} />
-          </View>
-          <Text style={[styles.completeTitle, dark && darkStyles.titleText]}>
-            {applied ? 'Stock count applied' : 'Stock count cancelled'}
-          </Text>
-          <Text style={[styles.completeText, dark && darkStyles.bodyText]}>
-            {applied
-              ? 'Approved variances were posted as auditable stock reconciliation movements.'
-              : 'No count variance was posted to stock.'}
-          </Text>
-          <Text style={[styles.referenceText, dark && darkStyles.bodyText]}>{count.reference}</Text>
-          {notice ? <Text style={[styles.noticeInline, dark && darkStyles.bodyText]}>{notice}</Text> : null}
-          <Pressable onPress={onClose} style={styles.primaryButton}>
-            <Text style={styles.primaryButtonText}>Back to Inventory</Text>
-          </Pressable>
-        </View>
-      </View>
-    );
-  }
-
-  const isCounting = count.status === 'counting';
-  const allCaptured = count.totalItems > 0 && count.capturedItems === count.totalItems;
-  const canCancel = isCounting ? capabilities.canCountStock : capabilities.canApplyStockCount;
-
   return (
     <View style={styles.stack}>
-      <BackButton dark={dark} onPress={onClose} />
+      <Pressable onPress={onClose} style={styles.backButton}>
+        <Ionicons name="arrow-back" size={18} color={theme.colors.greenDark} />
+        <Text style={styles.backText}>Inventory</Text>
+      </Pressable>
+
       <View style={styles.heading}>
-        <Text style={[styles.eyebrow, dark && darkStyles.bodyText]}>{isCounting ? 'PHYSICAL COUNT' : 'VARIANCE REVIEW'}</Text>
-        <Text style={[styles.title, dark && darkStyles.titleText]}>{count.reference}</Text>
-        <Text style={[styles.subtitle, dark && darkStyles.bodyText]}>{branch.name} · {count.reason}</Text>
+        <Text style={[styles.eyebrow, dark && darkStyles.bodyText]}>STOCK COUNT</Text>
+        <Text style={[styles.title, dark && darkStyles.titleText]}>{branch.name}</Text>
+        <Text style={[styles.subtitle, dark && darkStyles.bodyText]}>Count physical stock first. Variances change inventory only after review and apply.</Text>
       </View>
 
-      {error ? <MessageCard text={error} error dark={dark} /> : null}
-      {notice ? <MessageCard text={notice} dark={dark} /> : null}
+      {error ? <Message text={error} error dark={dark} /> : null}
+      {notice ? <Message text={notice} dark={dark} /> : null}
 
-      {isCounting ? (
-        <View style={styles.summaryRow}>
-          <SummaryCard label="Counted" value={`${count.capturedItems}/${count.totalItems}`} dark={dark} />
-          <SummaryCard label="Remaining" value={String(Math.max(count.totalItems - count.capturedItems, 0))} dark={dark} />
-        </View>
-      ) : (
-        <View style={styles.reviewSummary}>
-          <SummaryCard label="Variance items" value={String(varianceItems.length)} dark={dark} />
-          <SummaryCard label="Increase items" value={String(increaseItems)} dark={dark} />
-          <SummaryCard label="Decrease items" value={String(decreaseItems)} dark={dark} attention={decreaseItems > 0} />
-        </View>
-      )}
+      {loading && !count ? (
+        <View style={[styles.emptyCard, dark && darkStyles.card]}><ActivityIndicator /><Text style={[styles.muted, dark && darkStyles.bodyText]}>Checking active stock count…</Text></View>
+      ) : null}
 
-      <View style={[styles.searchBox, dark && darkStyles.input]}>
-        <Ionicons name="search-outline" size={18} color={theme.colors.muted} />
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Search product"
-          placeholderTextColor={theme.colors.subtle}
-          style={[styles.searchInput, dark && darkStyles.inputText]}
-        />
-      </View>
-
-      {editingItem && isCounting ? (
+      {!loading && !count ? (
         <View style={[styles.formCard, dark && darkStyles.card]}>
-          <View style={styles.formHeader}>
-            <View style={styles.flexOne}>
-              <Text style={[styles.sectionTitle, dark && darkStyles.titleText]}>{editingItem.productName}</Text>
-              <Text style={[styles.helperText, dark && darkStyles.bodyText]}>Enter the quantity physically present. Use 0 if none is present.</Text>
-            </View>
-            <Pressable disabled={saving} onPress={() => setEditingProductId(null)} style={styles.iconButton}>
-              <Ionicons name="close" size={20} color={theme.colors.slate} />
+          <Text style={[styles.formTitle, dark && darkStyles.titleText]}>Start a stock count</Text>
+          <View style={styles.fieldHeadingRow}>
+            <Text style={[styles.label, dark && darkStyles.bodyText]}>Reference</Text>
+            <Pressable onPress={() => setReference(createOperationalReference('stock_count'))} style={styles.generateButton}>
+              <Ionicons name="refresh-outline" size={15} color={theme.colors.greenDark} />
+              <Text style={styles.generateText}>Generate</Text>
             </Pressable>
           </View>
+          <TextInput value={reference} onChangeText={setReference} autoCapitalize="characters" style={[styles.input, dark && darkStyles.input]} />
+          <Text style={[styles.helper, dark && darkStyles.bodyText]}>Generated by default; replace it only when an external count sheet reference is useful.</Text>
+          <Text style={[styles.label, dark && darkStyles.bodyText]}>Reason</Text>
+          <TextInput value={reason} onChangeText={setReason} placeholder="Why is this count being performed?" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
+          <Pressable disabled={saving || !capabilities.canCountStock} onPress={() => void startNewCount()} style={[styles.primaryButton, (saving || !capabilities.canCountStock) && styles.disabled]}>
+            {saving ? <ActivityIndicator color={theme.colors.white} /> : <Ionicons name="clipboard-outline" size={18} color={theme.colors.white} />}
+            <Text style={styles.primaryText}>{saving ? 'Starting…' : 'Start count'}</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
-          <FieldLabel dark={dark}>Count unit</FieldLabel>
-          <View style={styles.uomWrap}>
-            {(editingProduct?.uoms ?? []).map((uom) => (
-              <Pressable
-                key={uom.id}
-                disabled={saving}
-                onPress={() => setCountUomId(uom.id)}
-                style={[
-                  styles.choiceChip,
-                  countUomId === uom.id && styles.choiceChipActive,
-                  dark && darkStyles.choiceChip,
-                ]}
-              >
-                <Text style={countUomId === uom.id ? styles.choiceChipTextActive : [styles.choiceChipText, dark && darkStyles.bodyText]}>
-                  {uom.name}
-                </Text>
-              </Pressable>
-            ))}
+      {count ? (
+        <>
+          <View style={[styles.summaryCard, dark && darkStyles.card]}>
+            <View style={styles.summaryHead}>
+              <View style={styles.flexCopy}>
+                <Text style={[styles.summaryReference, dark && darkStyles.titleText]}>{count.reference}</Text>
+                <Text style={[styles.muted, dark && darkStyles.bodyText]}>{count.reason}</Text>
+              </View>
+              <StatusPill status={count.status} />
+            </View>
+            <View style={styles.metricsRow}>
+              <Metric label="Counted" value={`${count.capturedItems}/${count.totalItems}`} dark={dark} />
+              <Metric label="Variances" value={String(varianceItems.length)} dark={dark} />
+              <Metric label="+/−" value={`${increaseItems}/${decreaseItems}`} dark={dark} />
+            </View>
           </View>
 
-          <FieldLabel dark={dark}>Physical quantity</FieldLabel>
-          <TextInput
-            value={countQuantity}
-            onChangeText={setCountQuantity}
-            keyboardType="decimal-pad"
-            placeholder="0"
-            placeholderTextColor={theme.colors.subtle}
-            style={[styles.input, dark && darkStyles.input]}
-          />
-          {selectedUom && previewStockQuantity !== null ? (
-            <Text style={[styles.conversionPreview, dark && darkStyles.bodyText]}>
-              {formatQuantity(parsedQuantity)} {selectedUom.name} = {formatQuantity(previewStockQuantity)} {editingItem.stockUom}
-            </Text>
+          {count.status === 'counting' ? (
+            <>
+              <View style={[styles.searchBox, dark && darkStyles.input]}>
+                <Ionicons name="search-outline" size={18} color={theme.colors.muted} />
+                <TextInput value={query} onChangeText={setQuery} placeholder="Search products to count" placeholderTextColor={theme.colors.subtle} style={[styles.searchInput, dark && darkStyles.inputText]} />
+              </View>
+              <View style={styles.itemList}>
+                {visibleItems.map((item) => (
+                  <View key={item.itemId} style={[styles.itemCard, dark && darkStyles.card]}>
+                    <View style={styles.itemHead}>
+                      <View style={styles.flexCopy}>
+                        <Text style={[styles.itemName, dark && darkStyles.titleText]}>{item.productName}</Text>
+                        <Text style={[styles.muted, dark && darkStyles.bodyText]}>{item.captured ? `${formatQuantity(item.countedQuantity ?? 0)} ${item.selectedUom ?? item.stockUom} counted` : 'Not counted yet'}</Text>
+                      </View>
+                      <Pressable onPress={() => beginCapture(item)} style={styles.smallButton}>
+                        <Text style={styles.smallButtonText}>{item.captured ? 'Edit' : 'Count'}</Text>
+                      </Pressable>
+                    </View>
+                    {editingProductId === item.productId && editingItem ? (
+                      <CountEditor
+                        product={editingProduct}
+                        selectedUomId={countUomId}
+                        quantity={countQuantity}
+                        previewStockQuantity={previewStockQuantity}
+                        stockUom={item.stockUom}
+                        dark={dark}
+                        saving={saving}
+                        onUomChange={setCountUomId}
+                        onQuantityChange={setCountQuantity}
+                        onCancel={() => { setEditingProductId(null); setCountQuantity(''); setCountUomId(''); }}
+                        onSave={() => void saveCapture()}
+                      />
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+
+              <View style={styles.actionRow}>
+                <Pressable disabled={saving} onPress={() => setCancelMode(true)} style={[styles.secondaryButton, dark && darkStyles.outlineButton]}><Text style={[styles.secondaryText, dark && darkStyles.bodyText]}>Cancel count</Text></Pressable>
+                <Pressable disabled={saving || count.capturedItems !== count.totalItems} onPress={() => void moveToReview()} style={[styles.primaryButton, (saving || count.capturedItems !== count.totalItems) && styles.disabled]}><Text style={styles.primaryText}>Review variances</Text></Pressable>
+              </View>
+            </>
           ) : null}
 
-          <Pressable
-            disabled={saving}
-            onPress={() => void saveCapture()}
-            style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed, saving && styles.disabled]}
-          >
-            {saving ? <ActivityIndicator color={theme.colors.white} /> : <Ionicons name="checkmark" size={19} color={theme.colors.white} />}
-            <Text style={styles.primaryButtonText}>Save count</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <View style={styles.itemList}>
-          {visibleItems.map((item) => (
-            <CountItemCard
-              key={item.itemId}
-              item={item}
-              counting={isCounting}
-              dark={dark}
-              disabled={saving || !capabilities.canCountStock}
-              onPress={() => beginCapture(item)}
-            />
-          ))}
-        </View>
-      )}
-
-      {isCounting && !editingItem ? (
-        <View style={[styles.actionCard, dark && darkStyles.card]}>
-          <Text style={[styles.helperText, dark && darkStyles.bodyText]}>
-            {allCaptured
-              ? 'Every product has a physical count. Continue to review the variances.'
-              : `${count.totalItems - count.capturedItems} product${count.totalItems - count.capturedItems === 1 ? '' : 's'} still need a physical count.`}
-          </Text>
-          <Pressable
-            disabled={!allCaptured || saving || !capabilities.canCountStock}
-            onPress={() => void moveToReview()}
-            style={({ pressed }) => [styles.primaryButton, (!allCaptured || !capabilities.canCountStock) && styles.disabled, pressed && styles.pressed]}
-          >
-            <Ionicons name="document-text-outline" size={19} color={theme.colors.white} />
-            <Text style={styles.primaryButtonText}>Review variances</Text>
-          </Pressable>
-        </View>
-      ) : null}
-
-      {!isCounting ? (
-        <View style={[styles.actionCard, dark && darkStyles.card]}>
-          {!capabilities.canApplyStockCount ? (
-            <View style={styles.reviewWaiting}>
-              <Ionicons name="shield-outline" size={20} color={theme.colors.greenDark} />
-              <Text style={[styles.helperText, dark && darkStyles.bodyText]}>
-                The count is ready for an authorised reviewer to apply or cancel.
-              </Text>
+          {count.status === 'review' ? (
+            <View style={[styles.reviewCard, dark && darkStyles.card]}>
+              <Text style={[styles.formTitle, dark && darkStyles.titleText]}>Variance review</Text>
+              {varianceItems.length === 0 ? <Text style={[styles.muted, dark && darkStyles.bodyText]}>No stock differences were found.</Text> : varianceItems.map((item) => (
+                <View key={item.itemId} style={[styles.varianceRow, dark && darkStyles.subtleCard]}>
+                  <View style={styles.flexCopy}><Text style={[styles.itemName, dark && darkStyles.titleText]}>{item.productName}</Text><Text style={[styles.muted, dark && darkStyles.bodyText]}>Expected {formatQuantity(item.expectedStockQuantity ?? 0)} · Counted {formatQuantity(item.countedStockQuantity ?? 0)} {item.stockUom}</Text></View>
+                  <Text style={[styles.varianceValue, (item.varianceQuantity ?? 0) < 0 && styles.negative]}>{(item.varianceQuantity ?? 0) > 0 ? '+' : ''}{formatQuantity(item.varianceQuantity ?? 0)}</Text>
+                </View>
+              ))}
+              {confirmApply ? (
+                <View style={[styles.confirmCard, dark && darkStyles.subtleCard]}>
+                  <Text style={[styles.confirmText, dark && darkStyles.bodyText]}>Applying creates immutable inventory movements for these variances. Continue?</Text>
+                  <View style={styles.actionRow}>
+                    <Pressable disabled={saving} onPress={() => setConfirmApply(false)} style={[styles.secondaryButton, dark && darkStyles.outlineButton]}><Text style={[styles.secondaryText, dark && darkStyles.bodyText]}>Not yet</Text></Pressable>
+                    <Pressable disabled={saving || !capabilities.canApplyStockCount} onPress={() => void applyReviewedCount()} style={[styles.primaryButton, (saving || !capabilities.canApplyStockCount) && styles.disabled]}>{saving ? <ActivityIndicator color={theme.colors.white} /> : null}<Text style={styles.primaryText}>Apply count</Text></Pressable>
+                  </View>
+                </View>
+              ) : (
+                <Pressable disabled={!capabilities.canApplyStockCount} onPress={() => setConfirmApply(true)} style={[styles.primaryButton, !capabilities.canApplyStockCount && styles.disabled]}><Text style={styles.primaryText}>Apply reviewed count</Text></Pressable>
+              )}
             </View>
-          ) : confirmApply ? (
-            <View style={styles.confirmStack}>
-              <Text style={[styles.confirmTitle, dark && darkStyles.titleText]}>Apply reviewed variances?</Text>
-              <Text style={[styles.helperText, dark && darkStyles.bodyText]}>
-                SellerTray will post {varianceItems.length} reconciliation movement{varianceItems.length === 1 ? '' : 's'}. The physical count itself will not overwrite stock.
-              </Text>
-              <View style={styles.inlineActions}>
-                <Pressable disabled={saving} onPress={() => setConfirmApply(false)} style={[styles.secondaryButton, dark && darkStyles.outlineButton]}>
-                  <Text style={styles.secondaryButtonText}>Back</Text>
-                </Pressable>
-                <Pressable disabled={saving} onPress={() => void applyReviewedCount()} style={[styles.primaryButton, styles.flexButton]}>
-                  {saving ? <ActivityIndicator color={theme.colors.white} /> : null}
-                  <Text style={styles.primaryButtonText}>Confirm & apply</Text>
-                </Pressable>
+          ) : null}
+
+          {(count.status === 'applied' || count.status === 'cancelled') ? (
+            <View style={[styles.emptyCard, dark && darkStyles.card]}>
+              <Ionicons name={count.status === 'applied' ? 'checkmark-circle-outline' : 'close-circle-outline'} size={30} color={count.status === 'applied' ? theme.colors.green : theme.colors.muted} />
+              <Text style={[styles.emptyTitle, dark && darkStyles.titleText]}>{count.status === 'applied' ? 'Stock count applied' : 'Stock count cancelled'}</Text>
+              <Text style={[styles.muted, dark && darkStyles.bodyText]}>{count.status === 'cancelled' ? count.cancelReason ?? 'No inventory movement was posted.' : 'The reviewed variance movements are now part of branch stock history.'}</Text>
+            </View>
+          ) : null}
+
+          {cancelMode && count.status === 'counting' ? (
+            <View style={[styles.confirmCard, dark && darkStyles.card]}>
+              <Text style={[styles.formTitle, dark && darkStyles.titleText]}>Cancel stock count</Text>
+              <TextInput value={cancelReason} onChangeText={setCancelReason} multiline placeholder="Reason for cancellation" placeholderTextColor={theme.colors.subtle} style={[styles.input, styles.multilineInput, dark && darkStyles.input]} />
+              <View style={styles.actionRow}>
+                <Pressable disabled={saving} onPress={() => setCancelMode(false)} style={[styles.secondaryButton, dark && darkStyles.outlineButton]}><Text style={[styles.secondaryText, dark && darkStyles.bodyText]}>Keep count</Text></Pressable>
+                <Pressable disabled={saving || !cancelReason.trim()} onPress={() => void cancelCurrentCount()} style={[styles.dangerButton, (saving || !cancelReason.trim()) && styles.disabled]}><Text style={styles.dangerText}>Cancel count</Text></Pressable>
               </View>
             </View>
-          ) : (
-            <Pressable disabled={saving} onPress={() => setConfirmApply(true)} style={styles.primaryButton}>
-              <Ionicons name="shield-checkmark-outline" size={19} color={theme.colors.white} />
-              <Text style={styles.primaryButtonText}>Apply variances</Text>
-            </Pressable>
-          )}
-        </View>
+          ) : null}
+        </>
       ) : null}
+    </View>
+  );
+}
 
-      {canCancel ? (
-        cancelMode ? (
-          <View style={[styles.cancelCard, dark && darkStyles.card]}>
-            <Text style={[styles.sectionTitle, dark && darkStyles.titleText]}>Cancel stock count</Text>
-            <Text style={[styles.helperText, dark && darkStyles.bodyText]}>Cancellation does not change stock. Enter why this count should be stopped.</Text>
-            <TextInput
-              value={cancelReason}
-              onChangeText={setCancelReason}
-              placeholder="Cancellation reason"
-              placeholderTextColor={theme.colors.subtle}
-              multiline
-              style={[styles.input, styles.multilineInput, dark && darkStyles.input]}
-            />
-            <View style={styles.inlineActions}>
-              <Pressable disabled={saving} onPress={() => setCancelMode(false)} style={[styles.secondaryButton, dark && darkStyles.outlineButton]}>
-                <Text style={styles.secondaryButtonText}>Keep count</Text>
-              </Pressable>
-              <Pressable disabled={saving} onPress={() => void cancelCurrentCount()} style={[styles.dangerButton, styles.flexButton]}>
-                <Text style={styles.dangerButtonText}>Cancel count</Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : (
-          <Pressable disabled={saving} onPress={() => setCancelMode(true)} style={styles.cancelLink}>
-            <Text style={styles.cancelLinkText}>Cancel stock count</Text>
+function CountEditor({
+  product,
+  selectedUomId,
+  quantity,
+  previewStockQuantity,
+  stockUom,
+  dark,
+  saving,
+  onUomChange,
+  onQuantityChange,
+  onCancel,
+  onSave,
+}: {
+  product: CommerceProduct | null;
+  selectedUomId: string;
+  quantity: string;
+  previewStockQuantity: number | null;
+  stockUom: string;
+  dark: boolean;
+  saving: boolean;
+  onUomChange: (value: string) => void;
+  onQuantityChange: (value: string) => void;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <View style={[styles.editorCard, dark && darkStyles.subtleCard]}>
+      <Text style={[styles.label, dark && darkStyles.bodyText]}>Unit</Text>
+      <View style={styles.uomRow}>
+        {(product?.uoms ?? []).map((uom) => (
+          <Pressable key={uom.id} onPress={() => onUomChange(uom.id)} style={[styles.uomChip, dark && darkStyles.outlineButton, selectedUomId === uom.id && styles.uomChipActive]}>
+            <Text style={[styles.uomText, dark && darkStyles.bodyText, selectedUomId === uom.id && styles.uomTextActive]}>{uom.name}</Text>
           </Pressable>
-        )
-      ) : null}
-
-      <View style={[styles.infoCard, dark && darkStyles.subtleCard]}>
-        <Ionicons name="layers-outline" size={20} color={theme.colors.greenDark} />
-        <Text style={[styles.infoText, dark && darkStyles.bodyText]}>
-          Sales, receipts and other stock movements can continue after a product is counted. SellerTray applies only the reviewed variance, so later movements are preserved.
-        </Text>
+        ))}
       </View>
+      <Text style={[styles.label, dark && darkStyles.bodyText]}>Physical quantity</Text>
+      <TextInput value={quantity} onChangeText={(value) => onQuantityChange(value.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
+      {previewStockQuantity !== null ? <Text style={[styles.helper, dark && darkStyles.bodyText]}>Equals {formatQuantity(previewStockQuantity)} {stockUom}</Text> : null}
+      <View style={styles.actionRow}><Pressable disabled={saving} onPress={onCancel} style={[styles.secondaryButton, dark && darkStyles.outlineButton]}><Text style={[styles.secondaryText, dark && darkStyles.bodyText]}>Cancel</Text></Pressable><Pressable disabled={saving} onPress={onSave} style={[styles.primaryButton, saving && styles.disabled]}><Text style={styles.primaryText}>Save count</Text></Pressable></View>
     </View>
   );
 }
 
-function CountItemCard({
-  item,
-  counting,
-  dark,
-  disabled,
-  onPress,
-}: {
-  item: StockCountItem;
-  counting: boolean;
-  dark: boolean;
-  disabled: boolean;
-  onPress: () => void;
-}) {
-  const variance = item.varianceQuantity ?? 0;
-  return (
-    <Pressable
-      disabled={!counting || disabled}
-      onPress={onPress}
-      style={({ pressed }) => [styles.itemCard, dark && darkStyles.card, pressed && styles.pressed]}
-    >
-      <View style={[styles.itemIcon, item.captured && styles.itemIconDone]}>
-        <Ionicons name={item.captured ? 'checkmark' : 'cube-outline'} size={18} color={theme.colors.greenDark} />
-      </View>
-      <View style={styles.flexOne}>
-        <Text style={[styles.itemName, dark && darkStyles.titleText]}>{item.productName}</Text>
-        {counting ? (
-          <Text style={[styles.itemMeta, dark && darkStyles.bodyText]}>
-            {item.captured
-              ? `${formatQuantity(item.countedQuantity ?? 0)} ${item.selectedUom ?? item.stockUom} counted`
-              : `Not counted · Stock unit ${item.stockUom}`}
-          </Text>
-        ) : (
-          <View style={styles.reviewFacts}>
-            <Text style={[styles.itemMeta, dark && darkStyles.bodyText]}>
-              Expected {formatQuantity(item.expectedStockQuantity ?? 0)} · Counted {formatQuantity(item.countedStockQuantity ?? 0)} {item.stockUom}
-            </Text>
-            <Text style={[styles.varianceText, variance < 0 && styles.varianceNegative, variance === 0 && styles.varianceZero]}>
-              Variance {variance > 0 ? '+' : ''}{formatQuantity(variance)}
-            </Text>
-          </View>
-        )}
-      </View>
-      {counting ? <Ionicons name="chevron-forward" size={18} color={theme.colors.subtle} /> : null}
-    </Pressable>
-  );
+function Metric({ label, value, dark }: { label: string; value: string; dark: boolean }) {
+  return <View style={styles.metric}><Text style={[styles.metricValue, dark && darkStyles.titleText]}>{value}</Text><Text style={[styles.metricLabel, dark && darkStyles.bodyText]}>{label}</Text></View>;
 }
 
-function BackButton({ dark, onPress }: { dark: boolean; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} style={styles.backButton}>
-      <Ionicons name="arrow-back" size={18} color={theme.colors.greenDark} />
-      <Text style={[styles.backText, dark && darkStyles.bodyText]}>Inventory</Text>
-    </Pressable>
-  );
+function StatusPill({ status }: { status: StockCountDetail['status'] }) {
+  return <View style={styles.statusPill}><Text style={styles.statusText}>{status === 'review' ? 'Review' : status.charAt(0).toUpperCase() + status.slice(1)}</Text></View>;
 }
 
-function SummaryCard({
-  label,
-  value,
-  dark,
-  attention = false,
-}: {
-  label: string;
-  value: string;
-  dark: boolean;
-  attention?: boolean;
-}) {
-  return (
-    <View style={[styles.summaryCard, dark && darkStyles.card, attention && styles.summaryAttention]}>
-      <Text style={[styles.summaryValue, dark && darkStyles.titleText, attention && styles.summaryAttentionText]}>{value}</Text>
-      <Text style={[styles.summaryLabel, dark && darkStyles.bodyText]}>{label}</Text>
-    </View>
-  );
-}
-
-function MessageCard({ text, error = false, dark }: { text: string; error?: boolean; dark: boolean }) {
-  return (
-    <View style={[error ? styles.errorCard : styles.noticeCard, dark && (error ? darkStyles.errorCard : darkStyles.subtleCard)]}>
-      <Ionicons name={error ? 'alert-circle-outline' : 'checkmark-circle-outline'} size={19} color={error ? theme.colors.danger : theme.colors.greenDark} />
-      <Text style={[error ? styles.errorText : styles.noticeText, dark && darkStyles.bodyText]}>{text}</Text>
-    </View>
-  );
-}
-
-function FieldLabel({ children, dark }: { children: string; dark: boolean }) {
-  return <Text style={[styles.fieldLabel, dark && darkStyles.bodyText]}>{children}</Text>;
+function Message({ text, error, dark }: { text: string; error?: boolean; dark: boolean }) {
+  return <View style={[error ? styles.errorCard : styles.noticeCard, dark && (error ? darkStyles.errorCard : darkStyles.noticeCard)]}><Ionicons name={error ? 'alert-circle-outline' : 'checkmark-circle-outline'} size={19} color={error ? theme.colors.danger : theme.colors.greenDark} /><Text style={[error ? styles.errorText : styles.noticeText, dark && darkStyles.bodyText]}>{text}</Text></View>;
 }
 
 function findStockUom(product: CommerceProduct): CommerceUom | null {
-  return product.uoms.find((uom) => uom.name.toLowerCase() === product.stockUom.toLowerCase()) ?? null;
+  return product.uoms.find((uom) => uom.isStockUom) ?? null;
 }
 
 function formatQuantity(value: number): string {
@@ -641,88 +453,76 @@ function formatQuantity(value: number): string {
 
 const styles = StyleSheet.create({
   stack: { gap: 14 },
-  flexOne: { flex: 1, minWidth: 0 },
   heading: { gap: 3 },
   eyebrow: { color: theme.colors.muted, fontSize: 11, fontWeight: '900', letterSpacing: 1.05 },
-  title: { color: theme.colors.navy, fontSize: 27, lineHeight: 33, fontWeight: '900' },
+  title: { color: theme.colors.navy, fontSize: 28, lineHeight: 34, fontWeight: '900' },
   subtitle: { color: theme.colors.slate, fontSize: 13, lineHeight: 19 },
   backButton: { alignSelf: 'flex-start', minHeight: 38, flexDirection: 'row', alignItems: 'center', gap: 5 },
   backText: { color: theme.colors.greenDark, fontSize: 12, fontWeight: '900' },
-  emptyCard: { minHeight: 130, borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 18, alignItems: 'center', justifyContent: 'center', gap: 8 },
-  muted: { color: theme.colors.muted, fontSize: 12 },
+  flexCopy: { flex: 1, minWidth: 0 },
   formCard: { borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 14, gap: 9 },
-  formHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  sectionTitle: { color: theme.colors.navy, fontSize: 15, fontWeight: '900' },
-  fieldLabel: { color: theme.colors.slate, fontSize: 11, fontWeight: '800', marginTop: 2 },
-  input: { minHeight: 48, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.cloud, paddingHorizontal: 12, color: theme.colors.navy, fontSize: 14 },
-  multilineInput: { minHeight: 78, paddingTop: 12, textAlignVertical: 'top' },
-  primaryButton: { minHeight: 48, borderRadius: theme.radius.md, backgroundColor: theme.colors.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: 14 },
-  primaryButtonText: { color: theme.colors.white, fontSize: 12.5, fontWeight: '900' },
-  secondaryButton: { minHeight: 46, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 13 },
-  secondaryButtonText: { color: theme.colors.greenDark, fontSize: 12, fontWeight: '900' },
-  dangerButton: { minHeight: 46, borderRadius: theme.radius.md, backgroundColor: theme.colors.dangerSoft, borderWidth: 1, borderColor: '#FDA29B', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 13 },
-  dangerButtonText: { color: '#B42318', fontSize: 12, fontWeight: '900' },
-  disabled: { opacity: 0.45 },
-  pressed: { opacity: 0.76 },
-  infoCard: { borderRadius: theme.radius.md, backgroundColor: theme.colors.mintSoft, padding: 11, flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  infoText: { flex: 1, color: theme.colors.slate, fontSize: 11, lineHeight: 17 },
-  errorCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#FDA29B', backgroundColor: theme.colors.dangerSoft, padding: 11, flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  errorText: { flex: 1, color: '#912018', fontSize: 11.5, lineHeight: 17 },
-  noticeCard: { borderRadius: theme.radius.md, backgroundColor: theme.colors.mintSoft, padding: 11, flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  noticeText: { flex: 1, color: theme.colors.slate, fontSize: 11.5, lineHeight: 17 },
-  summaryRow: { flexDirection: 'row', gap: 8 },
-  reviewSummary: { flexDirection: 'row', gap: 7 },
-  summaryCard: { flex: 1, minHeight: 70, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 10, justifyContent: 'center' },
-  summaryAttention: { backgroundColor: theme.colors.warningSoft, borderColor: '#FEDF89' },
-  summaryValue: { color: theme.colors.navy, fontSize: 17, fontWeight: '900' },
-  summaryAttentionText: { color: '#B54708' },
-  summaryLabel: { color: theme.colors.muted, fontSize: 10.5, marginTop: 2 },
-  searchBox: { minHeight: 48, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 11 },
-  searchInput: { flex: 1, minHeight: 46, color: theme.colors.navy, fontSize: 13, paddingVertical: 0 },
+  formTitle: { color: theme.colors.navy, fontSize: 15, fontWeight: '900' },
+  fieldHeadingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  label: { color: theme.colors.slate, fontSize: 11.5, fontWeight: '900' },
+  input: { minHeight: 47, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, paddingHorizontal: 12, color: theme.colors.navy, fontSize: 13 },
+  multilineInput: { minHeight: 78, textAlignVertical: 'top', paddingTop: 10 },
+  helper: { color: theme.colors.muted, fontSize: 10.5, lineHeight: 16 },
+  generateButton: { minHeight: 30, paddingHorizontal: 8, borderRadius: 9, backgroundColor: theme.colors.mintSoft, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  generateText: { color: theme.colors.greenDark, fontSize: 10.5, fontWeight: '900' },
+  primaryButton: { flex: 1, minHeight: 47, borderRadius: 13, backgroundColor: theme.colors.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 12 },
+  primaryText: { color: theme.colors.white, fontSize: 12, fontWeight: '900' },
+  secondaryButton: { flex: 1, minHeight: 47, borderRadius: 13, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  secondaryText: { color: theme.colors.slate, fontSize: 12, fontWeight: '900' },
+  dangerButton: { flex: 1, minHeight: 47, borderRadius: 13, backgroundColor: theme.colors.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  dangerText: { color: theme.colors.white, fontSize: 12, fontWeight: '900' },
+  actionRow: { flexDirection: 'row', gap: 9 },
+  summaryCard: { borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 14, gap: 12 },
+  summaryHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 9 },
+  summaryReference: { color: theme.colors.navy, fontSize: 16, fontWeight: '900' },
+  statusPill: { borderRadius: theme.radius.pill, backgroundColor: theme.colors.mintSoft, paddingHorizontal: 9, paddingVertical: 5 },
+  statusText: { color: theme.colors.greenDark, fontSize: 10.5, fontWeight: '900' },
+  metricsRow: { flexDirection: 'row', gap: 8 },
+  metric: { flex: 1, borderRadius: 11, backgroundColor: '#F9FAFB', padding: 9 },
+  metricValue: { color: theme.colors.navy, fontSize: 16, fontWeight: '900' },
+  metricLabel: { color: theme.colors.muted, fontSize: 10, marginTop: 1 },
+  searchBox: { minHeight: 48, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 12, backgroundColor: theme.colors.white, paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center', gap: 7 },
+  searchInput: { flex: 1, color: theme.colors.navy, fontSize: 13, paddingVertical: 0 },
   itemList: { gap: 8 },
-  itemCard: { minHeight: 70, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 9 },
-  itemIcon: { width: 37, height: 37, borderRadius: 12, backgroundColor: theme.colors.cloud, alignItems: 'center', justifyContent: 'center' },
-  itemIconDone: { backgroundColor: theme.colors.mintSoft },
+  itemCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 11, gap: 9 },
+  itemHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   itemName: { color: theme.colors.navy, fontSize: 12.5, fontWeight: '900' },
-  itemMeta: { color: theme.colors.muted, fontSize: 10.5, lineHeight: 15, marginTop: 2 },
-  reviewFacts: { gap: 3 },
-  varianceText: { color: theme.colors.greenDark, fontSize: 11, fontWeight: '900' },
-  varianceNegative: { color: '#B42318' },
-  varianceZero: { color: theme.colors.muted },
-  iconButton: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.cloud },
-  uomWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
-  choiceChip: { minHeight: 36, borderRadius: 18, borderWidth: 1, borderColor: theme.colors.border, paddingHorizontal: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.white },
-  choiceChipActive: { borderColor: theme.colors.green, backgroundColor: theme.colors.mintSoft },
-  choiceChipText: { color: theme.colors.slate, fontSize: 11, fontWeight: '800' },
-  choiceChipTextActive: { color: theme.colors.greenDark, fontSize: 11, fontWeight: '900' },
-  conversionPreview: { color: theme.colors.muted, fontSize: 11, lineHeight: 16 },
-  helperText: { color: theme.colors.muted, fontSize: 11, lineHeight: 17 },
-  actionCard: { borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 13, gap: 10 },
-  reviewWaiting: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  confirmStack: { gap: 8 },
-  confirmTitle: { color: theme.colors.navy, fontSize: 14, fontWeight: '900' },
-  inlineActions: { flexDirection: 'row', gap: 8 },
-  flexButton: { flex: 1 },
-  cancelCard: { borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 13, gap: 8 },
-  cancelLink: { alignSelf: 'center', minHeight: 38, justifyContent: 'center', paddingHorizontal: 10 },
-  cancelLinkText: { color: '#B42318', fontSize: 11.5, fontWeight: '800' },
-  completeCard: { minHeight: 260, borderRadius: theme.radius.xl, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 20, alignItems: 'center', justifyContent: 'center', gap: 9 },
-  completeIcon: { width: 64, height: 64, borderRadius: 22, backgroundColor: theme.colors.mintSoft, alignItems: 'center', justifyContent: 'center' },
-  cancelledIcon: { backgroundColor: theme.colors.cloud },
-  completeTitle: { color: theme.colors.navy, fontSize: 20, fontWeight: '900' },
-  completeText: { color: theme.colors.slate, fontSize: 12, lineHeight: 18, textAlign: 'center' },
-  referenceText: { color: theme.colors.muted, fontSize: 11, fontWeight: '800' },
-  noticeInline: { color: theme.colors.slate, fontSize: 11, lineHeight: 16, textAlign: 'center' },
+  smallButton: { minHeight: 34, minWidth: 56, borderRadius: 10, backgroundColor: theme.colors.mintSoft, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 9 },
+  smallButtonText: { color: theme.colors.greenDark, fontSize: 10.5, fontWeight: '900' },
+  editorCard: { borderRadius: 11, backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: theme.colors.border, padding: 10, gap: 8 },
+  uomRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  uomChip: { minHeight: 33, borderRadius: theme.radius.pill, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, paddingHorizontal: 9, alignItems: 'center', justifyContent: 'center' },
+  uomChipActive: { borderColor: theme.colors.green, backgroundColor: theme.colors.mintSoft },
+  uomText: { color: theme.colors.slate, fontSize: 10.5, fontWeight: '800' },
+  uomTextActive: { color: theme.colors.greenDark },
+  reviewCard: { borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 14, gap: 9 },
+  varianceRow: { borderRadius: 11, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: '#F9FAFB', padding: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  varianceValue: { color: theme.colors.greenDark, fontSize: 13, fontWeight: '900' },
+  negative: { color: '#B42318' },
+  confirmCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: '#F9FAFB', padding: 12, gap: 9 },
+  confirmText: { color: theme.colors.slate, fontSize: 11.5, lineHeight: 17 },
+  emptyCard: { minHeight: 125, borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 18, alignItems: 'center', justifyContent: 'center', gap: 7 },
+  emptyTitle: { color: theme.colors.navy, fontSize: 15, fontWeight: '900' },
+  muted: { color: theme.colors.muted, fontSize: 11, lineHeight: 16 },
+  errorCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#FDA29B', backgroundColor: theme.colors.dangerSoft, padding: 11, flexDirection: 'row', gap: 7, alignItems: 'flex-start' },
+  errorText: { flex: 1, color: '#912018', fontSize: 11.5, lineHeight: 17 },
+  noticeCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#ABEFC6', backgroundColor: theme.colors.mintSoft, padding: 11, flexDirection: 'row', gap: 7, alignItems: 'flex-start' },
+  noticeText: { flex: 1, color: theme.colors.slate, fontSize: 11.5, lineHeight: 17 },
+  disabled: { opacity: 0.42 },
 });
 
 const darkStyles = StyleSheet.create({
-  card: { backgroundColor: theme.colors.navy, borderColor: '#344054' },
-  subtleCard: { backgroundColor: '#162F46', borderColor: '#344054' },
-  input: { backgroundColor: '#162F46', borderColor: '#475467', color: theme.colors.cloud },
-  inputText: { color: theme.colors.cloud },
-  outlineButton: { backgroundColor: '#162F46', borderColor: '#475467' },
-  choiceChip: { backgroundColor: '#162F46', borderColor: '#475467' },
-  errorCard: { backgroundColor: '#3A1717', borderColor: '#7A271A' },
-  titleText: { color: theme.colors.cloud },
-  bodyText: { color: '#D0D5DD' },
+  titleText: { color: '#F8FAFC' },
+  bodyText: { color: '#CBD5E1' },
+  card: { backgroundColor: '#111827', borderColor: '#334155' },
+  subtleCard: { backgroundColor: '#172033', borderColor: '#334155' },
+  outlineButton: { backgroundColor: '#111827', borderColor: '#334155' },
+  input: { backgroundColor: '#111827', borderColor: '#334155', color: '#F8FAFC' },
+  inputText: { color: '#F8FAFC' },
+  errorCard: { backgroundColor: '#3F1D1D', borderColor: '#7F1D1D' },
+  noticeCard: { backgroundColor: '#102E24', borderColor: '#166534' },
 });
