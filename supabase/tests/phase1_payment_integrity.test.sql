@@ -65,6 +65,13 @@ insert into public.merchant_payment_methods(
 select method_id,tenant_id,'paystack','pgTAP Paystack',true,true,1,'test','configured'
 from phase1_payment_fixture;
 
+insert into public.sellertray_branch_payment_methods(
+  tenant_id,branch_id,payment_method_id,is_enabled
+)
+select f.tenant_id,o.branch_id,f.method_id,true
+from phase1_payment_fixture f
+join public.orders o on o.tenant_id=f.tenant_id and o.id=f.order_id;
+
 update phase1_payment_fixture
 set p1=public.create_sellertray_order_payment_for_method(
   tenant_id,order_id,method_id,'initiated','PAYTEST1','phase1-payment-1',null
