@@ -34,3 +34,12 @@ export function createOperationalReference(kind: OperationalReferenceKind): stri
   const random = Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, '0');
   return `${PREFIX[kind]}-${date}-${time}-${random}`;
 }
+
+export function createInventoryOperationCommandId(kind: 'receive' | 'adjust'): string {
+  const timestamp = Date.now().toString(36);
+  const random = `${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}`
+    .replace(/[^a-z0-9]/gi, '')
+    .slice(0, 14)
+    .padEnd(14, '0');
+  return `invop:${kind}:${timestamp}:${random}`;
+}
