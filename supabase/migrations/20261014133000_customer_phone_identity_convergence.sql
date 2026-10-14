@@ -188,10 +188,10 @@ begin
     raise warning 'SellerTray found multiple manual customers matching WhatsApp sender % in business %; preserving them for explicit reconciliation',v_wa_id,p_tenant_id;
   end if;
 
-  insert into public.customers(tenant_id,wa_id,display_name,phone,updated_at)
+  insert into public.customers as c(tenant_id,wa_id,display_name,phone,updated_at)
   values(p_tenant_id,v_wa_id,coalesce(v_display_name,v_wa_id),v_wa_id,now())
   on conflict (tenant_id,wa_id) do update
-    set display_name=coalesce(excluded.display_name,public.customers.display_name),
+    set display_name=coalesce(excluded.display_name,c.display_name),
         phone=excluded.phone,
         updated_at=now()
   returning id into v_customer_id;
