@@ -117,6 +117,15 @@ export async function loadOrderFinancials(
   };
 }
 
+export async function canManageOrderPayment(tenantId: string, orderId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('get_sellertray_order_payment_authority', {
+    p_tenant_id: tenantId,
+    p_order_id: orderId,
+  });
+  if (error) throw error;
+  return data === true;
+}
+
 export async function confirmOfflinePayment(
   tenantId: string,
   paymentId: string,
