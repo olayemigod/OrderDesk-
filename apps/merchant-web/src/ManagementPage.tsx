@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import DevicesPrintersManagement from './DevicesPrintersManagement';
+import PaymentBranchManagement from './PaymentBranchManagement';
 import ProductsManagement from './ProductsManagement';
 import SettingsManagement from './SettingsManagement';
 import TeamBranchesManagement from './TeamBranchesManagement';
@@ -22,7 +23,7 @@ export default function ManagementPage({
   if (page === 'products') return <ProductsManagement tenantId={tenantId} currency={currency} />;
   if (page === 'team') return <TeamBranchesManagement tenantId={tenantId} onBranchesChanged={onBranchesChanged} />;
   if (page === 'devices') return <DeviceManagement tenantId={tenantId} />;
-  return <SettingsManagement tenantId={tenantId} />;
+  return <div className="page-stack"><SettingsManagement tenantId={tenantId} /><PaymentBranchManagement tenantId={tenantId} /></div>;
 }
 
 function DeviceManagement({ tenantId }: { tenantId: string }) {
