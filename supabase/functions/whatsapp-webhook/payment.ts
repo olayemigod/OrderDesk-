@@ -26,6 +26,7 @@ type PaymentAttempt = {
 
 type OrderRow = {
   id: string;
+  branch_id: string;
   customer_id: string;
   public_order_id: string;
   status: string;
@@ -153,7 +154,7 @@ async function resolveCustomerIds(tenantId: string, customerId: string, waId: st
 async function findOrder(tenantId: string, customerIds: string[], orderRef: string): Promise<OrderRow | null> {
   if (customerIds.length === 0) return null;
   const rows = await rest<OrderRow[]>(
-    '/rest/v1/orders?select=id,customer_id,public_order_id,status,payment_status' +
+    '/rest/v1/orders?select=id,branch_id,customer_id,public_order_id,status,payment_status' +
     '&tenant_id=eq.' + encodeURIComponent(tenantId) +
     '&customer_id=in.(' + customerIds.join(',') + ')' +
     '&public_order_id=eq.' + encodeURIComponent(orderRef) +
@@ -182,10 +183,10 @@ async function sendOptions(input: HandlerInput, order: OrderRow): Promise<void> 
     return;
   }
 
-  const methods = await loadMethods(input.tenantId);
+  const methods = await loadMethods(input.tenantId, order.branch_id);
   if (methods.length === 0) {
     await queueReply(input, order, 'payment_options',
-      'No customer payment method is currently enabled for ' + input.businessName + '. Please contact the merchant.');
+      'No customer payment method is currently available for this Branch. Please contact ' + input.businessName + '.');
     return;
   }
 
@@ -218,11 +219,11 @@ async function selectMethod(input: HandlerInput, order: OrderRow, token: string)
     return;
   }
 
-  const methods = await loadMethods(input.tenantId);
+  const methods = await loadMethods(input.tenantId, order.branch_id);
   const method = resolveMethod(methods, token);
   if (!method) {
     await queueReply(input, order, 'payment_instructions',
-      'I could not match "' + token + '" to an enabled payment method. Ask to see the payment options again, then reply with the number, code, or method name.');
+      'I could not match "' + token + '" to a payment method available for this Branch. Ask to see the payment options again, then reply with the number, code, or method name.');
     return;
   }
 
@@ -531,12 +532,11 @@ async function financialSnapshot(tenantId: string, orderId: string): Promise<{
   };
 }
 
-async function loadMethods(tenantId: string): Promise<PaymentMethod[]> {
-  return rest<PaymentMethod[]>(
-    '/rest/v1/merchant_payment_methods?select=id,method_type,display_name,is_default,sort_order,bank_name,bank_account_name,bank_account_number,instructions' +
-    '&tenant_id=eq.' + encodeURIComponent(tenantId) +
-    '&is_enabled=eq.true&order=is_default.desc,sort_order.asc,created_at.asc',
-  );
+async function loadMethods(tenantId: string, branchId: string): Promise<PaymentMethod[]> {
+  return rpc<PaymentMethod[]>('sellertray_branch_customer_payment_methods', {
+    p_tenant_id: tenantId,
+    p_branch_id: branchId,
+  });
 }
 
 async function latestPayment(tenantId: string, orderId: string): Promise<PaymentAttempt | null> {
