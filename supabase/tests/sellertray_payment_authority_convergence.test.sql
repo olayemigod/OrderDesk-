@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(16);
+select extensions.plan(17);
 
 select extensions.ok(
   position('can_manage_payments' in pg_get_functiondef('public.upsert_sellertray_payment_method(uuid,uuid,uuid,text,text,boolean,boolean,integer,text,text,text,text,text,text)'::regprocedure)) > 0,
@@ -21,7 +21,7 @@ select extensions.ok(
 select extensions.ok(
   position('can_manage_payments' in pg_get_functiondef('public.sellertray_user_can_manage_order_payment(uuid,uuid,uuid)'::regprocedure)) > 0
   and position('sellertray_user_has_capability' in pg_get_functiondef('public.sellertray_user_can_manage_order_payment(uuid,uuid,uuid)'::regprocedure)) > 0,
-  'human payment authority requires centralized payment capability'
+  'non-POS human payment management retains centralized payment capability evaluation'
 );
 select extensions.ok(
   position('sellertray_user_can_operate_branch' in pg_get_functiondef('public.sellertray_user_can_manage_order_payment(uuid,uuid,uuid)'::regprocedure)) > 0
@@ -29,8 +29,13 @@ select extensions.ok(
   'human payment authority requires current operational Branch access'
 );
 select extensions.ok(
+  position('source' in pg_get_functiondef('public.sellertray_user_can_manage_order_payment(uuid,uuid,uuid)'::regprocedure)) > 0
+  and position('pos' in lower(pg_get_functiondef('public.sellertray_user_can_manage_order_payment(uuid,uuid,uuid)'::regprocedure))) > 0,
+  'POS checkout preserves the Branch-operator settlement boundary instead of requiring payment-management capability'
+);
+select extensions.ok(
   position('sellertray_user_can_manage_order_payment' in pg_get_functiondef('public.confirm_sellertray_offline_payment(uuid,uuid,text)'::regprocedure)) > 0,
-  'manual payment confirmation reuses the shared capability-and-Branch authority boundary'
+  'manual payment confirmation reuses the shared order payment authority boundary'
 );
 select extensions.ok(
   position('orderdesk_subscription_can_write' in pg_get_functiondef('public.confirm_sellertray_offline_payment(uuid,uuid,text)'::regprocedure)) > 0,
