@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(13);
+select extensions.plan(16);
 
 select extensions.ok(
   position('can_manage_payments' in pg_get_functiondef('public.upsert_sellertray_payment_method(uuid,uuid,uuid,text,text,boolean,boolean,integer,text,text,text,text,text,text)'::regprocedure)) > 0,
@@ -57,6 +57,20 @@ select extensions.ok(
 select extensions.ok(
   has_function_privilege('service_role','public.sellertray_user_can_manage_order_payment(uuid,uuid,uuid)','EXECUTE'),
   'governed payment services can evaluate human payment authority'
+);
+select extensions.ok(
+  to_regprocedure('public.get_sellertray_order_payment_authority(uuid,uuid)') is not null,
+  'authenticated payment action authority reader exists'
+);
+select extensions.ok(
+  has_function_privilege('authenticated','public.get_sellertray_order_payment_authority(uuid,uuid)','EXECUTE')
+  and not has_function_privilege('anon','public.get_sellertray_order_payment_authority(uuid,uuid)','EXECUTE'),
+  'payment action authority reader is available only to signed-in users and service infrastructure'
+);
+select extensions.ok(
+  position('auth.uid()' in pg_get_functiondef('public.get_sellertray_order_payment_authority(uuid,uuid)'::regprocedure)) > 0
+  and position('sellertray_user_can_manage_order_payment' in pg_get_functiondef('public.get_sellertray_order_payment_authority(uuid,uuid)'::regprocedure)) > 0,
+  'payment action authority reader binds the decision to the signed-in user'
 );
 
 select * from extensions.finish();
