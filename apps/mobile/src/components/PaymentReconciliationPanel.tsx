@@ -55,9 +55,12 @@ export function PaymentReconciliationPanel({ tenantId }: { tenantId: string }) {
   }
 
   function confirm(item: PaymentReconciliationItem) {
+    const consequence = item.methodType === 'bank_transfer'
+      ? 'For a POS bank-transfer sale awaiting settlement, SellerTray also rechecks stock, completes collection and deducts stock only after this confirmation succeeds.'
+      : 'SellerTray will apply the governed payment and order consequences for this payment.';
     Alert.alert(
       'Confirm payment received?',
-      'Verify the money has been received before confirming. SellerTray will issue the financial payment receipt, but will not change order or fulfilment state.',
+      `Verify the money has been received before confirming. SellerTray will issue the financial payment receipt. ${consequence}`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Confirm payment', onPress: () => void run(item, () => confirmReconciliationPayment(tenantId, item.id)) },
