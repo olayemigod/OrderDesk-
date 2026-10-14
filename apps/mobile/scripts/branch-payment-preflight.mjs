@@ -14,6 +14,7 @@ function requireValue(condition, message) {
 }
 
 const migration = read(join(repoRoot, 'supabase/migrations/20261014184500_branch_customer_payment_convergence.sql'));
+const authorityMigration = read(join(repoRoot, 'supabase/migrations/20261014190000_payment_operation_branch_authority.sql'));
 const paymentMethodsRepository = read(join(mobileRoot, 'src/data/paymentMethodsRepository.ts'));
 const orderPaymentPanel = read(join(mobileRoot, 'src/components/OrderPaymentPanel.tsx'));
 const merchantPaymentOperations = read(join(repoRoot, 'supabase/functions/merchant-payment-operations/index.ts'));
@@ -32,6 +33,18 @@ requireValue(
   'Customer payment discovery must exclude in-person card terminals',
 );
 requireValue(
+  authorityMigration.includes('sellertray_user_can_manage_order_payment') &&
+    authorityMigration.includes("'can_manage_payments'") &&
+    authorityMigration.includes('sellertray_user_can_operate_branch'),
+  'Human payment authority must require both payment capability and operational Branch access',
+);
+requireValue(
+  authorityMigration.includes("public.confirm_sellertray_offline_payment") &&
+    authorityMigration.includes('public.sellertray_user_can_manage_order_payment(') &&
+    authorityMigration.includes('public.finalize_sellertray_pos_confirmed_payment('),
+  'Manual confirmation must reuse human payment authority without losing POS transfer settlement',
+);
+requireValue(
   paymentMethodsRepository.includes("supabase.rpc('get_sellertray_branch_customer_payment_methods'") &&
     paymentMethodsRepository.includes('p_branch_id: branchId'),
   'Mobile payment repository must load customer payment methods through the guarded Branch RPC',
@@ -48,6 +61,13 @@ requireValue(
   'Merchant-triggered WhatsApp payment options must be Branch-scoped',
 );
 requireValue(
+  merchantPaymentOperations.includes("rpc<boolean>('sellertray_user_can_manage_order_payment'") &&
+    merchantPaymentOperations.includes('p_order_id: orderId') &&
+    merchantPaymentOperations.split('await assertHumanPaymentAuthority(tenantId, userId, order)').length >= 5 &&
+    merchantPaymentOperations.includes('select=id,tenant_id,branch_id,source,payment_status'),
+  'Merchant payment mutations must use the shared human payment capability-and-Branch authority boundary',
+);
+requireValue(
   whatsappPayment.includes('branch_id: string;') &&
     whatsappPayment.includes('select=id,branch_id,customer_id,public_order_id,status,payment_status') &&
     whatsappPayment.split('loadMethods(input.tenantId, order.branch_id)').length >= 3,
@@ -57,6 +77,10 @@ requireValue(
   whatsappPayment.includes("rpc<PaymentMethod[]>('sellertray_branch_customer_payment_methods'") &&
     !whatsappPayment.includes('/rest/v1/merchant_payment_methods?select=id,method_type,display_name'),
   'WhatsApp customer payment discovery must use the shared service Branch reader',
+);
+requireValue(
+  !whatsappPayment.includes('sellertray_user_can_manage_order_payment'),
+  'Customer WhatsApp payment self-service must not inherit human merchant payment authority checks',
 );
 
 if (failures.length > 0) {
