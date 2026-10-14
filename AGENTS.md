@@ -2,17 +2,21 @@
 
 These instructions apply to all work in this repository unless a more specific nested `AGENTS.md` adds narrower compatible guidance.
 
-## Mandatory governing skill
+## Mandatory governing skills
 
 Before planning, editing, reviewing, refactoring, testing, or documenting any SellerTray product change, read and follow:
 
 `.agents/skills/sellertray-project-implementation/SKILL.md`
 
-That skill is the repository-level implementation contract for the SellerTray redesign. It governs mobile UX, merchant web boundaries, shared commerce architecture, POS, inventory, branch awareness, UOM, WhatsApp commerce, payments, Bluetooth printing, reporting, AI, permissions, offline behaviour, implementation phases, QA gates, and anti-divergence rules.
+For any SellerTray task touching UI, forms, fields, registration/onboarding, typography/accessibility, or branch/PR management, also read and follow:
 
-The originating SellerTray redesign conversation is the primary decision record when it is available to the agent. The repository skill is the durable fallback and must be used when that thread is unavailable.
+`.agents/skills/sellertray-ui-form-pr-governance/SKILL.md`
 
-A later explicit user decision overrides older guidance. When product direction changes materially, update the governing skill in the same workstream so later agents do not inherit stale instructions.
+The project implementation skill is the repository-level architecture and product implementation contract. The UI/form/PR governance skill supplements it with mandatory semantic field controls, cascading field behaviour, intuitive registration/setup forms, readable and user-adjustable typography, form/accessibility QA, and continuous PR reconciliation rules. Neither skill permits a client to create separate business truth from the shared SellerTray core.
+
+The originating SellerTray redesign conversation is the primary decision record when it is available to the agent. The repository skills are the durable fallback and must be used when that thread is unavailable.
+
+A later explicit user decision overrides older guidance. When product direction changes materially, update the applicable governing skill in the same workstream so later agents do not inherit stale instructions.
 
 ## Non-negotiable product model
 
@@ -22,4 +26,4 @@ Do not implement a change that creates conflicting business truth across mobile,
 
 ## Before declaring work complete
 
-Confirm the applicable QA gates from the governing skill, report the tests actually run, preserve existing WhatsApp behaviour unless explicitly changed, and state any migration/build/deployment requirement. Do not describe planned work as completed.
+Confirm the applicable QA gates from both governing skills, report the tests actually run, preserve existing WhatsApp behaviour unless explicitly changed, state any migration/build/deployment requirement, and reconcile relevant open PRs continuously rather than allowing superseded or overlapping PRs to accumulate. Do not describe planned work as completed.
