@@ -177,6 +177,7 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
   const usingSavedData = usingCachedProducts || usingCachedStock;
   const savedAt = latestCacheTime(catalogCacheSavedAt, stockCacheSavedAt);
   const selectedPayment = paymentMethods.find((entry) => paymentKey(entry) === selectedPaymentKey) ?? paymentMethods[0] ?? null;
+  const bankTransferSelected = selectedPayment?.methodType === 'bank_transfer';
 
   function selectedUom(product: CommerceProduct): CommerceUom | null {
     const selectedId = selectedUomByProduct[product.id];
@@ -320,11 +321,20 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
 
   function confirmSelectedPayment() {
     if (!draftOrderId || completing || !selectedPayment) return;
+    if (selectedPayment.methodType === 'bank_transfer') {
+      Alert.alert(
+        'Record bank transfer?',
+        `Record ${formatMoney(total, currency)} against ${selectedPayment.displayName} for verification. The sale will remain unpaid and stock will not be deducted until an authorised operator confirms the money has arrived.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Record for verification', onPress: () => void completeSelectedSale() },
+        ],
+      );
+      return;
+    }
     const confirmation = selectedPayment.methodType === 'cash'
       ? `Confirm that ${formatMoney(total, currency)} cash has been received.`
-      : selectedPayment.methodType === 'card_terminal'
-        ? `Confirm the ${selectedPayment.displayName} terminal shows an approved payment of ${formatMoney(total, currency)}.`
-        : `Confirm ${formatMoney(total, currency)} has been received in ${selectedPayment.displayName}.`;
+      : `Confirm the ${selectedPayment.displayName} terminal shows an approved payment of ${formatMoney(total, currency)}.`;
     Alert.alert(`Confirm ${selectedPayment.displayName}`, `${confirmation} Stock will be deducted when the sale completes.`, [
       { text: 'Not yet', style: 'cancel' },
       { text: 'Payment confirmed', onPress: () => void completeSelectedSale() },
@@ -336,12 +346,21 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
     const orderId = draftOrderId;
     setCompleting(true); setCheckoutError(null);
     try {
-      await completePosSale(tenantId, orderId, selectedPayment.paymentMethodId);
+      const checkout = await completePosSale(tenantId, orderId, selectedPayment.paymentMethodId);
       clearSale();
+      if (checkout.status === 'awaiting_payment_confirmation') {
+        setHeldNotice('Bank transfer recorded for verification. The sale is still unpaid, stock has not been deducted, and collection is not complete. Confirm the transfer in Payment inbox before handing over goods.');
+        Alert.alert(
+          'Transfer awaiting verification',
+          'SellerTray saved the sale as unpaid. Stock and collection remain unchanged until the transfer is confirmed in Payment inbox.',
+        );
+        onDraftCreated?.(orderId);
+        return;
+      }
       try { await refreshBranchStock({ allowCache: true }); }
       catch { setStockError('Sale completed, but branch stock could not be refreshed. Refresh stock before starting another sale.'); }
       onDraftCreated?.(orderId);
-    } catch (err) { setCheckoutError(err instanceof Error ? err.message : 'Unable to complete this sale.'); }
+    } catch (err) { setCheckoutError(err instanceof Error ? err.message : 'Unable to process this payment.'); }
     finally { setCompleting(false); }
   }
 
@@ -367,7 +386,7 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
       <View style={styles.heading}>
         <Text style={[styles.eyebrow, dark && darkStyles.bodyText]}>SELL · {stepLabel.toUpperCase()}</Text>
         <Text style={[styles.title, dark && darkStyles.titleText]}>{stage === 'products' ? 'New Sale' : stage === 'cart' ? 'Review Cart' : 'Take Payment'}</Text>
-        <Text style={[styles.subtitle, dark && darkStyles.bodyText]}>{stage === 'products' ? `Selling from ${branch.name}. Choose products and units.` : stage === 'cart' ? 'Review quantities and customer before preparing payment.' : `Collect ${formatMoney(total, currency)} using a payment method available at ${branch.name}.`}</Text>
+        <Text style={[styles.subtitle, dark && darkStyles.bodyText]}>{stage === 'products' ? `Selling from ${branch.name}. Choose products and units.` : stage === 'cart' ? 'Review quantities and customer before preparing payment.' : `Process ${formatMoney(total, currency)} using a payment method available at ${branch.name}.`}</Text>
       </View>
 
       <View style={styles.stepRow}>{(['products', 'cart', 'payment'] as SaleStage[]).map((value, index) => <View key={value} style={styles.stepItem}><View style={[styles.stepDot, value === stage && styles.stepDotActive]}><Text style={[styles.stepNumber, value === stage && styles.stepNumberActive]}>{index + 1}</Text></View><Text style={[styles.stepText, value === stage && styles.stepTextActive]}>{value === 'products' ? 'Products' : value === 'cart' ? 'Cart' : 'Payment'}</Text></View>)}</View>
@@ -419,8 +438,8 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
           {paymentMethodError ? <ErrorCard text={paymentMethodError} dark={dark} /> : null}
           <View style={styles.paymentList}>{paymentMethods.map((method) => <Pressable key={paymentKey(method)} onPress={() => setSelectedPaymentKey(paymentKey(method))} style={[styles.paymentMethod, dark && darkStyles.subtle, selectedPaymentKey === paymentKey(method) && styles.paymentMethodActive]}><View style={styles.paymentIcon}><Ionicons name={method.methodType === 'cash' ? 'cash-outline' : method.methodType === 'card_terminal' ? 'card-outline' : 'business-outline'} size={22} color={theme.colors.greenDark} /></View><View style={styles.flex}><Text style={[styles.productName, dark && darkStyles.titleText]}>{method.displayName}</Text><Text style={[styles.small, dark && darkStyles.bodyText]}>{paymentDescription(method)}</Text></View>{selectedPaymentKey === paymentKey(method) ? <Ionicons name="checkmark-circle" size={23} color={theme.colors.green} /> : null}</Pressable>)}</View>
           {selectedPayment?.methodType === 'bank_transfer' ? <View style={[styles.instructions, dark && darkStyles.subtle]}><Text style={[styles.sectionTitle, dark && darkStyles.titleText]}>{selectedPayment.bankName ?? selectedPayment.displayName}</Text>{selectedPayment.bankAccountName ? <Text style={[styles.small, dark && darkStyles.bodyText]}>{selectedPayment.bankAccountName}</Text> : null}{selectedPayment.bankAccountNumber ? <Text selectable style={[styles.accountNumber, dark && darkStyles.titleText]}>{selectedPayment.bankAccountNumber}</Text> : null}{selectedPayment.instructions ? <Text style={[styles.small, dark && darkStyles.bodyText]}>{selectedPayment.instructions}</Text> : null}</View> : selectedPayment?.instructions ? <Text style={[styles.small, dark && darkStyles.bodyText]}>{selectedPayment.instructions}</Text> : null}
-          <Notice icon="shield-checkmark-outline" text="Confirm the payment only after cash is received, the transfer is visible, or the terminal shows approval. Payment, order completion and stock deduction are committed together." dark={dark} />
-          <Pressable disabled={completing || !selectedPayment || paymentMethodsLoading} onPress={confirmSelectedPayment} style={[styles.checkoutButton, (completing || !selectedPayment || paymentMethodsLoading) && styles.disabled]}>{completing ? <ActivityIndicator color={theme.colors.white} /> : <Ionicons name="checkmark-circle-outline" size={20} color={theme.colors.white} />}<Text style={styles.buttonText}>{completing ? 'Completing sale…' : selectedPayment ? `Confirm ${selectedPayment.displayName} · Complete sale` : 'Choose payment method'}</Text></Pressable>
+          <Notice icon="shield-checkmark-outline" text={bankTransferSelected ? 'Recording a bank transfer does not mark the sale paid or deduct stock. Confirm received funds in Payment inbox; SellerTray finalises the sale only after that confirmation.' : 'Confirm the payment only after cash is received or the terminal shows approval. Payment, order completion and stock deduction are committed together.'} dark={dark} />
+          <Pressable disabled={completing || !selectedPayment || paymentMethodsLoading} onPress={confirmSelectedPayment} style={[styles.checkoutButton, (completing || !selectedPayment || paymentMethodsLoading) && styles.disabled]}>{completing ? <ActivityIndicator color={theme.colors.white} /> : <Ionicons name="checkmark-circle-outline" size={20} color={theme.colors.white} />}<Text style={styles.buttonText}>{completing ? (bankTransferSelected ? 'Recording transfer…' : 'Completing sale…') : selectedPayment ? (bankTransferSelected ? `Record ${selectedPayment.displayName} · Verify payment` : `Confirm ${selectedPayment.displayName} · Complete sale`) : 'Choose payment method'}</Text></Pressable>
           <Pressable disabled={completing} onPress={openSavedSale} style={styles.secondaryButton}><Text style={styles.secondaryText}>View saved sale</Text></Pressable>
         </View>
       </View> : null}
@@ -430,7 +449,7 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
 
 function cashFallback(): PosPaymentMethod { return { paymentMethodId: null, methodType: 'cash', displayName: 'Cash', sortOrder: -1, isDefault: true, bankName: null, bankAccountName: null, bankAccountNumber: null, instructions: null }; }
 function paymentKey(method: PosPaymentMethod): string { return method.paymentMethodId ?? 'cash'; }
-function paymentDescription(method: PosPaymentMethod): string { if (method.methodType === 'cash') return 'Physical drawer cash'; if (method.methodType === 'card_terminal') return 'Confirm approval on the payment terminal'; return 'Confirm the transfer has reached this account'; }
+function paymentDescription(method: PosPaymentMethod): string { if (method.methodType === 'cash') return 'Physical drawer cash'; if (method.methodType === 'card_terminal') return 'Confirm approval on the payment terminal'; return 'Record transfer and verify received funds before fulfilment'; }
 function findStockShortage(lines: CartLine[], rows: BranchStockRow[]): StockShortage | null { const available = new Map(rows.map((row) => [row.catalogItemId, row.quantityOnHand])); const requested = new Map<string, StockShortage>(); for (const line of lines) { const quantity = line.quantity * line.uom.conversionFactor; const current = requested.get(line.product.id); if (current) current.required += quantity; else requested.set(line.product.id, { productName: line.product.name, stockUom: line.product.stockUom, required: quantity, available: available.get(line.product.id) ?? 0 }); } for (const row of requested.values()) if (row.required > row.available + STOCK_EPSILON) return row; return null; }
 function latestCacheTime(left: string | null, right: string | null): string | null { if (!left) return right; if (!right) return left; return new Date(left).getTime() >= new Date(right).getTime() ? left : right; }
 function formatSavedAt(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? 'earlier' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(date); }
