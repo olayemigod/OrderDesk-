@@ -45,15 +45,28 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
   const invoice = useMemo(() => documents.find((item) => item.documentType === 'invoice' && item.status === 'issued') ?? null, [documents]);
   const receipt = useMemo(() => documents.find((item) => item.documentType === 'receipt' && item.status === 'issued') ?? null, [documents]);
   const offlineMethods = useMemo(() => methods.filter((method) => method.isEnabled && ['bank_transfer', 'cash_on_delivery', 'pay_on_pickup'].includes(method.methodType)), [methods]);
+  const canRecordNewOfflinePayment = order.source !== 'pos';
+  const displayedPaymentStatus: MerchantOrder['paymentStatus'] = receipt ? 'paid' : order.paymentStatus;
+  const displayedAmountPaid = receipt?.amount ?? order.amountPaid;
 
   async function confirm(payment: OrderPaymentAttempt) {
-    Alert.alert('Confirm payment received?', 'This will mark the payment as confirmed and issue the SellerTray financial receipt. Use this only after you have verified the money was received.', [
+    const finalisesPosSale = order.source === 'pos' && payment.methodType === 'bank_transfer';
+    const message = finalisesPosSale
+      ? 'Confirm only after the transfer is visible in the business account. SellerTray will recheck stock, mark the payment paid, complete collection, deduct stock and issue the financial receipt together.'
+      : 'This will mark the payment as confirmed and issue the SellerTray financial receipt. Use this only after you have verified the money was received.';
+    Alert.alert('Confirm payment received?', message, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Confirm payment', onPress: () => void run(payment.id, async () => confirmOfflinePayment(tenantId, payment.id)) },
+      { text: 'Confirm payment', onPress: () => void run(payment.id, async () => {
+        await confirmOfflinePayment(tenantId, payment.id);
+        setNotice(finalisesPosSale
+          ? 'Transfer confirmed. SellerTray rechecked stock, completed collection, deducted stock and issued the financial receipt.'
+          : 'Payment confirmed and financial receipt issued.');
+      }) },
     ]);
   }
 
   async function record(method: MerchantPaymentMethod) {
+    if (order.source === 'pos') return;
     if (!['bank_transfer', 'cash_on_delivery', 'pay_on_pickup'].includes(method.methodType)) return;
     Alert.alert('Record payment received?', 'Use this only after you or a staff member has verified the money or cash was actually received. SellerTray will mark the order paid and issue the financial receipt.', [
       { text: 'Cancel', style: 'cancel' },
@@ -78,20 +91,22 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
 
   return (
     <View style={[styles.wrap, appearance.dark && darkStyles.card]}>
-      <View style={styles.header}><View style={styles.headerCopy}><Text style={[styles.eyebrow, appearance.dark && darkStyles.bodyText]}>PAYMENT</Text><Text style={[styles.title, appearance.dark && darkStyles.titleText]}>Financial status</Text></View><PaymentPill status={order.paymentStatus} /></View>
+      <View style={styles.header}><View style={styles.headerCopy}><Text style={[styles.eyebrow, appearance.dark && darkStyles.bodyText]}>PAYMENT</Text><Text style={[styles.title, appearance.dark && darkStyles.titleText]}>Financial status</Text></View><PaymentPill status={displayedPaymentStatus} /></View>
       <View style={[styles.summary, appearance.dark && darkStyles.subtleCard]}>
-        <SummaryRow dark={appearance.dark} label="Amount paid" value={formatMoney(order.amountPaid, invoice?.currency ?? 'NGN')} />
+        <SummaryRow dark={appearance.dark} label="Amount paid" value={formatMoney(displayedAmountPaid, invoice?.currency ?? 'NGN')} />
         {invoice ? <SummaryRow dark={appearance.dark} label="Invoice" value={invoice.documentReference} /> : null}
         {receipt ? <SummaryRow dark={appearance.dark} label="Financial receipt" value={receipt.documentReference} /> : null}
         {order.paymentConfirmedAt ? <SummaryRow dark={appearance.dark} label="Confirmed" value={formatDateTime(order.paymentConfirmedAt)} /> : null}
       </View>
 
-      {invoice && order.paymentStatus !== 'paid' ? <View style={[styles.merchantActions, appearance.dark && darkStyles.subtleCard]}>
+      {invoice && displayedPaymentStatus !== 'paid' ? <View style={[styles.merchantActions, appearance.dark && darkStyles.subtleCard]}>
         <Text style={[styles.merchantActionsTitle, appearance.dark && darkStyles.titleText]}>Merchant payment actions</Text>
-        <Text style={[styles.helper, appearance.dark && darkStyles.bodyText]}>Staff can record verified customer-facing offline payments here. Physical card terminals are used only in the branch POS payment step.</Text>
+        <Text style={[styles.helper, appearance.dark && darkStyles.bodyText]}>{order.source === 'pos'
+          ? 'This POS sale already has its checkout payment attempt. Confirm that existing transfer below after the money is received; do not record a second payment.'
+          : 'Staff with payment authority can record verified customer-facing offline payments here. Physical card terminals are used only in the branch POS payment step.'}</Text>
         {order.source === 'whatsapp' ? <Pressable disabled={busyId !== null} onPress={() => void sendOptions()} style={[styles.secondaryButton, appearance.dark && darkStyles.secondaryButton, busyId !== null && styles.disabled]}><Text style={[styles.secondaryText, appearance.dark && darkStyles.titleText]}>{busyId === 'send-options' ? 'Sending…' : 'Send payment options on WhatsApp'}</Text></Pressable> : null}
-        {offlineMethods.length > 0 ? <Pressable disabled={busyId !== null} onPress={() => setShowRecordMethods((value) => !value)} style={[styles.primaryButton, busyId !== null && styles.disabled]}><Text style={styles.primaryText}>{showRecordMethods ? 'Hide payment methods' : 'Record payment received'}</Text></Pressable> : null}
-        {showRecordMethods ? <View style={styles.recordMethodList}>{offlineMethods.map((method) => <Pressable key={method.id} disabled={busyId !== null} onPress={() => void record(method)} style={[styles.recordMethodButton, appearance.dark && darkStyles.secondaryButton]}><Text style={[styles.recordMethodTitle, appearance.dark && darkStyles.titleText]}>{method.displayName}</Text><Text style={[styles.recordMethodMeta, appearance.dark && darkStyles.bodyText]}>{humanMethod(method.methodType)}</Text></Pressable>)}<Text style={[styles.note, appearance.dark && darkStyles.bodyText]}>Paystack and Flutterwave are verified through their providers. Card terminals stay inside the in-person POS flow.</Text></View> : null}
+        {canRecordNewOfflinePayment && offlineMethods.length > 0 ? <Pressable disabled={busyId !== null} onPress={() => setShowRecordMethods((value) => !value)} style={[styles.primaryButton, busyId !== null && styles.disabled]}><Text style={styles.primaryText}>{showRecordMethods ? 'Hide payment methods' : 'Record payment received'}</Text></Pressable> : null}
+        {canRecordNewOfflinePayment && showRecordMethods ? <View style={styles.recordMethodList}>{offlineMethods.map((method) => <Pressable key={method.id} disabled={busyId !== null} onPress={() => void record(method)} style={[styles.recordMethodButton, appearance.dark && darkStyles.secondaryButton]}><Text style={[styles.recordMethodTitle, appearance.dark && darkStyles.titleText]}>{method.displayName}</Text><Text style={[styles.recordMethodMeta, appearance.dark && darkStyles.bodyText]}>{humanMethod(method.methodType)}</Text></Pressable>)}<Text style={[styles.note, appearance.dark && darkStyles.bodyText]}>Paystack and Flutterwave are verified through their providers. Card terminals stay inside the in-person POS flow.</Text></View> : null}
       </View> : null}
 
       {loading && payments.length === 0 ? <Text style={[styles.helper, appearance.dark && darkStyles.bodyText]}>Loading payment attempts…</Text> : null}
@@ -114,7 +129,9 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
           {verifiable ? <Pressable disabled={busyId !== null} onPress={() => void verify(payment)} style={[styles.secondaryButton, busyId !== null && styles.disabled]}><Text style={styles.secondaryText}>{busyId === payment.id ? 'Checking provider…' : 'Verify with provider'}</Text></Pressable> : null}
         </View>;
       })}
-      <Text style={[styles.note, appearance.dark && darkStyles.bodyText]}>Order status, payment status and fulfilment status are independent. Confirming payment does not complete the order or delivery.</Text>
+      <Text style={[styles.note, appearance.dark && darkStyles.bodyText]}>{order.source === 'pos'
+        ? 'For a pending POS bank transfer, payment confirmation is the settlement boundary: SellerTray rechecks stock, completes collection and deducts stock only when confirmation succeeds.'
+        : 'Order status, payment status and fulfilment status remain separate for customer orders; confirming payment does not by itself mark delivery complete.'}</Text>
     </View>
   );
 }
