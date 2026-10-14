@@ -1,0 +1,88 @@
+import { readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+
+const mobileRoot = process.cwd();
+const repoRoot = resolve(mobileRoot, '../..');
+const failures = [];
+
+function read(path) {
+  return readFileSync(path, 'utf8');
+}
+
+function requireValue(condition, message) {
+  if (!condition) failures.push(message);
+}
+
+const migration = read(join(repoRoot, 'supabase/migrations/20261014195000_inventory_operation_command_identity_classification.sql'));
+const edge = read(join(repoRoot, 'supabase/functions/inventory-operation/index.ts'));
+const repository = read(join(mobileRoot, 'src/data/inventoryRepository.ts'));
+const workspace = read(join(mobileRoot, 'src/redesign/InventoryWorkspace.tsx'));
+const references = read(join(mobileRoot, 'src/redesign/operationalReference.ts'));
+
+requireValue(
+  migration.includes('p_command_id text') &&
+    migration.includes("p_tenant_id::text || '|' || v_command_id") &&
+    migration.includes('Stock action retry identity is already used for different stock facts'),
+  'Inventory retries must use a hidden tenant-scoped command identity and reject changed replay facts',
+);
+requireValue(
+  migration.includes('lower(btrim(im.reference_id))=lower(v_reference)') &&
+    migration.includes('Reference is already used for a different stock movement'),
+  'Merchant-facing inventory references must remain an independent duplicate guard',
+);
+requireValue(
+  migration.includes("v_movement_type := 'opening'") &&
+    migration.includes("when v_reason_key='damage' then 'damaged'") &&
+    migration.includes("when v_reason_key='expiry' then 'expired'"),
+  'Opening, damage and expiry must use canonical stock movement classifications',
+);
+requireValue(
+  migration.includes('Use Stock Transfer to move stock from another branch') &&
+    migration.includes('Use Stock Count to reconcile counted stock') &&
+    migration.includes('Opening stock can only be posted before other stock movements for this product'),
+  'Direct stock actions must not bypass Stock Transfer, Stock Count or opening-stock history rules',
+);
+requireValue(
+  edge.includes('const commandId = cleanCommandId(body.commandId)') &&
+    edge.includes('p_command_id: commandId') &&
+    edge.includes("['supplier delivery', 'Supplier delivery']") &&
+    edge.includes("['inventory recovery', 'Inventory recovery']"),
+  'Inventory Edge Function must validate and forward the hidden command identity with governed reasons',
+);
+requireValue(
+  repository.includes('commandId: string;') &&
+    repository.includes('commandId: input.commandId.trim()'),
+  'Mobile inventory repository must require and send the hidden command identity',
+);
+requireValue(
+  references.includes('createInventoryOperationCommandId') &&
+    references.includes('invop:${kind}:'),
+  'Mobile must generate a non-user-facing inventory command identity',
+);
+requireValue(
+  workspace.includes('setOperationCommandId(createInventoryOperationCommandId(mode))') &&
+    workspace.includes('commandId: operationCommandId') &&
+    workspace.includes("onPress={() => setOperationReference(createOperationalReference(operationMode))}"),
+  'Inventory form must preserve its hidden command identity while allowing the visible reference to change',
+);
+requireValue(
+  !workspace.includes("'Branch replenishment'") &&
+    !workspace.includes("'Stock count correction'") &&
+    workspace.includes("'Inventory recovery'") &&
+    workspace.includes("reason !== 'Opening stock'"),
+  'Mobile inventory reasons must route branch transfers and stock counts to their governed workflows',
+);
+requireValue(
+  workspace.includes("reason === 'Damage' || reason === 'Expiry' || reason === 'Missing / shrinkage'") &&
+    workspace.includes("reason === 'Inventory recovery'") &&
+    workspace.includes('disabled={forcedAdjustmentDirection !== null}'),
+  'Mobile inventory adjustments must enforce direction-safe reason semantics',
+);
+
+if (failures.length > 0) {
+  console.error('SellerTray inventory operation preflight failed:');
+  for (const failure of failures) console.error(`- ${failure}`);
+  process.exit(1);
+}
+
+console.log('SellerTray inventory operation preflight passed.');
