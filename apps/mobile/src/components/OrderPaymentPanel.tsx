@@ -10,7 +10,7 @@ import {
   type OrderFinancialDocument,
   type OrderPaymentAttempt,
 } from '../data/orderPaymentsRepository';
-import { loadPaymentMethods, type MerchantPaymentMethod } from '../data/paymentMethodsRepository';
+import { loadBranchCustomerPaymentMethods, type MerchantPaymentMethod } from '../data/paymentMethodsRepository';
 import type { MerchantOrder } from '../domain/order';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
@@ -30,7 +30,10 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [data, paymentMethods] = await Promise.all([loadOrderFinancials(tenantId, order.id), loadPaymentMethods(tenantId)]);
+      const [data, paymentMethods] = await Promise.all([
+        loadOrderFinancials(tenantId, order.id),
+        loadBranchCustomerPaymentMethods(tenantId, order.branchId),
+      ]);
       setDocuments(data.documents);
       setPayments(data.payments);
       setMethods(paymentMethods);
@@ -38,7 +41,7 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load payment details.');
     } finally { setLoading(false); }
-  }, [order.id, tenantId]);
+  }, [order.branchId, order.id, tenantId]);
 
   useEffect(() => { void refresh(); }, [refresh, order.paymentStatus, order.paymentConfirmedAt]);
 
@@ -103,7 +106,7 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
         <Text style={[styles.merchantActionsTitle, appearance.dark && darkStyles.titleText]}>Merchant payment actions</Text>
         <Text style={[styles.helper, appearance.dark && darkStyles.bodyText]}>{order.source === 'pos'
           ? 'This POS sale already has its checkout payment attempt. Confirm that existing transfer below after the money is received; do not record a second payment.'
-          : 'Staff with payment authority can record verified customer-facing offline payments here. Physical card terminals are used only in the branch POS payment step.'}</Text>
+          : 'Staff with payment authority can record verified customer-facing offline payments available at this Branch. Physical card terminals are used only in the Branch POS payment step.'}</Text>
         {order.source === 'whatsapp' ? <Pressable disabled={busyId !== null} onPress={() => void sendOptions()} style={[styles.secondaryButton, appearance.dark && darkStyles.secondaryButton, busyId !== null && styles.disabled]}><Text style={[styles.secondaryText, appearance.dark && darkStyles.titleText]}>{busyId === 'send-options' ? 'Sending…' : 'Send payment options on WhatsApp'}</Text></Pressable> : null}
         {canRecordNewOfflinePayment && offlineMethods.length > 0 ? <Pressable disabled={busyId !== null} onPress={() => setShowRecordMethods((value) => !value)} style={[styles.primaryButton, busyId !== null && styles.disabled]}><Text style={styles.primaryText}>{showRecordMethods ? 'Hide payment methods' : 'Record payment received'}</Text></Pressable> : null}
         {canRecordNewOfflinePayment && showRecordMethods ? <View style={styles.recordMethodList}>{offlineMethods.map((method) => <Pressable key={method.id} disabled={busyId !== null} onPress={() => void record(method)} style={[styles.recordMethodButton, appearance.dark && darkStyles.secondaryButton]}><Text style={[styles.recordMethodTitle, appearance.dark && darkStyles.titleText]}>{method.displayName}</Text><Text style={[styles.recordMethodMeta, appearance.dark && darkStyles.bodyText]}>{humanMethod(method.methodType)}</Text></Pressable>)}<Text style={[styles.note, appearance.dark && darkStyles.bodyText]}>Paystack and Flutterwave are verified through their providers. Card terminals stay inside the in-person POS flow.</Text></View> : null}
