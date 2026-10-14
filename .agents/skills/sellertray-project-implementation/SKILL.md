@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.1"
+  version: "0.1.2"
   status: governing
 ---
 
@@ -139,15 +139,53 @@ Sell is the main POS surface. Support:
 - split payment where enabled;
 - receipt actions.
 
+On phone, the primary POS flow is explicitly staged:
+
+> Products -> Cart -> Payment
+
+Rules:
+
+1. Products, Cart and Payment are separate phone steps/screens. Do not place the full cart or payment form beneath a long product catalogue.
+2. The product catalogue defaults to a tile/grid view. A compact list view may be offered as an explicit toggle.
+3. Large catalogues must use bounded paging or equivalent virtualised incremental loading so a merchant is not forced through one unbounded 100+ item scroll.
+4. Search and barcode entry remain available from the Products step and must work across the catalogue, not merely the visible page.
+5. The Cart shows product-line count separately from transaction quantity; do not label fractional transaction quantity as a fractional number of “items”.
+6. Cart quantity must be directly editable by typing and may also provide plus/minus controls. Both paths must enforce the same UOM fractional policy, stock availability and price/conversion rules.
+7. Moving from Cart to Payment must revalidate governed branch stock, current price and UOM conversion before a checkout draft is committed.
+8. Payment remains a distinct step after the cart is accepted. Completing payment must revalidate server-side transactional invariants before payment and stock effects are committed.
+9. A branch change invalidates stale Product/Cart/Payment context safely.
+10. Tablet or desktop layouts may use a denser split-screen treatment where appropriate, but do not force that pattern onto small Android phones.
+
 After successful completion, support fast continuation, normally **New Sale**.
 
 ## Orders
 
 Orders is a unified order surface. POS, WhatsApp, merchant-created orders and future storefront/API orders use one order model with `source` as a dimension. Do not create isolated order engines per channel.
 
+Order-line rules:
+
+1. Every order must expose its line items for review, including finalised orders.
+2. Finalised/posting-affected order lines are historical snapshots and are read-only.
+3. Draft order edits must go through a governed server/domain command; clients must not write order-item rows directly.
+4. A draft edit must preserve branch authority, capability checks, current UOM/price validation and audit history.
+5. Once payment, financial-document or inventory activity exists, order lines must not be silently rewritten as if they were still an untouched draft.
+
 ## Inventory
 
 Mobile inventory is operational: stock lookup, branch availability, receiving, transfers, stock count, controlled adjustment, low stock and movement history.
+
+Operational reference rules:
+
+1. SellerTray generates a unique operational reference by default for stock receipts, adjustments, purchase receipts, stock counts and stock transfers.
+2. The generated reference may be replaced with a meaningful external reference, such as a supplier delivery note or count sheet, where that improves traceability.
+3. User-facing business references are not substitutes for internal idempotency keys; preserve both concepts where retry safety requires them.
+4. Reusing a reference according to the governed retry contract must not duplicate stock or payment effects.
+
+Reason rules:
+
+1. Stock receipt and stock adjustment reason entry should use a governed merchant-facing reason vocabulary rather than unrestricted free text by default.
+2. Add an “Other approved …” reason only where the workflow genuinely needs it; do not let clients invent internal reason codes.
+3. Cancellation/explanation workflows may still require a concise free-text explanation where the audit trail needs human context.
 
 ## More
 
@@ -233,6 +271,9 @@ Rules:
 4. Return restores stock only according to approved return state/policy.
 5. Transfer out and transfer receipt must remain auditable and duplicate-safe.
 6. Retried requests must not duplicate stock effects.
+7. A Purchase Order does not create on-hand stock. It records procurement intent for a specific branch.
+8. Purchase stock enters inventory only when a physical receipt is posted for that Purchase Order. Partial receipts post only the physically received quantity.
+9. Stock needed by another branch must be received against that branch’s Purchase Order or moved through a governed Stock Transfer after receipt; do not create global phantom stock from placing a purchase.
 
 # 8. WhatsApp preservation and unification
 
@@ -400,6 +441,8 @@ Apply relevant gates to every slice.
 
 Verify information architecture, primary action, branch context, loading/empty/error states, small-screen behaviour, business-facing labels and tap efficiency.
 
+For phone POS specifically, verify the Products -> Cart -> Payment stage separation, tile-default catalogue, scalable paging/loading, direct quantity entry, and that large catalogues do not require scrolling through the cart or payment UI.
+
 ## Permission gate
 
 Verify representative allowed/denied read, allowed/denied write/action, branch isolation and multi-branch switching.
@@ -444,6 +487,9 @@ Do not:
 - silently change stock from a stock count;
 - put full management administration into mobile;
 - make merchant web a stretched mobile app;
+- collapse phone Products, Cart and Payment into one unbounded long POS screen;
+- make manual/free-text references the only operational-reference path when SellerTray can safely generate one;
+- write draft order-item changes directly from a client instead of through governed domain commands;
 - let print failure undo a completed sale;
 - let AI bypass permissions/domain services;
 - duplicate payment or stock effects on retries;
