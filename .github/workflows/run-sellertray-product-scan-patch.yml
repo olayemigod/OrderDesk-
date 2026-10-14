@@ -6,6 +6,7 @@ on:
       - feat/sellertray-brand-ui-v1
     paths:
       - scripts/patch-sellertray-product-scan.py
+      - .github/workflows/run-sellertray-product-scan-patch.yml
 
 permissions:
   contents: write
@@ -24,6 +25,9 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: apps/mobile/package-lock.json
+      - name: Install locked mobile dependencies
+        working-directory: apps/mobile
+        run: npm ci --no-audit --no-fund
       - name: Repair product scan integration
         run: python3 scripts/patch-sellertray-product-scan.py
       - name: Install SDK-compatible camera dependency
@@ -34,7 +38,7 @@ jobs:
         run: npm run typecheck
       - name: Release preflight
         working-directory: apps/mobile
-        run: npm run release:preflight
+        run: npm run preflight
       - name: Validate diff
         run: git diff --check
       - name: Commit repaired checkpoint
