@@ -24,6 +24,7 @@ import {
 } from '../data/offlineSalesRepository';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
+import { PosCustomerSelector, type PosCustomerSelection } from './PosCustomerSelector';
 
 type CartLine = { key: string; product: CommerceProduct; uom: CommerceUom; quantity: number };
 type StockShortage = { productName: string; stockUom: string; required: number; available: number };
@@ -58,6 +59,7 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
   const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(true);
   const [paymentMethodError, setPaymentMethodError] = useState<string | null>(null);
   const [selectedPaymentKey, setSelectedPaymentKey] = useState('cash');
+  const [customer, setCustomer] = useState<PosCustomerSelection | null>(null);
   const [query, setQuery] = useState('');
   const [viewMode, setViewMode] = useState<ProductViewMode>('grid');
   const [page, setPage] = useState(1);
@@ -103,6 +105,7 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
     setQuantityDrafts({});
     setDraftOrderId(null);
     setSaleClientReference(null);
+    setCustomer(null);
     setCheckoutError(null);
     setHeldNotice(null);
     setStage('products');
@@ -251,14 +254,48 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
   }
 
   function currentDraftInput(clientReference: string) {
-    return { tenantId, branchId: branch.id, clientReference, items: cartLines.map((line) => ({ catalogItemId: line.product.id, uomId: line.uom.id, quantity: line.quantity, expectedSellingPrice: line.uom.sellingPrice ?? 0, expectedConversionFactor: line.uom.conversionFactor })) };
+    return {
+      tenantId,
+      branchId: branch.id,
+      clientReference,
+      customerId: customer?.id ?? null,
+      customerName: customer?.name ?? null,
+      customerPhone: customer?.phone ?? null,
+      items: cartLines.map((line) => ({
+        catalogItemId: line.product.id,
+        uomId: line.uom.id,
+        quantity: line.quantity,
+        expectedSellingPrice: line.uom.sellingPrice ?? 0,
+        expectedConversionFactor: line.uom.conversionFactor,
+      })),
+    };
   }
 
   async function holdSaleForSync(clientReference: string) {
     if (!actorUserId) throw new Error('SellerTray cannot identify the cashier for offline sync.');
-    await queueOfflinePosSale({ clientReference, actorUserId, tenantId, branchId: branch.id, branchName: branch.name, currency, total, lines: cartLines.map((line) => ({ catalogItemId: line.product.id, uomId: line.uom.id, quantity: line.quantity, expectedSellingPrice: line.uom.sellingPrice ?? 0, expectedConversionFactor: line.uom.conversionFactor, productName: line.product.name, uomName: line.uom.name })) });
+    await queueOfflinePosSale({
+      clientReference,
+      actorUserId,
+      tenantId,
+      branchId: branch.id,
+      branchName: branch.name,
+      customerId: customer?.id ?? null,
+      customerName: customer?.name ?? null,
+      customerPhone: customer?.phone ?? null,
+      currency,
+      total,
+      lines: cartLines.map((line) => ({
+        catalogItemId: line.product.id,
+        uomId: line.uom.id,
+        quantity: line.quantity,
+        expectedSellingPrice: line.uom.sellingPrice ?? 0,
+        expectedConversionFactor: line.uom.conversionFactor,
+        productName: line.product.name,
+        uomName: line.uom.name,
+      })),
+    });
     clearSale();
-    setHeldNotice('Sale held on this device. It is not paid or completed. SellerTray will recheck Branch access, price, unit conversion and stock before creating the draft online.');
+    setHeldNotice('Sale held on this device. It is not paid or completed. SellerTray will recheck Branch access, customer, price, unit conversion and stock before creating the draft online.');
     onOfflineSaleQueued?.();
   }
 
@@ -309,7 +346,13 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
   }
 
   function clearSale() {
-    setCart({}); setQuantityDrafts({}); setDraftOrderId(null); setSaleClientReference(null); setCheckoutError(null); setStage('products');
+    setCart({});
+    setQuantityDrafts({});
+    setDraftOrderId(null);
+    setSaleClientReference(null);
+    setCustomer(null);
+    setCheckoutError(null);
+    setStage('products');
   }
 
   function openSavedSale() {
@@ -324,7 +367,7 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
       <View style={styles.heading}>
         <Text style={[styles.eyebrow, dark && darkStyles.bodyText]}>SELL · {stepLabel.toUpperCase()}</Text>
         <Text style={[styles.title, dark && darkStyles.titleText]}>{stage === 'products' ? 'New Sale' : stage === 'cart' ? 'Review Cart' : 'Take Payment'}</Text>
-        <Text style={[styles.subtitle, dark && darkStyles.bodyText]}>{stage === 'products' ? `Selling from ${branch.name}. Choose products and units.` : stage === 'cart' ? 'Review quantities before creating the checkout draft.' : `Collect ${formatMoney(total, currency)} using a payment method available at ${branch.name}.`}</Text>
+        <Text style={[styles.subtitle, dark && darkStyles.bodyText]}>{stage === 'products' ? `Selling from ${branch.name}. Choose products and units.` : stage === 'cart' ? 'Review quantities and customer before preparing payment.' : `Collect ${formatMoney(total, currency)} using a payment method available at ${branch.name}.`}</Text>
       </View>
 
       <View style={styles.stepRow}>{(['products', 'cart', 'payment'] as SaleStage[]).map((value, index) => <View key={value} style={styles.stepItem}><View style={[styles.stepDot, value === stage && styles.stepDotActive]}><Text style={[styles.stepNumber, value === stage && styles.stepNumberActive]}>{index + 1}</Text></View><Text style={[styles.stepText, value === stage && styles.stepTextActive]}>{value === 'products' ? 'Products' : value === 'cart' ? 'Cart' : 'Payment'}</Text></View>)}</View>
@@ -355,17 +398,22 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
 
       {stage === 'cart' ? <View style={styles.stageStack}>
         <BackLink label="Continue shopping" onPress={() => setStage('products')} />
-        <View style={[styles.card, dark && darkStyles.card]}><View style={styles.row}><View style={styles.flex}><Text style={[styles.eyebrow, dark && darkStyles.bodyText]}>CART</Text><Text style={[styles.cartTitle, dark && darkStyles.titleText]}>{lineCount} product{lineCount === 1 ? '' : 's'} · {formatQuantity(unitCount)} units</Text></View><Text style={[styles.cartTotal, dark && darkStyles.titleText]}>{formatMoney(total, currency)}</Text></View>
+        <View style={[styles.card, dark && darkStyles.card]}>
+          <View style={styles.row}><View style={styles.flex}><Text style={[styles.eyebrow, dark && darkStyles.bodyText]}>CART</Text><Text style={[styles.cartTitle, dark && darkStyles.titleText]}>{lineCount} product{lineCount === 1 ? '' : 's'} · {formatQuantity(unitCount)} units</Text></View><Text style={[styles.cartTotal, dark && darkStyles.titleText]}>{formatMoney(total, currency)}</Text></View>
           {cartLines.map((line) => <View key={line.key} style={[styles.cartLine, dark && darkStyles.subtle]}><View style={styles.flex}><Text style={[styles.productName, dark && darkStyles.titleText]}>{line.product.name}</Text><Text style={[styles.small, dark && darkStyles.bodyText]}>{line.uom.name} · {formatQuantity(line.quantity * line.uom.conversionFactor)} {line.product.stockUom}</Text><Text style={[styles.productPrice, dark && darkStyles.titleText]}>{formatMoney(line.quantity * (line.uom.sellingPrice ?? 0), currency)}</Text></View><View style={styles.qty}><Pressable onPress={() => changeQuantity(line, -1)} style={styles.qtyButton}><Ionicons name="remove" size={18} color={theme.colors.navy} /></Pressable><TextInput value={quantityDrafts[line.key] ?? formatQuantity(line.quantity)} onChangeText={(value) => setQuantityDrafts((current) => ({ ...current, [line.key]: value.replace(/[^0-9.]/g, '') }))} onBlur={() => commitTypedQuantity(line)} keyboardType="decimal-pad" style={[styles.qtyInput, dark && darkStyles.input]} /><Pressable onPress={() => changeQuantity(line, 1)} style={styles.qtyButton}><Ionicons name="add" size={18} color={theme.colors.navy} /></Pressable></View></View>)}
+          <View style={styles.customerSection}>
+            <Text style={[styles.sectionTitle, dark && darkStyles.titleText]}>Customer</Text>
+            <PosCustomerSelector tenantId={tenantId} value={customer} onChange={setCustomer} disabled={saving || checkoutLocked} />
+          </View>
           {cartShortage ? <ErrorCard text={`${cartShortage.productName} exceeds current branch stock. Reduce the quantity before checkout.`} dark={dark} /> : null}
-          <Notice icon="information-circle-outline" text="SellerTray rechecks branch stock, selling price and unit conversion before creating the checkout draft." dark={dark} />
+          <Notice icon="information-circle-outline" text="SellerTray rechecks customer, branch stock, selling price and unit conversion before creating the checkout draft." dark={dark} />
           <Pressable disabled={!lineCount || saving || !stockReady || Boolean(cartShortage)} onPress={() => void continueToPayment()} style={[styles.checkoutButton, (!lineCount || saving || !stockReady || Boolean(cartShortage)) && styles.disabled]}>{saving ? <ActivityIndicator color={theme.colors.white} /> : null}<Text style={styles.buttonText}>{saving ? 'Preparing payment…' : usingSavedData ? 'Hold sale for sync' : 'Continue to payment'}</Text></Pressable>
         </View>
       </View> : null}
 
       {stage === 'payment' ? <View style={styles.stageStack}>
         <View style={[styles.card, dark && darkStyles.card]}>
-          <View style={styles.center}><Text style={[styles.eyebrow, dark && darkStyles.bodyText]}>AMOUNT DUE</Text><Text style={[styles.paymentAmount, dark && darkStyles.titleText]}>{formatMoney(total, currency)}</Text><Text style={[styles.small, dark && darkStyles.bodyText]}>{lineCount} products · {formatQuantity(unitCount)} units</Text></View>
+          <View style={styles.center}><Text style={[styles.eyebrow, dark && darkStyles.bodyText]}>AMOUNT DUE</Text><Text style={[styles.paymentAmount, dark && darkStyles.titleText]}>{formatMoney(total, currency)}</Text><Text style={[styles.small, dark && darkStyles.bodyText]}>{lineCount} products · {formatQuantity(unitCount)} units</Text><Text style={[styles.paymentCustomer, dark && darkStyles.bodyText]}>{customer?.name || customer?.phone || 'Walk-in Customer'}</Text></View>
           <Text style={[styles.sectionTitle, dark && darkStyles.titleText]}>Payment method</Text>
           {paymentMethodsLoading ? <View style={styles.loadingRow}><ActivityIndicator /><Text style={[styles.small, dark && darkStyles.bodyText]}>Loading branch payment methods…</Text></View> : null}
           {paymentMethodError ? <ErrorCard text={paymentMethodError} dark={dark} /> : null}
@@ -402,7 +450,7 @@ const styles = StyleSheet.create({
   toolbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }, catalogueCount: { color: theme.colors.navy, fontSize: 13, fontWeight: '900' }, viewToggle: { flexDirection: 'row', borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, borderRadius: 12, padding: 3 }, viewButton: { width: 38, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' }, viewButtonActive: { backgroundColor: theme.colors.green },
   productGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 10 }, productList: { gap: 9 }, productTile: { width: '48.3%', minHeight: 190, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 11, gap: 9 }, productCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 13, gap: 10 }, productName: { color: theme.colors.navy, fontSize: 13, fontWeight: '900' }, productPrice: { color: theme.colors.navy, fontSize: 12, fontWeight: '900' }, stockText: { color: theme.colors.greenDark, fontSize: 10, fontWeight: '800' }, dangerText: { color: '#B42318' }, chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 }, chip: { minHeight: 30, borderRadius: theme.radius.pill, borderWidth: 1, borderColor: theme.colors.border, paddingHorizontal: 8, justifyContent: 'center' }, chipActive: { borderColor: theme.colors.green, backgroundColor: theme.colors.mintSoft }, chipText: { color: theme.colors.slate, fontSize: 10, fontWeight: '800' }, chipTextActive: { color: theme.colors.greenDark }, addButton: { marginTop: 'auto', minHeight: 38, borderRadius: 11, backgroundColor: theme.colors.green, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5 },
   pagination: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, pageButton: { minHeight: 38, borderRadius: 11, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, paddingHorizontal: 14, justifyContent: 'center' }, pageButtonText: { color: theme.colors.navy, fontSize: 11, fontWeight: '900' }, bottomBar: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: 12, backgroundColor: theme.colors.white, flexDirection: 'row', alignItems: 'center', gap: 10 }, cartTitle: { color: theme.colors.navy, fontSize: 14, fontWeight: '900' }, cartTotal: { color: theme.colors.navy, fontSize: 18, fontWeight: '900' }, primarySmall: { minHeight: 42, borderRadius: 11, backgroundColor: theme.colors.green, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 13 },
-  card: { borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 14, gap: 12 }, cartLine: { borderRadius: theme.radius.md, backgroundColor: theme.colors.cloud, padding: 12, flexDirection: 'row', gap: 8, alignItems: 'center' }, qty: { flexDirection: 'row', alignItems: 'center', gap: 5 }, qtyButton: { width: 36, height: 36, borderRadius: 10, backgroundColor: theme.colors.mintSoft, alignItems: 'center', justifyContent: 'center' }, qtyInput: { width: 58, minHeight: 38, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 10, textAlign: 'center', color: theme.colors.navy, backgroundColor: theme.colors.white }, backLink: { alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', minHeight: 36 }, backLinkText: { color: theme.colors.greenDark, fontWeight: '900', fontSize: 12 },
+  card: { borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 14, gap: 12 }, cartLine: { borderRadius: theme.radius.md, backgroundColor: theme.colors.cloud, padding: 12, flexDirection: 'row', gap: 8, alignItems: 'center' }, customerSection: { gap: 8, paddingTop: 2 }, paymentCustomer: { color: theme.colors.slate, fontSize: 11, fontWeight: '800', marginTop: 3 }, qty: { flexDirection: 'row', alignItems: 'center', gap: 5 }, qtyButton: { width: 36, height: 36, borderRadius: 10, backgroundColor: theme.colors.mintSoft, alignItems: 'center', justifyContent: 'center' }, qtyInput: { width: 58, minHeight: 38, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 10, textAlign: 'center', color: theme.colors.navy, backgroundColor: theme.colors.white }, backLink: { alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', minHeight: 36 }, backLinkText: { color: theme.colors.greenDark, fontWeight: '900', fontSize: 12 },
   paymentAmount: { color: theme.colors.navy, fontSize: 32, fontWeight: '900' }, paymentList: { gap: 8 }, paymentMethod: { minHeight: 68, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 9 }, paymentMethodActive: { borderColor: theme.colors.green, backgroundColor: theme.colors.mintSoft }, paymentIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: theme.colors.mintSoft, alignItems: 'center', justifyContent: 'center' }, instructions: { borderRadius: theme.radius.md, backgroundColor: theme.colors.cloud, padding: 12, gap: 5 }, accountNumber: { color: theme.colors.navy, fontSize: 20, fontWeight: '900', letterSpacing: 1 }, loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   checkoutButton: { minHeight: 50, borderRadius: theme.radius.md, backgroundColor: theme.colors.green, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 7, paddingHorizontal: 12 }, buttonText: { color: theme.colors.white, fontSize: 12, fontWeight: '900' }, secondaryButton: { minHeight: 46, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, justifyContent: 'center', alignItems: 'center' }, secondaryText: { color: theme.colors.greenDark, fontWeight: '900', fontSize: 12 },
   notice: { borderRadius: theme.radius.md, backgroundColor: '#EFF8FF', padding: 11, flexDirection: 'row', gap: 8, alignItems: 'flex-start' }, warning: { backgroundColor: '#FFFAEB' }, noticeText: { flex: 1, color: theme.colors.slate, fontSize: 11, lineHeight: 17 }, errorCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#FDA29B', backgroundColor: theme.colors.dangerSoft, padding: 11, flexDirection: 'row', gap: 8 }, errorText: { flex: 1, color: '#B42318', fontSize: 11, lineHeight: 17 }, empty: { minHeight: 110, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, justifyContent: 'center', alignItems: 'center', gap: 6 }, disabled: { opacity: 0.45 },
