@@ -178,12 +178,16 @@ Deno.serve(async (request) => {
   }
 
   const lines = parseManualLines(body.items);
+  const branchProvided = body.branchId !== undefined && body.branchId !== null && body.branchId !== '';
+  const branchId = cleanUuid(body.branchId);
+  if (branchProvided && !branchId) return json({ error: 'Selected Branch is invalid' }, 400);
   if (!customerName) return json({ error: 'Customer name is required' }, 400);
   if (!customerPhone) return json({ error: 'Customer phone is required' }, 400);
   if (!lines.length) return json({ error: 'Add at least one product' }, 400);
 
-  const { data: orderId, error: createError } = await admin.rpc('create_sellertray_manual_order_atomic', {
+  const { data: orderId, error: createError } = await admin.rpc('create_sellertray_merchant_order_atomic', {
     p_tenant_id: tenantId,
+    p_actor_user_id: userId,
     p_customer_name: customerName,
     p_customer_phone: customerPhone,
     p_note: note,
@@ -191,25 +195,23 @@ Deno.serve(async (request) => {
       catalog_item_id: line.catalogItemId,
       quantity: line.quantity,
     })),
+    p_branch_id: branchId,
   });
 
   if (createError || typeof orderId !== 'string') {
-    return json({ error: createError?.message ?? 'Unable to create order' }, 400);
+    const message = createError?.message ?? 'Unable to create order';
+    const status = createError?.code === '42501'
+      ? 403
+      : createError?.code === 'P0002'
+        ? 404
+        : createError?.code === '23514'
+          ? 409
+          : 400;
+    return json({ error: message }, status);
   }
 
-  await writeOrderCreationAudit({
-    tenantId,
-    userId,
-    role: String(membership.role),
-    orderId,
-    actionKey: 'manual-order:' + orderId,
-    actionType: 'manual_order_created',
-    customerName,
-    customerPhone,
-    lineCount: lines.length,
-    metadata: { source: 'merchant_app' },
-  });
-
+  // The governed command writes the merchant creation audit in the same
+  // transaction as the Customer, order and order lines.
   return json({ orderId }, 201);
 });
 
