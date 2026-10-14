@@ -19,6 +19,16 @@ export type CashShiftStatus = 'open' | 'closed' | 'reviewed';
 export type CashMovementType = 'cash_in' | 'cash_out' | 'expense';
 export type ShiftReviewDecision = 'accepted' | 'follow_up';
 
+export type ShiftPaymentSummary = {
+  methodKey: string;
+  paymentMethodId: string | null;
+  methodType: string;
+  displayName: string;
+  transactionCount: number;
+  amount: number;
+  currency: string;
+};
+
 export type CashShiftMovement = {
   movementId: string;
   movementType: CashMovementType;
@@ -55,6 +65,7 @@ export type CashShift = {
   closedAt: string | null;
   reviewedAt: string | null;
   movements: CashShiftMovement[];
+  paymentSummary: ShiftPaymentSummary[];
 };
 
 export type CashShiftActionResult = {
@@ -139,6 +150,20 @@ export async function loadCashWriteAccess(tenantId: string): Promise<boolean> {
   return data === true;
 }
 
+export async function loadShiftPaymentSummary(
+  tenantId: string,
+  shiftId: string,
+): Promise<ShiftPaymentSummary[]> {
+  if (!tenantId || !shiftId) return [];
+  const { data, error } = await supabase.rpc('get_sellertray_shift_payment_summary', {
+    p_tenant_id: tenantId,
+    p_shift_id: shiftId,
+  });
+  if (error) throw error;
+  if (!Array.isArray(data)) return [];
+  return data.map(parsePaymentSummary);
+}
+
 export async function loadActiveCashShift(
   tenantId: string,
   branchId: string,
@@ -150,7 +175,8 @@ export async function loadActiveCashShift(
   });
   if (error) throw error;
   if (data === null) return null;
-  return parseCashShift(data);
+  const shift = parseCashShift(data);
+  return { ...shift, paymentSummary: await loadShiftPaymentSummary(tenantId, shift.shiftId) };
 }
 
 export async function loadCashShift(
@@ -164,7 +190,8 @@ export async function loadCashShift(
   });
   if (error) throw error;
   if (data === null) return null;
-  return parseCashShift(data);
+  const shift = parseCashShift(data);
+  return { ...shift, paymentSummary: await loadShiftPaymentSummary(tenantId, shift.shiftId) };
 }
 
 export async function openCashShift(input: {
@@ -308,6 +335,27 @@ function parseCashShift(value: unknown): CashShift {
     closedAt: typeof row.closedAt === 'string' ? row.closedAt : null,
     reviewedAt: typeof row.reviewedAt === 'string' ? row.reviewedAt : null,
     movements: row.movements.map(parseMovement),
+    paymentSummary: [],
+  };
+}
+
+function parsePaymentSummary(value: unknown): ShiftPaymentSummary {
+  if (!value || typeof value !== 'object') throw new Error('SellerTray returned an invalid shift payment summary.');
+  const row = value as Record<string, unknown>;
+  if (typeof row.methodKey !== 'string'
+      || typeof row.methodType !== 'string'
+      || typeof row.displayName !== 'string'
+      || typeof row.currency !== 'string') {
+    throw new Error('SellerTray returned an invalid shift payment summary.');
+  }
+  return {
+    methodKey: row.methodKey,
+    paymentMethodId: typeof row.paymentMethodId === 'string' ? row.paymentMethodId : null,
+    methodType: row.methodType,
+    displayName: row.displayName,
+    transactionCount: toNumber(row.transactionCount),
+    amount: toNumber(row.amount),
+    currency: row.currency,
   };
 }
 
