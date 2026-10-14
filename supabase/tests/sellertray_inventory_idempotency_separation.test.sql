@@ -23,7 +23,11 @@ select ok(
 
 select ok(
   pg_get_functiondef('public.apply_sellertray_inventory_operation(uuid,uuid,uuid,uuid,text,numeric,text,text,text,uuid)'::regprocedure)
-    like '%lower(btrim(im.reference_id)) = lower(v_reference)%',
+    like '%btrim(im.reference_id)%'
+  and pg_get_functiondef('public.apply_sellertray_inventory_operation(uuid,uuid,uuid,uuid,text,numeric,text,text,text,uuid)'::regprocedure)
+    like '%lower(v_reference)%'
+  and pg_get_functiondef('public.apply_sellertray_inventory_operation(uuid,uuid,uuid,uuid,text,numeric,text,text,text,uuid)'::regprocedure)
+    like '%reference_type = v_reference_type%',
   'merchant-facing reference remains a separate duplicate guard'
 );
 
