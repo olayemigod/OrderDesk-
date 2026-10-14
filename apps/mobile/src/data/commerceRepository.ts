@@ -57,6 +57,7 @@ export type CreatePosDraftInput = {
   tenantId: string;
   branchId: string;
   clientReference?: string | null;
+  customerId?: string | null;
   customerName?: string | null;
   customerPhone?: string | null;
   note?: string | null;
@@ -133,30 +134,14 @@ type ProductRow = {
 
 export async function loadAccessibleBranches(tenantId: string): Promise<CommerceBranch[]> {
   if (!tenantId) return [];
-
-  const { data, error } = await supabase.rpc('get_sellertray_accessible_branches', {
-    p_tenant_id: tenantId,
-  });
-
+  const { data, error } = await supabase.rpc('get_sellertray_accessible_branches', { p_tenant_id: tenantId });
   if (error) throw error;
-
-  return ((data ?? []) as BranchRow[]).map((row) => ({
-    id: row.id,
-    code: row.code,
-    name: row.name,
-    isDefault: row.is_default,
-  }));
+  return ((data ?? []) as BranchRow[]).map((row) => ({ id: row.id, code: row.code, name: row.name, isDefault: row.is_default }));
 }
 
-export async function loadBranchPosPaymentMethods(
-  tenantId: string,
-  branchId: string,
-): Promise<PosPaymentMethod[]> {
+export async function loadBranchPosPaymentMethods(tenantId: string, branchId: string): Promise<PosPaymentMethod[]> {
   if (!tenantId || !branchId) return [];
-  const { data, error } = await supabase.rpc('get_sellertray_branch_pos_payment_methods', {
-    p_tenant_id: tenantId,
-    p_branch_id: branchId,
-  });
+  const { data, error } = await supabase.rpc('get_sellertray_branch_pos_payment_methods', { p_tenant_id: tenantId, p_branch_id: branchId });
   if (error) throw error;
   return ((data ?? []) as PosPaymentMethodRow[]).map((row) => ({
     paymentMethodId: row.payment_method_id,
@@ -171,15 +156,9 @@ export async function loadBranchPosPaymentMethods(
   }));
 }
 
-export async function loadCommerceProducts(
-  tenantId: string,
-  options?: { includeInactive?: boolean },
-): Promise<CommerceProduct[]> {
+export async function loadCommerceProducts(tenantId: string, options?: { includeInactive?: boolean }): Promise<CommerceProduct[]> {
   if (!tenantId) return [];
-
-  let query = supabase
-    .from('catalog_items')
-    .select(`
+  let query = supabase.from('catalog_items').select(`
       id,
       name,
       sku,
@@ -198,17 +177,10 @@ export async function loadCommerceProducts(
         is_default_selling,
         is_default_purchase
       )
-    `)
-    .eq('tenant_id', tenantId);
-
-  if (!options?.includeInactive) {
-    query = query.eq('is_active', true);
-  }
-
+    `).eq('tenant_id', tenantId);
+  if (!options?.includeInactive) query = query.eq('is_active', true);
   const { data, error } = await query.order('name', { ascending: true });
-
   if (error) throw error;
-
   return ((data ?? []) as unknown as ProductRow[]).map((row) => ({
     id: row.id,
     name: row.name,
@@ -251,6 +223,7 @@ export async function createPosDraft(input: CreatePosDraftInput): Promise<string
       tenantId: input.tenantId,
       branchId: input.branchId,
       clientReference,
+      customerId: cleanOptional(input.customerId),
       customerName: cleanOptional(input.customerName),
       customerPhone: cleanOptional(input.customerPhone),
       note: cleanOptional(input.note),
@@ -269,41 +242,20 @@ export async function createPosDraft(input: CreatePosDraftInput): Promise<string
   const row = data && typeof data === 'object' ? data as Record<string, unknown> : {};
   const orderId = typeof row.orderId === 'string' ? row.orderId : null;
   if (!orderId) throw new PosDraftRequestError('SellerTray returned an invalid sale reference.', 'server');
-  if (clientReference && row.clientReference !== clientReference) {
-    throw new PosDraftRequestError('SellerTray returned a different sale reference.', 'server');
-  }
+  if (clientReference && row.clientReference !== clientReference) throw new PosDraftRequestError('SellerTray returned a different sale reference.', 'server');
   return orderId;
 }
 
-export async function completePosSale(
-  tenantId: string,
-  orderId: string,
-  paymentMethodId: string | null,
-): Promise<PosCheckoutResult> {
+export async function completePosSale(tenantId: string, orderId: string, paymentMethodId: string | null): Promise<PosCheckoutResult> {
   if (!tenantId) throw new Error('Business is required.');
   if (!orderId) throw new Error('Sale is required.');
-
-  const { data, error } = await supabase.functions.invoke('pos-checkout', {
-    body: {
-      tenantId,
-      orderId,
-      paymentMethodId,
-    },
-  });
-
+  const { data, error } = await supabase.functions.invoke('pos-checkout', { body: { tenantId, orderId, paymentMethodId } });
   if (error) throw new Error(await functionErrorMessage(error, 'Unable to complete this sale.'));
-
-  if (!isPosCheckoutResult(data)) {
-    throw new Error('SellerTray returned an invalid checkout result.');
-  }
-
+  if (!isPosCheckoutResult(data)) throw new Error('SellerTray returned an invalid checkout result.');
   return data;
 }
 
-export async function completePosCashSale(
-  tenantId: string,
-  orderId: string,
-): Promise<PosCashCheckoutResult> {
+export async function completePosCashSale(tenantId: string, orderId: string): Promise<PosCashCheckoutResult> {
   return completePosSale(tenantId, orderId, null);
 }
 
@@ -334,15 +286,12 @@ async function posDraftError(error: unknown, fallback: string): Promise<PosDraft
       try {
         const payload = await context.clone().json() as { error?: string };
         if (payload?.error) message = payload.error;
-      } catch {
-        // Keep SDK message.
-      }
+      } catch {}
       if (status === 409) return new PosDraftRequestError(message, 'conflict', status);
       if (status >= 500) return new PosDraftRequestError(message, 'server', status);
       return new PosDraftRequestError(message, 'rejected', status);
     }
   }
-
   if (/network request failed|failed to fetch|fetch failed|networkerror|failed to send a request to the edge function/i.test(baseMessage)) {
     return new PosDraftRequestError('SellerTray could not reach the server.', 'network');
   }
@@ -352,16 +301,12 @@ async function posDraftError(error: unknown, fallback: string): Promise<PosDraft
 async function functionErrorMessage(error: unknown, fallback: string): Promise<string> {
   let message = error instanceof Error && error.message ? error.message : fallback;
   if (!error || typeof error !== 'object' || !('context' in error)) return message;
-
   const context = (error as { context?: unknown }).context;
   if (!context || typeof context !== 'object' || !('clone' in context)) return message;
-
   try {
     const payload = await (context as Response).clone().json() as { error?: string };
     if (payload?.error) message = payload.error;
-  } catch {
-    // Keep the SDK message.
-  }
+  } catch {}
   return message;
 }
 
