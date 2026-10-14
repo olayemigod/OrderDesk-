@@ -18,7 +18,8 @@ create temp table sellertray_cash_balance_fixture (
   return_replay jsonb,
   cash_out_rejected boolean not null default false,
   expense_rejected boolean not null default false,
-  refund_overdraw_rejected boolean not null default false
+  refund_overdraw_rejected boolean not null default false,
+  unshifted_checkout_rejected boolean not null default false
 ) on commit drop;
 
 insert into sellertray_cash_balance_fixture(tenant_id,owner_user_id,product_id)
@@ -297,28 +298,37 @@ select extensions.is(
 
 update sellertray_cash_balance_fixture
 set legacy_order_id=public.create_sellertray_pos_order_atomic(
-  tenant_id,branch_id,null,null,'Legacy compatible unshifted sale',
+  tenant_id,branch_id,null,null,'Cash sale after shift close',
   jsonb_build_array(jsonb_build_object(
     'catalog_item_id',product_id,'uom_id',stock_uom_id,'quantity',1
   ))
 );
 
-select extensions.is(
-  (
-    select public.complete_sellertray_pos_cash_sale(
-      tenant_id,legacy_order_id,owner_user_id
-    )->>'status'
-    from sellertray_cash_balance_fixture
-  ),
-  'completed','existing server checkout remains compatible when no shift is open'
+do $$
+begin
+  begin
+    perform public.complete_sellertray_pos_cash_sale(
+      (select tenant_id from sellertray_cash_balance_fixture),
+      (select legacy_order_id from sellertray_cash_balance_fixture),
+      (select owner_user_id from sellertray_cash_balance_fixture)
+    );
+  exception when sqlstate '23514' then
+    update sellertray_cash_balance_fixture set unshifted_checkout_rejected=true;
+  end;
+end
+$$;
+
+select extensions.ok(
+  (select unshifted_checkout_rejected from sellertray_cash_balance_fixture),
+  'cash checkout fails closed after the cashier shift is closed'
 );
 
 select extensions.is(
   (
-    select count(*)::integer from public.sellertray_shift_cash_sales s
-    where s.order_id=(select legacy_order_id from sellertray_cash_balance_fixture)
+    select count(*)::integer from public.order_payments p
+    where p.order_id=(select legacy_order_id from sellertray_cash_balance_fixture)
   ),
-  0,'unshifted legacy checkout does not fabricate cashier-shift evidence'
+  0,'unshifted cash checkout leaves no payment effect'
 );
 
 select * from extensions.finish();

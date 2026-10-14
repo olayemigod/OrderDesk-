@@ -9,6 +9,8 @@ create temp table sellertray_operational_lifecycle_fixture (
   product_id uuid not null,
   branch_id uuid,
   location_id uuid,
+  register_id uuid,
+  shift_id uuid,
   uom_id uuid,
   order_id uuid,
   return_id uuid,
@@ -63,6 +65,13 @@ where sl.tenant_id=f.tenant_id
   and sl.branch_id=f.branch_id
   and sl.is_default=true;
 
+update sellertray_operational_lifecycle_fixture f
+set register_id=r.id
+from public.sellertray_registers r
+where r.tenant_id=f.tenant_id
+  and r.branch_id=f.branch_id
+  and r.is_default=true;
+
 insert into public.catalog_items(
   id,tenant_id,name,sku,price_ngn,is_active,stock_uom,allow_fractional_stock
 )
@@ -92,7 +101,12 @@ set order_id=public.create_sellertray_pos_order_atomic(
   ))
 );
 
-set local request.jwt.claim.role = 'service_role';
+update sellertray_operational_lifecycle_fixture
+set shift_id=(public.open_sellertray_cash_shift(
+  tenant_id,branch_id,register_id,0,owner_user_id
+)->>'shiftId')::uuid;
+
+set local request.jwt.claim.role='service_role';
 
 select public.complete_sellertray_pos_cash_sale(
   tenant_id,order_id,owner_user_id

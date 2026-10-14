@@ -309,6 +309,11 @@ set order_id=public.create_sellertray_pos_order_atomic(
   ))
 );
 
+select public.open_sellertray_cash_shift(
+  tenant_id,branch_id,register_id,0,owner_user_id
+)
+from sellertray_printer_fixture;
+
 set local request.jwt.claim.role='service_role';
 select public.complete_sellertray_pos_cash_sale(tenant_id,order_id,owner_user_id)
 from sellertray_printer_fixture;
