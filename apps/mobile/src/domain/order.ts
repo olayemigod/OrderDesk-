@@ -122,7 +122,7 @@ export type MerchantOrder = {
   paymentStatus: PaymentStatus;
   amountPaid: number;
   paymentConfirmedAt: string | null;
-  cashReturnSupported: boolean;
+  cashReturnSupported?: boolean;
   returnStatus: ReturnStatus;
   returnedAmount: number;
   returnedAt: string | null;
