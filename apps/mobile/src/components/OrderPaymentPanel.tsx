@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
+  canManageOrderPayment,
   confirmOfflinePayment,
   loadOrderFinancials,
   recordOfflineOrderPayment,
@@ -21,6 +22,7 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
   const [documents, setDocuments] = useState<OrderFinancialDocument[]>([]);
   const [payments, setPayments] = useState<OrderPaymentAttempt[]>([]);
   const [methods, setMethods] = useState<MerchantPaymentMethod[]>([]);
+  const [canManagePaymentActions, setCanManagePaymentActions] = useState(false);
   const [showRecordMethods, setShowRecordMethods] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -29,30 +31,43 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
 
   const refresh = useCallback(async () => {
     setLoading(true);
+    setCanManagePaymentActions(false);
+    setMethods([]);
+    setShowRecordMethods(false);
     try {
-      const [data, paymentMethods] = await Promise.all([
-        loadOrderFinancials(tenantId, order.id),
-        loadBranchCustomerPaymentMethods(tenantId, order.branchId),
-      ]);
+      const data = await loadOrderFinancials(tenantId, order.id);
       setDocuments(data.documents);
       setPayments(data.payments);
-      setMethods(paymentMethods);
+
+      let allowed = false;
+      try {
+        allowed = await canManageOrderPayment(tenantId, order.id);
+      } catch {
+        allowed = false;
+      }
+      setCanManagePaymentActions(allowed);
+
+      if (allowed && order.source !== 'pos') {
+        const paymentMethods = await loadBranchCustomerPaymentMethods(tenantId, order.branchId);
+        setMethods(paymentMethods);
+      }
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load payment details.');
     } finally { setLoading(false); }
-  }, [order.branchId, order.id, tenantId]);
+  }, [order.branchId, order.id, order.source, tenantId]);
 
   useEffect(() => { void refresh(); }, [refresh, order.paymentStatus, order.paymentConfirmedAt]);
 
   const invoice = useMemo(() => documents.find((item) => item.documentType === 'invoice' && item.status === 'issued') ?? null, [documents]);
   const receipt = useMemo(() => documents.find((item) => item.documentType === 'receipt' && item.status === 'issued') ?? null, [documents]);
   const offlineMethods = useMemo(() => methods.filter((method) => method.isEnabled && ['bank_transfer', 'cash_on_delivery', 'pay_on_pickup'].includes(method.methodType)), [methods]);
-  const canRecordNewOfflinePayment = order.source !== 'pos';
+  const canRecordNewOfflinePayment = canManagePaymentActions && order.source !== 'pos';
   const displayedPaymentStatus: MerchantOrder['paymentStatus'] = receipt ? 'paid' : order.paymentStatus;
   const displayedAmountPaid = receipt?.amount ?? order.amountPaid;
 
   async function confirm(payment: OrderPaymentAttempt) {
+    if (!canManagePaymentActions) return;
     const finalisesPosSale = order.source === 'pos' && payment.methodType === 'bank_transfer';
     const message = finalisesPosSale
       ? 'Confirm only after the transfer is visible in the business account. SellerTray will recheck stock, mark the payment paid, complete collection, deduct stock and issue the financial receipt together.'
@@ -69,7 +84,7 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
   }
 
   async function record(method: MerchantPaymentMethod) {
-    if (order.source === 'pos') return;
+    if (!canManagePaymentActions || order.source === 'pos') return;
     if (!['bank_transfer', 'cash_on_delivery', 'pay_on_pickup'].includes(method.methodType)) return;
     Alert.alert('Record payment received?', 'Use this only after you or a staff member has verified the money or cash was actually received. SellerTray will mark the order paid and issue the financial receipt.', [
       { text: 'Cancel', style: 'cancel' },
@@ -81,8 +96,17 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
     ]);
   }
 
-  async function sendOptions() { await run('send-options', async () => { const result = await sendMerchantPaymentOptions(tenantId, order.id); setNotice(result.message); }); }
-  async function verify(payment: OrderPaymentAttempt) { await run(payment.id, async () => verifyGatewayPayment(tenantId, payment.id)); }
+  async function sendOptions() {
+    if (!canManagePaymentActions) return;
+    await run('send-options', async () => {
+      const result = await sendMerchantPaymentOptions(tenantId, order.id);
+      setNotice(result.message);
+    });
+  }
+  async function verify(payment: OrderPaymentAttempt) {
+    if (!canManagePaymentActions) return;
+    await run(payment.id, async () => verifyGatewayPayment(tenantId, payment.id));
+  }
   async function run(paymentId: string, action: () => Promise<void>) {
     setBusyId(paymentId); setError(null); setNotice(null);
     try { await action(); await refresh(); }
@@ -102,7 +126,7 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
         {order.paymentConfirmedAt ? <SummaryRow dark={appearance.dark} label="Confirmed" value={formatDateTime(order.paymentConfirmedAt)} /> : null}
       </View>
 
-      {invoice && displayedPaymentStatus !== 'paid' ? <View style={[styles.merchantActions, appearance.dark && darkStyles.subtleCard]}>
+      {invoice && displayedPaymentStatus !== 'paid' && canManagePaymentActions ? <View style={[styles.merchantActions, appearance.dark && darkStyles.subtleCard]}>
         <Text style={[styles.merchantActionsTitle, appearance.dark && darkStyles.titleText]}>Merchant payment actions</Text>
         <Text style={[styles.helper, appearance.dark && darkStyles.bodyText]}>{order.source === 'pos'
           ? 'This POS sale already has its checkout payment attempt. Confirm that existing transfer below after the money is received; do not record a second payment.'
@@ -112,6 +136,7 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
         {canRecordNewOfflinePayment && showRecordMethods ? <View style={styles.recordMethodList}>{offlineMethods.map((method) => <Pressable key={method.id} disabled={busyId !== null} onPress={() => void record(method)} style={[styles.recordMethodButton, appearance.dark && darkStyles.secondaryButton]}><Text style={[styles.recordMethodTitle, appearance.dark && darkStyles.titleText]}>{method.displayName}</Text><Text style={[styles.recordMethodMeta, appearance.dark && darkStyles.bodyText]}>{humanMethod(method.methodType)}</Text></Pressable>)}<Text style={[styles.note, appearance.dark && darkStyles.bodyText]}>Paystack and Flutterwave are verified through their providers. Card terminals stay inside the in-person POS flow.</Text></View> : null}
       </View> : null}
 
+      {invoice && displayedPaymentStatus !== 'paid' && !loading && !canManagePaymentActions ? <Text style={[styles.helper, appearance.dark && darkStyles.bodyText]}>Payment actions are unavailable for your current access. You can still review this payment history.</Text> : null}
       {loading && payments.length === 0 ? <Text style={[styles.helper, appearance.dark && darkStyles.bodyText]}>Loading payment attempts…</Text> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {notice ? <Text style={styles.notice}>{notice}</Text> : null}
@@ -120,8 +145,8 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
       {payments.map((payment) => {
         const offline = ['bank_transfer', 'cash_on_delivery', 'pay_on_pickup'].includes(payment.methodType);
         const gateway = payment.methodType === 'paystack' || payment.methodType === 'flutterwave';
-        const confirmable = offline && ['initiated', 'pending_verification'].includes(payment.status);
-        const verifiable = gateway && ['initiated', 'pending_verification'].includes(payment.status);
+        const confirmable = canManagePaymentActions && offline && ['initiated', 'pending_verification'].includes(payment.status);
+        const verifiable = canManagePaymentActions && gateway && ['initiated', 'pending_verification'].includes(payment.status);
         return <View key={payment.id} style={[styles.attempt, appearance.dark && darkStyles.subtleCard]}>
           <View style={styles.attemptTop}><View style={styles.headerCopy}><Text style={[styles.attemptTitle, appearance.dark && darkStyles.titleText]}>{humanMethod(payment.methodType)}</Text><Text style={[styles.attemptMeta, appearance.dark && darkStyles.bodyText]}>{formatMoney(payment.amount, payment.currency)} · {humanAttemptStatus(payment.status)}</Text></View><Text style={[styles.time, appearance.dark && darkStyles.mutedText]}>{formatDateTime(payment.createdAt)}</Text></View>
           {payment.providerReference ? <Text style={[styles.reference, appearance.dark && darkStyles.bodyText]}>Ref: {payment.providerReference}</Text> : null}
