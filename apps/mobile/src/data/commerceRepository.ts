@@ -16,6 +16,7 @@ export type CommerceUom = {
   allowFractional: boolean;
   isDefaultSelling: boolean;
   isDefaultPurchase: boolean;
+  isStockUom: boolean;
 };
 
 export type CommerceProduct = {
@@ -174,6 +175,7 @@ export async function loadCommerceProducts(
         allowFractional: uom.allow_fractional,
         isDefaultSelling: uom.is_default_selling,
         isDefaultPurchase: uom.is_default_purchase,
+        isStockUom: uom.uom_name.trim().toLowerCase() === row.stock_uom.trim().toLowerCase(),
       }))
       .sort((left, right) => {
         if (left.isDefaultSelling !== right.isDefaultSelling) return left.isDefaultSelling ? -1 : 1;
