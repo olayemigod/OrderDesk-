@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.2"
+  version: "0.1.3"
   status: governing
 ---
 
@@ -176,10 +176,11 @@ Mobile inventory is operational: stock lookup, branch availability, receiving, t
 
 Operational reference rules:
 
-1. SellerTray generates a unique operational reference by default for stock receipts, adjustments, purchase receipts, stock counts and stock transfers.
-2. The generated reference may be replaced with a meaningful external reference, such as a supplier delivery note or count sheet, where that improves traceability.
-3. User-facing business references are not substitutes for internal idempotency keys; preserve both concepts where retry safety requires them.
-4. Reusing a reference according to the governed retry contract must not duplicate stock or payment effects.
+1. SellerTray generates a unique operational reference by default on every user-created operational transaction that needs a business reference, including stock receipts, adjustments, purchase receipts, stock counts, stock transfers, cash in, cash out and expenses.
+2. The generated reference remains editable and may be replaced with a meaningful external reference, such as a supplier delivery note, voucher, receipt, count sheet or other source document, where that improves traceability.
+3. Apply the same generated-by-default rule across mobile and web surfaces that create the same governed transaction; do not require blank/manual-only reference entry on one channel while another channel generates it.
+4. User-facing business references are not substitutes for internal idempotency keys; preserve both concepts where retry safety requires them.
+5. Reusing a reference according to the governed retry contract must not duplicate stock, cash or payment effects.
 
 Reason rules:
 
