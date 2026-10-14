@@ -23,7 +23,7 @@ import {
 import { loadCashShiftHistory, type CashShiftHistoryRow } from '../data/cashShiftHistoryRepository';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
-import { createOperationalReference } from './operationalReference';
+import { createCashMovementCommandId, createOperationalReference } from './operationalReference';
 
 type Props = {
   tenantId: string;
@@ -57,6 +57,7 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
   const [selectedRegisterId, setSelectedRegisterId] = useState('');
   const [openingCash, setOpeningCash] = useState('0');
   const [movementMode, setMovementMode] = useState<CashMovementType | null>(null);
+  const [movementCommandId, setMovementCommandId] = useState('');
   const [movementAmount, setMovementAmount] = useState('');
   const [movementReference, setMovementReference] = useState('');
   const [movementReason, setMovementReason] = useState('');
@@ -132,6 +133,7 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
     setReviewShift(null);
     setCloseMode(false);
     setMovementMode(null);
+    setMovementCommandId('');
     void refresh();
   }, [tenantId, branch.id]);
 
@@ -164,6 +166,7 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
 
   function beginMovement(type: CashMovementType) {
     setMovementMode(type);
+    setMovementCommandId(createCashMovementCommandId(type));
     setMovementAmount('');
     setMovementReference(createOperationalReference(type));
     setMovementReason('');
@@ -172,10 +175,17 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
     setNotice(null);
   }
 
+  function closeMovement() {
+    if (saving) return;
+    setMovementMode(null);
+    setMovementCommandId('');
+  }
+
   async function handleMovement() {
     if (!shift || !movementMode || saving) return;
     if (canWrite !== true) return setError('This business is read-only. Reactivate the SellerTray subscription before recording cash activity.');
     const amount = Number(movementAmount);
+    if (!movementCommandId) return setError('Restart this cash activity and try again.');
     if (!movementAmount.trim() || !Number.isFinite(amount) || amount <= 0) return setError('Enter an amount greater than zero.');
     if (!movementReference.trim()) return setError('Enter a reference for this cash activity.');
     if (!movementReason.trim()) return setError('Enter a reason for this cash activity.');
@@ -189,6 +199,7 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
         tenantId,
         shiftId: shift.shiftId,
         movementType: movementMode,
+        commandId: movementCommandId,
         amount,
         reference: movementReference,
         reason: movementReason,
@@ -196,6 +207,7 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
       });
       await refresh({ quiet: true });
       setMovementMode(null);
+      setMovementCommandId('');
       setNotice(result.idempotentReplay ? 'This cash activity was already recorded.' : `${movementLabel(result.movementType)} recorded.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to record this cash activity.');
@@ -349,7 +361,7 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
           {canWrite !== true ? <InfoCard title="Cashier actions unavailable" text="Reactivate the SellerTray subscription before recording expenses, cash movements or closing this shift." dark={dark} />
             : movementMode ? (
               <Card dark={dark}>
-                <View style={styles.sectionRow}><Text style={[styles.sectionTitle, dark && darkStyles.titleText]}>{movementLabel(movementMode)}</Text><Pressable disabled={saving} onPress={() => setMovementMode(null)} style={styles.iconButton}><Ionicons name="close" size={20} color={theme.colors.slate} /></Pressable></View>
+                <View style={styles.sectionRow}><Text style={[styles.sectionTitle, dark && darkStyles.titleText]}>{movementLabel(movementMode)}</Text><Pressable disabled={saving} onPress={closeMovement} style={styles.iconButton}><Ionicons name="close" size={20} color={theme.colors.slate} /></Pressable></View>
                 {movementMode === 'expense' ? <><FieldLabel dark={dark}>Expense category</FieldLabel><TextInput value={expenseCategory} onChangeText={setExpenseCategory} placeholder="e.g. Delivery" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} /></> : null}
                 <FieldLabel dark={dark}>Amount</FieldLabel><TextInput value={movementAmount} onChangeText={setMovementAmount} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
                 <FieldLabel dark={dark}>Reference</FieldLabel><TextInput value={movementReference} onChangeText={setMovementReference} placeholder="Receipt, voucher or note number" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
