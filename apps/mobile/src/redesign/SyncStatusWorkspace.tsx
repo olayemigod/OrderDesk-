@@ -27,11 +27,7 @@ export function SyncStatusWorkspace({ sales, syncing, onSync, onDiscard, onClose
       'This removes the device copy. No payment or stock movement was created for this held sale.',
       [
         { text: 'Keep sale', style: 'cancel' },
-        {
-          text: 'Discard',
-          style: 'destructive',
-          onPress: () => void onDiscard(sale.clientReference),
-        },
+        { text: 'Discard', style: 'destructive', onPress: () => void onDiscard(sale.clientReference) },
       ],
     );
   }
@@ -50,7 +46,7 @@ export function SyncStatusWorkspace({ sales, syncing, onSync, onDiscard, onClose
     <View style={[styles.safetyCard, dark && darkStyles.safetyCard]}>
       <Ionicons name="shield-checkmark-outline" size={22} color={theme.colors.greenDark} />
       <Text style={[styles.safetyText, dark && darkStyles.bodyText]}>
-        A held sale is not paid or completed. Sync creates a server draft only after SellerTray rechecks Branch access, price, unit conversion and stock. Payment completion always stays online.
+        A held sale is not paid or completed. Sync creates a server draft only after SellerTray rechecks customer, Branch access, price, unit conversion and stock. Payment completion always stays online.
       </Text>
     </View>
 
@@ -61,11 +57,7 @@ export function SyncStatusWorkspace({ sales, syncing, onSync, onDiscard, onClose
       <Metric label="Synced" value={synced} dark={dark} />
     </View>
 
-    <Pressable
-      disabled={syncing || pending + failed === 0}
-      onPress={() => void onSync()}
-      style={({ pressed }) => [styles.syncButton, (syncing || pending + failed === 0) && styles.disabled, pressed && !syncing && styles.pressed]}
-    >
+    <Pressable disabled={syncing || pending + failed === 0} onPress={() => void onSync()} style={({ pressed }) => [styles.syncButton, (syncing || pending + failed === 0) && styles.disabled, pressed && !syncing && styles.pressed]}>
       {syncing ? <ActivityIndicator color={theme.colors.white} /> : <Ionicons name="sync-outline" size={19} color={theme.colors.white} />}
       <Text style={styles.syncButtonText}>{syncing ? 'Syncing held sales…' : 'Sync now'}</Text>
     </Pressable>
@@ -83,6 +75,8 @@ export function SyncStatusWorkspace({ sales, syncing, onSync, onDiscard, onClose
           </View>
           <Status status={sale.status} />
         </View>
+        <Text style={[styles.customer, dark && darkStyles.titleText]}>{sale.customerName || sale.customerPhone || 'Walk-in Customer'}</Text>
+        {sale.customerPhone ? <Text style={[styles.customerMeta, dark && darkStyles.bodyText]}>{sale.customerPhone}</Text> : null}
         <Text style={[styles.lines, dark && darkStyles.bodyText]} numberOfLines={3}>
           {sale.lines.map((line) => `${formatQty(line.quantity)} ${line.uomName} ${line.productName}`).join(' · ')}
         </Text>
@@ -101,17 +95,9 @@ function Metric({ label, value, dark }: { label: string; value: number; dark: bo
 }
 
 function Status({ status }: { status: OfflinePosSale['status'] }) {
-  const label = status === 'pending' ? 'Waiting'
-    : status === 'syncing' ? 'Syncing'
-      : status === 'needs_review' ? 'Needs review'
-        : status === 'failed' ? 'Failed'
-          : 'Synced';
-  const tone = status === 'synced' ? styles.statusGood
-    : status === 'needs_review' || status === 'failed' ? styles.statusBad
-      : styles.statusWaiting;
-  const textTone = status === 'synced' ? styles.statusGoodText
-    : status === 'needs_review' || status === 'failed' ? styles.statusBadText
-      : styles.statusWaitingText;
+  const label = status === 'pending' ? 'Waiting' : status === 'syncing' ? 'Syncing' : status === 'needs_review' ? 'Needs review' : status === 'failed' ? 'Failed' : 'Synced';
+  const tone = status === 'synced' ? styles.statusGood : status === 'needs_review' || status === 'failed' ? styles.statusBad : styles.statusWaiting;
+  const textTone = status === 'synced' ? styles.statusGoodText : status === 'needs_review' || status === 'failed' ? styles.statusBadText : styles.statusWaitingText;
   return <View style={[styles.status, tone]}><Text style={[styles.statusText, textTone]}>{label}</Text></View>;
 }
 
@@ -119,14 +105,11 @@ function formatMoney(value: number, currency: string): string {
   try { return new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 2 }).format(value); }
   catch { return `${currency} ${value.toFixed(2)}`; }
 }
-function formatDate(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? 'Saved earlier' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
-}
+function formatDate(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? 'Saved earlier' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(date); }
 function formatQty(value: number): string { return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(3))); }
 
 const styles = StyleSheet.create({
-  stack: { gap: 14 }, topRow: { flexDirection: 'row', alignItems: 'center', gap: 10 }, backButton: { width: 42, height: 42, borderRadius: 13, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, alignItems: 'center', justifyContent: 'center' }, headingCopy: { flex: 1 }, eyebrow: { color: theme.colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 1 }, title: { color: theme.colors.navy, fontSize: 25, fontWeight: '900' }, safetyCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#ABEFC6', backgroundColor: theme.colors.mintSoft, padding: 12, flexDirection: 'row', gap: 9, alignItems: 'flex-start' }, safetyText: { flex: 1, color: theme.colors.slate, fontSize: 11, lineHeight: 17 }, metrics: { flexDirection: 'row', gap: 7, flexWrap: 'wrap' }, metric: { minWidth: '22%', flexGrow: 1, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 10 }, metricValue: { color: theme.colors.navy, fontSize: 18, fontWeight: '900' }, metricLabel: { color: theme.colors.muted, fontSize: 10, marginTop: 2 }, syncButton: { minHeight: 48, borderRadius: 14, backgroundColor: theme.colors.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 }, syncButtonText: { color: theme.colors.white, fontSize: 13, fontWeight: '900' }, disabled: { opacity: .45 }, pressed: { opacity: .75 }, list: { gap: 9 }, saleCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 12, gap: 8 }, saleHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 }, saleHeadCopy: { flex: 1 }, saleTitle: { color: theme.colors.navy, fontSize: 15, fontWeight: '900' }, meta: { color: theme.colors.muted, fontSize: 10.5, marginTop: 2 }, lines: { color: theme.colors.slate, fontSize: 11, lineHeight: 17 }, errorText: { color: '#B42318', fontSize: 11, lineHeight: 16 }, saleFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }, reference: { color: theme.colors.muted, fontSize: 9.5, flex: 1 }, discardText: { color: theme.colors.danger, fontSize: 11, fontWeight: '900' }, status: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 }, statusText: { fontSize: 9.5, fontWeight: '900' }, statusGood: { backgroundColor: theme.colors.mintSoft }, statusGoodText: { color: theme.colors.greenDark }, statusWaiting: { backgroundColor: theme.colors.infoSoft }, statusWaitingText: { color: '#175CD3' }, statusBad: { backgroundColor: theme.colors.dangerSoft }, statusBadText: { color: '#B42318' }, emptyCard: { minHeight: 130, borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 18, alignItems: 'center', justifyContent: 'center', gap: 7 }, emptyTitle: { color: theme.colors.navy, fontSize: 14, fontWeight: '900' }, body: { color: theme.colors.slate, fontSize: 11, lineHeight: 17, textAlign: 'center' },
+  stack: { gap: 14 }, topRow: { flexDirection: 'row', alignItems: 'center', gap: 10 }, backButton: { width: 42, height: 42, borderRadius: 13, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, alignItems: 'center', justifyContent: 'center' }, headingCopy: { flex: 1 }, eyebrow: { color: theme.colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 1 }, title: { color: theme.colors.navy, fontSize: 25, fontWeight: '900' }, safetyCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#ABEFC6', backgroundColor: theme.colors.mintSoft, padding: 12, flexDirection: 'row', gap: 9, alignItems: 'flex-start' }, safetyText: { flex: 1, color: theme.colors.slate, fontSize: 11, lineHeight: 17 }, metrics: { flexDirection: 'row', gap: 7, flexWrap: 'wrap' }, metric: { minWidth: '22%', flexGrow: 1, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 10 }, metricValue: { color: theme.colors.navy, fontSize: 18, fontWeight: '900' }, metricLabel: { color: theme.colors.muted, fontSize: 10, marginTop: 2 }, syncButton: { minHeight: 48, borderRadius: 14, backgroundColor: theme.colors.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 }, syncButtonText: { color: theme.colors.white, fontSize: 13, fontWeight: '900' }, disabled: { opacity: .45 }, pressed: { opacity: .75 }, list: { gap: 9 }, saleCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 12, gap: 8 }, saleHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 }, saleHeadCopy: { flex: 1 }, saleTitle: { color: theme.colors.navy, fontSize: 15, fontWeight: '900' }, meta: { color: theme.colors.muted, fontSize: 10.5, marginTop: 2 }, customer: { color: theme.colors.navy, fontSize: 11, fontWeight: '900' }, customerMeta: { color: theme.colors.muted, fontSize: 10, marginTop: -5 }, lines: { color: theme.colors.slate, fontSize: 11, lineHeight: 17 }, errorText: { color: '#B42318', fontSize: 11, lineHeight: 16 }, saleFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }, reference: { color: theme.colors.muted, fontSize: 9.5, flex: 1 }, discardText: { color: theme.colors.danger, fontSize: 11, fontWeight: '900' }, status: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 }, statusText: { fontSize: 9.5, fontWeight: '900' }, statusGood: { backgroundColor: theme.colors.mintSoft }, statusGoodText: { color: theme.colors.greenDark }, statusWaiting: { backgroundColor: theme.colors.infoSoft }, statusWaitingText: { color: '#175CD3' }, statusBad: { backgroundColor: theme.colors.dangerSoft }, statusBadText: { color: '#B42318' }, emptyCard: { minHeight: 130, borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 18, alignItems: 'center', justifyContent: 'center', gap: 7 }, emptyTitle: { color: theme.colors.navy, fontSize: 14, fontWeight: '900' }, body: { color: theme.colors.slate, fontSize: 11, lineHeight: 17, textAlign: 'center' },
 });
 
 const darkStyles = StyleSheet.create({ card: { backgroundColor: theme.colors.navy, borderColor: '#344054' }, outline: { backgroundColor: theme.colors.navy, borderColor: '#475467' }, safetyCard: { backgroundColor: '#123524', borderColor: '#067647' }, titleText: { color: theme.colors.cloud }, bodyText: { color: '#D0D5DD' } });
