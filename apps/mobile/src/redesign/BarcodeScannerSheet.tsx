@@ -88,7 +88,7 @@ export function BarcodeScannerSheet({ visible, onClose, onBarcode }: Props) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: theme.colors.background, paddingHorizontal: 18, paddingTop: 52, paddingBottom: 24, gap: 16 },
+  screen: { flex: 1, backgroundColor: theme.colors.cloud, paddingHorizontal: 18, paddingTop: 52, paddingBottom: 24, gap: 16 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   eyebrow: { color: theme.colors.muted, fontSize: 11, fontWeight: '900', letterSpacing: 1 },
   title: { color: theme.colors.navy, fontSize: 27, fontWeight: '900' },
@@ -96,9 +96,9 @@ const styles = StyleSheet.create({
   help: { color: theme.colors.slate, fontSize: 14, lineHeight: 20 },
   cameraPlaceholder: { flex: 1, minHeight: 280, borderRadius: 22, backgroundColor: theme.colors.navy, alignItems: 'center', justifyContent: 'center' },
   cameraFrame: { flex: 1, minHeight: 320, overflow: 'hidden', borderRadius: 22, backgroundColor: theme.colors.navy },
-  scanGuide: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  scanGuide: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center' },
   scanWindow: { width: '82%', height: 150, borderWidth: 2, borderColor: theme.colors.white, borderRadius: 18 },
-  lockedOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(16,42,67,0.62)', alignItems: 'center', justifyContent: 'center' },
+  lockedOverlay: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(16,42,67,0.62)', alignItems: 'center', justifyContent: 'center' },
   lockedText: { color: theme.colors.white, fontWeight: '900', fontSize: 16 },
   permissionCard: { flex: 1, minHeight: 280, borderRadius: 22, backgroundColor: theme.colors.white, borderWidth: 1, borderColor: theme.colors.border, padding: 24, alignItems: 'center', justifyContent: 'center', gap: 12 },
   permissionTitle: { color: theme.colors.navy, fontSize: 17, fontWeight: '900', textAlign: 'center' },
