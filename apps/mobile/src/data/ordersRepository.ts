@@ -36,6 +36,15 @@ type OrderNotificationRow = {
   sent_at: string | null;
 };
 
+type OrderPaymentEvidenceRow = {
+  order_id: string;
+  method_type: string;
+  provider: string;
+  status: string;
+  amount: number | string;
+  currency: string;
+};
+
 type OrderRow = {
   id: string;
   branch_id: string;
@@ -53,6 +62,7 @@ type OrderRow = {
   customer_confirmed_at: string | null;
   payment_status: PaymentStatus;
   amount_paid: number | string;
+  currency: string;
   payment_confirmed_at: string | null;
   return_status: ReturnStatus;
   returned_amount: number | string;
@@ -118,9 +128,23 @@ function toNumber(value: number | string | null): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function mapOrder(row: OrderRow, notifications: OrderNotification[]): MerchantOrder {
+function mapOrder(
+  row: OrderRow,
+  notifications: OrderNotification[],
+  paymentEvidence: OrderPaymentEvidenceRow[],
+): MerchantOrder {
   const customer = one(row.customers);
   const sourceMessage = one(row.inbound_messages);
+  const confirmedPayments = paymentEvidence.filter((payment) => payment.status === 'confirmed');
+  const confirmedPayment = confirmedPayments.length === 1 ? confirmedPayments[0] : null;
+  const amountPaid = toNumber(row.amount_paid) ?? 0;
+  const cashReturnSupported = Boolean(
+    confirmedPayment
+    && confirmedPayment.method_type === 'cash'
+    && confirmedPayment.provider === 'pos_cash'
+    && (toNumber(confirmedPayment.amount) ?? -1) === amountPaid
+    && confirmedPayment.currency === row.currency,
+  );
 
   return {
     id: row.id,
@@ -142,8 +166,9 @@ function mapOrder(row: OrderRow, notifications: OrderNotification[]): MerchantOr
     fulfillmentConfirmedBy: row.fulfillment_confirmed_by,
     customerConfirmedAt: row.customer_confirmed_at,
     paymentStatus: row.payment_status,
-    amountPaid: toNumber(row.amount_paid) ?? 0,
+    amountPaid,
     paymentConfirmedAt: row.payment_confirmed_at,
+    cashReturnSupported,
     returnStatus: row.return_status,
     returnedAmount: toNumber(row.returned_amount) ?? 0,
     returnedAt: row.returned_at,
@@ -186,7 +211,7 @@ function mapOrder(row: OrderRow, notifications: OrderNotification[]): MerchantOr
 export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
   if (!tenantId) return [];
 
-  const [ordersResult, notificationsResult] = await Promise.all([
+  const [ordersResult, notificationsResult, paymentsResult] = await Promise.all([
     supabase
       .from('orders')
       .select(`
@@ -206,6 +231,7 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
         customer_confirmed_at,
         payment_status,
         amount_paid,
+        currency,
         payment_confirmed_at,
         return_status,
         returned_amount,
@@ -229,10 +255,15 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
       .select('id, order_id, event_key, delivery_status, message_body, created_at, sent_at')
       .eq('tenant_id', tenantId)
       .order('created_at', { ascending: false }),
+    supabase
+      .from('order_payments')
+      .select('order_id,method_type,provider,status,amount,currency')
+      .eq('tenant_id', tenantId),
   ]);
 
   if (ordersResult.error) throw ordersResult.error;
   if (notificationsResult.error) throw notificationsResult.error;
+  if (paymentsResult.error) throw paymentsResult.error;
 
   const notificationsByOrder = new Map<string, OrderNotification[]>();
   for (const row of (notificationsResult.data ?? []) as OrderNotificationRow[]) {
@@ -249,8 +280,19 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
     notificationsByOrder.set(row.order_id, bucket);
   }
 
+  const paymentsByOrder = new Map<string, OrderPaymentEvidenceRow[]>();
+  for (const row of (paymentsResult.data ?? []) as OrderPaymentEvidenceRow[]) {
+    const bucket = paymentsByOrder.get(row.order_id) ?? [];
+    bucket.push(row);
+    paymentsByOrder.set(row.order_id, bucket);
+  }
+
   return ((ordersResult.data ?? []) as unknown as OrderRow[]).map((row) =>
-    mapOrder(row, notificationsByOrder.get(row.id) ?? []),
+    mapOrder(
+      row,
+      notificationsByOrder.get(row.id) ?? [],
+      paymentsByOrder.get(row.id) ?? [],
+    ),
   );
 }
 
@@ -426,6 +468,11 @@ export function subscribeToOrderChanges(tenantId: string, onChange: () => void):
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'order_status_events', filter: `tenant_id=eq.${tenantId}` },
+      onChange,
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'order_payments', filter: `tenant_id=eq.${tenantId}` },
       onChange,
     )
     .on(
