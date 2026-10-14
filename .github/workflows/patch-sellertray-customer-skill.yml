@@ -1,0 +1,53 @@
+name: One-shot SellerTray customer governance update
+
+on:
+  push:
+    branches:
+      - feat/sellertray-brand-ui-v1
+    paths:
+      - .github/workflows/patch-sellertray-customer-skill.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/sellertray-brand-ui-v1
+          fetch-depth: 1
+      - name: Update governing customer rules
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.agents/skills/sellertray-project-implementation/SKILL.md')
+          text = path.read_text()
+          if '## Customer identity and selling context' in text:
+              raise SystemExit('Customer governance section already exists')
+          if 'version: "0.1.4"' not in text:
+              raise SystemExit('Unexpected SellerTray skill version')
+          anchor = '''## Inventory\n\nMobile inventory is operational: stock lookup, branch availability, receiving, transfers, stock count, controlled adjustment, low stock and movement history.\n'''
+          if text.count(anchor) != 1:
+              raise SystemExit(f'Expected one Inventory anchor, found {text.count(anchor)}')
+          customer = '''## Customer identity and selling context\n\nCustomer identity is shared commerce truth across POS, merchant web, WhatsApp and reporting. Walk-in sales are supported, but SellerTray must not force every POS transaction into a walk-in customer when the merchant needs customer-level history or outstanding-balance tracking.\n\nRules:\n\n1. Sell defaults to **Walk-in Customer** but the cashier may search and select an existing Customer before checkout.\n2. The cashier may create a new Customer in selling context using merchant-facing identity fields; the committed sale/order must immediately reference that shared Customer.\n3. An explicitly selected Customer ID wins over name/phone matching. Clients must not recreate a selected WhatsApp Customer as a separate manual/POS Customer.\n4. New name/phone entry may reuse one unambiguous existing Customer with the same canonical phone identity. If multiple records match, fail closed and require explicit selection rather than guessing or silently merging history.\n5. Phone comparison may normalise superficial formatting such as an optional leading `+`; do not invent country-code transformations or assume `080...` and `234...` are the same identity without an explicit governed rule.\n6. POS and WhatsApp must converge on one Customer record. When a POS-created phone later becomes a WhatsApp sender, preserve the existing Customer ID and history rather than creating channel-specific duplicates.\n7. Customer choice is part of the sale snapshot and must survive idempotent retry and offline replay. A branch change or completed/cleared sale must invalidate stale customer context safely.\n8. Customer-linked orders, payments, invoices/receipts and outstanding amounts must remain attributable to that Customer so merchant web can support customer history, receivables and balance follow-up. Walk-in sales remain intentionally unassigned to a named Customer.\n9. Do not expose direct customer-table writes from mobile clients. Customer creation/reuse and identity convergence belong behind governed server/domain commands.\n\n'''
+          text = text.replace('version: "0.1.4"', 'version: "0.1.5"', 1)
+          text = text.replace(anchor, customer + anchor, 1)
+          path.write_text(text)
+          PY
+          grep -q 'version: "0.1.5"' .agents/skills/sellertray-project-implementation/SKILL.md
+          grep -q '## Customer identity and selling context' .agents/skills/sellertray-project-implementation/SKILL.md
+          git diff --check
+      - name: Commit governance update
+        shell: bash
+        run: |
+          rm .github/workflows/patch-sellertray-customer-skill.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .agents/skills/sellertray-project-implementation/SKILL.md .github/workflows/patch-sellertray-customer-skill.yml
+          git commit -m 'docs: govern shared SellerTray customer identity'
+          git push origin HEAD:feat/sellertray-brand-ui-v1
