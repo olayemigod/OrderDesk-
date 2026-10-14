@@ -21,11 +21,11 @@ select extensions.ok(
   exists (
     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where n.nspname='public' and p.proname='sellertray_report_center'
-      and lower(pg_get_functiondef(p.oid)) like '%owner%'
-      and lower(pg_get_functiondef(p.oid)) like '%manager%'
+      and lower(pg_get_functiondef(p.oid)) like '%sellertray_user_has_capability%'
+      and lower(pg_get_functiondef(p.oid)) like '%can_view_reports%'
       and lower(pg_get_functiondef(p.oid)) like '%auth.uid%'
   ),
-  'Report Center enforces management membership'
+  'Report Center enforces centralized report capability authority'
 );
 
 select extensions.ok(
