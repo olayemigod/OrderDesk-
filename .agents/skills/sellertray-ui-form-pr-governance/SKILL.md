@@ -1,18 +1,18 @@
 ---
 name: sellertray-ui-form-pr-governance
-description: "Mandatory SellerTray UI/form semantics, accessible typography, intuitive registration flows, and continuous PR reconciliation rules. Read together with sellertray-project-implementation for every SellerTray implementation, review, QA, or PR task that touches UI, forms, fields, accessibility, or branch/PR management."
+description: "Mandatory SellerTray UI/form semantics, accessible typography, intuitive registration flows, continuous PR reconciliation, and pre-finalization implementation audit rules. Read together with sellertray-project-implementation for every SellerTray implementation, review, QA, or PR task."
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.0"
+  version: "0.1.1"
   status: governing
 ---
 
-# SellerTray UI, Form and PR Governance
+# SellerTray UI, Form, PR and Review Governance
 
 ## Mandatory relationship to the main skill
 
-This skill supplements `.agents/skills/sellertray-project-implementation/SKILL.md`. Both are governing instructions. The main skill remains authoritative for SellerTray architecture, shared commerce, branch, UOM, inventory, payments, WhatsApp, permissions, reporting and offline behaviour. This skill adds mandatory UI field semantics, form usability, typography/accessibility and PR hygiene.
+This skill supplements `.agents/skills/sellertray-project-implementation/SKILL.md`. Both are governing instructions. The main skill remains authoritative for SellerTray architecture, shared commerce, branch, UOM, inventory, payments, WhatsApp, permissions, reporting and offline behaviour. This skill adds mandatory UI field semantics, form usability, typography/accessibility, PR hygiene, and pre-finalization implementation review.
 
 A later explicit user decision overrides an older rule. If such a decision materially changes these rules, update this skill in the same workstream.
 
@@ -103,7 +103,7 @@ Rules:
 6. Web layouts must remain usable under browser zoom/text enlargement; mobile layouts must tolerate larger accessibility text without clipping critical actions or values.
 7. Prefer responsive wrapping/reflow over truncating essential business information.
 8. Tap/click targets, spacing and line height must remain usable with larger text.
-9. If SellerTray provides an in-app text-size preference, implement it through shared design tokens (for example compact/default/large or an equivalent accessible scale) rather than per-screen overrides, and persist the user's choice. Do not create a second styling system.
+9. If SellerTray provides an in-app text-size preference, implement it through shared design tokens rather than per-screen overrides, and persist the user's choice. Do not create a second styling system.
 10. QA must include default text size and an enlarged-text/zoom case for affected screens.
 
 Do not hard-code a universal pixel value as a substitute for accessibility. Platform conventions, shared tokens and user scaling are authoritative; the outcome must be human-readable on mobile and web.
@@ -145,7 +145,41 @@ Rules:
 11. Keep PR scope reviewable, but do not fragment one coherent business outcome into many tiny PRs that create unnecessary dependency chains.
 12. When reconciliation changes architecture or approved product behaviour, update the governing skill in the same workstream.
 
-# 7. Agent completion report
+# 7. Mandatory pre-finalization implementation audit
+
+Every implementation must receive an explicit adversarial review before it is considered final, merge-ready, releasable, or complete. Passing the happy path, typecheck, build, or focused tests is necessary but is not sufficient.
+
+The review must inspect the implementation in the context of the whole SellerTray product model and the current repository, not only the files changed in the immediate slice.
+
+At minimum, audit:
+
+1. **Loopholes and bypasses** — identify paths that can bypass the intended domain command, validation, workflow, approval, capability, branch scope, UOM rule, inventory rule, payment rule, idempotency rule, audit trail or other governed service. Include direct client/database mutation paths and service-role/privileged paths.
+2. **Permissions and isolation** — verify allowed and denied reads/actions, merchant isolation, branch isolation, role/capability checks, historical-read versus operational authority, privilege grants/RLS and server-side enforcement. Hiding a control in the UI is never sufficient permission enforcement.
+3. **Omissions and incomplete flows** — look for missing states, actions, fields, validations, loading/empty/error/offline states, cancellation/retry/recovery paths, audit events, notifications, reporting dimensions, migrations, deployment steps and tests.
+4. **Threats and abuse cases** — review relevant trust boundaries, untrusted input, authentication/authorization, privilege escalation, replay/duplicate submission, race/concurrency behavior, tampering, unsafe defaults, data leakage, injection or arbitrary mutation risks, and secret/sensitive-data exposure. Apply the review proportionately to the capability being changed.
+5. **Data and business integrity** — confirm merchant/branch attribution, UOM snapshots/conversions, stock ledger integrity, payment/reference idempotency, immutable/history requirements, timestamps, source channel and audit actor attribution remain correct.
+6. **End-to-end workflow continuity** — trace the complete user/business flow before and after the change. Verify the implementation has a sensible entry point, next action, completion state and recovery path and does not create a dead end or disconnected feature.
+7. **Overall product alignment** — reconcile the implementation with `Mobile performs. Web manages. WhatsApp sells. AI assists.` Confirm it uses the shared SellerTray core and does not create duplicated or conflicting business truth.
+8. **Cross-channel/regression impact** — inspect implications for mobile, merchant web, WhatsApp, AI, reports, printing, offline behavior and integrations whenever they share the affected domain capability. Run the applicable regression gates rather than assuming untouched clients remain correct.
+9. **UX and accessibility** — check semantic field controls, intuitive flow, readable typography, enlarged text/zoom, touch targets, user-facing labels, error guidance and responsive behavior where UI is affected.
+10. **Compatibility and migration** — check existing records, migrations, older app clients, API/function contracts, staged rollouts, retries and backward compatibility where relevant. Never assume only newly-created data exists.
+11. **Tests versus actual guarantees** — ensure tests prove the governing behavior, including representative negative/adversarial cases, rather than merely executing code. Identify important guarantees that remain untested.
+12. **Repository/PR consistency** — inspect overlapping PRs, migrations, duplicate implementations, stale branches and superseded code so the final result has one authoritative implementation.
+
+The audit must be evidence-based. Inspect relevant code, schema, policies, migrations, APIs, tests and integrations. Do not mark an item safe merely because no problem was observed in the changed file.
+
+For every material finding, classify it as one of:
+
+- **Blocker** — must be corrected before merge/release because it can violate security, permissions, data integrity, governed business truth, or a critical user flow.
+- **Required correction** — material omission or defect that should be fixed in the current workstream before finalization.
+- **Follow-up** — bounded non-critical improvement that may safely follow, with its limitation recorded.
+- **Verified** — reviewed with evidence and no material gap found.
+
+If the audit discovers a blocker or required correction, correct it and re-run the affected audit/test gates before finalizing. Do not convert a known blocker into a follow-up merely to finish the task.
+
+A feature is not complete because its implementation exists. It is complete only when its intended flow, permissions, data integrity, security/trust boundaries, relevant cross-channel effects, tests and repository state have been reviewed and material findings resolved or explicitly bounded according to this governance.
+
+# 8. Agent completion report
 
 For affected work, report:
 
@@ -153,8 +187,9 @@ For affected work, report:
 - registration/setup UX implications;
 - readability/accessibility checks actually performed;
 - tests/QA actually run;
+- pre-finalization audit scope and material findings, including blockers/corrections/follow-ups and what was verified;
 - PRs reconciled, merged, closed, intentionally blocked or still active;
 - migration/build/deployment requirements;
 - remaining limitations and the next bounded milestone.
 
-Never report a PR as reconciled or a UX/accessibility check as passed unless it was actually verified.
+Never report a PR as reconciled, an audit item as verified, or a UX/accessibility check as passed unless it was actually verified.
