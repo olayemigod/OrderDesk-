@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.3"
+  version: "0.1.4"
   status: governing
 ---
 
@@ -298,7 +298,7 @@ Rules:
 
 Use one governed payment model across channels. Preserve idempotency and external references so retries cannot duplicate effects.
 
-Support configured methods such as cash, transfer, Paystack, Flutterwave and other approved methods. Split or partial payment must follow merchant policy.
+Support configured methods such as cash, transfer, physical card terminal, Paystack, Flutterwave and other approved methods. Split or partial payment must follow merchant policy.
 
 Payment/verification state must be explicit. A pending transfer is not equivalent to paid.
 
@@ -307,6 +307,18 @@ Cashier flow:
 > Open Shift -> Operate -> Cash Movements/Expenses -> Close Shift -> Reconcile
 
 Track opening cash, cash sales, expenses, cash in/out, expected cash, declared cash, variance and explanation/manager review where required.
+
+Payment and shift rules:
+
+1. Payment-method configuration is merchant-level, but in-person availability is explicitly assigned per Branch. A method enabled for the business is not automatically valid for every Branch after explicit assignments exist.
+2. Cash is the physical drawer method and is always reconciled as drawer cash. Confirmed bank-transfer, physical card-terminal and other non-cash settlements must never inflate expected physical drawer cash.
+3. Opening a cashier shift snapshots the payment methods available for that Branch. Later configuration changes must not rewrite what the cashier was expected to reconcile for the already-open shift.
+4. Every confirmed POS payment must be attributed immutably to the responsible open shift when one exists, preserving payment method, amount, currency, order/payment reference, operator and business timestamp.
+5. Shift close shows cash and non-cash methods separately. Declared cash and cash variance apply only to physical drawer cash; non-cash methods reconcile by their confirmed transaction counts and amounts.
+6. POS checkout may use only Cash or an enabled in-person method assigned to the active Branch. The server/domain command revalidates Branch authority and assignment before payment and stock effects commit.
+7. Physical card terminals are merchant operational methods. Never advertise a physical terminal or drawer cash as a remote WhatsApp/customer payment option.
+8. WhatsApp/customer-facing payment options remain limited to methods the remote customer can actually use, such as bank transfer, configured gateways, cash on delivery or pay on pickup as policy allows.
+9. Merchant Web manages payment methods and Branch assignments; mobile performs the sale and shift reconciliation using the same governed payment truth.
 
 # 10. Bluetooth printing and hardware
 
@@ -458,11 +470,11 @@ Verify sale deduction, return restoration, receiving, transfer, adjustment, stoc
 
 ## Payment gate
 
-Verify success, pending verification, failure, retry/idempotency, split payment where applicable and refund/reference behaviour.
+Verify success, pending verification, failure, retry/idempotency, split payment where applicable and refund/reference behaviour. For POS shifts, also verify Branch assignment, per-shift payment-method snapshot, separate cash/non-cash totals, drawer variance isolation and retry-safe payment attribution.
 
 ## WhatsApp regression gate
 
-When shared commerce changes, verify customer resolution, Product/UOM resolution where applicable, order creation, payment linkage, merchant takeover and receipt/status behaviour.
+When shared commerce changes, verify customer resolution, Product/UOM resolution where applicable, order creation, payment linkage, merchant takeover and receipt/status behaviour. Payment changes must also prove that in-person-only methods such as physical card terminals are never advertised as WhatsApp/customer payment options.
 
 ## Printing gate
 
