@@ -35,11 +35,19 @@ export function createOperationalReference(kind: OperationalReferenceKind): stri
   return `${PREFIX[kind]}-${date}-${time}-${random}`;
 }
 
-export function createInventoryOperationCommandId(kind: 'receive' | 'adjust'): string {
+function createHiddenCommandId(prefix: string): string {
   const timestamp = Date.now().toString(36);
   const random = `${Math.random().toString(36).slice(2, 10)}${Math.random().toString(36).slice(2, 10)}`
     .replace(/[^a-z0-9]/gi, '')
     .slice(0, 14)
     .padEnd(14, '0');
-  return `invop:${kind}:${timestamp}:${random}`;
+  return `${prefix}:${timestamp}:${random}`;
+}
+
+export function createInventoryOperationCommandId(kind: 'receive' | 'adjust'): string {
+  return createHiddenCommandId(`invop:${kind}`);
+}
+
+export function createCashMovementCommandId(kind: 'cash_in' | 'cash_out' | 'expense'): string {
+  return createHiddenCommandId(`cash:${kind}`);
 }
