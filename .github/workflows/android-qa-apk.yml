@@ -9,6 +9,7 @@ on:
       - fix/sellertray-redesign-integration
     paths:
       - 'apps/mobile/**'
+      - 'supabase/**'
       - '.github/workflows/android-qa-apk.yml'
   workflow_dispatch:
 
