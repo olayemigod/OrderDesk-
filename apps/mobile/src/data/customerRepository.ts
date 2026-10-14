@@ -54,6 +54,7 @@ export async function loadCustomers(tenantId: string): Promise<MerchantCustomer[
       orders(id,public_order_id,status,total_amount,created_at)
     `)
     .eq('tenant_id', tenantId)
+    .neq('wa_id', 'pos:walk-in')
     .order('created_at', { ascending: false })
     .limit(500);
 
