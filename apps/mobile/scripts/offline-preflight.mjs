@@ -11,6 +11,7 @@ const commerce = readFileSync(resolve(appRoot, 'src/data/commerceRepository.ts')
 const edge = readFileSync(resolve(appRoot, '../../supabase/functions/merchant-order/index.ts'), 'utf8');
 const idempotency = readFileSync(resolve(appRoot, '../../supabase/migrations/20261010101500_pos_draft_client_idempotency.sql'), 'utf8');
 const replay = readFileSync(resolve(appRoot, '../../supabase/migrations/20261010101600_offline_pos_replay_validation.sql'), 'utf8');
+const customerIdentity = readFileSync(resolve(appRoot, '../../supabase/migrations/20261014130000_pos_customer_identity_selection.sql'), 'utf8');
 const failures = [];
 
 function requireValue(condition, message) {
@@ -24,6 +25,16 @@ requireValue(
     sell.includes('expectedConversionFactor') &&
     sell.includes('clientReference'),
   'Sell must queue held sales with a stable client reference and displayed price/UOM snapshots without claiming payment.',
+);
+
+requireValue(
+  sell.includes('PosCustomerSelector') &&
+    sell.includes('customerId: customer?.id ?? null') &&
+    sell.includes('customerName: customer?.name ?? null') &&
+    sell.includes('customerPhone: customer?.phone ?? null') &&
+    commerce.includes('customerId?: string | null') &&
+    commerce.includes('customerId: cleanOptional(input.customerId)'),
+  'POS must carry the selected shared customer identity into the governed server draft.',
 );
 
 const preparePaymentIndex = sell.indexOf('async function continueToPayment()');
@@ -44,6 +55,16 @@ requireValue(
     offline.includes("status: 'needs_review'") &&
     offline.includes("status: 'pending', message: 'Waiting for a connection.'"),
   'Offline outbox must be bounded, user-owned, and distinguish connectivity from business conflicts.',
+);
+
+requireValue(
+  offline.includes('schemaVersion: 2') &&
+    offline.includes('customerId: candidate.customerId') &&
+    offline.includes('customerName: candidate.customerName') &&
+    offline.includes('customerPhone: candidate.customerPhone') &&
+    offline.includes("(row.schemaVersion !== 1 && row.schemaVersion !== 2)") &&
+    offline.includes("row.schemaVersion === 2 ? nullableString(row.customerId) : null"),
+  'Held-sale sync must preserve new customer identity while remaining backward compatible with schema-v1 held sales.',
 );
 
 requireValue(
@@ -79,11 +100,20 @@ requireValue(
 );
 
 requireValue(
-  edge.includes("clientReference") &&
-    edge.includes("create_sellertray_pos_order_idempotent") &&
-    edge.includes("Offline-ready sale lines require the displayed price and unit conversion") &&
-    edge.includes("create_sellertray_pos_order_atomic"),
-  'merchant-order must route modern POS references through idempotent replay validation while preserving legacy callers.',
+  edge.includes('customerId') &&
+    edge.includes('p_customer_id: customerId') &&
+    edge.includes('create_sellertray_pos_order_idempotent') &&
+    edge.includes('Offline-ready sale lines require the displayed price and unit conversion') &&
+    edge.includes('create_sellertray_pos_order_atomic'),
+  'merchant-order must route selected customer identity and modern POS references through the governed server commands.',
+);
+
+requireValue(
+  customerIdentity.includes('resolve_sellertray_pos_customer') &&
+    customerIdentity.includes('Multiple customer records use this phone. Select the customer from search.') &&
+    customerIdentity.includes("'customerId',p_customer_id") &&
+    customerIdentity.includes('Queued sale needs review because Branch stock is no longer sufficient'),
+  'Customer-aware POS commands must reuse one shared customer and retain strong offline replay validation.',
 );
 
 requireValue(
