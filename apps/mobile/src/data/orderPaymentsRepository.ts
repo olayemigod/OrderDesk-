@@ -13,7 +13,7 @@ export type OrderFinancialDocument = {
 
 export type OrderPaymentAttempt = {
   id: string;
-  methodType: 'bank_transfer' | 'paystack' | 'flutterwave' | 'cash_on_delivery' | 'pay_on_pickup';
+  methodType: 'bank_transfer' | 'card_terminal' | 'paystack' | 'flutterwave' | 'cash_on_delivery' | 'pay_on_pickup' | 'cash';
   provider: string;
   status: 'initiated' | 'pending_verification' | 'confirmed' | 'failed' | 'cancelled' | 'expired';
   exceptionState: 'none' | 'refund_pending' | 'refunded' | 'disputed' | 'chargeback' | 'reversed' | 'duplicate_payment';
@@ -122,37 +122,19 @@ export async function confirmOfflinePayment(
   paymentId: string,
   note?: string | null,
 ): Promise<void> {
-  await invokeOperation({
-    action: 'confirm_offline',
-    tenantId,
-    paymentId,
-    note: note?.trim() || null,
-  });
+  await invokeOperation({ action: 'confirm_offline', tenantId, paymentId, note: note?.trim() || null });
 }
 
-export async function verifyGatewayPayment(
-  tenantId: string,
-  paymentId: string,
-): Promise<void> {
-  await invokeOperation({
-    action: 'verify_gateway',
-    tenantId,
-    paymentId,
-  });
+export async function verifyGatewayPayment(tenantId: string, paymentId: string): Promise<void> {
+  await invokeOperation({ action: 'verify_gateway', tenantId, paymentId });
 }
 
 async function invokeOperation(body: Record<string, unknown>): Promise<void> {
   const { error } = await supabase.functions.invoke('merchant-payment-operations', { body });
   if (!error) return;
-
   let message = error.message || 'SellerTray payment operation failed.';
   if (error.context && typeof error.context === 'object' && 'clone' in error.context) {
-    try {
-      const payload = await (error.context as Response).clone().json() as { error?: string };
-      if (payload?.error) message = payload.error;
-    } catch {
-      // Keep SDK message.
-    }
+    try { const payload = await (error.context as Response).clone().json() as { error?: string }; if (payload?.error) message = payload.error; } catch {}
   }
   throw new Error(message);
 }
@@ -162,51 +144,30 @@ function toNumber(value: number | string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-
 export async function recordOfflineOrderPayment(
   tenantId: string,
   orderId: string,
   paymentMethodId: string,
   note?: string | null,
 ): Promise<void> {
-  await invokeMerchantPaymentOperation({
-    action: 'record_offline',
-    tenantId,
-    orderId,
-    paymentMethodId,
-    note: note?.trim() || null,
-  });
+  await invokeMerchantPaymentOperation({ action: 'record_offline', tenantId, orderId, paymentMethodId, note: note?.trim() || null });
 }
 
 export async function sendMerchantPaymentOptions(
   tenantId: string,
   orderId: string,
-): Promise<{ deliveryStatus: string; message: string }> {
-  const data = await invokeMerchantPaymentOperation({
-    action: 'send_options',
-    tenantId,
-    orderId,
-  });
-  const row = data && typeof data === 'object' ? data as Record<string, unknown> : {};
-  return {
-    deliveryStatus: typeof row.deliveryStatus === 'string' ? row.deliveryStatus : 'unknown',
-    message: typeof row.message === 'string' ? row.message : 'Payment options queued.',
-  };
+): Promise<{ message: string }> {
+  return invokeMerchantPaymentOperation<{ message: string }>({ action: 'send_options', tenantId, orderId });
 }
 
-async function invokeMerchantPaymentOperation(body: Record<string, unknown>): Promise<unknown> {
+async function invokeMerchantPaymentOperation<T = void>(body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke('merchant-payment-operations', { body });
   if (error) {
     let message = error.message || 'SellerTray payment operation failed.';
     if (error.context && typeof error.context === 'object' && 'clone' in error.context) {
-      try {
-        const payload = await (error.context as Response).clone().json() as { error?: string };
-        if (payload?.error) message = payload.error;
-      } catch {
-        // Keep the SDK error.
-      }
+      try { const payload = await (error.context as Response).clone().json() as { error?: string }; if (payload?.error) message = payload.error; } catch {}
     }
     throw new Error(message);
   }
-  return data;
+  return data as T;
 }
