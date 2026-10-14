@@ -35,21 +35,21 @@ select ok(
   'authenticated role cannot bypass inventory Edge Function'
 );
 
-select like(
-  pg_get_functiondef('public.apply_sellertray_inventory_operation(uuid,uuid,uuid,uuid,text,numeric,text,text,text,uuid)'::regprocedure),
-  '%u.uom_name%',
+select ok(
+  pg_get_functiondef('public.apply_sellertray_inventory_operation(uuid,uuid,uuid,uuid,text,numeric,text,text,text,uuid)'::regprocedure)
+    like '%u.uom_name%',
   'inventory operation uses current UOM schema'
 );
 
-select like(
-  pg_get_functiondef('public.apply_sellertray_inventory_operation(uuid,uuid,uuid,uuid,text,numeric,text,text,text,uuid)'::regprocedure),
-  '%purchase_receipt%',
+select ok(
+  pg_get_functiondef('public.apply_sellertray_inventory_operation(uuid,uuid,uuid,uuid,text,numeric,text,text,text,uuid)'::regprocedure)
+    like '%purchase_receipt%',
   'stock receipt uses canonical inventory movement vocabulary'
 );
 
-select like(
-  pg_get_functiondef('public.apply_sellertray_inventory_operation(uuid,uuid,uuid,uuid,text,numeric,text,text,text,uuid)'::regprocedure),
-  '%null::uuid%',
+select ok(
+  pg_get_functiondef('public.apply_sellertray_inventory_operation(uuid,uuid,uuid,uuid,text,numeric,text,text,text,uuid)'::regprocedure)
+    like '%null::uuid%',
   'inventory operation binds explicitly to authoritative ledger writer'
 );
 
