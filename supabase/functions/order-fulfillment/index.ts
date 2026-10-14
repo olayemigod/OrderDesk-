@@ -54,273 +54,47 @@ Deno.serve(withObservability('order-fulfillment', async (request) => {
     return json({ error: 'action, orderId and method are required' }, 400);
   }
 
+  // Resolve only the immutable tenant key here. The database command below is
+  // the single authority for membership, capability, Branch, payment policy,
+  // state transition, audit and idempotent fulfillment behavior.
   const { data: order, error: orderError } = await admin
     .from('orders')
-    .select('id,tenant_id,customer_id,public_order_id,status,payment_status,amount_paid,total_amount,currency,fulfillment_method,fulfillment_status,delivery_provider,delivery_reference,delivery_note,dispatched_at,fulfilled_at,fulfillment_confirmed_by')
+    .select('tenant_id')
     .eq('id', orderId)
     .maybeSingle();
 
   if (orderError) return json({ error: 'Unable to load order' }, 400);
-  if (!order) return json({ error: 'Order not found' }, 404);
+  if (!order?.tenant_id) return json({ error: 'Order not found' }, 404);
 
-  const tenantId = String(order.tenant_id);
-
-  const { data: membership, error: membershipError } = await admin
-    .from('tenant_members')
-    .select('role')
-    .eq('tenant_id', tenantId)
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  if (membershipError) return json({ error: 'Unable to verify business access' }, 400);
-  if (!membership) return json({ error: 'You do not have access to this business' }, 403);
-
-  const { data: canWrite, error: accessError } = await admin.rpc('orderdesk_subscription_can_write', {
-    p_tenant_id: tenantId,
+  const { data, error } = await admin.rpc('apply_sellertray_order_fulfillment', {
+    p_tenant_id: String(order.tenant_id),
+    p_order_id: orderId,
+    p_actor_user_id: userId,
+    p_action: action,
+    p_method: method,
+    p_provider: provider,
+    p_reference: reference,
+    p_note: note,
   });
-  if (accessError) return json({ error: 'Unable to verify subscription access' }, 400);
-  if (canWrite !== true) {
-    return json({ error: 'SellerTray subscription is read-only. Renew or reactivate the business to make changes.' }, 403);
-  }
-
-  if (action === 'start_delivery') {
-    if (method === 'customer_pickup') {
-      return json({ error: 'Customer pickup does not require a delivery start' }, 400);
-    }
-    if (order.status !== 'ready') {
-      return json({ error: 'Only a ready order can start delivery' }, 409);
-    }
-
-    if (order.fulfillment_status === 'out_for_delivery') {
-      if (order.fulfillment_method !== method) {
-        return json({ error: 'Delivery has already started with a different fulfillment method' }, 409);
-      }
-      return json({ orderId, status: 'ready', fulfillmentStatus: 'out_for_delivery', alreadyStarted: true }, 200);
-    }
-
-    if (order.fulfillment_status !== 'unassigned') {
-      return json({ error: 'This order fulfillment state cannot start delivery' }, 409);
-    }
-
-    const now = new Date().toISOString();
-    const { data: updated, error: updateError } = await admin
-      .from('orders')
-      .update({
-        fulfillment_method: method,
-        fulfillment_status: 'out_for_delivery',
-        delivery_provider: provider,
-        delivery_reference: reference,
-        delivery_note: note,
-        dispatched_at: now,
-        fulfilled_at: null,
-        updated_at: now,
-      })
-      .eq('id', orderId)
-      .eq('tenant_id', tenantId)
-      .eq('status', 'ready')
-      .eq('fulfillment_status', 'unassigned')
-      .select('id,tenant_id,customer_id,public_order_id,status,payment_status,amount_paid,total_amount,currency,fulfillment_method,fulfillment_status,delivery_provider,delivery_reference,delivery_note,dispatched_at,fulfilled_at,fulfillment_confirmed_by')
-      .maybeSingle();
-
-    if (updateError) return json({ error: updateError.message }, 400);
-    if (!updated) return json({ error: 'Order fulfillment changed before delivery could start. Refresh and try again.' }, 409);
-
-    await recordFulfillmentCommercialAction({
-      tenantId,
-      userId,
-      role: String(membership.role),
-      orderBefore: order,
-      orderAfter: updated,
-      action: 'start_delivery',
-      provider,
-      reference,
-      note,
-    });
-
-    return json({ orderId, status: updated.status, fulfillmentStatus: updated.fulfillment_status }, 200);
-  }
-
-  if (order.status === 'completed') {
-    return json({ orderId, status: 'completed', fulfillmentStatus: order.fulfillment_status, alreadyCompleted: true }, 200);
-  }
-  if (order.status !== 'ready') {
-    return json({ error: 'Only a ready order can be completed' }, 409);
-  }
-
-  const now = new Date().toISOString();
-
-  if (method === 'customer_pickup') {
-    if (order.fulfillment_status !== 'unassigned') {
-      return json({ error: 'An order already in delivery cannot be completed as customer pickup' }, 409);
-    }
-
-    const { data: updated, error: updateError } = await admin
-      .from('orders')
-      .update({
-        status: 'completed',
-        status_reason: null,
-        fulfillment_method: 'customer_pickup',
-        fulfillment_status: 'collected',
-        fulfillment_confirmed_by: 'merchant',
-        customer_confirmed_at: null,
-        customer_confirmation_message_id: null,
-        delivery_provider: null,
-        delivery_reference: null,
-        delivery_note: note,
-        fulfilled_at: now,
-        updated_at: now,
-      })
-      .eq('id', orderId)
-      .eq('tenant_id', tenantId)
-      .eq('status', 'ready')
-      .eq('fulfillment_status', 'unassigned')
-      .select('id,tenant_id,customer_id,public_order_id,status,payment_status,amount_paid,total_amount,currency,fulfillment_method,fulfillment_status,delivery_provider,delivery_reference,delivery_note,dispatched_at,fulfilled_at,fulfillment_confirmed_by')
-      .maybeSingle();
-
-    if (updateError) return json({ error: updateError.message }, 400);
-    if (!updated) return json({ error: 'Order fulfillment changed before pickup could be completed. Refresh and try again.' }, 409);
-
-    await recordFulfillmentCommercialAction({
-      tenantId,
-      userId,
-      role: String(membership.role),
-      orderBefore: order,
-      orderAfter: updated,
-      action: 'complete_fulfillment',
-      provider: null,
-      reference: null,
-      note,
-    });
-
-    return json({ orderId, status: updated.status, fulfillmentStatus: updated.fulfillment_status }, 200);
-  }
-
-  if (order.fulfillment_status !== 'out_for_delivery') {
-    return json({ error: 'Start delivery before marking this order delivered' }, 409);
-  }
-  if (order.fulfillment_method !== method) {
-    return json({ error: 'Fulfillment method does not match the active delivery' }, 409);
-  }
-
-  const { data: updated, error: updateError } = await admin
-    .from('orders')
-    .update({
-      status: 'completed',
-      status_reason: null,
-      fulfillment_status: 'delivered',
-      fulfillment_confirmed_by: 'merchant',
-      customer_confirmed_at: null,
-      customer_confirmation_message_id: null,
-      fulfilled_at: now,
-      updated_at: now,
-    })
-    .eq('id', orderId)
-    .eq('tenant_id', tenantId)
-    .eq('status', 'ready')
-    .eq('fulfillment_status', 'out_for_delivery')
-    .eq('fulfillment_method', method)
-    .select('id,tenant_id,customer_id,public_order_id,status,payment_status,amount_paid,total_amount,currency,fulfillment_method,fulfillment_status,delivery_provider,delivery_reference,delivery_note,dispatched_at,fulfilled_at,fulfillment_confirmed_by')
-    .maybeSingle();
-
-  if (updateError) return json({ error: updateError.message }, 400);
-  if (!updated) return json({ error: 'Order fulfillment changed before delivery could be completed. Refresh and try again.' }, 409);
-
-  await recordFulfillmentCommercialAction({
-    tenantId,
-    userId,
-    role: String(membership.role),
-    orderBefore: order,
-    orderAfter: updated,
-    action: 'complete_fulfillment',
-    provider: updated.delivery_provider ?? provider,
-    reference: updated.delivery_reference ?? reference,
-    note: updated.delivery_note ?? note,
-  });
-
-  return json({ orderId, status: updated.status, fulfillmentStatus: updated.fulfillment_status }, 200);
-}));
-
-async function recordFulfillmentCommercialAction(input: {
-  tenantId: string;
-  userId: string;
-  role: string;
-  orderBefore: Record<string, unknown>;
-  orderAfter: Record<string, unknown>;
-  action: Action;
-  provider: string | null;
-  reference: string | null;
-  note: string | null;
-}): Promise<void> {
-  if (!admin) return;
-
-  const requestedBy = input.role === 'staff' ? 'staff' : 'merchant';
-  const status = String(input.orderAfter.fulfillment_status ?? '');
-  const actionType = input.action === 'start_delivery'
-    ? 'delivery_started'
-    : status === 'collected'
-      ? 'pickup_completed'
-      : 'delivery_completed';
-  const riskClass = input.action === 'start_delivery' ? 'medium' : 'high';
-  const appliedAt = new Date().toISOString();
-  const actionKey =
-    'fulfillment:' +
-    String(input.orderAfter.id ?? '') + ':' +
-    actionType + ':' +
-    String(input.orderAfter.dispatched_at ?? input.orderAfter.fulfilled_at ?? appliedAt);
-
-  const beforeState = fulfillmentState(input.orderBefore);
-  const afterState = fulfillmentState(input.orderAfter);
-
-  const { error } = await admin
-    .from('commercial_action_ledger')
-    .upsert({
-      tenant_id: input.tenantId,
-      action_key: actionKey,
-      channel: 'merchant_app',
-      customer_id: input.orderAfter.customer_id ?? null,
-      target_order_id: input.orderAfter.id ?? null,
-      action_type: actionType,
-      risk_class: riskClass,
-      requested_by: requestedBy,
-      actor_user_id: input.userId,
-      policy_result: 'allowed',
-      action_status: 'applied',
-      financial_impact: null,
-      currency: input.orderAfter.currency ?? null,
-      before_state: beforeState,
-      after_state: afterState,
-      metadata: {
-        public_order_id: input.orderAfter.public_order_id ?? null,
-        delivery_provider: input.provider,
-        delivery_reference: input.reference,
-        note: input.note,
-      },
-      applied_at: appliedAt,
-    }, {
-      onConflict: 'tenant_id,action_key',
-      ignoreDuplicates: true,
-    });
 
   if (error) {
-    console.warn('SellerTray fulfillment audit write failed', error.message);
+    const message = error.message || 'SellerTray could not update fulfillment.';
+    const status = error.code === '42501'
+      ? 403
+      : error.code === 'P0002'
+        ? 404
+        : error.code === '23514'
+          ? 409
+          : 400;
+    return json({ error: message }, status);
   }
-}
 
-function fulfillmentState(order: Record<string, unknown>): Record<string, unknown> {
-  return {
-    status: order.status ?? null,
-    payment_status: order.payment_status ?? null,
-    amount_paid: order.amount_paid ?? null,
-    total_amount: order.total_amount ?? null,
-    fulfillment_method: order.fulfillment_method ?? null,
-    fulfillment_status: order.fulfillment_status ?? null,
-    delivery_provider: order.delivery_provider ?? null,
-    delivery_reference: order.delivery_reference ?? null,
-    dispatched_at: order.dispatched_at ?? null,
-    fulfilled_at: order.fulfilled_at ?? null,
-    fulfillment_confirmed_by: order.fulfillment_confirmed_by ?? null,
-  };
-}
+  if (!data || typeof data !== 'object') {
+    return json({ error: 'SellerTray returned an invalid fulfillment result.' }, 500);
+  }
+
+  return json(data as JsonRecord, 200);
+}));
 
 function cleanAction(value: unknown): Action | null {
   return value === 'start_delivery' || value === 'complete_fulfillment' ? value : null;
