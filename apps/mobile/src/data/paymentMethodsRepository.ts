@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 
 export type PaymentMethodType =
   | 'bank_transfer'
+  | 'card_terminal'
   | 'paystack'
   | 'flutterwave'
   | 'cash_on_delivery'
@@ -135,43 +136,26 @@ export async function connectPaymentGateway(
   secretKey: string,
   secretHash?: string | null,
 ): Promise<void> {
-  await invokePaymentSettings({
-    action: 'connect_gateway',
-    tenantId,
-    methodId,
-    provider,
-    secretKey: secretKey.trim(),
-    secretHash: cleanOptional(secretHash),
-  });
+  await invokePaymentSettings({ action: 'connect_gateway', tenantId, methodId, provider, secretKey: secretKey.trim(), secretHash: cleanOptional(secretHash) });
 }
 
-export async function disconnectPaymentGateway(
-  tenantId: string,
-  methodId: string,
-): Promise<void> {
-  await invokePaymentSettings({
-    action: 'disconnect_gateway',
-    tenantId,
-    methodId,
-  });
+export async function disconnectPaymentGateway(tenantId: string, methodId: string): Promise<void> {
+  await invokePaymentSettings({ action: 'disconnect_gateway', tenantId, methodId });
+}
+
+export async function assignPaymentMethodBranches(tenantId: string, methodId: string, branchIds: string[]): Promise<void> {
+  await invokePaymentSettings({ action: 'assign_branches', tenantId, methodId, branchIds });
 }
 
 async function invokePaymentSettings(body: Record<string, unknown>): Promise<unknown> {
   const { data, error } = await supabase.functions.invoke('payment-settings', { body });
-
   if (error) {
     let message = error.message || 'SellerTray could not update payment settings.';
     if (error.context && typeof error.context === 'object' && 'clone' in error.context) {
-      try {
-        const payload = await (error.context as Response).clone().json() as { error?: string };
-        if (payload?.error) message = payload.error;
-      } catch {
-        // Keep the SDK message.
-      }
+      try { const payload = await (error.context as Response).clone().json() as { error?: string }; if (payload?.error) message = payload.error; } catch {}
     }
     throw new Error(message);
   }
-
   return data;
 }
 
