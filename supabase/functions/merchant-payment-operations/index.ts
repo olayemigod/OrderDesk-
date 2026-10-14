@@ -100,7 +100,7 @@ Deno.serve(async (req: Request) => {
     return json({ ok: true, paymentId, status: runtime.status || payment.status, providerStatus: runtime.providerStatus || null });
   } catch (error) {
     const message = error instanceof Error ? sanitize(error.message) : 'Payment operation failed';
-    const status = /membership|required|customer-facing offline|not awaiting|read-only|permission|access/i.test(message) ? 403 : /not found/i.test(message) ? 404 : /already|enabled/i.test(message) ? 409 : 400;
+    const status = /membership|required|customer-facing offline|not awaiting|read-only|permission|access/i.test(message) ? 403 : /not found/i.test(message) ? 404 : /already|enabled|not available/i.test(message) ? 409 : 400;
     console.error(JSON.stringify({ ts: new Date().toISOString(), service: 'merchant-payment-operations', event: 'request_failed', payment_id: paymentId, error: message }));
     return json({ error: message }, status);
   }
@@ -129,9 +129,10 @@ async function loadOrderSummary(tenantId: string, orderId: string): Promise<J | 
 }
 
 async function queueMerchantPaymentOptions(tenantId: string, orderId: string): Promise<{ deliveryStatus: string; message: string }> {
-  const orders = await rest<Array<{ id: string; customer_id: string; public_order_id: string; payment_status: string; source: string }>>('/rest/v1/orders?select=id,customer_id,public_order_id,payment_status,source&tenant_id=eq.' + encodeURIComponent(tenantId) + '&id=eq.' + encodeURIComponent(orderId) + '&limit=1');
+  const orders = await rest<Array<{ id: string; branch_id: string | null; customer_id: string; public_order_id: string; payment_status: string; source: string }>>('/rest/v1/orders?select=id,branch_id,customer_id,public_order_id,payment_status,source&tenant_id=eq.' + encodeURIComponent(tenantId) + '&id=eq.' + encodeURIComponent(orderId) + '&limit=1');
   const order = orders[0];
   if (!order) throw new Error('Order not found');
+  if (!order.branch_id) throw new Error('SellerTray order requires a Branch before payment options can be sent');
   if (order.payment_status === 'paid') throw new Error('SellerTray order is already paid');
   if (order.source !== 'whatsapp') throw new Error('Payment options can only be sent to a WhatsApp customer');
 
@@ -139,7 +140,7 @@ async function queueMerchantPaymentOptions(tenantId: string, orderId: string): P
     rest<Array<{ name: string; whatsapp_phone_number_id: string | null }>>('/rest/v1/tenants?select=name,whatsapp_phone_number_id&id=eq.' + encodeURIComponent(tenantId) + '&limit=1'),
     rest<Array<{ wa_id: string | null }>>('/rest/v1/customers?select=wa_id&tenant_id=eq.' + encodeURIComponent(tenantId) + '&id=eq.' + encodeURIComponent(order.customer_id) + '&limit=1'),
     rest<Array<{ document_reference: string; amount: number | string; currency: string }>>('/rest/v1/order_financial_documents?select=document_reference,amount,currency&tenant_id=eq.' + encodeURIComponent(tenantId) + '&order_id=eq.' + encodeURIComponent(orderId) + '&document_type=eq.invoice&status=eq.issued&limit=1'),
-    rest<Array<{ method_type: string; display_name: string }>>('/rest/v1/merchant_payment_methods?select=method_type,display_name&tenant_id=eq.' + encodeURIComponent(tenantId) + '&is_enabled=eq.true&order=is_default.desc,sort_order.asc,created_at.asc'),
+    rpc<Array<{ method_type: string; display_name: string }>>('sellertray_branch_customer_payment_methods', { p_tenant_id: tenantId, p_branch_id: order.branch_id }),
     rest<Array<{ received_at: string }>>('/rest/v1/inbound_messages?select=received_at&tenant_id=eq.' + encodeURIComponent(tenantId) + '&customer_id=eq.' + encodeURIComponent(order.customer_id) + '&order=received_at.desc&limit=1'),
   ]);
 
@@ -149,7 +150,7 @@ async function queueMerchantPaymentOptions(tenantId: string, orderId: string): P
   const methods = rawMethods.filter((method) => CUSTOMER_METHODS.has(method.method_type));
   if (!tenant?.whatsapp_phone_number_id || !customer?.wa_id || customer.wa_id.startsWith('manual:')) throw new Error('Customer does not have an active WhatsApp destination');
   if (!invoice) throw new Error('SellerTray order has no payable invoice');
-  if (!methods.length) throw new Error('No customer payment method is enabled');
+  if (!methods.length) throw new Error('No customer payment method is available at this Branch');
 
   const message = [
     'Payment options — ' + tenant.name,
