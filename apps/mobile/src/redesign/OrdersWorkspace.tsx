@@ -202,7 +202,9 @@ export function OrdersWorkspace({
         const total = orderTotal(order);
         const canVoid = order.source === 'pos' && order.status === 'draft' && order.paymentStatus === 'unpaid' && order.amountPaid === 0;
         const canEditDraft = canVoid;
-        const canReturn = canReturnCompletedSale && order.source === 'pos' && order.status === 'completed' && order.paymentStatus === 'paid' && order.fulfillmentStatus === 'collected' && order.returnStatus === 'none';
+        const isCompletedUnreturnedPosSale = order.source === 'pos' && order.status === 'completed' && order.paymentStatus === 'paid' && order.fulfillmentStatus === 'collected' && order.returnStatus === 'none';
+        const canReturn = canReturnCompletedSale && isCompletedUnreturnedPosSale && order.cashReturnSupported === true;
+        const paymentNeedsRefundReview = canReturnCompletedSale && isCompletedUnreturnedPosSale && order.cashReturnSupported !== true;
         const canPrintReceipt = order.paymentStatus === 'paid';
         const action = pending?.orderId === order.id ? pending.action : null;
         const printing = printingOrderId === order.id;
@@ -286,6 +288,10 @@ export function OrdersWorkspace({
 
             {order.returnStatus === 'returned' ? (
               <View style={[styles.returnedNotice, dark && darkStyles.subtleCard]}><Ionicons name="return-down-back-outline" size={18} color={theme.colors.greenDark} /><Text style={[styles.returnedText, dark && darkStyles.bodyText]}>{formatMoney(order.returnedAmount, businessCurrency)} returned. The original sale and payment remain in history.</Text></View>
+            ) : null}
+
+            {paymentNeedsRefundReview ? (
+              <View style={[styles.returnedNotice, dark && darkStyles.subtleCard]}><Ionicons name="card-outline" size={18} color={theme.colors.muted} /><Text style={[styles.returnedText, dark && darkStyles.bodyText]}>This sale was paid outside the cash drawer. Review the payment before processing a refund.</Text></View>
             ) : null}
 
             {!action && !editing && (canVoid || canReturn || canPrintReceipt) ? (
