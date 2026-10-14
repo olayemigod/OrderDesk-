@@ -39,6 +39,28 @@ requireValue(
   'Merchant order-change actions must remain authenticated, tenant-scoped, branch-authorized and retry-safe',
 );`;
 
+const staleFulfillmentCheck = `requireValue(
+  orderFulfillmentFunction.includes('admin.auth.getUser(token)') &&
+    orderFulfillmentFunction.includes("orderdesk_subscription_can_write") &&
+    orderFulfillmentFunction.includes("eq('fulfillment_status', 'unassigned')") &&
+    orderFulfillmentFunction.includes("eq('fulfillment_status', 'out_for_delivery')"),
+  'order-fulfillment must authenticate the user, enforce subscription access and use compare-and-set fulfillment transitions',
+);`;
+
+const currentFulfillmentCheck = `const orderOperationAuthorityMigration = read(join(repoRoot, 'supabase/migrations/20261014192000_order_operation_authority_convergence.sql'));
+requireValue(
+  orderFulfillmentFunction.includes('admin.auth.getUser(token)') &&
+    orderFulfillmentFunction.includes("admin.rpc('apply_sellertray_order_fulfillment'") &&
+    orderFulfillmentFunction.includes('p_actor_user_id: userId') &&
+    orderOperationAuthorityMigration.includes('sellertray_user_can_manage_order_operation') &&
+    orderOperationAuthorityMigration.includes("'can_manage_orders'") &&
+    orderOperationAuthorityMigration.includes('sellertray_user_can_operate_branch') &&
+    orderOperationAuthorityMigration.includes("sellertray_payment_gate_decision(p_order_id,'dispatch')") &&
+    orderOperationAuthorityMigration.includes("sellertray_payment_gate_decision(p_order_id,'complete')") &&
+    orderOperationAuthorityMigration.includes("v_order.fulfillment_status='out_for_delivery'"),
+  'order-fulfillment must authenticate the user and delegate authority, payment policy and transactional fulfillment state to the governed database command',
+);`;
+
 const staleVersionCodeCheck = "requireValue(app.android?.versionCode === 19, 'Android versionCode must be 19 for the merchant-reference QA line');";
 const currentVersionCodeCheck = "requireValue(app.android?.versionCode === 22, 'Android versionCode must be 22 for the merchant-reference QA line');";
 
@@ -72,6 +94,8 @@ if (!moreWorkspace.includes('SellerTray ') || !moreWorkspace.includes(expectedBu
 let source = fs.readFileSync(sourcePath, 'utf8');
 if (source.split(staleOrderChangeCheck).length !== 2) throw new Error('Expected exactly one legacy order-change governance check in release preflight');
 source = source.replace(staleOrderChangeCheck, currentOrderChangeCheck);
+if (source.split(staleFulfillmentCheck).length !== 2) throw new Error('Expected exactly one legacy fulfillment governance check in release preflight');
+source = source.replace(staleFulfillmentCheck, currentFulfillmentCheck);
 if (source.split(staleVersionCodeCheck).length !== 2) throw new Error('Expected exactly one build 19 QA version guard in release preflight');
 source = source.replace(staleVersionCodeCheck, currentVersionCodeCheck);
 
