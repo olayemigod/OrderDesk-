@@ -83,7 +83,8 @@ Deno.serve(async (request) => {
     const reference = cleanText(body.reference, 160);
     const reason = cleanText(body.reason, 500);
     const expenseCategory = cleanText(body.expenseCategory, 120);
-    if (!shiftId || !movementType || amount === null || !reference || !reason) {
+    const commandId = cleanCommandId(body.commandId);
+    if (!shiftId || !movementType || amount === null || !reference || !reason || !commandId) {
       return json({ error: 'Shift, cash activity, amount, reference and reason are required' }, 400);
     }
     if (movementType === 'expense' && !expenseCategory) {
@@ -98,6 +99,7 @@ Deno.serve(async (request) => {
       p_reference: reference,
       p_reason: reason,
       p_expense_category: movementType === 'expense' ? expenseCategory : null,
+      p_command_id: commandId,
       p_actor_user_id: userId,
     };
   } else if (action === 'close') {
@@ -144,7 +146,7 @@ Deno.serve(async (request) => {
       ? 403
       : /not found/i.test(message)
         ? 404
-        : /already|open shift|cannot|close|variance|different facts|unavailable/i.test(message)
+        : /already|open shift|cannot|close|variance|different facts|unavailable|invalid/i.test(message)
           ? 409
           : 400;
     return json({ error: message }, status);
@@ -169,6 +171,12 @@ function cleanUuid(value: unknown): string | null {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clean)
     ? clean
     : null;
+}
+
+function cleanCommandId(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const clean = value.trim();
+  return /^[A-Za-z0-9][A-Za-z0-9:_-]{7,159}$/.test(clean) ? clean : null;
 }
 
 function cleanNonNegativeNumber(value: unknown): number | null {
