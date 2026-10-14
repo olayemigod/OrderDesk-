@@ -21,6 +21,7 @@ import {
 } from '../data/inventoryRepository';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
+import { createOperationalReference } from './operationalReference';
 
 type Props = {
   tenantId: string;
@@ -31,6 +32,23 @@ const NO_CAPABILITIES: InventoryCapabilities = {
   canReceiveStock: false,
   canAdjustStock: false,
 };
+
+const RECEIVE_REASONS = [
+  'Supplier delivery',
+  'Opening stock',
+  'Branch replenishment',
+  'Inventory recovery',
+  'Other approved receipt',
+] as const;
+
+const ADJUST_REASONS = [
+  'Stock count correction',
+  'Damage',
+  'Expiry',
+  'Missing / shrinkage',
+  'Data correction',
+  'Other approved adjustment',
+] as const;
 
 export function InventoryWorkspace({ tenantId, branch }: Props) {
   const appearance = useSellerTrayAppearance();
@@ -53,6 +71,7 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
   const [adjustmentDirection, setAdjustmentDirection] = useState<InventoryAdjustmentDirection>('increase');
   const [operationReference, setOperationReference] = useState('');
   const [operationReason, setOperationReason] = useState('');
+  const [reasonOpen, setReasonOpen] = useState(false);
   const [operationSaving, setOperationSaving] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
   const [operationNotice, setOperationNotice] = useState<string | null>(null);
@@ -78,8 +97,7 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
     setMovementLoading(true);
     setMovementError(null);
     try {
-      const next = await loadStockMovements(tenantId, branch.id, productId, 50);
-      setMovements(next);
+      setMovements(await loadStockMovements(tenantId, branch.id, productId, 50));
     } catch (err) {
       setMovementError(err instanceof Error ? err.message : 'Unable to load stock history.');
     } finally {
@@ -131,7 +149,6 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
       setMovementError(null);
       return undefined;
     }
-
     let active = true;
     setMovementLoading(true);
     setMovementError(null);
@@ -145,7 +162,6 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
       .finally(() => {
         if (active) setMovementLoading(false);
       });
-
     return () => {
       active = false;
     };
@@ -181,8 +197,9 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
     setOperationUomId(defaultUom?.id ?? '');
     setOperationQuantity('');
     setAdjustmentDirection('increase');
-    setOperationReference('');
-    setOperationReason('');
+    setOperationReference(createOperationalReference(mode));
+    setOperationReason(mode === 'receive' ? RECEIVE_REASONS[0] : ADJUST_REASONS[0]);
+    setReasonOpen(false);
     setOperationError(null);
     setOperationNotice(null);
   }
@@ -190,6 +207,7 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
   function closeOperation() {
     if (operationSaving) return;
     setOperationMode(null);
+    setReasonOpen(false);
     setOperationError(null);
   }
 
@@ -205,11 +223,11 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
       return;
     }
     if (!operationReference.trim()) {
-      setOperationError('Enter a reference for this stock movement.');
+      setOperationError('Reference is required. Generate one or enter an external reference.');
       return;
     }
     if (!operationReason.trim()) {
-      setOperationError('Enter a reason for this stock movement.');
+      setOperationError('Choose a reason for this stock movement.');
       return;
     }
 
@@ -238,6 +256,7 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
       setOperationQuantity('');
       setOperationReference('');
       setOperationReason('');
+      setReasonOpen(false);
       await Promise.all([
         refreshStock(),
         refreshMovements(selected.catalogItemId),
@@ -252,13 +271,14 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
   if (selected) {
     const canReceive = capabilities.canReceiveStock;
     const canAdjust = capabilities.canAdjustStock;
+    const reasons = operationMode === 'receive' ? RECEIVE_REASONS : ADJUST_REASONS;
     return (
       <View style={styles.stack}>
         <Pressable
           onPress={() => {
             setSelectedProductId(null);
             setOperationMode(null);
-            setOperationNotice(null);
+            setReasonOpen(false);
           }}
           style={styles.backButton}
         >
@@ -267,154 +287,184 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
         </Pressable>
 
         <View style={styles.heading}>
-          <Text style={[styles.eyebrow, dark && darkStyles.bodyText]}>STOCK HISTORY</Text>
+          <Text style={[styles.eyebrow, dark && darkStyles.bodyText]}>STOCK DETAIL</Text>
           <Text style={[styles.title, dark && darkStyles.titleText]}>{selected.itemName}</Text>
-          <Text style={[styles.subtitle, dark && darkStyles.bodyText]}>
-            {branch.name} · {formatQuantity(selected.quantityOnHand)} {selected.stockUom} on hand
-          </Text>
+          <Text style={[styles.subtitle, dark && darkStyles.bodyText]}>{branch.name}</Text>
         </View>
 
         <View style={[styles.balanceCard, dark && darkStyles.card]}>
-          <View style={styles.balanceIcon}>
-            <Ionicons name="cube-outline" size={24} color={theme.colors.greenDark} />
-          </View>
-          <View style={styles.balanceCopy}>
-            <Text style={[styles.balanceLabel, dark && darkStyles.bodyText]}>Current stock</Text>
-            <Text style={[styles.balanceValue, dark && darkStyles.titleText]}>
-              {formatQuantity(selected.quantityOnHand)} {selected.stockUom}
-            </Text>
-            <Text style={[styles.balanceMeta, dark && darkStyles.bodyText]}>
-              {selected.lastMovementAt ? `Last movement ${formatDateTime(selected.lastMovementAt)}` : 'No stock movements yet'}
-            </Text>
-          </View>
+          <Text style={[styles.balanceLabel, dark && darkStyles.bodyText]}>On hand</Text>
+          <Text style={[styles.balanceValue, dark && darkStyles.titleText]}>{formatQuantity(selected.quantityOnHand)} {selected.stockUom}</Text>
+          <Text style={[styles.muted, dark && darkStyles.bodyText]}>
+            {selected.lastMovementAt ? `Last movement ${formatDate(selected.lastMovementAt)}` : 'No stock movement yet'}
+          </Text>
         </View>
 
-        {capabilityLoading ? (
-          <View style={[styles.actionLoading, dark && darkStyles.subtleCard]}>
-            <ActivityIndicator size="small" />
-            <Text style={[styles.actionLoadingText, dark && darkStyles.bodyText]}>Checking stock permissions…</Text>
-          </View>
-        ) : null}
-
-        {!capabilityLoading && (canReceive || canAdjust) ? (
-          <View style={styles.actionRow}>
-            {canReceive ? (
-              <Pressable
-                disabled={operationSaving}
-                onPress={() => beginOperation('receive')}
-                style={({ pressed }) => [styles.primaryAction, pressed && styles.pressed]}
-              >
-                <Ionicons name="download-outline" size={18} color={theme.colors.white} />
-                <Text style={styles.primaryActionText}>Receive stock</Text>
-              </Pressable>
-            ) : null}
-            {canAdjust ? (
-              <Pressable
-                disabled={operationSaving}
-                onPress={() => beginOperation('adjust')}
-                style={({ pressed }) => [styles.secondaryAction, dark && darkStyles.outlineButton, pressed && styles.pressed]}
-              >
-                <Ionicons name="options-outline" size={18} color={theme.colors.greenDark} />
-                <Text style={styles.secondaryActionText}>Adjust stock</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        ) : null}
-
-        {capabilityError ? (
-          <View style={[styles.permissionNotice, dark && darkStyles.subtleCard]}>
-            <Ionicons name="shield-outline" size={18} color={theme.colors.muted} />
-            <Text style={[styles.permissionNoticeText, dark && darkStyles.bodyText]}>
-              Stock history is available, but stock actions could not be verified.
-            </Text>
-          </View>
-        ) : null}
-
+        {capabilityError ? <ErrorCard text={capabilityError} dark={dark} /> : null}
         {operationNotice ? (
-          <View style={[styles.successCard, dark && darkStyles.subtleCard]}>
-            <Ionicons name="checkmark-circle-outline" size={20} color={theme.colors.greenDark} />
-            <Text style={[styles.successText, dark && darkStyles.bodyText]}>{operationNotice}</Text>
+          <View style={[styles.noticeCard, dark && darkStyles.subtleCard]}>
+            <Ionicons name="checkmark-circle-outline" size={19} color={theme.colors.greenDark} />
+            <Text style={[styles.noticeText, dark && darkStyles.bodyText]}>{operationNotice}</Text>
           </View>
         ) : null}
 
-        {operationMode ? (
-          <InventoryOperationForm
-            mode={operationMode}
-            product={selectedProduct}
-            stockRow={selected}
-            selectedUom={selectedOperationUom}
-            selectedUomId={operationUomId}
-            quantity={operationQuantity}
-            previewStockQuantity={previewStockQuantity}
-            adjustmentDirection={adjustmentDirection}
-            reference={operationReference}
-            reason={operationReason}
-            saving={operationSaving}
-            error={operationError}
-            dark={dark}
-            onSelectUom={setOperationUomId}
-            onChangeQuantity={setOperationQuantity}
-            onChangeDirection={setAdjustmentDirection}
-            onChangeReference={setOperationReference}
-            onChangeReason={setOperationReason}
-            onCancel={closeOperation}
-            onSubmit={() => void submitOperation()}
-          />
-        ) : null}
-
-        {movementError ? (
-          <View style={[styles.errorCard, dark && darkStyles.errorCard]}>
-            <Text style={[styles.errorText, dark && darkStyles.bodyText]}>{movementError}</Text>
+        {!operationMode ? (
+          <View style={styles.actionRow}>
+            <Pressable
+              disabled={capabilityLoading || !canReceive}
+              onPress={() => beginOperation('receive')}
+              style={[styles.primaryAction, (capabilityLoading || !canReceive) && styles.disabled]}
+            >
+              <Ionicons name="download-outline" size={20} color={theme.colors.white} />
+              <Text style={styles.primaryActionText}>Receive stock</Text>
+            </Pressable>
+            <Pressable
+              disabled={capabilityLoading || !canAdjust}
+              onPress={() => beginOperation('adjust')}
+              style={[styles.secondaryAction, dark && darkStyles.outlineButton, (capabilityLoading || !canAdjust) && styles.disabled]}
+            >
+              <Ionicons name="options-outline" size={20} color={theme.colors.greenDark} />
+              <Text style={styles.secondaryActionText}>Adjust stock</Text>
+            </Pressable>
           </View>
-        ) : null}
+        ) : (
+          <View style={[styles.operationCard, dark && darkStyles.card]}>
+            <View style={styles.operationHead}>
+              <View style={styles.flexCopy}>
+                <Text style={[styles.operationTitle, dark && darkStyles.titleText]}>{operationMode === 'receive' ? 'Receive stock' : 'Adjust stock'}</Text>
+                <Text style={[styles.muted, dark && darkStyles.bodyText]}>{operationMode === 'receive' ? 'Record stock received into this branch.' : 'Record a controlled correction to branch stock.'}</Text>
+              </View>
+              <Pressable onPress={closeOperation} disabled={operationSaving} style={styles.iconButton}>
+                <Ionicons name="close" size={20} color={theme.colors.slate} />
+              </Pressable>
+            </View>
 
-        {movementLoading && movements.length === 0 ? (
-          <View style={[styles.emptyCard, dark && darkStyles.card]}>
-            <ActivityIndicator />
-            <Text style={[styles.muted, dark && darkStyles.bodyText]}>Loading stock history…</Text>
+            {operationMode === 'adjust' ? (
+              <View style={styles.segmentRow}>
+                {(['increase', 'decrease'] as InventoryAdjustmentDirection[]).map((direction) => (
+                  <Pressable
+                    key={direction}
+                    onPress={() => setAdjustmentDirection(direction)}
+                    style={[styles.segmentButton, dark && darkStyles.outlineButton, adjustmentDirection === direction && styles.segmentButtonActive]}
+                  >
+                    <Text style={[styles.segmentText, dark && darkStyles.bodyText, adjustmentDirection === direction && styles.segmentTextActive]}>{direction === 'increase' ? 'Increase' : 'Decrease'}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+
+            <Text style={[styles.fieldLabel, dark && darkStyles.bodyText]}>Unit</Text>
+            <View style={styles.uomRow}>
+              {(selectedProduct?.uoms ?? []).map((uom) => (
+                <Pressable
+                  key={uom.id}
+                  onPress={() => setOperationUomId(uom.id)}
+                  style={[styles.uomChip, dark && darkStyles.outlineButton, operationUomId === uom.id && styles.uomChipActive]}
+                >
+                  <Text style={[styles.uomChipText, dark && darkStyles.bodyText, operationUomId === uom.id && styles.uomChipTextActive]}>{uom.name}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Text style={[styles.fieldLabel, dark && darkStyles.bodyText]}>Quantity</Text>
+            <TextInput
+              value={operationQuantity}
+              onChangeText={setOperationQuantity}
+              keyboardType="decimal-pad"
+              placeholder="0"
+              placeholderTextColor={theme.colors.subtle}
+              style={[styles.input, dark && darkStyles.input]}
+            />
+            {previewStockQuantity !== null && selectedOperationUom ? (
+              <Text style={[styles.preview, dark && darkStyles.bodyText]}>{formatQuantity(parsedOperationQuantity)} {selectedOperationUom.name} = {formatQuantity(previewStockQuantity)} {selected.stockUom}</Text>
+            ) : null}
+
+            <View style={styles.fieldHeadingRow}>
+              <Text style={[styles.fieldLabel, dark && darkStyles.bodyText]}>Reference</Text>
+              <Pressable
+                onPress={() => setOperationReference(createOperationalReference(operationMode))}
+                style={styles.generateButton}
+              >
+                <Ionicons name="refresh-outline" size={15} color={theme.colors.greenDark} />
+                <Text style={styles.generateText}>Generate</Text>
+              </Pressable>
+            </View>
+            <TextInput
+              value={operationReference}
+              onChangeText={setOperationReference}
+              autoCapitalize="characters"
+              placeholder="Auto-generated reference"
+              placeholderTextColor={theme.colors.subtle}
+              style={[styles.input, dark && darkStyles.input]}
+            />
+            <Text style={[styles.helperText, dark && darkStyles.bodyText]}>Generated by default. Replace it only when an external document reference is more useful.</Text>
+
+            <Text style={[styles.fieldLabel, dark && darkStyles.bodyText]}>Reason</Text>
+            <Pressable
+              onPress={() => setReasonOpen((current) => !current)}
+              style={[styles.selectButton, dark && darkStyles.input]}
+            >
+              <Text style={[styles.selectText, dark && darkStyles.titleText]}>{operationReason || 'Choose reason'}</Text>
+              <Ionicons name={reasonOpen ? 'chevron-up' : 'chevron-down'} size={18} color={theme.colors.slate} />
+            </Pressable>
+            {reasonOpen ? (
+              <View style={[styles.selectMenu, dark && darkStyles.card]}>
+                {reasons.map((reason) => (
+                  <Pressable
+                    key={reason}
+                    onPress={() => {
+                      setOperationReason(reason);
+                      setReasonOpen(false);
+                    }}
+                    style={[styles.selectOption, operationReason === reason && styles.selectOptionActive]}
+                  >
+                    <Text style={[styles.selectOptionText, dark && darkStyles.bodyText, operationReason === reason && styles.selectOptionTextActive]}>{reason}</Text>
+                    {operationReason === reason ? <Ionicons name="checkmark" size={17} color={theme.colors.greenDark} /> : null}
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+
+            {operationError ? <ErrorCard text={operationError} dark={dark} /> : null}
+
+            <View style={styles.formActions}>
+              <Pressable disabled={operationSaving} onPress={closeOperation} style={[styles.cancelButton, dark && darkStyles.outlineButton]}>
+                <Text style={[styles.cancelText, dark && darkStyles.bodyText]}>Cancel</Text>
+              </Pressable>
+              <Pressable disabled={operationSaving} onPress={() => void submitOperation()} style={[styles.postButton, operationSaving && styles.disabled]}>
+                {operationSaving ? <ActivityIndicator color={theme.colors.white} /> : null}
+                <Text style={styles.postButtonText}>{operationSaving ? 'Posting…' : operationMode === 'receive' ? 'Post receipt' : 'Post adjustment'}</Text>
+              </Pressable>
+            </View>
           </View>
-        ) : null}
+        )}
 
+        <View style={styles.sectionHead}>
+          <Text style={[styles.sectionTitle, dark && darkStyles.titleText]}>Movement history</Text>
+          <Pressable disabled={movementLoading} onPress={() => void refreshMovements(selected.catalogItemId)}>
+            <Ionicons name="refresh-outline" size={19} color={theme.colors.greenDark} />
+          </Pressable>
+        </View>
+
+        {movementError ? <ErrorCard text={movementError} dark={dark} /> : null}
+        {movementLoading && movements.length === 0 ? <ActivityIndicator /> : null}
         {!movementLoading && movements.length === 0 ? (
           <View style={[styles.emptyCard, dark && darkStyles.card]}>
             <Ionicons name="swap-vertical-outline" size={28} color={theme.colors.greenDark} />
             <Text style={[styles.emptyTitle, dark && darkStyles.titleText]}>No movement yet</Text>
-            <Text style={[styles.muted, dark && darkStyles.bodyText]}>
-              Stock receipts, sales, returns, transfers and adjustments will appear here after they are posted.
-            </Text>
+            <Text style={[styles.muted, dark && darkStyles.bodyText]}>Receipts, sales, returns, transfers and adjustments will appear here.</Text>
           </View>
         ) : (
           <View style={styles.movementList}>
             {movements.map((movement) => (
               <View key={movement.id} style={[styles.movementCard, dark && darkStyles.card]}>
-                <View style={styles.movementTopRow}>
-                  <View style={[styles.movementIcon, movement.quantityDelta < 0 && styles.movementIconOut]}>
-                    <Ionicons
-                      name={movement.quantityDelta < 0 ? 'arrow-up-outline' : 'arrow-down-outline'}
-                      size={18}
-                      color={movement.quantityDelta < 0 ? '#B42318' : theme.colors.greenDark}
-                    />
-                  </View>
-                  <View style={styles.movementCopy}>
-                    <Text style={[styles.movementTitle, dark && darkStyles.titleText]}>
-                      {movementLabel(movement.movementType)}
-                    </Text>
-                    <Text style={[styles.movementMeta, dark && darkStyles.bodyText]}>
-                      {formatDateTime(movement.businessAt)} · {movement.referenceId}
-                    </Text>
-                  </View>
-                  <Text style={[styles.movementQuantity, movement.quantityDelta < 0 && styles.movementQuantityOut]}>
-                    {movement.quantityDelta > 0 ? '+' : ''}{formatQuantity(movement.quantityDelta)} {movement.stockUom}
-                  </Text>
+                <View style={styles.movementTop}>
+                  <Text style={[styles.movementType, dark && darkStyles.titleText]}>{movementLabel(movement.movementType)}</Text>
+                  <Text style={[styles.movementDelta, movement.quantityDelta < 0 && styles.negative]}>{movement.quantityDelta > 0 ? '+' : ''}{formatQuantity(movement.quantityDelta)} {movement.stockUom}</Text>
                 </View>
-                {movement.sourceUom.toLowerCase() !== movement.stockUom.toLowerCase() ? (
-                  <Text style={[styles.conversionText, dark && darkStyles.bodyText]}>
-                    {formatQuantity(movement.sourceQuantity)} {movement.sourceUom} × {formatQuantity(movement.conversionFactor)}
-                  </Text>
-                ) : null}
-                {movement.reason ? (
-                  <Text style={[styles.reasonText, dark && darkStyles.bodyText]}>{movement.reason}</Text>
-                ) : null}
+                <Text style={[styles.movementMeta, dark && darkStyles.bodyText]}>{formatDate(movement.businessAt)} · {movement.referenceId}</Text>
+                <Text style={[styles.movementMeta, dark && darkStyles.bodyText]}>{formatQuantity(movement.sourceQuantity)} {movement.sourceUom} × {formatQuantity(movement.conversionFactor)}</Text>
+                {movement.reason ? <Text style={[styles.reasonText, dark && darkStyles.bodyText]}>{movement.reason}</Text> : null}
               </View>
             ))}
           </View>
@@ -427,383 +477,76 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
     <View style={styles.stack}>
       <View style={styles.heading}>
         <Text style={[styles.eyebrow, dark && darkStyles.bodyText]}>INVENTORY</Text>
-        <Text style={[styles.title, dark && darkStyles.titleText]}>Stock at {branch.name}</Text>
-        <Text style={[styles.subtitle, dark && darkStyles.bodyText]}>
-          Quantities are shown in each product’s stock unit.
-        </Text>
+        <Text style={[styles.title, dark && darkStyles.titleText]}>{branch.name}</Text>
+        <Text style={[styles.subtitle, dark && darkStyles.bodyText]}>Branch stock is ledger-driven. Open a product to receive, adjust or review movement history.</Text>
       </View>
 
       <View style={styles.summaryRow}>
-        <SummaryCard label="Products" value={rows.length} icon="cube-outline" dark={dark} />
-        <SummaryCard label="Out of stock" value={outOfStockCount} icon="alert-circle-outline" dark={dark} attention={outOfStockCount > 0} />
+        <View style={[styles.summaryCard, dark && darkStyles.card]}><Text style={[styles.summaryValue, dark && darkStyles.titleText]}>{rows.length}</Text><Text style={[styles.summaryLabel, dark && darkStyles.bodyText]}>Products</Text></View>
+        <View style={[styles.summaryCard, dark && darkStyles.card]}><Text style={[styles.summaryValue, outOfStockCount > 0 && styles.negative, dark && darkStyles.titleText]}>{outOfStockCount}</Text><Text style={[styles.summaryLabel, dark && darkStyles.bodyText]}>Out of stock</Text></View>
       </View>
 
       <View style={[styles.searchBox, dark && darkStyles.input]}>
         <Ionicons name="search-outline" size={19} color={theme.colors.muted} />
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Search product, SKU or stock unit"
-          placeholderTextColor={theme.colors.subtle}
-          autoCorrect={false}
-          style={[styles.searchInput, dark && darkStyles.inputText]}
-        />
-        <Pressable onPress={() => void refreshStock()} disabled={loading} style={styles.refreshButton}>
-          <Ionicons name="refresh-outline" size={20} color={theme.colors.greenDark} />
-        </Pressable>
+        <TextInput value={query} onChangeText={setQuery} placeholder="Search stock" placeholderTextColor={theme.colors.subtle} style={[styles.searchInput, dark && darkStyles.inputText]} />
       </View>
 
-      {error ? (
-        <View style={[styles.errorCard, dark && darkStyles.errorCard]}>
-          <Ionicons name="alert-circle-outline" size={20} color={theme.colors.danger} />
-          <Text style={[styles.errorText, dark && darkStyles.bodyText]}>{error}</Text>
-        </View>
-      ) : null}
+      {error ? <ErrorCard text={error} dark={dark} /> : null}
+      {loading && rows.length === 0 ? <View style={[styles.emptyCard, dark && darkStyles.card]}><ActivityIndicator /><Text style={[styles.muted, dark && darkStyles.bodyText]}>Loading stock…</Text></View> : null}
+      {!loading && visibleRows.length === 0 ? <View style={[styles.emptyCard, dark && darkStyles.card]}><Ionicons name="cube-outline" size={28} color={theme.colors.greenDark} /><Text style={[styles.emptyTitle, dark && darkStyles.titleText]}>No matching stock</Text></View> : null}
 
-      {loading && rows.length === 0 ? (
-        <View style={[styles.emptyCard, dark && darkStyles.card]}>
-          <ActivityIndicator />
-          <Text style={[styles.muted, dark && darkStyles.bodyText]}>Loading branch stock…</Text>
-        </View>
-      ) : null}
-
-      {!loading && visibleRows.length === 0 ? (
-        <View style={[styles.emptyCard, dark && darkStyles.card]}>
-          <Ionicons name="cube-outline" size={28} color={theme.colors.greenDark} />
-          <Text style={[styles.emptyTitle, dark && darkStyles.titleText]}>
-            {rows.length === 0 ? 'No products yet' : 'No matching stock item'}
-          </Text>
-          <Text style={[styles.muted, dark && darkStyles.bodyText]}>
-            {rows.length === 0
-              ? 'Add products before tracking stock for this branch.'
-              : 'Change the search and try again.'}
-          </Text>
-        </View>
-      ) : (
-        <View style={styles.stockList}>
-          {visibleRows.map((row) => {
-            const out = row.quantityOnHand <= 0;
-            return (
-              <Pressable
-                key={row.catalogItemId}
-                onPress={() => {
-                  setSelectedProductId(row.catalogItemId);
-                  setOperationMode(null);
-                  setOperationNotice(null);
-                }}
-                style={({ pressed }) => [styles.stockCard, dark && darkStyles.card, pressed && styles.pressed]}
-              >
-                <View style={[styles.stockIcon, out && styles.stockIconOut]}>
-                  <Ionicons name="cube-outline" size={21} color={out ? '#B42318' : theme.colors.greenDark} />
-                </View>
-                <View style={styles.stockCopy}>
-                  <Text style={[styles.stockName, dark && darkStyles.titleText]}>{row.itemName}</Text>
-                  <Text style={[styles.stockMeta, dark && darkStyles.bodyText]}>
-                    {[row.sku, row.category].filter(Boolean).join(' · ') || row.stockUom}
-                  </Text>
-                  <Text style={[styles.stockUpdated, dark && darkStyles.bodyText]}>
-                    {row.lastMovementAt ? `Updated ${formatDateTime(row.lastMovementAt)}` : 'No stock movement yet'}
-                  </Text>
-                </View>
-                <View style={styles.stockBalance}>
-                  <Text style={[styles.stockQuantity, dark && darkStyles.titleText, out && styles.stockQuantityOut]}>
-                    {formatQuantity(row.quantityOnHand)}
-                  </Text>
-                  <Text style={[styles.stockUom, dark && darkStyles.bodyText]}>{row.stockUom}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={theme.colors.subtle} />
-              </Pressable>
-            );
-          })}
-        </View>
-      )}
-
-      <View style={[styles.infoCard, dark && darkStyles.subtleCard]}>
-        <Ionicons name="shield-checkmark-outline" size={20} color={theme.colors.greenDark} />
-        <Text style={[styles.infoText, dark && darkStyles.bodyText]}>
-          Stock changes are posted as auditable movements. Stock counts use a separate review step before they change on-hand quantity.
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-function InventoryOperationForm({
-  mode,
-  product,
-  stockRow,
-  selectedUom,
-  selectedUomId,
-  quantity,
-  previewStockQuantity,
-  adjustmentDirection,
-  reference,
-  reason,
-  saving,
-  error,
-  dark,
-  onSelectUom,
-  onChangeQuantity,
-  onChangeDirection,
-  onChangeReference,
-  onChangeReason,
-  onCancel,
-  onSubmit,
-}: {
-  mode: InventoryOperation;
-  product: CommerceProduct | null;
-  stockRow: BranchStockRow;
-  selectedUom: CommerceUom | null;
-  selectedUomId: string;
-  quantity: string;
-  previewStockQuantity: number | null;
-  adjustmentDirection: InventoryAdjustmentDirection;
-  reference: string;
-  reason: string;
-  saving: boolean;
-  error: string | null;
-  dark: boolean;
-  onSelectUom: (value: string) => void;
-  onChangeQuantity: (value: string) => void;
-  onChangeDirection: (value: InventoryAdjustmentDirection) => void;
-  onChangeReference: (value: string) => void;
-  onChangeReason: (value: string) => void;
-  onCancel: () => void;
-  onSubmit: () => void;
-}) {
-  const isReceive = mode === 'receive';
-  const availableUoms = product?.uoms ?? [];
-  const canSubmit = Boolean(
-    selectedUom
-    && Number.isFinite(Number(quantity))
-    && Number(quantity) > 0
-    && reference.trim()
-    && reason.trim()
-    && !saving,
-  );
-
-  return (
-    <View style={[styles.operationCard, dark && darkStyles.card]}>
-      <View style={styles.operationHeading}>
-        <View style={styles.operationHeadingIcon}>
-          <Ionicons
-            name={isReceive ? 'download-outline' : 'options-outline'}
-            size={20}
-            color={theme.colors.greenDark}
-          />
-        </View>
-        <View style={styles.operationHeadingCopy}>
-          <Text style={[styles.operationTitle, dark && darkStyles.titleText]}>
-            {isReceive ? 'Receive stock' : 'Adjust stock'}
-          </Text>
-          <Text style={[styles.operationSubtitle, dark && darkStyles.bodyText]}>
-            {isReceive
-              ? `Record stock received into the current branch for ${stockRow.itemName}.`
-              : `Record a controlled correction to ${stockRow.itemName}. This does not overwrite stock history.`}
-          </Text>
-        </View>
+      <View style={styles.stockList}>
+        {visibleRows.map((row) => (
+          <Pressable key={row.catalogItemId} onPress={() => setSelectedProductId(row.catalogItemId)} style={({ pressed }) => [styles.stockCard, dark && darkStyles.card, pressed && styles.pressed]}>
+            <View style={styles.flexCopy}>
+              <Text style={[styles.stockName, dark && darkStyles.titleText]}>{row.itemName}</Text>
+              <Text style={[styles.muted, dark && darkStyles.bodyText]}>{[row.sku, row.category].filter(Boolean).join(' · ') || `Stock unit: ${row.stockUom}`}</Text>
+            </View>
+            <View style={styles.stockAmountWrap}>
+              <Text style={[styles.stockAmount, row.quantityOnHand <= 0 && styles.negative, dark && darkStyles.titleText]}>{formatQuantity(row.quantityOnHand)}</Text>
+              <Text style={[styles.stockUnit, dark && darkStyles.bodyText]}>{row.stockUom}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={theme.colors.muted} />
+          </Pressable>
+        ))}
       </View>
 
-      {!isReceive ? (
-        <View style={styles.fieldGroup}>
-          <Text style={[styles.fieldLabel, dark && darkStyles.bodyText]}>Adjustment</Text>
-          <View style={styles.segmentRow}>
-            <Pressable
-              disabled={saving}
-              onPress={() => onChangeDirection('increase')}
-              style={[
-                styles.segmentButton,
-                dark && darkStyles.outlineButton,
-                adjustmentDirection === 'increase' && styles.segmentButtonActive,
-              ]}
-            >
-              <Ionicons name="add" size={16} color={adjustmentDirection === 'increase' ? theme.colors.greenDark : theme.colors.muted} />
-              <Text style={[styles.segmentText, dark && darkStyles.bodyText, adjustmentDirection === 'increase' && styles.segmentTextActive]}>
-                Increase
-              </Text>
-            </Pressable>
-            <Pressable
-              disabled={saving}
-              onPress={() => onChangeDirection('decrease')}
-              style={[
-                styles.segmentButton,
-                dark && darkStyles.outlineButton,
-                adjustmentDirection === 'decrease' && styles.segmentButtonDanger,
-              ]}
-            >
-              <Ionicons name="remove" size={16} color={adjustmentDirection === 'decrease' ? '#B42318' : theme.colors.muted} />
-              <Text style={[styles.segmentText, dark && darkStyles.bodyText, adjustmentDirection === 'decrease' && styles.segmentTextDanger]}>
-                Decrease
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : null}
-
-      <View style={styles.fieldGroup}>
-        <Text style={[styles.fieldLabel, dark && darkStyles.bodyText]}>Unit</Text>
-        {availableUoms.length === 0 ? (
-          <Text style={[styles.fieldHelp, dark && darkStyles.bodyText]}>No configured unit is available for this product.</Text>
-        ) : (
-          <View style={styles.uomRow}>
-            {availableUoms.map((uom) => (
-              <Pressable
-                key={uom.id}
-                disabled={saving}
-                onPress={() => onSelectUom(uom.id)}
-                style={[
-                  styles.uomChip,
-                  dark && darkStyles.outlineButton,
-                  uom.id === selectedUomId && styles.uomChipActive,
-                ]}
-              >
-                <Text style={[styles.uomChipText, dark && darkStyles.bodyText, uom.id === selectedUomId && styles.uomChipTextActive]}>
-                  {uom.name}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
-      </View>
-
-      <View style={styles.fieldGroup}>
-        <Text style={[styles.fieldLabel, dark && darkStyles.bodyText]}>Quantity</Text>
-        <TextInput
-          value={quantity}
-          onChangeText={onChangeQuantity}
-          editable={!saving}
-          keyboardType="decimal-pad"
-          placeholder="0"
-          placeholderTextColor={theme.colors.subtle}
-          style={[styles.formInput, dark && darkStyles.input, dark && darkStyles.inputText]}
-        />
-        {selectedUom && previewStockQuantity !== null ? (
-          <Text style={[styles.fieldHelp, dark && darkStyles.bodyText]}>
-            {formatQuantity(Number(quantity))} {selectedUom.name} = {formatQuantity(previewStockQuantity)} {stockRow.stockUom}
-          </Text>
-        ) : null}
-      </View>
-
-      <View style={styles.fieldGroup}>
-        <Text style={[styles.fieldLabel, dark && darkStyles.bodyText]}>Reference</Text>
-        <TextInput
-          value={reference}
-          onChangeText={onChangeReference}
-          editable={!saving}
-          autoCapitalize="characters"
-          maxLength={160}
-          placeholder={isReceive ? 'Supplier receipt or delivery reference' : 'Adjustment reference'}
-          placeholderTextColor={theme.colors.subtle}
-          style={[styles.formInput, dark && darkStyles.input, dark && darkStyles.inputText]}
-        />
-        <Text style={[styles.fieldHelp, dark && darkStyles.bodyText]}>
-          Reusing the same reference for this product is treated as a retry, not a second stock change.
-        </Text>
-      </View>
-
-      <View style={styles.fieldGroup}>
-        <Text style={[styles.fieldLabel, dark && darkStyles.bodyText]}>Reason</Text>
-        <TextInput
-          value={reason}
-          onChangeText={onChangeReason}
-          editable={!saving}
-          multiline
-          maxLength={500}
-          placeholder={isReceive ? 'What stock was received and why?' : 'Why is this correction required?'}
-          placeholderTextColor={theme.colors.subtle}
-          style={[styles.formInput, styles.reasonInput, dark && darkStyles.input, dark && darkStyles.inputText]}
-        />
-      </View>
-
-      {!isReceive && adjustmentDirection === 'decrease' ? (
-        <View style={[styles.warningCard, dark && darkStyles.errorCard]}>
-          <Ionicons name="alert-circle-outline" size={18} color="#B54708" />
-          <Text style={[styles.warningText, dark && darkStyles.bodyText]}>
-            SellerTray will reject this adjustment if it would take branch stock below zero.
-          </Text>
-        </View>
-      ) : null}
-
-      {error ? (
-        <View style={[styles.errorCard, dark && darkStyles.errorCard]}>
-          <Ionicons name="alert-circle-outline" size={18} color={theme.colors.danger} />
-          <Text style={[styles.errorText, dark && darkStyles.bodyText]}>{error}</Text>
-        </View>
-      ) : null}
-
-      <View style={styles.formActions}>
-        <Pressable disabled={saving} onPress={onCancel} style={[styles.cancelAction, dark && darkStyles.outlineButton]}>
-          <Text style={[styles.cancelActionText, dark && darkStyles.bodyText]}>Cancel</Text>
-        </Pressable>
-        <Pressable
-          disabled={!canSubmit}
-          onPress={onSubmit}
-          style={[styles.submitAction, !canSubmit && styles.disabled]}
-        >
-          {saving ? <ActivityIndicator color={theme.colors.white} /> : null}
-          <Text style={styles.submitActionText}>
-            {saving ? 'Posting…' : isReceive ? 'Post receipt' : 'Post adjustment'}
-          </Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-function SummaryCard({
-  label,
-  value,
-  icon,
-  dark,
-  attention = false,
-}: {
-  label: string;
-  value: number;
-  icon: string;
-  dark: boolean;
-  attention?: boolean;
-}) {
-  return (
-    <View style={[styles.summaryCard, dark && darkStyles.card, attention && styles.summaryCardAttention]}>
-      <Ionicons name={icon as never} size={20} color={attention ? '#B54708' : theme.colors.greenDark} />
-      <Text style={[styles.summaryValue, dark && darkStyles.titleText]}>{value}</Text>
-      <Text style={[styles.summaryLabel, dark && darkStyles.bodyText]}>{label}</Text>
+      <Pressable disabled={loading} onPress={() => void refreshStock()} style={[styles.refreshButton, dark && darkStyles.outlineButton]}>
+        <Ionicons name="refresh-outline" size={18} color={theme.colors.greenDark} />
+        <Text style={styles.refreshText}>{loading ? 'Refreshing…' : 'Refresh stock'}</Text>
+      </Pressable>
     </View>
   );
 }
 
 function findDefaultOperationUom(product: CommerceProduct, mode: InventoryOperation): CommerceUom | null {
   if (mode === 'receive') {
-    const purchaseUom = product.uoms.find((uom) => uom.isDefaultPurchase);
-    if (purchaseUom) return purchaseUom;
+    return product.uoms.find((uom) => uom.isStockUom) ?? product.uoms[0] ?? null;
   }
+  return product.uoms.find((uom) => uom.isStockUom) ?? product.uoms[0] ?? null;
+}
 
-  return product.uoms.find((uom) => uom.name.toLowerCase() === product.stockUom.toLowerCase())
-    ?? product.uoms.find((uom) => uom.isDefaultSelling)
-    ?? product.uoms[0]
-    ?? null;
+function ErrorCard({ text, dark }: { text: string; dark: boolean }) {
+  return (
+    <View style={[styles.errorCard, dark && darkStyles.errorCard]}>
+      <Ionicons name="alert-circle-outline" size={19} color={theme.colors.danger} />
+      <Text style={[styles.errorText, dark && darkStyles.bodyText]}>{text}</Text>
+    </View>
+  );
 }
 
 function movementLabel(value: string): string {
-  return value
-    .split('_')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
+  return value.split('_').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
 }
 
 function formatQuantity(value: number): string {
   return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(3)));
 }
 
-function formatDateTime(value: string): string {
+function formatDate(value: string): string {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Unknown time';
-  return new Intl.DateTimeFormat('en-NG', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
 const styles = StyleSheet.create({
@@ -811,106 +554,93 @@ const styles = StyleSheet.create({
   heading: { gap: 3 },
   eyebrow: { color: theme.colors.muted, fontSize: 11, fontWeight: '900', letterSpacing: 1.05 },
   title: { color: theme.colors.navy, fontSize: 28, lineHeight: 34, fontWeight: '900' },
-  subtitle: { color: theme.colors.slate, fontSize: 14, lineHeight: 20 },
+  subtitle: { color: theme.colors.slate, fontSize: 13, lineHeight: 19 },
+  flexCopy: { flex: 1, minWidth: 0 },
   backButton: { alignSelf: 'flex-start', minHeight: 38, flexDirection: 'row', alignItems: 'center', gap: 5 },
   backText: { color: theme.colors.greenDark, fontSize: 12, fontWeight: '900' },
-  summaryRow: { flexDirection: 'row', gap: 8 },
-  summaryCard: { flex: 1, minHeight: 90, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 12, gap: 3 },
-  summaryCardAttention: { backgroundColor: theme.colors.warningSoft, borderColor: '#FEDF89' },
-  summaryValue: { color: theme.colors.navy, fontSize: 22, fontWeight: '900', marginTop: 4 },
-  summaryLabel: { color: theme.colors.slate, fontSize: 11, fontWeight: '800' },
-  searchBox: { minHeight: 50, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, backgroundColor: theme.colors.white, paddingLeft: 12, paddingRight: 5, flexDirection: 'row', alignItems: 'center', gap: 7 },
-  searchInput: { flex: 1, minHeight: 48, color: theme.colors.navy, fontSize: 14, paddingVertical: 0 },
-  refreshButton: { width: 42, height: 42, borderRadius: 12, backgroundColor: theme.colors.mintSoft, alignItems: 'center', justifyContent: 'center' },
-  errorCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#FDA29B', backgroundColor: theme.colors.dangerSoft, padding: 12, flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  errorText: { flex: 1, color: '#912018', fontSize: 12, lineHeight: 18 },
-  emptyCard: { minHeight: 120, borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 18, alignItems: 'center', justifyContent: 'center', gap: 7 },
-  emptyTitle: { color: theme.colors.navy, fontSize: 15, fontWeight: '900' },
-  muted: { color: theme.colors.muted, fontSize: 12, lineHeight: 18, textAlign: 'center' },
+  summaryRow: { flexDirection: 'row', gap: 10 },
+  summaryCard: { flex: 1, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 13 },
+  summaryValue: { color: theme.colors.navy, fontSize: 22, fontWeight: '900' },
+  summaryLabel: { color: theme.colors.muted, fontSize: 11, marginTop: 2 },
+  searchBox: { minHeight: 50, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, backgroundColor: theme.colors.white, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  searchInput: { flex: 1, color: theme.colors.navy, fontSize: 14, paddingVertical: 0 },
   stockList: { gap: 8 },
-  stockCard: { minHeight: 82, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 9 },
-  stockIcon: { width: 40, height: 40, borderRadius: 13, backgroundColor: theme.colors.mintSoft, alignItems: 'center', justifyContent: 'center' },
-  stockIconOut: { backgroundColor: theme.colors.dangerSoft },
-  stockCopy: { flex: 1, minWidth: 0 },
-  stockName: { color: theme.colors.navy, fontSize: 13, fontWeight: '900' },
-  stockMeta: { color: theme.colors.muted, fontSize: 10.5, marginTop: 2 },
-  stockUpdated: { color: theme.colors.subtle, fontSize: 10, marginTop: 4 },
-  stockBalance: { alignItems: 'flex-end' },
-  stockQuantity: { color: theme.colors.navy, fontSize: 18, fontWeight: '900' },
-  stockQuantityOut: { color: '#B42318' },
-  stockUom: { color: theme.colors.muted, fontSize: 10.5, fontWeight: '700' },
-  infoCard: { borderRadius: theme.radius.md, backgroundColor: theme.colors.mintSoft, padding: 11, flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  infoText: { flex: 1, color: theme.colors.slate, fontSize: 11, lineHeight: 17 },
-  balanceCard: { borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 11 },
-  balanceIcon: { width: 48, height: 48, borderRadius: 15, backgroundColor: theme.colors.mintSoft, alignItems: 'center', justifyContent: 'center' },
-  balanceCopy: { flex: 1 },
+  stockCard: { minHeight: 72, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  stockName: { color: theme.colors.navy, fontSize: 14, fontWeight: '900' },
+  stockAmountWrap: { alignItems: 'flex-end' },
+  stockAmount: { color: theme.colors.navy, fontSize: 17, fontWeight: '900' },
+  stockUnit: { color: theme.colors.muted, fontSize: 10.5 },
+  balanceCard: { borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 16, gap: 4 },
   balanceLabel: { color: theme.colors.muted, fontSize: 11, fontWeight: '800' },
-  balanceValue: { color: theme.colors.navy, fontSize: 23, fontWeight: '900', marginTop: 2 },
-  balanceMeta: { color: theme.colors.muted, fontSize: 10.5, marginTop: 3 },
-  actionLoading: { borderRadius: theme.radius.md, backgroundColor: '#F9FAFB', padding: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  actionLoadingText: { color: theme.colors.slate, fontSize: 11, fontWeight: '700' },
-  actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  primaryAction: { minHeight: 42, borderRadius: 12, backgroundColor: theme.colors.green, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  balanceValue: { color: theme.colors.navy, fontSize: 28, lineHeight: 34, fontWeight: '900' },
+  muted: { color: theme.colors.muted, fontSize: 11.5, lineHeight: 17 },
+  actionRow: { flexDirection: 'row', gap: 10 },
+  primaryAction: { flex: 1, minHeight: 48, borderRadius: 13, backgroundColor: theme.colors.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   primaryActionText: { color: theme.colors.white, fontSize: 12, fontWeight: '900' },
-  secondaryAction: { minHeight: 42, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  secondaryAction: { flex: 1, minHeight: 48, borderRadius: 13, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   secondaryActionText: { color: theme.colors.greenDark, fontSize: 12, fontWeight: '900' },
-  permissionNotice: { borderRadius: theme.radius.md, backgroundColor: '#F9FAFB', padding: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  permissionNoticeText: { flex: 1, color: theme.colors.slate, fontSize: 11, lineHeight: 17 },
-  successCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#ABEFC6', backgroundColor: theme.colors.mintSoft, padding: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  successText: { flex: 1, color: theme.colors.greenDark, fontSize: 11, lineHeight: 17, fontWeight: '700' },
-  operationCard: { borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 13, gap: 12 },
-  operationHeading: { flexDirection: 'row', alignItems: 'flex-start', gap: 9 },
-  operationHeadingIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: theme.colors.mintSoft, alignItems: 'center', justifyContent: 'center' },
-  operationHeadingCopy: { flex: 1 },
-  operationTitle: { color: theme.colors.navy, fontSize: 14, fontWeight: '900' },
-  operationSubtitle: { color: theme.colors.slate, fontSize: 11, lineHeight: 17, marginTop: 2 },
-  fieldGroup: { gap: 6 },
-  fieldLabel: { color: theme.colors.slate, fontSize: 11, fontWeight: '900' },
-  fieldHelp: { color: theme.colors.muted, fontSize: 10.5, lineHeight: 16 },
-  formInput: { minHeight: 46, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, paddingHorizontal: 11, color: theme.colors.navy, fontSize: 13 },
-  reasonInput: { minHeight: 80, paddingTop: 10, textAlignVertical: 'top' },
-  segmentRow: { flexDirection: 'row', gap: 7 },
-  segmentButton: { flex: 1, minHeight: 40, borderRadius: 11, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
-  segmentButtonActive: { borderColor: theme.colors.green, backgroundColor: theme.colors.mintSoft },
-  segmentButtonDanger: { borderColor: '#FDA29B', backgroundColor: theme.colors.dangerSoft },
+  operationCard: { borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 14, gap: 10 },
+  operationHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  operationTitle: { color: theme.colors.navy, fontSize: 16, fontWeight: '900' },
+  iconButton: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#F2F4F7', alignItems: 'center', justifyContent: 'center' },
+  segmentRow: { flexDirection: 'row', gap: 8 },
+  segmentButton: { flex: 1, minHeight: 40, borderRadius: 11, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, alignItems: 'center', justifyContent: 'center' },
+  segmentButtonActive: { backgroundColor: theme.colors.mintSoft, borderColor: theme.colors.green },
   segmentText: { color: theme.colors.slate, fontSize: 11, fontWeight: '800' },
   segmentTextActive: { color: theme.colors.greenDark },
-  segmentTextDanger: { color: '#B42318' },
+  fieldLabel: { color: theme.colors.slate, fontSize: 11.5, fontWeight: '900', marginTop: 2 },
+  fieldHeadingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  input: { minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, paddingHorizontal: 12, color: theme.colors.navy, fontSize: 13 },
+  helperText: { color: theme.colors.muted, fontSize: 10.5, lineHeight: 16 },
+  generateButton: { minHeight: 30, paddingHorizontal: 8, borderRadius: 9, backgroundColor: theme.colors.mintSoft, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  generateText: { color: theme.colors.greenDark, fontSize: 10.5, fontWeight: '900' },
   uomRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  uomChip: { minHeight: 36, borderRadius: theme.radius.pill, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, paddingHorizontal: 11, alignItems: 'center', justifyContent: 'center' },
+  uomChip: { minHeight: 34, borderRadius: theme.radius.pill, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center' },
   uomChipActive: { borderColor: theme.colors.green, backgroundColor: theme.colors.mintSoft },
   uomChipText: { color: theme.colors.slate, fontSize: 11, fontWeight: '800' },
   uomChipTextActive: { color: theme.colors.greenDark },
-  warningCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#FEDF89', backgroundColor: theme.colors.warningSoft, padding: 10, flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  warningText: { flex: 1, color: '#93370D', fontSize: 11, lineHeight: 17 },
-  formActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
-  cancelAction: { minHeight: 42, minWidth: 86, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
-  cancelActionText: { color: theme.colors.slate, fontSize: 11, fontWeight: '900' },
-  submitAction: { minHeight: 42, minWidth: 126, borderRadius: 12, backgroundColor: theme.colors.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 12 },
-  submitActionText: { color: theme.colors.white, fontSize: 11, fontWeight: '900' },
-  disabled: { opacity: 0.42 },
+  preview: { color: theme.colors.muted, fontSize: 11, fontWeight: '700' },
+  selectButton: { minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  selectText: { flex: 1, color: theme.colors.navy, fontSize: 13, fontWeight: '800' },
+  selectMenu: { borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, overflow: 'hidden' },
+  selectOption: { minHeight: 43, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.border },
+  selectOptionActive: { backgroundColor: theme.colors.mintSoft },
+  selectOptionText: { color: theme.colors.slate, fontSize: 12, fontWeight: '700' },
+  selectOptionTextActive: { color: theme.colors.greenDark, fontWeight: '900' },
+  formActions: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  cancelButton: { minHeight: 48, minWidth: 100, borderRadius: 13, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, alignItems: 'center', justifyContent: 'center' },
+  cancelText: { color: theme.colors.slate, fontSize: 12, fontWeight: '900' },
+  postButton: { flex: 1, minHeight: 48, borderRadius: 13, backgroundColor: theme.colors.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
+  postButtonText: { color: theme.colors.white, fontSize: 12, fontWeight: '900' },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sectionTitle: { color: theme.colors.navy, fontSize: 15, fontWeight: '900' },
   movementList: { gap: 8 },
-  movementCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 11, gap: 6 },
-  movementTopRow: { flexDirection: 'row', alignItems: 'center', gap: 9 },
-  movementIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: theme.colors.mintSoft, alignItems: 'center', justifyContent: 'center' },
-  movementIconOut: { backgroundColor: theme.colors.dangerSoft },
-  movementCopy: { flex: 1 },
-  movementTitle: { color: theme.colors.navy, fontSize: 12, fontWeight: '900' },
-  movementMeta: { color: theme.colors.muted, fontSize: 10.5, marginTop: 2 },
-  movementQuantity: { color: theme.colors.greenDark, fontSize: 12, fontWeight: '900' },
-  movementQuantityOut: { color: '#B42318' },
-  conversionText: { color: theme.colors.muted, fontSize: 10.5, paddingLeft: 45 },
-  reasonText: { color: theme.colors.slate, fontSize: 11, lineHeight: 16, paddingLeft: 45 },
-  pressed: { opacity: 0.74 },
+  movementCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 11, gap: 3 },
+  movementTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  movementType: { color: theme.colors.navy, fontSize: 12.5, fontWeight: '900' },
+  movementDelta: { color: theme.colors.greenDark, fontSize: 12.5, fontWeight: '900' },
+  movementMeta: { color: theme.colors.muted, fontSize: 10.5, lineHeight: 15 },
+  reasonText: { color: theme.colors.slate, fontSize: 11, lineHeight: 16, marginTop: 2 },
+  negative: { color: '#B42318' },
+  noticeCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#ABEFC6', backgroundColor: theme.colors.mintSoft, padding: 11, flexDirection: 'row', gap: 7, alignItems: 'flex-start' },
+  noticeText: { flex: 1, color: theme.colors.slate, fontSize: 11.5, lineHeight: 17 },
+  errorCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#FDA29B', backgroundColor: theme.colors.dangerSoft, padding: 11, flexDirection: 'row', gap: 7, alignItems: 'flex-start' },
+  errorText: { flex: 1, color: '#912018', fontSize: 11.5, lineHeight: 17 },
+  emptyCard: { minHeight: 120, borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 18, alignItems: 'center', justifyContent: 'center', gap: 7 },
+  emptyTitle: { color: theme.colors.navy, fontSize: 15, fontWeight: '900' },
+  refreshButton: { minHeight: 46, borderRadius: 13, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  refreshText: { color: theme.colors.greenDark, fontSize: 12, fontWeight: '900' },
+  disabled: { opacity: 0.42 },
+  pressed: { opacity: 0.82 },
 });
 
 const darkStyles = StyleSheet.create({
-  card: { backgroundColor: theme.colors.navy, borderColor: '#344054' },
-  subtleCard: { backgroundColor: '#162F46', borderColor: '#344054' },
-  input: { backgroundColor: theme.colors.navy, borderColor: '#475467' },
-  inputText: { color: theme.colors.cloud },
-  outlineButton: { backgroundColor: theme.colors.navy, borderColor: '#475467' },
-  errorCard: { backgroundColor: '#3A1717', borderColor: '#7A271A' },
-  titleText: { color: theme.colors.cloud },
-  bodyText: { color: '#D0D5DD' },
+  titleText: { color: '#F8FAFC' },
+  bodyText: { color: '#CBD5E1' },
+  card: { backgroundColor: '#111827', borderColor: '#334155' },
+  subtleCard: { backgroundColor: '#172033', borderColor: '#334155' },
+  outlineButton: { backgroundColor: '#111827', borderColor: '#334155' },
+  input: { backgroundColor: '#111827', borderColor: '#334155', color: '#F8FAFC' },
+  inputText: { color: '#F8FAFC' },
+  errorCard: { backgroundColor: '#3F1D1D', borderColor: '#7F1D1D' },
 });
