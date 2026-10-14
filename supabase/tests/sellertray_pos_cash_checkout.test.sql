@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(17);
+select extensions.plan(22);
 
 create temp table sellertray_pos_cash_fixture (
   tenant_id uuid not null,
@@ -8,34 +8,29 @@ create temp table sellertray_pos_cash_fixture (
   product_id uuid not null,
   branch_id uuid,
   location_id uuid,
+  register_id uuid,
+  shift_id uuid,
   pack_uom_id uuid,
   order_id uuid,
   second_order_id uuid,
   completion jsonb,
   replay jsonb,
+  shift_required_rejected boolean not null default false,
   insufficient_stock_rejected boolean not null default false
 ) on commit drop;
 
-insert into sellertray_pos_cash_fixture(tenant_id, actor_user_id, product_id)
-values (gen_random_uuid(), gen_random_uuid(), gen_random_uuid());
+insert into sellertray_pos_cash_fixture(tenant_id,actor_user_id,product_id)
+values(gen_random_uuid(),gen_random_uuid(),gen_random_uuid());
 
 insert into auth.users(id,email,aud,role,created_at,updated_at)
-select
-  actor_user_id,
-  'pos-owner-' || substr(actor_user_id::text,1,8) || '@example.com',
-  'authenticated',
-  'authenticated',
-  now(),
-  now()
+select actor_user_id,
+  'pos-owner-'||substr(actor_user_id::text,1,8)||'@example.com',
+  'authenticated','authenticated',now(),now()
 from sellertray_pos_cash_fixture;
 
 insert into public.tenants(id,name,slug,merchant_code,subscription_status)
-select
-  tenant_id,
-  'SellerTray POS Cash Test',
-  'sellertray-pos-cash-' || substr(tenant_id::text,1,8),
-  'PCT',
-  'active'
+select tenant_id,'SellerTray POS Cash Test',
+  'sellertray-pos-cash-'||substr(tenant_id::text,1,8),'PCT','active'
 from sellertray_pos_cash_fixture;
 
 update public.tenant_subscriptions
@@ -43,21 +38,22 @@ set status='active',trial_ends_at=null,grace_ends_at=null
 where tenant_id=(select tenant_id from sellertray_pos_cash_fixture);
 
 insert into public.tenant_members(tenant_id,user_id,role)
-select tenant_id,actor_user_id,'owner'
-from sellertray_pos_cash_fixture;
+select tenant_id,actor_user_id,'owner' from sellertray_pos_cash_fixture;
 
 update sellertray_pos_cash_fixture f
 set branch_id=b.id
 from public.branches b
-where b.tenant_id=f.tenant_id
-  and b.is_default=true;
+where b.tenant_id=f.tenant_id and b.is_default=true;
 
 update sellertray_pos_cash_fixture f
 set location_id=sl.id
 from public.stock_locations sl
-where sl.tenant_id=f.tenant_id
-  and sl.branch_id=f.branch_id
-  and sl.is_default=true;
+where sl.tenant_id=f.tenant_id and sl.branch_id=f.branch_id and sl.is_default=true;
+
+update sellertray_pos_cash_fixture f
+set register_id=r.id
+from public.sellertray_registers r
+where r.tenant_id=f.tenant_id and r.branch_id=f.branch_id and r.is_default=true;
 
 insert into public.catalog_items(
   id,tenant_id,name,sku,price_ngn,is_active,stock_uom,allow_fractional_stock
@@ -67,118 +63,116 @@ from sellertray_pos_cash_fixture;
 
 with inserted_uom as (
   insert into public.catalog_item_uoms(
-    tenant_id,catalog_item_id,uom_name,conversion_factor,
-    selling_price,allow_fractional,is_default_selling
+    tenant_id,catalog_item_id,uom_name,conversion_factor,selling_price,
+    allow_fractional,is_default_selling
   )
   select tenant_id,product_id,'Pack',12,1050,false,false
   from sellertray_pos_cash_fixture
   returning id
 )
-update sellertray_pos_cash_fixture
-set pack_uom_id=(select id from inserted_uom);
+update sellertray_pos_cash_fixture set pack_uom_id=(select id from inserted_uom);
 
 select public.record_sellertray_inventory_movement(
-  tenant_id,
-  branch_id,
-  location_id,
-  product_id,
-  'opening',
-  36,
-  'Bottle',
-  36,
-  1,
-  'opening_stock',
-  'POS-CASH-OPENING',
-  'opening:POS-CASH-OPENING',
-  now(),
-  actor_user_id,
-  'Opening stock for POS cash checkout test',
-  '{}'::jsonb,
-  null
+  tenant_id,branch_id,location_id,product_id,
+  'opening',36,'Bottle',36,1,
+  'opening_stock','POS-CASH-OPENING','opening:POS-CASH-OPENING',
+  now(),actor_user_id,'Opening stock for POS cash checkout test','{}'::jsonb,null
 )
 from sellertray_pos_cash_fixture;
 
 update sellertray_pos_cash_fixture
 set order_id=public.create_sellertray_pos_order_atomic(
-  tenant_id,
-  branch_id,
-  null,
-  null,
-  'Counter cash sale',
+  tenant_id,branch_id,null,null,'Counter cash sale',
   jsonb_build_array(jsonb_build_object(
-    'catalog_item_id',product_id,
-    'uom_id',pack_uom_id,
-    'quantity',2
+    'catalog_item_id',product_id,'uom_id',pack_uom_id,'quantity',2
   ))
 );
 
-set local request.jwt.claim.role = 'service_role';
+set local request.jwt.claim.role='service_role';
+
+do $$
+begin
+  begin
+    perform public.complete_sellertray_pos_cash_sale(
+      (select tenant_id from sellertray_pos_cash_fixture),
+      (select order_id from sellertray_pos_cash_fixture),
+      (select actor_user_id from sellertray_pos_cash_fixture)
+    );
+  exception when sqlstate '23514' then
+    update sellertray_pos_cash_fixture set shift_required_rejected=true;
+  end;
+end
+$$;
+
+select extensions.ok(
+  (select shift_required_rejected from sellertray_pos_cash_fixture),
+  'counter cash checkout fails closed without an open cashier shift'
+);
+
+select extensions.is(
+  (select o.status from public.orders o where o.id=(select order_id from sellertray_pos_cash_fixture)),
+  'draft','shift-required cash checkout leaves the sale as a draft'
+);
+
+select extensions.is(
+  (select count(*)::integer from public.order_payments p where p.order_id=(select order_id from sellertray_pos_cash_fixture)),
+  0,'shift-required cash checkout leaves no payment effect'
+);
+
+update sellertray_pos_cash_fixture
+set shift_id=(public.open_sellertray_cash_shift(
+  tenant_id,branch_id,register_id,0,actor_user_id
+)->>'shiftId')::uuid;
 
 update sellertray_pos_cash_fixture
 set completion=public.complete_sellertray_pos_cash_sale(
-  tenant_id,
-  order_id,
-  actor_user_id
+  tenant_id,order_id,actor_user_id
 );
 
 select extensions.is(
   (select completion->>'status' from sellertray_pos_cash_fixture),
-  'completed',
-  'cash checkout completes the POS order'
+  'completed','cash checkout completes the POS order'
 );
 
 select extensions.is(
   (select o.payment_status from public.orders o where o.id=(select order_id from sellertray_pos_cash_fixture)),
-  'paid',
-  'cash checkout projects the order to paid'
+  'paid','cash checkout projects the order to paid'
 );
 
 select extensions.is(
   (select o.fulfillment_status from public.orders o where o.id=(select order_id from sellertray_pos_cash_fixture)),
-  'collected',
-  'counter checkout records customer pickup as collected'
+  'collected','counter checkout records customer pickup as collected'
 );
 
 select extensions.is(
   (
-    select p.method_type
-    from public.order_payments p
-    where p.order_id=(select order_id from sellertray_pos_cash_fixture)
-      and p.status='confirmed'
+    select p.method_type from public.order_payments p
+    where p.order_id=(select order_id from sellertray_pos_cash_fixture) and p.status='confirmed'
   ),
-  'cash',
-  'counter value is recorded through the shared payment core as cash'
+  'cash','counter value is recorded through the shared payment core as cash'
 );
 
 select extensions.is(
   (
-    select p.provider
-    from public.order_payments p
-    where p.order_id=(select order_id from sellertray_pos_cash_fixture)
-      and p.status='confirmed'
+    select p.provider from public.order_payments p
+    where p.order_id=(select order_id from sellertray_pos_cash_fixture) and p.status='confirmed'
   ),
-  'pos_cash',
-  'cash payment records POS provenance'
+  'pos_cash','cash payment records POS provenance'
 );
 
 select extensions.is(
   (
-    select p.amount
-    from public.order_payments p
-    where p.order_id=(select order_id from sellertray_pos_cash_fixture)
-      and p.status='confirmed'
+    select p.amount from public.order_payments p
+    where p.order_id=(select order_id from sellertray_pos_cash_fixture) and p.status='confirmed'
   ),
-  2100::numeric,
-  'cash payment exactly matches the UOM-priced invoice'
+  2100::numeric,'cash payment exactly matches the UOM-priced invoice'
 );
 
 select extensions.ok(
-  exists (
-    select 1
-    from public.order_financial_documents d
+  exists(
+    select 1 from public.order_financial_documents d
     where d.order_id=(select order_id from sellertray_pos_cash_fixture)
-      and d.document_type='receipt'
-      and d.status='issued'
+      and d.document_type='receipt' and d.status='issued'
   ),
   'confirmed POS cash value issues the shared financial receipt'
 );
@@ -192,28 +186,44 @@ select extensions.is(
     ) s
     where s.catalog_item_id=(select product_id from sellertray_pos_cash_fixture)
   ),
-  12::numeric,
-  'checkout deducts the normalized Stock UOM quantity exactly once'
+  12::numeric,'checkout deducts the normalized Stock UOM quantity exactly once'
 );
 
 select extensions.is(
   (
-    select count(*)::integer
-    from public.inventory_movements im
+    select count(*)::integer from public.inventory_movements im
     where im.tenant_id=(select tenant_id from sellertray_pos_cash_fixture)
       and im.reference_type='order'
       and im.reference_id=(select order_id::text from sellertray_pos_cash_fixture)
       and im.movement_type='sale'
   ),
-  1,
-  'checkout creates one sale movement for the one order line'
+  1,'checkout creates one sale movement for the one order line'
+);
+
+select extensions.is(
+  (
+    select count(*)::integer from public.sellertray_shift_cash_sales s
+    where s.tenant_id=(select tenant_id from sellertray_pos_cash_fixture)
+      and s.shift_id=(select shift_id from sellertray_pos_cash_fixture)
+      and s.order_id=(select order_id from sellertray_pos_cash_fixture)
+  ),
+  1,'confirmed cash checkout is immutably attributed to the open cashier shift'
+);
+
+select extensions.is(
+  (
+    select t.expected_cash
+    from public.sellertray_cash_shift_totals(
+      (select tenant_id from sellertray_pos_cash_fixture),
+      (select shift_id from sellertray_pos_cash_fixture)
+    ) t
+  ),
+  2100::numeric,'cash checkout increases expected drawer cash by the confirmed payment'
 );
 
 update sellertray_pos_cash_fixture
 set replay=public.complete_sellertray_pos_cash_sale(
-  tenant_id,
-  order_id,
-  actor_user_id
+  tenant_id,order_id,actor_user_id
 );
 
 select extensions.is(
@@ -224,39 +234,28 @@ select extensions.is(
 
 select extensions.is(
   (
-    select count(*)::integer
-    from public.order_payments p
-    where p.order_id=(select order_id from sellertray_pos_cash_fixture)
-      and p.method_type='cash'
+    select count(*)::integer from public.order_payments p
+    where p.order_id=(select order_id from sellertray_pos_cash_fixture) and p.method_type='cash'
   ),
-  1,
-  'retry does not duplicate cash payment effects'
+  1,'retry does not duplicate cash payment effects'
 );
 
 select extensions.is(
   (
-    select count(*)::integer
-    from public.inventory_movements im
+    select count(*)::integer from public.inventory_movements im
     where im.tenant_id=(select tenant_id from sellertray_pos_cash_fixture)
       and im.reference_type='order'
       and im.reference_id=(select order_id::text from sellertray_pos_cash_fixture)
       and im.movement_type='sale'
   ),
-  1,
-  'retry does not duplicate stock effects'
+  1,'retry does not duplicate stock effects'
 );
 
 update sellertray_pos_cash_fixture
 set second_order_id=public.create_sellertray_pos_order_atomic(
-  tenant_id,
-  branch_id,
-  null,
-  null,
-  'Insufficient stock sale',
+  tenant_id,branch_id,null,null,'Insufficient stock sale',
   jsonb_build_array(jsonb_build_object(
-    'catalog_item_id',product_id,
-    'uom_id',pack_uom_id,
-    'quantity',2
+    'catalog_item_id',product_id,'uom_id',pack_uom_id,'quantity',2
   ))
 );
 
@@ -281,42 +280,27 @@ select extensions.ok(
 
 select extensions.is(
   (select o.status from public.orders o where o.id=(select second_order_id from sellertray_pos_cash_fixture)),
-  'draft',
-  'failed checkout rolls the order back to draft'
+  'draft','failed checkout rolls the order back to draft'
+);
+
+select extensions.is(
+  (select count(*)::integer from public.order_payments p where p.order_id=(select second_order_id from sellertray_pos_cash_fixture)),
+  0,'failed checkout leaves no payment effect'
 );
 
 select extensions.is(
   (
-    select count(*)::integer
-    from public.order_payments p
-    where p.order_id=(select second_order_id from sellertray_pos_cash_fixture)
-  ),
-  0,
-  'failed checkout leaves no payment effect'
-);
-
-select extensions.is(
-  (
-    select count(*)::integer
-    from public.inventory_movements im
+    select count(*)::integer from public.inventory_movements im
     where im.tenant_id=(select tenant_id from sellertray_pos_cash_fixture)
       and im.reference_type='order'
       and im.reference_id=(select second_order_id::text from sellertray_pos_cash_fixture)
   ),
-  0,
-  'failed checkout leaves no stock effect'
+  0,'failed checkout leaves no stock effect'
 );
 
 select extensions.ok(
-  not has_function_privilege(
-    'authenticated',
-    'public.complete_sellertray_pos_cash_sale(uuid,uuid,uuid)',
-    'EXECUTE'
-  ) and has_function_privilege(
-    'service_role',
-    'public.complete_sellertray_pos_cash_sale(uuid,uuid,uuid)',
-    'EXECUTE'
-  ),
+  not has_function_privilege('authenticated','public.complete_sellertray_pos_cash_sale(uuid,uuid,uuid)','EXECUTE')
+  and has_function_privilege('service_role','public.complete_sellertray_pos_cash_sale(uuid,uuid,uuid)','EXECUTE'),
   'POS completion remains a server-only governed command'
 );
 

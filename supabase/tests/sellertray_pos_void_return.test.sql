@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(23);
+select extensions.plan(28);
 
 create temp table sellertray_pos_return_fixture (
   tenant_id uuid not null,
@@ -9,6 +9,9 @@ create temp table sellertray_pos_return_fixture (
   product_id uuid not null,
   branch_id uuid,
   location_id uuid,
+  register_id uuid,
+  sale_shift_id uuid,
+  refund_shift_id uuid,
   pack_uom_id uuid,
   void_order_id uuid,
   sale_order_id uuid,
@@ -18,7 +21,8 @@ create temp table sellertray_pos_return_fixture (
   return_result jsonb,
   return_replay jsonb,
   immutable_rejected boolean not null default false,
-  staff_return_rejected boolean not null default false
+  staff_return_rejected boolean not null default false,
+  return_without_shift_rejected boolean not null default false
 ) on commit drop;
 
 insert into sellertray_pos_return_fixture(tenant_id,actor_user_id,staff_user_id,product_id)
@@ -58,6 +62,11 @@ update sellertray_pos_return_fixture f
 set location_id=sl.id
 from public.stock_locations sl
 where sl.tenant_id=f.tenant_id and sl.branch_id=f.branch_id and sl.is_default=true;
+
+update sellertray_pos_return_fixture f
+set register_id=r.id
+from public.sellertray_registers r
+where r.tenant_id=f.tenant_id and r.branch_id=f.branch_id and r.is_default=true;
 
 insert into public.catalog_items(
   id,tenant_id,name,sku,price_ngn,is_active,stock_uom,allow_fractional_stock
@@ -145,12 +154,57 @@ select extensions.is(
 );
 
 update sellertray_pos_return_fixture
+set sale_shift_id=(public.open_sellertray_cash_shift(
+  tenant_id,branch_id,register_id,0,actor_user_id
+)->>'shiftId')::uuid;
+
+update sellertray_pos_return_fixture
 set completion=public.complete_sellertray_pos_cash_sale(tenant_id,sale_order_id,actor_user_id);
 
 select extensions.is(
   (select completion->>'status' from sellertray_pos_return_fixture),
   'completed','return fixture first completes through governed cash checkout'
 );
+
+select public.close_sellertray_cash_shift(
+  tenant_id,sale_shift_id,2100,null,actor_user_id
+)
+from sellertray_pos_return_fixture;
+
+do $$
+begin
+  begin
+    perform public.return_sellertray_pos_cash_sale(
+      (select tenant_id from sellertray_pos_return_fixture),
+      (select sale_order_id from sellertray_pos_return_fixture),
+      (select actor_user_id from sellertray_pos_return_fixture),
+      'Return should require an open drawer'
+    );
+  exception when sqlstate '23514' then
+    update sellertray_pos_return_fixture set return_without_shift_rejected=true;
+  end;
+end
+$$;
+
+select extensions.ok(
+  (select return_without_shift_rejected from sellertray_pos_return_fixture),
+  'cash return fails closed when the approving operator has no open cashier shift'
+);
+
+select extensions.is(
+  (select count(*)::integer from public.sale_returns sr where sr.order_id=(select sale_order_id from sellertray_pos_return_fixture)),
+  0,'failed drawer-less return rolls back return evidence'
+);
+
+select extensions.is(
+  (select count(*)::integer from public.payment_refunds pr where pr.order_id=(select sale_order_id from sellertray_pos_return_fixture)),
+  0,'failed drawer-less return leaves no refund effect'
+);
+
+update sellertray_pos_return_fixture
+set refund_shift_id=(public.open_sellertray_cash_shift(
+  tenant_id,branch_id,register_id,2100,actor_user_id
+)->>'shiftId')::uuid;
 
 update sellertray_pos_return_fixture
 set return_result=public.return_sellertray_pos_cash_sale(
@@ -205,6 +259,27 @@ select extensions.is(
 
 select extensions.is(
   (
+    select count(*)::integer from public.sellertray_shift_cash_refunds r
+    where r.tenant_id=(select tenant_id from sellertray_pos_return_fixture)
+      and r.shift_id=(select refund_shift_id from sellertray_pos_return_fixture)
+      and r.refund_id=(select (return_result->>'refundId')::uuid from sellertray_pos_return_fixture)
+  ),
+  1,'cash refund is immutably attributed to the active refund drawer'
+);
+
+select extensions.is(
+  (
+    select t.expected_cash
+    from public.sellertray_cash_shift_totals(
+      (select tenant_id from sellertray_pos_return_fixture),
+      (select refund_shift_id from sellertray_pos_return_fixture)
+    ) t
+  ),
+  0::numeric,'cash refund reduces expected drawer cash without taking it below zero'
+);
+
+select extensions.is(
+  (
     select s.quantity_on_hand
     from public.get_sellertray_branch_stock(
       (select tenant_id from sellertray_pos_return_fixture),
@@ -252,10 +327,7 @@ select extensions.is(
 );
 
 select extensions.is(
-  (
-    select count(*)::integer from public.payment_refunds pr
-    where pr.order_id=(select sale_order_id from sellertray_pos_return_fixture)
-  ),
+  (select count(*)::integer from public.payment_refunds pr where pr.order_id=(select sale_order_id from sellertray_pos_return_fixture)),
   1,'return retry does not duplicate refund evidence'
 );
 
@@ -274,8 +346,7 @@ select extensions.ok(
     select 1 from public.commercial_action_ledger l
     where l.tenant_id=(select tenant_id from sellertray_pos_return_fixture)
       and l.target_order_id=(select sale_order_id from sellertray_pos_return_fixture)
-      and l.action_type='sale_returned'
-      and l.action_status='applied'
+      and l.action_type='sale_returned' and l.action_status='applied'
   ),
   'completed return leaves a high-risk commercial audit record'
 );
