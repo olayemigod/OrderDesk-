@@ -40,7 +40,7 @@ requireValue(
 );`;
 
 const staleVersionCodeCheck = "requireValue(app.android?.versionCode === 19, 'Android versionCode must be 19 for the merchant-reference QA line');";
-const currentVersionCodeCheck = "requireValue(app.android?.versionCode === 21, 'Android versionCode must be 21 for the merchant-reference QA line');";
+const currentVersionCodeCheck = "requireValue(app.android?.versionCode === 22, 'Android versionCode must be 22 for the merchant-reference QA line');";
 
 const app = JSON.parse(fs.readFileSync(appPath, 'utf8')).expo;
 const blockedPermissions = new Set(app.android?.blockedPermissions ?? []);
