@@ -10,6 +10,7 @@ const offline = readFileSync(resolve(appRoot, 'src/data/offlineSalesRepository.t
 const commerce = readFileSync(resolve(appRoot, 'src/data/commerceRepository.ts'), 'utf8');
 const edge = readFileSync(resolve(appRoot, '../../supabase/functions/merchant-order/index.ts'), 'utf8');
 const whatsappWebhook = readFileSync(resolve(appRoot, '../../supabase/functions/whatsapp-webhook/index.ts'), 'utf8');
+const governingSkill = readFileSync(resolve(appRoot, '../../.agents/skills/sellertray-project-implementation/SKILL.md'), 'utf8');
 const idempotency = readFileSync(resolve(appRoot, '../../supabase/migrations/20261010101500_pos_draft_client_idempotency.sql'), 'utf8');
 const replay = readFileSync(resolve(appRoot, '../../supabase/migrations/20261010101600_offline_pos_replay_validation.sql'), 'utf8');
 const customerIdentity = readFileSync(resolve(appRoot, '../../supabase/migrations/20261014130000_pos_customer_identity_selection.sql'), 'utf8');
@@ -37,6 +38,16 @@ requireValue(
     commerce.includes('customerId?: string | null') &&
     commerce.includes('customerId: cleanOptional(input.customerId)'),
   'POS must carry the selected shared customer identity into the governed server draft.',
+);
+
+requireValue(
+  governingSkill.includes('version: "0.1.5"') &&
+    governingSkill.includes('## Customer identity and selling context') &&
+    governingSkill.includes('Sell defaults to **Walk-in Customer**') &&
+    governingSkill.includes('POS and WhatsApp must converge on one Customer record') &&
+    governingSkill.includes('Customer choice is part of the sale snapshot') &&
+    governingSkill.includes('receivables and balance follow-up'),
+  'The SellerTray governing skill must preserve shared customer identity, explicit customer choice, offline replay and customer balance attribution.',
 );
 
 const preparePaymentIndex = sell.indexOf('async function continueToPayment()');
