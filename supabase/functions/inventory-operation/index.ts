@@ -8,6 +8,21 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const MAX_BODY_BYTES = 12_288;
 
+const RECEIVE_REASONS = new Map<string, string>([
+  ['supplier delivery', 'Supplier delivery'],
+  ['opening stock', 'Opening stock'],
+  ['other approved receipt', 'Other approved receipt'],
+]);
+
+const ADJUST_REASONS = new Map<string, string>([
+  ['data correction', 'Data correction'],
+  ['damage', 'Damage'],
+  ['expiry', 'Expiry'],
+  ['missing / shrinkage', 'Missing / shrinkage'],
+  ['inventory recovery', 'Inventory recovery'],
+  ['other approved adjustment', 'Other approved adjustment'],
+]);
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-request-id',
@@ -51,13 +66,23 @@ Deno.serve(async (request) => {
   const quantity = cleanPositiveNumber(body.quantity);
   const adjustmentDirection = cleanDirection(body.adjustmentDirection);
   const reference = cleanText(body.reference, 160);
-  const reason = cleanText(body.reason, 500);
+  const commandId = cleanCommandId(body.commandId);
+  const rawReason = cleanText(body.reason, 120);
+  const reason = operation && rawReason ? cleanReason(operation, rawReason) : null;
 
-  if (!tenantId || !branchId || !productId || !uomId || !operation || quantity === null || !reference || !reason) {
+  if (!tenantId || !branchId || !productId || !uomId || !operation || quantity === null || !reference || !commandId || !rawReason) {
     return json({ error: 'Business, branch, product, unit, quantity, reference and reason are required' }, 400);
+  }
+  if (!reason) {
+    return json({ error: 'Choose an approved reason for this stock action' }, 400);
   }
   if (operation === 'adjust' && !adjustmentDirection) {
     return json({ error: 'Choose whether the adjustment increases or decreases stock' }, 400);
+  }
+
+  const forcedDirection = operation === 'adjust' ? requiredDirectionForReason(reason) : null;
+  if (forcedDirection && adjustmentDirection !== forcedDirection) {
+    return json({ error: `${reason} must ${forcedDirection === 'increase' ? 'increase' : 'reduce'} stock` }, 409);
   }
 
   const { data: membership, error: membershipError } = await admin
@@ -80,6 +105,7 @@ Deno.serve(async (request) => {
     p_adjustment_direction: operation === 'adjust' ? adjustmentDirection : null,
     p_reference: reference,
     p_reason: reason,
+    p_command_id: commandId,
     p_actor_user_id: userId,
   });
 
@@ -89,7 +115,7 @@ Deno.serve(async (request) => {
       ? 403
       : /not found/i.test(message)
         ? 404
-        : /not enough|does not allow|already used|unavailable|cannot|invalid/i.test(message)
+        : /not enough|does not allow|already used|unavailable|cannot|invalid|must|use stock/i.test(message)
           ? 409
           : 400;
     return json({ error: message }, status);
@@ -114,6 +140,12 @@ function cleanUuid(value: unknown): string | null {
     : null;
 }
 
+function cleanCommandId(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const clean = value.trim();
+  return /^[A-Za-z0-9][A-Za-z0-9:_-]{7,159}$/.test(clean) ? clean : null;
+}
+
 function cleanPositiveNumber(value: unknown): number | null {
   const parsed = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
@@ -123,6 +155,17 @@ function cleanText(value: unknown, max: number): string | null {
   if (typeof value !== 'string') return null;
   const clean = value.trim().replace(/\s+/g, ' ');
   return clean ? clean.slice(0, max) : null;
+}
+
+function cleanReason(operation: InventoryOperation, value: string): string | null {
+  const key = value.trim().replace(/\s+/g, ' ').toLowerCase();
+  return (operation === 'receive' ? RECEIVE_REASONS : ADJUST_REASONS).get(key) ?? null;
+}
+
+function requiredDirectionForReason(reason: string): AdjustmentDirection | null {
+  if (reason === 'Damage' || reason === 'Expiry' || reason === 'Missing / shrinkage') return 'decrease';
+  if (reason === 'Inventory recovery') return 'increase';
+  return null;
 }
 
 function isInventoryOperationResult(value: unknown): value is JsonRecord {
