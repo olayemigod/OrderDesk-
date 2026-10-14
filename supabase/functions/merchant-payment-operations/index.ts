@@ -44,6 +44,9 @@ Deno.serve(async (req: Request) => {
 
     if (action === 'send_options') {
       if (!await rpc<boolean>('orderdesk_subscription_can_write', { p_tenant_id: tenantId })) return json({ error: 'SellerTray subscription is read-only' }, 403);
+      const order = await loadOrderSummary(tenantId, orderId!);
+      if (!order) return json({ error: 'Order not found' }, 404);
+      await assertHumanPaymentAuthority(tenantId, userId, order);
       const queued = await queueMerchantPaymentOptions(tenantId, orderId!);
       await auditPaymentAction({ tenantId, orderId: orderId!, paymentId: null, actionType: 'merchant_payment_options_sent', requestedBy, actorUserId: userId, riskClass: 'low', beforeState: {}, afterState: { delivery_status: queued.deliveryStatus }, metadata: {} });
       return json({ ok: true, orderId, ...queued });
@@ -56,12 +59,7 @@ Deno.serve(async (req: Request) => {
       if (order.source === 'pos') {
         return json({ error: 'POS sales must confirm the existing checkout payment instead of recording a new payment.' }, 409);
       }
-      const canManagePayments = await rpc<boolean>('sellertray_user_has_capability', {
-        p_tenant_id: tenantId,
-        p_user_id: userId,
-        p_capability: 'can_manage_payments',
-      });
-      if (!canManagePayments) return json({ error: 'You do not have permission to record this payment' }, 403);
+      await assertHumanPaymentAuthority(tenantId, userId, order);
 
       const method = await loadPaymentMethod(tenantId, paymentMethodId!);
       const methodType = String(method?.method_type ?? '');
@@ -85,18 +83,26 @@ Deno.serve(async (req: Request) => {
 
     const payment = await loadPayment(tenantId, paymentId!);
     if (!payment) return json({ error: 'Payment not found' }, 404);
+    const paymentOrderId = typeof payment.order_id === 'string' ? payment.order_id : null;
+    if (!paymentOrderId) return json({ error: 'Payment order is unavailable' }, 409);
 
     if (action === 'confirm_offline') {
       if (!OFFLINE_CUSTOMER_METHODS.has(String(payment.method_type ?? ''))) return json({ error: 'This payment is not a customer-facing offline payment' }, 409);
+      const order = await loadOrderSummary(tenantId, paymentOrderId);
+      if (!order) return json({ error: 'Order not found' }, 404);
+      await assertHumanPaymentAuthority(tenantId, userId, order);
       await rpc('confirm_sellertray_offline_payment', { p_payment_id: paymentId, p_actor_user_id: userId, p_note: optional(body.note, 500) });
       const refreshed = await loadPayment(tenantId, paymentId!);
-      await auditPaymentAction({ tenantId, orderId: typeof payment.order_id === 'string' ? payment.order_id : '', paymentId: paymentId!, actionType: 'merchant_offline_payment_confirmed', requestedBy, actorUserId: userId, riskClass: 'high', beforeState: { payment_status: payment.status }, afterState: { payment_status: refreshed?.status ?? 'confirmed' }, financialImpact: numberOrNull(payment.amount), currency: typeof payment.currency === 'string' ? payment.currency : null, metadata: { method_type: payment.method_type, note_present: Boolean(optional(body.note, 500)) } });
+      await auditPaymentAction({ tenantId, orderId: paymentOrderId, paymentId: paymentId!, actionType: 'merchant_offline_payment_confirmed', requestedBy, actorUserId: userId, riskClass: 'high', beforeState: { payment_status: payment.status }, afterState: { payment_status: refreshed?.status ?? 'confirmed' }, financialImpact: numberOrNull(payment.amount), currency: typeof payment.currency === 'string' ? payment.currency : null, metadata: { method_type: payment.method_type, note_present: Boolean(optional(body.note, 500)) } });
       return json({ ok: true, paymentId, status: 'confirmed' });
     }
 
     if (payment.provider !== 'paystack' && payment.provider !== 'flutterwave') return json({ error: 'Only gateway payments can be provider-verified' }, 409);
+    const order = await loadOrderSummary(tenantId, paymentOrderId);
+    if (!order) return json({ error: 'Order not found' }, 404);
+    await assertHumanPaymentAuthority(tenantId, userId, order);
     const runtime = await callRuntime(paymentId!);
-    await auditPaymentAction({ tenantId, orderId: typeof payment.order_id === 'string' ? payment.order_id : '', paymentId: paymentId!, actionType: 'merchant_gateway_payment_verified', requestedBy, actorUserId: userId, riskClass: 'high', beforeState: { payment_status: payment.status }, afterState: { payment_status: runtime.status || payment.status }, financialImpact: numberOrNull(payment.amount), currency: typeof payment.currency === 'string' ? payment.currency : null, metadata: { provider: payment.provider, provider_status: runtime.providerStatus || null } });
+    await auditPaymentAction({ tenantId, orderId: paymentOrderId, paymentId: paymentId!, actionType: 'merchant_gateway_payment_verified', requestedBy, actorUserId: userId, riskClass: 'high', beforeState: { payment_status: payment.status }, afterState: { payment_status: runtime.status || payment.status }, financialImpact: numberOrNull(payment.amount), currency: typeof payment.currency === 'string' ? payment.currency : null, metadata: { provider: payment.provider, provider_status: runtime.providerStatus || null } });
     return json({ ok: true, paymentId, status: runtime.status || payment.status, providerStatus: runtime.providerStatus || null });
   } catch (error) {
     const message = error instanceof Error ? sanitize(error.message) : 'Payment operation failed';
@@ -124,8 +130,20 @@ async function loadPaymentMethod(tenantId: string, paymentMethodId: string): Pro
 }
 
 async function loadOrderSummary(tenantId: string, orderId: string): Promise<J | null> {
-  const rows = await rest<J[]>('/rest/v1/orders?select=id,tenant_id,source,payment_status&tenant_id=eq.' + encodeURIComponent(tenantId) + '&id=eq.' + encodeURIComponent(orderId) + '&limit=1');
+  const rows = await rest<J[]>('/rest/v1/orders?select=id,tenant_id,branch_id,source,payment_status&tenant_id=eq.' + encodeURIComponent(tenantId) + '&id=eq.' + encodeURIComponent(orderId) + '&limit=1');
   return rows[0] || null;
+}
+
+async function assertHumanPaymentAuthority(tenantId: string, userId: string, order: J): Promise<void> {
+  const orderId = typeof order.id === 'string' ? order.id : null;
+  const branchId = typeof order.branch_id === 'string' ? order.branch_id : null;
+  if (!orderId || !branchId) throw new Error('SellerTray order requires a Branch for payment management');
+  const allowed = await rpc<boolean>('sellertray_user_can_manage_order_payment', {
+    p_tenant_id: tenantId,
+    p_order_id: orderId,
+    p_user_id: userId,
+  });
+  if (!allowed) throw new Error('Payment management permission and Branch access are required');
 }
 
 async function queueMerchantPaymentOptions(tenantId: string, orderId: string): Promise<{ deliveryStatus: string; message: string }> {
