@@ -1,21 +1,12 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { errorMessage, supabase } from './supabase';
 
 type PaymentGate = 'none' | 'before_processing' | 'before_ready' | 'before_fulfillment';
 type WhatsAppPushMode = 'actionable_only' | 'all_messages' | 'orders_payments_only';
-type PaymentMethodType = 'bank_transfer' | 'paystack' | 'flutterwave' | 'cash_on_delivery' | 'pay_on_pickup';
+type PaymentMethodType = 'bank_transfer' | 'card_terminal' | 'paystack' | 'flutterwave' | 'cash_on_delivery' | 'pay_on_pickup';
 type PaymentMode = 'test' | 'live';
 
-type BusinessProfile = {
-  name: string;
-  businessEmail: string;
-  businessPhone: string;
-  businessType: string;
-  logoUrl: string;
-  currency: string;
-  timezone: string;
-};
-
+type BusinessProfile = { name: string; businessEmail: string; businessPhone: string; businessType: string; logoUrl: string; currency: string; timezone: string };
 type OperationalPolicy = {
   paymentGate: PaymentGate;
   allowCodDispatchUnpaid: boolean;
@@ -27,7 +18,6 @@ type OperationalPolicy = {
   requireCustomerDeliveryConfirmation: boolean;
   whatsappPushMode: WhatsAppPushMode;
 };
-
 type PaymentMethod = {
   id: string;
   methodType: PaymentMethodType;
@@ -43,7 +33,6 @@ type PaymentMethod = {
   bankCode: string;
   instructions: string;
 };
-
 type PaymentDraft = Omit<PaymentMethod, 'id' | 'configurationStatus'>;
 
 const DEFAULT_POLICY: OperationalPolicy = {
@@ -57,19 +46,9 @@ const DEFAULT_POLICY: OperationalPolicy = {
   requireCustomerDeliveryConfirmation: false,
   whatsappPushMode: 'actionable_only',
 };
-
 const EMPTY_PAYMENT: PaymentDraft = {
-  methodType: 'bank_transfer',
-  displayName: 'Bank Transfer',
-  isEnabled: true,
-  isDefault: false,
-  sortOrder: 100,
-  mode: 'live',
-  bankName: '',
-  bankAccountName: '',
-  bankAccountNumber: '',
-  bankCode: '',
-  instructions: '',
+  methodType: 'bank_transfer', displayName: 'Bank Transfer', isEnabled: true, isDefault: false,
+  sortOrder: 100, mode: 'live', bankName: '', bankAccountName: '', bankAccountNumber: '', bankCode: '', instructions: '',
 };
 
 export default function SettingsManagement({ tenantId }: { tenantId: string }) {
@@ -87,18 +66,16 @@ export default function SettingsManagement({ tenantId }: { tenantId: string }) {
 
   const selectedMethod = useMemo(() => methods.find((row) => row.id === selectedMethodId) ?? null, [methods, selectedMethodId]);
   const gatewaySelected = paymentDraft.methodType === 'paystack' || paymentDraft.methodType === 'flutterwave';
+  const terminalSelected = paymentDraft.methodType === 'card_terminal';
 
-  useEffect(() => {
-    void loadAll();
-  }, [tenantId]);
-
+  useEffect(() => { void loadAll(); }, [tenantId]);
   useEffect(() => {
     if (!selectedMethod) return;
     setPaymentDraft({
       methodType: selectedMethod.methodType,
       displayName: selectedMethod.displayName,
       isEnabled: selectedMethod.isEnabled,
-      isDefault: selectedMethod.isDefault,
+      isDefault: selectedMethod.methodType === 'card_terminal' ? false : selectedMethod.isDefault,
       sortOrder: selectedMethod.sortOrder,
       mode: selectedMethod.mode,
       bankName: selectedMethod.bankName,
@@ -112,8 +89,7 @@ export default function SettingsManagement({ tenantId }: { tenantId: string }) {
   }, [selectedMethod]);
 
   async function loadAll(preferredMethodId?: string | null) {
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     try {
       const [profileResult, policyResult, methodsResult] = await Promise.all([
         supabase.from('tenants').select('name,business_email,business_phone,business_type,logo_url,currency,timezone').eq('id', tenantId).single(),
@@ -123,16 +99,10 @@ export default function SettingsManagement({ tenantId }: { tenantId: string }) {
       if (profileResult.error) throw profileResult.error;
       if (policyResult.error) throw policyResult.error;
       if (methodsResult.error) throw methodsResult.error;
-
       const p = profileResult.data as Record<string, unknown>;
       setProfile({
-        name: String(p.name ?? ''),
-        businessEmail: optionalText(p.business_email),
-        businessPhone: optionalText(p.business_phone),
-        businessType: optionalText(p.business_type),
-        logoUrl: optionalText(p.logo_url),
-        currency: String(p.currency ?? 'NGN'),
-        timezone: String(p.timezone ?? 'Africa/Lagos'),
+        name: String(p.name ?? ''), businessEmail: optionalText(p.business_email), businessPhone: optionalText(p.business_phone),
+        businessType: optionalText(p.business_type), logoUrl: optionalText(p.logo_url), currency: String(p.currency ?? 'NGN'), timezone: String(p.timezone ?? 'Africa/Lagos'),
       });
       setPolicy(parsePolicy(policyResult.data));
       const nextMethods = ((methodsResult.data ?? []) as Array<Record<string, unknown>>).map(parsePaymentMethod).filter((row) => row.id);
@@ -141,51 +111,32 @@ export default function SettingsManagement({ tenantId }: { tenantId: string }) {
       const nextId = wanted && nextMethods.some((row) => row.id === wanted) ? wanted : nextMethods.find((row) => row.isDefault)?.id ?? nextMethods[0]?.id ?? null;
       setSelectedMethodId(nextId);
       if (!nextId) setPaymentDraft(EMPTY_PAYMENT);
-    } catch (cause) {
-      setError(errorMessage(cause, 'Unable to load business settings.'));
-    } finally {
-      setLoading(false);
-    }
+    } catch (cause) { setError(errorMessage(cause, 'Unable to load business settings.')); }
+    finally { setLoading(false); }
   }
 
   async function saveProfile(event: FormEvent) {
-    event.preventDefault();
-    setBusy('profile');
-    clearNotice();
+    event.preventDefault(); setBusy('profile'); clearNotice();
     try {
-      const name = profile.name.trim();
-      const currency = profile.currency.trim().toUpperCase();
-      const timezone = profile.timezone.trim();
+      const name = profile.name.trim(); const currency = profile.currency.trim().toUpperCase(); const timezone = profile.timezone.trim();
       if (!name) throw new Error('Business name is required.');
       if (!/^[A-Z]{3}$/.test(currency)) throw new Error('Currency must be a 3-letter code.');
       if (!timezone) throw new Error('Timezone is required.');
       const { error: updateError } = await supabase.from('tenants').update({
-        name,
-        business_email: clean(profile.businessEmail),
-        business_phone: clean(profile.businessPhone),
-        business_type: clean(profile.businessType),
-        logo_url: clean(profile.logoUrl),
-        currency,
-        timezone,
+        name, business_email: clean(profile.businessEmail), business_phone: clean(profile.businessPhone), business_type: clean(profile.businessType),
+        logo_url: clean(profile.logoUrl), currency, timezone,
       }).eq('id', tenantId);
       if (updateError) throw updateError;
-      setProfile((current) => ({ ...current, name, currency, timezone }));
-      setMessage('Business profile saved.');
-    } catch (cause) {
-      setError(errorMessage(cause, 'Unable to save the business profile.'));
-    } finally {
-      setBusy(null);
-    }
+      setProfile((current) => ({ ...current, name, currency, timezone })); setMessage('Business profile saved.');
+    } catch (cause) { setError(errorMessage(cause, 'Unable to save the business profile.')); }
+    finally { setBusy(null); }
   }
 
   async function savePolicy(event: FormEvent) {
-    event.preventDefault();
-    setBusy('policy');
-    clearNotice();
+    event.preventDefault(); setBusy('policy'); clearNotice();
     try {
       const { data, error: rpcError } = await supabase.rpc('sellertray_save_operational_policy', {
-        p_tenant_id: tenantId,
-        p_payment_gate: policy.paymentGate,
+        p_tenant_id: tenantId, p_payment_gate: policy.paymentGate,
         p_allow_cod_dispatch_unpaid: policy.allowCodDispatchUnpaid,
         p_require_cod_payment_before_completion: policy.requireCodPaymentBeforeCompletion,
         p_allow_pickup_ready_unpaid: policy.allowPickupReadyUnpaid,
@@ -196,113 +147,65 @@ export default function SettingsManagement({ tenantId }: { tenantId: string }) {
         p_whatsapp_push_mode: policy.whatsappPushMode,
       });
       if (rpcError) throw rpcError;
-      setPolicy(parsePolicy(data));
-      setMessage('Selling and fulfilment rules saved.');
-    } catch (cause) {
-      setError(errorMessage(cause, 'Unable to save selling and fulfilment rules.'));
-    } finally {
-      setBusy(null);
-    }
+      setPolicy(parsePolicy(data)); setMessage('Selling and fulfilment rules saved.');
+    } catch (cause) { setError(errorMessage(cause, 'Unable to save selling and fulfilment rules.')); }
+    finally { setBusy(null); }
   }
 
   function newPaymentMethod(type: PaymentMethodType = 'bank_transfer') {
     setSelectedMethodId(null);
-    setPaymentDraft({ ...EMPTY_PAYMENT, methodType: type, displayName: paymentLabel(type) });
-    setSecretKey('');
-    setSecretHash('');
-    clearNotice();
+    setPaymentDraft({ ...EMPTY_PAYMENT, methodType: type, displayName: paymentLabel(type), isDefault: false });
+    setSecretKey(''); setSecretHash(''); clearNotice();
   }
 
   async function savePaymentMethod(event: FormEvent) {
-    event.preventDefault();
-    setBusy('payment');
-    clearNotice();
+    event.preventDefault(); setBusy('payment'); clearNotice();
     try {
       const displayName = paymentDraft.displayName.trim();
       if (!displayName) throw new Error('Payment method name is required.');
-      const { data, error: functionError } = await supabase.functions.invoke('payment-settings', {
-        body: {
-          action: 'save_method',
-          tenantId,
-          methodId: selectedMethodId,
-          methodType: paymentDraft.methodType,
-          displayName,
-          isEnabled: paymentDraft.isEnabled,
-          isDefault: paymentDraft.isDefault,
-          sortOrder: paymentDraft.sortOrder,
-          mode: paymentDraft.mode,
-          bankName: clean(paymentDraft.bankName),
-          bankAccountName: clean(paymentDraft.bankAccountName),
-          bankAccountNumber: clean(paymentDraft.bankAccountNumber),
-          bankCode: clean(paymentDraft.bankCode),
-          instructions: clean(paymentDraft.instructions),
-        },
-      });
+      const { data, error: functionError } = await supabase.functions.invoke('payment-settings', { body: {
+        action: 'save_method', tenantId, methodId: selectedMethodId, methodType: paymentDraft.methodType, displayName,
+        isEnabled: paymentDraft.isEnabled, isDefault: terminalSelected ? false : paymentDraft.isDefault,
+        sortOrder: paymentDraft.sortOrder, mode: paymentDraft.mode,
+        bankName: clean(paymentDraft.bankName), bankAccountName: clean(paymentDraft.bankAccountName), bankAccountNumber: clean(paymentDraft.bankAccountNumber), bankCode: clean(paymentDraft.bankCode), instructions: clean(paymentDraft.instructions),
+      }});
       if (functionError) throw functionError;
-      const payload = object(data);
-      const method = object(payload.method);
-      const methodId = typeof method.id === 'string' ? method.id : selectedMethodId;
+      const methodId = typeof object(object(data).method).id === 'string' ? String(object(object(data).method).id) : selectedMethodId;
       if (!methodId) throw new Error('SellerTray did not return the saved payment method.');
-      setMessage('Payment method saved.');
+      setMessage(terminalSelected ? 'Card terminal saved. Assign it to Branches below.' : 'Payment method saved.');
       await loadAll(methodId);
-    } catch (cause) {
-      setError(errorMessage(cause, 'Unable to save this payment method.'));
-    } finally {
-      setBusy(null);
-    }
+    } catch (cause) { setError(errorMessage(cause, 'Unable to save this payment method.')); }
+    finally { setBusy(null); }
   }
 
   async function connectGateway() {
     if (!selectedMethod || (selectedMethod.methodType !== 'paystack' && selectedMethod.methodType !== 'flutterwave')) return;
-    setBusy('gateway');
-    clearNotice();
+    setBusy('gateway'); clearNotice();
     try {
       if (!secretKey.trim()) throw new Error('Enter the gateway secret key.');
       if (selectedMethod.methodType === 'flutterwave' && !secretHash.trim()) throw new Error('Enter the Flutterwave webhook secret hash.');
-      const { error: functionError } = await supabase.functions.invoke('payment-settings', {
-        body: {
-          action: 'connect_gateway',
-          tenantId,
-          methodId: selectedMethod.id,
-          provider: selectedMethod.methodType,
-          secretKey: secretKey.trim(),
-          secretHash: selectedMethod.methodType === 'flutterwave' ? secretHash.trim() : null,
-        },
-      });
+      const { error: functionError } = await supabase.functions.invoke('payment-settings', { body: {
+        action: 'connect_gateway', tenantId, methodId: selectedMethod.id, provider: selectedMethod.methodType,
+        secretKey: secretKey.trim(), secretHash: selectedMethod.methodType === 'flutterwave' ? secretHash.trim() : null,
+      }});
       if (functionError) throw functionError;
-      setSecretKey('');
-      setSecretHash('');
-      setMessage(`${paymentLabel(selectedMethod.methodType)} credentials connected securely.`);
-      await loadAll(selectedMethod.id);
-    } catch (cause) {
-      setError(errorMessage(cause, 'Unable to connect gateway credentials.'));
-    } finally {
-      setBusy(null);
-    }
+      setSecretKey(''); setSecretHash(''); setMessage(`${paymentLabel(selectedMethod.methodType)} credentials connected securely.`); await loadAll(selectedMethod.id);
+    } catch (cause) { setError(errorMessage(cause, 'Unable to connect gateway credentials.')); }
+    finally { setBusy(null); }
   }
 
   async function disconnectGateway() {
     if (!selectedMethod || (selectedMethod.methodType !== 'paystack' && selectedMethod.methodType !== 'flutterwave')) return;
-    setBusy('gateway');
-    clearNotice();
+    setBusy('gateway'); clearNotice();
     try {
-      const { error: functionError } = await supabase.functions.invoke('payment-settings', {
-        body: { action: 'disconnect_gateway', tenantId, methodId: selectedMethod.id },
-      });
+      const { error: functionError } = await supabase.functions.invoke('payment-settings', { body: { action: 'disconnect_gateway', tenantId, methodId: selectedMethod.id } });
       if (functionError) throw functionError;
-      setMessage(`${paymentLabel(selectedMethod.methodType)} credentials disconnected.`);
-      await loadAll(selectedMethod.id);
-    } catch (cause) {
-      setError(errorMessage(cause, 'Unable to disconnect gateway credentials.'));
-    } finally {
-      setBusy(null);
-    }
+      setMessage(`${paymentLabel(selectedMethod.methodType)} credentials disconnected.`); await loadAll(selectedMethod.id);
+    } catch (cause) { setError(errorMessage(cause, 'Unable to disconnect gateway credentials.')); }
+    finally { setBusy(null); }
   }
 
-  function clearNotice() {
-    setError(null);
-    setMessage(null);
-  }
+  function clearNotice() { setError(null); setMessage(null); }
 
   if (loading) return <article className="panel"><p className="muted">Loading business settings…</p></article>;
 
@@ -346,28 +249,21 @@ export default function SettingsManagement({ tenantId }: { tenantId: string }) {
     <div className="settings-payment-layout">
       <article className="panel settings-method-list">
         <div className="panel-head"><div><p className="eyebrow">Payments</p><h3>Payment methods</h3></div><button className="secondary-button" onClick={() => newPaymentMethod()}>New method</button></div>
-        {methods.length ? <div className="device-list">{methods.map((row) => <button key={row.id} className={selectedMethodId === row.id ? 'device-row selected' : 'device-row'} onClick={() => setSelectedMethodId(row.id)}><span><strong>{row.displayName}</strong><small>{paymentLabel(row.methodType)} · {row.mode === 'test' ? 'Test' : 'Live'}</small></span><span className="device-row-badges">{row.isDefault ? <em>Default</em> : null}<em className={row.isEnabled ? 'good' : 'muted'}>{row.isEnabled ? 'Enabled' : 'Disabled'}</em></span></button>)}</div> : <div className="empty-state"><strong>No payment methods</strong><p>Add how customers can pay for SellerTray orders.</p></div>}
+        {methods.length ? <div className="device-list">{methods.map((row) => <button key={row.id} className={selectedMethodId === row.id ? 'device-row selected' : 'device-row'} onClick={() => setSelectedMethodId(row.id)}><span><strong>{row.displayName}</strong><small>{paymentLabel(row.methodType)} · {row.mode === 'test' ? 'Test' : 'Live'}</small></span><span className="device-row-badges">{row.isDefault ? <em>Default</em> : null}<em className={row.isEnabled ? 'good' : 'muted'}>{row.isEnabled ? 'Enabled' : 'Disabled'}</em></span></button>)}</div> : <div className="empty-state"><strong>No payment methods</strong><p>Add how customers or counter staff can receive payments.</p></div>}
       </article>
 
       <form className="panel settings-form" onSubmit={savePaymentMethod}>
         <div className="panel-head"><div><p className="eyebrow">Payment method</p><h3>{selectedMethod?.displayName ?? 'New method'}</h3></div>{selectedMethod ? <span className={`status-pill ${selectedMethod.configurationStatus === 'ready' || selectedMethod.configurationStatus === 'configured' ? 'good' : 'neutral'}`}>{label(selectedMethod.configurationStatus)}</span> : null}</div>
         <div className="settings-grid two">
-          <Field label="Method"><select value={paymentDraft.methodType} disabled={Boolean(selectedMethod)} onChange={(event) => { const methodType = event.target.value as PaymentMethodType; setPaymentDraft((current) => ({ ...current, methodType, displayName: paymentLabel(methodType) })); }}><option value="bank_transfer">Bank Transfer</option><option value="paystack">Paystack</option><option value="flutterwave">Flutterwave</option><option value="cash_on_delivery">Cash on Delivery</option><option value="pay_on_pickup">Pay on Pickup</option></select></Field>
+          <Field label="Method"><select value={paymentDraft.methodType} disabled={Boolean(selectedMethod)} onChange={(event) => { const methodType = event.target.value as PaymentMethodType; setPaymentDraft((current) => ({ ...current, methodType, displayName: paymentLabel(methodType), isDefault: methodType === 'card_terminal' ? false : current.isDefault })); }}><option value="bank_transfer">Bank Transfer</option><option value="card_terminal">Card Terminal</option><option value="paystack">Paystack</option><option value="flutterwave">Flutterwave</option><option value="cash_on_delivery">Cash on Delivery</option><option value="pay_on_pickup">Pay on Pickup</option></select></Field>
           <Field label="Display name"><input required value={paymentDraft.displayName} onChange={(event) => setPaymentDraft((current) => ({ ...current, displayName: event.target.value }))} /></Field>
           {gatewaySelected ? <Field label="Mode"><select value={paymentDraft.mode} onChange={(event) => setPaymentDraft((current) => ({ ...current, mode: event.target.value === 'test' ? 'test' : 'live' }))}><option value="live">Live</option><option value="test">Test</option></select></Field> : null}
           <Field label="Sort order"><input type="number" min={0} max={1000} value={paymentDraft.sortOrder} onChange={(event) => setPaymentDraft((current) => ({ ...current, sortOrder: Number(event.target.value) || 0 }))} /></Field>
         </div>
-        {paymentDraft.methodType === 'bank_transfer' ? <div className="settings-grid two">
-          <Field label="Bank name"><input value={paymentDraft.bankName} onChange={(event) => setPaymentDraft((current) => ({ ...current, bankName: event.target.value }))} /></Field>
-          <Field label="Account name"><input value={paymentDraft.bankAccountName} onChange={(event) => setPaymentDraft((current) => ({ ...current, bankAccountName: event.target.value }))} /></Field>
-          <Field label="Account number"><input value={paymentDraft.bankAccountNumber} onChange={(event) => setPaymentDraft((current) => ({ ...current, bankAccountNumber: event.target.value }))} /></Field>
-          <Field label="Bank code"><input value={paymentDraft.bankCode} onChange={(event) => setPaymentDraft((current) => ({ ...current, bankCode: event.target.value }))} /></Field>
-        </div> : null}
-        <Field label="Customer instructions"><textarea rows={3} maxLength={500} value={paymentDraft.instructions} onChange={(event) => setPaymentDraft((current) => ({ ...current, instructions: event.target.value }))} placeholder="Optional instructions shown during payment." /></Field>
-        <div className="settings-check-grid compact">
-          <Toggle label="Enabled" checked={paymentDraft.isEnabled} onChange={(value) => setPaymentDraft((current) => ({ ...current, isEnabled: value }))} />
-          <Toggle label="Default payment method" checked={paymentDraft.isDefault} onChange={(value) => setPaymentDraft((current) => ({ ...current, isDefault: value, isEnabled: value ? true : current.isEnabled }))} />
-        </div>
+        {paymentDraft.methodType === 'bank_transfer' ? <div className="settings-grid two"><Field label="Bank name"><input value={paymentDraft.bankName} onChange={(event) => setPaymentDraft((current) => ({ ...current, bankName: event.target.value }))} /></Field><Field label="Account name"><input value={paymentDraft.bankAccountName} onChange={(event) => setPaymentDraft((current) => ({ ...current, bankAccountName: event.target.value }))} /></Field><Field label="Account number"><input value={paymentDraft.bankAccountNumber} onChange={(event) => setPaymentDraft((current) => ({ ...current, bankAccountNumber: event.target.value }))} /></Field><Field label="Bank code"><input value={paymentDraft.bankCode} onChange={(event) => setPaymentDraft((current) => ({ ...current, bankCode: event.target.value }))} /></Field></div> : null}
+        <Field label={terminalSelected ? 'Staff instructions' : 'Customer instructions'}><textarea rows={3} maxLength={500} value={paymentDraft.instructions} onChange={(event) => setPaymentDraft((current) => ({ ...current, instructions: event.target.value }))} placeholder={terminalSelected ? 'Confirm terminal approval before completing the sale.' : 'Optional instructions shown during payment.'} /></Field>
+        <div className="settings-check-grid compact"><Toggle label="Enabled" checked={paymentDraft.isEnabled} onChange={(value) => setPaymentDraft((current) => ({ ...current, isEnabled: value }))} />{!terminalSelected ? <Toggle label="Default customer payment method" checked={paymentDraft.isDefault} onChange={(value) => setPaymentDraft((current) => ({ ...current, isDefault: value, isEnabled: value ? true : current.isEnabled }))} /> : null}</div>
+        {terminalSelected ? <p className="muted">Card terminals are in-person methods. They are never sent to WhatsApp customers and do not become the default customer payment method. Assign the terminal to Branches below.</p> : null}
         <div className="settings-actions"><button className="primary-button" disabled={busy !== null}>{busy === 'payment' ? 'Saving' : 'Save payment method'}</button></div>
 
         {selectedMethod && (selectedMethod.methodType === 'paystack' || selectedMethod.methodType === 'flutterwave') ? <div className="gateway-box">
@@ -381,57 +277,26 @@ export default function SettingsManagement({ tenantId }: { tenantId: string }) {
   </div>;
 }
 
-function Field({ label: title, children }: { label: string; children: React.ReactNode }) {
-  return <label className="settings-field"><span>{title}</span>{children}</label>;
-}
-
-function Toggle({ label: title, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
-  return <label className="settings-toggle"><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /><span>{title}</span></label>;
-}
-
+function Field({ label: title, children }: { label: string; children: ReactNode }) { return <label className="settings-field"><span>{title}</span>{children}</label>; }
+function Toggle({ label: title, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) { return <label className="settings-toggle"><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /><span>{title}</span></label>; }
 function parsePolicy(value: unknown): OperationalPolicy {
-  const row = object(value);
-  const paymentGate = row.paymentGate;
-  const whatsappPushMode = row.whatsappPushMode;
+  const row = object(value); const paymentGate = row.paymentGate; const whatsappPushMode = row.whatsappPushMode;
   return {
     paymentGate: paymentGate === 'none' || paymentGate === 'before_processing' || paymentGate === 'before_ready' || paymentGate === 'before_fulfillment' ? paymentGate : DEFAULT_POLICY.paymentGate,
-    allowCodDispatchUnpaid: booleanValue(row.allowCodDispatchUnpaid, true),
-    requireCodPaymentBeforeCompletion: booleanValue(row.requireCodPaymentBeforeCompletion, true),
-    allowPickupReadyUnpaid: booleanValue(row.allowPickupReadyUnpaid, true),
-    requirePickupPaymentBeforeCompletion: booleanValue(row.requirePickupPaymentBeforeCompletion, true),
-    requireDeliveryProvider: booleanValue(row.requireDeliveryProvider, false),
-    requireDeliveryReference: booleanValue(row.requireDeliveryReference, false),
+    allowCodDispatchUnpaid: booleanValue(row.allowCodDispatchUnpaid, true), requireCodPaymentBeforeCompletion: booleanValue(row.requireCodPaymentBeforeCompletion, true),
+    allowPickupReadyUnpaid: booleanValue(row.allowPickupReadyUnpaid, true), requirePickupPaymentBeforeCompletion: booleanValue(row.requirePickupPaymentBeforeCompletion, true),
+    requireDeliveryProvider: booleanValue(row.requireDeliveryProvider, false), requireDeliveryReference: booleanValue(row.requireDeliveryReference, false),
     requireCustomerDeliveryConfirmation: booleanValue(row.requireCustomerDeliveryConfirmation, false),
     whatsappPushMode: whatsappPushMode === 'all_messages' || whatsappPushMode === 'orders_payments_only' || whatsappPushMode === 'actionable_only' ? whatsappPushMode : DEFAULT_POLICY.whatsappPushMode,
   };
 }
-
 function parsePaymentMethod(row: Record<string, unknown>): PaymentMethod {
-  const type = row.method_type;
-  const methodType: PaymentMethodType = type === 'paystack' || type === 'flutterwave' || type === 'cash_on_delivery' || type === 'pay_on_pickup' ? type : 'bank_transfer';
-  return {
-    id: String(row.id ?? ''),
-    methodType,
-    displayName: String(row.display_name ?? paymentLabel(methodType)),
-    isEnabled: row.is_enabled === true,
-    isDefault: row.is_default === true,
-    sortOrder: numberValue(row.sort_order),
-    mode: row.mode === 'test' ? 'test' : 'live',
-    configurationStatus: String(row.configuration_status ?? 'configured'),
-    bankName: optionalText(row.bank_name),
-    bankAccountName: optionalText(row.bank_account_name),
-    bankAccountNumber: optionalText(row.bank_account_number),
-    bankCode: optionalText(row.bank_code),
-    instructions: optionalText(row.instructions),
-  };
+  const raw = String(row.method_type ?? 'bank_transfer');
+  const methodType: PaymentMethodType = isPaymentMethodType(raw) ? raw : 'bank_transfer';
+  return { id: String(row.id ?? ''), methodType, displayName: String(row.display_name ?? paymentLabel(methodType)), isEnabled: row.is_enabled === true, isDefault: row.is_default === true, sortOrder: numberValue(row.sort_order), mode: row.mode === 'test' ? 'test' : 'live', configurationStatus: String(row.configuration_status ?? 'configured'), bankName: optionalText(row.bank_name), bankAccountName: optionalText(row.bank_account_name), bankAccountNumber: optionalText(row.bank_account_number), bankCode: optionalText(row.bank_code), instructions: optionalText(row.instructions) };
 }
-
-function paymentLabel(type: PaymentMethodType): string {
-  if (type === 'bank_transfer') return 'Bank Transfer';
-  if (type === 'cash_on_delivery') return 'Cash on Delivery';
-  if (type === 'pay_on_pickup') return 'Pay on Pickup';
-  return type === 'paystack' ? 'Paystack' : 'Flutterwave';
-}
+function isPaymentMethodType(value: string): value is PaymentMethodType { return ['bank_transfer','card_terminal','paystack','flutterwave','cash_on_delivery','pay_on_pickup'].includes(value); }
+function paymentLabel(type: PaymentMethodType): string { if (type === 'bank_transfer') return 'Bank Transfer'; if (type === 'card_terminal') return 'Card Terminal'; if (type === 'cash_on_delivery') return 'Cash on Delivery'; if (type === 'pay_on_pickup') return 'Pay on Pickup'; return type === 'paystack' ? 'Paystack' : 'Flutterwave'; }
 function clean(value: string): string | null { const next = value.trim(); return next || null; }
 function optionalText(value: unknown): string { return typeof value === 'string' ? value : ''; }
 function booleanValue(value: unknown, fallback: boolean): boolean { return typeof value === 'boolean' ? value : fallback; }
