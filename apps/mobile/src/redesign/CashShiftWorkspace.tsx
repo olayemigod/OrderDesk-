@@ -22,6 +22,7 @@ import {
 import { loadCashShiftHistory, type CashShiftHistoryRow } from '../data/cashShiftHistoryRepository';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
+import { createOperationalReference } from './operationalReference';
 
 type Props = {
   tenantId: string;
@@ -181,7 +182,7 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
   function beginMovement(type: CashMovementType) {
     setMovementMode(type);
     setMovementAmount('');
-    setMovementReference('');
+    setMovementReference(createOperationalReference(type));
     setMovementReason('');
     setExpenseCategory('');
     setError(null);
