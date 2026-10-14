@@ -1,4 +1,4 @@
-﻿import type { RealtimeChannel } from '@supabase/supabase-js';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 
 import type {
   MatchSource,
@@ -287,6 +287,16 @@ export async function createManualOrder(input: ManualOrderInput): Promise<string
   return orderId;
 }
 
+export async function canManageOrderActions(tenantId: string, orderId: string): Promise<boolean> {
+  if (!tenantId || !orderId) return false;
+  const { data, error } = await supabase.rpc('get_sellertray_order_action_authority', {
+    p_tenant_id: tenantId,
+    p_order_id: orderId,
+  });
+  if (error) return false;
+  return data === true;
+}
+
 export type OrderFulfillmentInput = {
   method: FulfillmentMethod;
   provider?: string | null;
@@ -342,59 +352,62 @@ export async function completeOrderFulfillment(
 }
 
 export async function updateOrderStatus(
+  tenantId: string,
   orderId: string,
   status: OrderStatus,
   reason?: string | null,
 ): Promise<void> {
-  const { error } = await supabase
-    .from('orders')
-    .update({
-      status,
-      status_reason: reason?.trim() || null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', orderId);
-
-  if (error) throw error;
-}
-
-export async function addOrderItem(orderId: string, item: OrderItemInput): Promise<void> {
-  const { data: order, error: orderError } = await supabase
-    .from('orders')
-    .select('tenant_id')
-    .eq('id', orderId)
-    .single();
-
-  if (orderError) throw orderError;
-  if (!order?.tenant_id) throw new Error('Unable to resolve the order tenant.');
-
-  const { error } = await supabase.from('order_items').insert({
-    tenant_id: order.tenant_id,
-    order_id: orderId,
-    item_name: item.name.trim(),
-    quantity: item.quantity,
-    unit_price: item.unitPrice,
+  const { error } = await supabase.rpc('transition_sellertray_order', {
+    p_tenant_id: tenantId,
+    p_order_id: orderId,
+    p_status: status,
+    p_reason: reason?.trim() || null,
   });
-
   if (error) throw error;
 }
 
-export async function updateOrderItem(itemId: string, item: OrderItemInput): Promise<void> {
-  const { error } = await supabase
-    .from('order_items')
-    .update({
-      item_name: item.name.trim(),
-      quantity: item.quantity,
-      unit_price: item.unitPrice,
-    })
-    .eq('id', itemId);
-
+async function mutateOrderItem(
+  tenantId: string,
+  orderId: string,
+  action: 'add' | 'update' | 'delete',
+  itemId: string | null,
+  item: OrderItemInput | null,
+): Promise<void> {
+  const { error } = await supabase.rpc('mutate_sellertray_order_item', {
+    p_tenant_id: tenantId,
+    p_order_id: orderId,
+    p_action: action,
+    p_item_id: itemId,
+    p_item_name: item?.name.trim() || null,
+    p_quantity: item?.quantity ?? null,
+    p_unit_price: item?.unitPrice ?? null,
+  });
   if (error) throw error;
 }
 
-export async function deleteOrderItem(itemId: string): Promise<void> {
-  const { error } = await supabase.from('order_items').delete().eq('id', itemId);
-  if (error) throw error;
+export async function addOrderItem(
+  tenantId: string,
+  orderId: string,
+  item: OrderItemInput,
+): Promise<void> {
+  await mutateOrderItem(tenantId, orderId, 'add', null, item);
+}
+
+export async function updateOrderItem(
+  tenantId: string,
+  orderId: string,
+  itemId: string,
+  item: OrderItemInput,
+): Promise<void> {
+  await mutateOrderItem(tenantId, orderId, 'update', itemId, item);
+}
+
+export async function deleteOrderItem(
+  tenantId: string,
+  orderId: string,
+  itemId: string,
+): Promise<void> {
+  await mutateOrderItem(tenantId, orderId, 'delete', itemId, null);
 }
 
 export function subscribeToOrderChanges(tenantId: string, onChange: () => void): RealtimeChannel {
