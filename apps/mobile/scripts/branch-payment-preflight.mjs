@@ -16,6 +16,7 @@ function requireValue(condition, message) {
 const migration = read(join(repoRoot, 'supabase/migrations/20261014184500_branch_customer_payment_convergence.sql'));
 const authorityMigration = read(join(repoRoot, 'supabase/migrations/20261014190000_payment_operation_branch_authority.sql'));
 const actionAuthorityReader = read(join(repoRoot, 'supabase/migrations/20261014190500_payment_action_authority_reader.sql'));
+const finalAuthorityMigration = read(join(repoRoot, 'supabase/migrations/20261014191000_pos_checkout_payment_authority_compatibility.sql'));
 const paymentMethodsRepository = read(join(mobileRoot, 'src/data/paymentMethodsRepository.ts'));
 const orderPaymentsRepository = read(join(mobileRoot, 'src/data/orderPaymentsRepository.ts'));
 const orderPaymentPanel = read(join(mobileRoot, 'src/components/OrderPaymentPanel.tsx'));
@@ -36,15 +37,23 @@ requireValue(
 );
 requireValue(
   authorityMigration.includes('sellertray_user_can_manage_order_payment') &&
-    authorityMigration.includes("'can_manage_payments'") &&
-    authorityMigration.includes('sellertray_user_can_operate_branch'),
-  'Human payment authority must require both payment capability and operational Branch access',
-);
-requireValue(
-  authorityMigration.includes("public.confirm_sellertray_offline_payment") &&
+    authorityMigration.includes("public.confirm_sellertray_offline_payment") &&
     authorityMigration.includes('public.sellertray_user_can_manage_order_payment(') &&
     authorityMigration.includes('public.finalize_sellertray_pos_confirmed_payment('),
-  'Manual confirmation must reuse human payment authority without losing POS transfer settlement',
+  'Manual confirmation must reuse the shared payment authority boundary without losing POS transfer settlement',
+);
+requireValue(
+  finalAuthorityMigration.includes('sellertray_user_can_manage_order_payment') &&
+    finalAuthorityMigration.includes('sellertray_user_can_operate_branch') &&
+    finalAuthorityMigration.includes("o.source='pos'") &&
+    finalAuthorityMigration.includes("'can_manage_payments'") &&
+    finalAuthorityMigration.includes('sellertray_user_has_capability'),
+  'Final payment authority must preserve POS Branch-operator settlement while requiring payment capability for non-POS payment management',
+);
+requireValue(
+  finalAuthorityMigration.indexOf('sellertray_user_can_operate_branch') < finalAuthorityMigration.indexOf("o.source='pos'") &&
+    finalAuthorityMigration.indexOf("o.source='pos'") < finalAuthorityMigration.indexOf("'can_manage_payments'"),
+  'Final payment authority must always enforce Branch operation before the POS-or-payment-capability split',
 );
 requireValue(
   actionAuthorityReader.includes('get_sellertray_order_payment_authority') &&
@@ -88,7 +97,7 @@ requireValue(
     merchantPaymentOperations.includes('p_order_id: orderId') &&
     merchantPaymentOperations.split('await assertHumanPaymentAuthority(tenantId, userId, order)').length >= 5 &&
     merchantPaymentOperations.includes('select=id,tenant_id,branch_id,source,payment_status'),
-  'Merchant payment mutations must use the shared human payment capability-and-Branch authority boundary',
+  'Merchant payment mutations must use the shared order payment authority boundary',
 );
 requireValue(
   whatsappPayment.includes('branch_id: string;') &&
