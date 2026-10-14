@@ -21,7 +21,7 @@ import {
 } from '../data/inventoryRepository';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
-import { createOperationalReference } from './operationalReference';
+import { createInventoryOperationCommandId, createOperationalReference } from './operationalReference';
 
 type Props = {
   tenantId: string;
@@ -36,17 +36,15 @@ const NO_CAPABILITIES: InventoryCapabilities = {
 const RECEIVE_REASONS = [
   'Supplier delivery',
   'Opening stock',
-  'Branch replenishment',
-  'Inventory recovery',
   'Other approved receipt',
 ] as const;
 
 const ADJUST_REASONS = [
-  'Stock count correction',
+  'Data correction',
   'Damage',
   'Expiry',
   'Missing / shrinkage',
-  'Data correction',
+  'Inventory recovery',
   'Other approved adjustment',
 ] as const;
 
@@ -66,6 +64,7 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
   const [capabilityLoading, setCapabilityLoading] = useState(true);
   const [capabilityError, setCapabilityError] = useState<string | null>(null);
   const [operationMode, setOperationMode] = useState<InventoryOperation | null>(null);
+  const [operationCommandId, setOperationCommandId] = useState('');
   const [operationUomId, setOperationUomId] = useState('');
   const [operationQuantity, setOperationQuantity] = useState('');
   const [adjustmentDirection, setAdjustmentDirection] = useState<InventoryAdjustmentDirection>('increase');
@@ -110,6 +109,7 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
     setSelectedProductId(null);
     setMovements([]);
     setOperationMode(null);
+    setOperationCommandId('');
     setOperationNotice(null);
     setCapabilities(NO_CAPABILITIES);
     setCapabilityLoading(true);
@@ -193,12 +193,14 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
       return;
     }
     const defaultUom = findDefaultOperationUom(selectedProduct, mode);
+    const defaultReason = mode === 'receive' ? RECEIVE_REASONS[0] : ADJUST_REASONS[0];
     setOperationMode(mode);
+    setOperationCommandId(createInventoryOperationCommandId(mode));
     setOperationUomId(defaultUom?.id ?? '');
     setOperationQuantity('');
-    setAdjustmentDirection('increase');
+    setAdjustmentDirection(requiredDirectionForAdjustmentReason(defaultReason) ?? 'increase');
     setOperationReference(createOperationalReference(mode));
-    setOperationReason(mode === 'receive' ? RECEIVE_REASONS[0] : ADJUST_REASONS[0]);
+    setOperationReason(defaultReason);
     setReasonOpen(false);
     setOperationError(null);
     setOperationNotice(null);
@@ -207,6 +209,7 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
   function closeOperation() {
     if (operationSaving) return;
     setOperationMode(null);
+    setOperationCommandId('');
     setReasonOpen(false);
     setOperationError(null);
   }
@@ -214,6 +217,10 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
   async function submitOperation() {
     if (!selected || !selectedProduct || !operationMode || operationSaving) return;
     const quantity = Number(operationQuantity);
+    if (!operationCommandId) {
+      setOperationError('Restart this stock action and try again.');
+      return;
+    }
     if (!selectedOperationUom) {
       setOperationError('Choose a unit for this stock movement.');
       return;
@@ -241,6 +248,7 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
         productId: selected.catalogItemId,
         uomId: selectedOperationUom.id,
         operation: operationMode,
+        commandId: operationCommandId,
         quantity,
         adjustmentDirection: operationMode === 'adjust' ? adjustmentDirection : null,
         reference: operationReference,
@@ -253,6 +261,7 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
           : `${operationMode === 'receive' ? 'Stock received' : 'Stock adjusted'}. Current stock is ${formatQuantity(result.quantityOnHand)} ${result.stockUom}.`,
       );
       setOperationMode(null);
+      setOperationCommandId('');
       setOperationQuantity('');
       setOperationReference('');
       setOperationReason('');
@@ -271,13 +280,20 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
   if (selected) {
     const canReceive = capabilities.canReceiveStock;
     const canAdjust = capabilities.canAdjustStock;
-    const reasons = operationMode === 'receive' ? RECEIVE_REASONS : ADJUST_REASONS;
+    const receiveReasons = selected.lastMovementAt
+      ? RECEIVE_REASONS.filter((reason) => reason !== 'Opening stock')
+      : [...RECEIVE_REASONS];
+    const reasons = operationMode === 'receive' ? receiveReasons : [...ADJUST_REASONS];
+    const forcedAdjustmentDirection = operationMode === 'adjust'
+      ? requiredDirectionForAdjustmentReason(operationReason)
+      : null;
     return (
       <View style={styles.stack}>
         <Pressable
           onPress={() => {
             setSelectedProductId(null);
             setOperationMode(null);
+            setOperationCommandId('');
             setReasonOpen(false);
           }}
           style={styles.backButton}
@@ -332,7 +348,11 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
             <View style={styles.operationHead}>
               <View style={styles.flexCopy}>
                 <Text style={[styles.operationTitle, dark && darkStyles.titleText]}>{operationMode === 'receive' ? 'Receive stock' : 'Adjust stock'}</Text>
-                <Text style={[styles.muted, dark && darkStyles.bodyText]}>{operationMode === 'receive' ? 'Record stock received into this branch.' : 'Record a controlled correction to branch stock.'}</Text>
+                <Text style={[styles.muted, dark && darkStyles.bodyText]}>
+                  {operationMode === 'receive'
+                    ? 'Record supplier or opening stock received into this branch. Use Stock Transfer for stock from another branch.'
+                    : 'Record a controlled correction to branch stock.'}
+                </Text>
               </View>
               <Pressable onPress={closeOperation} disabled={operationSaving} style={styles.iconButton}>
                 <Ionicons name="close" size={20} color={theme.colors.slate} />
@@ -344,8 +364,14 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
                 {(['increase', 'decrease'] as InventoryAdjustmentDirection[]).map((direction) => (
                   <Pressable
                     key={direction}
+                    disabled={forcedAdjustmentDirection !== null}
                     onPress={() => setAdjustmentDirection(direction)}
-                    style={[styles.segmentButton, dark && darkStyles.outlineButton, adjustmentDirection === direction && styles.segmentButtonActive]}
+                    style={[
+                      styles.segmentButton,
+                      dark && darkStyles.outlineButton,
+                      adjustmentDirection === direction && styles.segmentButtonActive,
+                      forcedAdjustmentDirection !== null && styles.disabled,
+                    ]}
                   >
                     <Text style={[styles.segmentText, dark && darkStyles.bodyText, adjustmentDirection === direction && styles.segmentTextActive]}>{direction === 'increase' ? 'Increase' : 'Decrease'}</Text>
                   </Pressable>
@@ -414,6 +440,10 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
                     key={reason}
                     onPress={() => {
                       setOperationReason(reason);
+                      if (operationMode === 'adjust') {
+                        const requiredDirection = requiredDirectionForAdjustmentReason(reason);
+                        if (requiredDirection) setAdjustmentDirection(requiredDirection);
+                      }
                       setReasonOpen(false);
                     }}
                     style={[styles.selectOption, operationReason === reason && styles.selectOptionActive]}
@@ -423,6 +453,9 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
                   </Pressable>
                 ))}
               </View>
+            ) : null}
+            {operationMode === 'adjust' ? (
+              <Text style={[styles.helperText, dark && darkStyles.bodyText]}>Damage, expiry and missing stock reduce stock. Inventory recovery increases stock.</Text>
             ) : null}
 
             {operationError ? <ErrorCard text={operationError} dark={dark} /> : null}
@@ -524,6 +557,12 @@ function findDefaultOperationUom(product: CommerceProduct, mode: InventoryOperat
     return product.uoms.find((uom) => uom.isStockUom) ?? product.uoms[0] ?? null;
   }
   return product.uoms.find((uom) => uom.isStockUom) ?? product.uoms[0] ?? null;
+}
+
+function requiredDirectionForAdjustmentReason(reason: string): InventoryAdjustmentDirection | null {
+  if (reason === 'Damage' || reason === 'Expiry' || reason === 'Missing / shrinkage') return 'decrease';
+  if (reason === 'Inventory recovery') return 'increase';
+  return null;
 }
 
 function ErrorCard({ text, dark }: { text: string; dark: boolean }) {
