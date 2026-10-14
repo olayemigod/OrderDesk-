@@ -60,14 +60,14 @@ requireValue(
 
 const posRecordGuard = merchantPaymentOperations.indexOf("if (order.source === 'pos')");
 const createOfflinePayment = merchantPaymentOperations.indexOf("create_sellertray_order_payment_for_method");
-const paymentCapabilityCheck = merchantPaymentOperations.indexOf("p_capability: 'can_manage_payments'");
+const paymentAuthorityCheck = merchantPaymentOperations.indexOf("rpc<boolean>('sellertray_user_can_manage_order_payment'");
 requireValue(
   posRecordGuard >= 0 && createOfflinePayment >= 0 && posRecordGuard < createOfflinePayment,
   'Merchant payment operations must reject POS record_offline before a duplicate payment can be created',
 );
 requireValue(
-  paymentCapabilityCheck >= 0 && createOfflinePayment >= 0 && paymentCapabilityCheck < createOfflinePayment,
-  'Merchant payment operations must authorize payment recording before creating a payment attempt',
+  paymentAuthorityCheck >= 0 && createOfflinePayment >= 0 && paymentAuthorityCheck < createOfflinePayment,
+  'Merchant payment operations must authorize payment capability and Branch scope before creating a payment attempt',
 );
 requireValue(
   orderPaymentPanel.includes("const canRecordNewOfflinePayment = order.source !== 'pos'") &&
