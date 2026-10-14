@@ -51,6 +51,18 @@ Deno.serve(async (req: Request) => {
 
     if (action === 'record_offline') {
       if (!await rpc<boolean>('orderdesk_subscription_can_write', { p_tenant_id: tenantId })) return json({ error: 'SellerTray subscription is read-only' }, 403);
+      const order = await loadOrderSummary(tenantId, orderId!);
+      if (!order) return json({ error: 'Order not found' }, 404);
+      if (order.source === 'pos') {
+        return json({ error: 'POS sales must confirm the existing checkout payment instead of recording a new payment.' }, 409);
+      }
+      const canManagePayments = await rpc<boolean>('sellertray_user_has_capability', {
+        p_tenant_id: tenantId,
+        p_user_id: userId,
+        p_capability: 'can_manage_payments',
+      });
+      if (!canManagePayments) return json({ error: 'You do not have permission to record this payment' }, 403);
+
       const method = await loadPaymentMethod(tenantId, paymentMethodId!);
       const methodType = String(method?.method_type ?? '');
       if (!method || method.is_enabled !== true) return json({ error: 'Payment method is not enabled' }, 409);
@@ -88,7 +100,7 @@ Deno.serve(async (req: Request) => {
     return json({ ok: true, paymentId, status: runtime.status || payment.status, providerStatus: runtime.providerStatus || null });
   } catch (error) {
     const message = error instanceof Error ? sanitize(error.message) : 'Payment operation failed';
-    const status = /membership|required|customer-facing offline|not awaiting|read-only/i.test(message) ? 403 : /not found/i.test(message) ? 404 : /already|enabled/i.test(message) ? 409 : 400;
+    const status = /membership|required|customer-facing offline|not awaiting|read-only|permission|access/i.test(message) ? 403 : /not found/i.test(message) ? 404 : /already|enabled/i.test(message) ? 409 : 400;
     console.error(JSON.stringify({ ts: new Date().toISOString(), service: 'merchant-payment-operations', event: 'request_failed', payment_id: paymentId, error: message }));
     return json({ error: message }, status);
   }
@@ -108,6 +120,11 @@ async function membershipRole(tenantId: string, userId: string): Promise<string 
 
 async function loadPaymentMethod(tenantId: string, paymentMethodId: string): Promise<J | null> {
   const rows = await rest<J[]>('/rest/v1/merchant_payment_methods?select=id,tenant_id,method_type,display_name,is_enabled&tenant_id=eq.' + encodeURIComponent(tenantId) + '&id=eq.' + encodeURIComponent(paymentMethodId) + '&limit=1');
+  return rows[0] || null;
+}
+
+async function loadOrderSummary(tenantId: string, orderId: string): Promise<J | null> {
+  const rows = await rest<J[]>('/rest/v1/orders?select=id,tenant_id,source,payment_status&tenant_id=eq.' + encodeURIComponent(tenantId) + '&id=eq.' + encodeURIComponent(orderId) + '&limit=1');
   return rows[0] || null;
 }
 
