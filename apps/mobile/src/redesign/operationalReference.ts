@@ -3,7 +3,10 @@ export type OperationalReferenceKind =
   | 'adjust'
   | 'purchase_receipt'
   | 'stock_count'
-  | 'stock_transfer';
+  | 'stock_transfer'
+  | 'cash_in'
+  | 'cash_out'
+  | 'expense';
 
 const PREFIX: Record<OperationalReferenceKind, string> = {
   receive: 'RCV',
@@ -11,6 +14,9 @@ const PREFIX: Record<OperationalReferenceKind, string> = {
   purchase_receipt: 'PORCV',
   stock_count: 'COUNT',
   stock_transfer: 'TRF',
+  cash_in: 'CASHIN',
+  cash_out: 'CASHOUT',
+  expense: 'EXP',
 };
 
 export function createOperationalReference(kind: OperationalReferenceKind): string {
