@@ -5,6 +5,8 @@ type JsonRecord = Record<string, unknown>;
 type CheckoutResult = {
   orderId: string;
   paymentId: string;
+  paymentMethodId: string | null;
+  methodType: string;
   status: string;
   paymentStatus: string;
   fulfillmentStatus: string;
@@ -53,10 +55,22 @@ Deno.serve(async (request) => {
 
   const tenantId = cleanUuid(body.tenantId);
   const orderId = cleanUuid(body.orderId);
-  const paymentMethod = body.paymentMethod === undefined ? 'cash' : cleanText(body.paymentMethod, 32);
+  const legacyPaymentMethod = body.paymentMethod === undefined ? null : cleanText(body.paymentMethod, 32);
+  const rawPaymentMethodId = body.paymentMethodId;
+  const paymentMethodId = rawPaymentMethodId === null || rawPaymentMethodId === undefined || rawPaymentMethodId === ''
+    ? null
+    : cleanUuid(rawPaymentMethodId);
 
   if (!tenantId || !orderId) return json({ error: 'Business and sale are required' }, 400);
-  if (paymentMethod !== 'cash') return json({ error: 'Only cash checkout is available in this SellerTray POS slice' }, 400);
+  if (rawPaymentMethodId !== null && rawPaymentMethodId !== undefined && rawPaymentMethodId !== '' && !paymentMethodId) {
+    return json({ error: 'A valid payment method is required' }, 400);
+  }
+  if (legacyPaymentMethod && legacyPaymentMethod !== 'cash') {
+    return json({ error: 'Use the branch payment method identifier for non-cash checkout' }, 400);
+  }
+  if (legacyPaymentMethod === 'cash' && paymentMethodId) {
+    return json({ error: 'Cash checkout cannot include a merchant payment method identifier' }, 400);
+  }
 
   const { data: membership, error: membershipError } = await admin
     .from('tenant_members')
@@ -68,19 +82,20 @@ Deno.serve(async (request) => {
   if (membershipError) return json({ error: membershipError.message }, 400);
   if (!membership) return json({ error: 'You do not have access to this business' }, 403);
 
-  const { data: result, error: checkoutError } = await admin.rpc('complete_sellertray_pos_cash_sale', {
+  const { data: result, error: checkoutError } = await admin.rpc('complete_sellertray_pos_sale', {
     p_tenant_id: tenantId,
     p_order_id: orderId,
+    p_payment_method_id: paymentMethodId,
     p_actor_user_id: userId,
   });
 
   if (checkoutError || !isCheckoutResult(result)) {
     const message = checkoutError?.message ?? 'Unable to complete this sale';
-    const status = /membership|access|role|read-only/i.test(message)
+    const status = /membership|access|role|permission|read-only/i.test(message)
       ? 403
       : /not found/i.test(message)
         ? 404
-        : /insufficient stock/i.test(message)
+        : /insufficient stock|not assigned|not enabled|already|inconsistent/i.test(message)
           ? 409
           : 400;
     return json({ error: message }, status);
@@ -119,11 +134,11 @@ async function writeCompletionAudit(input: {
     .from('commercial_action_ledger')
     .upsert({
       tenant_id: input.tenantId,
-      action_key: 'pos-cash-complete:' + input.orderId,
+      action_key: 'pos-complete:' + input.orderId,
       channel: 'merchant_app',
       customer_id: order.customer_id,
       target_order_id: input.orderId,
-      action_type: 'pos_cash_sale_completed',
+      action_type: 'pos_sale_completed',
       risk_class: 'high',
       requested_by: input.role === 'staff' ? 'staff' : 'merchant',
       actor_user_id: input.userId,
@@ -142,7 +157,8 @@ async function writeCompletionAudit(input: {
         branch_id: order.branch_id,
       },
       metadata: {
-        payment_method: 'cash',
+        payment_method_id: input.result.paymentMethodId,
+        payment_method_type: input.result.methodType,
         payment_id: input.result.paymentId,
         inventory_movement_count: input.result.inventoryMovementCount,
         idempotent_replay: input.result.idempotentReplay,
@@ -161,6 +177,8 @@ function isCheckoutResult(value: unknown): value is CheckoutResult {
   const row = value as JsonRecord;
   return typeof row.orderId === 'string'
     && typeof row.paymentId === 'string'
+    && (row.paymentMethodId === null || row.paymentMethodId === undefined || typeof row.paymentMethodId === 'string')
+    && typeof row.methodType === 'string'
     && row.status === 'completed'
     && row.paymentStatus === 'paid'
     && row.fulfillmentStatus === 'collected'
