@@ -9,9 +9,11 @@ const sync = readFileSync(resolve(appRoot, 'src/redesign/SyncStatusWorkspace.tsx
 const offline = readFileSync(resolve(appRoot, 'src/data/offlineSalesRepository.ts'), 'utf8');
 const commerce = readFileSync(resolve(appRoot, 'src/data/commerceRepository.ts'), 'utf8');
 const edge = readFileSync(resolve(appRoot, '../../supabase/functions/merchant-order/index.ts'), 'utf8');
+const whatsappWebhook = readFileSync(resolve(appRoot, '../../supabase/functions/whatsapp-webhook/index.ts'), 'utf8');
 const idempotency = readFileSync(resolve(appRoot, '../../supabase/migrations/20261010101500_pos_draft_client_idempotency.sql'), 'utf8');
 const replay = readFileSync(resolve(appRoot, '../../supabase/migrations/20261010101600_offline_pos_replay_validation.sql'), 'utf8');
 const customerIdentity = readFileSync(resolve(appRoot, '../../supabase/migrations/20261014130000_pos_customer_identity_selection.sql'), 'utf8');
+const customerConvergence = readFileSync(resolve(appRoot, '../../supabase/migrations/20261014133000_customer_phone_identity_convergence.sql'), 'utf8');
 const failures = [];
 
 function requireValue(condition, message) {
@@ -114,6 +116,17 @@ requireValue(
     customerIdentity.includes("'customerId',p_customer_id") &&
     customerIdentity.includes('Queued sale needs review because Branch stock is no longer sufficient'),
   'Customer-aware POS commands must reuse one shared customer and retain strong offline replay validation.',
+);
+
+requireValue(
+  customerConvergence.includes('resolve_sellertray_whatsapp_customer') &&
+    customerConvergence.includes("regexp_replace(v_customer_phone,'[^0-9]','','g')") &&
+    customerConvergence.includes("c.wa_id like 'manual:%'") &&
+    customerConvergence.includes('grant execute on function public.resolve_sellertray_whatsapp_customer(uuid,text,text)') &&
+    whatsappWebhook.includes('/rest/v1/rpc/resolve_sellertray_whatsapp_customer') &&
+    whatsappWebhook.includes('p_wa_id: event.waId') &&
+    !whatsappWebhook.includes('const customerPayload: JsonRecord = {'),
+  'POS and WhatsApp must resolve one shared customer identity instead of creating channel-specific customer records.',
 );
 
 requireValue(
