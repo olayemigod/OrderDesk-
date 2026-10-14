@@ -14,11 +14,13 @@ function requireValue(condition, message) {
 }
 
 const authorityMigration = read(join(repoRoot, 'supabase/migrations/20261014192000_order_operation_authority_convergence.sql'));
+const merchantOrderMigration = read(join(repoRoot, 'supabase/migrations/20261014193000_merchant_order_creation_authority.sql'));
 const paidCancellationGuard = read(join(repoRoot, 'supabase/migrations/20260914095500_restore_paid_order_cancellation_guard.sql'));
 const posDraftMigration = read(join(repoRoot, 'supabase/migrations/20261014091000_pos_draft_item_editing.sql'));
 const ordersRepository = read(join(mobileRoot, 'src/data/ordersRepository.ts'));
 const useOrders = read(join(mobileRoot, 'src/hooks/useOrders.ts'));
 const fulfillmentEdge = read(join(repoRoot, 'supabase/functions/order-fulfillment/index.ts'));
+const merchantOrderEdge = read(join(repoRoot, 'supabase/functions/merchant-order/index.ts'));
 
 requireValue(
   authorityMigration.includes('sellertray_user_can_manage_order_operation') &&
@@ -56,6 +58,27 @@ requireValue(
     authorityMigration.includes('revoke update(status,status_reason,updated_at) on table public.orders from authenticated') &&
     authorityMigration.includes('revoke insert,update,delete on table public.order_items from authenticated'),
   'Authenticated clients must not retain raw order or order-line mutation privileges',
+);
+requireValue(
+  merchantOrderMigration.includes('create_sellertray_merchant_order_atomic') &&
+    merchantOrderMigration.includes("'can_manage_orders'") &&
+    merchantOrderMigration.includes('sellertray_user_can_operate_branch') &&
+    merchantOrderMigration.includes('orderdesk_subscription_can_write'),
+  'Merchant-created orders must require writable subscription, order capability and active Branch operation',
+);
+requireValue(
+  merchantOrderMigration.includes('resolve_sellertray_pos_customer') &&
+    merchantOrderMigration.includes('branch_id') &&
+    merchantOrderMigration.includes('commercial_action_ledger') &&
+    merchantOrderMigration.includes('sellertray.audit_actor_user_id'),
+  'Merchant-created orders must share Customer identity, persist Branch and commit audit atomically',
+);
+requireValue(
+  merchantOrderEdge.includes("admin.rpc('create_sellertray_merchant_order_atomic'") &&
+    merchantOrderEdge.includes('p_actor_user_id: userId') &&
+    merchantOrderEdge.includes('p_branch_id: branchId') &&
+    !merchantOrderEdge.includes("admin.rpc('create_sellertray_manual_order_atomic'"),
+  'Merchant order edge path must delegate human order creation to the governed Branch-aware command',
 );
 requireValue(
   paidCancellationGuard.includes("old.payment_status in ('paid','verification_required','payment_issue')") &&
