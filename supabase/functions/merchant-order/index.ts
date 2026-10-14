@@ -54,6 +54,8 @@ Deno.serve(async (request) => {
 
   const mode = body.mode === 'pos' ? 'pos' : 'manual';
   const tenantId = cleanUuid(body.tenantId);
+  const customerIdProvided = body.customerId !== undefined && body.customerId !== null && body.customerId !== '';
+  const customerId = cleanUuid(body.customerId);
   const customerName = cleanText(body.customerName, 120);
   const customerPhone = normalizePhone(body.customerPhone);
   const note = cleanText(body.note, 500);
@@ -77,11 +79,10 @@ Deno.serve(async (request) => {
     const lines = parsePosLines(body.items);
 
     if (!branchId) return json({ error: 'Branch is required' }, 400);
-    if (clientReferenceProvided && !clientReference) {
-      return json({ error: 'Sale reference is invalid' }, 400);
-    }
+    if (customerIdProvided && !customerId) return json({ error: 'Selected customer is invalid' }, 400);
+    if (clientReferenceProvided && !clientReference) return json({ error: 'Sale reference is invalid' }, 400);
     if (!lines.length) return json({ error: 'Add at least one product' }, 400);
-    if ((customerName === null) !== (customerPhone === null)) {
+    if (!customerId && (customerName === null) !== (customerPhone === null)) {
       return json({ error: 'Enter both customer name and phone, or leave both blank for a walk-in sale' }, 400);
     }
     if (
@@ -126,6 +127,7 @@ Deno.serve(async (request) => {
     const rpcArgs: JsonRecord = {
       p_tenant_id: tenantId,
       p_branch_id: branchId,
+      p_customer_id: customerId,
       p_customer_name: customerName,
       p_customer_phone: customerPhone,
       p_note: note,
@@ -145,7 +147,7 @@ Deno.serve(async (request) => {
 
     if (createError || typeof orderId !== 'string') {
       const message = createError?.message ?? 'Unable to create sale';
-      const status = /needs review|reused with different details/i.test(message) ? 409 : 400;
+      const status = /needs review|reused with different details|multiple customer records|selected customer is unavailable/i.test(message) ? 409 : 400;
       return json({ error: message }, status);
     }
 
@@ -156,12 +158,13 @@ Deno.serve(async (request) => {
       orderId,
       actionKey: 'pos-draft:' + orderId,
       actionType: 'pos_draft_created',
-      customerName: customerName ?? 'Walk-in Customer',
+      customerName: customerName ?? (customerId ? 'Selected customer' : 'Walk-in Customer'),
       customerPhone,
       lineCount: lines.length,
       metadata: {
         source: 'pos',
         branch_id: branchId,
+        ...(customerId ? { selected_customer_id: customerId } : {}),
         ...(clientReference ? { client_reference: clientReference } : {}),
       },
     });
@@ -306,13 +309,7 @@ function parsePosLines(value: unknown): PosLine[] {
     const expectedSellingPrice = optionalNonNegativeNumber(row.expectedSellingPrice);
     const expectedConversionFactor = optionalPositiveNumber(row.expectedConversionFactor);
     if (!catalogItemId || !uomId || !Number.isFinite(quantity) || quantity <= 0 || quantity > 9999) continue;
-    lines.push({
-      catalogItemId,
-      uomId,
-      quantity,
-      expectedSellingPrice,
-      expectedConversionFactor,
-    });
+    lines.push({ catalogItemId, uomId, quantity, expectedSellingPrice, expectedConversionFactor });
   }
   return lines;
 }
@@ -325,63 +322,20 @@ function normalizePhone(value: unknown): string | null {
   return clean;
 }
 
-function optionalNonNegativeNumber(value: unknown): number | null {
-  if (value === null || value === undefined || value === '') return null;
-  const parsed = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
-}
+function optionalNonNegativeNumber(value: unknown): number | null { if (value === null || value === undefined || value === '') return null; const parsed = typeof value === 'number' ? value : Number(value); return Number.isFinite(parsed) && parsed >= 0 ? parsed : null; }
+function optionalPositiveNumber(value: unknown): number | null { if (value === null || value === undefined || value === '') return null; const parsed = typeof value === 'number' ? value : Number(value); return Number.isFinite(parsed) && parsed > 0 ? parsed : null; }
+function cleanText(value: unknown, max: number): string | null { if (typeof value !== 'string') return null; const clean = value.trim().replace(/\s+/g, ' '); return clean ? clean.slice(0, max) : null; }
+function cleanUuid(value: unknown): string | null { if (typeof value !== 'string') return null; const clean = value.trim(); return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clean) ? clean : null; }
 
-function optionalPositiveNumber(value: unknown): number | null {
-  if (value === null || value === undefined || value === '') return null;
-  const parsed = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
-
-function cleanText(value: unknown, max: number): string | null {
-  if (typeof value !== 'string') return null;
-  const clean = value.trim().replace(/\s+/g, ' ');
-  return clean ? clean.slice(0, max) : null;
-}
-
-function cleanUuid(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const clean = value.trim();
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clean) ? clean : null;
-}
-
-async function readRequestTextLimited(
-  request: Request,
-  maxBytes: number,
-): Promise<{ ok: true; text: string } | { ok: false }> {
+async function readRequestTextLimited(request: Request, maxBytes: number): Promise<{ ok: true; text: string } | { ok: false }> {
   const declared = Number(request.headers.get('content-length') ?? 0);
   if (Number.isFinite(declared) && declared > maxBytes) return { ok: false };
   if (!request.body) return { ok: true, text: '' };
-
-  const reader = request.body.getReader();
-  const decoder = new TextDecoder();
-  const parts: string[] = [];
-  let total = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > maxBytes) {
-        await reader.cancel();
-        return { ok: false };
-      }
-      parts.push(decoder.decode(value, { stream: true }));
-    }
-    parts.push(decoder.decode());
-    return { ok: true, text: parts.join('') };
-  } finally {
-    try { reader.releaseLock(); } catch { /* no-op */ }
-  }
+  const reader = request.body.getReader(); const decoder = new TextDecoder(); const parts: string[] = []; let total = 0;
+  try { while (true) { const { done, value } = await reader.read(); if (done) break; total += value.byteLength; if (total > maxBytes) { await reader.cancel(); return { ok: false }; } parts.push(decoder.decode(value, { stream: true })); } parts.push(decoder.decode()); return { ok: true, text: parts.join('') }; }
+  finally { try { reader.releaseLock(); } catch {} }
 }
 
 function json(payload: JsonRecord, status = 200): Response {
-  return new Response(JSON.stringify(payload), {
-    status,
-    headers: { ...corsHeaders, 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
-  });
+  return new Response(JSON.stringify(payload), { status, headers: { ...corsHeaders, 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
 }
