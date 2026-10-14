@@ -27,10 +27,11 @@ requireValue(
 );
 
 requireValue(
-  sell.includes('completePosCashSale') &&
-    sell.indexOf('completePosCashSale') < sell.indexOf('function confirmCashReceived') &&
-    sell.includes('if (!draftOrderId || completing) return;'),
-  'Cash completion must remain gated by a server-created draft order.',
+  sell.includes('completePosSale') &&
+    sell.includes('if (!draftOrderId || completing || !selectedPayment) return;') &&
+    sell.includes('await completePosSale(tenantId, orderId, selectedPayment.paymentMethodId)') &&
+    sell.indexOf('createPosDraft') < sell.indexOf('completePosSale'),
+  'Payment completion must remain gated by a server-created draft order and selected governed Branch payment method.',
 );
 
 requireValue(
@@ -43,8 +44,9 @@ requireValue(
 );
 
 requireValue(
-  !offline.includes('completePosCashSale') &&
-    !offline.includes('complete_sellertray_pos_cash') &&
+  !offline.includes('completePosSale') &&
+    !offline.includes('completePosCashSale') &&
+    !offline.includes('complete_sellertray_pos') &&
     !offline.includes('record_sellertray_inventory_movement') &&
     !offline.includes('sellertray_supplier_payment') &&
     !offline.includes('set_sellertray_member_'),
@@ -61,7 +63,7 @@ requireValue(
 requireValue(
   more.includes('Sync Status') &&
     sync.includes('A held sale is not paid or completed') &&
-    sync.includes('Cash completion always stays online'),
+    sync.includes('Payment completion always stays online'),
   'More must expose an explicit Sync Status surface with the offline safety boundary.',
 );
 
