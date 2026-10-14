@@ -134,7 +134,7 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
       })}
       <Text style={[styles.note, appearance.dark && darkStyles.bodyText]}>{order.source === 'pos'
         ? 'For a pending POS bank transfer, payment confirmation is the settlement boundary: SellerTray rechecks stock, completes collection and deducts stock only when confirmation succeeds.'
-        : 'Order status, payment status and fulfilment status remain separate for customer orders; confirming payment does not by itself mark delivery complete.'}</Text>
+        : 'Order status, payment status and fulfilment status remain separate for customer orders. Confirming payment does not complete the order or delivery.'}</Text>
     </View>
   );
 }
