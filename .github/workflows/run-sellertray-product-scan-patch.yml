@@ -1,4 +1,4 @@
-name: SellerTray product scan patch
+name: SellerTray product scan repair
 
 on:
   push:
@@ -12,7 +12,8 @@ permissions:
 
 jobs:
   patch:
-    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -23,22 +24,25 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: apps/mobile/package-lock.json
-      - name: Patch mobile product scan
+      - name: Repair product scan integration
         run: python3 scripts/patch-sellertray-product-scan.py
-      - name: Install camera dependency
+      - name: Install SDK-compatible camera dependency
         working-directory: apps/mobile
         run: npx expo install expo-camera --npm
       - name: Typecheck mobile
         working-directory: apps/mobile
         run: npm run typecheck
+      - name: Release preflight
+        working-directory: apps/mobile
+        run: npm run release:preflight
       - name: Validate diff
         run: git diff --check
-      - name: Commit patch
+      - name: Commit repaired checkpoint
         run: |
           rm scripts/patch-sellertray-product-scan.py
           rm .github/workflows/run-sellertray-product-scan-patch.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add apps/mobile scripts/patch-sellertray-product-scan.py .github/workflows/run-sellertray-product-scan-patch.yml
-          git commit -m 'feat: enable mobile product barcode capture'
+          git add apps/mobile supabase/tests scripts/patch-sellertray-product-scan.py .github/workflows/run-sellertray-product-scan-patch.yml
+          git commit -m 'fix: complete SellerTray product scan integration'
           git push origin HEAD:feat/sellertray-brand-ui-v1
