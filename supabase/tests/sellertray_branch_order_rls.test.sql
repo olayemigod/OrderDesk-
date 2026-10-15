@@ -10,18 +10,18 @@ select extensions.ok(
 );
 
 select extensions.ok(
-  (select with_check ilike '%sellertray_user_can_access_branch%'
+  (select with_check ilike '%sellertray_current_user_can_access_branch%'
    from pg_policies
    where schemaname='public' and tablename='orders' and policyname='orders_insert_member'),
-  'order inserts require active Branch access'
+  'order inserts bind active Branch access to the current user'
 );
 
 select extensions.ok(
-  (select qual ilike '%sellertray_user_can_access_branch%'
-      and with_check ilike '%sellertray_user_can_access_branch%'
+  (select qual ilike '%sellertray_current_user_can_access_branch%'
+      and with_check ilike '%sellertray_current_user_can_access_branch%'
    from pg_policies
    where schemaname='public' and tablename='orders' and policyname='orders_update_member'),
-  'order updates require active Branch access before and after mutation'
+  'order updates bind active Branch access to the current user before and after mutation'
 );
 
 select extensions.ok(
@@ -32,25 +32,25 @@ select extensions.ok(
 );
 
 select extensions.ok(
-  (select with_check ilike '%sellertray_user_can_access_branch%'
+  (select with_check ilike '%sellertray_current_user_can_access_branch%'
    from pg_policies
    where schemaname='public' and tablename='order_items' and policyname='order_items_insert_member'),
-  'order-item inserts inherit active parent-order Branch access'
+  'order-item inserts inherit current-user active parent-order Branch access'
 );
 
 select extensions.ok(
-  (select qual ilike '%sellertray_user_can_access_branch%'
-      and with_check ilike '%sellertray_user_can_access_branch%'
+  (select qual ilike '%sellertray_current_user_can_access_branch%'
+      and with_check ilike '%sellertray_current_user_can_access_branch%'
    from pg_policies
    where schemaname='public' and tablename='order_items' and policyname='order_items_update_member'),
-  'order-item updates inherit active parent-order Branch access'
+  'order-item updates inherit current-user active parent-order Branch access'
 );
 
 select extensions.ok(
-  (select qual ilike '%sellertray_user_can_access_branch%'
+  (select qual ilike '%sellertray_current_user_can_access_branch%'
    from pg_policies
    where schemaname='public' and tablename='order_items' and policyname='order_items_delete_member'),
-  'order-item deletes inherit active parent-order Branch access'
+  'order-item deletes inherit current-user active parent-order Branch access'
 );
 
 select extensions.ok(
@@ -64,8 +64,9 @@ select extensions.ok(
 );
 
 select extensions.ok(
-  has_function_privilege('authenticated','public.sellertray_user_can_access_branch(uuid,uuid,uuid)','EXECUTE'),
-  'authenticated mutation policies can evaluate active Branch access'
+  not has_function_privilege('authenticated','public.sellertray_user_can_access_branch(uuid,uuid,uuid)','EXECUTE')
+  and has_function_privilege('authenticated','public.sellertray_current_user_can_access_branch(uuid,uuid)','EXECUTE'),
+  'authenticated mutation policies use only current-user active Branch authority'
 );
 
 select extensions.ok(
