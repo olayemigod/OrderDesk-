@@ -24,12 +24,17 @@ export type PosDraftItemEditResult = {
 export async function updatePosDraftItems(input: {
   tenantId: string;
   orderId: string;
-  items: Array<{ orderItemId: string; quantity: number }>;
+  items: Array<{ orderItemId: string; quantity: number; unitPrice?: number }>;
 }): Promise<PosDraftItemEditResult> {
   if (!input.tenantId || !input.orderId) throw new Error('Business and draft sale are required.');
   if (!input.items.length) throw new Error('A draft sale must contain at least one item.');
-  if (input.items.some((item) => !item.orderItemId || !Number.isFinite(item.quantity) || item.quantity < 0)) {
-    throw new Error('Every draft item needs a valid quantity.');
+  if (input.items.some((item) => (
+    !item.orderItemId
+    || !Number.isFinite(item.quantity)
+    || item.quantity < 0
+    || (item.unitPrice !== undefined && (!Number.isFinite(item.unitPrice) || item.unitPrice < 0))
+  ))) {
+    throw new Error('Every draft item needs a valid quantity and price.');
   }
 
   const { data, error } = await supabase.rpc('update_sellertray_pos_draft_items', {
@@ -38,6 +43,7 @@ export async function updatePosDraftItems(input: {
     p_items: input.items.map((item) => ({
       orderItemId: item.orderItemId,
       quantity: item.quantity,
+      ...(item.unitPrice === undefined ? {} : { unitPrice: item.unitPrice }),
     })),
   });
 
