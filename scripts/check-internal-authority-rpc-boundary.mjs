@@ -1,7 +1,9 @@
 import { readdir, readFile } from 'node:fs/promises';
-import { extname, join, relative } from 'node:path';
+import { dirname, extname, join, relative, resolve } from 'node:path';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const roots = ['apps/mobile/src', 'apps/merchant-web/src'];
 const sourceExtensions = new Set(['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx']);
 const internalAuthorityHelpers = [
@@ -29,11 +31,11 @@ async function collectSourceFiles(directory) {
 const violations = [];
 
 for (const root of roots) {
-  for (const file of await collectSourceFiles(root)) {
+  for (const file of await collectSourceFiles(resolve(repoRoot, root))) {
     const content = await readFile(file, 'utf8');
     for (const helper of internalAuthorityHelpers) {
       if (content.includes(helper)) {
-        violations.push(`${relative(process.cwd(), file)}: ${helper}`);
+        violations.push(`${relative(repoRoot, file)}: ${helper}`);
       }
     }
   }
