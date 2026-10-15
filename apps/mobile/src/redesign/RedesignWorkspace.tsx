@@ -20,6 +20,7 @@ import { InventoryTabWorkspace } from './InventoryTabWorkspace';
 import { MobileShell, type SellerTrayPrimaryTab } from './MobileShell';
 import { MoreWorkspace } from './MoreWorkspace';
 import { OrdersWorkspace } from './OrdersWorkspace';
+import { ResumePosDraftWorkspace } from './ResumePosDraftWorkspace';
 import { SellWorkspace } from './SellWorkspace';
 
 export default function RedesignWorkspace() {
@@ -46,6 +47,7 @@ export default function RedesignWorkspace() {
   const [cashRouteKey, setCashRouteKey] = useState(0);
   const [whatsappRouteKey, setWhatsappRouteKey] = useState(0);
   const [syncRouteKey, setSyncRouteKey] = useState(0);
+  const [resumeDraftOrder, setResumeDraftOrder] = useState<MerchantOrder | null>(null);
 
   const {
     orders,
@@ -106,6 +108,10 @@ export default function RedesignWorkspace() {
       active = false;
     };
   }, [activeBusiness?.id]);
+
+  useEffect(() => {
+    setResumeDraftOrder(null);
+  }, [activeBranchId]);
 
   const activeBranch = useMemo(
     () => branches.find((branch) => branch.id === activeBranchId) ?? branches[0] ?? null,
@@ -351,8 +357,14 @@ export default function RedesignWorkspace() {
       notificationCount={notifications.unreadCount}
       orderAttentionCount={home.ordersNeedingAttention}
       syncState={syncState}
-      onTabChange={setTab}
-      onOpenNotifications={() => setTab('orders')}
+      onTabChange={(nextTab) => {
+        if (nextTab !== 'sell') setResumeDraftOrder(null);
+        setTab(nextTab);
+      }}
+      onOpenNotifications={() => {
+        setResumeDraftOrder(null);
+        setTab('orders');
+      }}
       onOpenBranchSwitcher={() => setShowBranchSwitcher((value) => !value)}
     >
       {showBranchSwitcher && branches.length > 1 ? (
@@ -360,6 +372,7 @@ export default function RedesignWorkspace() {
           branches={branches}
           activeBranchId={activeBranch?.id ?? ''}
           onSelect={(branchId) => {
+            setResumeDraftOrder(null);
             setActiveBranchId(branchId);
             setShowBranchSwitcher(false);
           }}
@@ -389,9 +402,18 @@ export default function RedesignWorkspace() {
           pendingTransferCount={pendingTransferCount}
           shiftOpen={cashShiftLoading ? null : Boolean(activeCashShift)}
           attentionItems={attentionItems}
-          onNewSale={() => setTab('sell')}
-          onOpenOrders={() => setTab('orders')}
-          onOpenInventory={() => setTab('inventory')}
+          onNewSale={() => {
+            setResumeDraftOrder(null);
+            setTab('sell');
+          }}
+          onOpenOrders={() => {
+            setResumeDraftOrder(null);
+            setTab('orders');
+          }}
+          onOpenInventory={() => {
+            setResumeDraftOrder(null);
+            setTab('inventory');
+          }}
           onOpenWhatsapp={openWhatsAppWorkspace}
         />
       ) : null}
@@ -401,19 +423,40 @@ export default function RedesignWorkspace() {
           cashShiftLoading ? (
             <ShiftRequiredState loading />
           ) : activeCashShift ? (
-            <SellWorkspace
-              tenantId={activeBusiness.id}
-              actorUserId={offline.actorUserId}
-              branch={activeBranch}
-              currency={activeBusiness.currency}
-              onOfflineSaleQueued={() => void offline.refresh()}
-              onDraftCreated={() => {
-                void Promise.all([
-                  refreshOrders(),
-                  refreshActiveCashShift(activeBusiness.id, activeBranch.id, { quiet: true }),
-                ]).finally(() => setTab('orders'));
-              }}
-            />
+            resumeDraftOrder ? (
+              <ResumePosDraftWorkspace
+                tenantId={activeBusiness.id}
+                branch={activeBranch}
+                currency={activeBusiness.currency}
+                order={resumeDraftOrder}
+                onCancel={() => {
+                  setResumeDraftOrder(null);
+                  setTab('orders');
+                }}
+                onCompleted={(orderId) => {
+                  setResumeDraftOrder(null);
+                  void Promise.all([
+                    refreshOrders(),
+                    refreshActiveCashShift(activeBusiness.id, activeBranch.id, { quiet: true }),
+                  ]).finally(() => setTab('orders'));
+                  void orderId;
+                }}
+              />
+            ) : (
+              <SellWorkspace
+                tenantId={activeBusiness.id}
+                actorUserId={offline.actorUserId}
+                branch={activeBranch}
+                currency={activeBusiness.currency}
+                onOfflineSaleQueued={() => void offline.refresh()}
+                onDraftCreated={() => {
+                  void Promise.all([
+                    refreshOrders(),
+                    refreshActiveCashShift(activeBusiness.id, activeBranch.id, { quiet: true }),
+                  ]).finally(() => setTab('orders'));
+                }}
+              />
+            )
           ) : (
             <ShiftRequiredState onOpenShift={openCashWorkspace} />
           )
@@ -429,6 +472,11 @@ export default function RedesignWorkspace() {
           orders={branchOrders}
           loading={ordersLoading}
           canReturnCompletedSale={canRefundSale && Boolean(activeCashShift)}
+          onResumeDraft={(order) => {
+            if (order.branchId !== activeBranch?.id) return;
+            setResumeDraftOrder(order);
+            setTab('sell');
+          }}
           onChanged={async () => {
             await Promise.all([
               refreshOrders(),
@@ -462,7 +510,10 @@ export default function RedesignWorkspace() {
               setActiveCashShift(next);
               setCashShiftError(null);
             }}
-            onOpenOrders={() => setTab('orders')}
+            onOpenOrders={() => {
+              setResumeDraftOrder(null);
+              setTab('orders');
+            }}
             onSyncOfflineSales={() => offline.syncNow()}
             onDiscardOfflineSale={offline.discard}
           />
