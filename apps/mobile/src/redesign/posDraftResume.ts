@@ -35,11 +35,11 @@ export function buildResumedPosDraft(order: MerchantOrder, products: CommercePro
     }
 
     const uomName = item.selectedUom.trim().toLowerCase();
-    const matches = product.uoms.filter((uom) => uom.name.trim().toLowerCase() === uomName);
-    if (matches.length !== 1 || matches[0]?.sellingPrice === null) {
+    const matches = product.uoms.filter((candidate) => candidate.name.trim().toLowerCase() === uomName);
+    const uom = matches[0];
+    if (matches.length !== 1 || !uom || uom.sellingPrice === null) {
       throw new Error(`The selling unit for ${item.name} is no longer available.`);
     }
-    const uom = matches[0];
     if (!Number.isFinite(item.quantity) || item.quantity <= 0) {
       throw new Error(`${item.name} has an invalid quantity.`);
     }
