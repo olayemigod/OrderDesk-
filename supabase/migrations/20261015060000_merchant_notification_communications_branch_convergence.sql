@@ -161,6 +161,9 @@ begin
 end;
 $$;
 
+-- Notification inbox access is historical evidence. It deliberately follows
+-- historical Branch read authority so authorized users can still review a
+-- deactivated Branch without making that Branch operational again.
 create or replace function public.sellertray_user_can_access_notification_scope(
   p_tenant_id uuid,
   p_branch_id uuid,
@@ -180,7 +183,7 @@ as $$
       and (
         (
           p_branch_id is not null
-          and public.sellertray_user_can_access_branch(
+          and public.sellertray_user_can_read_branch(
             p_tenant_id,
             p_branch_id,
             p_user_id
@@ -223,6 +226,46 @@ revoke all on function public.sellertray_current_user_can_access_notification_sc
   from public,anon;
 grant execute on function public.sellertray_current_user_can_access_notification_scope(uuid,uuid)
   to authenticated,service_role;
+
+-- Push delivery is operational, not historical. It remains limited to an
+-- active Branch so deactivated Branches cannot generate new Staff push.
+create or replace function public.sellertray_user_can_receive_notification_scope(
+  p_tenant_id uuid,
+  p_branch_id uuid,
+  p_user_id uuid
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path=''
+as $$
+  select exists (
+    select 1
+    from public.tenant_members tm
+    where tm.tenant_id=p_tenant_id
+      and tm.user_id=p_user_id
+      and (
+        (
+          p_branch_id is not null
+          and public.sellertray_user_can_access_branch(
+            p_tenant_id,
+            p_branch_id,
+            p_user_id
+          )
+        )
+        or (
+          p_branch_id is null
+          and tm.role in ('owner','manager')
+        )
+      )
+  );
+$$;
+
+revoke all on function public.sellertray_user_can_receive_notification_scope(uuid,uuid,uuid)
+  from public,anon,authenticated;
+grant execute on function public.sellertray_user_can_receive_notification_scope(uuid,uuid,uuid)
+  to service_role;
 
 create or replace function public.apply_sellertray_merchant_notification_branch()
 returns trigger
@@ -566,7 +609,7 @@ revoke all on function public.sellertray_unread_notification_count_for_user(uuid
 grant execute on function public.sellertray_unread_notification_count_for_user(uuid)
   to service_role;
 
--- Push dispatch combines the original per-role/expiry rules with Branch scope.
+-- Push dispatch combines active Branch operation with audience and expiry rules.
 create or replace function public.queue_sellertray_merchant_push_dispatches()
 returns trigger
 language plpgsql
@@ -578,7 +621,7 @@ begin
   select new.tenant_id,new.id,tm.user_id
   from public.tenant_members tm
   where tm.tenant_id=new.tenant_id
-    and public.sellertray_user_can_access_notification_scope(
+    and public.sellertray_user_can_receive_notification_scope(
       new.tenant_id,
       new.branch_id,
       tm.user_id
