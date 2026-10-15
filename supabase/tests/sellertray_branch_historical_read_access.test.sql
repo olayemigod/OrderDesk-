@@ -18,8 +18,8 @@ insert into sellertray_branch_history_fixture(
   active_notification_id,delayed_notification_id
 )
 values(
-  gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),
-  gen_random_uuid(),gen_random_uuid(),gen_random_uuid()
+  gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),
+  gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid()
 );
 
 insert into auth.users(id,email,aud,role,created_at,updated_at)
