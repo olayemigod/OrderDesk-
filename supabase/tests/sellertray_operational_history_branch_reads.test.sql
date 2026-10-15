@@ -6,9 +6,9 @@ select extensions.ok(
   exists (
     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where n.nspname='public' and p.proname='get_sellertray_stock_movements'
-      and lower(pg_get_functiondef(p.oid)) like '%sellertray_user_can_read_branch%'
+      and lower(pg_get_functiondef(p.oid)) like '%sellertray_current_user_can_read_branch%'
   ),
-  'stock movement history uses historical Branch read access'
+  'stock movement history binds historical Branch read access to the current user'
 );
 
 select extensions.ok(
