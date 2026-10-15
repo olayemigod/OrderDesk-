@@ -51,24 +51,36 @@ type TeamPayload = {
 
 type Capability =
   | 'can_manage_orders'
+  | 'can_refund_sale'
+  | 'can_manage_products'
   | 'can_receive_stock'
   | 'can_adjust_stock'
   | 'can_count_stock'
   | 'can_apply_stock_count'
   | 'can_transfer_stock'
+  | 'can_manage_purchasing'
+  | 'can_manage_payments'
   | 'can_open_shift'
   | 'can_record_cash_movement'
   | 'can_record_expense'
   | 'can_close_shift'
   | 'can_review_shift'
   | 'can_print_receipt'
-  | 'can_manage_devices';
+  | 'can_manage_devices'
+  | 'can_view_reports';
 
 const CAPABILITY_GROUPS: Array<{ title: string; items: Array<{ id: Capability; label: string }> }> = [
   {
     title: 'Sales & orders',
     items: [
       { id: 'can_manage_orders', label: 'Manage orders' },
+      { id: 'can_refund_sale', label: 'Refund completed sales' },
+    ],
+  },
+  {
+    title: 'Products',
+    items: [
+      { id: 'can_manage_products', label: 'Manage products' },
     ],
   },
   {
@@ -79,6 +91,18 @@ const CAPABILITY_GROUPS: Array<{ title: string; items: Array<{ id: Capability; l
       { id: 'can_count_stock', label: 'Count stock' },
       { id: 'can_apply_stock_count', label: 'Apply stock count' },
       { id: 'can_transfer_stock', label: 'Transfer stock' },
+    ],
+  },
+  {
+    title: 'Purchasing',
+    items: [
+      { id: 'can_manage_purchasing', label: 'Manage purchasing' },
+    ],
+  },
+  {
+    title: 'Payments',
+    items: [
+      { id: 'can_manage_payments', label: 'Manage payments' },
     ],
   },
   {
@@ -96,6 +120,12 @@ const CAPABILITY_GROUPS: Array<{ title: string; items: Array<{ id: Capability; l
     items: [
       { id: 'can_print_receipt', label: 'Print receipts' },
       { id: 'can_manage_devices', label: 'Manage devices' },
+    ],
+  },
+  {
+    title: 'Reports',
+    items: [
+      { id: 'can_view_reports', label: 'View reports' },
     ],
   },
 ];
