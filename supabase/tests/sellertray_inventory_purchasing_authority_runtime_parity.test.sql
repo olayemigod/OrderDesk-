@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(27);
+select extensions.plan(28);
 
 select extensions.ok(
   has_table_privilege('authenticated','public.catalog_items','SELECT')
@@ -167,8 +167,9 @@ select extensions.ok(
   exists(
     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where n.nspname='public' and p.proname='create_sellertray_stock_transfer'
-      and lower(pg_get_functiondef(p.oid)) like '%items_fingerprint%'
-      and lower(pg_get_functiondef(p.oid)) like '%different transfer facts%'
+      and regexp_replace(lower(pg_get_functiondef(p.oid)),'[[:space:]]+','','g')
+          like '%v_existing.items_fingerprint<>v_fingerprint%'
+      and lower(pg_get_functiondef(p.oid)) like '%already used for different facts%'
   ),
   'stock transfer creation retains normalized fact-aware idempotency'
 );
