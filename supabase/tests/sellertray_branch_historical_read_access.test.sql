@@ -126,10 +126,10 @@ select extensions.ok(
 );
 
 select extensions.ok(
-  (select qual ilike '%sellertray_user_can_read_branch%'
+  (select qual ilike '%sellertray_current_user_can_read_branch%'
    from pg_policies
    where schemaname='public' and tablename='orders' and policyname='orders_select_member'),
-  'order reads use historical Branch access'
+  'order reads bind historical Branch access to the signed-in user'
 );
 
 select extensions.ok(
@@ -141,10 +141,10 @@ select extensions.ok(
 );
 
 select extensions.ok(
-  (select qual ilike '%sellertray_user_can_read_branch%'
+  (select qual ilike '%sellertray_current_user_can_read_branch%'
    from pg_policies
    where schemaname='public' and tablename='inbound_messages' and policyname='inbound_messages_select_member'),
-  'WhatsApp history reads use historical Branch access'
+  'WhatsApp history reads bind historical Branch access to the signed-in user'
 );
 
 select extensions.ok(
