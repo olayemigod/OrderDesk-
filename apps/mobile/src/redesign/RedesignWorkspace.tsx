@@ -40,6 +40,9 @@ export default function RedesignWorkspace() {
   const [activeCashShift, setActiveCashShift] = useState<CashShift | null>(null);
   const [cashShiftLoading, setCashShiftLoading] = useState(false);
   const [cashShiftError, setCashShiftError] = useState<string | null>(null);
+  const [canRefundSale, setCanRefundSale] = useState(false);
+  const [refundAuthorityLoading, setRefundAuthorityLoading] = useState(false);
+  const [refundAuthorityError, setRefundAuthorityError] = useState<string | null>(null);
   const [cashRouteKey, setCashRouteKey] = useState(0);
   const [whatsappRouteKey, setWhatsappRouteKey] = useState(0);
   const [syncRouteKey, setSyncRouteKey] = useState(0);
@@ -162,6 +165,41 @@ export default function RedesignWorkspace() {
       .finally(() => {
         if (active) setCashShiftLoading(false);
       });
+    return () => {
+      active = false;
+    };
+  }, [activeBusiness?.id, activeBranch?.id]);
+
+  useEffect(() => {
+    const tenantId = activeBusiness?.id ?? '';
+    const branchId = activeBranch?.id ?? '';
+    if (!tenantId || !branchId) {
+      setCanRefundSale(false);
+      setRefundAuthorityLoading(false);
+      setRefundAuthorityError(null);
+      return undefined;
+    }
+
+    let active = true;
+    setRefundAuthorityLoading(true);
+    setRefundAuthorityError(null);
+    void supabase.rpc('get_sellertray_pos_return_authority', {
+      p_tenant_id: tenantId,
+      p_branch_id: branchId,
+    })
+      .then(({ data, error }) => {
+        if (error) throw error;
+        if (active) setCanRefundSale(data === true);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setCanRefundSale(false);
+        setRefundAuthorityError(err instanceof Error ? err.message : 'Unable to check return permission.');
+      })
+      .finally(() => {
+        if (active) setRefundAuthorityLoading(false);
+      });
+
     return () => {
       active = false;
     };
@@ -296,8 +334,8 @@ export default function RedesignWorkspace() {
     });
   }
 
-  const workspaceError = ordersError || notifications.error || branchError || inventorySummaryError || cashShiftError;
-  const workspaceSyncing = branchLoading || inventorySummaryLoading || cashShiftLoading;
+  const workspaceError = ordersError || notifications.error || branchError || inventorySummaryError || cashShiftError || refundAuthorityError;
+  const workspaceSyncing = branchLoading || inventorySummaryLoading || cashShiftLoading || refundAuthorityLoading;
   const syncState = offline.connectionState === 'offline'
     ? 'offline'
     : offline.syncing || workspaceSyncing
@@ -390,7 +428,7 @@ export default function RedesignWorkspace() {
           businessCurrency={activeBusiness.currency}
           orders={branchOrders}
           loading={ordersLoading}
-          canReturnCompletedSale={(activeBusiness.role === 'owner' || activeBusiness.role === 'manager') && Boolean(activeCashShift)}
+          canReturnCompletedSale={canRefundSale && Boolean(activeCashShift)}
           onChanged={async () => {
             await Promise.all([
               refreshOrders(),
