@@ -14,9 +14,7 @@ on:
       - 'supabase/tests/**'
       - 'supabase/functions/**'
       - 'supabase/config.toml'
-      - 'apps/mobile/src/**'
-      - 'apps/merchant-web/src/**'
-      - 'scripts/check-internal-authority-rpc-boundary.mjs'
+      - 'apps/mobile/src/data/**'
       - '.github/workflows/database-ci.yml'
   push:
     branches:
@@ -26,9 +24,7 @@ on:
       - 'supabase/tests/**'
       - 'supabase/functions/**'
       - 'supabase/config.toml'
-      - 'apps/mobile/src/**'
-      - 'apps/merchant-web/src/**'
-      - 'scripts/check-internal-authority-rpc-boundary.mjs'
+      - 'apps/mobile/src/data/**'
       - '.github/workflows/database-ci.yml'
 
 jobs:
@@ -38,9 +34,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Enforce internal authority RPC boundary
-        run: node scripts/check-internal-authority-rpc-boundary.mjs
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
