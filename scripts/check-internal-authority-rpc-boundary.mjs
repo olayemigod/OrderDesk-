@@ -7,9 +7,14 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const roots = ['apps/mobile/src', 'apps/merchant-web/src'];
 const sourceExtensions = new Set(['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx']);
 const internalAuthorityHelpers = [
+  'sellertray_user_can_access_branch',
   'sellertray_user_can_read_branch',
+  'sellertray_current_user_can_read_branch',
   'sellertray_user_can_operate_branch',
   'sellertray_user_has_capability',
+  'sellertray_user_can_access_notification_scope',
+  'sellertray_current_user_can_access_notification_scope',
+  'sellertray_user_can_receive_notification_scope',
 ];
 
 async function collectSourceFiles(directory) {
