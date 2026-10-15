@@ -8,6 +8,7 @@ const repoRoot = path.resolve(mobileRoot, '../..');
 const sourcePath = path.join(scriptsDir, 'release-preflight.mjs');
 const runtimePath = path.join(scriptsDir, '.release-preflight.runtime.mjs');
 const appPath = path.join(mobileRoot, 'app.json');
+const packagePath = path.join(mobileRoot, 'package.json');
 const provisionedAppPath = path.join(mobileRoot, 'src', 'ProvisionedApp.tsx');
 const redesignWorkspacePath = path.join(mobileRoot, 'src', 'redesign', 'RedesignWorkspace.tsx');
 const moreWorkspacePath = path.join(mobileRoot, 'src', 'redesign', 'MoreWorkspace.tsx');
@@ -83,11 +84,18 @@ requireValue(
 
 const staleVersionCodeCheck = "requireValue(app.android?.versionCode === 19, 'Android versionCode must be 19 for the merchant-reference QA line');";
 const currentVersionCodeCheck = "requireValue(app.android?.versionCode === 22, 'Android versionCode must be 22 for the merchant-reference QA line');";
+const staleCameraBlockedEntry = '  "android.permission.CAMERA",\n';
 
 const app = JSON.parse(fs.readFileSync(appPath, 'utf8')).expo;
+const pkg = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
 const blockedPermissions = new Set(app.android?.blockedPermissions ?? []);
 if (blockedPermissions.has('android.permission.BLUETOOTH_CONNECT')) throw new Error('Bluetooth printer connection must not be blocked when the SellerTray printer module is enabled');
 if (!blockedPermissions.has('android.permission.BLUETOOTH_SCAN')) throw new Error('Bluetooth scanning must remain blocked; SellerTray supports already-paired printers only');
+if (blockedPermissions.has('android.permission.CAMERA')) throw new Error('SellerTray POS barcode scanning requires Android camera permission');
+if (pkg.dependencies?.['expo-camera'] !== '~57.0.6') throw new Error('SellerTray POS barcode scanning must retain the pinned expo-camera dependency');
+const cameraPlugin = (app.plugins ?? []).find((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-camera');
+if (!cameraPlugin) throw new Error('SellerTray POS barcode scanning requires the expo-camera config plugin');
+if (!String(cameraPlugin?.[1]?.cameraPermission ?? '').includes('scan product barcodes')) throw new Error('SellerTray camera permission must explain product barcode scanning');
 if (!fs.existsSync(printerManifestPath) || !fs.existsSync(printerModulePath)) throw new Error('Bluetooth printer permission requires the governed SellerTray local printer module');
 
 const printerManifest = fs.readFileSync(printerManifestPath, 'utf8');
@@ -120,6 +128,8 @@ if (source.split(staleManualOrderCheck).length !== 2) throw new Error('Expected 
 source = source.replace(staleManualOrderCheck, currentManualOrderCheck);
 if (source.split(staleVersionCodeCheck).length !== 2) throw new Error('Expected exactly one build 19 QA version guard in release preflight');
 source = source.replace(staleVersionCodeCheck, currentVersionCodeCheck);
+if (source.split(staleCameraBlockedEntry).length !== 2) throw new Error('Expected exactly one legacy blocked camera permission in release preflight');
+source = source.replace(staleCameraBlockedEntry, '');
 
 fs.writeFileSync(runtimePath, source);
 try {
