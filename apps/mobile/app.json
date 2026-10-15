@@ -18,7 +18,6 @@
         "android.permission.ACCESS_BACKGROUND_LOCATION",
         "android.permission.READ_CONTACTS",
         "android.permission.WRITE_CONTACTS",
-        "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
         "android.permission.READ_CALENDAR",
         "android.permission.WRITE_CALENDAR",
@@ -61,6 +60,14 @@
         "expo-secure-store",
         {
           "configureAndroidBackup": false
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow SellerTray to scan product barcodes during selling and product setup.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
         }
       ],
       [
