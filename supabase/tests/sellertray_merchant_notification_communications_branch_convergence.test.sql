@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(18);
+select extensions.plan(20);
 
 select extensions.ok(
   to_regclass('public.platform_merchant_campaigns') is not null,
@@ -116,6 +116,31 @@ select extensions.ok(
 
 select extensions.ok(
   (
+    select p.prosrc ilike '%sellertray_user_can_read_branch%'
+      and p.prosrc not ilike '%sellertray_user_can_access_branch%'
+    from pg_proc p
+    join pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='public'
+      and p.proname='sellertray_user_can_access_notification_scope'
+      and pg_get_function_identity_arguments(p.oid)='p_tenant_id uuid, p_branch_id uuid, p_user_id uuid'
+  ),
+  'notification inbox authority preserves historical Branch read access'
+);
+
+select extensions.ok(
+  (
+    select p.prosrc ilike '%sellertray_user_can_access_branch%'
+    from pg_proc p
+    join pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='public'
+      and p.proname='sellertray_user_can_receive_notification_scope'
+      and pg_get_function_identity_arguments(p.oid)='p_tenant_id uuid, p_branch_id uuid, p_user_id uuid'
+  ),
+  'push delivery authority remains limited to active Branch access'
+);
+
+select extensions.ok(
+  (
     select pg_get_function_result(p.oid) ilike '%message_type text%'
       and pg_get_function_result(p.oid) ilike '%action_label text%'
       and pg_get_function_result(p.oid) ilike '%action_url text%'
@@ -168,12 +193,12 @@ select extensions.ok(
       and p.proname='sellertray_unread_notification_count_for_user'
       and pg_get_function_identity_arguments(p.oid)='p_user_id uuid'
   ),
-  'service unread counter preserves Branch, expiry and audience scope'
+  'service unread counter preserves historical Branch, expiry and audience scope'
 );
 
 select extensions.ok(
   (
-    select p.prosrc ilike '%sellertray_user_can_access_notification_scope%'
+    select p.prosrc ilike '%sellertray_user_can_receive_notification_scope%'
       and p.prosrc ilike '%expires_at%'
       and p.prosrc ilike '%audience_roles%'
     from pg_proc p
@@ -182,7 +207,7 @@ select extensions.ok(
       and p.proname='queue_sellertray_merchant_push_dispatches'
       and pg_get_function_identity_arguments(p.oid)=''
   ),
-  'push dispatch combines Branch, expiry and audience scope'
+  'push dispatch combines active Branch, expiry and audience scope'
 );
 
 select extensions.ok(
