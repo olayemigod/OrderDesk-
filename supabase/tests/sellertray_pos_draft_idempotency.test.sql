@@ -71,16 +71,21 @@ select extensions.ok(
 
 select extensions.ok(
   not has_function_privilege(
-    'authenticated',
+    'service_role',
     'public.create_sellertray_pos_order_idempotent(uuid,uuid,text,text,text,jsonb,uuid)',
+    'EXECUTE'
+  )
+  and not has_function_privilege(
+    'authenticated',
+    'public.create_sellertray_pos_order_idempotent(uuid,uuid,uuid,uuid,text,text,text,jsonb,uuid)',
     'EXECUTE'
   )
   and has_function_privilege(
     'service_role',
-    'public.create_sellertray_pos_order_idempotent(uuid,uuid,text,text,text,jsonb,uuid)',
+    'public.create_sellertray_pos_order_idempotent(uuid,uuid,uuid,uuid,text,text,text,jsonb,uuid)',
     'EXECUTE'
   ),
-  'idempotent POS draft command is service-only'
+  'POS draft transport uses the actor-aware service-only command'
 );
 
 select extensions.ok(
