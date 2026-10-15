@@ -55,10 +55,10 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
             : business.whatsappConnectionStatus;
   const status = statusCopy[effectiveStatus];
   const connected = effectiveStatus === 'connected';
-  const messagingReady = connection?.readiness.messagingReady ?? business.whatsappReadiness.messagingReady;
-  const inboundReady = connection?.readiness.inboundReady ?? business.whatsappReadiness.inboundReady;
-  const outboundReady = connection?.readiness.outboundReady ?? business.whatsappReadiness.outboundReady;
-  const readinessReason = connection?.readiness.reason ?? business.whatsappReadiness.reason;
+  const messagingReady = connection?.readiness?.messagingReady ?? business.whatsappReadiness.messagingReady;
+  const inboundReady = connection?.readiness?.inboundReady ?? business.whatsappReadiness.inboundReady;
+  const outboundReady = connection?.readiness?.outboundReady ?? business.whatsappReadiness.outboundReady;
+  const readinessReason = connection?.readiness?.reason ?? business.whatsappReadiness.reason;
   const [consent, setConsent] = useState<WhatsAppConsentStatus | null>(null);
   const [consentLoading, setConsentLoading] = useState(true);
   const [consentBusy, setConsentBusy] = useState(false);

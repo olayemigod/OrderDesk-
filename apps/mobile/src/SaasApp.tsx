@@ -27,6 +27,7 @@ import { OrderWorkflowPanel } from './components/OrderWorkflowPanel';
 import { SettingsHub } from './components/SettingsHub';
 import { SetupGuideCard } from './components/SetupGuideCard';
 import { SellerTrayBrand } from './components/SellerTrayBrand';
+import { SellerTrayLoadingScreen } from './components/SellerTrayLoadingScreen';
 import type { MerchantBusiness } from './data/businessRepository';
 import type { OrderFulfillmentInput, OrderItemInput } from './data/ordersRepository';
 import { sendMerchantPaymentOptions } from './data/orderPaymentsRepository';
@@ -213,12 +214,7 @@ function Workspace() {
   }
 
   if (businessesLoading && !activeBusiness) {
-    return (
-      <SafeAreaView style={styles.centered}>
-        <ActivityIndicator size="large" />
-        <Text style={styles.muted}>Opening SellerTrayâ€¦</Text>
-      </SafeAreaView>
-    );
+    return <SellerTrayLoadingScreen message="Opening SellerTray…" />;
   }
 
   if (!activeBusiness) {
