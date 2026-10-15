@@ -16,8 +16,7 @@ begin
     raise exception 'Stock UOM is required' using errcode='23514';
   end if;
 
-  select u.id
-    into v_uom_id
+  select u.id into v_uom_id
   from public.catalog_item_uoms u
   where u.tenant_id=new.tenant_id
     and u.catalog_item_id=new.id
@@ -25,15 +24,13 @@ begin
   limit 1;
 
   v_make_default_selling := not exists (
-    select 1
-    from public.catalog_item_uoms u
+    select 1 from public.catalog_item_uoms u
     where u.tenant_id=new.tenant_id
       and u.catalog_item_id=new.id
       and u.is_default_selling=true
   );
   v_make_default_purchase := not exists (
-    select 1
-    from public.catalog_item_uoms u
+    select 1 from public.catalog_item_uoms u
     where u.tenant_id=new.tenant_id
       and u.catalog_item_id=new.id
       and u.is_default_purchase=true
@@ -43,8 +40,7 @@ begin
     insert into public.catalog_item_uoms(
       tenant_id,catalog_item_id,uom_name,conversion_factor,selling_price,
       barcode,allow_fractional,is_default_selling,is_default_purchase
-    )
-    values(
+    ) values (
       new.tenant_id,new.id,new.stock_uom,1,new.price_ngn,
       null,new.allow_fractional_stock,v_make_default_selling,v_make_default_purchase
     );
@@ -85,7 +81,6 @@ begin
   if v_user_id is null then
     raise exception 'Authentication required' using errcode='42501';
   end if;
-
   if p_quantity is null or p_quantity<=0 or p_quantity>9999 then
     raise exception 'Enter a valid quantity' using errcode='22023';
   end if;
@@ -98,13 +93,12 @@ begin
     raise exception 'Order not found' using errcode='22023';
   end if;
 
-  if not public.sellertray_user_can_manage_order_operation(p_tenant_id,v_order.branch_id,v_user_id) then
+  if not public.sellertray_user_can_manage_order_operation(p_tenant_id,p_order_id,v_user_id) then
     raise exception 'You do not have permission to manage this order' using errcode='42501';
   end if;
   if not public.orderdesk_subscription_can_write(p_tenant_id) then
     raise exception 'SellerTray subscription is read-only' using errcode='42501';
   end if;
-
   if v_order.status not in ('draft','needs_review','accepted') then
     raise exception 'Products can only be changed before fulfilment starts' using errcode='23514';
   end if;
@@ -141,13 +135,8 @@ begin
     tenant_id,action_key,channel,customer_id,target_order_id,
     action_type,risk_class,requested_by,policy_result,action_status,metadata,applied_at
   ) values (
-    p_tenant_id,
-    'catalogue-add:'||v_order_item_id::text,
-    'merchant_app',
-    v_order.customer_id,
-    p_order_id,
-    'catalogue_item_added_to_order',
-    'medium',
+    p_tenant_id,'catalogue-add:'||v_order_item_id::text,'merchant_app',
+    v_order.customer_id,p_order_id,'catalogue_item_added_to_order','medium',
     case when v_role='staff' then 'staff' else 'merchant' end,
     'allowed','applied',
     jsonb_build_object(
@@ -159,8 +148,7 @@ begin
       'selected_uom',v_item.stock_uom,
       'conversion_factor',1,
       'actor_role',v_role
-    ),
-    now()
+    ),now()
   ) on conflict(tenant_id,action_key) do nothing;
 
   return v_order_item_id;
@@ -181,7 +169,6 @@ as $$
 declare
   v_user_id uuid := auth.uid();
   v_role text;
-  v_branch_id uuid;
   v_order_id uuid;
   v_order_status text;
   v_customer_id uuid;
@@ -199,10 +186,10 @@ begin
     raise exception 'Authentication required' using errcode='42501';
   end if;
 
-  select oi.order_id,o.branch_id,o.status,o.customer_id,
+  select oi.order_id,o.status,o.customer_id,
          coalesce(nullif(btrim(oi.original_item_name),''),oi.item_name),
          oi.item_name,oi.catalog_item_id,oi.unit_price
-    into v_order_id,v_branch_id,v_order_status,v_customer_id,v_original,
+    into v_order_id,v_order_status,v_customer_id,v_original,
          v_previous_name,v_previous_catalog_item_id,v_previous_price
   from public.order_items oi
   join public.orders o on o.id=oi.order_id and o.tenant_id=oi.tenant_id
@@ -212,7 +199,7 @@ begin
     raise exception 'Order item not found' using errcode='22023';
   end if;
 
-  if not public.sellertray_user_can_manage_order_operation(p_tenant_id,v_branch_id,v_user_id) then
+  if not public.sellertray_user_can_manage_order_operation(p_tenant_id,v_order_id,v_user_id) then
     raise exception 'You do not have permission to manage this order' using errcode='42501';
   end if;
   if not public.orderdesk_subscription_can_write(p_tenant_id) then
@@ -301,8 +288,7 @@ begin
       'conversion_factor',1,
       'learned_alias',case when v_alias_learned then v_alias else null end,
       'actor_role',v_role
-    ),
-    now()
+    ),now()
   ) on conflict(tenant_id,action_key) do nothing;
 end;
 $$;
@@ -321,7 +307,6 @@ as $$
 declare
   v_user_id uuid := auth.uid();
   v_role text;
-  v_branch_id uuid;
   v_order_id uuid;
   v_order_status text;
   v_original text;
@@ -331,10 +316,10 @@ begin
     raise exception 'Authentication required' using errcode='42501';
   end if;
 
-  select oi.order_id,o.branch_id,o.status,
+  select oi.order_id,o.status,
          coalesce(nullif(btrim(oi.original_item_name),''),oi.item_name),
          coalesce(nullif(btrim(p_name),''),oi.item_name)
-    into v_order_id,v_branch_id,v_order_status,v_original,v_final_name
+    into v_order_id,v_order_status,v_original,v_final_name
   from public.order_items oi
   join public.orders o on o.id=oi.order_id and o.tenant_id=oi.tenant_id
   where oi.id=p_order_item_id and oi.tenant_id=p_tenant_id
@@ -343,7 +328,7 @@ begin
     raise exception 'Order item not found' using errcode='22023';
   end if;
 
-  if not public.sellertray_user_can_manage_order_operation(p_tenant_id,v_branch_id,v_user_id) then
+  if not public.sellertray_user_can_manage_order_operation(p_tenant_id,v_order_id,v_user_id) then
     raise exception 'You do not have permission to manage this order' using errcode='42501';
   end if;
   if not public.orderdesk_subscription_can_write(p_tenant_id) then
@@ -391,26 +376,20 @@ begin
     tenant_id,action_key,channel,customer_id,target_order_id,
     action_type,risk_class,requested_by,policy_result,action_status,metadata,applied_at
   )
-  select
-    p_tenant_id,
-    'catalogue-one-off:'||p_order_item_id::text,
-    'merchant_app',
-    o.customer_id,
-    v_order_id,
-    'order_item_kept_one_off',
-    'medium',
-    'merchant',
-    'allowed','applied',
-    jsonb_build_object(
-      'order_item_id',p_order_item_id,
-      'customer_wording',v_original,
-      'final_name',v_final_name,
-      'unit_price',p_price,
-      'selected_uom','Each',
-      'conversion_factor',1,
-      'actor_role',v_role
-    ),
-    now()
+  select p_tenant_id,
+         'catalogue-one-off:'||p_order_item_id::text,
+         'merchant_app',o.customer_id,v_order_id,
+         'order_item_kept_one_off','medium','merchant',
+         'allowed','applied',
+         jsonb_build_object(
+           'order_item_id',p_order_item_id,
+           'customer_wording',v_original,
+           'final_name',v_final_name,
+           'unit_price',p_price,
+           'selected_uom','Each',
+           'conversion_factor',1,
+           'actor_role',v_role
+         ),now()
   from public.orders o
   where o.id=v_order_id
   on conflict(tenant_id,action_key) do nothing;
@@ -433,7 +412,6 @@ set search_path=''
 as $$
 declare
   v_user_id uuid := auth.uid();
-  v_branch_id uuid;
   v_order_id uuid;
   v_order_status text;
   v_original text;
@@ -446,7 +424,6 @@ begin
   if v_user_id is null then
     raise exception 'Authentication required' using errcode='42501';
   end if;
-
   if nullif(btrim(p_name),'') is null then
     raise exception 'Product name is required' using errcode='22023';
   end if;
@@ -454,9 +431,9 @@ begin
     raise exception 'A valid selling price is required' using errcode='22023';
   end if;
 
-  select oi.order_id,o.branch_id,o.status,
+  select oi.order_id,o.status,
          coalesce(nullif(btrim(oi.original_item_name),''),oi.item_name)
-    into v_order_id,v_branch_id,v_order_status,v_original
+    into v_order_id,v_order_status,v_original
   from public.order_items oi
   join public.orders o on o.id=oi.order_id and o.tenant_id=oi.tenant_id
   where oi.id=p_order_item_id and oi.tenant_id=p_tenant_id
@@ -465,7 +442,7 @@ begin
     raise exception 'Order item not found' using errcode='22023';
   end if;
 
-  if not public.sellertray_user_can_manage_order_operation(p_tenant_id,v_branch_id,v_user_id) then
+  if not public.sellertray_user_can_manage_order_operation(p_tenant_id,v_order_id,v_user_id) then
     raise exception 'You do not have permission to manage this order' using errcode='42501';
   end if;
   if not public.sellertray_user_can_manage_products(p_tenant_id,v_user_id) then
@@ -525,22 +502,20 @@ begin
     tenant_id,action_key,channel,customer_id,target_order_id,
     action_type,risk_class,requested_by,policy_result,action_status,metadata,applied_at
   )
-  select
-    p_tenant_id,
-    'catalogue-create:'||p_order_item_id::text||':'||v_item_id::text,
-    'merchant_app',o.customer_id,v_order_id,
-    'catalogue_item_created_from_order','medium','merchant',
-    'allowed','applied',
-    jsonb_build_object(
-      'order_item_id',p_order_item_id,
-      'catalog_item_id',v_item_id,
-      'customer_wording',v_original,
-      'catalogue_name',btrim(p_name),
-      'selected_uom',v_stock_uom,
-      'conversion_factor',1,
-      'learned_alias',case when v_alias_learned then v_alias else null end
-    ),
-    now()
+  select p_tenant_id,
+         'catalogue-create:'||p_order_item_id::text||':'||v_item_id::text,
+         'merchant_app',o.customer_id,v_order_id,
+         'catalogue_item_created_from_order','medium','merchant',
+         'allowed','applied',
+         jsonb_build_object(
+           'order_item_id',p_order_item_id,
+           'catalog_item_id',v_item_id,
+           'customer_wording',v_original,
+           'catalogue_name',btrim(p_name),
+           'selected_uom',v_stock_uom,
+           'conversion_factor',1,
+           'learned_alias',case when v_alias_learned then v_alias else null end
+         ),now()
   from public.orders o
   where o.id=v_order_id
   on conflict(tenant_id,action_key) do nothing;
@@ -568,20 +543,18 @@ set search_path=''
 as $$
 declare
   v_user_id uuid := auth.uid();
-  v_branch_id uuid;
 begin
   if v_user_id is null then
     raise exception 'Authentication required' using errcode='42501';
   end if;
-
-  select o.branch_id into v_branch_id
-  from public.orders o
-  where o.id=p_order_id and o.tenant_id=p_tenant_id;
-  if not found then
+  if not exists(
+    select 1 from public.orders o
+    where o.id=p_order_id and o.tenant_id=p_tenant_id
+  ) then
     raise exception 'Order not found' using errcode='22023';
   end if;
 
-  if not public.sellertray_user_can_manage_order_operation(p_tenant_id,v_branch_id,v_user_id) then
+  if not public.sellertray_user_can_manage_order_operation(p_tenant_id,p_order_id,v_user_id) then
     raise exception 'You do not have permission to review this order' using errcode='42501';
   end if;
 
