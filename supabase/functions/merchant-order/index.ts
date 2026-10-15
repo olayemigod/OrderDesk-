@@ -127,6 +127,7 @@ Deno.serve(async (request) => {
     const rpcArgs: JsonRecord = {
       p_tenant_id: tenantId,
       p_branch_id: branchId,
+      p_actor_user_id: userId,
       p_customer_id: customerId,
       p_customer_name: customerName,
       p_customer_phone: customerPhone,
@@ -147,7 +148,11 @@ Deno.serve(async (request) => {
 
     if (createError || typeof orderId !== 'string') {
       const message = createError?.message ?? 'Unable to create sale';
-      const status = /needs review|reused with different details|multiple customer records|selected customer is unavailable/i.test(message) ? 409 : 400;
+      const status = createError?.code === '42501'
+        ? 403
+        : /needs review|reused with different details|multiple customer records|selected customer is unavailable/i.test(message)
+          ? 409
+          : 400;
       return json({ error: message }, status);
     }
 
