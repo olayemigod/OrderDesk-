@@ -42,6 +42,7 @@ export function ResumePosDraftWorkspace({ tenantId, branch, currency, order, onC
   const [paymentMethods, setPaymentMethods] = useState<PosPaymentMethod[]>([]);
   const [selectedPaymentKey, setSelectedPaymentKey] = useState('cash');
   const [stage, setStage] = useState<ResumeStage>('cart');
+  const [serverTotal, setServerTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [completing, setCompleting] = useState(false);
@@ -52,6 +53,7 @@ export function ResumePosDraftWorkspace({ tenantId, branch, currency, order, onC
     let active = true;
     setWorkingOrder(order);
     setStage('cart');
+    setServerTotal(null);
     setLoading(true);
     setError(null);
     setNotice(null);
@@ -90,7 +92,8 @@ export function ResumePosDraftWorkspace({ tenantId, branch, currency, order, onC
     return () => { active = false; };
   }, [branch.id, order, tenantId]);
 
-  const total = lines.reduce((sum, line) => sum + line.quantity * (line.uom.sellingPrice ?? 0), 0);
+  const calculatedTotal = lines.reduce((sum, line) => sum + line.quantity * (line.uom.sellingPrice ?? 0), 0);
+  const total = serverTotal ?? calculatedTotal;
   const unitCount = lines.reduce((sum, line) => sum + line.quantity, 0);
   const selectedPayment = paymentMethods.find((method) => paymentKey(method) === selectedPaymentKey) ?? paymentMethods[0] ?? null;
   const shortage = useMemo(() => findStockShortage(lines, stockRows), [lines, stockRows]);
@@ -116,6 +119,7 @@ export function ResumePosDraftWorkspace({ tenantId, branch, currency, order, onC
         delete next[line.orderItemId];
         return next;
       });
+      setServerTotal(null);
       setError(null);
       setNotice(`${line.product.name} will be removed when you save the sale.`);
       return true;
@@ -136,6 +140,7 @@ export function ResumePosDraftWorkspace({ tenantId, branch, currency, order, onC
 
     setLines((current) => current.map((candidate) => candidate.orderItemId === line.orderItemId ? { ...candidate, quantity } : candidate));
     setQuantityDrafts((current) => ({ ...current, [line.orderItemId]: formatQuantity(quantity) }));
+    setServerTotal(null);
     setError(null);
     return true;
   }
@@ -175,7 +180,8 @@ export function ResumePosDraftWorkspace({ tenantId, branch, currency, order, onC
       }
 
       const edits = buildResumedPosDraftEdits(workingOrder, nextLines);
-      await updatePosDraftItems({ tenantId, orderId: workingOrder.id, items: edits });
+      const editResult = await updatePosDraftItems({ tenantId, orderId: workingOrder.id, items: edits });
+      const expectedTotal = nextLines.reduce((sum, line) => sum + line.quantity * (line.uom.sellingPrice ?? 0), 0);
 
       const nextOrder: MerchantOrder = {
         ...workingOrder,
@@ -185,8 +191,11 @@ export function ResumePosDraftWorkspace({ tenantId, branch, currency, order, onC
       setLines(nextLines);
       setQuantityDrafts(Object.fromEntries(nextLines.map((line) => [line.orderItemId, formatQuantity(line.quantity)])));
       setStockRows(latestStock);
+      setServerTotal(editResult.totalAmount);
       setStage('payment');
-      setNotice('Saved sale updated. Current price, unit conversion and Branch stock were rechecked before payment.');
+      setNotice(Math.abs(editResult.totalAmount - expectedTotal) > 0.005
+        ? 'Saved sale updated. A current selling price changed during recheck, so the payment amount has been refreshed from SellerTray.'
+        : 'Saved sale updated. Current price, unit conversion and Branch stock were rechecked before payment.');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unable to update this saved sale.';
       setError(isLikelyConnectivityError(err)
