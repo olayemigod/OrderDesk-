@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(18);
+select extensions.plan(23);
 
 select extensions.ok(
   position('uom_name' in pg_get_functiondef('public.sync_sellertray_stock_uom_row()'::regprocedure))>0
@@ -42,6 +42,11 @@ select extensions.ok(
   'catalogue add requires shared order and subscription authority'
 );
 select extensions.ok(
+  position('sellertray_user_can_manage_order_operation(p_tenant_id,p_order_id,v_user_id)' in replace(pg_get_functiondef('public.sellertray_add_catalogue_order_item(uuid,uuid,uuid,numeric)'::regprocedure),' ',''))>0
+  and position('v_order.branch_id' in pg_get_functiondef('public.sellertray_add_catalogue_order_item(uuid,uuid,uuid,numeric)'::regprocedure))=0,
+  'catalogue add authorizes the order id rather than substituting its Branch id'
+);
+select extensions.ok(
   position('selected_uom' in pg_get_functiondef('public.sellertray_add_catalogue_order_item(uuid,uuid,uuid,numeric)'::regprocedure))>0
   and position('stock_uom' in pg_get_functiondef('public.sellertray_add_catalogue_order_item(uuid,uuid,uuid,numeric)'::regprocedure))>0
   and position('conversion_factor' in pg_get_functiondef('public.sellertray_add_catalogue_order_item(uuid,uuid,uuid,numeric)'::regprocedure))>0,
@@ -58,6 +63,11 @@ select extensions.ok(
   'catalogue match requires shared order and subscription authority'
 );
 select extensions.ok(
+  position('sellertray_user_can_manage_order_operation(p_tenant_id,v_order_id,v_user_id)' in replace(pg_get_functiondef('public.sellertray_match_order_item_to_catalogue(uuid,uuid,uuid,boolean)'::regprocedure),' ',''))>0
+  and position('sellertray_user_can_manage_order_operation(p_tenant_id,v_branch_id,v_user_id)' in replace(pg_get_functiondef('public.sellertray_match_order_item_to_catalogue(uuid,uuid,uuid,boolean)'::regprocedure),' ',''))=0,
+  'catalogue match authorizes the owning order id'
+);
+select extensions.ok(
   position('sellertray_user_can_manage_products' in pg_get_functiondef('public.sellertray_match_order_item_to_catalogue(uuid,uuid,uuid,boolean)'::regprocedure))>0,
   'catalogue alias learning requires product-management authority'
 );
@@ -71,6 +81,11 @@ select extensions.ok(
   position('sellertray_user_can_manage_order_operation' in pg_get_functiondef('public.sellertray_keep_order_item_one_off(uuid,uuid,numeric,text)'::regprocedure))>0
   and position('orderdesk_subscription_can_write' in pg_get_functiondef('public.sellertray_keep_order_item_one_off(uuid,uuid,numeric,text)'::regprocedure))>0,
   'one-off approval requires shared order and subscription authority'
+);
+select extensions.ok(
+  position('sellertray_user_can_manage_order_operation(p_tenant_id,v_order_id,v_user_id)' in replace(pg_get_functiondef('public.sellertray_keep_order_item_one_off(uuid,uuid,numeric,text)'::regprocedure),' ',''))>0
+  and position('sellertray_user_can_manage_order_operation(p_tenant_id,v_branch_id,v_user_id)' in replace(pg_get_functiondef('public.sellertray_keep_order_item_one_off(uuid,uuid,numeric,text)'::regprocedure),' ',''))=0,
+  'one-off approval authorizes the owning order id'
 );
 select extensions.ok(
   position('v_rolenotin(''owner'',''manager'')' in replace(pg_get_functiondef('public.sellertray_keep_order_item_one_off(uuid,uuid,numeric,text)'::regprocedure),' ',''))>0,
@@ -89,6 +104,11 @@ select extensions.ok(
   'create-from-order requires order, product and subscription authority'
 );
 select extensions.ok(
+  position('sellertray_user_can_manage_order_operation(p_tenant_id,v_order_id,v_user_id)' in replace(pg_get_functiondef('public.sellertray_create_catalogue_from_order_item(uuid,uuid,text,numeric,text,text,boolean)'::regprocedure),' ',''))>0
+  and position('sellertray_user_can_manage_order_operation(p_tenant_id,v_branch_id,v_user_id)' in replace(pg_get_functiondef('public.sellertray_create_catalogue_from_order_item(uuid,uuid,text,numeric,text,text,boolean)'::regprocedure),' ',''))=0,
+  'create-from-order authorizes the owning order id'
+);
+select extensions.ok(
   position('save_sellertray_catalogue_item' in pg_get_functiondef('public.sellertray_create_catalogue_from_order_item(uuid,uuid,text,numeric,text,text,boolean)'::regprocedure))>0
   and position('insert into public.catalog_items' in lower(pg_get_functiondef('public.sellertray_create_catalogue_from_order_item(uuid,uuid,text,numeric,text,text,boolean)'::regprocedure)))=0,
   'create-from-order reuses the governed catalogue command instead of direct product writes'
@@ -102,6 +122,11 @@ select extensions.ok(
 select extensions.ok(
   position('sellertray_user_can_manage_order_operation' in pg_get_functiondef('public.sellertray_list_order_item_catalogue_candidates(uuid,uuid)'::regprocedure))>0,
   'catalogue candidate review is Branch-scoped through shared order authority'
+);
+select extensions.ok(
+  position('sellertray_user_can_manage_order_operation(p_tenant_id,p_order_id,v_user_id)' in replace(pg_get_functiondef('public.sellertray_list_order_item_catalogue_candidates(uuid,uuid)'::regprocedure),' ',''))>0
+  and position('sellertray_user_can_manage_order_operation(p_tenant_id,v_branch_id,v_user_id)' in replace(pg_get_functiondef('public.sellertray_list_order_item_catalogue_candidates(uuid,uuid)'::regprocedure),' ',''))=0,
+  'catalogue candidate review authorizes the requested order id'
 );
 
 select extensions.ok(
