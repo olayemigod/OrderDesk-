@@ -29,18 +29,19 @@ export function PosPolicySettings({ tenantId }: { tenantId: string }) {
     let active = true;
     setLoading(true);
     setError(null);
-    void supabase.rpc('sellertray_get_pos_policy', { p_tenant_id: tenantId })
-      .then(({ data, error: rpcError }) => {
-        if (!active) return;
+
+    void (async () => {
+      try {
+        const { data, error: rpcError } = await supabase.rpc('sellertray_get_pos_policy', { p_tenant_id: tenantId });
         if (rpcError) throw rpcError;
-        setPolicy(parsePolicy(data));
-      })
-      .catch((cause) => {
+        if (active) setPolicy(parsePolicy(data));
+      } catch (cause: unknown) {
         if (active) setError(errorMessage(cause, 'Unable to load POS settings.'));
-      })
-      .finally(() => {
+      } finally {
         if (active) setLoading(false);
-      });
+      }
+    })();
+
     return () => { active = false; };
   }, [tenantId]);
 
