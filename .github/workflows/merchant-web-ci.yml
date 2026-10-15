@@ -6,10 +6,12 @@ on:
       - feat/sellertray-merchant-web-v1
     paths:
       - 'apps/merchant-web/**'
+      - 'scripts/check-internal-authority-rpc-boundary.mjs'
       - '.github/workflows/merchant-web-ci.yml'
   pull_request:
     paths:
       - 'apps/merchant-web/**'
+      - 'scripts/check-internal-authority-rpc-boundary.mjs'
       - '.github/workflows/merchant-web-ci.yml'
 
 permissions:
@@ -26,6 +28,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Enforce internal authority RPC boundary
+        run: node ../../scripts/check-internal-authority-rpc-boundary.mjs
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Typecheck
