@@ -183,22 +183,22 @@ export default function RedesignWorkspace() {
     let active = true;
     setRefundAuthorityLoading(true);
     setRefundAuthorityError(null);
-    void supabase.rpc('get_sellertray_pos_return_authority', {
-      p_tenant_id: tenantId,
-      p_branch_id: branchId,
-    })
-      .then(({ data, error }) => {
+    void (async () => {
+      try {
+        const { data, error } = await supabase.rpc('get_sellertray_pos_return_authority', {
+          p_tenant_id: tenantId,
+          p_branch_id: branchId,
+        });
         if (error) throw error;
         if (active) setCanRefundSale(data === true);
-      })
-      .catch((err) => {
+      } catch (err) {
         if (!active) return;
         setCanRefundSale(false);
         setRefundAuthorityError(err instanceof Error ? err.message : 'Unable to check return permission.');
-      })
-      .finally(() => {
+      } finally {
         if (active) setRefundAuthorityLoading(false);
-      });
+      }
+    })();
 
     return () => {
       active = false;
