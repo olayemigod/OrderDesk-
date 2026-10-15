@@ -15,12 +15,12 @@ select extensions.ok(not has_function_privilege('authenticated','public.finalize
 select extensions.ok(has_function_privilege('service_role','public.finalize_sellertray_catalogue_candidate_conversion(uuid,uuid,uuid,text,text,text,numeric,text,text,text)','EXECUTE'),'service role can finalize candidate conversion');
 select extensions.ok(position('native_catalog' in pg_get_constraintdef((select oid from pg_constraint where conrelid='public.orders'::regclass and conname='orders_parser_source_check')))>0,'orders allow native catalogue provenance');
 select extensions.ok(position('whatsapp_catalog' in pg_get_constraintdef((select oid from pg_constraint where conrelid='public.order_items'::regclass and conname='order_items_match_source_check')))>0,'order items allow WhatsApp catalogue match provenance');
-select extensions.ok(not (select prosecdef from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='update_sellertray_customer_profile' limit 1),'customer profile RPC uses SECURITY INVOKER');
+select extensions.ok((select prosecdef from pg_proc p where p.oid='public.update_sellertray_customer_profile(uuid,uuid,text,text)'::regprocedure),'customer profile mutation uses a self-authorizing SECURITY DEFINER command');
 select extensions.ok(
-  has_column_privilege('authenticated','public.customers','display_name','UPDATE')
-  and has_column_privilege('authenticated','public.customers','email','UPDATE')
-  and not has_column_privilege('authenticated','public.customers','phone','UPDATE')
-  and not has_column_privilege('authenticated','public.customers','wa_id','UPDATE'),
-  'customer update grants are limited to safe metadata');
+  has_function_privilege('authenticated','public.update_sellertray_customer_profile(uuid,uuid,text,text)','EXECUTE')
+  and not has_table_privilege('authenticated','public.customers','INSERT')
+  and not has_table_privilege('authenticated','public.customers','UPDATE')
+  and not has_table_privilege('authenticated','public.customers','DELETE'),
+  'customer mutation is command-only for authenticated users');
 select * from extensions.finish();
 rollback;
