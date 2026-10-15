@@ -53,16 +53,13 @@ Deno.serve(async (request) => {
 
   const { data: membership, error: membershipError } = await admin
     .from('tenant_members')
-    .select('role')
+    .select('user_id')
     .eq('tenant_id', tenantId)
     .eq('user_id', userId)
     .maybeSingle();
 
   if (membershipError) return json({ error: membershipError.message }, 400);
   if (!membership) return json({ error: 'You do not have access to this business' }, 403);
-  if (action === 'return' && membership.role !== 'owner' && membership.role !== 'manager') {
-    return json({ error: 'Owner or manager approval is required to return a completed sale' }, 403);
-  }
 
   const rpc = action === 'void'
     ? 'void_sellertray_pos_draft'
@@ -77,11 +74,11 @@ Deno.serve(async (request) => {
 
   if (error || !isResult(action, result)) {
     const message = error?.message ?? `Unable to ${action} this sale`;
-    const status = /membership|access|role|read-only|owner|manager|approval/i.test(message)
+    const status = /membership|access|role|read-only|permission|refund/i.test(message)
       ? 403
       : /not found/i.test(message)
         ? 404
-        : /cannot|only|already|incomplete|does not match/i.test(message)
+        : /cannot|only|already|incomplete|does not match|open a cashier shift|drawer/i.test(message)
           ? 409
           : 400;
     return json({ error: message }, status);
