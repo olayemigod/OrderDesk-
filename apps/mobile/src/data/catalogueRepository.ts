@@ -85,25 +85,22 @@ export async function createCatalogueItem(
   input: CatalogueItemInput,
 ): Promise<string> {
   const clean = validateInput(input);
-  const { data, error } = await supabase
-    .from('catalog_items')
-    .insert({
-      tenant_id: tenantId,
-      name: clean.name,
-      sku: clean.sku,
-      category: clean.category,
-      image_url: clean.imageUrl,
-      price_ngn: clean.price,
-      is_active: true,
-    })
-    .select('id')
-    .single();
+  const { data, error } = await supabase.rpc('save_sellertray_catalogue_item', {
+    p_tenant_id: tenantId,
+    p_product_id: null,
+    p_name: clean.name,
+    p_sku: clean.sku,
+    p_category: clean.category,
+    p_image_url: clean.imageUrl,
+    p_selling_price: clean.price,
+    p_aliases: clean.aliases,
+  });
 
   if (error) throw error;
-  if (!data?.id) throw new Error('SellerTray could not create the catalogue item.');
-
-  await replaceAliases(tenantId, data.id, clean.aliases);
-  return data.id;
+  if (typeof data !== 'string' || !data) {
+    throw new Error('SellerTray could not create the catalogue item.');
+  }
+  return data;
 }
 
 export async function updateCatalogueItem(
@@ -112,20 +109,21 @@ export async function updateCatalogueItem(
   input: CatalogueItemInput,
 ): Promise<void> {
   const clean = validateInput(input);
-  const { error } = await supabase
-    .from('catalog_items')
-    .update({
-      name: clean.name,
-      sku: clean.sku,
-      category: clean.category,
-      image_url: clean.imageUrl,
-      price_ngn: clean.price,
-    })
-    .eq('tenant_id', tenantId)
-    .eq('id', itemId);
+  const { data, error } = await supabase.rpc('save_sellertray_catalogue_item', {
+    p_tenant_id: tenantId,
+    p_product_id: itemId,
+    p_name: clean.name,
+    p_sku: clean.sku,
+    p_category: clean.category,
+    p_image_url: clean.imageUrl,
+    p_selling_price: clean.price,
+    p_aliases: clean.aliases,
+  });
 
   if (error) throw error;
-  await replaceAliases(tenantId, itemId, clean.aliases);
+  if (typeof data !== 'string' || data !== itemId) {
+    throw new Error('SellerTray could not confirm the catalogue item update.');
+  }
 }
 
 export async function uploadCatalogueImage(
@@ -162,34 +160,13 @@ export async function setCatalogueItemActive(
   tenantId: string,
   isActive: boolean,
 ): Promise<void> {
-  const { error } = await supabase
-    .from('catalog_items')
-    .update({ is_active: isActive, updated_at: new Date().toISOString() })
-    .eq('tenant_id', tenantId)
-    .eq('id', itemId);
+  const { error } = await supabase.rpc('set_sellertray_product_active', {
+    p_tenant_id: tenantId,
+    p_product_id: itemId,
+    p_is_active: isActive,
+  });
 
   if (error) throw error;
-}
-
-async function replaceAliases(tenantId: string, itemId: string, aliases: string[]): Promise<void> {
-  const { error: deleteError } = await supabase
-    .from('catalog_item_aliases')
-    .delete()
-    .eq('tenant_id', tenantId)
-    .eq('catalog_item_id', itemId);
-
-  if (deleteError) throw deleteError;
-  if (aliases.length === 0) return;
-
-  const { error: insertError } = await supabase.from('catalog_item_aliases').insert(
-    aliases.map((alias) => ({
-      tenant_id: tenantId,
-      catalog_item_id: itemId,
-      alias,
-    })),
-  );
-
-  if (insertError) throw insertError;
 }
 
 function validateInput(input: CatalogueItemInput): CatalogueItemInput {
