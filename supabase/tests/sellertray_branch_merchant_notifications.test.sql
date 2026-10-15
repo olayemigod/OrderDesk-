@@ -102,32 +102,32 @@ select extensions.ok(
 );
 
 select extensions.ok(
-  (select qual ilike '%sellertray_user_can_access_notification_scope%'
+  (select qual ilike '%sellertray_current_user_can_access_notification_scope%'
    from pg_policies
    where schemaname='public'
      and tablename='merchant_notifications'
      and policyname='merchant_notifications_select_member'),
-  'direct notification reads enforce Branch-aware scope'
+  'direct notification reads bind Branch-aware scope to the current user'
 );
 
 select extensions.ok(
-  (select qual ilike '%sellertray_user_can_access_notification_scope%'
-      and with_check ilike '%sellertray_user_can_access_notification_scope%'
+  (select qual ilike '%sellertray_current_user_can_access_notification_scope%'
+      and with_check ilike '%sellertray_current_user_can_access_notification_scope%'
    from pg_policies
    where schemaname='public'
      and tablename='merchant_notifications'
      and policyname='merchant_notifications_update_member'),
-  'legacy notification read-marker updates cannot cross Branch scope'
+  'legacy notification read-marker updates bind Branch scope to the current user'
 );
 
 select extensions.ok(
-  (select qual ilike '%sellertray_user_can_access_notification_scope%'
-      and with_check ilike '%sellertray_user_can_access_notification_scope%'
+  (select qual ilike '%sellertray_current_user_can_access_notification_scope%'
+      and with_check ilike '%sellertray_current_user_can_access_notification_scope%'
    from pg_policies
    where schemaname='public'
      and tablename='merchant_notification_reads'
      and policyname='merchant_notification_reads_own'),
-  'per-user read rows require notification visibility'
+  'per-user read rows require current-user notification visibility'
 );
 
 select extensions.is(
