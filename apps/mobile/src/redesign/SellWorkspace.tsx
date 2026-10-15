@@ -22,10 +22,12 @@ import {
   saveBranchStockCache,
   saveCommerceProductCache,
 } from '../data/offlineSalesRepository';
+import { loadPosPaymentPolicy, type PosAllocationCheckoutResult, type PosPaymentPolicy } from '../data/posPaymentRepository';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import { PosCustomerSelector, type PosCustomerSelection } from './PosCustomerSelector';
 import { BarcodeScannerSheet } from './BarcodeScannerSheet';
+import { PosPaymentAllocator } from './PosPaymentAllocator';
 
 type CartLine = { key: string; product: CommerceProduct; uom: CommerceUom; quantity: number };
 type StockShortage = { productName: string; stockUom: string; required: number; available: number };
@@ -59,6 +61,8 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
   const [paymentMethods, setPaymentMethods] = useState<PosPaymentMethod[]>([]);
   const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(true);
   const [paymentMethodError, setPaymentMethodError] = useState<string | null>(null);
+  const [posPolicy, setPosPolicy] = useState<PosPaymentPolicy | null>(null);
+  const [posPolicyError, setPosPolicyError] = useState<string | null>(null);
   const [selectedPaymentKey, setSelectedPaymentKey] = useState('cash');
   const [customer, setCustomer] = useState<PosCustomerSelection | null>(null);
   const [query, setQuery] = useState('');
@@ -157,6 +161,13 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
     }).finally(() => { if (active) setPaymentMethodsLoading(false); });
     return () => { active = false; };
   }, [tenantId, branch.id]);
+
+  useEffect(() => {
+    let active = true;
+    setPosPolicyError(null);
+    void loadPosPaymentPolicy(tenantId).then((policy) => { if (active) setPosPolicy(policy); }).catch((err) => { if (active) { setPosPolicy(null); setPosPolicyError(err instanceof Error ? err.message : 'Unable to load POS payment rules.'); } });
+    return () => { active = false; };
+  }, [tenantId]);
 
   const normalizedQuery = query.trim().toLowerCase();
   const visibleProducts = useMemo(() => !normalizedQuery ? products : products.filter((product) => [product.name, product.sku ?? '', product.category ?? '', ...product.uoms.map((uom) => uom.barcode ?? '')].join(' ').toLowerCase().includes(normalizedQuery)), [normalizedQuery, products]);
@@ -364,6 +375,21 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
     finally { setCompleting(false); }
   }
 
+  async function handleAllocatedCheckout(result: PosAllocationCheckoutResult) {
+    const orderId = result.orderId;
+    clearSale();
+    if (result.status === 'awaiting_payment_confirmation') {
+      setHeldNotice('Payment recorded and awaiting the configured confirmation. Stock and collection remain unchanged until SellerTray confirms the payment.');
+      Alert.alert('Payment awaiting confirmation', 'SellerTray recorded the payment allocation. Complete the required payment confirmation before handing over goods.');
+      onDraftCreated?.(orderId);
+      return;
+    }
+    if (result.outstandingAmount > 0.005) setHeldNotice(`${formatMoney(result.outstandingAmount, currency)} remains outstanding on the completed sale.`);
+    try { await refreshBranchStock({ allowCache: true }); }
+    catch { setStockError('Sale completed, but Branch stock could not be refreshed. Refresh stock before starting another sale.'); }
+    onDraftCreated?.(orderId);
+  }
+
   function clearSale() {
     setCart({});
     setQuantityDrafts({});
@@ -446,13 +472,12 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
       {stage === 'payment' ? <View style={styles.stageStack}>
         <View style={[styles.card, dark && darkStyles.card]}>
           <View style={styles.center}><Text style={[styles.eyebrow, dark && darkStyles.bodyText]}>AMOUNT DUE</Text><Text style={[styles.paymentAmount, dark && darkStyles.titleText]}>{formatMoney(total, currency)}</Text><Text style={[styles.small, dark && darkStyles.bodyText]}>{lineCount} products · {formatQuantity(unitCount)} units</Text><Text style={[styles.paymentCustomer, dark && darkStyles.bodyText]}>{customer?.name || customer?.phone || 'Walk-in Customer'}</Text></View>
-          <Text style={[styles.sectionTitle, dark && darkStyles.titleText]}>Payment method</Text>
-          {paymentMethodsLoading ? <View style={styles.loadingRow}><ActivityIndicator /><Text style={[styles.small, dark && darkStyles.bodyText]}>Loading branch payment methods…</Text></View> : null}
+          <Text style={[styles.sectionTitle, dark && darkStyles.titleText]}>Payment</Text>
+          {paymentMethodsLoading ? <View style={styles.loadingRow}><ActivityIndicator /><Text style={[styles.small, dark && darkStyles.bodyText]}>Loading Branch payment methods…</Text></View> : null}
           {paymentMethodError ? <ErrorCard text={paymentMethodError} dark={dark} /> : null}
-          <View style={styles.paymentList}>{paymentMethods.map((method) => <Pressable key={paymentKey(method)} onPress={() => setSelectedPaymentKey(paymentKey(method))} style={[styles.paymentMethod, dark && darkStyles.subtle, selectedPaymentKey === paymentKey(method) && styles.paymentMethodActive]}><View style={styles.paymentIcon}><Ionicons name={method.methodType === 'cash' ? 'cash-outline' : method.methodType === 'card_terminal' ? 'card-outline' : 'business-outline'} size={22} color={theme.colors.greenDark} /></View><View style={styles.flex}><Text style={[styles.productName, dark && darkStyles.titleText]}>{method.displayName}</Text><Text style={[styles.small, dark && darkStyles.bodyText]}>{paymentDescription(method)}</Text></View>{selectedPaymentKey === paymentKey(method) ? <Ionicons name="checkmark-circle" size={23} color={theme.colors.green} /> : null}</Pressable>)}</View>
-          {selectedPayment?.methodType === 'bank_transfer' ? <View style={[styles.instructions, dark && darkStyles.subtle]}><Text style={[styles.sectionTitle, dark && darkStyles.titleText]}>{selectedPayment.bankName ?? selectedPayment.displayName}</Text>{selectedPayment.bankAccountName ? <Text style={[styles.small, dark && darkStyles.bodyText]}>{selectedPayment.bankAccountName}</Text> : null}{selectedPayment.bankAccountNumber ? <Text selectable style={[styles.accountNumber, dark && darkStyles.titleText]}>{selectedPayment.bankAccountNumber}</Text> : null}{selectedPayment.instructions ? <Text style={[styles.small, dark && darkStyles.bodyText]}>{selectedPayment.instructions}</Text> : null}</View> : selectedPayment?.instructions ? <Text style={[styles.small, dark && darkStyles.bodyText]}>{selectedPayment.instructions}</Text> : null}
-          <Notice icon="shield-checkmark-outline" text={bankTransferSelected ? 'Recording a bank transfer does not mark the sale paid or deduct stock. Confirm received funds in Payment inbox; SellerTray finalises the sale only after that confirmation.' : 'Confirm the payment only after cash is received or the terminal shows approval. Payment, order completion and stock deduction are committed together.'} dark={dark} />
-          <Pressable disabled={completing || !selectedPayment || paymentMethodsLoading} onPress={confirmSelectedPayment} style={[styles.checkoutButton, (completing || !selectedPayment || paymentMethodsLoading) && styles.disabled]}>{completing ? <ActivityIndicator color={theme.colors.white} /> : <Ionicons name="checkmark-circle-outline" size={20} color={theme.colors.white} />}<Text style={styles.buttonText}>{completing ? (bankTransferSelected ? 'Recording transfer…' : 'Completing sale…') : selectedPayment ? (bankTransferSelected ? `Record ${selectedPayment.displayName} · Verify payment` : `Confirm ${selectedPayment.displayName} · Complete sale`) : 'Choose payment method'}</Text></Pressable>
+          {posPolicyError ? <ErrorCard text={posPolicyError} dark={dark} /> : null}
+          {!paymentMethodsLoading && !posPolicy && !posPolicyError ? <View style={styles.loadingRow}><ActivityIndicator /><Text style={[styles.small, dark && darkStyles.bodyText]}>Loading POS payment rules…</Text></View> : null}
+          {draftOrderId && posPolicy && !paymentMethodsLoading && !paymentMethodError ? <PosPaymentAllocator tenantId={tenantId} orderId={draftOrderId} amountDue={total} currency={currency} paymentMethods={paymentMethods} policy={posPolicy} disabled={completing} onError={(message) => setCheckoutError(message || null)} onResult={(result) => { void handleAllocatedCheckout(result); }} /> : null}
           <Pressable disabled={completing} onPress={openSavedSale} style={styles.secondaryButton}><Text style={styles.secondaryText}>View saved sale</Text></Pressable>
         </View>
       </View> : null}

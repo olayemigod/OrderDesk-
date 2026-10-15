@@ -137,6 +137,8 @@ Sell is the main POS surface. Support:
 - checkout;
 - configured payment methods;
 - split payment where enabled;
+- merchant-governed partial payment and pay-later where enabled;
+- merchant-governed manual non-cash payment confirmation authority;
 - receipt actions.
 
 On phone, the primary POS flow is explicitly staged:
@@ -153,8 +155,11 @@ Rules:
 6. Cart quantity must be directly editable by typing and may also provide plus/minus controls. Both paths must enforce the same UOM fractional policy, stock availability and price/conversion rules.
 7. Moving from Cart to Payment must revalidate governed branch stock, current price and UOM conversion before a checkout draft is committed.
 8. Payment remains a distinct step after the cart is accepted. Completing payment must revalidate server-side transactional invariants before payment and stock effects are committed.
-9. A branch change invalidates stale Product/Cart/Payment context safely.
-10. Tablet or desktop layouts may use a denser split-screen treatment where appropriate, but do not force that pattern onto small Android phones.
+9. Split payment, partial settlement and pay-later are merchant policy, not client hard-coding. Mobile and web must consume the same governed payment settings.
+10. `amount_paid` is the sum of confirmed allocations. An order is `paid` only when confirmed allocations cover the governed invoice amount; any remainder stays an explicit outstanding balance.
+11. Cash is cashier-confirmed physical drawer tender. Manual bank-transfer and terminal confirmation authority is merchant-configurable and must still preserve Branch access plus the configured payment capability boundary.
+12. A branch change invalidates stale Product/Cart/Payment context safely.
+13. Tablet or desktop layouts may use a denser split-screen treatment where appropriate, but do not force that pattern onto small Android phones.
 
 After successful completion, support fast continuation, normally **New Sale**.
 

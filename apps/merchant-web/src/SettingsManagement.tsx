@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { errorMessage, supabase } from './supabase';
+import { PosPolicySettings } from './PosPolicySettings';
 
 type PaymentGate = 'none' | 'before_processing' | 'before_ready' | 'before_fulfillment';
 type WhatsAppPushMode = 'actionable_only' | 'all_messages' | 'orders_payments_only';
@@ -245,6 +246,8 @@ export default function SettingsManagement({ tenantId }: { tenantId: string }) {
       </div>
       <div className="settings-actions"><button className="primary-button" disabled={busy !== null}>{busy === 'policy' ? 'Saving' : 'Save order controls'}</button></div>
     </form>
+
+    <PosPolicySettings tenantId={tenantId} />
 
     <div className="settings-payment-layout">
       <article className="panel settings-method-list">
