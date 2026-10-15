@@ -3,39 +3,39 @@ create extension if not exists pgtap with schema extensions;
 select extensions.plan(12);
 
 select extensions.ok(
-  (select qual ilike '%sellertray_user_can_read_branch%'
+  (select qual ilike '%sellertray_current_user_can_read_branch%'
    from pg_policies
    where schemaname='public'
      and tablename='order_status_events'
      and policyname='order_status_events_select_member'),
-  'order status history inherits historical parent-order Branch access'
+  'order status history inherits current-user historical parent-order Branch access'
 );
 
 select extensions.ok(
-  (select qual ilike '%sellertray_user_can_read_branch%'
+  (select qual ilike '%sellertray_current_user_can_read_branch%'
    from pg_policies
    where schemaname='public'
      and tablename='outbound_notifications'
      and policyname='outbound_notifications_select_member'),
-  'outbound notifications inherit historical parent-order Branch access'
+  'outbound notifications inherit current-user historical parent-order Branch access'
 );
 
 select extensions.ok(
-  (select qual ilike '%sellertray_user_can_read_branch%'
+  (select qual ilike '%sellertray_current_user_can_read_branch%'
    from pg_policies
    where schemaname='public'
      and tablename='order_financial_documents'
      and policyname='order_financial_documents_select_member'),
-  'order financial documents inherit historical parent-order Branch access'
+  'order financial documents inherit current-user historical parent-order Branch access'
 );
 
 select extensions.ok(
-  (select qual ilike '%sellertray_user_can_read_branch%'
+  (select qual ilike '%sellertray_current_user_can_read_branch%'
    from pg_policies
    where schemaname='public'
      and tablename='order_payments'
      and policyname='order_payments_select_member'),
-  'order payments inherit historical parent-order Branch access'
+  'order payments inherit current-user historical parent-order Branch access'
 );
 
 select extensions.ok(
