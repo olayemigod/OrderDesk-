@@ -3,10 +3,10 @@ create extension if not exists pgtap with schema extensions;
 select extensions.plan(11);
 
 select extensions.ok(
-  (select qual ilike '%sellertray_user_can_read_branch%'
+  (select qual ilike '%sellertray_current_user_can_read_branch%'
    from pg_policies
    where schemaname='public' and tablename='orders' and policyname='orders_select_member'),
-  'order reads use historical Branch access'
+  'order reads bind historical Branch access to the current user'
 );
 
 select extensions.ok(
@@ -25,10 +25,10 @@ select extensions.ok(
 );
 
 select extensions.ok(
-  (select qual ilike '%sellertray_user_can_read_branch%'
+  (select qual ilike '%sellertray_current_user_can_read_branch%'
    from pg_policies
    where schemaname='public' and tablename='order_items' and policyname='order_items_select_member'),
-  'order-item reads inherit historical parent-order Branch access'
+  'order-item reads inherit current-user historical parent-order Branch access'
 );
 
 select extensions.ok(
@@ -69,8 +69,8 @@ select extensions.ok(
 );
 
 select extensions.ok(
-  has_function_privilege('authenticated','public.sellertray_user_can_read_branch(uuid,uuid,uuid)','EXECUTE'),
-  'authenticated read policies can evaluate historical Branch access'
+  has_function_privilege('authenticated','public.sellertray_current_user_can_read_branch(uuid,uuid)','EXECUTE'),
+  'authenticated read policies can evaluate current-user historical Branch access'
 );
 
 select * from extensions.finish();
