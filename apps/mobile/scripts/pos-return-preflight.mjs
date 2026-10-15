@@ -19,7 +19,9 @@ const ordersWorkspace = read(join(mobileRoot, 'src/redesign/OrdersWorkspace.tsx'
 const redesignWorkspace = read(join(mobileRoot, 'src/redesign/RedesignWorkspace.tsx'));
 const posReturnEdge = read(join(repoRoot, 'supabase/functions/pos-return/index.ts'));
 const returnMigration = read(join(repoRoot, 'supabase/migrations/20261009194500_pos_void_and_cash_return.sql'));
+const refundAuthorityMigration = read(join(repoRoot, 'supabase/migrations/20261014203000_pos_refund_authority_convergence.sql'));
 const shiftReconciliationMigration = read(join(repoRoot, 'supabase/migrations/20261014202000_pos_cash_shift_reconciliation.sql'));
+const teamManagementWeb = read(join(repoRoot, 'apps/merchant-web/src/TeamBranchesManagement.tsx'));
 
 requireValue(
   domain.includes('cashReturnSupported?: boolean;'),
@@ -45,10 +47,28 @@ requireValue(
   'Orders UI must show the cash-return action only for supported cash sales and explain non-cash refund review',
 );
 requireValue(
-  redesignWorkspace.includes('activeCashShift ? (')
-    && redesignWorkspace.includes('<SellWorkspace')
-    && redesignWorkspace.includes("canReturnCompletedSale={(activeBusiness.role === 'owner' || activeBusiness.role === 'manager') && Boolean(activeCashShift)}"),
-  'Mobile must require an active cashier shift before selling or exposing the managed cash-return action',
+  redesignWorkspace.includes("get_sellertray_pos_return_authority")
+    && redesignWorkspace.includes('canReturnCompletedSale={canRefundSale && Boolean(activeCashShift)}'),
+  'Mobile return visibility must use governed refund capability plus the active cashier shift',
+);
+requireValue(
+  !posReturnEdge.includes("membership.role !== 'owner'")
+    && !posReturnEdge.includes("membership.role !== 'manager'")
+    && posReturnEdge.includes('return_sellertray_pos_cash_sale'),
+  'POS return edge adapter must delegate refund authority to the governed domain command instead of hard-coding roles',
+);
+requireValue(
+  refundAuthorityMigration.includes("'can_refund_sale'")
+    && refundAuthorityMigration.includes('sellertray_user_can_operate_branch')
+    && refundAuthorityMigration.includes('create or replace function public.get_sellertray_pos_return_authority')
+    && refundAuthorityMigration.includes('create or replace function public.apply_sellertray_pos_cash_return_internal')
+    && refundAuthorityMigration.includes('create or replace function public.return_sellertray_pos_cash_sale'),
+  'Refund authority migration must enforce capability and Branch authority in both the reader and return command',
+);
+requireValue(
+  teamManagementWeb.includes("'can_refund_sale'")
+    && teamManagementWeb.includes('Refund completed sales'),
+  'Merchant Web permission management must expose refund authority with merchant-facing wording',
 );
 requireValue(
   posReturnEdge.includes('return_sellertray_pos_cash_sale')
