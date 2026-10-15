@@ -35,7 +35,7 @@ begin
     raise exception 'Order not found' using errcode='22023';
   end if;
 
-  if not public.sellertray_user_can_manage_order_operation(p_tenant_id,v_order.branch_id,v_user_id) then
+  if not public.sellertray_user_can_manage_order_operation(p_tenant_id,p_order_id,v_user_id) then
     raise exception 'You do not have permission to manage this order' using errcode='42501';
   end if;
   if not public.orderdesk_subscription_can_write(p_tenant_id) then
@@ -121,7 +121,6 @@ declare
   v_role text;
   v_order_id uuid;
   v_order_status text;
-  v_branch_id uuid;
   v_original text;
   v_final_name text;
 begin
@@ -143,12 +142,10 @@ begin
 
   select oi.order_id,
          o.status,
-         o.branch_id,
          coalesce(nullif(btrim(oi.original_item_name),''),oi.item_name),
          coalesce(nullif(btrim(p_name),''),oi.item_name)
   into v_order_id,
        v_order_status,
-       v_branch_id,
        v_original,
        v_final_name
   from public.order_items oi
@@ -163,7 +160,7 @@ begin
     raise exception 'Order item not found' using errcode='22023';
   end if;
 
-  if not public.sellertray_user_can_manage_order_operation(p_tenant_id,v_branch_id,v_user_id) then
+  if not public.sellertray_user_can_manage_order_operation(p_tenant_id,v_order_id,v_user_id) then
     raise exception 'You do not have permission to manage this order' using errcode='42501';
   end if;
   if not public.orderdesk_subscription_can_write(p_tenant_id) then
@@ -242,7 +239,6 @@ declare
   v_role text;
   v_order_id uuid;
   v_order_status text;
-  v_branch_id uuid;
   v_customer_id uuid;
   v_original text;
   v_previous_name text;
@@ -261,10 +257,10 @@ begin
   from public.tenant_members tm
   where tm.tenant_id=p_tenant_id and tm.user_id=v_user_id;
 
-  select oi.order_id,o.status,o.branch_id,o.customer_id,
+  select oi.order_id,o.status,o.customer_id,
          coalesce(nullif(btrim(oi.original_item_name),''),oi.item_name),
          oi.item_name,oi.catalog_item_id,oi.unit_price
-  into v_order_id,v_order_status,v_branch_id,v_customer_id,v_original,
+  into v_order_id,v_order_status,v_customer_id,v_original,
        v_previous_name,v_previous_catalog_item_id,v_previous_price
   from public.order_items oi
   join public.orders o on o.id=oi.order_id and o.tenant_id=oi.tenant_id
@@ -274,7 +270,7 @@ begin
   if v_order_id is null then
     raise exception 'Order item not found' using errcode='22023';
   end if;
-  if not public.sellertray_user_can_manage_order_operation(p_tenant_id,v_branch_id,v_user_id) then
+  if not public.sellertray_user_can_manage_order_operation(p_tenant_id,v_order_id,v_user_id) then
     raise exception 'You do not have permission to manage this order' using errcode='42501';
   end if;
   if not public.orderdesk_subscription_can_write(p_tenant_id) then
@@ -382,7 +378,6 @@ declare
   v_user_id uuid := auth.uid();
   v_order_id uuid;
   v_order_status text;
-  v_branch_id uuid;
   v_original text;
   v_item_id uuid;
   v_alias text;
@@ -399,9 +394,9 @@ begin
     raise exception 'A valid selling price is required' using errcode='22023';
   end if;
 
-  select oi.order_id,o.status,o.branch_id,
+  select oi.order_id,o.status,
          coalesce(nullif(btrim(oi.original_item_name),''),oi.item_name)
-  into v_order_id,v_order_status,v_branch_id,v_original
+  into v_order_id,v_order_status,v_original
   from public.order_items oi
   join public.orders o on o.id=oi.order_id and o.tenant_id=oi.tenant_id
   where oi.id=p_order_item_id and oi.tenant_id=p_tenant_id
@@ -410,7 +405,7 @@ begin
   if v_order_id is null then
     raise exception 'Order item not found' using errcode='22023';
   end if;
-  if not public.sellertray_user_can_manage_order_operation(p_tenant_id,v_branch_id,v_user_id) then
+  if not public.sellertray_user_can_manage_order_operation(p_tenant_id,v_order_id,v_user_id) then
     raise exception 'You do not have permission to manage this order' using errcode='42501';
   end if;
   if not public.sellertray_user_can_manage_products(p_tenant_id,v_user_id) then
@@ -516,20 +511,19 @@ set search_path=''
 as $$
 declare
   v_user_id uuid := auth.uid();
-  v_branch_id uuid;
 begin
   if v_user_id is null then
     raise exception 'Authentication required' using errcode='42501';
   end if;
 
-  select o.branch_id into v_branch_id
-  from public.orders o
-  where o.tenant_id=p_tenant_id and o.id=p_order_id;
-
-  if not found then
+  if not exists(
+    select 1
+    from public.orders o
+    where o.tenant_id=p_tenant_id and o.id=p_order_id
+  ) then
     raise exception 'Order not found' using errcode='22023';
   end if;
-  if not public.sellertray_user_can_manage_order_operation(p_tenant_id,v_branch_id,v_user_id) then
+  if not public.sellertray_user_can_manage_order_operation(p_tenant_id,p_order_id,v_user_id) then
     raise exception 'You do not have permission to manage this order' using errcode='42501';
   end if;
 
