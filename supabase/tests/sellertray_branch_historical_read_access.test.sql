@@ -19,7 +19,7 @@ insert into sellertray_branch_history_fixture(
 )
 values(
   gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),
-  gen_random_uuid(),gen_random_uuid()
+  gen_random_uuid(),gen_random_uuid(),gen_random_uuid()
 );
 
 insert into auth.users(id,email,aud,role,created_at,updated_at)
@@ -133,11 +133,11 @@ select extensions.ok(
 );
 
 select extensions.ok(
-  (select qual ilike '%sellertray_user_can_access_branch%'
-      and with_check ilike '%sellertray_user_can_access_branch%'
+  (select qual ilike '%sellertray_current_user_can_access_branch%'
+      and with_check ilike '%sellertray_current_user_can_access_branch%'
    from pg_policies
    where schemaname='public' and tablename='orders' and policyname='orders_update_member'),
-  'order mutation remains tied to active Branch access'
+  'order mutation remains tied to current-user active Branch access'
 );
 
 select extensions.ok(
