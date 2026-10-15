@@ -25,6 +25,7 @@ import {
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import { PosCustomerSelector, type PosCustomerSelection } from './PosCustomerSelector';
+import { BarcodeScannerSheet } from './BarcodeScannerSheet';
 
 type CartLine = { key: string; product: CommerceProduct; uom: CommerceUom; quantity: number };
 type StockShortage = { productName: string; stockUom: string; required: number; available: number };
@@ -73,6 +74,7 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
   const [saleClientReference, setSaleClientReference] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [heldNotice, setHeldNotice] = useState<string | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -86,14 +88,13 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
       await saveCommerceProductCache(tenantId, rows).catch(() => undefined);
     }).catch(async (err) => {
       if (!active) return;
-      if (isLikelyConnectivityError(err)) {
-        const cached = await loadCommerceProductCache(tenantId);
-        if (active && cached) {
-          setProducts(cached.data);
-          setUsingCachedProducts(true);
-          setCatalogCacheSavedAt(cached.savedAt);
-          return;
-        }
+      const cached = await loadCommerceProductCache(tenantId);
+      if (active && cached) {
+        setProducts(cached.data);
+        setUsingCachedProducts(true);
+        setCatalogCacheSavedAt(cached.savedAt);
+        setError(null);
+        return;
       }
       setError(err instanceof Error ? err.message : 'Unable to load products.');
     }).finally(() => { if (active) setLoading(false); });
@@ -125,14 +126,13 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
       await saveBranchStockCache(tenantId, branch.id, rows).catch(() => undefined);
     }).catch(async (err) => {
       if (!active) return;
-      if (isLikelyConnectivityError(err)) {
-        const cached = await loadBranchStockCache(tenantId, branch.id);
-        if (active && cached) {
-          setStockRows(cached.data);
-          setUsingCachedStock(true);
-          setStockCacheSavedAt(cached.savedAt);
-          return;
-        }
+      const cached = await loadBranchStockCache(tenantId, branch.id);
+      if (active && cached) {
+        setStockRows(cached.data);
+        setUsingCachedStock(true);
+        setStockCacheSavedAt(cached.savedAt);
+        setStockError(null);
+        return;
       }
       setStockRows([]);
       setStockError(err instanceof Error ? err.message : 'Unable to load branch stock.');
@@ -245,7 +245,7 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
       await saveBranchStockCache(tenantId, branch.id, rows).catch(() => undefined);
       return rows;
     } catch (err) {
-      if (options?.allowCache && isLikelyConnectivityError(err)) {
+      if (options?.allowCache) {
         const cached = await loadBranchStockCache(tenantId, branch.id);
         if (cached) { setStockRows(cached.data); setStockError(null); setUsingCachedStock(true); setStockCacheSavedAt(cached.savedAt); return cached.data; }
       }
@@ -379,10 +379,23 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
     const orderId = draftOrderId; clearSale(); onDraftCreated?.(orderId);
   }
 
+  function handleScannedBarcode(barcode: string) {
+    const clean = barcode.trim();
+    if (!clean) return;
+    const match = products.flatMap((product) => product.uoms.map((uom) => ({ product, uom }))).find(({ uom }) => uom.barcode?.trim() === clean);
+    if (match) {
+      setSelectedUomByProduct((current) => ({ ...current, [match.product.id]: match.uom.id }));
+    }
+    setQuery(clean);
+    setPage(1);
+    setScannerOpen(false);
+  }
+
   const stepLabel = stage === 'products' ? 'Products' : stage === 'cart' ? 'Cart' : 'Payment';
 
   return (
     <View style={styles.stack}>
+      <BarcodeScannerSheet visible={scannerOpen} onClose={() => setScannerOpen(false)} onBarcode={handleScannedBarcode} />
       <View style={styles.heading}>
         <Text style={[styles.eyebrow, dark && darkStyles.bodyText]}>SELL · {stepLabel.toUpperCase()}</Text>
         <Text style={[styles.title, dark && darkStyles.titleText]}>{stage === 'products' ? 'New Sale' : stage === 'cart' ? 'Review Cart' : 'Take Payment'}</Text>
@@ -396,7 +409,7 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
       {checkoutError ? <ErrorCard text={checkoutError} dark={dark} /> : null}
 
       {stage === 'products' ? <>
-        <View style={[styles.searchBox, dark && darkStyles.input]}><Ionicons name="search-outline" size={20} color={theme.colors.muted} /><TextInput value={query} onChangeText={setQuery} placeholder="Search product, SKU or barcode" placeholderTextColor={theme.colors.subtle} autoCorrect={false} style={[styles.searchInput, dark && darkStyles.inputText]} /><View style={styles.scanButton}><Ionicons name="barcode-outline" size={23} color={theme.colors.greenDark} /></View></View>
+        <View style={[styles.searchBox, dark && darkStyles.input]}><Ionicons name="search-outline" size={20} color={theme.colors.muted} /><TextInput value={query} onChangeText={setQuery} placeholder="Search product, SKU or barcode" placeholderTextColor={theme.colors.subtle} autoCorrect={false} style={[styles.searchInput, dark && darkStyles.inputText]} /><Pressable accessibilityRole="button" accessibilityLabel="Scan product barcode" onPress={() => setScannerOpen(true)} style={styles.scanButton}><Ionicons name="barcode-outline" size={23} color={theme.colors.greenDark} /></Pressable></View>
         <View style={styles.toolbar}><View><Text style={[styles.catalogueCount, dark && darkStyles.titleText]}>{visibleProducts.length} products</Text><Text style={[styles.small, dark && darkStyles.bodyText]}>Page {safePage} of {pageCount}</Text></View><View style={[styles.viewToggle, dark && darkStyles.card]}><ToggleIcon name="grid-outline" active={viewMode === 'grid'} onPress={() => setViewMode('grid')} /><ToggleIcon name="list-outline" active={viewMode === 'list'} onPress={() => setViewMode('list')} /></View></View>
         {error ? <ErrorCard text={error} dark={dark} /> : null}
         {stockError ? <ErrorCard text="Branch stock is unavailable. Selling is paused until availability can be verified." dark={dark} /> : null}
