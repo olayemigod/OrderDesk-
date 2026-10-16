@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.6"
+  version: "0.1.7"
   status: governing
 ---
 
@@ -383,6 +383,17 @@ Android mobile printing should support Bluetooth ESC/POS, initially 58mm and 80m
 
 Support discovery/pairing, default printer, test print, device/register assignment, auto-print where configured and reprint.
 
+Receipt copy rules:
+
+1. Each printer has a governed receipt-copy profile. Existing printers default to one **Customer Copy** so configuration changes remain backward compatible.
+2. A merchant may configure multiple physical copies, with standard types including Customer, Store, Audit, Accounts, Dispatch and Production, plus a Custom type with a merchant-facing label.
+3. The configured copy order determines physical print order. Each copy prints the same commercial receipt truth with its configured copy heading; copies must never create duplicate orders, payments, stock effects or financial documents.
+4. Copy configuration is management/device authority and is shared merchant truth, not an ungoverned device-local preference. Mobile may expose lightweight configuration to authorised Owners/Managers; Merchant Web remains the richer management surface.
+5. Every print attempt snapshots the copy profile and merchant footer used at request time so later configuration changes do not rewrite historical print evidence.
+6. A reprint is an explicit audited print attempt and must never replay the sale. Printing failure must never roll back or replay the completed commercial transaction.
+7. Merchant receipt footer and SellerTray platform attribution are separate concepts. Do not hard-code ProcessEdge Solutions Limited into merchant receipt content. Thermal output must use printer-safe text and must not expose internal customer sentinels such as `pos:walk-in`.
+8. Test prints remain distinct from commercial receipt copies and may identify SellerTray for device verification.
+
 Critical invariant:
 
 > A successful sale must never be rolled back because receipt printing failed.
@@ -542,7 +553,7 @@ When shared commerce changes, verify customer resolution, Product/UOM resolution
 
 ## Printing gate
 
-Verify successful print, unavailable/failing printer after successful sale, reprint without duplication and 58/80mm where implemented.
+Verify successful print, unavailable/failing printer after successful sale, reprint without duplication, configured copy headings/order, custom copy labels, merchant footer/platform attribution separation, printer-safe output, and 58/80mm where implemented.
 
 ## Reporting gate
 
@@ -558,59 +569,29 @@ When feedback is touched, verify signed-in submission state, repeat submission, 
 
 # 18. Anti-divergence rules
 
-Do not:
+1. Do not fork POS, WhatsApp, web and AI into separate commerce truth.
+2. Do not duplicate UOM conversion logic in clients.
+3. Do not let reporting invent business rules independently of transaction state.
+4. Do not add a second payment model for a new channel.
+5. Do not let offline create a parallel permanent database model.
+6. Do not expose cross-tenant or cross-branch data for convenience.
+7. Do not bypass server/domain validation because the UI already checked something.
+8. Do not use generic direct stock receipt where purchasing or transfer receiving is the governed source.
+9. Do not destructively edit posted cash history to correct a mistake.
 
-- rebuild SellerTray as separate WhatsApp and POS products;
-- discard existing WhatsApp work during redesign;
-- create unrelated stock balances per UOM;
-- automatically derive alternate UOM price by multiplication unless explicitly configured;
-- infer branch later when it should be captured at transaction time;
-- silently change stock from a stock count;
-- expose generic stock receiving that bypasses Purchase Receiving or Stock Transfer;
-- put full management administration into mobile;
-- make merchant web a stretched mobile app;
-- collapse phone Products, Cart and Payment into one unbounded long POS screen;
-- make manual/free-text references the only operational-reference path when SellerTray can safely generate one;
-- write draft order-item changes directly from a client instead of through governed domain commands;
-- hard-delete eligible POS drafts instead of preserving governed deletion audit history;
-- treat a return as an automatic full-order return when only selected lines/quantities are being returned;
-- directly edit or delete posted cash movement/expense history instead of using governed correction;
-- let print failure undo a completed sale;
-- let AI bypass permissions/domain services;
-- duplicate payment or stock effects on retries;
-- expose phase/code/project/internal implementation names in user-facing UI;
-- implement font-size preference separately per screen so SellerTray surfaces drift;
-- expose feedback across tenant boundaries or give Staff management feedback visibility by default;
-- expand SellerTray into a full ERP without explicit approval;
-- declare implementation complete without focused verification.
+# 19. Definition of done
 
-# 19. New-feature decision checklist
+A SellerTray implementation slice is complete only when:
 
-Before adding a feature, answer:
-
-1. Is it mobile operation, web management or shared core?
-2. Where does it fit in the approved information architecture?
-3. Which branch owns the data/transaction?
-4. Does it affect stock?
-5. Does it require Product/UOM conversion?
-6. Does it affect WhatsApp selling?
-7. Does it affect payments/cash?
-8. What capability governs it?
-9. What audit/history is required?
-10. What reports consume it?
-11. Does it need offline behaviour?
-12. What focused tests prove it?
-13. Does it preserve current SellerTray functionality?
-14. Is it inside the current approved phase/scope?
-
-If these cannot be answered, do not create a new isolated implementation path; resolve the domain boundary first.
-
-# 20. MVP interpretation
-
-The redesign MVP is a coherent operating product rather than scattered advanced features.
-
-Mobile MVP direction: redesigned Home/Sell/Orders/Inventory/More shell, POS, customers, unified orders, WhatsApp orders, branch awareness, inventory, UOM, payments, cashier shifts, expenses/cash corrections, Bluetooth printing, feedback capture and basic reports.
-
-Merchant web MVP direction: management dashboard, sales/orders, products, UOM/pricing, inventory, purchasing, customers, branches, staff, payments, cash review, WhatsApp administration, tenant feedback dashboard, Report Center and settings.
-
-Existing WhatsApp functionality must remain operational throughout the transition. AI expansion and deep offline hardening follow the stable transactional core.
+- the approved business behaviour works end to end;
+- mobile/web/WhatsApp/AI boundaries remain coherent;
+- branch and permission rules are enforced;
+- UOM and inventory effects are correct where relevant;
+- payment and retry/idempotency rules are preserved;
+- offline implications are handled where relevant;
+- reporting implications are handled where relevant;
+- user-facing language is merchant-facing;
+- relevant tests pass;
+- WhatsApp regressions are checked when shared commerce changed;
+- migrations and deployment steps are documented;
+- no known divergence from this governing skill remains unaddressed.
