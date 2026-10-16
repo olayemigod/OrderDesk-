@@ -214,9 +214,11 @@ export function OrdersWorkspace({
       const capabilities = await loadPrintingCapabilities(tenantId, order.branchId);
       if (!capabilities.canPrintReceipt) throw new Error('Receipt printing is not available for your role.');
       const activeShift = await loadActiveCashShift(tenantId, order.branchId);
-      const printers = await loadPrinters(tenantId, order.branchId, activeShift?.registerId ?? null);
-      const printer = chooseReceiptPrinter(printers);
-      if (!printer) throw new Error('Choose a single default receipt printer for this branch or register before printing.');
+      const printers = await loadPrinters(tenantId, order.branchId, null);
+      const printer = chooseReceiptPrinter(printers, activeShift?.registerId ?? null);
+      if (!printer) {
+        throw new Error('No active receipt printer is available for this branch. Set one printer as default in Devices & printers, then try again.');
+      }
       const printJob = await requestPrintJob({
         tenantId,
         printerId: printer.id,
@@ -446,11 +448,22 @@ function Banner({ text, error, dark, onDismiss }: { text: string; error?: boolea
   return <View style={[error ? styles.errorCard : styles.noticeCard, dark && (error ? darkStyles.errorCard : darkStyles.subtleCard)]}><Ionicons name={error ? 'alert-circle-outline' : 'checkmark-circle-outline'} size={18} color={error ? theme.colors.danger : theme.colors.greenDark} /><Text style={[error ? styles.errorText : styles.noticeText, dark && darkStyles.bodyText]}>{text}</Text><Pressable onPress={onDismiss}><Ionicons name="close" size={18} color={theme.colors.muted} /></Pressable></View>;
 }
 
-function chooseReceiptPrinter(printers: SellerTrayPrinter[]): SellerTrayPrinter | null {
+function chooseReceiptPrinter(
+  printers: SellerTrayPrinter[],
+  preferredRegisterId: string | null,
+): SellerTrayPrinter | null {
   const active = printers.filter((printer) => printer.isActive);
   if (active.length === 0) return null;
-  const defaults = active.filter((printer) => printer.isDefault);
-  if (defaults.length === 1) return defaults[0] ?? null;
+
+  if (preferredRegisterId) {
+    const registerPrinters = active.filter((printer) => printer.registerId === preferredRegisterId);
+    const registerDefaults = registerPrinters.filter((printer) => printer.isDefault);
+    if (registerDefaults.length === 1) return registerDefaults[0] ?? null;
+    if (registerPrinters.length === 1) return registerPrinters[0] ?? null;
+  }
+
+  const branchDefaults = active.filter((printer) => printer.isDefault);
+  if (branchDefaults.length === 1) return branchDefaults[0] ?? null;
   if (active.length === 1) return active[0] ?? null;
   return null;
 }
