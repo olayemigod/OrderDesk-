@@ -14,7 +14,6 @@ import {
 import {
   loadPrinters,
   loadPrintingCapabilities,
-  loadReceiptPrintReference,
   requestPrintJob,
   type SellerTrayPrinter,
 } from '../data/printerRepository';
@@ -212,23 +211,20 @@ export function OrdersWorkspace({
     setPrintError(null);
     setPrintNotice(null);
     try {
-      const capabilities = await loadPrintingCapabilities(tenantId);
-      if (!capabilities.canPrint) throw new Error('Receipt printing is not available for your role.');
-      const printers = await loadPrinters(tenantId);
-      const branchPrinters = printers.filter((printer) => !printer.branchId || printer.branchId === order.branchId);
-      const printer = chooseReceiptPrinter(branchPrinters, capabilities.registerResolved);
-      if (!printer) throw new Error('No receipt printer is available for this branch or register.');
-      const printReference = await loadReceiptPrintReference(tenantId, order.id);
+      const capabilities = await loadPrintingCapabilities(tenantId, order.branchId);
+      if (!capabilities.canPrintReceipt) throw new Error('Receipt printing is not available for your role.');
       const activeShift = await loadActiveCashShift(tenantId, order.branchId);
+      const printers = await loadPrinters(tenantId, order.branchId, activeShift?.registerId ?? null);
+      const printer = chooseReceiptPrinter(printers);
+      if (!printer) throw new Error('Choose a single default receipt printer for this branch or register before printing.');
       const printJob = await requestPrintJob({
         tenantId,
         printerId: printer.id,
+        jobType: 'receipt',
         orderId: order.id,
-        shiftId: activeShift?.id,
-        referenceId: printReference,
       });
-      await executePreparedPrintJob(printJob, printer);
-      setPrintNotice(`Receipt sent to ${printer.name}.`);
+      await executePreparedPrintJob(tenantId, printJob);
+      setPrintNotice(`Receipt sent to ${printer.displayName}.`);
     } catch (cause) {
       setPrintError(cause instanceof Error ? cause.message : 'Unable to print this receipt.');
     } finally {
@@ -450,13 +446,13 @@ function Banner({ text, error, dark, onDismiss }: { text: string; error?: boolea
   return <View style={[error ? styles.errorCard : styles.noticeCard, dark && (error ? darkStyles.errorCard : darkStyles.subtleCard)]}><Ionicons name={error ? 'alert-circle-outline' : 'checkmark-circle-outline'} size={18} color={error ? theme.colors.danger : theme.colors.greenDark} /><Text style={[error ? styles.errorText : styles.noticeText, dark && darkStyles.bodyText]}>{text}</Text><Pressable onPress={onDismiss}><Ionicons name="close" size={18} color={theme.colors.muted} /></Pressable></View>;
 }
 
-function chooseReceiptPrinter(printers: SellerTrayPrinter[], registerResolved: boolean): SellerTrayPrinter | null {
+function chooseReceiptPrinter(printers: SellerTrayPrinter[]): SellerTrayPrinter | null {
   const active = printers.filter((printer) => printer.isActive);
   if (active.length === 0) return null;
-  if (registerResolved) return active.find((printer) => printer.isDefault) ?? active[0] ?? null;
-  if (active.length === 1) return active[0] ?? null;
   const defaults = active.filter((printer) => printer.isDefault);
-  return defaults.length === 1 ? defaults[0] ?? null : null;
+  if (defaults.length === 1) return defaults[0] ?? null;
+  if (active.length === 1) return active[0] ?? null;
+  return null;
 }
 
 function StatePill({ label, positive = false }: { label: string; positive?: boolean }) {
@@ -509,8 +505,8 @@ const styles = StyleSheet.create({
   orderValueWrap: { alignItems: 'flex-end', flexDirection: 'row', gap: 7 },
   orderValue: { color: theme.colors.navy, fontSize: 15, fontWeight: '900' },
   orderStateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
-  statePill: { backgroundColor: theme.colors.graySoft, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
-  statePillPositive: { backgroundColor: theme.colors.greenPale },
+  statePill: { backgroundColor: theme.colors.cloud, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  statePillPositive: { backgroundColor: theme.colors.mintSoft },
   statePillText: { color: theme.colors.slate, fontSize: 11, fontWeight: '800' },
   statePillTextPositive: { color: theme.colors.greenDark },
   actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
@@ -539,7 +535,7 @@ const styles = StyleSheet.create({
   quantityText: { color: theme.colors.navy, fontSize: 13, fontWeight: '900' },
   quantityInput: { backgroundColor: theme.colors.white, borderColor: theme.colors.border, borderRadius: 10, borderWidth: 1, color: theme.colors.navy, fontSize: 14, fontWeight: '800', minWidth: 72, paddingHorizontal: 10, paddingVertical: 8, textAlign: 'right' },
   editActions: { flexDirection: 'row', gap: 8, justifyContent: 'flex-end' },
-  returnedNotice: { alignItems: 'flex-start', backgroundColor: theme.colors.greenPale, borderRadius: 14, flexDirection: 'row', gap: 8, padding: 11 },
+  returnedNotice: { alignItems: 'flex-start', backgroundColor: theme.colors.mintSoft, borderRadius: 14, flexDirection: 'row', gap: 8, padding: 11 },
   returnedText: { color: theme.colors.slate, flex: 1, fontSize: 12, lineHeight: 18 },
   actionPanel: { backgroundColor: theme.colors.mint, borderRadius: 16, gap: 12, padding: 13 },
   actionPanelHeading: { alignItems: 'flex-start', flexDirection: 'row', gap: 9 },
@@ -560,17 +556,17 @@ const styles = StyleSheet.create({
   confirmText: { color: theme.colors.white, fontSize: 12, fontWeight: '900' },
   errorCard: { alignItems: 'center', backgroundColor: theme.colors.dangerSoft, borderRadius: 12, flexDirection: 'row', gap: 8, padding: 10 },
   errorText: { color: theme.colors.danger, flex: 1, fontSize: 12, lineHeight: 17 },
-  noticeCard: { alignItems: 'center', backgroundColor: theme.colors.greenPale, borderRadius: 12, flexDirection: 'row', gap: 8, padding: 10 },
+  noticeCard: { alignItems: 'center', backgroundColor: theme.colors.mintSoft, borderRadius: 12, flexDirection: 'row', gap: 8, padding: 10 },
   noticeText: { color: theme.colors.greenDark, flex: 1, fontSize: 12, lineHeight: 17 },
 });
 
 const darkStyles = StyleSheet.create({
-  page: { backgroundColor: theme.colors.darkBackground },
-  card: { backgroundColor: theme.colors.darkCard, borderColor: theme.colors.darkBorder },
-  subtleCard: { backgroundColor: theme.colors.darkSurface },
-  input: { backgroundColor: theme.colors.darkSurface, borderColor: theme.colors.darkBorder, color: theme.colors.white },
-  outlineButton: { borderColor: theme.colors.darkBorder },
+  page: { backgroundColor: '#081825' },
+  card: { backgroundColor: theme.colors.navy, borderColor: '#344054' },
+  subtleCard: { backgroundColor: '#162F46' },
+  input: { backgroundColor: '#162F46', borderColor: '#344054', color: theme.colors.white },
+  outlineButton: { borderColor: '#344054' },
   titleText: { color: theme.colors.white },
-  bodyText: { color: theme.colors.darkMuted },
+  bodyText: { color: '#D0D5DD' },
   errorCard: { backgroundColor: '#3B2024' },
 });
