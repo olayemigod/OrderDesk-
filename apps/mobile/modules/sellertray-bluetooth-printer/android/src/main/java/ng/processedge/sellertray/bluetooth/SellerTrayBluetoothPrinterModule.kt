@@ -8,11 +8,13 @@ import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.SystemClock
 import android.util.Base64
 import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.util.UUID
+import kotlin.math.min
 
 class SellerTrayBluetoothPrinterModule : Module() {
   private val context: Context
@@ -102,8 +104,19 @@ class SellerTrayBluetoothPrinterModule : Module() {
     try {
       socket.connect()
       val output = socket.outputStream
-      output.write(payload)
-      output.flush()
+      var offset = 0
+      while (offset < payload.size) {
+        val length = min(WRITE_CHUNK_BYTES, payload.size - offset)
+        output.write(payload, offset, length)
+        output.flush()
+        offset += length
+        if (offset < payload.size) SystemClock.sleep(CHUNK_SETTLE_MS)
+      }
+
+      // Bluetooth RFCOMM flush only confirms that Android accepted the bytes.
+      // Keep the connection alive briefly so small ESC/POS printers can drain
+      // their serial receive buffer before the socket is closed.
+      SystemClock.sleep(drainDelayMs(payload.size))
       return mapOf("bytesWritten" to payload.size)
     } finally {
       try {
@@ -114,7 +127,15 @@ class SellerTrayBluetoothPrinterModule : Module() {
     }
   }
 
+  private fun drainDelayMs(payloadSize: Int): Long =
+    (MIN_DRAIN_MS + payloadSize.toLong() * DRAIN_MS_PER_BYTE).coerceAtMost(MAX_DRAIN_MS)
+
   companion object {
     private val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+    private const val WRITE_CHUNK_BYTES = 256
+    private const val CHUNK_SETTLE_MS = 20L
+    private const val MIN_DRAIN_MS = 350L
+    private const val DRAIN_MS_PER_BYTE = 2L
+    private const val MAX_DRAIN_MS = 2500L
   }
 }
