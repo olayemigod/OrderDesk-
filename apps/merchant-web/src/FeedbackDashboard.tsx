@@ -42,9 +42,12 @@ type FeedbackDashboardData = {
   submissions: FeedbackSubmission[];
 };
 
+type ManageFeedbackStatus = 'reviewing' | 'resolved';
+
 export default function FeedbackDashboard({ tenantId }: { tenantId: string }) {
   const [data, setData] = useState<FeedbackDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [managingId, setManagingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -70,13 +73,32 @@ export default function FeedbackDashboard({ tenantId }: { tenantId: string }) {
     }
   }
 
+  async function manageFeedback(feedbackId: string, status: ManageFeedbackStatus) {
+    setManagingId(feedbackId);
+    setError(null);
+    try {
+      const { error: rpcError } = await supabase.rpc('manage_sellertray_feedback', {
+        p_tenant_id: tenantId,
+        p_feedback_id: feedbackId,
+        p_status: status,
+        p_admin_note: null,
+      });
+      if (rpcError) throw rpcError;
+      setData(await loadDashboard(tenantId));
+    } catch (cause) {
+      setError(errorMessage(cause, status === 'resolved' ? 'Unable to resolve feedback.' : 'Unable to start feedback review.'));
+    } finally {
+      setManagingId(null);
+    }
+  }
+
   const summary = data?.summary ?? { memberCount: 0, feedbackUsers: 0, submissionCount: 0, newCount: 0, averageRating: null };
   const participation = summary.memberCount > 0 ? Math.round((summary.feedbackUsers / summary.memberCount) * 100) : 0;
 
   return <div className="page-stack">
     <div className="section-heading">
       <div><p className="eyebrow">Customer voice</p><h2>Feedback</h2></div>
-      <div><p className="muted">See who has shared feedback and what the SellerTray team should review.</p><button className="secondary-button" disabled={loading} onClick={() => void refresh()}>{loading ? 'Refreshing' : 'Refresh feedback'}</button></div>
+      <div><p className="muted">See who has shared feedback, review submissions and resolve follow-up.</p><button className="secondary-button" disabled={loading} onClick={() => void refresh()}>{loading ? 'Refreshing' : 'Refresh feedback'}</button></div>
     </div>
 
     {error ? <div className="error-banner">{error}<button onClick={() => setError(null)}>Dismiss</button></div> : null}
@@ -95,7 +117,12 @@ export default function FeedbackDashboard({ tenantId }: { tenantId: string }) {
 
     <article className="panel">
       <div className="panel-head"><div><p className="eyebrow">Recent submissions</p><h3>What people are saying</h3></div></div>
-      {data?.submissions.length ? <div className="table-wrap"><table><thead><tr><th>Submitted</th><th>Team member</th><th>Branch</th><th>Type</th><th>Rating</th><th>Feedback</th><th>Status</th></tr></thead><tbody>{data.submissions.map((entry) => <tr key={entry.id}><td>{dateTime(entry.createdAt)}</td><td><strong>{entry.displayName}</strong><br /><span className="muted">{entry.email || title(entry.role)}</span></td><td>{entry.branchName || 'Business-wide'}</td><td>{title(entry.feedbackType)}</td><td>{entry.rating === null ? '—' : `${entry.rating}/5`}</td><td style={{ maxWidth: 440, whiteSpace: 'normal', lineHeight: 1.5 }}>{entry.message}</td><td><span className={`status-pill ${entry.status === 'new' ? '' : 'good'}`}>{title(entry.status)}</span></td></tr>)}</tbody></table></div> : <div className="empty-state"><div><strong>No feedback yet</strong><p>Feedback submitted from the SellerTray mobile app will appear here.</p></div></div>}
+      {data?.submissions.length ? <div className="table-wrap"><table><thead><tr><th>Submitted</th><th>Team member</th><th>Branch</th><th>Type</th><th>Rating</th><th>Feedback</th><th>Status</th><th>Actions</th></tr></thead><tbody>{data.submissions.map((entry) => {
+        const managing = managingId === entry.id;
+        const canStartReview = entry.status === 'new';
+        const canResolve = entry.status === 'new' || entry.status === 'reviewing';
+        return <tr key={entry.id}><td>{dateTime(entry.createdAt)}</td><td><strong>{entry.displayName}</strong><br /><span className="muted">{entry.email || title(entry.role)}</span></td><td>{entry.branchName || 'Business-wide'}</td><td>{title(entry.feedbackType)}</td><td>{entry.rating === null ? '—' : `${entry.rating}/5`}</td><td style={{ maxWidth: 440, whiteSpace: 'normal', lineHeight: 1.5 }}>{entry.message}</td><td><span className={`status-pill ${entry.status === 'new' ? '' : 'good'}`}>{title(entry.status)}</span></td><td><div className="button-row">{canStartReview ? <button className="secondary-button" disabled={managing} onClick={() => void manageFeedback(entry.id, 'reviewing')}>{managing ? 'Updating' : 'Start review'}</button> : null}{canResolve ? <button className="primary-button" disabled={managing} onClick={() => void manageFeedback(entry.id, 'resolved')}>{managing ? 'Updating' : 'Resolve'}</button> : <span className="muted">Complete</span>}</div></td></tr>;
+      })}</tbody></table></div> : <div className="empty-state"><div><strong>No feedback yet</strong><p>Feedback submitted from the SellerTray mobile app will appear here.</p></div></div>}
     </article>
   </div>;
 }
