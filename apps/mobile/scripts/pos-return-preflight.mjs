@@ -44,8 +44,10 @@ requireValue(
   posSaleRepository.includes("rpc('get_sellertray_pos_returnable_items'")
     && posSaleRepository.includes('returnPosSaleItems')
     && posSaleRepository.includes('deletePosDraft')
-    && posSaleRepository.includes("createPosCommandId('return'")
-    && posSaleRepository.includes("createPosCommandId('delete_draft'"),
+    && posSaleRepository.includes("export function createPosCommandId(action: 'return' | 'delete_draft'")
+    && ordersWorkspace.includes("createPosCommandId('return', order.id)")
+    && ordersWorkspace.includes("createPosCommandId('delete_draft', order.id)")
+    && ordersWorkspace.includes('commandId: pending.commandId'),
   'Mobile sale commands must load remaining line quantities and preserve retry identity for returns and draft deletion',
 );
 requireValue(
@@ -102,7 +104,11 @@ requireValue(
     && draftDeletionMigration.includes('deletion_reason')
     && draftDeletionMigration.includes('deletion_command_hash')
     && draftDeletionMigration.includes("v_order.payment_status<>'unpaid'")
-    && draftDeletionMigration.includes('prevent_sellertray_deleted_order_mutation'),
+    && draftDeletionMigration.includes('coalesce(v_order.amount_paid,0)<>0')
+    && draftDeletionMigration.includes('A POS draft with payment activity cannot be deleted')
+    && draftDeletionMigration.includes('A POS draft with stock activity cannot be deleted')
+    && draftDeletionMigration.includes('A POS draft with financial documents cannot be deleted')
+    && draftDeletionMigration.includes('prevent_sellertray_deleted_draft_mutation'),
   'Draft deletion must remain an audited soft deletion restricted to commercially untouched unpaid drafts',
 );
 requireValue(
