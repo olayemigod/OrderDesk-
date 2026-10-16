@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import BranchesManagement from './BranchesManagement';
 import DevicesPrintersManagement from './DevicesPrintersManagement';
 import FeedbackDashboard from './FeedbackDashboard';
 import ProductsManagement from './ProductsManagement';
@@ -7,7 +8,7 @@ import SuppliersManagement from './SuppliersManagement';
 import TeamBranchesManagement from './TeamBranchesManagement';
 import { errorMessage, supabase } from './supabase';
 
-type ManagementPageId = 'products' | 'suppliers' | 'team' | 'devices' | 'feedback' | 'settings';
+type ManagementPageId = 'products' | 'suppliers' | 'branches' | 'team' | 'devices' | 'feedback' | 'settings';
 type Branch = { id: string; name: string; isDefault: boolean };
 
 export default function ManagementPage({
@@ -23,6 +24,7 @@ export default function ManagementPage({
 }) {
   if (page === 'products') return <ProductsManagement tenantId={tenantId} currency={currency} />;
   if (page === 'suppliers') return <SuppliersManagement tenantId={tenantId} />;
+  if (page === 'branches') return <BranchesManagement tenantId={tenantId} onBranchesChanged={onBranchesChanged} />;
   if (page === 'team') return <TeamBranchesManagement tenantId={tenantId} onBranchesChanged={onBranchesChanged} />;
   if (page === 'devices') return <DeviceManagement tenantId={tenantId} />;
   if (page === 'feedback') return <FeedbackDashboard tenantId={tenantId} />;

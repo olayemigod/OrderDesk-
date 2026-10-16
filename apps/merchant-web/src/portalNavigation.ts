@@ -42,7 +42,7 @@ export const MERCHANT_PORTAL_NAVIGATION: MerchantPortalNavigationItem[] = [
   { id: 'devices', label: 'Devices & Printers', section: 'Channels', available: true },
   { id: 'reports', label: 'Report Center', section: 'Insights', available: true },
   { id: 'ai', label: 'Ask SellerTray', section: 'Insights', available: true },
-  { id: 'branches', label: 'Branches', section: 'Management', available: false },
+  { id: 'branches', label: 'Branches', section: 'Management', available: true },
   { id: 'team', label: 'Team & Permissions', section: 'Management', available: true },
   { id: 'feedback', label: 'Feedback', section: 'Management', available: true },
   { id: 'settings', label: 'Settings', section: 'Management', available: true },
