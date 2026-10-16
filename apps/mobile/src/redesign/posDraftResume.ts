@@ -17,9 +17,7 @@ export type ResumedPosDraft = {
 };
 
 export type ResumedPosDraftEdit = {
-  orderItemId?: string;
-  catalogItemId?: string;
-  uomId?: string;
+  orderItemId: string;
   quantity: number;
   unitPrice?: number;
 };
@@ -78,26 +76,15 @@ export function buildResumedPosDraftEdits(
   lines: ResumedPosDraftLine[],
 ): ResumedPosDraftEdit[] {
   const existingIds = new Set(order.items.map((item) => item.id));
-  if (lines.some((line) => line.orderItemId && !existingIds.has(line.orderItemId))) {
+  if (lines.some((line) => !existingIds.has(line.orderItemId))) {
     throw new Error('This saved sale contains a product that is not part of the original draft.');
   }
 
-  const quantityByItemId = new Map(
-    lines.flatMap((line) => line.orderItemId ? [[line.orderItemId, line.quantity] as const] : []),
-  );
+  const quantityByItemId = new Map(lines.map((line) => [line.orderItemId, line.quantity] as const));
   const edits: ResumedPosDraftEdit[] = order.items.map((item) => ({
     orderItemId: item.id,
     quantity: quantityByItemId.get(item.id) ?? 0,
   }));
-
-  for (const line of lines) {
-    if (line.orderItemId) continue;
-    edits.push({
-      catalogItemId: line.product.id,
-      uomId: line.uom.id,
-      quantity: line.quantity,
-    });
-  }
 
   if (!edits.some((item) => item.quantity > 0)) {
     throw new Error('Keep at least one product in the saved sale.');
