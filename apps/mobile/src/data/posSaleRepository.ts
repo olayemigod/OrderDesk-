@@ -1,6 +1,29 @@
 import { supabase } from '../lib/supabase';
 
 export type PosSaleAction = 'void' | 'return';
+export type PosReturnStatus = 'partial' | 'returned';
+
+export type PosReturnableItem = {
+  orderItemId: string;
+  catalogItemId: string;
+  name: string;
+  selectedUom: string;
+  soldQuantity: number;
+  returnedQuantity: number;
+  remainingQuantity: number;
+  unitPrice: number;
+  remainingValue: number;
+};
+
+export type PosReturnableSale = {
+  orderId: string;
+  publicOrderId: string;
+  currency: string;
+  returnStatus: 'none' | PosReturnStatus;
+  returnedAmount: number;
+  remainingAmount: number;
+  items: PosReturnableItem[];
+};
 
 export type PosSaleActionResult = {
   action: PosSaleAction;
@@ -9,9 +32,17 @@ export type PosSaleActionResult = {
   status?: 'cancelled';
   returnId?: string;
   refundId?: string;
-  returnStatus?: 'returned';
+  returnStatus?: PosReturnStatus;
   refundedAmount?: number;
+  returnedAmount?: number;
   currency?: string;
+};
+
+export type PosDraftDeletionResult = {
+  orderId: string;
+  deleted: true;
+  deletedAt: string;
+  idempotentReplay: boolean;
 };
 
 export type PosDraftItemEditResult = {
@@ -27,6 +58,11 @@ export type PosDraftItemEdit = {
   uomId?: string;
   quantity: number;
   unitPrice?: number;
+};
+
+export type PosReturnItemInput = {
+  orderItemId: string;
+  quantity: number;
 };
 
 export async function updatePosDraftItems(input: {
@@ -78,6 +114,105 @@ export async function updatePosDraftItems(input: {
   };
 }
 
+export async function loadPosReturnableItems(
+  tenantId: string,
+  orderId: string,
+): Promise<PosReturnableSale> {
+  if (!tenantId || !orderId) throw new Error('Business and completed sale are required.');
+  const { data, error } = await supabase.rpc('get_sellertray_pos_returnable_items', {
+    p_tenant_id: tenantId,
+    p_order_id: orderId,
+  });
+  if (error) throw error;
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error('SellerTray returned invalid returnable sale details.');
+  }
+
+  const row = data as Record<string, unknown>;
+  const returnStatus = row.returnStatus;
+  const returnedAmount = numberOrUndefined(row.returnedAmount);
+  const remainingAmount = numberOrUndefined(row.remainingAmount);
+  if (
+    typeof row.orderId !== 'string'
+    || typeof row.publicOrderId !== 'string'
+    || typeof row.currency !== 'string'
+    || (returnStatus !== 'none' && returnStatus !== 'partial' && returnStatus !== 'returned')
+    || returnedAmount === undefined
+    || remainingAmount === undefined
+    || !Array.isArray(row.items)
+  ) {
+    throw new Error('SellerTray returned invalid returnable sale details.');
+  }
+
+  const items = row.items.map((value) => mapReturnableItem(value));
+  return {
+    orderId: row.orderId,
+    publicOrderId: row.publicOrderId,
+    currency: row.currency,
+    returnStatus,
+    returnedAmount,
+    remainingAmount,
+    items,
+  };
+}
+
+export async function returnPosSaleItems(input: {
+  tenantId: string;
+  orderId: string;
+  reason: string;
+  items: PosReturnItemInput[];
+  commandId: string;
+}): Promise<PosSaleActionResult> {
+  const reason = input.reason.trim();
+  if (!reason) throw new Error('Enter a reason before continuing.');
+  if (!input.commandId.trim()) throw new Error('Restart this return and try again.');
+  if (!input.items.length || input.items.some((item) => !item.orderItemId || !Number.isFinite(item.quantity) || item.quantity <= 0)) {
+    throw new Error('Choose at least one item quantity to return.');
+  }
+
+  return invokeSaleAction({
+    tenantId: input.tenantId,
+    orderId: input.orderId,
+    action: 'return',
+    reason,
+    items: input.items,
+    commandId: input.commandId,
+  });
+}
+
+export async function deletePosDraft(input: {
+  tenantId: string;
+  orderId: string;
+  reason: string;
+  commandId: string;
+}): Promise<PosDraftDeletionResult> {
+  const reason = input.reason.trim();
+  if (!reason) throw new Error('Enter a reason before deleting this draft.');
+  if (!input.commandId.trim()) throw new Error('Restart this deletion and try again.');
+
+  const data = await invokeRawAction({
+    tenantId: input.tenantId,
+    orderId: input.orderId,
+    action: 'delete_draft',
+    reason,
+    commandId: input.commandId,
+  });
+  if (data.deleted !== true || typeof data.deletedAt !== 'string') {
+    throw new Error('SellerTray did not confirm the draft was deleted.');
+  }
+  return {
+    orderId: data.orderId as string,
+    deleted: true,
+    deletedAt: data.deletedAt,
+    idempotentReplay: data.idempotentReplay as boolean,
+  };
+}
+
+export function createPosCommandId(action: 'return' | 'delete_draft', orderId: string): string {
+  const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  return `pos-${action}:${orderId}:${suffix}`;
+}
+
 export async function applyPosSaleAction(input: {
   tenantId: string;
   orderId: string;
@@ -87,12 +222,80 @@ export async function applyPosSaleAction(input: {
   const reason = input.reason.trim();
   if (!reason) throw new Error('Enter a reason before continuing.');
 
+  if (input.action === 'return') {
+    const returnable = await loadPosReturnableItems(input.tenantId, input.orderId);
+    return returnPosSaleItems({
+      tenantId: input.tenantId,
+      orderId: input.orderId,
+      reason,
+      commandId: createPosCommandId('return', input.orderId),
+      items: returnable.items.map((item) => ({
+        orderItemId: item.orderItemId,
+        quantity: item.remainingQuantity,
+      })),
+    });
+  }
+
+  return invokeSaleAction({
+    tenantId: input.tenantId,
+    orderId: input.orderId,
+    action: input.action,
+    reason,
+  });
+}
+
+async function invokeSaleAction(input: {
+  tenantId: string;
+  orderId: string;
+  action: PosSaleAction;
+  reason: string;
+  items?: PosReturnItemInput[];
+  commandId?: string;
+}): Promise<PosSaleActionResult> {
+  const row = await invokeRawAction(input);
+
+  if (input.action === 'void' && row.status !== 'cancelled') {
+    throw new Error('SellerTray did not confirm the sale was voided.');
+  }
+  if (
+    input.action === 'return'
+    && ((row.returnStatus !== 'partial' && row.returnStatus !== 'returned')
+      || typeof row.returnId !== 'string'
+      || typeof row.refundId !== 'string')
+  ) {
+    throw new Error('SellerTray did not confirm the sale return.');
+  }
+
+  return {
+    action: input.action,
+    orderId: row.orderId as string,
+    idempotentReplay: row.idempotentReplay as boolean,
+    status: row.status === 'cancelled' ? 'cancelled' : undefined,
+    returnId: typeof row.returnId === 'string' ? row.returnId : undefined,
+    refundId: typeof row.refundId === 'string' ? row.refundId : undefined,
+    returnStatus: row.returnStatus === 'partial' || row.returnStatus === 'returned' ? row.returnStatus : undefined,
+    refundedAmount: numberOrUndefined(row.refundedAmount),
+    returnedAmount: numberOrUndefined(row.returnedAmount),
+    currency: typeof row.currency === 'string' ? row.currency : undefined,
+  };
+}
+
+async function invokeRawAction(input: {
+  tenantId: string;
+  orderId: string;
+  action: PosSaleAction | 'delete_draft';
+  reason: string;
+  items?: PosReturnItemInput[];
+  commandId?: string;
+}): Promise<Record<string, unknown>> {
   const { data, error } = await supabase.functions.invoke('pos-return', {
     body: {
       tenantId: input.tenantId,
       orderId: input.orderId,
       action: input.action,
-      reason,
+      reason: input.reason,
+      ...(input.items ? { items: input.items } : {}),
+      ...(input.commandId ? { commandId: input.commandId } : {}),
     },
   });
 
@@ -117,27 +320,42 @@ export async function applyPosSaleAction(input: {
   if (typeof row.orderId !== 'string' || typeof row.idempotentReplay !== 'boolean') {
     throw new Error('SellerTray returned an invalid sale action result.');
   }
+  return row;
+}
 
-  if (input.action === 'void' && row.status !== 'cancelled') {
-    throw new Error('SellerTray did not confirm the sale was voided.');
+function mapReturnableItem(value: unknown): PosReturnableItem {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('SellerTray returned an invalid returnable item.');
   }
+  const row = value as Record<string, unknown>;
+  const soldQuantity = numberOrUndefined(row.soldQuantity);
+  const returnedQuantity = numberOrUndefined(row.returnedQuantity);
+  const remainingQuantity = numberOrUndefined(row.remainingQuantity);
+  const unitPrice = numberOrUndefined(row.unitPrice);
+  const remainingValue = numberOrUndefined(row.remainingValue);
   if (
-    input.action === 'return'
-    && (row.returnStatus !== 'returned' || typeof row.returnId !== 'string' || typeof row.refundId !== 'string')
+    typeof row.orderItemId !== 'string'
+    || typeof row.catalogItemId !== 'string'
+    || typeof row.name !== 'string'
+    || typeof row.selectedUom !== 'string'
+    || soldQuantity === undefined
+    || returnedQuantity === undefined
+    || remainingQuantity === undefined
+    || unitPrice === undefined
+    || remainingValue === undefined
   ) {
-    throw new Error('SellerTray did not confirm the sale return.');
+    throw new Error('SellerTray returned an invalid returnable item.');
   }
-
   return {
-    action: input.action,
-    orderId: row.orderId,
-    idempotentReplay: row.idempotentReplay,
-    status: row.status === 'cancelled' ? 'cancelled' : undefined,
-    returnId: typeof row.returnId === 'string' ? row.returnId : undefined,
-    refundId: typeof row.refundId === 'string' ? row.refundId : undefined,
-    returnStatus: row.returnStatus === 'returned' ? 'returned' : undefined,
-    refundedAmount: numberOrUndefined(row.refundedAmount),
-    currency: typeof row.currency === 'string' ? row.currency : undefined,
+    orderItemId: row.orderItemId,
+    catalogItemId: row.catalogItemId,
+    name: row.name,
+    selectedUom: row.selectedUom,
+    soldQuantity,
+    returnedQuantity,
+    remainingQuantity,
+    unitPrice,
+    remainingValue,
   };
 }
 
