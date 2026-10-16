@@ -4,9 +4,12 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 
 import { loadActiveCashShift } from '../data/cashShiftRepository';
 import {
-  applyPosSaleAction,
+  createPosCommandId,
+  deletePosDraft,
+  loadPosReturnableItems,
+  returnPosSaleItems,
   updatePosDraftItems,
-  type PosSaleAction,
+  type PosReturnableSale,
 } from '../data/posSaleRepository';
 import {
   loadPrinters,
@@ -33,7 +36,8 @@ type Props = {
 
 type PendingAction = {
   orderId: string;
-  action: PosSaleAction;
+  action: 'return' | 'delete_draft';
+  commandId: string;
 };
 
 export function OrdersWorkspace({
@@ -51,6 +55,9 @@ export function OrdersWorkspace({
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [returnLoadingOrderId, setReturnLoadingOrderId] = useState<string | null>(null);
+  const [returnableSale, setReturnableSale] = useState<PosReturnableSale | null>(null);
+  const [returnQuantities, setReturnQuantities] = useState<Record<string, string>>({});
   const [printingOrderId, setPrintingOrderId] = useState<string | null>(null);
   const [printError, setPrintError] = useState<string | null>(null);
   const [printNotice, setPrintNotice] = useState<string | null>(null);
@@ -58,16 +65,47 @@ export function OrdersWorkspace({
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [draftQuantities, setDraftQuantities] = useState<Record<string, string>>({});
 
-  function beginAction(order: MerchantOrder, action: PosSaleAction) {
-    setPending({ orderId: order.id, action });
+  function beginDelete(order: MerchantOrder) {
+    setPending({
+      orderId: order.id,
+      action: 'delete_draft',
+      commandId: createPosCommandId('delete_draft', order.id),
+    });
     setReason('');
+    setReturnableSale(null);
+    setReturnQuantities({});
     setError(null);
+  }
+
+  async function beginReturn(order: MerchantOrder) {
+    if (returnLoadingOrderId || saving) return;
+    setReturnLoadingOrderId(order.id);
+    setError(null);
+    try {
+      const next = await loadPosReturnableItems(tenantId, order.id);
+      if (next.items.length === 0) throw new Error('This sale has no quantity left to return.');
+      setReturnableSale(next);
+      setReturnQuantities(Object.fromEntries(next.items.map((item) => [item.orderItemId, '0'])));
+      setPending({
+        orderId: order.id,
+        action: 'return',
+        commandId: createPosCommandId('return', order.id),
+      });
+      setReason('');
+      setExpandedOrderIds((current) => ({ ...current, [order.id]: true }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'SellerTray could not load returnable quantities.');
+    } finally {
+      setReturnLoadingOrderId(null);
+    }
   }
 
   function cancelAction() {
     if (saving) return;
     setPending(null);
     setReason('');
+    setReturnableSale(null);
+    setReturnQuantities({});
     setError(null);
   }
 
@@ -82,9 +120,41 @@ export function OrdersWorkspace({
     setSaving(true);
     setError(null);
     try {
-      await applyPosSaleAction({ tenantId, orderId: order.id, action: pending.action, reason: cleanReason });
+      if (pending.action === 'delete_draft') {
+        await deletePosDraft({
+          tenantId,
+          orderId: order.id,
+          reason: cleanReason,
+          commandId: pending.commandId,
+        });
+      } else {
+        if (!returnableSale || returnableSale.orderId !== order.id) {
+          throw new Error('Reload the return items before continuing.');
+        }
+        const items = returnableSale.items
+          .map((item) => ({
+            orderItemId: item.orderItemId,
+            quantity: Number(returnQuantities[item.orderItemId] ?? 0),
+            remainingQuantity: item.remainingQuantity,
+          }))
+          .filter((item) => Number.isFinite(item.quantity) && item.quantity > 0);
+        if (items.length === 0) throw new Error('Choose at least one item quantity to return.');
+        if (items.some((item) => item.quantity > item.remainingQuantity)) {
+          throw new Error('A return quantity cannot exceed the quantity still available for that item.');
+        }
+        await returnPosSaleItems({
+          tenantId,
+          orderId: order.id,
+          reason: cleanReason,
+          commandId: pending.commandId,
+          items: items.map(({ orderItemId, quantity }) => ({ orderItemId, quantity })),
+        });
+      }
+
       setPending(null);
       setReason('');
+      setReturnableSale(null);
+      setReturnQuantities({});
       await onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'SellerTray could not update this sale.');
@@ -122,7 +192,7 @@ export function OrdersWorkspace({
       return;
     }
     if (!edits.some((item) => item.quantity > 0)) {
-      setError('Keep at least one item in the draft sale.');
+      setError('Keep at least one item in the draft sale, or delete the draft instead.');
       return;
     }
 
@@ -202,14 +272,18 @@ export function OrdersWorkspace({
 
       {orders.map((order) => {
         const total = orderTotal(order);
-        const canVoid = order.source === 'pos' && order.status === 'draft' && order.paymentStatus === 'unpaid' && order.amountPaid === 0;
-        const canEditDraft = canVoid;
-        const isCompletedUnreturnedPosSale = order.source === 'pos' && order.status === 'completed' && order.paymentStatus === 'paid' && order.fulfillmentStatus === 'collected' && order.returnStatus === 'none';
-        const canReturn = canReturnCompletedSale && isCompletedUnreturnedPosSale && order.cashReturnSupported === true;
-        const paymentNeedsRefundReview = canReturnCompletedSale && isCompletedUnreturnedPosSale && order.cashReturnSupported !== true;
+        const canManageDraft = order.source === 'pos' && order.status === 'draft' && order.paymentStatus === 'unpaid' && order.amountPaid === 0;
+        const isReturnablePosSale = order.source === 'pos'
+          && order.status === 'completed'
+          && order.paymentStatus === 'paid'
+          && order.fulfillmentStatus === 'collected'
+          && (order.returnStatus === 'none' || order.returnStatus === 'partial');
+        const canReturn = canReturnCompletedSale && isReturnablePosSale && order.cashReturnSupported === true;
+        const paymentNeedsRefundReview = canReturnCompletedSale && isReturnablePosSale && order.cashReturnSupported !== true;
         const canPrintReceipt = order.paymentStatus === 'paid';
         const action = pending?.orderId === order.id ? pending.action : null;
         const printing = printingOrderId === order.id;
+        const loadingReturn = returnLoadingOrderId === order.id;
         const expanded = expandedOrderIds[order.id] === true;
         const editing = editingOrderId === order.id;
 
@@ -227,7 +301,10 @@ export function OrdersWorkspace({
             </Pressable>
 
             <View style={styles.orderStateRow}>
-              <StatePill label={order.returnStatus === 'returned' ? 'Returned' : titleCase(order.status)} positive={order.returnStatus === 'returned'} />
+              <StatePill
+                label={order.returnStatus === 'returned' ? 'Returned' : order.returnStatus === 'partial' ? 'Partially returned' : titleCase(order.status)}
+                positive={order.returnStatus !== 'none'}
+              />
               <StatePill label={titleCase(order.paymentStatus)} positive={order.paymentStatus === 'paid'} />
               <StatePill label={titleCase(order.fulfillmentStatus)} positive={order.fulfillmentStatus === 'delivered' || order.fulfillmentStatus === 'collected'} />
             </View>
@@ -238,10 +315,10 @@ export function OrdersWorkspace({
                   <View style={styles.flexCopy}>
                     <Text style={[styles.itemsTitle, dark && darkStyles.titleText]}>Order items</Text>
                     <Text style={[styles.itemsHelper, dark && darkStyles.bodyText]}>
-                      {canEditDraft ? 'Draft quantities can be changed. Enter 0 to remove a line.' : 'Finalised order lines are historical snapshots and cannot be edited.'}
+                      {canManageDraft ? 'Draft quantities can be changed. Enter 0 to remove a line.' : 'Finalised order lines are historical snapshots and cannot be edited.'}
                     </Text>
                   </View>
-                  {canEditDraft && !editing ? (
+                  {canManageDraft && !editing ? (
                     <Pressable disabled={saving} onPress={() => beginDraftEdit(order)} style={styles.editButton}>
                       <Ionicons name="create-outline" size={16} color={theme.colors.greenDark} />
                       <Text style={styles.editButtonText}>Edit draft</Text>
@@ -254,25 +331,19 @@ export function OrdersWorkspace({
                     <View key={item.id} style={[styles.itemRow, dark && darkStyles.card]}>
                       <View style={styles.flexCopy}>
                         <Text style={[styles.itemName, dark && darkStyles.titleText]}>{item.name}</Text>
-                        <Text style={[styles.itemMeta, dark && darkStyles.bodyText]}>
-                          {item.selectedUom} · {formatQuantity(item.stockQuantity)} stock qty
-                        </Text>
-                        <Text style={[styles.itemPrice, dark && darkStyles.titleText]}>
-                          {item.unitPrice === null ? 'Needs pricing' : `${formatMoney(item.unitPrice, businessCurrency)} × ${formatQuantity(item.quantity)}`}
-                        </Text>
+                        <Text style={[styles.itemMeta, dark && darkStyles.bodyText]}>{item.selectedUom} · {formatQuantity(item.stockQuantity)} stock qty</Text>
+                        <Text style={[styles.itemPrice, dark && darkStyles.titleText]}>{item.unitPrice === null ? 'Needs pricing' : `${formatMoney(item.unitPrice, businessCurrency)} × ${formatQuantity(item.quantity)}`}</Text>
                       </View>
                       {editing ? (
                         <TextInput
                           value={draftQuantities[item.id] ?? formatQuantity(item.quantity)}
-                          onChangeText={(value) => setDraftQuantities((current) => ({ ...current, [item.id]: value.replace(/[^0-9.]/g, '') }))}
+                          onChangeText={(value) => setDraftQuantities((current) => ({ ...current, [item.id]: cleanDecimalInput(value) }))}
                           keyboardType="decimal-pad"
                           selectTextOnFocus
                           accessibilityLabel={`Quantity for ${item.name}`}
                           style={[styles.quantityInput, dark && darkStyles.input]}
                         />
-                      ) : (
-                        <Text style={[styles.quantityText, dark && darkStyles.titleText]}>{formatQuantity(item.quantity)}</Text>
-                      )}
+                      ) : <Text style={[styles.quantityText, dark && darkStyles.titleText]}>{formatQuantity(item.quantity)}</Text>}
                     </View>
                   ))}
                 </View>
@@ -288,33 +359,85 @@ export function OrdersWorkspace({
               </View>
             ) : null}
 
-            {order.returnStatus === 'returned' ? (
-              <View style={[styles.returnedNotice, dark && darkStyles.subtleCard]}><Ionicons name="return-down-back-outline" size={18} color={theme.colors.greenDark} /><Text style={[styles.returnedText, dark && darkStyles.bodyText]}>{formatMoney(order.returnedAmount, businessCurrency)} returned. The original sale and payment remain in history.</Text></View>
+            {order.returnStatus !== 'none' ? (
+              <View style={[styles.returnedNotice, dark && darkStyles.subtleCard]}>
+                <Ionicons name="return-down-back-outline" size={18} color={theme.colors.greenDark} />
+                <Text style={[styles.returnedText, dark && darkStyles.bodyText]}>
+                  {formatMoney(order.returnedAmount, businessCurrency)} returned{order.returnStatus === 'partial' ? '; remaining quantities can still be returned.' : '.'} The original sale and payment remain in history.
+                </Text>
+              </View>
             ) : null}
 
             {paymentNeedsRefundReview ? (
               <View style={[styles.returnedNotice, dark && darkStyles.subtleCard]}><Ionicons name="card-outline" size={18} color={theme.colors.muted} /><Text style={[styles.returnedText, dark && darkStyles.bodyText]}>This sale was paid outside the cash drawer. Review the payment before processing a refund.</Text></View>
             ) : null}
 
-            {!action && !editing && (canVoid || canReturn || canPrintReceipt) ? (
+            {!action && !editing && (canManageDraft || canReturn || canPrintReceipt) ? (
               <View style={styles.actionRow}>
-                {canEditDraft ? <Pressable disabled={saving || printingOrderId !== null} onPress={() => onResumeDraft(order)} style={[styles.outlineAction, styles.resumeAction, dark && darkStyles.outlineButton]}><Ionicons name="cart-outline" size={17} color={theme.colors.greenDark} /><Text style={styles.resumeActionText}>Resume sale</Text></Pressable> : null}
+                {canManageDraft ? <Pressable disabled={saving || printingOrderId !== null} onPress={() => onResumeDraft(order)} style={[styles.outlineAction, styles.resumeAction, dark && darkStyles.outlineButton]}><Ionicons name="cart-outline" size={17} color={theme.colors.greenDark} /><Text style={styles.resumeActionText}>Resume sale</Text></Pressable> : null}
                 {canPrintReceipt ? <Pressable disabled={saving || printingOrderId !== null} onPress={() => void printReceipt(order)} style={[styles.outlineAction, styles.printAction, dark && darkStyles.outlineButton, (saving || printingOrderId !== null) && styles.disabled]}>{printing ? <ActivityIndicator size="small" color={theme.colors.greenDark} /> : <Ionicons name="print-outline" size={17} color={theme.colors.greenDark} />}<Text style={styles.printActionText}>{printing ? 'Printing…' : 'Print receipt'}</Text></Pressable> : null}
-                {canVoid ? <Pressable disabled={saving || printingOrderId !== null} onPress={() => beginAction(order, 'void')} style={[styles.outlineAction, dark && darkStyles.outlineButton]}><Ionicons name="close-circle-outline" size={17} color={theme.colors.slate} /><Text style={[styles.outlineActionText, dark && darkStyles.bodyText]}>Void sale</Text></Pressable> : null}
-                {canReturn ? <Pressable disabled={saving || printingOrderId !== null} onPress={() => beginAction(order, 'return')} style={[styles.outlineAction, styles.returnAction, dark && darkStyles.outlineButton]}><Ionicons name="return-down-back-outline" size={17} color={theme.colors.greenDark} /><Text style={styles.returnActionText}>Return sale</Text></Pressable> : null}
+                {canManageDraft ? <Pressable disabled={saving || printingOrderId !== null} onPress={() => beginDelete(order)} style={[styles.outlineAction, styles.deleteAction, dark && darkStyles.outlineButton]}><Ionicons name="trash-outline" size={17} color={theme.colors.danger} /><Text style={styles.deleteActionText}>Delete draft</Text></Pressable> : null}
+                {canReturn ? <Pressable disabled={saving || printingOrderId !== null || loadingReturn} onPress={() => void beginReturn(order)} style={[styles.outlineAction, styles.returnAction, dark && darkStyles.outlineButton]}>{loadingReturn ? <ActivityIndicator size="small" color={theme.colors.greenDark} /> : <Ionicons name="return-down-back-outline" size={17} color={theme.colors.greenDark} />}<Text style={styles.returnActionText}>{loadingReturn ? 'Loading…' : 'Return items'}</Text></Pressable> : null}
               </View>
             ) : null}
 
             {action ? (
               <View style={[styles.actionPanel, dark && darkStyles.subtleCard]}>
                 <View style={styles.actionPanelHeading}>
-                  <Ionicons name={action === 'return' ? 'return-down-back-outline' : 'close-circle-outline'} size={20} color={action === 'return' ? theme.colors.greenDark : theme.colors.danger} />
-                  <View style={styles.actionPanelCopy}><Text style={[styles.actionPanelTitle, dark && darkStyles.titleText]}>{action === 'return' ? 'Return this sale' : 'Void this draft sale'}</Text><Text style={[styles.actionPanelText, dark && darkStyles.bodyText]}>{action === 'return' ? 'This returns the full counter sale, records the cash refund and restores stock. The original sale stays in history.' : 'This closes the unpaid draft. No payment or stock movement will be created.'}</Text></View>
+                  <Ionicons name={action === 'return' ? 'return-down-back-outline' : 'trash-outline'} size={20} color={action === 'return' ? theme.colors.greenDark : theme.colors.danger} />
+                  <View style={styles.actionPanelCopy}>
+                    <Text style={[styles.actionPanelTitle, dark && darkStyles.titleText]}>{action === 'return' ? 'Return items' : 'Delete this draft'}</Text>
+                    <Text style={[styles.actionPanelText, dark && darkStyles.bodyText]}>
+                      {action === 'return'
+                        ? 'Enter only the quantity the customer is returning. SellerTray restores exactly those quantities and records the matching cash refund.'
+                        : 'This removes the unwanted unpaid draft from normal work and reports while keeping its deletion audit record.'}
+                    </Text>
+                  </View>
                 </View>
+
+                {action === 'return' && returnableSale ? (
+                  <View style={styles.returnItems}>
+                    {returnableSale.items.map((item) => (
+                      <View key={item.orderItemId} style={[styles.returnItemRow, dark && darkStyles.card]}>
+                        <View style={styles.flexCopy}>
+                          <Text style={[styles.itemName, dark && darkStyles.titleText]}>{item.name}</Text>
+                          <Text style={[styles.itemMeta, dark && darkStyles.bodyText]}>
+                            Sold {formatQuantity(item.soldQuantity)} · Already returned {formatQuantity(item.returnedQuantity)} · Available {formatQuantity(item.remainingQuantity)} {item.selectedUom}
+                          </Text>
+                        </View>
+                        <TextInput
+                          value={returnQuantities[item.orderItemId] ?? '0'}
+                          onChangeText={(value) => setReturnQuantities((current) => ({ ...current, [item.orderItemId]: cleanDecimalInput(value) }))}
+                          keyboardType="decimal-pad"
+                          selectTextOnFocus
+                          accessibilityLabel={`Return quantity for ${item.name}`}
+                          style={[styles.quantityInput, dark && darkStyles.input]}
+                        />
+                      </View>
+                    ))}
+                    <View style={styles.returnSummaryRow}>
+                      <Text style={[styles.returnSummaryLabel, dark && darkStyles.bodyText]}>Estimated refund</Text>
+                      <Text style={[styles.returnSummaryValue, dark && darkStyles.titleText]}>{formatMoney(selectedReturnValue(returnableSale, returnQuantities), returnableSale.currency)}</Text>
+                    </View>
+                  </View>
+                ) : null}
+
                 <Text style={[styles.fieldLabel, dark && darkStyles.bodyText]}>Reason</Text>
-                <TextInput value={reason} onChangeText={setReason} editable={!saving} placeholder={action === 'return' ? 'Why is the customer returning this sale?' : 'Why is this draft being voided?'} placeholderTextColor={theme.colors.subtle} multiline maxLength={500} style={[styles.reasonInput, dark && darkStyles.input]} />
+                <TextInput
+                  value={reason}
+                  onChangeText={setReason}
+                  editable={!saving}
+                  placeholder={action === 'return' ? 'Why are these items being returned?' : 'Why is this draft being deleted?'}
+                  placeholderTextColor={theme.colors.subtle}
+                  multiline
+                  maxLength={500}
+                  style={[styles.reasonInput, dark && darkStyles.input]}
+                />
                 {error ? <Banner text={error} error dark={dark} onDismiss={() => setError(null)} /> : null}
-                <View style={styles.confirmRow}><Pressable disabled={saving} onPress={cancelAction} style={[styles.cancelButton, dark && darkStyles.outlineButton]}><Text style={[styles.cancelText, dark && darkStyles.bodyText]}>Cancel</Text></Pressable><Pressable disabled={saving || !reason.trim()} onPress={() => void confirmAction(order)} style={[styles.confirmButton, (saving || !reason.trim()) && styles.disabled]}>{saving ? <ActivityIndicator color={theme.colors.white} /> : null}<Text style={styles.confirmText}>{saving ? 'Applying…' : action === 'return' ? 'Confirm return' : 'Confirm void'}</Text></Pressable></View>
+                <View style={styles.confirmRow}>
+                  <Pressable disabled={saving} onPress={cancelAction} style={[styles.cancelButton, dark && darkStyles.outlineButton]}><Text style={[styles.cancelText, dark && darkStyles.bodyText]}>Cancel</Text></Pressable>
+                  <Pressable disabled={saving || !reason.trim()} onPress={() => void confirmAction(order)} style={[styles.confirmButton, (saving || !reason.trim()) && styles.disabled]}>{saving ? <ActivityIndicator color={theme.colors.white} /> : null}<Text style={styles.confirmText}>{saving ? 'Applying…' : action === 'return' ? 'Confirm return' : 'Delete draft'}</Text></Pressable>
+                </View>
               </View>
             ) : null}
           </View>
@@ -322,6 +445,20 @@ export function OrdersWorkspace({
       })}
     </View>
   );
+}
+
+function selectedReturnValue(sale: PosReturnableSale, quantities: Record<string, string>): number {
+  return sale.items.reduce((sum, item) => {
+    const quantity = Number(quantities[item.orderItemId] ?? 0);
+    if (!Number.isFinite(quantity) || quantity <= 0) return sum;
+    return sum + Math.min(quantity, item.remainingQuantity) * item.unitPrice;
+  }, 0);
+}
+
+function cleanDecimalInput(value: string): string {
+  const clean = value.replace(/[^0-9.]/g, '');
+  const [whole, ...rest] = clean.split('.');
+  return rest.length === 0 ? whole : `${whole}.${rest.join('')}`;
 }
 
 function Banner({ text, error, dark, onDismiss }: { text: string; error?: boolean; dark: boolean; onDismiss: () => void }) {
@@ -361,7 +498,7 @@ function formatQuantity(value: number): string {
 }
 
 const styles = StyleSheet.create({
-  stack:{gap:12},heading:{gap:3},eyebrow:{color:theme.colors.muted,fontSize:11,fontWeight:'900',letterSpacing:1.05},pageTitle:{color:theme.colors.navy,fontSize:28,lineHeight:34,fontWeight:'900'},pageSubtitle:{color:theme.colors.slate,fontSize:14,lineHeight:20},emptyCard:{minHeight:140,borderRadius:theme.radius.lg,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.white,padding:18,alignItems:'center',justifyContent:'center',gap:7},emptyTitle:{color:theme.colors.navy,fontSize:15,fontWeight:'900'},emptyText:{color:theme.colors.muted,fontSize:12,lineHeight:18,textAlign:'center'},muted:{color:theme.colors.muted,fontSize:12},orderCard:{borderRadius:theme.radius.lg,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.white,padding:13,gap:10},orderTopRow:{flexDirection:'row',alignItems:'flex-start',gap:10},orderIdentity:{flex:1,minWidth:0},customerName:{color:theme.colors.navy,fontSize:15,fontWeight:'900'},orderMeta:{color:theme.colors.muted,fontSize:11,marginTop:3},orderValueWrap:{alignItems:'flex-end',gap:5},orderValue:{color:theme.colors.navy,fontSize:14,fontWeight:'900'},orderStateRow:{flexDirection:'row',flexWrap:'wrap',gap:6},statePill:{borderRadius:theme.radius.pill,backgroundColor:'#F2F4F7',paddingHorizontal:9,paddingVertical:5},statePillPositive:{backgroundColor:theme.colors.mintSoft},statePillText:{color:theme.colors.slate,fontSize:10,fontWeight:'900'},statePillTextPositive:{color:theme.colors.greenDark},itemsPanel:{borderRadius:theme.radius.md,borderWidth:1,borderColor:theme.colors.border,backgroundColor:'#F9FAFB',padding:11,gap:9},itemsHeading:{flexDirection:'row',alignItems:'flex-start',gap:8},flexCopy:{flex:1,minWidth:0},itemsTitle:{color:theme.colors.navy,fontSize:13,fontWeight:'900'},itemsHelper:{color:theme.colors.muted,fontSize:10.5,lineHeight:16,marginTop:2},editButton:{minHeight:34,borderRadius:10,backgroundColor:theme.colors.mintSoft,paddingHorizontal:9,flexDirection:'row',alignItems:'center',gap:4},editButtonText:{color:theme.colors.greenDark,fontSize:10.5,fontWeight:'900'},itemList:{gap:7},itemRow:{borderRadius:11,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.white,padding:10,flexDirection:'row',alignItems:'center',gap:8},itemName:{color:theme.colors.navy,fontSize:12.5,fontWeight:'900'},itemMeta:{color:theme.colors.muted,fontSize:10.5,lineHeight:15,marginTop:2},itemPrice:{color:theme.colors.navy,fontSize:11.5,fontWeight:'800',marginTop:3},quantityText:{color:theme.colors.navy,fontSize:14,fontWeight:'900'},quantityInput:{width:74,minHeight:42,borderRadius:11,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.white,color:theme.colors.navy,textAlign:'center',fontSize:13,fontWeight:'900',paddingHorizontal:6},editActions:{flexDirection:'row',gap:8},actionRow:{flexDirection:'row',flexWrap:'wrap',gap:8},outlineAction:{minHeight:39,borderRadius:11,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.white,paddingHorizontal:10,flexDirection:'row',alignItems:'center',gap:5},outlineActionText:{color:theme.colors.slate,fontSize:10.5,fontWeight:'900'},resumeAction:{borderColor:'#ABEFC6'},resumeActionText:{color:theme.colors.greenDark,fontSize:10.5,fontWeight:'900'},printAction:{borderColor:'#ABEFC6'},printActionText:{color:theme.colors.greenDark,fontSize:10.5,fontWeight:'900'},returnAction:{borderColor:'#ABEFC6'},returnActionText:{color:theme.colors.greenDark,fontSize:10.5,fontWeight:'900'},returnedNotice:{borderRadius:11,backgroundColor:theme.colors.mintSoft,padding:9,flexDirection:'row',gap:6,alignItems:'flex-start'},returnedText:{flex:1,color:theme.colors.slate,fontSize:10.5,lineHeight:16},actionPanel:{borderRadius:theme.radius.md,borderWidth:1,borderColor:theme.colors.border,backgroundColor:'#F9FAFB',padding:11,gap:9},actionPanelHeading:{flexDirection:'row',alignItems:'flex-start',gap:7},actionPanelCopy:{flex:1},actionPanelTitle:{color:theme.colors.navy,fontSize:13,fontWeight:'900'},actionPanelText:{color:theme.colors.slate,fontSize:10.5,lineHeight:16,marginTop:2},fieldLabel:{color:theme.colors.slate,fontSize:11,fontWeight:'900'},reasonInput:{minHeight:76,borderRadius:11,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.white,color:theme.colors.navy,padding:10,textAlignVertical:'top',fontSize:12},confirmRow:{flexDirection:'row',gap:8},cancelButton:{flex:1,minHeight:43,borderRadius:11,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.white,alignItems:'center',justifyContent:'center'},cancelText:{color:theme.colors.slate,fontSize:11,fontWeight:'900'},confirmButton:{flex:1,minHeight:43,borderRadius:11,backgroundColor:theme.colors.green,flexDirection:'row',alignItems:'center',justifyContent:'center',gap:5},confirmText:{color:theme.colors.white,fontSize:11,fontWeight:'900'},errorCard:{borderRadius:theme.radius.md,borderWidth:1,borderColor:'#FDA29B',backgroundColor:theme.colors.dangerSoft,padding:10,flexDirection:'row',alignItems:'flex-start',gap:7},errorText:{flex:1,color:'#912018',fontSize:11.5,lineHeight:17},noticeCard:{borderRadius:theme.radius.md,borderWidth:1,borderColor:'#ABEFC6',backgroundColor:theme.colors.mintSoft,padding:10,flexDirection:'row',alignItems:'flex-start',gap:7},noticeText:{flex:1,color:theme.colors.slate,fontSize:11.5,lineHeight:17},disabled:{opacity:0.42}
+  stack:{gap:12},heading:{gap:3},eyebrow:{color:theme.colors.muted,fontSize:11,fontWeight:'900',letterSpacing:1.05},pageTitle:{color:theme.colors.navy,fontSize:28,lineHeight:34,fontWeight:'900'},pageSubtitle:{color:theme.colors.slate,fontSize:14,lineHeight:20},emptyCard:{minHeight:140,borderRadius:theme.radius.lg,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.white,padding:18,alignItems:'center',justifyContent:'center',gap:7},emptyTitle:{color:theme.colors.navy,fontSize:15,fontWeight:'900'},emptyText:{color:theme.colors.muted,fontSize:12,lineHeight:18,textAlign:'center'},muted:{color:theme.colors.muted,fontSize:12},orderCard:{borderRadius:theme.radius.lg,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.white,padding:13,gap:10},orderTopRow:{flexDirection:'row',alignItems:'flex-start',gap:10},orderIdentity:{flex:1,minWidth:0},customerName:{color:theme.colors.navy,fontSize:15,fontWeight:'900'},orderMeta:{color:theme.colors.muted,fontSize:11,marginTop:3},orderValueWrap:{alignItems:'flex-end',gap:5},orderValue:{color:theme.colors.navy,fontSize:14,fontWeight:'900'},orderStateRow:{flexDirection:'row',flexWrap:'wrap',gap:6},statePill:{borderRadius:theme.radius.pill,backgroundColor:'#F2F4F7',paddingHorizontal:9,paddingVertical:5},statePillPositive:{backgroundColor:theme.colors.mintSoft},statePillText:{color:theme.colors.slate,fontSize:10,fontWeight:'900'},statePillTextPositive:{color:theme.colors.greenDark},itemsPanel:{borderRadius:theme.radius.md,borderWidth:1,borderColor:theme.colors.border,backgroundColor:'#F9FAFB',padding:11,gap:9},itemsHeading:{flexDirection:'row',alignItems:'flex-start',gap:8},flexCopy:{flex:1,minWidth:0},itemsTitle:{color:theme.colors.navy,fontSize:13,fontWeight:'900'},itemsHelper:{color:theme.colors.muted,fontSize:10.5,lineHeight:16,marginTop:2},editButton:{minHeight:34,borderRadius:10,backgroundColor:theme.colors.mintSoft,paddingHorizontal:9,flexDirection:'row',alignItems:'center',gap:4},editButtonText:{color:theme.colors.greenDark,fontSize:10.5,fontWeight:'900'},itemList:{gap:7},itemRow:{borderRadius:11,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.white,padding:10,flexDirection:'row',alignItems:'center',gap:8},itemName:{color:theme.colors.navy,fontSize:12.5,fontWeight:'900'},itemMeta:{color:theme.colors.muted,fontSize:10.5,lineHeight:15,marginTop:2},itemPrice:{color:theme.colors.navy,fontSize:11.5,fontWeight:'800',marginTop:3},quantityText:{color:theme.colors.navy,fontSize:14,fontWeight:'900'},quantityInput:{width:74,minHeight:42,borderRadius:11,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.white,color:theme.colors.navy,textAlign:'center',fontSize:13,fontWeight:'900',paddingHorizontal:6},editActions:{flexDirection:'row',gap:8},actionRow:{flexDirection:'row',flexWrap:'wrap',gap:8},outlineAction:{minHeight:39,borderRadius:11,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.white,paddingHorizontal:10,flexDirection:'row',alignItems:'center',gap:5},outlineActionText:{color:theme.colors.slate,fontSize:10.5,fontWeight:'900'},resumeAction:{borderColor:'#ABEFC6'},resumeActionText:{color:theme.colors.greenDark,fontSize:10.5,fontWeight:'900'},printAction:{borderColor:'#ABEFC6'},printActionText:{color:theme.colors.greenDark,fontSize:10.5,fontWeight:'900'},returnAction:{borderColor:'#ABEFC6'},returnActionText:{color:theme.colors.greenDark,fontSize:10.5,fontWeight:'900'},deleteAction:{borderColor:'#FDA29B'},deleteActionText:{color:theme.colors.danger,fontSize:10.5,fontWeight:'900'},returnedNotice:{borderRadius:11,backgroundColor:theme.colors.mintSoft,padding:9,flexDirection:'row',gap:6,alignItems:'flex-start'},returnedText:{flex:1,color:theme.colors.slate,fontSize:10.5,lineHeight:16},actionPanel:{borderRadius:theme.radius.md,borderWidth:1,borderColor:theme.colors.border,backgroundColor:'#F9FAFB',padding:11,gap:9},actionPanelHeading:{flexDirection:'row',alignItems:'flex-start',gap:7},actionPanelCopy:{flex:1},actionPanelTitle:{color:theme.colors.navy,fontSize:13,fontWeight:'900'},actionPanelText:{color:theme.colors.slate,fontSize:10.5,lineHeight:16,marginTop:2},returnItems:{gap:7},returnItemRow:{borderRadius:11,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.white,padding:9,flexDirection:'row',alignItems:'center',gap:8},returnSummaryRow:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',paddingTop:2},returnSummaryLabel:{color:theme.colors.slate,fontSize:11,fontWeight:'800'},returnSummaryValue:{color:theme.colors.navy,fontSize:13,fontWeight:'900'},fieldLabel:{color:theme.colors.slate,fontSize:11,fontWeight:'900'},reasonInput:{minHeight:76,borderRadius:11,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.white,color:theme.colors.navy,padding:10,textAlignVertical:'top',fontSize:12},confirmRow:{flexDirection:'row',gap:8},cancelButton:{flex:1,minHeight:43,borderRadius:11,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.white,alignItems:'center',justifyContent:'center'},cancelText:{color:theme.colors.slate,fontSize:11,fontWeight:'900'},confirmButton:{flex:1,minHeight:43,borderRadius:11,backgroundColor:theme.colors.green,flexDirection:'row',alignItems:'center',justifyContent:'center',gap:5},confirmText:{color:theme.colors.white,fontSize:11,fontWeight:'900'},errorCard:{borderRadius:theme.radius.md,borderWidth:1,borderColor:'#FDA29B',backgroundColor:theme.colors.dangerSoft,padding:10,flexDirection:'row',alignItems:'flex-start',gap:7},errorText:{flex:1,color:'#912018',fontSize:11.5,lineHeight:17},noticeCard:{borderRadius:theme.radius.md,borderWidth:1,borderColor:'#ABEFC6',backgroundColor:theme.colors.mintSoft,padding:10,flexDirection:'row',alignItems:'flex-start',gap:7},noticeText:{flex:1,color:theme.colors.slate,fontSize:11.5,lineHeight:17},disabled:{opacity:0.42}
 });
 
 const darkStyles=StyleSheet.create({titleText:{color:'#F8FAFC'},bodyText:{color:'#CBD5E1'},card:{backgroundColor:'#111827',borderColor:'#334155'},subtleCard:{backgroundColor:'#172033',borderColor:'#334155'},outlineButton:{backgroundColor:'#111827',borderColor:'#334155'},input:{backgroundColor:'#111827',borderColor:'#334155',color:'#F8FAFC'},errorCard:{backgroundColor:'#3F1D1D',borderColor:'#7F1D1D'}});
