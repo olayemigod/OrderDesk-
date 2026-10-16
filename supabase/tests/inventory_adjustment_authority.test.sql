@@ -18,8 +18,8 @@ select ok(
   'service runtime can execute governed stock adjustment command'
 );
 select ok(
-  not has_function_privilege('service_role', 'public.apply_sellertray_inventory_operation(uuid,uuid,uuid,uuid,text,numeric,text,text,text,text,uuid)', 'EXECUTE'),
-  'service runtime cannot call generic receive-or-adjust command'
+  has_function_privilege('service_role', 'public.apply_sellertray_inventory_operation(uuid,uuid,uuid,uuid,text,numeric,text,text,text,text,uuid)', 'EXECUTE'),
+  'governed server workflows retain the authoritative inventory command'
 );
 
 select * from finish();
