@@ -21,9 +21,9 @@ requireValue(
 
 requireValue(
   app.includes("import PurchasingManagement from './PurchasingManagement'") &&
-    navigation.includes("{ id: 'purchasing', label: 'Purchasing', section: 'Stock', available: true }") &&
+    navigation.includes("{ id: 'purchasing', label: 'Purchasing & Suppliers', section: 'Stock', available: true }") &&
     app.includes("page === 'purchasing' && <PurchasingManagement tenantId={business.id} currency={business.currency}"),
-  'Merchant Web must expose the governed Purchasing workspace.',
+  'Merchant Web must expose the governed Purchasing & Suppliers workspace.',
 );
 
 requireValue(
