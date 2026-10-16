@@ -29,7 +29,7 @@ export type MerchantPortalNavigationItem = {
 
 export const MERCHANT_PORTAL_NAVIGATION: MerchantPortalNavigationItem[] = [
   { id: 'overview', label: 'Overview', section: 'Business', available: true },
-  { id: 'sales', label: 'Sales', section: 'Business', available: false },
+  { id: 'sales', label: 'Sales', section: 'Business', available: true },
   { id: 'orders', label: 'Orders', section: 'Business', available: true },
   { id: 'customers', label: 'Customers', section: 'Business', available: true },
   { id: 'products', label: 'Products & Pricing', section: 'Stock', available: true },
