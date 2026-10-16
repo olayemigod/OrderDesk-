@@ -15,73 +15,106 @@ function requireValue(condition, message) {
 
 const domain = read(join(mobileRoot, 'src/domain/order.ts'));
 const ordersRepository = read(join(mobileRoot, 'src/data/ordersRepository.ts'));
+const posSaleRepository = read(join(mobileRoot, 'src/data/posSaleRepository.ts'));
 const ordersWorkspace = read(join(mobileRoot, 'src/redesign/OrdersWorkspace.tsx'));
 const redesignWorkspace = read(join(mobileRoot, 'src/redesign/RedesignWorkspace.tsx'));
+const mobileShell = read(join(mobileRoot, 'src/redesign/MobileShell.tsx'));
 const posReturnEdge = read(join(repoRoot, 'supabase/functions/pos-return/index.ts'));
-const returnMigration = read(join(repoRoot, 'supabase/migrations/20261009194500_pos_void_and_cash_return.sql'));
+const partialReturnMigration = read(join(repoRoot, 'supabase/migrations/20261016043000_pos_partial_return_governance.sql'));
+const draftDeletionMigration = read(join(repoRoot, 'supabase/migrations/20261016044000_pos_draft_deletion.sql'));
 const refundAuthorityMigration = read(join(repoRoot, 'supabase/migrations/20261014203000_pos_refund_authority_convergence.sql'));
 const shiftReconciliationMigration = read(join(repoRoot, 'supabase/migrations/20261014202000_pos_cash_shift_reconciliation.sql'));
 const teamManagementWeb = read(join(repoRoot, 'apps/merchant-web/src/TeamBranchesManagement.tsx'));
 
 requireValue(
-  domain.includes('cashReturnSupported?: boolean;'),
-  'Order read model must expose whether the current full POS cash return is supported',
+  domain.includes("export type ReturnStatus = 'none' | 'partial' | 'returned';")
+    && domain.includes('cashReturnSupported?: boolean;'),
+  'Order read model must distinguish partial and full returns while preserving cash refund eligibility evidence',
 );
 requireValue(
   ordersRepository.includes(".from('order_payments')")
-    && ordersRepository.includes(".select('order_id,method_type,provider,status,amount,currency')")
     && ordersRepository.includes("payment.status === 'confirmed'")
     && ordersRepository.includes("confirmedPayment.method_type === 'cash'")
     && ordersRepository.includes("confirmedPayment.provider === 'pos_cash'")
-    && ordersRepository.includes('confirmedPayments.length === 1'),
-  'Order loading must derive cash-return support from one confirmed POS cash payment rather than payment_status alone',
+    && ordersRepository.includes('confirmedPayments.length === 1')
+    && ordersRepository.includes(".is('deleted_at', null)"),
+  'Order loading must derive cash-return support from one confirmed POS cash payment and hide audit-deleted drafts',
 );
 requireValue(
-  ordersRepository.includes("table: 'order_payments'") && ordersRepository.includes('cashReturnSupported,'),
-  'Order return eligibility must refresh when payment evidence changes',
+  posSaleRepository.includes("rpc('get_sellertray_pos_returnable_items'")
+    && posSaleRepository.includes('returnPosSaleItems')
+    && posSaleRepository.includes('deletePosDraft')
+    && posSaleRepository.includes("createPosCommandId('return'")
+    && posSaleRepository.includes("createPosCommandId('delete_draft'"),
+  'Mobile sale commands must load remaining line quantities and preserve retry identity for returns and draft deletion',
 );
 requireValue(
-  ordersWorkspace.includes('order.cashReturnSupported === true')
-    && ordersWorkspace.includes('order.cashReturnSupported !== true')
-    && ordersWorkspace.includes('This sale was paid outside the cash drawer. Review the payment before processing a refund.'),
-  'Orders UI must show the cash-return action only for supported cash sales and explain non-cash refund review',
+  ordersWorkspace.includes("order.returnStatus === 'partial'")
+    && ordersWorkspace.includes('loadPosReturnableItems')
+    && ordersWorkspace.includes('returnPosSaleItems')
+    && ordersWorkspace.includes('remainingQuantity')
+    && ordersWorkspace.includes('Delete draft')
+    && ordersWorkspace.includes('deletePosDraft'),
+  'Orders UI must support quantity-level partial returns and explicit deletion of unwanted unpaid drafts',
 );
 requireValue(
-  redesignWorkspace.includes("get_sellertray_pos_return_authority")
+  redesignWorkspace.includes('get_sellertray_pos_return_authority')
     && redesignWorkspace.includes('canReturnCompletedSale={canRefundSale && Boolean(activeCashShift)}'),
   'Mobile return visibility must use governed refund capability plus the active cashier shift',
 );
 requireValue(
+  mobileShell.includes('RefreshControl')
+    && redesignWorkspace.includes('onRefresh={refreshWorkspace}')
+    && redesignWorkspace.includes('notifications.refresh()')
+    && redesignWorkspace.includes('loadStockTransfers(tenantId, branchId, 100)'),
+  'Redesign pull-to-refresh must refresh live operational data rather than exposing a no-op gesture',
+);
+requireValue(
   !posReturnEdge.includes("membership.role !== 'owner'")
     && !posReturnEdge.includes("membership.role !== 'manager'")
-    && posReturnEdge.includes('return_sellertray_pos_cash_sale'),
-  'POS return edge adapter must delegate refund authority to the governed domain command instead of hard-coding roles',
+    && posReturnEdge.includes("type PosAction = 'void' | 'return' | 'delete_draft'")
+    && posReturnEdge.includes("rpc = 'return_sellertray_pos_cash_sale'")
+    && posReturnEdge.includes('p_items: items')
+    && posReturnEdge.includes('p_command_id: commandId')
+    && posReturnEdge.includes("rpc = 'delete_sellertray_pos_draft'"),
+  'POS action edge adapter must delegate partial return and draft deletion authority to governed domain commands',
+);
+requireValue(
+  partialReturnMigration.includes("check (return_status in ('none','partial','returned'))")
+    && partialReturnMigration.includes('create or replace function public.get_sellertray_pos_returnable_items')
+    && partialReturnMigration.includes('create or replace function public.return_sellertray_pos_cash_sale')
+    && partialReturnMigration.includes('p_items jsonb')
+    && partialReturnMigration.includes('p_command_id text')
+    && partialReturnMigration.includes("v_order.return_status not in ('none','partial')")
+    && partialReturnMigration.includes('sale_returns_command_unique'),
+  'Partial return domain must calculate remaining quantities and make each return command duplicate-safe',
+);
+requireValue(
+  partialReturnMigration.includes("p.method_type='cash' and p.provider='pos_cash' and p.status='confirmed'")
+    && partialReturnMigration.includes('v_remaining_qty')
+    && partialReturnMigration.includes('sale_return_items')
+    && partialReturnMigration.includes('conversion_factor'),
+  'Partial returns must remain cash-only and restore stock from the historical sale UOM snapshot',
+);
+requireValue(
+  draftDeletionMigration.includes('create or replace function public.delete_sellertray_pos_draft')
+    && draftDeletionMigration.includes('deleted_at')
+    && draftDeletionMigration.includes('deletion_reason')
+    && draftDeletionMigration.includes('deletion_command_hash')
+    && draftDeletionMigration.includes("v_order.payment_status<>'unpaid'")
+    && draftDeletionMigration.includes('prevent_sellertray_deleted_order_mutation'),
+  'Draft deletion must remain an audited soft deletion restricted to commercially untouched unpaid drafts',
 );
 requireValue(
   refundAuthorityMigration.includes("'can_refund_sale'")
     && refundAuthorityMigration.includes('sellertray_user_can_operate_branch')
-    && refundAuthorityMigration.includes('create or replace function public.get_sellertray_pos_return_authority')
-    && refundAuthorityMigration.includes('create or replace function public.apply_sellertray_pos_cash_return_internal')
-    && refundAuthorityMigration.includes('create or replace function public.return_sellertray_pos_cash_sale'),
-  'Refund authority migration must enforce capability and Branch authority in both the reader and return command',
+    && refundAuthorityMigration.includes('create or replace function public.get_sellertray_pos_return_authority'),
+  'Refund authority must remain capability- and Branch-governed',
 );
 requireValue(
   teamManagementWeb.includes("'can_refund_sale'")
     && teamManagementWeb.includes('Refund completed sales'),
   'Merchant Web permission management must expose refund authority with merchant-facing wording',
-);
-requireValue(
-  posReturnEdge.includes('return_sellertray_pos_cash_sale')
-    && returnMigration.includes("p.method_type='cash' and p.provider='pos_cash' and p.status='confirmed'")
-    && returnMigration.includes("'sale_return',v_line.stock_quantity,v_line.selected_uom,v_line.quantity")
-    && returnMigration.includes('v_line.conversion_factor'),
-  'The current return command must remain cash-only and restore stock from the historical sale UOM snapshot',
-);
-requireValue(
-  returnMigration.includes('unique (tenant_id,order_id)')
-    && returnMigration.includes('unique (tenant_id,sale_return_id)')
-    && returnMigration.includes("'pos-cash-return:'||p_order_id::text"),
-  'POS cash return and refund effects must remain duplicate-safe',
 );
 requireValue(
   shiftReconciliationMigration.includes('create or replace function public.capture_sellertray_shift_cash_sale()')
