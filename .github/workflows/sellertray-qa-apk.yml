@@ -1,0 +1,80 @@
+name: SellerTray QA APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      git_ref:
+        description: "SellerTray commit SHA or ref to build"
+        required: true
+        default: "feat/sellertray-brand-ui-v1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sellertray-qa-apk
+  cancel-in-progress: false
+
+jobs:
+  build-qa-apk:
+    name: Build SellerTray QA APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: apps/mobile
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+    steps:
+      - name: Checkout requested SellerTray revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_ref }}
+
+      - name: Record exact source revision
+        id: source
+        working-directory: .
+        shell: bash
+        run: |
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          git rev-parse HEAD
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Require Expo authentication
+        shell: bash
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "EXPO_TOKEN GitHub Actions secret is required." >&2
+            exit 1
+          fi
+
+      - name: Install locked dependencies
+        working-directory: .
+        run: npm ci
+
+      - name: Verify Expo account
+        run: npx --yes eas-cli@latest whoami
+
+      - name: Build QA APK on EAS
+        run: npx --yes eas-cli@latest build --platform android --profile qa --non-interactive --wait
+
+      - name: Build provenance summary
+        if: always()
+        working-directory: .
+        shell: bash
+        run: |
+          {
+            echo "## SellerTray QA APK"
+            echo ""
+            echo "Source revision: \`${{ steps.source.outputs.sha }}\`"
+            echo "Requested ref: \`${{ inputs.git_ref }}\`"
+            echo "EAS profile: \`qa\`"
+            echo "Android output: APK (internal distribution)"
+          } >> "$GITHUB_STEP_SUMMARY"
