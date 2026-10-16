@@ -10,8 +10,8 @@ export default function PaymentsManagement({ tenantId }: { tenantId: string }) {
       <p className="muted">Reconcile payments, follow customer balances, review returns and refunds, and manage where payment methods can be used.</p>
     </div>
     <PaymentReconciliationManagement tenantId={tenantId} />
-    <ReceivablesManagement tenantId={tenantId} currency="NGN" />
-    <ReturnsManagement tenantId={tenantId} currency="NGN" />
+    <ReceivablesManagement tenantId={tenantId} />
+    <ReturnsManagement tenantId={tenantId} />
     <PaymentBranchManagement tenantId={tenantId} />
   </div>;
 }
