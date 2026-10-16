@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, AppState, Linking, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 
@@ -14,9 +14,19 @@ type Props = {
 };
 
 export function BarcodeScannerSheet({ visible, onClose, onBarcode }: Props) {
-  const [permission, requestPermission] = useCameraPermissions();
+  const [permission, requestPermission, getPermission] = useCameraPermissions();
   const [locked, setLocked] = useState(false);
   const [manualBarcode, setManualBarcode] = useState('');
+  const [requestingPermission, setRequestingPermission] = useState(false);
+
+  useEffect(() => {
+    if (!visible) return;
+    void getPermission();
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void getPermission();
+    });
+    return () => subscription.remove();
+  }, [getPermission, visible]);
 
   function close() {
     setLocked(false);
@@ -35,6 +45,37 @@ export function BarcodeScannerSheet({ visible, onClose, onBarcode }: Props) {
     chooseBarcode(result.data);
   }
 
+  async function requestCameraAccess() {
+    if (requestingPermission || permission?.granted) return;
+    setRequestingPermission(true);
+    try {
+      if (permission?.canAskAgain === false) {
+        await Linking.openSettings();
+        return;
+      }
+      const next = await requestPermission();
+      if (!next.granted && !next.canAskAgain) {
+        Alert.alert(
+          'Camera permission needed',
+          'Enable Camera for SellerTray in your device settings to scan product barcodes.',
+          [
+            { text: 'Not now', style: 'cancel' },
+            { text: 'Open settings', onPress: () => void Linking.openSettings() },
+          ],
+        );
+      }
+    } catch (error) {
+      Alert.alert(
+        'Unable to request camera access',
+        error instanceof Error ? error.message : 'Open your device settings and allow Camera for SellerTray.',
+      );
+    } finally {
+      setRequestingPermission(false);
+    }
+  }
+
+  const needsSettings = permission?.canAskAgain === false;
+
   return <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={close}>
     <View style={styles.screen}>
       <View style={styles.header}>
@@ -50,8 +91,18 @@ export function BarcodeScannerSheet({ visible, onClose, onBarcode }: Props) {
       {permission && !permission.granted ? <View style={styles.permissionCard}>
         <Ionicons name="camera-outline" size={30} color={theme.colors.greenDark} />
         <Text style={styles.permissionTitle}>Camera access is needed to scan</Text>
-        <Text style={styles.muted}>You can still enter the barcode below if you prefer not to use the camera.</Text>
-        <Pressable onPress={() => void requestPermission()} style={styles.primaryButton}><Text style={styles.primaryText}>Allow camera</Text></Pressable>
+        <Text style={styles.muted}>{needsSettings
+          ? 'Camera access is turned off in your device settings. Open Settings to allow SellerTray to use the camera.'
+          : 'You can still enter the barcode below if you prefer not to use the camera.'}</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={needsSettings ? 'Open SellerTray camera settings' : 'Allow SellerTray camera access'}
+          disabled={requestingPermission}
+          onPress={() => void requestCameraAccess()}
+          style={[styles.primaryButton, requestingPermission && styles.disabled]}
+        >
+          <Text style={styles.primaryText}>{requestingPermission ? 'Requesting…' : needsSettings ? 'Open camera settings' : 'Allow camera'}</Text>
+        </Pressable>
       </View> : null}
       {permission?.granted ? <View style={styles.cameraFrame}>
         <CameraView
