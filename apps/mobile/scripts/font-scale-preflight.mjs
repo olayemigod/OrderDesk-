@@ -13,6 +13,7 @@ function requireValue(condition, message) {
 
 const babelConfig = readFileSync(join(mobileRoot, 'babel.config.js'), 'utf8');
 const textComponent = readFileSync(join(mobileRoot, 'src/components/SellerTrayText.tsx'), 'utf8');
+const inputComponent = readFileSync(join(mobileRoot, 'src/components/SellerTrayTextInput.tsx'), 'utf8');
 const appearance = readFileSync(join(mobileRoot, 'src/theme/AppearanceContext.tsx'), 'utf8');
 const plugin = require(join(mobileRoot, 'scripts/babel-sellertray-text-scale.cjs'));
 
@@ -28,13 +29,19 @@ requireValue(
   'SellerTrayText must scale explicit font size and line height from appearance preferences',
 );
 requireValue(
+  inputComponent.includes('const { fontScale } = useSellerTrayAppearance()')
+    && inputComponent.includes('flatStyle.fontSize * fontScale')
+    && inputComponent.includes('flatStyle.lineHeight * fontScale'),
+  'SellerTrayTextInput must scale typed form text from appearance preferences',
+);
+requireValue(
   appearance.includes('fontScale') && appearance.includes('setFontScale'),
   'Appearance context must expose the persisted font-scale preference',
 );
 
 const probeFilename = join(mobileRoot, 'src/redesign/FontScaleProbe.tsx');
 const probe = transformSync(
-  "import { Text, View } from 'react-native'; export const Probe = Text; export const Other = View;",
+  "import { Text, TextInput, View } from 'react-native'; export const Label = Text; export const Input = TextInput; export const Other = View;",
   {
     filename: probeFilename,
     configFile: false,
@@ -46,25 +53,40 @@ const probe = transformSync(
 requireValue(
   probe.includes('SellerTrayText')
     && probe.includes('../components/SellerTrayText')
-    && !/\{\s*Text\s*,/.test(probe)
+    && probe.includes('SellerTrayTextInput')
+    && probe.includes('../components/SellerTrayTextInput')
     && (probe.includes("from 'react-native'") || probe.includes('from "react-native"')),
-  'SellerTray source Text imports must be rewritten to SellerTrayText while other React Native imports remain intact',
+  'SellerTray source Text and TextInput imports must be rewritten while other React Native imports remain intact',
 );
 
-const wrapperFilename = join(mobileRoot, 'src/components/SellerTrayText.tsx');
-const wrapperProbe = transformSync(
+const textWrapperFilename = join(mobileRoot, 'src/components/SellerTrayText.tsx');
+const textWrapperProbe = transformSync(
   "import { Text as NativeText } from 'react-native'; export const Native = NativeText;",
   {
-    filename: wrapperFilename,
+    filename: textWrapperFilename,
     configFile: false,
     babelrc: false,
     plugins: [plugin],
   },
 )?.code ?? '';
-
 requireValue(
-  wrapperProbe.includes('NativeText') && wrapperProbe.includes('react-native') && !wrapperProbe.includes('SellerTrayText'),
+  textWrapperProbe.includes('NativeText') && textWrapperProbe.includes('react-native') && !textWrapperProbe.includes('SellerTrayTextInput'),
   'SellerTrayText itself must remain bound to native Text to avoid recursive rewriting',
+);
+
+const inputWrapperFilename = join(mobileRoot, 'src/components/SellerTrayTextInput.tsx');
+const inputWrapperProbe = transformSync(
+  "import { TextInput as NativeTextInput } from 'react-native'; export const Native = NativeTextInput;",
+  {
+    filename: inputWrapperFilename,
+    configFile: false,
+    babelrc: false,
+    plugins: [plugin],
+  },
+)?.code ?? '';
+requireValue(
+  inputWrapperProbe.includes('NativeTextInput') && inputWrapperProbe.includes('react-native') && !inputWrapperProbe.includes('SellerTrayTextInput'),
+  'SellerTrayTextInput itself must remain bound to native TextInput to avoid recursive rewriting',
 );
 
 if (failures.length > 0) {
