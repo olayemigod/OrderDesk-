@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
   Platform,
   Pressable,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StatusBar,
@@ -41,7 +42,7 @@ type Props = {
   onTabChange: (tab: SellerTrayPrimaryTab) => void;
   onOpenNotifications?: () => void;
   onOpenBranchSwitcher?: () => void;
-  onRefresh?: () => void;
+  onRefresh?: () => void | Promise<void>;
   children: ReactNode;
 };
 
@@ -61,6 +62,17 @@ export function MobileShell({
 }: Props) {
   const appearance = useSellerTrayAppearance();
   const dark = appearance.dark;
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function handleRefresh() {
+    if (!onRefresh || refreshing) return;
+    setRefreshing(true);
+    try {
+      await onRefresh();
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   return (
     <SafeAreaView style={[styles.safeArea, dark && darkStyles.safeArea]}>
@@ -137,7 +149,15 @@ export function MobileShell({
           contentContainerStyle={[styles.content, dark && darkStyles.content]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          onScrollBeginDrag={onRefresh ? undefined : undefined}
+          refreshControl={onRefresh ? (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => void handleRefresh()}
+              colors={[theme.colors.green]}
+              tintColor={dark ? theme.colors.mint : theme.colors.greenDark}
+              progressBackgroundColor={dark ? theme.colors.navy : theme.colors.white}
+            />
+          ) : undefined}
         >
           {children}
         </ScrollView>
