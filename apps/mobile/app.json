@@ -2,10 +2,7 @@
   "expo": {
     "name": "SellerTray",
     "slug": "sellertray",
-    "scheme": [
-      "sellertray",
-      "orderdesk"
-    ],
+    "scheme": ["sellertray", "orderdesk"],
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
