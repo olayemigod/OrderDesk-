@@ -14,6 +14,7 @@ import {
   getSellerTrayLegalAcceptance,
 } from '../data/accountLifecycleRepository';
 import { supabase } from '../lib/supabase';
+import { SellerTrayLoadingScreen } from './SellerTrayLoadingScreen';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
 const PRIVACY_URL = 'https://sellertray.vercel.app/privacy';
@@ -59,14 +60,7 @@ export function LegalAcceptanceGate({ children }: { children: ReactNode }) {
     }
   }
 
-  if (checking) {
-    return (
-      <SafeAreaView style={[styles.centered, appearance.dark && darkStyles.screen]}>
-        <ActivityIndicator size="large" />
-        <Text style={[styles.muted, appearance.dark && darkStyles.bodyText]}>Checking SellerTray account terms…</Text>
-      </SafeAreaView>
-    );
-  }
+  if (checking) return <SellerTrayLoadingScreen message="Checking SellerTray account terms…" />;
 
   if (accepted) return <>{children}</>;
 

@@ -17,6 +17,7 @@ import type { Session } from '@supabase/supabase-js';
 
 import { supabase } from '../lib/supabase';
 import { SellerTrayBrand } from './SellerTrayBrand';
+import { SellerTrayLoadingScreen } from './SellerTrayLoadingScreen';
 
 type AuthMode = 'welcome' | 'sign-in' | 'sign-up' | 'forgot-password' | 'reset-password';
 
@@ -263,14 +264,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     setNotice(null);
   }
 
-  if (booting) {
-    return (
-      <SafeAreaView style={styles.centered}>
-        <ActivityIndicator size="large" />
-        <Text style={styles.muted}>Opening SellerTray…</Text>
-      </SafeAreaView>
-    );
-  }
+  if (booting) return <SellerTrayLoadingScreen message="Opening SellerTray…" />;
 
   if (mode === 'reset-password') {
     return (

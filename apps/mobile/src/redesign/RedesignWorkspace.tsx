@@ -13,6 +13,7 @@ import { useMerchantNotifications } from '../hooks/useMerchantNotifications';
 import { useOfflineSalesSync } from '../hooks/useOfflineSalesSync';
 import { useOrders } from '../hooks/useOrders';
 import { supabase } from '../lib/supabase';
+import { SellerTrayLoadingScreen } from '../components/SellerTrayLoadingScreen';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import { HomeDashboard, type HomeAttentionItem } from './HomeDashboard';
@@ -251,14 +252,7 @@ export default function RedesignWorkspace() {
     };
   }, [activeBusiness?.id, activeBranch?.id]);
 
-  if (!activeBusiness) {
-    return (
-      <View style={[styles.centered, appearance.dark && darkStyles.page]}>
-        <ActivityIndicator />
-        <Text style={[styles.muted, appearance.dark && darkStyles.bodyText]}>Opening your business…</Text>
-      </View>
-    );
-  }
+  if (!activeBusiness) return <SellerTrayLoadingScreen message="Opening your business…" />;
 
   function openCashWorkspace() {
     setTab('more');
