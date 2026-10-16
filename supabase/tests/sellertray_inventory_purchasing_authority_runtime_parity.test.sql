@@ -157,10 +157,11 @@ select extensions.ok(
     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where n.nspname='public' and p.proname='receive_sellertray_purchase_order'
       and lower(pg_get_functiondef(p.oid)) like '%sellertray_user_can_operate_branch%'
-      and lower(pg_get_functiondef(p.oid)) like '%can_receive_stock%'
+      and lower(pg_get_functiondef(p.oid)) like '%sellertray_purchase_management_role%'
+      and lower(pg_get_functiondef(p.oid)) not like '%sellertray_user_has_capability%can_receive_stock%'
       and lower(pg_get_functiondef(p.oid)) like '%orderdesk_subscription_can_write%'
   ),
-  'goods receipt authority still requires writable subscription, Branch operation and receive-stock capability'
+  'goods receipt authority requires writable subscription, Branch operation and management/procurement authority rather than a staff receive-stock capability'
 );
 
 select extensions.ok(
