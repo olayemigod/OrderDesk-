@@ -17,6 +17,7 @@ export type CashShiftCapabilities = {
 
 export type CashShiftStatus = 'open' | 'closed' | 'reviewed';
 export type CashMovementType = 'cash_in' | 'cash_out' | 'expense';
+export type CashCorrectionKind = 'replace' | 'remove';
 export type ShiftReviewDecision = 'accepted' | 'follow_up';
 
 export type ShiftPaymentSummary = {
@@ -88,6 +89,16 @@ export type CashMovementResult = {
   idempotentReplay: boolean;
 };
 
+export type CashCorrectionResult = {
+  shiftId: string;
+  correctionId: string;
+  movementId: string;
+  replacementMovementId: string | null;
+  correctionKind: CashCorrectionKind;
+  expectedCash: number;
+  idempotentReplay: boolean;
+};
+
 type RegisterRpcRow = {
   id: string;
   code: string;
@@ -139,6 +150,19 @@ export async function loadCashShiftCapabilities(
     canCloseShift: row?.can_close_shift === true,
     canReviewShift: row?.can_review_shift === true,
   };
+}
+
+export async function loadCashCorrectionAuthority(
+  tenantId: string,
+  branchId: string,
+): Promise<boolean> {
+  if (!tenantId || !branchId) return false;
+  const { data, error } = await supabase.rpc('get_sellertray_cash_correction_authority', {
+    p_tenant_id: tenantId,
+    p_branch_id: branchId,
+  });
+  if (error) throw error;
+  return data === true;
 }
 
 export async function loadCashWriteAccess(tenantId: string): Promise<boolean> {
@@ -247,6 +271,55 @@ export async function recordCashMovement(input: {
   }, 'Unable to record this cash activity.');
 }
 
+export async function correctCashMovement(input: {
+  tenantId: string;
+  shiftId: string;
+  movementId: string;
+  correctionKind: CashCorrectionKind;
+  correctionReason: string;
+  commandId: string;
+  replacementType?: CashMovementType | null;
+  replacementAmount?: number | null;
+  replacementReference?: string | null;
+  replacementReason?: string | null;
+  replacementExpenseCategory?: string | null;
+}): Promise<CashCorrectionResult> {
+  if (!input.tenantId || !input.shiftId || !input.movementId) {
+    throw new Error('Business, cashier shift and cash activity are required.');
+  }
+  if (!input.commandId.trim()) throw new Error('Restart this cash correction and try again.');
+  if (!input.correctionReason.trim()) throw new Error('Correction reason is required.');
+
+  if (input.correctionKind === 'replace') {
+    if (!input.replacementType) throw new Error('Choose the corrected cash activity type.');
+    if (!Number.isFinite(input.replacementAmount) || (input.replacementAmount ?? 0) <= 0) {
+      throw new Error('Corrected amount must be greater than zero.');
+    }
+    if (!input.replacementReference?.trim()) throw new Error('Corrected reference is required.');
+    if (!input.replacementReason?.trim()) throw new Error('Corrected activity reason is required.');
+    if (input.replacementType === 'expense' && !input.replacementExpenseCategory?.trim()) {
+      throw new Error('Expense category is required.');
+    }
+  }
+
+  return invokeShift<CashCorrectionResult>({
+    action: 'correct',
+    tenantId: input.tenantId,
+    shiftId: input.shiftId,
+    movementId: input.movementId,
+    correctionKind: input.correctionKind,
+    correctionReason: input.correctionReason.trim(),
+    commandId: input.commandId.trim(),
+    replacementType: input.correctionKind === 'replace' ? input.replacementType : null,
+    replacementAmount: input.correctionKind === 'replace' ? input.replacementAmount : null,
+    replacementReference: input.correctionKind === 'replace' ? input.replacementReference?.trim() : null,
+    replacementReason: input.correctionKind === 'replace' ? input.replacementReason?.trim() : null,
+    replacementExpenseCategory: input.correctionKind === 'replace' && input.replacementType === 'expense'
+      ? input.replacementExpenseCategory?.trim()
+      : null,
+  }, 'Unable to correct this cash activity.');
+}
+
 export async function closeCashShift(input: {
   tenantId: string;
   shiftId: string;
@@ -285,7 +358,7 @@ export async function reviewCashShift(input: {
   }, 'Unable to review this cashier shift.');
 }
 
-async function invokeShift<T extends CashShiftActionResult | CashMovementResult>(
+async function invokeShift<T extends CashShiftActionResult | CashMovementResult | CashCorrectionResult>(
   body: Record<string, unknown>,
   fallback: string,
 ): Promise<T> {
