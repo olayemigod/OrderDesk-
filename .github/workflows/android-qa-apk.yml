@@ -73,8 +73,10 @@ jobs:
             echo "SellerTray barcode scanner CAMERA permission is marked for removal" >&2
             exit 1
           fi
-          if grep -q 'android.permission.RECORD_AUDIO' "$manifest"; then
-            echo "SellerTray barcode scanning must not request RECORD_AUDIO" >&2
+          active_audio="$(grep 'android.permission.RECORD_AUDIO' "$manifest" | grep -v 'tools:node="remove"' || true)"
+          if [ -n "$active_audio" ]; then
+            echo "SellerTray barcode scanning must not request active RECORD_AUDIO permission" >&2
+            printf '%s\n' "$active_audio" >&2
             exit 1
           fi
 
