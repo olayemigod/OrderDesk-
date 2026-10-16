@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import AiInsights from './AiInsights';
 import CustomersManagement from './CustomersManagement';
 import ManagementPage from './ManagementPage';
+import OrdersManagement from './OrdersManagement';
 import PaymentsManagement from './PaymentsManagement';
 import PurchasingManagement from './PurchasingManagement';
 import ReportCenter from './ReportCenter';
@@ -125,7 +126,8 @@ export default function MerchantApp() {
       {page === 'overview' && <Overview business={business} branch={branch} data={workspace} go={setPage} />}
       {page === 'sales' && branch && <SalesManagement tenantId={business.id} branchId={branch.id} />}
       {page === 'sales' && !branch && <PageTable eyebrow="Sales" title="Choose a Branch" note="Select a Branch to review completed sales."><Empty title="No active Branch" body="Sales are reviewed within a Branch so transaction and stock context remain clear." /></PageTable>}
-      {page === 'orders' && <Orders business={business} branch={branch} rows={workspace.orders} />}
+      {page === 'orders' && branch && <OrdersManagement tenantId={business.id} branchId={branch.id} currency={business.currency} />}
+      {page === 'orders' && !branch && <PageTable eyebrow="Orders" title="Choose a Branch" note="Select a Branch to review open orders and POS drafts."><Empty title="No active Branch" body="Orders are reviewed within a Branch so fulfilment and transaction context remain clear." /></PageTable>}
       {page === 'customers' && <CustomersManagement tenantId={business.id} currency={business.currency} />}
       {page === 'inventory' && <Inventory branch={branch} rows={workspace.stock} />}
       {page === 'payments' && <PaymentsManagement tenantId={business.id} />}
