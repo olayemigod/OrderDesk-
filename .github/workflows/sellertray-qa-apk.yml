@@ -17,14 +17,15 @@ concurrency:
 
 jobs:
   build-qa-apk:
-    name: Build SellerTray QA APK
+    name: Build SellerTray QA APK on GitHub
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: apps/mobile
     env:
-      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_SELLERTRAY_MOBILE_REDESIGN: '1'
 
     steps:
       - name: Checkout requested SellerTray revision
@@ -43,38 +44,78 @@ jobs:
       - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '22'
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: apps/mobile/package-lock.json
 
-      - name: Require Expo authentication
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Generate Android project
+        run: npx expo prebuild --platform android --no-install --clean
+
+      - name: Verify barcode camera permission
         shell: bash
         run: |
-          if [ -z "$EXPO_TOKEN" ]; then
-            echo "EXPO_TOKEN GitHub Actions secret is required." >&2
+          manifest="android/app/src/main/AndroidManifest.xml"
+          camera_line="$(grep 'android.permission.CAMERA' "$manifest" || true)"
+          if [ -z "$camera_line" ]; then
+            echo "SellerTray barcode scanner is missing android.permission.CAMERA" >&2
+            exit 1
+          fi
+          if printf '%s\n' "$camera_line" | grep -q 'tools:node="remove"'; then
+            echo "SellerTray barcode scanner CAMERA permission is marked for removal" >&2
+            exit 1
+          fi
+          active_audio="$(grep 'android.permission.RECORD_AUDIO' "$manifest" | grep -v 'tools:node="remove"' || true)"
+          if [ -n "$active_audio" ]; then
+            echo "SellerTray barcode scanning must not request active RECORD_AUDIO permission" >&2
+            printf '%s\n' "$active_audio" >&2
             exit 1
           fi
 
-      - name: Install locked dependencies
-        working-directory: .
-        run: npm ci
+      - name: Build release APK
+        shell: bash
+        run: |
+          chmod +x android/gradlew
+          cd android
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace
 
-      - name: Verify Expo account
-        run: npx --yes eas-cli@latest whoami
+      - name: Stage APK
+        id: apk
+        shell: bash
+        run: |
+          source_apk="android/app/build/outputs/apk/release/app-release.apk"
+          test -f "$source_apk"
+          short_sha="${{ steps.source.outputs.sha }}"
+          short_sha="${short_sha:0:12}"
+          output="SellerTray-QA-${short_sha}.apk"
+          cp "$source_apk" "$output"
+          echo "path=$output" >> "$GITHUB_OUTPUT"
+          echo "name=SellerTray-QA-${short_sha}" >> "$GITHUB_OUTPUT"
+          sha256sum "$output"
 
-      - name: Build QA APK on EAS
-        run: npx --yes eas-cli@latest build --platform android --profile qa --non-interactive --wait
+      - name: Upload QA APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.apk.outputs.name }}
+          path: apps/mobile/${{ steps.apk.outputs.path }}
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Build provenance summary
         if: always()
         working-directory: .
         shell: bash
         run: |
-          {
-            echo "## SellerTray QA APK"
-            echo ""
-            echo "Source revision: \`${{ steps.source.outputs.sha }}\`"
-            echo "Requested ref: \`${{ inputs.git_ref }}\`"
-            echo "EAS profile: \`qa\`"
-            echo "Android output: APK (internal distribution)"
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo "## SellerTray QA APK" >> "$GITHUB_STEP_SUMMARY"
+          echo "Source revision: ${{ steps.source.outputs.sha }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Builder: GitHub Actions native Android/Gradle" >> "$GITHUB_STEP_SUMMARY"
+          echo "EAS cloud build: not used" >> "$GITHUB_STEP_SUMMARY"
