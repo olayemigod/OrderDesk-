@@ -78,23 +78,21 @@ export function OrdersWorkspace({
   }
 
   async function beginReturn(order: MerchantOrder) {
-    if (returnLoadingOrderId || saving) return;
+    if (returnLoadingOrderId) return;
     setReturnLoadingOrderId(order.id);
     setError(null);
     try {
-      const next = await loadPosReturnableItems(tenantId, order.id);
-      if (next.items.length === 0) throw new Error('This sale has no quantity left to return.');
-      setReturnableSale(next);
-      setReturnQuantities(Object.fromEntries(next.items.map((item) => [item.orderItemId, '0'])));
+      const details = await loadPosReturnableItems(tenantId, order.id);
+      setReturnableSale(details);
+      setReturnQuantities(Object.fromEntries(details.items.map((item) => [item.orderItemId, '0'])));
       setPending({
         orderId: order.id,
         action: 'return',
         commandId: createPosCommandId('return', order.id),
       });
       setReason('');
-      setExpandedOrderIds((current) => ({ ...current, [order.id]: true }));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'SellerTray could not load returnable quantities.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to load returnable items.');
     } finally {
       setReturnLoadingOrderId(null);
     }
@@ -109,67 +107,12 @@ export function OrdersWorkspace({
     setError(null);
   }
 
-  async function confirmAction(order: MerchantOrder) {
-    if (!pending || pending.orderId !== order.id || saving) return;
-    const cleanReason = reason.trim();
-    if (!cleanReason) {
-      setError('Enter a reason before continuing.');
-      return;
-    }
-
-    setSaving(true);
-    setError(null);
-    try {
-      if (pending.action === 'delete_draft') {
-        await deletePosDraft({
-          tenantId,
-          orderId: order.id,
-          reason: cleanReason,
-          commandId: pending.commandId,
-        });
-      } else {
-        if (!returnableSale || returnableSale.orderId !== order.id) {
-          throw new Error('Reload the return items before continuing.');
-        }
-        const items = returnableSale.items
-          .map((item) => ({
-            orderItemId: item.orderItemId,
-            quantity: Number(returnQuantities[item.orderItemId] ?? 0),
-            remainingQuantity: item.remainingQuantity,
-          }))
-          .filter((item) => Number.isFinite(item.quantity) && item.quantity > 0);
-        if (items.length === 0) throw new Error('Choose at least one item quantity to return.');
-        if (items.some((item) => item.quantity > item.remainingQuantity)) {
-          throw new Error('A return quantity cannot exceed the quantity still available for that item.');
-        }
-        await returnPosSaleItems({
-          tenantId,
-          orderId: order.id,
-          reason: cleanReason,
-          commandId: pending.commandId,
-          items: items.map(({ orderItemId, quantity }) => ({ orderItemId, quantity })),
-        });
-      }
-
-      setPending(null);
-      setReason('');
-      setReturnableSale(null);
-      setReturnQuantities({});
-      await onChanged();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'SellerTray could not update this sale.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
   function toggleExpanded(orderId: string) {
     setExpandedOrderIds((current) => ({ ...current, [orderId]: !current[orderId] }));
   }
 
   function beginDraftEdit(order: MerchantOrder) {
     setEditingOrderId(order.id);
-    setExpandedOrderIds((current) => ({ ...current, [order.id]: true }));
     setDraftQuantities(Object.fromEntries(order.items.map((item) => [item.id, formatQuantity(item.quantity)])));
     setError(null);
   }
@@ -183,28 +126,81 @@ export function OrdersWorkspace({
 
   async function saveDraftEdit(order: MerchantOrder) {
     if (saving || editingOrderId !== order.id) return;
-    const edits = order.items.map((item) => ({
+    const items = order.items.map((item) => ({
       orderItemId: item.id,
       quantity: Number(draftQuantities[item.id] ?? item.quantity),
     }));
-    if (edits.some((item) => !Number.isFinite(item.quantity) || item.quantity < 0)) {
-      setError('Every draft item needs a valid quantity.');
+    if (items.some((item) => !Number.isFinite(item.quantity) || item.quantity < 0)) {
+      setError('Enter a valid quantity for every draft item.');
       return;
     }
-    if (!edits.some((item) => item.quantity > 0)) {
-      setError('Keep at least one item in the draft sale, or delete the draft instead.');
+    if (items.every((item) => item.quantity === 0)) {
+      setError('A draft sale must keep at least one item. Delete the draft instead if it is no longer needed.');
       return;
     }
 
     setSaving(true);
     setError(null);
     try {
-      await updatePosDraftItems({ tenantId, orderId: order.id, items: edits });
+      await updatePosDraftItems({ tenantId, orderId: order.id, items });
       setEditingOrderId(null);
       setDraftQuantities({});
       await onChanged();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'SellerTray could not edit this draft sale.');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to update this draft sale.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function confirmAction(order: MerchantOrder) {
+    if (!pending || pending.orderId !== order.id || saving) return;
+    const cleanReason = reason.trim();
+    if (!cleanReason) {
+      setError('Enter a reason before continuing.');
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    try {
+      if (pending.action === 'return') {
+        if (!returnableSale || returnableSale.orderId !== order.id) {
+          throw new Error('Reload the returnable items before continuing.');
+        }
+        const items = returnableSale.items
+          .map((item) => ({
+            orderItemId: item.orderItemId,
+            quantity: Number(returnQuantities[item.orderItemId] ?? 0),
+            remainingQuantity: item.remainingQuantity,
+          }))
+          .filter((item) => Number.isFinite(item.quantity) && item.quantity > 0);
+        if (items.length === 0) throw new Error('Enter a return quantity for at least one item.');
+        if (items.some((item) => item.quantity > item.remainingQuantity)) {
+          throw new Error('A return quantity cannot be greater than the quantity still available to return.');
+        }
+        await returnPosSaleItems({
+          tenantId,
+          orderId: order.id,
+          reason: cleanReason,
+          commandId: pending.commandId,
+          items: items.map(({ orderItemId, quantity }) => ({ orderItemId, quantity })),
+        });
+      } else {
+        await deletePosDraft({
+          tenantId,
+          orderId: order.id,
+          reason: cleanReason,
+          commandId: pending.commandId,
+        });
+      }
+      setPending(null);
+      setReason('');
+      setReturnableSale(null);
+      setReturnQuantities({});
+      await onChanged();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to apply this order action.');
     } finally {
       setSaving(false);
     }
@@ -212,40 +208,29 @@ export function OrdersWorkspace({
 
   async function printReceipt(order: MerchantOrder) {
     if (printingOrderId) return;
-    const branchId = order.branchId;
-    if (!branchId) {
-      setPrintError('This order has no branch for receipt printing.');
-      return;
-    }
-
     setPrintingOrderId(order.id);
     setPrintError(null);
     setPrintNotice(null);
     try {
-      const capabilities = await loadPrintingCapabilities(tenantId, branchId);
-      if (!capabilities.canPrintReceipt) {
-        throw new Error('You do not have permission to print receipts for this branch.');
-      }
-
-      const receipt = await loadReceiptPrintReference(tenantId, order.id);
-      if (!receipt) throw new Error('This order does not have an issued payment receipt yet.');
-
-      const activeShift = await loadActiveCashShift(tenantId, branchId);
-      const printers = await loadPrinters(tenantId, branchId, activeShift?.registerId ?? null);
-      const printer = chooseReceiptPrinter(printers, Boolean(activeShift));
-      if (!printer) {
-        throw new Error(
-          activeShift
-            ? 'No active receipt printer is configured for this register. Set one up in More > Devices & Printers.'
-            : 'Open the cashier shift for this register, or configure one unambiguous active default printer in More > Devices & Printers.',
-        );
-      }
-
-      const job = await requestPrintJob({ tenantId, printerId: printer.id, jobType: 'receipt', orderId: order.id });
-      await executePreparedPrintJob(tenantId, job);
-      setPrintNotice(`Receipt ${receipt.documentReference} printed on ${printer.displayName}.`);
-    } catch (err) {
-      setPrintError(err instanceof Error ? err.message : 'The receipt could not be printed.');
+      const capabilities = await loadPrintingCapabilities(tenantId);
+      if (!capabilities.canPrint) throw new Error('Receipt printing is not available for your role.');
+      const printers = await loadPrinters(tenantId);
+      const branchPrinters = printers.filter((printer) => !printer.branchId || printer.branchId === order.branchId);
+      const printer = chooseReceiptPrinter(branchPrinters, capabilities.registerResolved);
+      if (!printer) throw new Error('No receipt printer is available for this branch or register.');
+      const printReference = await loadReceiptPrintReference(tenantId, order.id);
+      const activeShift = await loadActiveCashShift(tenantId, order.branchId);
+      const printJob = await requestPrintJob({
+        tenantId,
+        printerId: printer.id,
+        orderId: order.id,
+        shiftId: activeShift?.id,
+        referenceId: printReference,
+      });
+      await executePreparedPrintJob(printJob, printer);
+      setPrintNotice(`Receipt sent to ${printer.name}.`);
+    } catch (cause) {
+      setPrintError(cause instanceof Error ? cause.message : 'Unable to print this receipt.');
     } finally {
       setPrintingOrderId(null);
     }
@@ -457,7 +442,7 @@ function selectedReturnValue(sale: PosReturnableSale, quantities: Record<string,
 
 function cleanDecimalInput(value: string): string {
   const clean = value.replace(/[^0-9.]/g, '');
-  const [whole, ...rest] = clean.split('.');
+  const [whole = '', ...rest] = clean.split('.');
   return rest.length === 0 ? whole : `${whole}.${rest.join('')}`;
 }
 
@@ -486,11 +471,20 @@ function sourceLabel(source: OrderSource): string {
 }
 
 function titleCase(value: string): string {
-  return value.split('_').map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+  return value
+    .replaceAll('_', ' ')
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part[0]?.toUpperCase() + part.slice(1))
+    .join(' ');
 }
 
 function formatMoney(value: number, currency: string): string {
-  return new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value);
+  try {
+    return new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 2 }).format(value);
+  } catch {
+    return `${currency} ${value.toFixed(2)}`;
+  }
 }
 
 function formatQuantity(value: number): string {
@@ -498,7 +492,85 @@ function formatQuantity(value: number): string {
 }
 
 const styles = StyleSheet.create({
-  stack:{gap:12},heading:{gap:3},eyebrow:{color:theme.colors.muted,fontSize:11,fontWeight:'900',letterSpacing:1.05},pageTitle:{color:theme.colors.navy,fontSize:28,lineHeight:34,fontWeight:'900'},pageSubtitle:{color:theme.colors.slate,fontSize:14,lineHeight:20},emptyCard:{minHeight:140,borderRadius:theme.radius.lg,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.white,padding:18,alignItems:'center',justifyContent:'center',gap:7},emptyTitle:{color:theme.colors.navy,fontSize:15,fontWeight:'900'},emptyText:{color:theme.colors.muted,fontSize:12,lineHeight:18,textAlign:'center'},muted:{color:theme.colors.muted,fontSize:12},orderCard:{borderRadius:theme.radius.lg,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.white,padding:13,gap:10},orderTopRow:{flexDirection:'row',alignItems:'flex-start',gap:10},orderIdentity:{flex:1,minWidth:0},customerName:{color:theme.colors.navy,fontSize:15,fontWeight:'900'},orderMeta:{color:theme.colors.muted,fontSize:11,marginTop:3},orderValueWrap:{alignItems:'flex-end',gap:5},orderValue:{color:theme.colors.navy,fontSize:14,fontWeight:'900'},orderStateRow:{flexDirection:'row',flexWrap:'wrap',gap:6},statePill:{borderRadius:theme.radius.pill,backgroundColor:'#F2F4F7',paddingHorizontal:9,paddingVertical:5},statePillPositive:{backgroundColor:theme.colors.mintSoft},statePillText:{color:theme.colors.slate,fontSize:10,fontWeight:'900'},statePillTextPositive:{color:theme.colors.greenDark},itemsPanel:{borderRadius:theme.radius.md,borderWidth:1,borderColor:theme.colors.border,backgroundColor:'#F9FAFB',padding:11,gap:9},itemsHeading:{flexDirection:'row',alignItems:'flex-start',gap:8},flexCopy:{flex:1,minWidth:0},itemsTitle:{color:theme.colors.navy,fontSize:13,fontWeight:'900'},itemsHelper:{color:theme.colors.muted,fontSize:10.5,lineHeight:16,marginTop:2},editButton:{minHeight:34,borderRadius:10,backgroundColor:theme.colors.mintSoft,paddingHorizontal:9,flexDirection:'row',alignItems:'center',gap:4},editButtonText:{color:theme.colors.greenDark,fontSize:10.5,fontWeight:'900'},itemList:{gap:7},itemRow:{borderRadius:11,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.white,padding:10,flexDirection:'row',alignItems:'center',gap:8},itemName:{color:theme.colors.navy,fontSize:12.5,fontWeight:'900'},itemMeta:{color:theme.colors.muted,fontSize:10.5,lineHeight:15,marginTop:2},itemPrice:{color:theme.colors.navy,fontSize:11.5,fontWeight:'800',marginTop:3},quantityText:{color:theme.colors.navy,fontSize:14,fontWeight:'900'},quantityInput:{width:74,minHeight:42,borderRadius:11,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.white,color:theme.colors.navy,textAlign:'center',fontSize:13,fontWeight:'900',paddingHorizontal:6},editActions:{flexDirection:'row',gap:8},actionRow:{flexDirection:'row',flexWrap:'wrap',gap:8},outlineAction:{minHeight:39,borderRadius:11,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.white,paddingHorizontal:10,flexDirection:'row',alignItems:'center',gap:5},outlineActionText:{color:theme.colors.slate,fontSize:10.5,fontWeight:'900'},resumeAction:{borderColor:'#ABEFC6'},resumeActionText:{color:theme.colors.greenDark,fontSize:10.5,fontWeight:'900'},printAction:{borderColor:'#ABEFC6'},printActionText:{color:theme.colors.greenDark,fontSize:10.5,fontWeight:'900'},returnAction:{borderColor:'#ABEFC6'},returnActionText:{color:theme.colors.greenDark,fontSize:10.5,fontWeight:'900'},deleteAction:{borderColor:'#FDA29B'},deleteActionText:{color:theme.colors.danger,fontSize:10.5,fontWeight:'900'},returnedNotice:{borderRadius:11,backgroundColor:theme.colors.mintSoft,padding:9,flexDirection:'row',gap:6,alignItems:'flex-start'},returnedText:{flex:1,color:theme.colors.slate,fontSize:10.5,lineHeight:16},actionPanel:{borderRadius:theme.radius.md,borderWidth:1,borderColor:theme.colors.border,backgroundColor:'#F9FAFB',padding:11,gap:9},actionPanelHeading:{flexDirection:'row',alignItems:'flex-start',gap:7},actionPanelCopy:{flex:1},actionPanelTitle:{color:theme.colors.navy,fontSize:13,fontWeight:'900'},actionPanelText:{color:theme.colors.slate,fontSize:10.5,lineHeight:16,marginTop:2},returnItems:{gap:7},returnItemRow:{borderRadius:11,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.white,padding:9,flexDirection:'row',alignItems:'center',gap:8},returnSummaryRow:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',paddingTop:2},returnSummaryLabel:{color:theme.colors.slate,fontSize:11,fontWeight:'800'},returnSummaryValue:{color:theme.colors.navy,fontSize:13,fontWeight:'900'},fieldLabel:{color:theme.colors.slate,fontSize:11,fontWeight:'900'},reasonInput:{minHeight:76,borderRadius:11,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.white,color:theme.colors.navy,padding:10,textAlignVertical:'top',fontSize:12},confirmRow:{flexDirection:'row',gap:8},cancelButton:{flex:1,minHeight:43,borderRadius:11,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.white,alignItems:'center',justifyContent:'center'},cancelText:{color:theme.colors.slate,fontSize:11,fontWeight:'900'},confirmButton:{flex:1,minHeight:43,borderRadius:11,backgroundColor:theme.colors.green,flexDirection:'row',alignItems:'center',justifyContent:'center',gap:5},confirmText:{color:theme.colors.white,fontSize:11,fontWeight:'900'},errorCard:{borderRadius:theme.radius.md,borderWidth:1,borderColor:'#FDA29B',backgroundColor:theme.colors.dangerSoft,padding:10,flexDirection:'row',alignItems:'flex-start',gap:7},errorText:{flex:1,color:'#912018',fontSize:11.5,lineHeight:17},noticeCard:{borderRadius:theme.radius.md,borderWidth:1,borderColor:'#ABEFC6',backgroundColor:theme.colors.mintSoft,padding:10,flexDirection:'row',alignItems:'flex-start',gap:7},noticeText:{flex:1,color:theme.colors.slate,fontSize:11.5,lineHeight:17},disabled:{opacity:0.42}
+  stack: { gap: 14 },
+  heading: { gap: 4 },
+  eyebrow: { color: theme.colors.muted, fontSize: 11, fontWeight: '900', letterSpacing: 1.05 },
+  pageTitle: { color: theme.colors.navy, fontSize: 28, fontWeight: '900' },
+  pageSubtitle: { color: theme.colors.muted, fontSize: 14, lineHeight: 20 },
+  emptyCard: { alignItems: 'center', borderColor: theme.colors.border, borderRadius: 18, borderWidth: 1, gap: 9, padding: 22 },
+  emptyTitle: { color: theme.colors.navy, fontSize: 17, fontWeight: '900' },
+  emptyText: { color: theme.colors.muted, fontSize: 13, lineHeight: 19, textAlign: 'center' },
+  muted: { color: theme.colors.muted, fontSize: 13 },
+  orderCard: { backgroundColor: theme.colors.white, borderColor: theme.colors.border, borderRadius: 20, borderWidth: 1, gap: 13, padding: 16 },
+  orderTopRow: { alignItems: 'flex-start', flexDirection: 'row', gap: 12, justifyContent: 'space-between' },
+  orderIdentity: { flex: 1, gap: 3 },
+  customerName: { color: theme.colors.navy, fontSize: 16, fontWeight: '900' },
+  orderMeta: { color: theme.colors.muted, fontSize: 12, lineHeight: 18 },
+  orderValueWrap: { alignItems: 'flex-end', flexDirection: 'row', gap: 7 },
+  orderValue: { color: theme.colors.navy, fontSize: 15, fontWeight: '900' },
+  orderStateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  statePill: { backgroundColor: theme.colors.graySoft, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  statePillPositive: { backgroundColor: theme.colors.greenPale },
+  statePillText: { color: theme.colors.slate, fontSize: 11, fontWeight: '800' },
+  statePillTextPositive: { color: theme.colors.greenDark },
+  actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  outlineAction: { alignItems: 'center', borderColor: theme.colors.border, borderRadius: 12, borderWidth: 1, flexDirection: 'row', gap: 6, paddingHorizontal: 11, paddingVertical: 9 },
+  resumeAction: { borderColor: theme.colors.greenDark },
+  resumeActionText: { color: theme.colors.greenDark, fontSize: 12, fontWeight: '900' },
+  printAction: { borderColor: theme.colors.greenDark },
+  printActionText: { color: theme.colors.greenDark, fontSize: 12, fontWeight: '900' },
+  deleteAction: { borderColor: '#F1C5C5' },
+  deleteActionText: { color: theme.colors.danger, fontSize: 12, fontWeight: '900' },
+  returnAction: { borderColor: theme.colors.greenDark },
+  returnActionText: { color: theme.colors.greenDark, fontSize: 12, fontWeight: '900' },
+  disabled: { opacity: 0.55 },
+  itemsPanel: { backgroundColor: theme.colors.mint, borderRadius: 16, gap: 11, padding: 12 },
+  itemsHeading: { alignItems: 'flex-start', flexDirection: 'row', gap: 10, justifyContent: 'space-between' },
+  itemsTitle: { color: theme.colors.navy, fontSize: 14, fontWeight: '900' },
+  itemsHelper: { color: theme.colors.muted, fontSize: 12, lineHeight: 17 },
+  editButton: { alignItems: 'center', flexDirection: 'row', gap: 5, paddingVertical: 3 },
+  editButtonText: { color: theme.colors.greenDark, fontSize: 12, fontWeight: '900' },
+  itemList: { gap: 8 },
+  itemRow: { alignItems: 'center', backgroundColor: theme.colors.white, borderRadius: 13, flexDirection: 'row', gap: 10, padding: 10 },
+  flexCopy: { flex: 1, gap: 2 },
+  itemName: { color: theme.colors.navy, fontSize: 13, fontWeight: '900' },
+  itemMeta: { color: theme.colors.muted, fontSize: 11, lineHeight: 16 },
+  itemPrice: { color: theme.colors.slate, fontSize: 12, fontWeight: '800' },
+  quantityText: { color: theme.colors.navy, fontSize: 13, fontWeight: '900' },
+  quantityInput: { backgroundColor: theme.colors.white, borderColor: theme.colors.border, borderRadius: 10, borderWidth: 1, color: theme.colors.navy, fontSize: 14, fontWeight: '800', minWidth: 72, paddingHorizontal: 10, paddingVertical: 8, textAlign: 'right' },
+  editActions: { flexDirection: 'row', gap: 8, justifyContent: 'flex-end' },
+  returnedNotice: { alignItems: 'flex-start', backgroundColor: theme.colors.greenPale, borderRadius: 14, flexDirection: 'row', gap: 8, padding: 11 },
+  returnedText: { color: theme.colors.slate, flex: 1, fontSize: 12, lineHeight: 18 },
+  actionPanel: { backgroundColor: theme.colors.mint, borderRadius: 16, gap: 12, padding: 13 },
+  actionPanelHeading: { alignItems: 'flex-start', flexDirection: 'row', gap: 9 },
+  actionPanelCopy: { flex: 1, gap: 3 },
+  actionPanelTitle: { color: theme.colors.navy, fontSize: 14, fontWeight: '900' },
+  actionPanelText: { color: theme.colors.muted, fontSize: 12, lineHeight: 18 },
+  returnItems: { gap: 8 },
+  returnItemRow: { alignItems: 'center', backgroundColor: theme.colors.white, borderRadius: 13, flexDirection: 'row', gap: 10, padding: 10 },
+  returnSummaryRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4 },
+  returnSummaryLabel: { color: theme.colors.slate, fontSize: 12, fontWeight: '800' },
+  returnSummaryValue: { color: theme.colors.navy, fontSize: 14, fontWeight: '900' },
+  fieldLabel: { color: theme.colors.slate, fontSize: 12, fontWeight: '900' },
+  reasonInput: { backgroundColor: theme.colors.white, borderColor: theme.colors.border, borderRadius: 12, borderWidth: 1, color: theme.colors.navy, fontSize: 14, minHeight: 78, padding: 11, textAlignVertical: 'top' },
+  confirmRow: { flexDirection: 'row', gap: 8, justifyContent: 'flex-end' },
+  cancelButton: { alignItems: 'center', borderColor: theme.colors.border, borderRadius: 12, borderWidth: 1, justifyContent: 'center', paddingHorizontal: 13, paddingVertical: 10 },
+  cancelText: { color: theme.colors.slate, fontSize: 12, fontWeight: '900' },
+  confirmButton: { alignItems: 'center', backgroundColor: theme.colors.green, borderRadius: 12, flexDirection: 'row', gap: 7, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 10 },
+  confirmText: { color: theme.colors.white, fontSize: 12, fontWeight: '900' },
+  errorCard: { alignItems: 'center', backgroundColor: theme.colors.dangerSoft, borderRadius: 12, flexDirection: 'row', gap: 8, padding: 10 },
+  errorText: { color: theme.colors.danger, flex: 1, fontSize: 12, lineHeight: 17 },
+  noticeCard: { alignItems: 'center', backgroundColor: theme.colors.greenPale, borderRadius: 12, flexDirection: 'row', gap: 8, padding: 10 },
+  noticeText: { color: theme.colors.greenDark, flex: 1, fontSize: 12, lineHeight: 17 },
 });
 
-const darkStyles=StyleSheet.create({titleText:{color:'#F8FAFC'},bodyText:{color:'#CBD5E1'},card:{backgroundColor:'#111827',borderColor:'#334155'},subtleCard:{backgroundColor:'#172033',borderColor:'#334155'},outlineButton:{backgroundColor:'#111827',borderColor:'#334155'},input:{backgroundColor:'#111827',borderColor:'#334155',color:'#F8FAFC'},errorCard:{backgroundColor:'#3F1D1D',borderColor:'#7F1D1D'}});
+const darkStyles = StyleSheet.create({
+  page: { backgroundColor: theme.colors.darkBackground },
+  card: { backgroundColor: theme.colors.darkCard, borderColor: theme.colors.darkBorder },
+  subtleCard: { backgroundColor: theme.colors.darkSurface },
+  input: { backgroundColor: theme.colors.darkSurface, borderColor: theme.colors.darkBorder, color: theme.colors.white },
+  outlineButton: { borderColor: theme.colors.darkBorder },
+  titleText: { color: theme.colors.white },
+  bodyText: { color: theme.colors.darkMuted },
+  errorCard: { backgroundColor: '#3B2024' },
+});
