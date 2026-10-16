@@ -3,6 +3,8 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 import { Ionicons } from '@expo/vector-icons';
 
 import { loadCustomers, type MerchantCustomer } from '../data/customerRepository';
+import { isLikelyConnectivityError, loadCustomerCache, saveCustomerCache } from '../data/offlineSalesRepository';
+import { sellerTrayUserMessage } from '../data/userFacingError';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
@@ -36,8 +38,8 @@ export function PosCustomerSelector({ tenantId, value, onChange, disabled = fals
     setLoading(true);
     setError(null);
     void loadCustomers(tenantId)
-      .then((rows) => { if (active) setCustomers(rows.filter((row) => row.whatsappId !== 'pos:walk-in')); })
-      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : 'Unable to load customers.'); })
+      .then(async (rows) => { const filtered = rows.filter((row) => row.whatsappId !== 'pos:walk-in'); await saveCustomerCache(tenantId, filtered).catch(() => undefined); if (active) setCustomers(filtered); })
+      .catch(async (cause) => { if (!active) return; if (isLikelyConnectivityError(cause)) { const cached = await loadCustomerCache(tenantId); if (cached) { setCustomers(cached.data); setError(null); return; } } setError(sellerTrayUserMessage(cause, 'Customer list is unavailable right now.')); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [tenantId]);

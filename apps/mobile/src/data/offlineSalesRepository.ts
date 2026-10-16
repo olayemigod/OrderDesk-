@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { CommerceProduct, PosPaymentMethod } from './commerceRepository';
 import { PosDraftRequestError } from './commerceRepository';
 import type { BranchStockRow } from './inventoryRepository';
+import type { MerchantCustomer } from './customerRepository';
 import type { PosPaymentPolicy } from './posPaymentRepository';
 
 const OUTBOX_KEY = 'sellertray.offline.pos-sales.v2';
@@ -11,6 +12,7 @@ const CATALOG_KEY_PREFIX = 'sellertray.offline.catalog.v1:';
 const STOCK_KEY_PREFIX = 'sellertray.offline.stock.v1:';
 const PAYMENT_KEY_PREFIX = 'sellertray.offline.payment-methods.v1:';
 const POLICY_KEY_PREFIX = 'sellertray.offline.pos-policy.v1:';
+const CUSTOMER_KEY_PREFIX = 'sellertray.offline.customers.v1:';
 const MAX_OPEN_INTENTS = 50;
 const SYNCED_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -173,6 +175,8 @@ export async function savePosPaymentMethodsCache(tenantId: string, branchId: str
 export async function loadPosPaymentMethodsCache(tenantId: string, branchId: string): Promise<OfflineCache<PosPaymentMethod[]> | null> { return readCache(`${PAYMENT_KEY_PREFIX}${tenantId}:${branchId}`); }
 export async function savePosPolicyCache(tenantId: string, policy: PosPaymentPolicy): Promise<void> { await writeCache(`${POLICY_KEY_PREFIX}${tenantId}`, policy); }
 export async function loadPosPolicyCache(tenantId: string): Promise<OfflineCache<PosPaymentPolicy> | null> { return readCache(`${POLICY_KEY_PREFIX}${tenantId}`); }
+export async function saveCustomerCache(tenantId: string, rows: MerchantCustomer[]): Promise<void> { await writeCache(`${CUSTOMER_KEY_PREFIX}${tenantId}`, rows); }
+export async function loadCustomerCache(tenantId: string): Promise<OfflineCache<MerchantCustomer[]> | null> { return readCache(`${CUSTOMER_KEY_PREFIX}${tenantId}`); }
 
 export function isLikelyConnectivityError(error: unknown): boolean {
   if (error instanceof PosDraftRequestError) return error.kind === 'network';

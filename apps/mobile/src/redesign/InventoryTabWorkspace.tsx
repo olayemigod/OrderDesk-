@@ -14,6 +14,8 @@ import {
   type StockCountDetail,
 } from '../data/inventoryRepository';
 import { loadLowStock } from '../data/lowStockRepository';
+import { isLikelyConnectivityError, loadCommerceProductCache, saveCommerceProductCache } from '../data/offlineSalesRepository';
+import { sellerTrayUserMessage } from '../data/userFacingError';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import { InventoryWorkspace } from './InventoryWorkspace';
@@ -59,6 +61,7 @@ export function InventoryTabWorkspace({ tenantId, branch }: Props) {
       ]);
       setCapabilities(nextCapabilities);
       setProducts(nextProducts);
+      await saveCommerceProductCache(tenantId, nextProducts).catch(() => undefined);
 
       try {
         const alerts = await loadLowStock(tenantId, branch.id);
@@ -72,7 +75,7 @@ export function InventoryTabWorkspace({ tenantId, branch }: Props) {
           setActiveCount(await loadActiveStockCount(tenantId, branch.id));
         } catch (err) {
           setActiveCount(null);
-          setCountAccessError(err instanceof Error ? err.message : 'Unable to load the active stock count.');
+          setCountAccessError(sellerTrayUserMessage(err, 'Stock count is unavailable right now.')); 
         }
       } else {
         setActiveCount(null);
@@ -82,7 +85,7 @@ export function InventoryTabWorkspace({ tenantId, branch }: Props) {
       setProducts([]);
       setActiveCount(null);
       setLowStockCount(null);
-      setCountAccessError(err instanceof Error ? err.message : 'Inventory action access could not be verified.');
+      const cached = isLikelyConnectivityError(err) ? await loadCommerceProductCache(tenantId) : null; setProducts(cached?.data ?? []); setCountAccessError(isLikelyConnectivityError(err) ? 'Inventory actions need a connection. Saved stock remains available to view.' : sellerTrayUserMessage(err, 'Inventory action access could not be verified.')); 
     } finally {
       setLoadingCountAccess(false);
     }

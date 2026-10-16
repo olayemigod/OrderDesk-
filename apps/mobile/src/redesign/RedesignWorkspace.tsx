@@ -13,6 +13,7 @@ import { useMerchantNotifications } from '../hooks/useMerchantNotifications';
 import { useOfflineSalesSync } from '../hooks/useOfflineSalesSync';
 import { useOrders } from '../hooks/useOrders';
 import { supabase } from '../lib/supabase';
+import { sellerTrayUserMessage } from '../data/userFacingError';
 import { SellerTrayLoadingScreen } from '../components/SellerTrayLoadingScreen';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
@@ -440,7 +441,7 @@ export default function RedesignWorkspace() {
           <Ionicons name="alert-circle-outline" size={22} color={theme.colors.danger} />
           <View style={styles.errorCopy}>
             <Text style={[styles.errorTitle, appearance.dark && darkStyles.titleText]}>Some information could not refresh</Text>
-            <Text style={[styles.errorText, appearance.dark && darkStyles.bodyText]}>{workspaceError}</Text>
+            <Text style={[styles.errorText, appearance.dark && darkStyles.bodyText]}>{sellerTrayUserMessage(workspaceError, offline.connectionState === 'offline' ? 'SellerTray is offline. Saved data remains available where supported.' : 'Some information could not refresh. Pull down to try again.')}</Text>
           </View>
         </View>
       ) : null}

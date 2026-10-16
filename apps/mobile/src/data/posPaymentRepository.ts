@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { createPosClientReference, type PosPaymentMethodType } from './commerceRepository';
+import { sellerTrayUserMessage } from './userFacingError';
 
 export type PosPaymentPolicy = {
   allowPriceOverride: boolean;
@@ -81,7 +82,7 @@ export async function checkoutPosPaymentAllocations(input: {
       allocations: input.allocations,
     },
   });
-  if (error) throw new Error(await functionErrorMessage(error, 'Unable to process this payment.'));
+  if (error) throw new Error(sellerTrayUserMessage(await functionErrorMessage(error, 'Unable to process this payment.'), 'This payment could not be processed. Please try again.'));
   if (!isAllocationCheckoutResult(data)) {
     throw new Error('SellerTray returned an invalid payment allocation result.');
   }
