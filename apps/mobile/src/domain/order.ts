@@ -28,7 +28,7 @@ export type PaymentStatus =
   | 'paid'
   | 'payment_issue';
 
-export type ReturnStatus = 'none' | 'returned';
+export type ReturnStatus = 'none' | 'partial' | 'returned';
 
 export type OrderSource = 'whatsapp' | 'manual' | 'pos';
 
