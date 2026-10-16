@@ -34,7 +34,7 @@ export const MERCHANT_PORTAL_NAVIGATION: MerchantPortalNavigationItem[] = [
   { id: 'customers', label: 'Customers', section: 'Business', available: true },
   { id: 'products', label: 'Products & Pricing', section: 'Stock', available: true },
   { id: 'inventory', label: 'Inventory', section: 'Stock', available: true },
-  { id: 'purchasing', label: 'Purchasing & Suppliers', section: 'Stock', available: true },
+  { id: 'purchasing', label: 'Purchasing', section: 'Stock', available: true },
   { id: 'suppliers', label: 'Suppliers', section: 'Stock', available: false },
   { id: 'payments', label: 'Payments', section: 'Money', available: true },
   { id: 'cash', label: 'Cash & Shifts', section: 'Money', available: true },
