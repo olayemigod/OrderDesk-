@@ -1,5 +1,10 @@
 const path = require('node:path');
 
+const SCALE_IMPORTS = {
+  Text: { exportName: 'SellerTrayText', moduleName: 'SellerTrayText' },
+  TextInput: { exportName: 'SellerTrayTextInput', moduleName: 'SellerTrayTextInput' },
+};
+
 module.exports = function sellerTrayTextScalePlugin({ types: t }) {
   return {
     name: 'sellertray-text-scale',
@@ -8,9 +13,13 @@ module.exports = function sellerTrayTextScalePlugin({ types: t }) {
         const filename = String(state.filename || '').replace(/\\/g, '/');
         const marker = '/apps/mobile/src/';
         const markerIndex = filename.lastIndexOf(marker);
-        if (markerIndex < 0 || filename.endsWith('/components/SellerTrayText.tsx')) return;
+        if (
+          markerIndex < 0
+          || filename.endsWith('/components/SellerTrayText.tsx')
+          || filename.endsWith('/components/SellerTrayTextInput.tsx')
+        ) return;
 
-        let textLocalName = null;
+        const rewritten = [];
 
         for (const statementPath of programPath.get('body')) {
           if (!statementPath.isImportDeclaration()) continue;
@@ -19,28 +28,32 @@ module.exports = function sellerTrayTextScalePlugin({ types: t }) {
           for (const specifierPath of statementPath.get('specifiers')) {
             if (!specifierPath.isImportSpecifier()) continue;
             const imported = specifierPath.node.imported;
-            if (!t.isIdentifier(imported, { name: 'Text' })) continue;
-            textLocalName = specifierPath.node.local.name;
+            if (!t.isIdentifier(imported)) continue;
+            const target = SCALE_IMPORTS[imported.name];
+            if (!target) continue;
+            rewritten.push({ ...target, localName: specifierPath.node.local.name });
             specifierPath.remove();
           }
 
           if (statementPath.node.specifiers.length === 0) statementPath.remove();
         }
 
-        if (!textLocalName) return;
+        if (rewritten.length === 0) return;
 
         const srcRoot = filename.slice(0, markerIndex + marker.length);
-        const target = `${srcRoot}components/SellerTrayText`;
-        let relative = path.posix.relative(path.posix.dirname(filename), target);
-        if (!relative.startsWith('.')) relative = `./${relative}`;
+        for (const item of rewritten) {
+          const target = `${srcRoot}components/${item.moduleName}`;
+          let relative = path.posix.relative(path.posix.dirname(filename), target);
+          if (!relative.startsWith('.')) relative = `./${relative}`;
 
-        programPath.unshiftContainer(
-          'body',
-          t.importDeclaration(
-            [t.importSpecifier(t.identifier(textLocalName), t.identifier('SellerTrayText'))],
-            t.stringLiteral(relative),
-          ),
-        );
+          programPath.unshiftContainer(
+            'body',
+            t.importDeclaration(
+              [t.importSpecifier(t.identifier(item.localName), t.identifier(item.exportName))],
+              t.stringLiteral(relative),
+            ),
+          );
+        }
       },
     },
   };
