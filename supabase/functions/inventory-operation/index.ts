@@ -1,18 +1,12 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.115.0';
 
 type JsonRecord = Record<string, unknown>;
-type InventoryOperation = 'receive' | 'adjust';
+type InventoryAction = 'adjust' | 'policy';
 type AdjustmentDirection = 'increase' | 'decrease';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const MAX_BODY_BYTES = 12_288;
-
-const RECEIVE_REASONS = new Map<string, string>([
-  ['supplier delivery', 'Supplier delivery'],
-  ['opening stock', 'Opening stock'],
-  ['other approved receipt', 'Other approved receipt'],
-]);
 
 const ADJUST_REASONS = new Map<string, string>([
   ['data correction', 'Data correction'],
@@ -60,29 +54,9 @@ Deno.serve(async (request) => {
 
   const tenantId = cleanUuid(body.tenantId);
   const branchId = cleanUuid(body.branchId);
-  const productId = cleanUuid(body.productId);
-  const uomId = cleanUuid(body.uomId);
-  const operation = cleanOperation(body.operation);
-  const quantity = cleanPositiveNumber(body.quantity);
-  const adjustmentDirection = cleanDirection(body.adjustmentDirection);
-  const reference = cleanText(body.reference, 160);
-  const commandId = cleanCommandId(body.commandId);
-  const rawReason = cleanText(body.reason, 120);
-  const reason = operation && rawReason ? cleanReason(operation, rawReason) : null;
-
-  if (!tenantId || !branchId || !productId || !uomId || !operation || quantity === null || !reference || !commandId || !rawReason) {
-    return json({ error: 'Business, branch, product, unit, quantity, reference and reason are required' }, 400);
-  }
-  if (!reason) {
-    return json({ error: 'Choose an approved reason for this stock action' }, 400);
-  }
-  if (operation === 'adjust' && !adjustmentDirection) {
-    return json({ error: 'Choose whether the adjustment increases or decreases stock' }, 400);
-  }
-
-  const forcedDirection = operation === 'adjust' ? requiredDirectionForReason(reason) : null;
-  if (forcedDirection && adjustmentDirection !== forcedDirection) {
-    return json({ error: `${reason} must ${forcedDirection === 'increase' ? 'increase' : 'reduce'} stock` }, 409);
+  const action = cleanAction(body.operation);
+  if (!tenantId || !branchId || !action) {
+    return json({ error: 'Business, branch and stock action are required' }, 400);
   }
 
   const { data: membership, error: membershipError } = await admin
@@ -95,14 +69,53 @@ Deno.serve(async (request) => {
   if (membershipError) return json({ error: membershipError.message }, 400);
   if (!membership) return json({ error: 'You do not have access to this business' }, 403);
 
-  const { data: result, error } = await admin.rpc('apply_sellertray_inventory_operation', {
+  if (action === 'policy') {
+    const productId = cleanUuid(body.productId);
+    const lowStockThreshold = cleanNonNegativeNumber(body.lowStockThreshold);
+    const reorderTarget = body.reorderTarget == null || body.reorderTarget === ''
+      ? null
+      : cleanNonNegativeNumber(body.reorderTarget);
+    if (!productId || lowStockThreshold === null || (body.reorderTarget != null && body.reorderTarget !== '' && reorderTarget === null)) {
+      return json({ error: 'Product and valid low-stock quantities are required' }, 400);
+    }
+    const { data, error } = await admin.rpc('set_sellertray_low_stock_policy', {
+      p_tenant_id: tenantId,
+      p_branch_id: branchId,
+      p_catalog_item_id: productId,
+      p_low_stock_threshold: lowStockThreshold,
+      p_reorder_target: reorderTarget,
+      p_actor_user_id: userId,
+    });
+    if (error || !data || typeof data !== 'object') return rpcError(error?.message, 'SellerTray could not update this low-stock policy');
+    return json({ ok: true, ...(data as JsonRecord) });
+  }
+
+  const productId = cleanUuid(body.productId);
+  const uomId = cleanUuid(body.uomId);
+  const quantity = cleanPositiveNumber(body.quantity);
+  const adjustmentDirection = cleanDirection(body.adjustmentDirection);
+  const reference = cleanText(body.reference, 160);
+  const commandId = cleanCommandId(body.commandId);
+  const rawReason = cleanText(body.reason, 120);
+  const reason = rawReason ? cleanReason(rawReason) : null;
+
+  if (!productId || !uomId || quantity === null || !adjustmentDirection || !reference || !commandId || !rawReason) {
+    return json({ error: 'Product, unit, quantity, direction, reference and reason are required' }, 400);
+  }
+  if (!reason) return json({ error: 'Choose an approved reason for this stock adjustment' }, 400);
+
+  const forcedDirection = requiredDirectionForReason(reason);
+  if (forcedDirection && adjustmentDirection !== forcedDirection) {
+    return json({ error: `${reason} must ${forcedDirection === 'increase' ? 'increase' : 'reduce'} stock` }, 409);
+  }
+
+  const { data: result, error } = await admin.rpc('apply_sellertray_stock_adjustment', {
     p_tenant_id: tenantId,
     p_branch_id: branchId,
     p_catalog_item_id: productId,
     p_uom_id: uomId,
-    p_operation: operation,
     p_quantity: quantity,
-    p_adjustment_direction: operation === 'adjust' ? adjustmentDirection : null,
+    p_adjustment_direction: adjustmentDirection,
     p_reference: reference,
     p_reason: reason,
     p_command_id: commandId,
@@ -110,69 +123,65 @@ Deno.serve(async (request) => {
   });
 
   if (error || !isInventoryOperationResult(result)) {
-    const message = error?.message ?? 'SellerTray could not post this stock movement';
-    const status = /permission|access|role|read-only/i.test(message)
-      ? 403
-      : /not found/i.test(message)
-        ? 404
-        : /not enough|does not allow|already used|unavailable|cannot|invalid|must|use stock/i.test(message)
-          ? 409
-          : 400;
-    return json({ error: message }, status);
+    return rpcError(error?.message, 'SellerTray could not post this stock adjustment');
   }
-
   return json({ ok: true, ...result });
 });
 
-function cleanOperation(value: unknown): InventoryOperation | null {
-  return value === 'receive' || value === 'adjust' ? value : null;
+function rpcError(messageValue: string | undefined, fallback: string): Response {
+  const message = messageValue ?? fallback;
+  const status = /permission|access|role|read-only/i.test(message)
+    ? 403
+    : /not found/i.test(message)
+      ? 404
+      : /not enough|does not allow|already used|unavailable|cannot|invalid|must|use stock|reorder/i.test(message)
+        ? 409
+        : 400;
+  return json({ error: message }, status);
 }
 
+function cleanAction(value: unknown): InventoryAction | null {
+  return value === 'adjust' || value === 'policy' ? value : null;
+}
 function cleanDirection(value: unknown): AdjustmentDirection | null {
   return value === 'increase' || value === 'decrease' ? value : null;
 }
-
 function cleanUuid(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const clean = value.trim();
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clean)
-    ? clean
-    : null;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clean) ? clean : null;
 }
-
 function cleanCommandId(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const clean = value.trim();
   return /^[A-Za-z0-9][A-Za-z0-9:_-]{7,159}$/.test(clean) ? clean : null;
 }
-
 function cleanPositiveNumber(value: unknown): number | null {
   const parsed = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
-
+function cleanNonNegativeNumber(value: unknown): number | null {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
 function cleanText(value: unknown, max: number): string | null {
   if (typeof value !== 'string') return null;
   const clean = value.trim().replace(/\s+/g, ' ');
   return clean ? clean.slice(0, max) : null;
 }
-
-function cleanReason(operation: InventoryOperation, value: string): string | null {
-  const key = value.trim().replace(/\s+/g, ' ').toLowerCase();
-  return (operation === 'receive' ? RECEIVE_REASONS : ADJUST_REASONS).get(key) ?? null;
+function cleanReason(value: string): string | null {
+  return ADJUST_REASONS.get(value.trim().replace(/\s+/g, ' ').toLowerCase()) ?? null;
 }
-
 function requiredDirectionForReason(reason: string): AdjustmentDirection | null {
   if (reason === 'Damage' || reason === 'Expiry' || reason === 'Missing / shrinkage') return 'decrease';
   if (reason === 'Inventory recovery') return 'increase';
   return null;
 }
-
 function isInventoryOperationResult(value: unknown): value is JsonRecord {
   if (!value || typeof value !== 'object') return false;
   const row = value as JsonRecord;
   return typeof row.movementId === 'string'
-    && (row.operation === 'receive' || row.operation === 'adjust')
+    && row.operation === 'adjust'
     && typeof row.productId === 'string'
     && typeof row.productName === 'string'
     && typeof row.sourceUom === 'string'
@@ -185,14 +194,10 @@ function isInventoryOperationResult(value: unknown): value is JsonRecord {
     && typeof row.idempotentReplay === 'boolean';
 }
 
-async function readRequestTextLimited(
-  request: Request,
-  maxBytes: number,
-): Promise<{ ok: true; text: string } | { ok: false }> {
+async function readRequestTextLimited(request: Request, maxBytes: number): Promise<{ ok: true; text: string } | { ok: false }> {
   const declared = Number(request.headers.get('content-length') ?? 0);
   if (Number.isFinite(declared) && declared > maxBytes) return { ok: false };
   if (!request.body) return { ok: true, text: '' };
-
   const reader = request.body.getReader();
   const decoder = new TextDecoder();
   const parts: string[] = [];
@@ -202,10 +207,7 @@ async function readRequestTextLimited(
       const { done, value } = await reader.read();
       if (done) break;
       total += value.byteLength;
-      if (total > maxBytes) {
-        await reader.cancel();
-        return { ok: false };
-      }
+      if (total > maxBytes) { await reader.cancel(); return { ok: false }; }
       parts.push(decoder.decode(value, { stream: true }));
     }
     parts.push(decoder.decode());
@@ -218,10 +220,6 @@ async function readRequestTextLimited(
 function json(payload: JsonRecord, status = 200): Response {
   return new Response(JSON.stringify(payload), {
     status,
-    headers: {
-      ...corsHeaders,
-      'content-type': 'application/json; charset=utf-8',
-      'cache-control': 'no-store',
-    },
+    headers: { ...corsHeaders, 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
   });
 }
