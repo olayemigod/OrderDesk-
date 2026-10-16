@@ -1,5 +1,7 @@
--- Generic stock receipt must not bypass Purchase Receiving or Stock Transfer receiving.
--- Keep controlled corrections available through a narrower service-only adjustment command.
+-- Browser and mobile inventory corrections use a narrower adjustment command.
+-- The authoritative service-only inventory command remains available to governed server
+-- workflows such as Purchase Receiving, while the public inventory Edge Function no longer
+-- exposes a generic supplier-receipt action.
 
 create or replace function public.apply_sellertray_stock_adjustment(
   p_tenant_id uuid,
@@ -40,9 +42,8 @@ revoke all on function public.apply_sellertray_stock_adjustment(uuid, uuid, uuid
 revoke all on function public.apply_sellertray_stock_adjustment(uuid, uuid, uuid, uuid, numeric, text, text, text, text, uuid) from authenticated;
 grant execute on function public.apply_sellertray_stock_adjustment(uuid, uuid, uuid, uuid, numeric, text, text, text, text, uuid) to service_role;
 
--- Retire both generic operation overloads from runtime callers. The narrower wrapper above
--- remains able to invoke the owned function for controlled adjustments only.
-revoke execute on function public.apply_sellertray_inventory_operation(uuid, uuid, uuid, uuid, text, numeric, text, text, text, uuid) from service_role;
-revoke execute on function public.apply_sellertray_inventory_operation(uuid, uuid, uuid, uuid, text, numeric, text, text, text, text, uuid) from service_role;
+-- Preserve the established internal server authority, but never grant it to browser clients.
 revoke all on function public.apply_sellertray_inventory_operation(uuid, uuid, uuid, uuid, text, numeric, text, text, text, uuid) from public, anon, authenticated;
 revoke all on function public.apply_sellertray_inventory_operation(uuid, uuid, uuid, uuid, text, numeric, text, text, text, text, uuid) from public, anon, authenticated;
+grant execute on function public.apply_sellertray_inventory_operation(uuid, uuid, uuid, uuid, text, numeric, text, text, text, uuid) to service_role;
+grant execute on function public.apply_sellertray_inventory_operation(uuid, uuid, uuid, uuid, text, numeric, text, text, text, text, uuid) to service_role;
