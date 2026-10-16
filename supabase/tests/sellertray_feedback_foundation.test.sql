@@ -36,7 +36,7 @@ select set_config('request.jwt.claim.role','authenticated',true);
 
 update sellertray_feedback_fixture
 set feedback_id=public.submit_sellertray_feedback(
-  tenant_id,null,'experience',5,'SellerTray works well for this workflow.','1.0.0','android','{"surface":"more"}'::jsonb
+  tenant_id,null,'experience',5::smallint,'SellerTray works well for this workflow.','1.0.0','android','{"surface":"more"}'::jsonb
 );
 
 select extensions.ok((select feedback_id is not null from sellertray_feedback_fixture),'signed-in member can submit feedback');
@@ -52,7 +52,7 @@ select extensions.throws_ok(
 );
 select extensions.throws_ok(
   format(
-    'select public.submit_sellertray_feedback(%L::uuid,null,''general'',5,''No access'',null,null,''{}''::jsonb)',
+    'select public.submit_sellertray_feedback(%L::uuid,null,''general'',5::smallint,''No access'',null,null,''{}''::jsonb)',
     (select tenant_id from sellertray_feedback_fixture)
   ),
   '42501',
