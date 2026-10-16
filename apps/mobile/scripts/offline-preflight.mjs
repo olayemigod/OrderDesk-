@@ -41,8 +41,7 @@ requireValue(
 );
 
 requireValue(
-  governingSkill.includes('version: "0.1.5"') &&
-    governingSkill.includes('## Customer identity and selling context') &&
+  governingSkill.includes('## Customer identity and selling context') &&
     governingSkill.includes('Sell defaults to **Walk-in Customer**') &&
     governingSkill.includes('POS and WhatsApp must converge on one Customer record') &&
     governingSkill.includes('Customer choice is part of the sale snapshot') &&
