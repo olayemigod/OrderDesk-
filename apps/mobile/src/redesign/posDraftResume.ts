@@ -3,7 +3,7 @@ import type { MerchantOrder } from '../domain/order';
 
 export type ResumedPosDraftLine = {
   key: string;
-  orderItemId: string;
+  orderItemId: string | null;
   product: CommerceProduct;
   uom: CommerceUom;
   quantity: number;
@@ -14,6 +14,14 @@ export type ResumedPosDraft = {
   branchId: string;
   customer: { id: string; name: string; phone: string } | null;
   lines: ResumedPosDraftLine[];
+};
+
+export type ResumedPosDraftEdit = {
+  orderItemId?: string;
+  catalogItemId?: string;
+  uomId?: string;
+  quantity: number;
+  unitPrice?: number;
 };
 
 export function buildResumedPosDraft(order: MerchantOrder, products: CommerceProduct[]): ResumedPosDraft {
@@ -68,15 +76,29 @@ export function buildResumedPosDraft(order: MerchantOrder, products: CommercePro
 export function buildResumedPosDraftEdits(
   order: MerchantOrder,
   lines: ResumedPosDraftLine[],
-): Array<{ orderItemId: string; quantity: number }> {
-  const quantityByItemId = new Map(lines.map((line) => [line.orderItemId, line.quantity]));
-  if (lines.some((line) => !order.items.some((item) => item.id === line.orderItemId))) {
+): ResumedPosDraftEdit[] {
+  const existingIds = new Set(order.items.map((item) => item.id));
+  if (lines.some((line) => line.orderItemId !== null && !existingIds.has(line.orderItemId))) {
     throw new Error('This saved sale contains a product that is not part of the original draft.');
   }
-  const edits = order.items.map((item) => ({
+
+  const quantityByItemId = new Map(
+    lines.flatMap((line) => line.orderItemId ? [[line.orderItemId, line.quantity] as const] : []),
+  );
+  const edits: ResumedPosDraftEdit[] = order.items.map((item) => ({
     orderItemId: item.id,
     quantity: quantityByItemId.get(item.id) ?? 0,
   }));
+
+  for (const line of lines) {
+    if (line.orderItemId !== null) continue;
+    edits.push({
+      catalogItemId: line.product.id,
+      uomId: line.uom.id,
+      quantity: line.quantity,
+    });
+  }
+
   if (!edits.some((item) => item.quantity > 0)) {
     throw new Error('Keep at least one product in the saved sale.');
   }
