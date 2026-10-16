@@ -34,12 +34,12 @@ requireValue(
 
 const probeFilename = join(mobileRoot, 'src/redesign/FontScaleProbe.tsx');
 const probe = transformSync(
-  "import { Text, View } from 'react-native'; export const Probe = () => <View><Text>Scaled</Text></View>;",
+  "import { Text, View } from 'react-native'; export const Probe = Text; export const Other = View;",
   {
     filename: probeFilename,
     configFile: false,
     babelrc: false,
-    plugins: [plugin, ['@babel/plugin-syntax-jsx']],
+    plugins: [plugin],
   },
 )?.code ?? '';
 
@@ -47,7 +47,7 @@ requireValue(
   probe.includes('SellerTrayText')
     && probe.includes('../components/SellerTrayText')
     && !/\{\s*Text\s*,/.test(probe)
-    && probe.includes("from 'react-native'") || probe.includes('from "react-native"'),
+    && (probe.includes("from 'react-native'") || probe.includes('from "react-native"')),
   'SellerTray source Text imports must be rewritten to SellerTrayText while other React Native imports remain intact',
 );
 
