@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import AiInsights from './AiInsights';
 import CustomersManagement from './CustomersManagement';
 import ManagementPage from './ManagementPage';
+import PaymentsManagement from './PaymentsManagement';
 import PurchasingManagement from './PurchasingManagement';
 import ReportCenter from './ReportCenter';
 import WhatsAppManagement from './WhatsAppManagement';
@@ -138,6 +139,7 @@ export default function MerchantApp() {
       {page === 'orders' && <Orders business={business} branch={branch} rows={workspace.orders} />}
       {page === 'customers' && <CustomersManagement tenantId={business.id} currency={business.currency} />}
       {page === 'inventory' && <Inventory branch={branch} rows={workspace.stock} />}
+      {page === 'payments' && <PaymentsManagement tenantId={business.id} />}
       {page === 'cash' && <Cash business={business} branch={branch} rows={workspace.shifts} />}
       {page === 'whatsapp' && <WhatsAppManagement tenantId={business.id} role={managementRole} branches={branches} connectionStatusHint={business.whatsappConnectionStatus} />}
       {page === 'reports' && <ReportCenter tenantId={business.id} currency={business.currency} />}
