@@ -68,6 +68,19 @@ export type PurchaseReceiptResult = {
   idempotentReplay: boolean;
 };
 
+export async function loadPurchaseReceivingAuthority(
+  tenantId: string,
+  branchId: string,
+): Promise<boolean> {
+  if (!tenantId || !branchId) return false;
+  const { data, error } = await supabase.rpc('get_sellertray_purchase_receiving_authority', {
+    p_tenant_id: tenantId,
+    p_branch_id: branchId,
+  });
+  if (error) throw error;
+  return data === true;
+}
+
 export async function loadReceivablePurchases(
   tenantId: string,
   branchId: string,
