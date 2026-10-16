@@ -7,6 +7,7 @@ import { loadActiveStockCount, loadInventoryCapabilities, type InventoryCapabili
 import { loadLowStock } from '../data/lowStockRepository';
 import { isLikelyConnectivityError, loadCommerceProductCache, saveCommerceProductCache } from '../data/offlineSalesRepository';
 import { sellerTrayUserMessage } from '../data/userFacingError';
+import { useBusinesses } from '../hooks/useBusinesses';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import { InventoryWorkspace } from './InventoryWorkspace';
@@ -20,6 +21,8 @@ const NONE: InventoryCapabilities = { canReceiveStock:false, canAdjustStock:fals
 
 export function InventoryTabWorkspace({ tenantId, branch, currency = '' }: Props) {
   const dark = useSellerTrayAppearance().dark;
+  const { activeBusiness } = useBusinesses();
+  const productCurrency = currency.trim() || (activeBusiness?.id === tenantId ? activeBusiness.currency.trim() : '');
   const [cap, setCap] = useState<InventoryCapabilities>(NONE);
   const [products, setProducts] = useState<CommerceProduct[]>([]);
   const [count, setCount] = useState<StockCountDetail | null>(null);
@@ -56,7 +59,7 @@ export function InventoryTabWorkspace({ tenantId, branch, currency = '' }: Props
 
   useEffect(() => { setCountOpen(false); setTransferOpen(false); setLowOpen(false); setProductsOpen(false); setVersion(0); void refresh(); }, [tenantId, branch.id]);
 
-  if (productsOpen) return <ProductManagementWorkspace tenantId={tenantId} currency={currency} onClose={() => { setProductsOpen(false); setVersion(v => v + 1); void refresh(); }} />;
+  if (productsOpen) return <ProductManagementWorkspace tenantId={tenantId} currency={productCurrency} onClose={() => { setProductsOpen(false); setVersion(v => v + 1); void refresh(); }} />;
   if (lowOpen) return <LowStockWorkspace tenantId={tenantId} branch={branch} onClose={() => { setLowOpen(false); void refresh(); }} />;
   if (transferOpen) return <StockTransferWorkspace tenantId={tenantId} branch={branch} products={products} capabilities={cap} onInventoryChanged={() => setVersion(v => v + 1)} onClose={() => { setTransferOpen(false); setVersion(v => v + 1); void refresh(); }} />;
   if (countOpen) return <StockCountWorkspace tenantId={tenantId} branch={branch} products={products} capabilities={cap} onInventoryChanged={() => setVersion(v => v + 1)} onClose={() => { setCountOpen(false); setVersion(v => v + 1); void refresh(); }} />;
