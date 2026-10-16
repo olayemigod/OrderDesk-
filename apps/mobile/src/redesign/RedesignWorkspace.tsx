@@ -275,6 +275,63 @@ export default function RedesignWorkspace() {
     setSyncRouteKey((value) => value + 1);
   }
 
+  async function refreshWorkspace() {
+    const tenantId = activeBusiness.id;
+    const branchId = activeBranch?.id ?? '';
+    const tasks: Promise<unknown>[] = [
+      refreshOrders(),
+      notifications.refresh(),
+      offline.refresh(),
+      loadAccessibleBranches(tenantId)
+        .then((rows) => {
+          setBranches(rows);
+          setActiveBranchId((current) => {
+            if (rows.some((branch) => branch.id === current)) return current;
+            return rows.find((branch) => branch.isDefault)?.id ?? rows[0]?.id ?? '';
+          });
+          setBranchError(null);
+        })
+        .catch((err) => {
+          setBranchError(err instanceof Error ? err.message : 'Unable to refresh branches.');
+        }),
+    ];
+
+    if (branchId) {
+      tasks.push(refreshActiveCashShift(tenantId, branchId, { quiet: true }));
+      tasks.push(
+        Promise.all([
+          loadLowStock(tenantId, branchId),
+          loadStockTransfers(tenantId, branchId, 100),
+        ])
+          .then(([lowStock, transfers]) => {
+            setLowStockCount(lowStock.length);
+            setPendingTransferCount(
+              transfers.filter((transfer) => transfer.status === 'draft' || transfer.status === 'dispatched').length,
+            );
+            setInventorySummaryError(null);
+          })
+          .catch((err) => {
+            setInventorySummaryError(err instanceof Error ? err.message : 'Unable to refresh inventory status.');
+          }),
+      );
+      tasks.push(
+        supabase.rpc('get_sellertray_pos_return_authority', {
+          p_tenant_id: tenantId,
+          p_branch_id: branchId,
+        }).then(({ data, error }) => {
+          if (error) throw error;
+          setCanRefundSale(data === true);
+          setRefundAuthorityError(null);
+        }).catch((err) => {
+          setCanRefundSale(false);
+          setRefundAuthorityError(err instanceof Error ? err.message : 'Unable to check return permission.');
+        }),
+      );
+    }
+
+    await Promise.all(tasks);
+  }
+
   const attentionItems: HomeAttentionItem[] = [];
   if (!cashShiftLoading && activeBranch && !activeCashShift) {
     attentionItems.push({
@@ -357,6 +414,7 @@ export default function RedesignWorkspace() {
       notificationCount={notifications.unreadCount}
       orderAttentionCount={home.ordersNeedingAttention}
       syncState={syncState}
+      onRefresh={refreshWorkspace}
       onTabChange={(nextTab) => {
         if (nextTab !== 'sell') setResumeDraftOrder(null);
         setTab(nextTab);
