@@ -145,7 +145,7 @@ export default function MerchantApp() {
       {page === 'reports' && <ReportCenter tenantId={business.id} currency={business.currency} />}
       {page === 'ai' && <AiInsights tenantId={business.id} />}
       {page === 'purchasing' && <PurchasingManagement tenantId={business.id} currency={business.currency} />}
-      {(page === 'products' || page === 'team' || page === 'devices' || page === 'feedback' || page === 'settings') && <ManagementPage page={page} tenantId={business.id} currency={business.currency} onBranchesChanged={refresh} />}
+      {(page === 'products' || page === 'suppliers' || page === 'team' || page === 'devices' || page === 'feedback' || page === 'settings') && <ManagementPage page={page} tenantId={business.id} currency={business.currency} onBranchesChanged={refresh} />}
     </main>
   </div>;
 }

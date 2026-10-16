@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 const appRoot = process.cwd();
 const app = readFileSync(resolve(appRoot, 'src/MerchantApp.tsx'), 'utf8');
 const navigation = readFileSync(resolve(appRoot, 'src/portalNavigation.ts'), 'utf8');
+const management = readFileSync(resolve(appRoot, 'src/ManagementPage.tsx'), 'utf8');
 const ai = readFileSync(resolve(appRoot, 'src/AiInsights.tsx'), 'utf8');
 const edge = readFileSync(resolve(appRoot, '../../supabase/functions/merchant-ai/index.ts'), 'utf8');
 const failures = [];
@@ -21,9 +22,18 @@ requireValue(
 
 requireValue(
   app.includes("import PurchasingManagement from './PurchasingManagement'") &&
-    navigation.includes("{ id: 'purchasing', label: 'Purchasing & Suppliers', section: 'Stock', available: true }") &&
+    navigation.includes("{ id: 'purchasing', label: 'Purchasing', section: 'Stock', available: true }") &&
     app.includes("page === 'purchasing' && <PurchasingManagement tenantId={business.id} currency={business.currency}"),
-  'Merchant Web must expose the governed Purchasing & Suppliers workspace.',
+  'Merchant Web must expose the governed Purchasing workspace.',
+);
+
+requireValue(
+  navigation.includes("{ id: 'suppliers', label: 'Suppliers', section: 'Stock', available: true }") &&
+    app.includes("page === 'suppliers'") &&
+    app.includes('<ManagementPage page={page}') &&
+    management.includes("import SuppliersManagement from './SuppliersManagement'") &&
+    management.includes("if (page === 'suppliers') return <SuppliersManagement tenantId={tenantId} />"),
+  'Merchant Web must expose governed Supplier management through the shared management shell.',
 );
 
 requireValue(

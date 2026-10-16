@@ -3,10 +3,11 @@ import DevicesPrintersManagement from './DevicesPrintersManagement';
 import FeedbackDashboard from './FeedbackDashboard';
 import ProductsManagement from './ProductsManagement';
 import SettingsManagement from './SettingsManagement';
+import SuppliersManagement from './SuppliersManagement';
 import TeamBranchesManagement from './TeamBranchesManagement';
 import { errorMessage, supabase } from './supabase';
 
-type ManagementPageId = 'products' | 'team' | 'devices' | 'feedback' | 'settings';
+type ManagementPageId = 'products' | 'suppliers' | 'team' | 'devices' | 'feedback' | 'settings';
 type Branch = { id: string; name: string; isDefault: boolean };
 
 export default function ManagementPage({
@@ -21,6 +22,7 @@ export default function ManagementPage({
   onBranchesChanged?: () => void | Promise<void>;
 }) {
   if (page === 'products') return <ProductsManagement tenantId={tenantId} currency={currency} />;
+  if (page === 'suppliers') return <SuppliersManagement tenantId={tenantId} />;
   if (page === 'team') return <TeamBranchesManagement tenantId={tenantId} onBranchesChanged={onBranchesChanged} />;
   if (page === 'devices') return <DeviceManagement tenantId={tenantId} />;
   if (page === 'feedback') return <FeedbackDashboard tenantId={tenantId} />;
