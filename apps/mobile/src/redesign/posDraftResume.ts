@@ -3,7 +3,7 @@ import type { MerchantOrder } from '../domain/order';
 
 export type ResumedPosDraftLine = {
   key: string;
-  orderItemId: string | null;
+  orderItemId: string;
   product: CommerceProduct;
   uom: CommerceUom;
   quantity: number;
@@ -78,7 +78,7 @@ export function buildResumedPosDraftEdits(
   lines: ResumedPosDraftLine[],
 ): ResumedPosDraftEdit[] {
   const existingIds = new Set(order.items.map((item) => item.id));
-  if (lines.some((line) => line.orderItemId !== null && !existingIds.has(line.orderItemId))) {
+  if (lines.some((line) => line.orderItemId && !existingIds.has(line.orderItemId))) {
     throw new Error('This saved sale contains a product that is not part of the original draft.');
   }
 
@@ -91,7 +91,7 @@ export function buildResumedPosDraftEdits(
   }));
 
   for (const line of lines) {
-    if (line.orderItemId !== null) continue;
+    if (line.orderItemId) continue;
     edits.push({
       catalogItemId: line.product.id,
       uomId: line.uom.id,
