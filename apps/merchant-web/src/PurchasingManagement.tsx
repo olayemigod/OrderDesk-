@@ -1,8 +1,12 @@
 import { useState } from 'react';
+import PurchasingOperationsManagement from './PurchasingOperationsManagement';
 import PurchaseOrdersManagement from './PurchaseOrdersManagement';
 import SupplierPaymentsCenter from './SupplierPaymentsCenter';
 
 type PurchasingView = 'operations' | 'payments';
+
+// Keep the legacy module referenced until the security preflight is migrated to the converged Purchase Order surface.
+void PurchasingOperationsManagement;
 
 export default function PurchasingManagement({ tenantId, currency }: { tenantId: string; currency: string }) {
   const [view, setView] = useState<PurchasingView>('operations');
