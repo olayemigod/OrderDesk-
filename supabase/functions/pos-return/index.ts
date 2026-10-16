@@ -1,11 +1,12 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.115.0';
 
 type JsonRecord = Record<string, unknown>;
-type PosAction = 'void' | 'return';
+type PosAction = 'void' | 'return' | 'delete_draft';
+type ReturnItem = { orderItemId: string; quantity: number };
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-const MAX_BODY_BYTES = 8_192;
+const MAX_BODY_BYTES = 32_768;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -61,24 +62,54 @@ Deno.serve(async (request) => {
   if (membershipError) return json({ error: membershipError.message }, 400);
   if (!membership) return json({ error: 'You do not have access to this business' }, 403);
 
-  const rpc = action === 'void'
-    ? 'void_sellertray_pos_draft'
-    : 'return_sellertray_pos_cash_sale';
+  const commandId = action === 'void' ? null : cleanCommandId(body.commandId);
+  if (action !== 'void' && !commandId) {
+    return json({ error: 'Retry identity is required for this action' }, 400);
+  }
 
-  const { data: result, error } = await admin.rpc(rpc, {
-    p_tenant_id: tenantId,
-    p_order_id: orderId,
-    p_actor_user_id: userId,
-    p_reason: reason,
-  });
+  let rpc: string;
+  let rpcArgs: JsonRecord;
+
+  if (action === 'void') {
+    rpc = 'void_sellertray_pos_draft';
+    rpcArgs = {
+      p_tenant_id: tenantId,
+      p_order_id: orderId,
+      p_actor_user_id: userId,
+      p_reason: reason,
+    };
+  } else if (action === 'delete_draft') {
+    rpc = 'delete_sellertray_pos_draft';
+    rpcArgs = {
+      p_tenant_id: tenantId,
+      p_order_id: orderId,
+      p_actor_user_id: userId,
+      p_reason: reason,
+      p_command_id: commandId,
+    };
+  } else {
+    const items = cleanReturnItems(body.items);
+    if (!items) return json({ error: 'Choose at least one valid item quantity to return' }, 400);
+    rpc = 'return_sellertray_pos_cash_sale';
+    rpcArgs = {
+      p_tenant_id: tenantId,
+      p_order_id: orderId,
+      p_actor_user_id: userId,
+      p_reason: reason,
+      p_items: items,
+      p_command_id: commandId,
+    };
+  }
+
+  const { data: result, error } = await admin.rpc(rpc, rpcArgs);
 
   if (error || !isResult(action, result)) {
-    const message = error?.message ?? `Unable to ${action} this sale`;
+    const message = error?.message ?? `Unable to ${actionLabel(action)} this sale`;
     const status = /membership|access|role|read-only|permission|refund/i.test(message)
       ? 403
       : /not found/i.test(message)
         ? 404
-        : /cannot|only|already|incomplete|does not match|open a cashier shift|drawer/i.test(message)
+        : /cannot|only|already|incomplete|does not match|open a cashier shift|drawer|exceeds|remaining/i.test(message)
           ? 409
           : 400;
     return json({ error: message }, status);
@@ -88,17 +119,47 @@ Deno.serve(async (request) => {
 });
 
 function cleanAction(value: unknown): PosAction | null {
-  return value === 'void' || value === 'return' ? value : null;
+  return value === 'void' || value === 'return' || value === 'delete_draft' ? value : null;
+}
+
+function cleanReturnItems(value: unknown): ReturnItem[] | null {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 100) return null;
+  const seen = new Set<string>();
+  const items: ReturnItem[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
+    const row = entry as JsonRecord;
+    const orderItemId = cleanUuid(row.orderItemId);
+    const quantity = typeof row.quantity === 'number' ? row.quantity : Number(row.quantity);
+    if (!orderItemId || !Number.isFinite(quantity) || quantity <= 0 || seen.has(orderItemId)) return null;
+    seen.add(orderItemId);
+    items.push({ orderItemId, quantity });
+  }
+  return items;
+}
+
+function cleanCommandId(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const clean = value.trim();
+  if (clean.length < 8 || clean.length > 160) return null;
+  return /^[A-Za-z0-9][A-Za-z0-9:_-]*$/.test(clean) ? clean : null;
 }
 
 function isResult(action: PosAction, value: unknown): value is JsonRecord {
-  if (!value || typeof value !== 'object') return false;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const row = value as JsonRecord;
   if (typeof row.orderId !== 'string' || typeof row.idempotentReplay !== 'boolean') return false;
   if (action === 'void') return row.status === 'cancelled';
-  return row.returnStatus === 'returned'
+  if (action === 'delete_draft') return row.deleted === true && typeof row.deletedAt === 'string';
+  return (row.returnStatus === 'partial' || row.returnStatus === 'returned')
     && typeof row.returnId === 'string'
-    && typeof row.refundId === 'string';
+    && typeof row.refundId === 'string'
+    && typeof row.refundedAmount === 'number';
+}
+
+function actionLabel(action: PosAction): string {
+  if (action === 'delete_draft') return 'delete';
+  return action;
 }
 
 function cleanUuid(value: unknown): string | null {
