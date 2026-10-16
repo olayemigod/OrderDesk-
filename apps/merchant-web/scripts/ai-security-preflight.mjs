@@ -43,7 +43,7 @@ requireValue(
     app.includes("page === 'orders' && branch && <OrdersManagement tenantId={business.id} branchId={branch.id} currency={business.currency}") &&
     orders.includes("functions.invoke('order-draft-action'") &&
     orders.includes(".is('deleted_at', null)") &&
-    orders.includes("selected.source === 'pos'") &&
+    orders.includes("selected?.source === 'pos'") &&
     orders.includes("selected.status === 'draft'") &&
     orders.includes("selected.payment_status === 'unpaid'"),
   'Merchant Web Orders must use the authenticated draft-action boundary and exclude deleted drafts.',
