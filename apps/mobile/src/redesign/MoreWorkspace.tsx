@@ -7,10 +7,12 @@ import { SellerTrayText as Text } from '../components/SellerTrayText';
 import type { BusinessProfileInput, MerchantBusiness } from '../data/businessRepository';
 import type { CashShift } from '../data/cashShiftRepository';
 import type { CommerceBranch } from '../data/commerceRepository';
+import { loadSellerTrayFeedbackState, type SellerTrayFeedbackState } from '../data/feedbackRepository';
 import type { OfflinePosSale } from '../data/offlineSalesRepository';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import { CashShiftWorkspace } from './CashShiftWorkspace';
+import { FeedbackWorkspace } from './FeedbackWorkspace';
 import { PrinterWorkspace } from './PrinterWorkspace';
 import { PurchaseReceivingWorkspace } from './PurchaseReceivingWorkspace';
 import { SyncStatusWorkspace } from './SyncStatusWorkspace';
@@ -54,6 +56,8 @@ export function MoreWorkspace({
   const [printerOpen, setPrinterOpen] = useState(false);
   const [whatsappOpen, setWhatsappOpen] = useState(false);
   const [syncOpen, setSyncOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackState, setFeedbackState] = useState<SellerTrayFeedbackState | null>(null);
   const openSyncCount = offlineSales.filter((sale) => sale.status !== 'synced').length;
   const reviewCount = offlineSales.filter((sale) => sale.status === 'needs_review' || sale.status === 'failed').length;
   const canManagePurchasing = business.role === 'owner' || business.role === 'manager';
@@ -64,6 +68,7 @@ export function MoreWorkspace({
     setPrinterOpen(false);
     setWhatsappOpen(false);
     setSyncOpen(false);
+    setFeedbackOpen(false);
   }
 
   useEffect(() => {
@@ -89,6 +94,16 @@ export function MoreWorkspace({
 
   useEffect(() => {
     closeOperationalWorkspaces();
+    setFeedbackState(null);
+    let active = true;
+    void loadSellerTrayFeedbackState(business.id)
+      .then((state) => {
+        if (active) setFeedbackState(state);
+      })
+      .catch(() => {
+        if (active) setFeedbackState(null);
+      });
+    return () => { active = false; };
   }, [business.id, branch.id]);
 
   if (cashOpen) {
@@ -109,6 +124,10 @@ export function MoreWorkspace({
 
   if (syncOpen) {
     return <SyncStatusWorkspace sales={offlineSales} syncing={offlineSyncing} onSync={onSyncOfflineSales} onDiscard={onDiscardOfflineSale} onClose={() => setSyncOpen(false)} />;
+  }
+
+  if (feedbackOpen) {
+    return <FeedbackWorkspace tenantId={business.id} branch={branch} onClose={() => setFeedbackOpen(false)} onStateChanged={setFeedbackState} />;
   }
 
   return (
@@ -178,6 +197,18 @@ export function MoreWorkspace({
         <View style={styles.operationCopy}>
           <Text style={[styles.operationTitle, dark && darkStyles.titleText]}>Devices & Printers</Text>
           <Text style={[styles.operationText, dark && darkStyles.bodyText]}>Set up Bluetooth receipt printers, paper width and test printing for {branch.name}.</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
+      </Pressable>
+
+      <Pressable onPress={() => { closeOperationalWorkspaces(); setFeedbackOpen(true); }} style={({ pressed }) => [styles.operationCard, dark && darkStyles.card, pressed && styles.pressed]}>
+        <View style={[styles.operationIcon, feedbackState?.hasSubmitted && styles.operationIconActive]}><Ionicons name={feedbackState?.hasSubmitted ? 'checkmark-circle-outline' : 'chatbubble-ellipses-outline'} size={23} color={theme.colors.greenDark} /></View>
+        <View style={styles.operationCopy}>
+          <View style={styles.operationTitleRow}>
+            <Text style={[styles.operationTitle, dark && darkStyles.titleText]}>Feedback</Text>
+            {feedbackState ? <View style={[styles.statusPill, !feedbackState.hasSubmitted && styles.statusPillClosed]}><Text style={[styles.statusText, !feedbackState.hasSubmitted && styles.statusTextClosed]}>{feedbackState.hasSubmitted ? 'Shared' : 'Not yet'}</Text></View> : null}
+          </View>
+          <Text style={[styles.operationText, dark && darkStyles.bodyText]}>{feedbackState?.hasSubmitted ? 'Send another update about what is working or what SellerTray should improve.' : 'Tell us what is working, what is difficult, and what would make SellerTray better.'}</Text>
         </View>
         <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
       </Pressable>
