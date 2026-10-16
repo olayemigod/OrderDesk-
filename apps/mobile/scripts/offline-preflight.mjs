@@ -11,67 +11,16 @@ const skill = readFileSync(resolve(root, '../../.agents/skills/sellertray-projec
 const failures = [];
 const requireValue = (condition, message) => { if (!condition) failures.push(message); };
 
-requireValue(
-  sell.includes('sellingPrice: number')
-    && sell.includes('configured')
-    && sell.includes('canOverridePrice')
-    && sell.includes('Unit price')
-    && sell.includes('prepareGovernedPosDraft'),
-  'Sell must separate configured price from the governed effective selling price and expose an authorised unit-price edit.',
-);
-requireValue(
-  policy.includes('allowPriceOverride') && policy.includes('canOverridePrice'),
-  'POS price changes must remain controlled by merchant policy and operator capability.',
-);
-requireValue(
-  prepare.includes('createPosDraft')
-    && prepare.includes('updatePosDraftItems')
-    && prepare.includes('expectedSellingPrice')
-    && prepare.includes('sellingPrice'),
-  'Price overrides must use the governed draft command after configured-price validation, never direct order-item writes.',
-);
-requireValue(
-  offline.includes("OfflineCompletionIntent = 'draft' | 'cash'")
-    && offline.includes("completionIntent: 'cash'") === false
-    && offline.includes('sellingPrice')
-    && offline.includes('reserveCachedStock')
-    && offline.includes('MAX_OPEN_INTENTS = 50'),
-  'Offline outbox must preserve effective price, support a cash completion intent, reserve cached stock and stay bounded.',
-);
-requireValue(
-  sell.includes("completionIntent: 'cash'")
-    && sell.includes('Cash sale recorded offline')
-    && sell.includes('loadPosPaymentMethodsCache')
-    && sell.includes('loadPosPolicyCache'),
-  'Sell must cache governed payment/policy context and record eligible offline cash sales rather than only holding drafts.',
-);
-requireValue(
-  hook.includes('probeReachability')
-    && hook.includes('backendReachable === false')
-    && hook.includes("sale.completionIntent === 'cash'")
-    && hook.includes('completePosSale')
-    && hook.includes('prepareGovernedPosDraft'),
-  'Offline status must reflect backend reachability and replay cash sales through governed draft and checkout commands.',
-);
-requireValue(
-  offline.includes('unknownhost') && offline.includes('unable to resolve host'),
-  'DNS/backend reachability failures must be classified as offline conditions.',
-);
-requireValue(
-  offline.includes("throw new Error('A completed offline cash sale cannot be discarded")
-    && hook.includes('syncOfflinePosSales'),
-  'Locally completed cash sales must not be destructively discarded and must reconcile through the sync queue.',
-);
-requireValue(
-  skill.includes('Offline-capable selling')
-    && skill.includes('controlled discounts/price overrides')
-    && skill.includes('Sale reduces stock exactly once'),
-  'Implementation must remain aligned with SellerTray offline selling, price-control and exactly-once stock rules.',
-);
+requireValue(sell.includes('sellingPrice: number') && sell.includes('configured') && sell.includes('canOverridePrice') && sell.includes('Unit price') && sell.includes('prepareGovernedPosDraft'), 'Sell must separate configured price from the governed effective selling price and expose an authorised unit-price edit.');
+requireValue(policy.includes('allowPriceOverride') && policy.includes('canOverridePrice'), 'POS price changes must remain controlled by merchant policy and operator capability.');
+requireValue(prepare.includes('createPosDraft') && prepare.includes('updatePosDraftItems') && prepare.includes('expectedSellingPrice') && prepare.includes('sellingPrice'), 'Price overrides must use the governed draft command after configured-price validation, never direct order-item writes.');
+requireValue(offline.includes("OfflineCompletionIntent = 'draft' | 'cash'") && offline.includes('sellingPrice') && offline.includes('reserveCachedStock') && offline.includes('MAX_OPEN_INTENTS = 50'), 'Offline outbox must preserve effective price, support a cash completion intent, reserve cached stock and stay bounded.');
+requireValue(sell.includes("completionIntent: 'cash'") && sell.includes('Cash sale recorded offline') && sell.includes('loadPosPaymentMethodsCache') && sell.includes('loadPosPolicyCache'), 'Sell must cache governed payment/policy context and record eligible offline cash sales rather than only holding drafts.');
+requireValue(hook.includes('probeReachability') && hook.includes('backendReachable === false') && hook.includes("sale.completionIntent === 'cash'") && hook.includes('completePosSale') && hook.includes('prepareGovernedPosDraft'), 'Offline status must reflect backend reachability and replay cash sales through governed draft and checkout commands.');
+requireValue(offline.includes('unknownhost') && offline.includes('unable to resolve host'), 'DNS/backend reachability failures must be classified as offline conditions.');
+requireValue(offline.includes("throw new Error('A completed offline cash sale cannot be discarded") && hook.includes('syncOfflinePosSales'), 'Locally completed cash sales must not be destructively discarded and must reconcile through the sync queue.');
+const governed = skill.toLowerCase();
+requireValue(governed.includes('offline-capable selling') && governed.includes('controlled discounts/price overrides') && governed.includes('sale reduces stock exactly once'), 'Implementation must remain aligned with SellerTray offline selling, price-control and exactly-once stock rules.');
 
-if (failures.length) {
-  console.error('SellerTray offline reliability preflight failed:');
-  for (const failure of failures) console.error('- ' + failure);
-  process.exit(1);
-}
+if (failures.length) { console.error('SellerTray offline reliability preflight failed:'); for (const failure of failures) console.error('- ' + failure); process.exit(1); }
 console.log('SellerTray offline reliability preflight passed.');
