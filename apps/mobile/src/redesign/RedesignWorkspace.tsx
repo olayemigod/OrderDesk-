@@ -276,7 +276,8 @@ export default function RedesignWorkspace() {
   }
 
   async function refreshWorkspace() {
-    const tenantId = activeBusiness.id;
+    const tenantId = activeBusiness?.id ?? '';
+    if (!tenantId) return;
     const branchId = activeBranch?.id ?? '';
     const tasks: Promise<unknown>[] = [
       refreshOrders(),
@@ -315,17 +316,20 @@ export default function RedesignWorkspace() {
           }),
       );
       tasks.push(
-        supabase.rpc('get_sellertray_pos_return_authority', {
-          p_tenant_id: tenantId,
-          p_branch_id: branchId,
-        }).then(({ data, error }) => {
-          if (error) throw error;
-          setCanRefundSale(data === true);
-          setRefundAuthorityError(null);
-        }).catch((err) => {
-          setCanRefundSale(false);
-          setRefundAuthorityError(err instanceof Error ? err.message : 'Unable to check return permission.');
-        }),
+        (async () => {
+          try {
+            const { data, error } = await supabase.rpc('get_sellertray_pos_return_authority', {
+              p_tenant_id: tenantId,
+              p_branch_id: branchId,
+            });
+            if (error) throw error;
+            setCanRefundSale(data === true);
+            setRefundAuthorityError(null);
+          } catch (cause) {
+            setCanRefundSale(false);
+            setRefundAuthorityError(cause instanceof Error ? cause.message : 'Unable to check return permission.');
+          }
+        })(),
       );
     }
 
