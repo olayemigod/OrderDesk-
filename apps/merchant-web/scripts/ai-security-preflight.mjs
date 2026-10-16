@@ -5,6 +5,7 @@ const appRoot = process.cwd();
 const app = readFileSync(resolve(appRoot, 'src/MerchantApp.tsx'), 'utf8');
 const navigation = readFileSync(resolve(appRoot, 'src/portalNavigation.ts'), 'utf8');
 const management = readFileSync(resolve(appRoot, 'src/ManagementPage.tsx'), 'utf8');
+const orders = readFileSync(resolve(appRoot, 'src/OrdersManagement.tsx'), 'utf8');
 const ai = readFileSync(resolve(appRoot, 'src/AiInsights.tsx'), 'utf8');
 const edge = readFileSync(resolve(appRoot, '../../supabase/functions/merchant-ai/index.ts'), 'utf8');
 const failures = [];
@@ -34,6 +35,18 @@ requireValue(
     management.includes("import SuppliersManagement from './SuppliersManagement'") &&
     management.includes("if (page === 'suppliers') return <SuppliersManagement tenantId={tenantId} />"),
   'Merchant Web must expose governed Supplier management through the shared management shell.',
+);
+
+requireValue(
+  app.includes("import OrdersManagement from './OrdersManagement'") &&
+    navigation.includes("{ id: 'orders', label: 'Orders', section: 'Business', available: true }") &&
+    app.includes("page === 'orders' && branch && <OrdersManagement tenantId={business.id} branchId={branch.id} currency={business.currency}") &&
+    orders.includes("functions.invoke('order-draft-action'") &&
+    orders.includes(".is('deleted_at', null)") &&
+    orders.includes("selected?.source === 'pos'") &&
+    orders.includes("selected.status === 'draft'") &&
+    orders.includes("selected.payment_status === 'unpaid'"),
+  'Merchant Web Orders must use the authenticated draft-action boundary and exclude deleted drafts.',
 );
 
 requireValue(
