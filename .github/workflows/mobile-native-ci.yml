@@ -55,6 +55,23 @@ jobs:
           EXPO_NO_TELEMETRY: '1'
         run: npx expo prebuild --platform android --no-install --clean
 
+      - name: Verify barcode camera permission
+        run: |
+          manifest="android/app/src/main/AndroidManifest.xml"
+          camera_line="$(grep 'android.permission.CAMERA' "$manifest" || true)"
+          if [ -z "$camera_line" ]; then
+            echo "SellerTray barcode scanner is missing android.permission.CAMERA" >&2
+            exit 1
+          fi
+          if printf '%s\n' "$camera_line" | grep -q 'tools:node="remove"'; then
+            echo "SellerTray barcode scanner CAMERA permission is marked for removal" >&2
+            exit 1
+          fi
+          if grep -q 'android.permission.RECORD_AUDIO' "$manifest"; then
+            echo "SellerTray barcode scanning must not request RECORD_AUDIO" >&2
+            exit 1
+          fi
+
       - name: Compile Android Kotlin
         run: |
           chmod +x android/gradlew
