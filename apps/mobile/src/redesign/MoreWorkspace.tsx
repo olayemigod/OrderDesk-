@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { SettingsHub } from '../components/SettingsHub';
+import { SellerTrayText as Text } from '../components/SellerTrayText';
 import type { BusinessProfileInput, MerchantBusiness } from '../data/businessRepository';
 import type { CashShift } from '../data/cashShiftRepository';
 import type { CommerceBranch } from '../data/commerceRepository';
@@ -55,6 +56,7 @@ export function MoreWorkspace({
   const [syncOpen, setSyncOpen] = useState(false);
   const openSyncCount = offlineSales.filter((sale) => sale.status !== 'synced').length;
   const reviewCount = offlineSales.filter((sale) => sale.status === 'needs_review' || sale.status === 'failed').length;
+  const canManagePurchasing = business.role === 'owner' || business.role === 'manager';
 
   function closeOperationalWorkspaces() {
     setCashOpen(false);
@@ -93,7 +95,7 @@ export function MoreWorkspace({
     return <CashShiftWorkspace tenantId={business.id} branch={branch} onClose={() => setCashOpen(false)} onShiftChanged={onShiftChanged} />;
   }
 
-  if (purchaseReceivingOpen) {
+  if (purchaseReceivingOpen && canManagePurchasing) {
     return <PurchaseReceivingWorkspace tenantId={business.id} branch={branch} onClose={() => setPurchaseReceivingOpen(false)} />;
   }
 
@@ -151,14 +153,16 @@ export function MoreWorkspace({
         <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
       </Pressable>
 
-      <Pressable onPress={() => { closeOperationalWorkspaces(); setPurchaseReceivingOpen(true); }} style={({ pressed }) => [styles.operationCard, dark && darkStyles.card, pressed && styles.pressed]}>
-        <View style={[styles.operationIcon, styles.operationIconActive]}><Ionicons name="cube-outline" size={23} color={theme.colors.greenDark} /></View>
-        <View style={styles.operationCopy}>
-          <Text style={[styles.operationTitle, dark && darkStyles.titleText]}>Purchase Receiving</Text>
-          <Text style={[styles.operationText, dark && darkStyles.bodyText]}>Receive placed Purchase Orders for {branch.name} and post the confirmed quantities into stock.</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
-      </Pressable>
+      {canManagePurchasing ? (
+        <Pressable onPress={() => { closeOperationalWorkspaces(); setPurchaseReceivingOpen(true); }} style={({ pressed }) => [styles.operationCard, dark && darkStyles.card, pressed && styles.pressed]}>
+          <View style={[styles.operationIcon, styles.operationIconActive]}><Ionicons name="cube-outline" size={23} color={theme.colors.greenDark} /></View>
+          <View style={styles.operationCopy}>
+            <Text style={[styles.operationTitle, dark && darkStyles.titleText]}>Purchase Receiving</Text>
+            <Text style={[styles.operationText, dark && darkStyles.bodyText]}>Receive placed Purchase Orders for {branch.name} and post only confirmed quantities into stock.</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
+        </Pressable>
+      ) : null}
 
       <Pressable onPress={() => { closeOperationalWorkspaces(); setWhatsappOpen(true); }} style={({ pressed }) => [styles.operationCard, dark && darkStyles.card, pressed && styles.pressed]}>
         <View style={[styles.operationIcon, styles.operationIconActive]}><Ionicons name="logo-whatsapp" size={23} color={theme.colors.greenDark} /></View>
