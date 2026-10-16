@@ -5,7 +5,6 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View 
 import {
   completePosSale,
   createPosClientReference,
-  createPosDraft,
   loadBranchPosPaymentMethods,
   loadCommerceProducts,
   type CommerceBranch,
@@ -18,10 +17,15 @@ import {
   isLikelyConnectivityError,
   loadBranchStockCache,
   loadCommerceProductCache,
+  loadPosPaymentMethodsCache,
+  loadPosPolicyCache,
   queueOfflinePosSale,
   saveBranchStockCache,
   saveCommerceProductCache,
+  savePosPaymentMethodsCache,
+  savePosPolicyCache,
 } from '../data/offlineSalesRepository';
+import { prepareGovernedPosDraft } from '../data/posDraftPreparationRepository';
 import { loadPosPaymentPolicy, type PosAllocationCheckoutResult, type PosPaymentPolicy } from '../data/posPaymentRepository';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
@@ -29,488 +33,244 @@ import { PosCustomerSelector, type PosCustomerSelection } from './PosCustomerSel
 import { BarcodeScannerSheet } from './BarcodeScannerSheet';
 import { PosPaymentAllocator } from './PosPaymentAllocator';
 
-type CartLine = { key: string; product: CommerceProduct; uom: CommerceUom; quantity: number };
-type StockShortage = { productName: string; stockUom: string; required: number; available: number };
+type CartLine = { key: string; product: CommerceProduct; uom: CommerceUom; quantity: number; sellingPrice: number };
 type SaleStage = 'products' | 'cart' | 'payment';
-type ProductViewMode = 'grid' | 'list';
-
-type Props = {
-  tenantId: string;
-  actorUserId: string;
-  branch: CommerceBranch;
-  currency: string;
-  onDraftCreated?: (orderId: string) => void;
-  onOfflineSaleQueued?: () => void;
-};
+type StockShortage = { productName: string; stockUom: string; required: number; available: number };
+type Props = { tenantId: string; actorUserId: string; branch: CommerceBranch; currency: string; onDraftCreated?: (orderId: string) => void; onOfflineSaleQueued?: () => void };
 
 const STOCK_EPSILON = 0.000001;
-const PRODUCTS_PER_PAGE = 20;
 
 export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraftCreated, onOfflineSaleQueued }: Props) {
   const dark = useSellerTrayAppearance().dark;
   const [products, setProducts] = useState<CommerceProduct[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [catalogCacheSavedAt, setCatalogCacheSavedAt] = useState<string | null>(null);
-  const [usingCachedProducts, setUsingCachedProducts] = useState(false);
   const [stockRows, setStockRows] = useState<BranchStockRow[]>([]);
-  const [stockLoading, setStockLoading] = useState(true);
-  const [stockError, setStockError] = useState<string | null>(null);
-  const [stockCacheSavedAt, setStockCacheSavedAt] = useState<string | null>(null);
-  const [usingCachedStock, setUsingCachedStock] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<PosPaymentMethod[]>([]);
-  const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(true);
-  const [paymentMethodError, setPaymentMethodError] = useState<string | null>(null);
   const [posPolicy, setPosPolicy] = useState<PosPaymentPolicy | null>(null);
-  const [posPolicyError, setPosPolicyError] = useState<string | null>(null);
-  const [selectedPaymentKey, setSelectedPaymentKey] = useState('cash');
-  const [customer, setCustomer] = useState<PosCustomerSelection | null>(null);
+  const [usingCachedProducts, setUsingCachedProducts] = useState(false);
+  const [usingCachedStock, setUsingCachedStock] = useState(false);
+  const [usingCachedPayments, setUsingCachedPayments] = useState(false);
+  const [usingCachedPolicy, setUsingCachedPolicy] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
-  const [viewMode, setViewMode] = useState<ProductViewMode>('grid');
-  const [page, setPage] = useState(1);
   const [stage, setStage] = useState<SaleStage>('products');
   const [selectedUomByProduct, setSelectedUomByProduct] = useState<Record<string, string>>({});
   const [cart, setCart] = useState<Record<string, CartLine>>({});
   const [quantityDrafts, setQuantityDrafts] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
-  const [completing, setCompleting] = useState(false);
+  const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
+  const [customer, setCustomer] = useState<PosCustomerSelection | null>(null);
   const [draftOrderId, setDraftOrderId] = useState<string | null>(null);
   const [saleClientReference, setSaleClientReference] = useState<string | null>(null);
-  const [checkoutError, setCheckoutError] = useState<string | null>(null);
-  const [heldNotice, setHeldNotice] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
-    setError(null);
-    setUsingCachedProducts(false);
-    setCatalogCacheSavedAt(null);
-    void loadCommerceProducts(tenantId).then(async (rows) => {
+    setLoading(true); setError(null);
+    void Promise.all([
+      loadProductsWithCache(tenantId),
+      loadStockWithCache(tenantId, branch.id),
+      loadPaymentsWithCache(tenantId, branch.id),
+      loadPolicyWithCache(tenantId),
+    ]).then(([catalog, stock, payments, policy]) => {
       if (!active) return;
-      setProducts(rows);
-      await saveCommerceProductCache(tenantId, rows).catch(() => undefined);
-    }).catch(async (err) => {
-      if (!active) return;
-      const cached = await loadCommerceProductCache(tenantId);
-      if (active && cached) {
-        setProducts(cached.data);
-        setUsingCachedProducts(true);
-        setCatalogCacheSavedAt(cached.savedAt);
-        setError(null);
-        return;
-      }
-      setError(err instanceof Error ? err.message : 'Unable to load products.');
+      setProducts(catalog.data); setUsingCachedProducts(catalog.cached);
+      setStockRows(stock.data); setUsingCachedStock(stock.cached);
+      setPaymentMethods(payments.data); setUsingCachedPayments(payments.cached);
+      setPosPolicy(policy.data); setUsingCachedPolicy(policy.cached);
+    }).catch((cause) => {
+      if (active) setError(cause instanceof Error ? cause.message : 'SellerTray could not load the selling workspace.');
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [tenantId]);
+  }, [tenantId, branch.id]);
 
   useEffect(() => {
-    setCart({});
-    setQuantityDrafts({});
-    setDraftOrderId(null);
-    setSaleClientReference(null);
-    setCustomer(null);
-    setCheckoutError(null);
-    setHeldNotice(null);
-    setStage('products');
-    setPage(1);
-    setSelectedPaymentKey('cash');
+    setCart({}); setQuantityDrafts({}); setPriceDrafts({}); setCustomer(null); setDraftOrderId(null);
+    setSaleClientReference(null); setStage('products'); setError(null); setNotice(null);
   }, [branch.id]);
-
-  useEffect(() => {
-    let active = true;
-    setStockLoading(true);
-    setStockError(null);
-    setUsingCachedStock(false);
-    setStockCacheSavedAt(null);
-    void loadBranchStock(tenantId, branch.id).then(async (rows) => {
-      if (!active) return;
-      setStockRows(rows);
-      await saveBranchStockCache(tenantId, branch.id, rows).catch(() => undefined);
-    }).catch(async (err) => {
-      if (!active) return;
-      const cached = await loadBranchStockCache(tenantId, branch.id);
-      if (active && cached) {
-        setStockRows(cached.data);
-        setUsingCachedStock(true);
-        setStockCacheSavedAt(cached.savedAt);
-        setStockError(null);
-        return;
-      }
-      setStockRows([]);
-      setStockError(err instanceof Error ? err.message : 'Unable to load branch stock.');
-    }).finally(() => { if (active) setStockLoading(false); });
-    return () => { active = false; };
-  }, [tenantId, branch.id]);
-
-  useEffect(() => {
-    let active = true;
-    setPaymentMethodsLoading(true);
-    setPaymentMethodError(null);
-    void loadBranchPosPaymentMethods(tenantId, branch.id).then((rows) => {
-      if (!active) return;
-      setPaymentMethods(rows);
-      setSelectedPaymentKey((current) => rows.some((entry) => paymentKey(entry) === current)
-        ? current
-        : paymentKey(rows.find((entry) => entry.isDefault) ?? rows[0] ?? cashFallback()));
-    }).catch((err) => {
-      if (!active) return;
-      setPaymentMethods([]);
-      setPaymentMethodError(err instanceof Error ? err.message : 'Unable to load branch payment methods.');
-    }).finally(() => { if (active) setPaymentMethodsLoading(false); });
-    return () => { active = false; };
-  }, [tenantId, branch.id]);
-
-  useEffect(() => {
-    let active = true;
-    setPosPolicyError(null);
-    void loadPosPaymentPolicy(tenantId).then((policy) => { if (active) setPosPolicy(policy); }).catch((err) => { if (active) { setPosPolicy(null); setPosPolicyError(err instanceof Error ? err.message : 'Unable to load POS payment rules.'); } });
-    return () => { active = false; };
-  }, [tenantId]);
-
-  const normalizedQuery = query.trim().toLowerCase();
-  const visibleProducts = useMemo(() => !normalizedQuery ? products : products.filter((product) => [product.name, product.sku ?? '', product.category ?? '', ...product.uoms.map((uom) => uom.barcode ?? '')].join(' ').toLowerCase().includes(normalizedQuery)), [normalizedQuery, products]);
-  const pageCount = Math.max(1, Math.ceil(visibleProducts.length / PRODUCTS_PER_PAGE));
-  const safePage = Math.min(page, pageCount);
-  const pageProducts = visibleProducts.slice((safePage - 1) * PRODUCTS_PER_PAGE, safePage * PRODUCTS_PER_PAGE);
-  useEffect(() => { setPage(1); }, [normalizedQuery]);
-  useEffect(() => { if (page > pageCount) setPage(pageCount); }, [page, pageCount]);
 
   const stockByProduct = useMemo(() => new Map(stockRows.map((row) => [row.catalogItemId, row])), [stockRows]);
   const cartLines = Object.values(cart);
-  const lineCount = cartLines.length;
+  const total = cartLines.reduce((sum, line) => sum + line.quantity * line.sellingPrice, 0);
   const unitCount = cartLines.reduce((sum, line) => sum + line.quantity, 0);
-  const total = cartLines.reduce((sum, line) => sum + line.quantity * (line.uom.sellingPrice ?? 0), 0);
-  const checkoutLocked = Boolean(draftOrderId);
-  const stockReady = !stockLoading && !stockError;
-  const cartShortage = stockReady ? findStockShortage(cartLines, stockRows) : null;
-  const usingSavedData = usingCachedProducts || usingCachedStock;
-  const savedAt = latestCacheTime(catalogCacheSavedAt, stockCacheSavedAt);
-  const selectedPayment = paymentMethods.find((entry) => paymentKey(entry) === selectedPaymentKey) ?? paymentMethods[0] ?? null;
-  const bankTransferSelected = selectedPayment?.methodType === 'bank_transfer';
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleProducts = useMemo(() => products.filter((product) => !normalizedQuery || [product.name, product.sku ?? '', product.category ?? '', ...product.uoms.map((uom) => uom.barcode ?? '')].join(' ').toLowerCase().includes(normalizedQuery)), [products, normalizedQuery]);
+  const usingSavedData = usingCachedProducts || usingCachedStock || usingCachedPayments || usingCachedPolicy;
+  const canOverridePrice = posPolicy?.allowPriceOverride === true && posPolicy.canOverridePrice === true;
+  const hasPriceOverride = cartLines.some((line) => Math.abs(line.sellingPrice - (line.uom.sellingPrice ?? 0)) > 0.005);
+  const cashMethod = paymentMethods.find((method) => method.methodType === 'cash') ?? cashFallback();
 
   function selectedUom(product: CommerceProduct): CommerceUom | null {
-    const selectedId = selectedUomByProduct[product.id];
-    return product.uoms.find((uom) => uom.id === selectedId) ?? product.uoms.find((uom) => uom.isDefaultSelling) ?? product.uoms[0] ?? null;
+    const id = selectedUomByProduct[product.id];
+    return product.uoms.find((uom) => uom.id === id) ?? product.uoms.find((uom) => uom.isDefaultSelling) ?? product.uoms[0] ?? null;
   }
 
-  function stockQuantityInCart(productId: string, excludeLineKey?: string): number {
-    return cartLines.reduce((sum, line) => line.product.id === productId && line.key !== excludeLineKey ? sum + line.quantity * line.uom.conversionFactor : sum, 0);
+  function stockInCart(productId: string, exclude?: string) {
+    return cartLines.reduce((sum, line) => line.product.id === productId && line.key !== exclude ? sum + line.quantity * line.uom.conversionFactor : sum, 0);
   }
 
   function addToCart(product: CommerceProduct) {
-    if (checkoutLocked || !stockReady) return;
     const uom = selectedUom(product);
-    if (!uom || uom.sellingPrice === null) return;
-    const onHand = stockByProduct.get(product.id)?.quantityOnHand ?? 0;
-    if (stockQuantityInCart(product.id) + uom.conversionFactor > onHand + STOCK_EPSILON) {
-      setCheckoutError(`Not enough ${product.name} at ${branch.name}. ${formatQuantity(onHand)} ${product.stockUom} is available.`);
-      return;
-    }
+    if (!uom || uom.sellingPrice === null || draftOrderId) return;
     const key = `${product.id}:${uom.id}`;
-    setCheckoutError(null);
-    setHeldNotice(null);
-    setCart((current) => {
-      const nextQuantity = (current[key]?.quantity ?? 0) + 1;
-      setQuantityDrafts((drafts) => ({ ...drafts, [key]: formatQuantity(nextQuantity) }));
-      return { ...current, [key]: { key, product, uom, quantity: nextQuantity } };
-    });
+    const available = stockByProduct.get(product.id)?.quantityOnHand ?? 0;
+    const nextQuantity = (cart[key]?.quantity ?? 0) + 1;
+    if (stockInCart(product.id, key) + nextQuantity * uom.conversionFactor > available + STOCK_EPSILON) {
+      setError(`Not enough ${product.name} at ${branch.name}. ${formatQuantity(available)} ${product.stockUom} is available.`); return;
+    }
+    setCart((current) => ({ ...current, [key]: { key, product, uom, quantity: nextQuantity, sellingPrice: current[key]?.sellingPrice ?? uom.sellingPrice! } }));
+    setQuantityDrafts((current) => ({ ...current, [key]: formatQuantity(nextQuantity) }));
+    setPriceDrafts((current) => ({ ...current, [key]: current[key] ?? formatEditablePrice(uom.sellingPrice!) }));
+    setError(null);
   }
 
-  function setLineQuantity(line: CartLine, quantity: number): boolean {
-    if (checkoutLocked || !stockReady) return false;
-    if (!Number.isFinite(quantity) || quantity < 0) { setCheckoutError('Enter a valid quantity.'); return false; }
-    if (!line.uom.allowFractional && quantity !== Math.trunc(quantity)) { setCheckoutError(`${line.uom.name} does not allow fractional quantity.`); return false; }
+  function setQuantity(line: CartLine, quantity: number) {
+    if (!Number.isFinite(quantity) || quantity < 0) { setError('Enter a valid quantity.'); return false; }
+    if (!line.uom.allowFractional && quantity !== Math.trunc(quantity)) { setError(`${line.uom.name} does not allow fractional quantity.`); return false; }
     if (quantity <= 0) {
-      setCart((current) => { const copy = { ...current }; delete copy[line.key]; return copy; });
-      setQuantityDrafts((current) => { const copy = { ...current }; delete copy[line.key]; return copy; });
-      setCheckoutError(null);
+      setCart((current) => { const next = { ...current }; delete next[line.key]; return next; });
+      setQuantityDrafts((current) => { const next = { ...current }; delete next[line.key]; return next; });
+      setPriceDrafts((current) => { const next = { ...current }; delete next[line.key]; return next; });
       return true;
     }
-    const onHand = stockByProduct.get(line.product.id)?.quantityOnHand ?? 0;
-    const requested = stockQuantityInCart(line.product.id, line.key) + quantity * line.uom.conversionFactor;
-    if (requested > onHand + STOCK_EPSILON) { setCheckoutError(`Not enough ${line.product.name} at ${branch.name}. ${formatQuantity(onHand)} ${line.product.stockUom} is available.`); return false; }
+    const available = stockByProduct.get(line.product.id)?.quantityOnHand ?? 0;
+    if (stockInCart(line.product.id, line.key) + quantity * line.uom.conversionFactor > available + STOCK_EPSILON) { setError(`Not enough ${line.product.name} at ${branch.name}.`); return false; }
     setCart((current) => ({ ...current, [line.key]: { ...line, quantity } }));
-    setQuantityDrafts((current) => ({ ...current, [line.key]: formatQuantity(quantity) }));
-    setCheckoutError(null);
-    return true;
+    setQuantityDrafts((current) => ({ ...current, [line.key]: formatQuantity(quantity) })); setError(null); return true;
   }
 
-  function changeQuantity(line: CartLine, direction: -1 | 1) {
-    const step = line.uom.allowFractional ? 0.5 : 1;
-    setLineQuantity(line, Math.max(0, Number((line.quantity + direction * step).toFixed(6))));
+  function setPrice(line: CartLine, value: string) {
+    if (!canOverridePrice || draftOrderId) return;
+    const clean = value.replace(/[^0-9.]/g, '');
+    setPriceDrafts((current) => ({ ...current, [line.key]: clean }));
+    const parsed = Number(clean);
+    if (clean !== '' && Number.isFinite(parsed) && parsed >= 0) setCart((current) => ({ ...current, [line.key]: { ...line, sellingPrice: parsed } }));
+    setError(null);
   }
 
-  function commitTypedQuantity(line: CartLine) {
-    const value = Number(quantityDrafts[line.key] ?? formatQuantity(line.quantity));
-    if (!setLineQuantity(line, value)) setQuantityDrafts((current) => ({ ...current, [line.key]: formatQuantity(line.quantity) }));
+  function commitPrice(line: CartLine) {
+    const parsed = Number(priceDrafts[line.key] ?? line.sellingPrice);
+    if (!Number.isFinite(parsed) || parsed < 0) { setPriceDrafts((current) => ({ ...current, [line.key]: formatEditablePrice(line.sellingPrice) })); setError('Enter a valid selling price.'); return; }
+    setCart((current) => ({ ...current, [line.key]: { ...line, sellingPrice: parsed } }));
   }
 
-  async function refreshBranchStock(options?: { allowCache?: boolean }): Promise<BranchStockRow[]> {
-    setStockLoading(true);
-    if (!options?.allowCache) setStockError(null);
-    try {
-      const rows = await loadBranchStock(tenantId, branch.id);
-      setStockRows(rows); setStockError(null); setUsingCachedStock(false); setStockCacheSavedAt(null);
-      await saveBranchStockCache(tenantId, branch.id, rows).catch(() => undefined);
-      return rows;
-    } catch (err) {
-      if (options?.allowCache) {
-        const cached = await loadBranchStockCache(tenantId, branch.id);
-        if (cached) { setStockRows(cached.data); setStockError(null); setUsingCachedStock(true); setStockCacheSavedAt(cached.savedAt); return cached.data; }
-      }
-      if (!isLikelyConnectivityError(err)) setStockError(err instanceof Error ? err.message : 'Unable to load branch stock.');
-      throw err;
-    } finally { setStockLoading(false); }
-  }
-
-  function currentDraftInput(clientReference: string) {
+  function draftInput(clientReference: string) {
     return {
-      tenantId,
-      branchId: branch.id,
-      clientReference,
-      customerId: customer?.id ?? null,
-      customerName: customer?.name ?? null,
-      customerPhone: customer?.phone ?? null,
-      items: cartLines.map((line) => ({
-        catalogItemId: line.product.id,
-        uomId: line.uom.id,
-        quantity: line.quantity,
-        expectedSellingPrice: line.uom.sellingPrice ?? 0,
-        expectedConversionFactor: line.uom.conversionFactor,
-      })),
+      tenantId, branchId: branch.id, clientReference,
+      customerId: customer?.id ?? null, customerName: customer?.name ?? null, customerPhone: customer?.phone ?? null,
+      items: cartLines.map((line) => ({ catalogItemId: line.product.id, uomId: line.uom.id, uomName: line.uom.name, quantity: line.quantity, expectedSellingPrice: line.uom.sellingPrice ?? 0, sellingPrice: line.sellingPrice, expectedConversionFactor: line.uom.conversionFactor })),
     };
   }
 
-  async function holdSaleForSync(clientReference: string) {
+  async function queueOfflineCashSale(clientReference: string) {
     if (!actorUserId) throw new Error('SellerTray cannot identify the cashier for offline sync.');
+    if (hasPriceOverride && !canOverridePrice) throw new Error('Selling-price authority is not available offline for this sale.');
     await queueOfflinePosSale({
-      clientReference,
-      actorUserId,
-      tenantId,
-      branchId: branch.id,
-      branchName: branch.name,
-      customerId: customer?.id ?? null,
-      customerName: customer?.name ?? null,
-      customerPhone: customer?.phone ?? null,
-      currency,
-      total,
-      lines: cartLines.map((line) => ({
-        catalogItemId: line.product.id,
-        uomId: line.uom.id,
-        quantity: line.quantity,
-        expectedSellingPrice: line.uom.sellingPrice ?? 0,
-        expectedConversionFactor: line.uom.conversionFactor,
-        productName: line.product.name,
-        uomName: line.uom.name,
-      })),
+      clientReference, actorUserId, tenantId, branchId: branch.id, branchName: branch.name,
+      customerId: customer?.id ?? null, customerName: customer?.name ?? null, customerPhone: customer?.phone ?? null,
+      currency, total, completionIntent: 'cash',
+      lines: cartLines.map((line) => ({ catalogItemId: line.product.id, uomId: line.uom.id, quantity: line.quantity, expectedSellingPrice: line.uom.sellingPrice ?? 0, sellingPrice: line.sellingPrice, expectedConversionFactor: line.uom.conversionFactor, productName: line.product.name, uomName: line.uom.name })),
     });
     clearSale();
-    setHeldNotice('Sale held on this device. It is not paid or completed. SellerTray will recheck Branch access, customer, price, unit conversion and stock before creating the draft online.');
+    setNotice(`Cash sale recorded offline for ${formatMoney(total, currency)}. It will sync automatically when SellerTray reconnects.`);
     onOfflineSaleQueued?.();
   }
 
   async function continueToPayment() {
-    if (saving || completing || checkoutLocked || !cartLines.length || !stockReady) return;
-    setSaving(true); setCheckoutError(null);
-    const clientReference = saleClientReference ?? createPosClientReference();
-    setSaleClientReference(clientReference);
+    if (saving || draftOrderId || !cartLines.length) return;
+    if (hasPriceOverride && !canOverridePrice) { setError('You do not have permission to change selling prices.'); return; }
+    setSaving(true); setError(null);
+    const clientReference = saleClientReference ?? createPosClientReference(); setSaleClientReference(clientReference);
     try {
-      const latestStock = await refreshBranchStock();
-      const shortage = findStockShortage(cartLines, latestStock);
+      const latest = await loadBranchStock(tenantId, branch.id);
+      setStockRows(latest); setUsingCachedStock(false); await saveBranchStockCache(tenantId, branch.id, latest).catch(() => undefined);
+      const shortage = findStockShortage(cartLines, latest);
       if (shortage) throw new Error(`Not enough ${shortage.productName} at ${branch.name}. ${formatQuantity(shortage.available)} ${shortage.stockUom} is available; ${formatQuantity(shortage.required)} is needed.`);
-      const orderId = await createPosDraft(currentDraftInput(clientReference));
-      setDraftOrderId(orderId); setUsingCachedProducts(false); setHeldNotice(null); setStage('payment');
-    } catch (err) {
-      if (isLikelyConnectivityError(err)) {
-        try { await holdSaleForSync(clientReference); }
-        catch (queueError) { setCheckoutError(queueError instanceof Error ? queueError.message : 'Unable to hold this sale for sync.'); }
-      } else setCheckoutError(err instanceof Error ? err.message : 'Unable to prepare this sale.');
+      const orderId = await prepareGovernedPosDraft(draftInput(clientReference));
+      setDraftOrderId(orderId); setStage('payment'); setNotice(null);
+    } catch (cause) {
+      if (isLikelyConnectivityError(cause)) {
+        Alert.alert('SellerTray is offline', `Record this ${formatMoney(total, currency)} sale as cash now? It will be queued with its customer, unit, price and stock snapshots and reconciled when SellerTray reconnects.`, [
+          { text: 'Keep cart', style: 'cancel' },
+          { text: 'Record cash sale', onPress: () => void queueOfflineCashSale(clientReference).catch((err) => setError(err instanceof Error ? err.message : 'Unable to record this offline sale.')) },
+        ]);
+      } else setError(cause instanceof Error ? cause.message : 'Unable to prepare this sale.');
     } finally { setSaving(false); }
   }
 
-  function confirmSelectedPayment() {
-    if (!draftOrderId || completing || !selectedPayment) return;
-    if (selectedPayment.methodType === 'bank_transfer') {
-      Alert.alert(
-        'Record bank transfer?',
-        `Record ${formatMoney(total, currency)} against ${selectedPayment.displayName} for verification. The sale will remain unpaid and stock will not be deducted until an authorised operator confirms the money has arrived.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Record for verification', onPress: () => void completeSelectedSale() },
-        ],
-      );
-      return;
-    }
-    const confirmation = selectedPayment.methodType === 'cash'
-      ? `Confirm that ${formatMoney(total, currency)} cash has been received.`
-      : `Confirm the ${selectedPayment.displayName} terminal shows an approved payment of ${formatMoney(total, currency)}.`;
-    Alert.alert(`Confirm ${selectedPayment.displayName}`, `${confirmation} Stock will be deducted when the sale completes.`, [
-      { text: 'Not yet', style: 'cancel' },
-      { text: 'Payment confirmed', onPress: () => void completeSelectedSale() },
-    ]);
-  }
-
-  async function completeSelectedSale() {
-    if (!draftOrderId || completing || !selectedPayment) return;
-    const orderId = draftOrderId;
-    setCompleting(true); setCheckoutError(null);
+  async function completeCash() {
+    if (!draftOrderId || completing) return;
+    const orderId = draftOrderId; setCompleting(true); setError(null);
     try {
-      const checkout = await completePosSale(tenantId, orderId, selectedPayment.paymentMethodId);
-      clearSale();
-      if (checkout.status === 'awaiting_payment_confirmation') {
-        setHeldNotice('Bank transfer recorded for verification. The sale is still unpaid, stock has not been deducted, and collection is not complete. Confirm the transfer in Payment inbox before handing over goods.');
-        Alert.alert(
-          'Transfer awaiting verification',
-          'SellerTray saved the sale as unpaid. Stock and collection remain unchanged until the transfer is confirmed in Payment inbox.',
-        );
-        onDraftCreated?.(orderId);
-        return;
-      }
-      try { await refreshBranchStock({ allowCache: true }); }
-      catch { setStockError('Sale completed, but branch stock could not be refreshed. Refresh stock before starting another sale.'); }
-      onDraftCreated?.(orderId);
-    } catch (err) { setCheckoutError(err instanceof Error ? err.message : 'Unable to process this payment.'); }
+      const result = await completePosSale(tenantId, orderId, null);
+      if (result.status !== 'completed') throw new Error('Cash sale did not complete.');
+      clearSale(); onDraftCreated?.(orderId);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to complete this cash sale.'); }
     finally { setCompleting(false); }
   }
 
   async function handleAllocatedCheckout(result: PosAllocationCheckoutResult) {
-    const orderId = result.orderId;
-    clearSale();
-    if (result.status === 'awaiting_payment_confirmation') {
-      setHeldNotice('Payment recorded and awaiting the configured confirmation. Stock and collection remain unchanged until SellerTray confirms the payment.');
-      Alert.alert('Payment awaiting confirmation', 'SellerTray recorded the payment allocation. Complete the required payment confirmation before handing over goods.');
-      onDraftCreated?.(orderId);
-      return;
-    }
-    if (result.outstandingAmount > 0.005) setHeldNotice(`${formatMoney(result.outstandingAmount, currency)} remains outstanding on the completed sale.`);
-    try { await refreshBranchStock({ allowCache: true }); }
-    catch { setStockError('Sale completed, but Branch stock could not be refreshed. Refresh stock before starting another sale.'); }
+    const orderId = result.orderId; clearSale();
+    if (result.status === 'awaiting_payment_confirmation') setNotice('Payment recorded and awaiting confirmation. Stock remains unchanged until payment is confirmed.');
+    else if (result.outstandingAmount > 0.005) setNotice(`${formatMoney(result.outstandingAmount, currency)} remains outstanding on this sale.`);
     onDraftCreated?.(orderId);
   }
 
-  function clearSale() {
-    setCart({});
-    setQuantityDrafts({});
-    setDraftOrderId(null);
-    setSaleClientReference(null);
-    setCustomer(null);
-    setCheckoutError(null);
-    setStage('products');
+  function clearSale() { setCart({}); setQuantityDrafts({}); setPriceDrafts({}); setCustomer(null); setDraftOrderId(null); setSaleClientReference(null); setStage('products'); setError(null); }
+
+  function handleBarcode(barcode: string) {
+    const clean = barcode.trim(); const match = products.flatMap((product) => product.uoms.map((uom) => ({ product, uom }))).find(({ uom }) => uom.barcode?.trim() === clean);
+    if (match) setSelectedUomByProduct((current) => ({ ...current, [match.product.id]: match.uom.id }));
+    setQuery(clean); setScannerOpen(false);
   }
 
-  function openSavedSale() {
-    if (!draftOrderId || completing) return;
-    const orderId = draftOrderId; clearSale(); onDraftCreated?.(orderId);
-  }
+  if (loading) return <View style={styles.empty}><ActivityIndicator /><Text style={styles.muted}>Loading selling workspace…</Text></View>;
 
-  function handleScannedBarcode(barcode: string) {
-    const clean = barcode.trim();
-    if (!clean) return;
-    const match = products.flatMap((product) => product.uoms.map((uom) => ({ product, uom }))).find(({ uom }) => uom.barcode?.trim() === clean);
-    if (match) {
-      setSelectedUomByProduct((current) => ({ ...current, [match.product.id]: match.uom.id }));
-    }
-    setQuery(clean);
-    setPage(1);
-    setScannerOpen(false);
-  }
+  return <View style={styles.stack}>
+    <BarcodeScannerSheet visible={scannerOpen} onClose={() => setScannerOpen(false)} onBarcode={handleBarcode} />
+    <View><Text style={[styles.eyebrow, dark && darkStyles.body]}>SELL · {stage.toUpperCase()}</Text><Text style={[styles.title, dark && darkStyles.title]}>{stage === 'products' ? 'New Sale' : stage === 'cart' ? 'Review Cart' : 'Take Payment'}</Text><Text style={[styles.muted, dark && darkStyles.body]}>Selling from {branch.name}</Text></View>
+    {usingSavedData ? <Notice text="Offline-ready data is in use. Cash sales can continue and will sync when SellerTray reconnects." warning /> : null}
+    {notice ? <Notice text={notice} /> : null}
+    {error ? <ErrorCard text={error} /> : null}
 
-  const stepLabel = stage === 'products' ? 'Products' : stage === 'cart' ? 'Cart' : 'Payment';
+    {stage === 'products' ? <>
+      <View style={[styles.search, dark && darkStyles.card]}><Ionicons name="search-outline" size={20} color={theme.colors.muted} /><TextInput value={query} onChangeText={setQuery} placeholder="Search product, SKU or barcode" placeholderTextColor={theme.colors.subtle} style={[styles.searchInput, dark && darkStyles.title]} /><Pressable onPress={() => setScannerOpen(true)} style={styles.iconButton}><Ionicons name="barcode-outline" size={22} color={theme.colors.greenDark} /></Pressable></View>
+      {visibleProducts.map((product) => { const uom = selectedUom(product); const available = stockByProduct.get(product.id)?.quantityOnHand ?? 0; return <View key={product.id} style={[styles.card, dark && darkStyles.card]}><View style={styles.row}><View style={styles.flex}><Text style={[styles.productName, dark && darkStyles.title]}>{product.name}</Text><Text style={[styles.muted, dark && darkStyles.body]}>{formatQuantity(Math.max(0, available - stockInCart(product.id)))} {product.stockUom} available</Text></View><Text style={[styles.price, dark && darkStyles.title]}>{uom?.sellingPrice == null ? 'No price' : formatMoney(uom.sellingPrice, currency)}</Text></View><View style={styles.chips}>{product.uoms.map((candidate) => <Pressable key={candidate.id} onPress={() => setSelectedUomByProduct((current) => ({ ...current, [product.id]: candidate.id }))} style={[styles.chip, candidate.id === uom?.id && styles.chipActive]}><Text style={styles.chipText}>{candidate.name}</Text></Pressable>)}</View><Pressable disabled={!uom || uom.sellingPrice == null} onPress={() => addToCart(product)} style={[styles.primary, (!uom || uom.sellingPrice == null) && styles.disabled]}><Ionicons name="add" size={18} color={theme.colors.white} /><Text style={styles.primaryText}>Add</Text></Pressable></View>; })}
+      {cartLines.length ? <Pressable onPress={() => setStage('cart')} style={styles.checkout}><View><Text style={styles.primaryText}>{cartLines.length} product{cartLines.length === 1 ? '' : 's'} · {formatQuantity(unitCount)} units</Text><Text style={styles.checkoutTotal}>{formatMoney(total, currency)}</Text></View><Ionicons name="arrow-forward" size={22} color={theme.colors.white} /></Pressable> : null}
+    </> : null}
 
-  return (
-    <View style={styles.stack}>
-      <BarcodeScannerSheet visible={scannerOpen} onClose={() => setScannerOpen(false)} onBarcode={handleScannedBarcode} />
-      <View style={styles.heading}>
-        <Text style={[styles.eyebrow, dark && darkStyles.bodyText]}>SELL · {stepLabel.toUpperCase()}</Text>
-        <Text style={[styles.title, dark && darkStyles.titleText]}>{stage === 'products' ? 'New Sale' : stage === 'cart' ? 'Review Cart' : 'Take Payment'}</Text>
-        <Text style={[styles.subtitle, dark && darkStyles.bodyText]}>{stage === 'products' ? `Selling from ${branch.name}. Choose products and units.` : stage === 'cart' ? 'Review quantities and customer before preparing payment.' : `Process ${formatMoney(total, currency)} using a payment method available at ${branch.name}.`}</Text>
-      </View>
+    {stage === 'cart' ? <>
+      <Pressable onPress={() => setStage('products')} style={styles.back}><Ionicons name="arrow-back" size={18} color={theme.colors.greenDark} /><Text style={styles.backText}>Products</Text></Pressable>
+      <View style={[styles.card, dark && darkStyles.card]}>{cartLines.map((line) => <View key={line.key} style={styles.cartLine}><View style={styles.flex}><Text style={[styles.productName, dark && darkStyles.title]}>{line.product.name}</Text><Text style={[styles.muted, dark && darkStyles.body]}>{line.uom.name} · configured {formatMoney(line.uom.sellingPrice ?? 0, currency)}</Text><View style={styles.editRow}><View><Text style={styles.fieldLabel}>Quantity</Text><TextInput keyboardType="decimal-pad" value={quantityDrafts[line.key] ?? formatQuantity(line.quantity)} onChangeText={(value) => setQuantityDrafts((current) => ({ ...current, [line.key]: value.replace(/[^0-9.]/g, '') }))} onEndEditing={() => { const value = Number(quantityDrafts[line.key] ?? line.quantity); if (!setQuantity(line, value)) setQuantityDrafts((current) => ({ ...current, [line.key]: formatQuantity(line.quantity) })); }} style={styles.editInput} /></View><View><Text style={styles.fieldLabel}>Unit price</Text><TextInput editable={canOverridePrice && !draftOrderId} keyboardType="decimal-pad" value={priceDrafts[line.key] ?? formatEditablePrice(line.sellingPrice)} onChangeText={(value) => setPrice(line, value)} onEndEditing={() => commitPrice(line)} style={[styles.priceInput, !canOverridePrice && styles.readOnly]} /></View></View>{canOverridePrice ? <Text style={styles.permissionText}>Price can be changed for this sale.</Text> : <Text style={styles.permissionText}>Configured price applies. Price changes require authorised access.</Text>}</View><View style={styles.lineTotal}><Text style={[styles.price, dark && darkStyles.title]}>{formatMoney(line.quantity * line.sellingPrice, currency)}</Text><Pressable onPress={() => setQuantity(line, 0)}><Ionicons name="trash-outline" size={20} color={theme.colors.danger} /></Pressable></View></View>)}</View>
+      <PosCustomerSelector tenantId={tenantId} value={customer} disabled={saving} onChange={setCustomer} />
+      <View style={[styles.summary, dark && darkStyles.card]}><Text style={[styles.productName, dark && darkStyles.title]}>Sale total</Text><Text style={[styles.summaryTotal, dark && darkStyles.title]}>{formatMoney(total, currency)}</Text></View>
+      <Pressable disabled={saving || !cartLines.length} onPress={() => void continueToPayment()} style={[styles.primary, (saving || !cartLines.length) && styles.disabled]}>{saving ? <ActivityIndicator color={theme.colors.white} /> : <Ionicons name="card-outline" size={19} color={theme.colors.white} />}<Text style={styles.primaryText}>{saving ? 'Preparing sale…' : 'Continue to payment'}</Text></Pressable>
+    </> : null}
 
-      <View style={styles.stepRow}>{(['products', 'cart', 'payment'] as SaleStage[]).map((value, index) => <View key={value} style={styles.stepItem}><View style={[styles.stepDot, value === stage && styles.stepDotActive]}><Text style={[styles.stepNumber, value === stage && styles.stepNumberActive]}>{index + 1}</Text></View><Text style={[styles.stepText, value === stage && styles.stepTextActive]}>{value === 'products' ? 'Products' : value === 'cart' ? 'Cart' : 'Payment'}</Text></View>)}</View>
-
-      {usingSavedData ? <Notice icon="cloud-offline-outline" text={`${savedAt ? `Saved ${formatSavedAt(savedAt)}. ` : ''}A sale can be held for sync, but it is not paid or completed until the server revalidates it.`} dark={dark} warning /> : null}
-      {heldNotice ? <Notice icon="time-outline" text={heldNotice} dark={dark} /> : null}
-      {checkoutError ? <ErrorCard text={checkoutError} dark={dark} /> : null}
-
-      {stage === 'products' ? <>
-        <View style={[styles.searchBox, dark && darkStyles.input]}><Ionicons name="search-outline" size={20} color={theme.colors.muted} /><TextInput value={query} onChangeText={setQuery} placeholder="Search product, SKU or barcode" placeholderTextColor={theme.colors.subtle} autoCorrect={false} style={[styles.searchInput, dark && darkStyles.inputText]} /><Pressable accessibilityRole="button" accessibilityLabel="Scan product barcode" onPress={() => setScannerOpen(true)} style={styles.scanButton}><Ionicons name="barcode-outline" size={23} color={theme.colors.greenDark} /></Pressable></View>
-        <View style={styles.toolbar}><View><Text style={[styles.catalogueCount, dark && darkStyles.titleText]}>{visibleProducts.length} products</Text><Text style={[styles.small, dark && darkStyles.bodyText]}>Page {safePage} of {pageCount}</Text></View><View style={[styles.viewToggle, dark && darkStyles.card]}><ToggleIcon name="grid-outline" active={viewMode === 'grid'} onPress={() => setViewMode('grid')} /><ToggleIcon name="list-outline" active={viewMode === 'list'} onPress={() => setViewMode('list')} /></View></View>
-        {error ? <ErrorCard text={error} dark={dark} /> : null}
-        {stockError ? <ErrorCard text="Branch stock is unavailable. Selling is paused until availability can be verified." dark={dark} /> : null}
-        {loading && !products.length ? <Empty text="Loading products…" dark={dark} loading /> : null}
-        {!loading && !visibleProducts.length ? <Empty text="No matching products" dark={dark} /> : null}
-        <View style={viewMode === 'grid' ? styles.productGrid : styles.productList}>{pageProducts.map((product) => {
-          const uom = selectedUom(product); const onHand = stockByProduct.get(product.id)?.quantityOnHand ?? 0; const inCart = stockQuantityInCart(product.id); const remaining = Math.max(0, onHand - inCart); const canAdd = Boolean(uom && uom.sellingPrice !== null && stockReady && remaining + STOCK_EPSILON >= uom.conversionFactor);
-          return <View key={product.id} style={[viewMode === 'grid' ? styles.productTile : styles.productCard, dark && darkStyles.card]}>
-            <View style={styles.row}><View style={styles.flex}><Text numberOfLines={2} style={[styles.productName, dark && darkStyles.titleText]}>{product.name}</Text>{viewMode === 'list' ? <Text style={[styles.small, dark && darkStyles.bodyText]}>{[product.sku, product.category].filter(Boolean).join(' · ') || `Stock unit: ${product.stockUom}`}</Text> : null}</View><Text style={[styles.productPrice, dark && darkStyles.titleText]}>{uom?.sellingPrice === null || !uom ? 'No price' : formatMoney(uom.sellingPrice, currency)}</Text></View>
-            <Text style={[styles.stockText, onHand <= 0 && styles.dangerText]}>{stockLoading ? 'Checking stock…' : `${formatQuantity(remaining)} ${product.stockUom} available`}</Text>
-            <View style={styles.chips}>{product.uoms.map((candidate) => <Pressable key={candidate.id} onPress={() => setSelectedUomByProduct((current) => ({ ...current, [product.id]: candidate.id }))} style={[styles.chip, candidate.id === uom?.id && styles.chipActive]}><Text style={[styles.chipText, candidate.id === uom?.id && styles.chipTextActive]}>{candidate.name}</Text></Pressable>)}</View>
-            <Pressable disabled={!canAdd} onPress={() => addToCart(product)} style={[styles.addButton, !canAdd && styles.disabled]}><Ionicons name="add" size={18} color={theme.colors.white} /><Text style={styles.buttonText}>{inCart > 0 ? 'Add more' : 'Add'}</Text></Pressable>
-          </View>;
-        })}</View>
-        {visibleProducts.length > PRODUCTS_PER_PAGE ? <View style={styles.pagination}><PageButton label="Previous" disabled={safePage <= 1} onPress={() => setPage((value) => Math.max(1, value - 1))} /><Text style={[styles.small, dark && darkStyles.bodyText]}>{safePage} / {pageCount}</Text><PageButton label="Next" disabled={safePage >= pageCount} onPress={() => setPage((value) => Math.min(pageCount, value + 1))} /></View> : null}
-        <View style={[styles.bottomBar, dark && darkStyles.card]}><View style={styles.flex}><Text style={[styles.cartTitle, dark && darkStyles.titleText]}>{lineCount ? `${lineCount} product${lineCount === 1 ? '' : 's'} · ${formatQuantity(unitCount)} units` : 'Cart is empty'}</Text><Text style={[styles.cartTotal, dark && darkStyles.titleText]}>{formatMoney(total, currency)}</Text></View><Pressable disabled={!lineCount} onPress={() => setStage('cart')} style={[styles.primarySmall, !lineCount && styles.disabled]}><Text style={styles.buttonText}>View cart</Text><Ionicons name="arrow-forward" size={18} color={theme.colors.white} /></Pressable></View>
-      </> : null}
-
-      {stage === 'cart' ? <View style={styles.stageStack}>
-        <BackLink label="Continue shopping" onPress={() => setStage('products')} />
-        <View style={[styles.card, dark && darkStyles.card]}>
-          <View style={styles.row}><View style={styles.flex}><Text style={[styles.eyebrow, dark && darkStyles.bodyText]}>CART</Text><Text style={[styles.cartTitle, dark && darkStyles.titleText]}>{lineCount} product{lineCount === 1 ? '' : 's'} · {formatQuantity(unitCount)} units</Text></View><Text style={[styles.cartTotal, dark && darkStyles.titleText]}>{formatMoney(total, currency)}</Text></View>
-          {cartLines.map((line) => <View key={line.key} style={[styles.cartLine, dark && darkStyles.subtle]}><View style={styles.flex}><Text style={[styles.productName, dark && darkStyles.titleText]}>{line.product.name}</Text><Text style={[styles.small, dark && darkStyles.bodyText]}>{line.uom.name} · {formatQuantity(line.quantity * line.uom.conversionFactor)} {line.product.stockUom}</Text><Text style={[styles.productPrice, dark && darkStyles.titleText]}>{formatMoney(line.quantity * (line.uom.sellingPrice ?? 0), currency)}</Text></View><View style={styles.qty}><Pressable onPress={() => changeQuantity(line, -1)} style={styles.qtyButton}><Ionicons name="remove" size={18} color={theme.colors.navy} /></Pressable><TextInput value={quantityDrafts[line.key] ?? formatQuantity(line.quantity)} onChangeText={(value) => setQuantityDrafts((current) => ({ ...current, [line.key]: value.replace(/[^0-9.]/g, '') }))} onBlur={() => commitTypedQuantity(line)} keyboardType="decimal-pad" style={[styles.qtyInput, dark && darkStyles.input]} /><Pressable onPress={() => changeQuantity(line, 1)} style={styles.qtyButton}><Ionicons name="add" size={18} color={theme.colors.navy} /></Pressable></View></View>)}
-          <View style={styles.customerSection}>
-            <Text style={[styles.sectionTitle, dark && darkStyles.titleText]}>Customer</Text>
-            <PosCustomerSelector tenantId={tenantId} value={customer} onChange={setCustomer} disabled={saving || checkoutLocked} />
-          </View>
-          {cartShortage ? <ErrorCard text={`${cartShortage.productName} exceeds current branch stock. Reduce the quantity before checkout.`} dark={dark} /> : null}
-          <Notice icon="information-circle-outline" text="SellerTray rechecks customer, branch stock, selling price and unit conversion before creating the checkout draft." dark={dark} />
-          <Pressable disabled={!lineCount || saving || !stockReady || Boolean(cartShortage)} onPress={() => void continueToPayment()} style={[styles.checkoutButton, (!lineCount || saving || !stockReady || Boolean(cartShortage)) && styles.disabled]}>{saving ? <ActivityIndicator color={theme.colors.white} /> : null}<Text style={styles.buttonText}>{saving ? 'Preparing payment…' : usingSavedData ? 'Hold sale for sync' : 'Continue to payment'}</Text></Pressable>
-        </View>
-      </View> : null}
-
-      {stage === 'payment' ? <View style={styles.stageStack}>
-        <View style={[styles.card, dark && darkStyles.card]}>
-          <View style={styles.center}><Text style={[styles.eyebrow, dark && darkStyles.bodyText]}>AMOUNT DUE</Text><Text style={[styles.paymentAmount, dark && darkStyles.titleText]}>{formatMoney(total, currency)}</Text><Text style={[styles.small, dark && darkStyles.bodyText]}>{lineCount} products · {formatQuantity(unitCount)} units</Text><Text style={[styles.paymentCustomer, dark && darkStyles.bodyText]}>{customer?.name || customer?.phone || 'Walk-in Customer'}</Text></View>
-          <Text style={[styles.sectionTitle, dark && darkStyles.titleText]}>Payment</Text>
-          {paymentMethodsLoading ? <View style={styles.loadingRow}><ActivityIndicator /><Text style={[styles.small, dark && darkStyles.bodyText]}>Loading Branch payment methods…</Text></View> : null}
-          {paymentMethodError ? <ErrorCard text={paymentMethodError} dark={dark} /> : null}
-          {posPolicyError ? <ErrorCard text={posPolicyError} dark={dark} /> : null}
-          {!paymentMethodsLoading && !posPolicy && !posPolicyError ? <View style={styles.loadingRow}><ActivityIndicator /><Text style={[styles.small, dark && darkStyles.bodyText]}>Loading POS payment rules…</Text></View> : null}
-          {draftOrderId && posPolicy && !paymentMethodsLoading && !paymentMethodError ? <PosPaymentAllocator tenantId={tenantId} orderId={draftOrderId} amountDue={total} currency={currency} paymentMethods={paymentMethods} policy={posPolicy} disabled={completing} onError={(message) => setCheckoutError(message || null)} onResult={(result) => { void handleAllocatedCheckout(result); }} /> : null}
-          <Pressable disabled={completing} onPress={openSavedSale} style={styles.secondaryButton}><Text style={styles.secondaryText}>View saved sale</Text></Pressable>
-        </View>
-      </View> : null}
-    </View>
-  );
+    {stage === 'payment' && draftOrderId ? <>
+      <View style={[styles.summary, dark && darkStyles.card]}><Text style={[styles.productName, dark && darkStyles.title]}>Amount due</Text><Text style={[styles.summaryTotal, dark && darkStyles.title]}>{formatMoney(total, currency)}</Text></View>
+      {posPolicy ? <PosPaymentAllocator tenantId={tenantId} orderId={draftOrderId} amountDue={total} currency={currency} paymentMethods={paymentMethods} policy={posPolicy} disabled={completing} onResult={(result) => void handleAllocatedCheckout(result)} onError={(message) => setError(message || null)} /> : <Pressable disabled={completing} onPress={() => Alert.alert('Confirm cash payment', `Confirm ${formatMoney(total, currency)} cash has been received.`, [{ text: 'Not yet', style: 'cancel' }, { text: 'Payment confirmed', onPress: () => void completeCash() }])} style={styles.primary}><Text style={styles.primaryText}>Complete cash sale</Text></Pressable>}
+      <Pressable onPress={() => onDraftCreated?.(draftOrderId)} style={styles.secondary}><Text style={styles.backText}>Save and open sale</Text></Pressable>
+    </> : null}
+  </View>;
 }
 
-function cashFallback(): PosPaymentMethod { return { paymentMethodId: null, methodType: 'cash', displayName: 'Cash', sortOrder: -1, isDefault: true, bankName: null, bankAccountName: null, bankAccountNumber: null, instructions: null }; }
-function paymentKey(method: PosPaymentMethod): string { return method.paymentMethodId ?? 'cash'; }
-function paymentDescription(method: PosPaymentMethod): string { if (method.methodType === 'cash') return 'Physical drawer cash'; if (method.methodType === 'card_terminal') return 'Confirm approval on the payment terminal'; return 'Record transfer and verify received funds before fulfilment'; }
-function findStockShortage(lines: CartLine[], rows: BranchStockRow[]): StockShortage | null { const available = new Map(rows.map((row) => [row.catalogItemId, row.quantityOnHand])); const requested = new Map<string, StockShortage>(); for (const line of lines) { const quantity = line.quantity * line.uom.conversionFactor; const current = requested.get(line.product.id); if (current) current.required += quantity; else requested.set(line.product.id, { productName: line.product.name, stockUom: line.product.stockUom, required: quantity, available: available.get(line.product.id) ?? 0 }); } for (const row of requested.values()) if (row.required > row.available + STOCK_EPSILON) return row; return null; }
-function latestCacheTime(left: string | null, right: string | null): string | null { if (!left) return right; if (!right) return left; return new Date(left).getTime() >= new Date(right).getTime() ? left : right; }
-function formatSavedAt(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? 'earlier' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(date); }
-function formatMoney(value: number, currency: string): string { return new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value); }
-function formatQuantity(value: number): string { return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(3))); }
-function BackLink({ label, onPress }: { label: string; onPress: () => void }) { return <Pressable onPress={onPress} style={styles.backLink}><Ionicons name="arrow-back" size={19} color={theme.colors.greenDark} /><Text style={styles.backLinkText}>{label}</Text></Pressable>; }
-function ToggleIcon({ name, active, onPress }: { name: string; active: boolean; onPress: () => void }) { return <Pressable onPress={onPress} style={[styles.viewButton, active && styles.viewButtonActive]}><Ionicons name={name as never} size={19} color={active ? theme.colors.white : theme.colors.navy} /></Pressable>; }
-function PageButton({ label, disabled, onPress }: { label: string; disabled: boolean; onPress: () => void }) { return <Pressable disabled={disabled} onPress={onPress} style={[styles.pageButton, disabled && styles.disabled]}><Text style={styles.pageButtonText}>{label}</Text></Pressable>; }
-function Empty({ text, dark, loading = false }: { text: string; dark: boolean; loading?: boolean }) { return <View style={[styles.empty, dark && darkStyles.card]}>{loading ? <ActivityIndicator /> : <Ionicons name="cube-outline" size={26} color={theme.colors.greenDark} />}<Text style={[styles.small, dark && darkStyles.bodyText]}>{text}</Text></View>; }
-function ErrorCard({ text, dark }: { text: string; dark: boolean }) { return <View style={[styles.errorCard, dark && darkStyles.error]}><Ionicons name="alert-circle-outline" size={20} color={theme.colors.danger} /><Text style={[styles.errorText, dark && darkStyles.bodyText]}>{text}</Text></View>; }
-function Notice({ icon, text, dark, warning = false }: { icon: string; text: string; dark: boolean; warning?: boolean }) { return <View style={[styles.notice, warning && styles.warning, dark && darkStyles.subtle]}><Ionicons name={icon as never} size={20} color={warning ? theme.colors.warning : theme.colors.info} /><Text style={[styles.noticeText, dark && darkStyles.bodyText]}>{text}</Text></View>; }
+async function loadProductsWithCache(tenantId: string) { try { const data = await loadCommerceProducts(tenantId); await saveCommerceProductCache(tenantId, data).catch(() => undefined); return { data, cached: false }; } catch (error) { if (!isLikelyConnectivityError(error)) throw error; const cached = await loadCommerceProductCache(tenantId); if (!cached) throw error; return { data: cached.data, cached: true }; } }
+async function loadStockWithCache(tenantId: string, branchId: string) { try { const data = await loadBranchStock(tenantId, branchId); await saveBranchStockCache(tenantId, branchId, data).catch(() => undefined); return { data, cached: false }; } catch (error) { if (!isLikelyConnectivityError(error)) throw error; const cached = await loadBranchStockCache(tenantId, branchId); if (!cached) throw error; return { data: cached.data, cached: true }; } }
+async function loadPaymentsWithCache(tenantId: string, branchId: string) { try { const data = await loadBranchPosPaymentMethods(tenantId, branchId); await savePosPaymentMethodsCache(tenantId, branchId, data).catch(() => undefined); return { data, cached: false }; } catch (error) { if (!isLikelyConnectivityError(error)) throw error; const cached = await loadPosPaymentMethodsCache(tenantId, branchId); return { data: cached?.data ?? [cashFallback()], cached: true }; } }
+async function loadPolicyWithCache(tenantId: string) { try { const data = await loadPosPaymentPolicy(tenantId); await savePosPolicyCache(tenantId, data).catch(() => undefined); return { data, cached: false }; } catch (error) { if (!isLikelyConnectivityError(error)) throw error; const cached = await loadPosPolicyCache(tenantId); if (!cached) throw new Error('Reconnect once to establish POS permissions before selling offline.'); return { data: cached.data, cached: true }; } }
+
+function findStockShortage(lines: CartLine[], stock: BranchStockRow[]): StockShortage | null { const available = new Map(stock.map((row) => [row.catalogItemId, row.quantityOnHand])); const required = new Map<string, number>(); for (const line of lines) required.set(line.product.id, (required.get(line.product.id) ?? 0) + line.quantity * line.uom.conversionFactor); for (const [id, quantity] of required) { const onHand = available.get(id) ?? 0; if (quantity > onHand + STOCK_EPSILON) { const line = lines.find((entry) => entry.product.id === id)!; return { productName: line.product.name, stockUom: line.product.stockUom, required: quantity, available: onHand }; } } return null; }
+function cashFallback(): PosPaymentMethod { return { paymentMethodId: null, methodType: 'cash', displayName: 'Cash', sortOrder: 0, isDefault: true, bankName: null, bankAccountName: null, bankAccountNumber: null, instructions: null }; }
+function formatMoney(value: number, currency: string) { try { return new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 2 }).format(value); } catch { return `${currency} ${value.toFixed(2)}`; } }
+function formatQuantity(value: number) { return Number.isInteger(value) ? String(value) : value.toFixed(3).replace(/0+$/, '').replace(/\.$/, ''); }
+function formatEditablePrice(value: number) { return Number(value.toFixed(2)).toString(); }
+function Notice({ text, warning = false }: { text: string; warning?: boolean }) { return <View style={[styles.notice, warning && styles.warning]}><Ionicons name={warning ? 'cloud-offline-outline' : 'information-circle-outline'} size={20} color={warning ? theme.colors.warning : theme.colors.info} /><Text style={styles.noticeText}>{text}</Text></View>; }
+function ErrorCard({ text }: { text: string }) { return <View style={styles.errorCard}><Ionicons name="alert-circle-outline" size={20} color={theme.colors.danger} /><Text style={styles.errorText}>{text}</Text></View>; }
 
 const styles = StyleSheet.create({
-  stack: { gap: 14 }, stageStack: { gap: 12 }, heading: { gap: 3 }, eyebrow: { color: theme.colors.muted, fontSize: 11, fontWeight: '900', letterSpacing: 1.05 }, title: { color: theme.colors.navy, fontSize: 28, lineHeight: 34, fontWeight: '900' }, subtitle: { color: theme.colors.slate, fontSize: 14, lineHeight: 20 }, flex: { flex: 1, minWidth: 0 }, row: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 }, center: { alignItems: 'center', gap: 3 }, small: { color: theme.colors.muted, fontSize: 11, lineHeight: 16 }, sectionTitle: { color: theme.colors.navy, fontSize: 14, fontWeight: '900' },
-  stepRow: { flexDirection: 'row', gap: 8 }, stepItem: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }, stepDot: { width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, alignItems: 'center', justifyContent: 'center' }, stepDotActive: { backgroundColor: theme.colors.green, borderColor: theme.colors.green }, stepNumber: { color: theme.colors.muted, fontSize: 11, fontWeight: '900' }, stepNumberActive: { color: theme.colors.white }, stepText: { color: theme.colors.slate, fontSize: 11, fontWeight: '800' }, stepTextActive: { color: theme.colors.greenDark },
-  searchBox: { minHeight: 52, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, backgroundColor: theme.colors.white, paddingLeft: 13, paddingRight: 5, flexDirection: 'row', alignItems: 'center', gap: 8 }, searchInput: { flex: 1, minHeight: 50, color: theme.colors.navy, fontSize: 14 }, scanButton: { width: 43, height: 43, borderRadius: 12, backgroundColor: theme.colors.mintSoft, alignItems: 'center', justifyContent: 'center' },
-  toolbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }, catalogueCount: { color: theme.colors.navy, fontSize: 13, fontWeight: '900' }, viewToggle: { flexDirection: 'row', borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, borderRadius: 12, padding: 3 }, viewButton: { width: 38, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' }, viewButtonActive: { backgroundColor: theme.colors.green },
-  productGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 10 }, productList: { gap: 9 }, productTile: { width: '48.3%', minHeight: 190, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 11, gap: 9 }, productCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 13, gap: 10 }, productName: { color: theme.colors.navy, fontSize: 13, fontWeight: '900' }, productPrice: { color: theme.colors.navy, fontSize: 12, fontWeight: '900' }, stockText: { color: theme.colors.greenDark, fontSize: 10, fontWeight: '800' }, dangerText: { color: '#B42318' }, chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 }, chip: { minHeight: 30, borderRadius: theme.radius.pill, borderWidth: 1, borderColor: theme.colors.border, paddingHorizontal: 8, justifyContent: 'center' }, chipActive: { borderColor: theme.colors.green, backgroundColor: theme.colors.mintSoft }, chipText: { color: theme.colors.slate, fontSize: 10, fontWeight: '800' }, chipTextActive: { color: theme.colors.greenDark }, addButton: { marginTop: 'auto', minHeight: 38, borderRadius: 11, backgroundColor: theme.colors.green, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5 },
-  pagination: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, pageButton: { minHeight: 38, borderRadius: 11, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, paddingHorizontal: 14, justifyContent: 'center' }, pageButtonText: { color: theme.colors.navy, fontSize: 11, fontWeight: '900' }, bottomBar: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: 12, backgroundColor: theme.colors.white, flexDirection: 'row', alignItems: 'center', gap: 10 }, cartTitle: { color: theme.colors.navy, fontSize: 14, fontWeight: '900' }, cartTotal: { color: theme.colors.navy, fontSize: 18, fontWeight: '900' }, primarySmall: { minHeight: 42, borderRadius: 11, backgroundColor: theme.colors.green, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 13 },
-  card: { borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 14, gap: 12 }, cartLine: { borderRadius: theme.radius.md, backgroundColor: theme.colors.cloud, padding: 12, flexDirection: 'row', gap: 8, alignItems: 'center' }, customerSection: { gap: 8, paddingTop: 2 }, paymentCustomer: { color: theme.colors.slate, fontSize: 11, fontWeight: '800', marginTop: 3 }, qty: { flexDirection: 'row', alignItems: 'center', gap: 5 }, qtyButton: { width: 36, height: 36, borderRadius: 10, backgroundColor: theme.colors.mintSoft, alignItems: 'center', justifyContent: 'center' }, qtyInput: { width: 58, minHeight: 38, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 10, textAlign: 'center', color: theme.colors.navy, backgroundColor: theme.colors.white }, backLink: { alignSelf: 'flex-start', flexDirection: 'row', gap: 6, alignItems: 'center', minHeight: 36 }, backLinkText: { color: theme.colors.greenDark, fontWeight: '900', fontSize: 12 },
-  paymentAmount: { color: theme.colors.navy, fontSize: 32, fontWeight: '900' }, paymentList: { gap: 8 }, paymentMethod: { minHeight: 68, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 9 }, paymentMethodActive: { borderColor: theme.colors.green, backgroundColor: theme.colors.mintSoft }, paymentIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: theme.colors.mintSoft, alignItems: 'center', justifyContent: 'center' }, instructions: { borderRadius: theme.radius.md, backgroundColor: theme.colors.cloud, padding: 12, gap: 5 }, accountNumber: { color: theme.colors.navy, fontSize: 20, fontWeight: '900', letterSpacing: 1 }, loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  checkoutButton: { minHeight: 50, borderRadius: theme.radius.md, backgroundColor: theme.colors.green, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 7, paddingHorizontal: 12 }, buttonText: { color: theme.colors.white, fontSize: 12, fontWeight: '900' }, secondaryButton: { minHeight: 46, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, justifyContent: 'center', alignItems: 'center' }, secondaryText: { color: theme.colors.greenDark, fontWeight: '900', fontSize: 12 },
-  notice: { borderRadius: theme.radius.md, backgroundColor: '#EFF8FF', padding: 11, flexDirection: 'row', gap: 8, alignItems: 'flex-start' }, warning: { backgroundColor: '#FFFAEB' }, noticeText: { flex: 1, color: theme.colors.slate, fontSize: 11, lineHeight: 17 }, errorCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#FDA29B', backgroundColor: theme.colors.dangerSoft, padding: 11, flexDirection: 'row', gap: 8 }, errorText: { flex: 1, color: '#B42318', fontSize: 11, lineHeight: 17 }, empty: { minHeight: 110, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, justifyContent: 'center', alignItems: 'center', gap: 6 }, disabled: { opacity: 0.45 },
+  stack: { gap: 14 }, eyebrow: { color: theme.colors.muted, fontSize: 11, fontWeight: '900', letterSpacing: 1 }, title: { color: theme.colors.navy, fontSize: 28, lineHeight: 34, fontWeight: '900' }, muted: { color: theme.colors.muted, fontSize: 12, lineHeight: 18 }, row: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' }, flex: { flex: 1, minWidth: 0 }, search: { minHeight: 52, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, backgroundColor: theme.colors.white, paddingLeft: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }, searchInput: { flex: 1, minHeight: 50, color: theme.colors.navy }, iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, card: { borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 13, gap: 10 }, productName: { color: theme.colors.navy, fontSize: 14, fontWeight: '900' }, price: { color: theme.colors.navy, fontSize: 13, fontWeight: '900' }, chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 }, chip: { minHeight: 30, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.pill, paddingHorizontal: 9, justifyContent: 'center' }, chipActive: { borderColor: theme.colors.green, backgroundColor: theme.colors.mintSoft }, chipText: { color: theme.colors.slate, fontSize: 11, fontWeight: '800' }, primary: { minHeight: 48, borderRadius: theme.radius.md, backgroundColor: theme.colors.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: 12 }, primaryText: { color: theme.colors.white, fontSize: 12, fontWeight: '900' }, checkout: { minHeight: 66, borderRadius: theme.radius.lg, backgroundColor: theme.colors.green, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, checkoutTotal: { color: theme.colors.white, fontSize: 20, fontWeight: '900' }, back: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', minHeight: 36 }, backText: { color: theme.colors.greenDark, fontWeight: '900', fontSize: 12 }, cartLine: { backgroundColor: theme.colors.cloud, borderRadius: theme.radius.md, padding: 11, flexDirection: 'row', gap: 8 }, editRow: { flexDirection: 'row', gap: 10, marginTop: 8 }, fieldLabel: { color: theme.colors.muted, fontSize: 10, fontWeight: '800', marginBottom: 3 }, editInput: { width: 72, minHeight: 40, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 10, backgroundColor: theme.colors.white, color: theme.colors.navy, textAlign: 'center' }, priceInput: { width: 112, minHeight: 40, borderWidth: 1, borderColor: theme.colors.green, borderRadius: 10, backgroundColor: theme.colors.white, color: theme.colors.navy, textAlign: 'right', paddingHorizontal: 9 }, readOnly: { borderColor: theme.colors.border, backgroundColor: theme.colors.cloud }, permissionText: { color: theme.colors.muted, fontSize: 10, marginTop: 5 }, lineTotal: { alignItems: 'flex-end', gap: 10 }, summary: { borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, summaryTotal: { color: theme.colors.navy, fontSize: 24, fontWeight: '900' }, secondary: { minHeight: 44, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, alignItems: 'center', justifyContent: 'center' }, notice: { borderRadius: theme.radius.md, backgroundColor: '#EFF8FF', padding: 11, flexDirection: 'row', gap: 8, alignItems: 'flex-start' }, warning: { backgroundColor: '#FFFAEB' }, noticeText: { flex: 1, color: theme.colors.slate, fontSize: 11, lineHeight: 17 }, errorCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#FDA29B', backgroundColor: theme.colors.dangerSoft, padding: 11, flexDirection: 'row', gap: 8 }, errorText: { flex: 1, color: '#B42318', fontSize: 11, lineHeight: 17 }, empty: { minHeight: 150, justifyContent: 'center', alignItems: 'center', gap: 8 }, disabled: { opacity: 0.45 },
 });
-
-const darkStyles = StyleSheet.create({ card: { backgroundColor: theme.colors.navy, borderColor: '#344054' }, subtle: { backgroundColor: '#162F46', borderColor: '#344054' }, input: { backgroundColor: '#162F46', borderColor: '#344054', color: theme.colors.cloud }, inputText: { color: theme.colors.cloud }, titleText: { color: theme.colors.cloud }, bodyText: { color: '#D0D5DD' }, error: { backgroundColor: '#3A1717', borderColor: '#7A271A' } });
+const darkStyles = StyleSheet.create({ card: { backgroundColor: theme.colors.navy, borderColor: '#344054' }, title: { color: theme.colors.cloud }, body: { color: '#D0D5DD' } });
