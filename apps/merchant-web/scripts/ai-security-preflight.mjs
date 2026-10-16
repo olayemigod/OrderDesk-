@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 
 const appRoot = process.cwd();
 const app = readFileSync(resolve(appRoot, 'src/MerchantApp.tsx'), 'utf8');
+const navigation = readFileSync(resolve(appRoot, 'src/portalNavigation.ts'), 'utf8');
 const ai = readFileSync(resolve(appRoot, 'src/AiInsights.tsx'), 'utf8');
 const edge = readFileSync(resolve(appRoot, '../../supabase/functions/merchant-ai/index.ts'), 'utf8');
 const failures = [];
@@ -13,16 +14,16 @@ function requireValue(condition, message) {
 
 requireValue(
   app.includes("import AiInsights from './AiInsights'") &&
-    app.includes("{ id: 'ai', label: 'Ask SellerTray' }") &&
+    navigation.includes("{ id: 'ai', label: 'Ask SellerTray', section: 'Insights', available: true }") &&
     app.includes("page === 'ai' && <AiInsights tenantId={business.id}"),
   'Merchant Web must expose Ask SellerTray through the management shell.',
 );
 
 requireValue(
   app.includes("import PurchasingManagement from './PurchasingManagement'") &&
-    app.includes("{ id: 'purchasing', label: 'Purchasing & Suppliers' }") &&
+    navigation.includes("{ id: 'purchasing', label: 'Purchasing', section: 'Stock', available: true }") &&
     app.includes("page === 'purchasing' && <PurchasingManagement tenantId={business.id} currency={business.currency}"),
-  'Merchant Web must expose the governed Purchasing & Suppliers workspace.',
+  'Merchant Web must expose the governed Purchasing workspace.',
 );
 
 requireValue(
