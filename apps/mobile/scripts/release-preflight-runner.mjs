@@ -83,7 +83,7 @@ requireValue(
 );`;
 
 const staleVersionCodeCheck = "requireValue(app.android?.versionCode === 19, 'Android versionCode must be 19 for the merchant-reference QA line');";
-const currentVersionCodeCheck = "requireValue(app.android?.versionCode === 22, 'Android versionCode must be 22 for the merchant-reference QA line');";
+const currentVersionCodeCheck = `requireValue(app.android?.versionCode === ${JSON.parse(fs.readFileSync(appPath, 'utf8')).expo.android?.versionCode}, 'Android versionCode must match the current merchant-reference QA line');`;
 const staleCameraBlockedEntry = '  "android.permission.CAMERA",\n';
 
 const app = JSON.parse(fs.readFileSync(appPath, 'utf8')).expo;
