@@ -20,17 +20,22 @@ type AppearanceContextValue = {
   ready: boolean;
   setMode: (mode: AppearanceMode) => Promise<void>;
   setTextSize: (size: TextSize) => Promise<void>;
+  setFontScale: (scale: number) => Promise<void>;
 };
 
 const MODE_KEY = 'sellertray.appearance.mode';
-const TEXT_KEY = 'sellertray.appearance.text-size';
+const LEGACY_TEXT_KEY = 'sellertray.appearance.text-size';
+const FONT_SCALE_KEY = 'sellertray.appearance.font-scale';
+export const SELLERTRAY_FONT_SCALE_MIN = 0.9;
+export const SELLERTRAY_FONT_SCALE_MAX = 1.3;
+export const SELLERTRAY_FONT_SCALE_STEP = 0.05;
 
 const AppearanceContext = createContext<AppearanceContextValue | null>(null);
 
 export function AppearanceProvider({ children }: { children: ReactNode }) {
   const systemScheme = useColorScheme();
   const [mode, setModeState] = useState<AppearanceMode>('system');
-  const [textSize, setTextSizeState] = useState<TextSize>('standard');
+  const [fontScale, setFontScaleState] = useState(1);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -38,14 +43,21 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
 
     void Promise.all([
       AsyncStorage.getItem(MODE_KEY),
-      AsyncStorage.getItem(TEXT_KEY),
-    ]).then(([savedMode, savedText]) => {
+      AsyncStorage.getItem(FONT_SCALE_KEY),
+      AsyncStorage.getItem(LEGACY_TEXT_KEY),
+    ]).then(([savedMode, savedScale, legacyTextSize]) => {
       if (!active) return;
       if (savedMode === 'system' || savedMode === 'light' || savedMode === 'dark') {
         setModeState(savedMode);
       }
-      if (savedText === 'standard' || savedText === 'large') {
-        setTextSizeState(savedText);
+
+      const parsedScale = savedScale === null ? Number.NaN : Number(savedScale);
+      if (Number.isFinite(parsedScale)) {
+        setFontScaleState(normalizeFontScale(parsedScale));
+      } else if (legacyTextSize === 'large') {
+        setFontScaleState(1.1);
+      } else {
+        setFontScaleState(1);
       }
       setReady(true);
     }).catch(() => {
@@ -58,7 +70,7 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const dark = mode === 'dark' || (mode === 'system' && systemScheme === 'dark');
-  const fontScale = textSize === 'large' ? 1.12 : 1;
+  const textSize: TextSize = fontScale > 1.05 ? 'large' : 'standard';
 
   const value = useMemo<AppearanceContextValue>(() => ({
     mode,
@@ -71,8 +83,16 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
       await AsyncStorage.setItem(MODE_KEY, next);
     },
     setTextSize: async (next) => {
-      setTextSizeState(next);
-      await AsyncStorage.setItem(TEXT_KEY, next);
+      const scale = next === 'large' ? 1.1 : 1;
+      setFontScaleState(scale);
+      await AsyncStorage.setItem(FONT_SCALE_KEY, String(scale));
+      await AsyncStorage.removeItem(LEGACY_TEXT_KEY);
+    },
+    setFontScale: async (next) => {
+      const scale = normalizeFontScale(next);
+      setFontScaleState(scale);
+      await AsyncStorage.setItem(FONT_SCALE_KEY, String(scale));
+      await AsyncStorage.removeItem(LEGACY_TEXT_KEY);
     },
   }), [mode, textSize, dark, fontScale, ready]);
 
@@ -83,4 +103,9 @@ export function useSellerTrayAppearance(): AppearanceContextValue {
   const value = useContext(AppearanceContext);
   if (!value) throw new Error('SellerTray appearance provider is missing.');
   return value;
+}
+
+function normalizeFontScale(value: number): number {
+  const clamped = Math.min(SELLERTRAY_FONT_SCALE_MAX, Math.max(SELLERTRAY_FONT_SCALE_MIN, value));
+  return Number((Math.round(clamped / SELLERTRAY_FONT_SCALE_STEP) * SELLERTRAY_FONT_SCALE_STEP).toFixed(2));
 }
