@@ -249,6 +249,7 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
         order_status_events(id, event_type, from_status, to_status, actor_kind, reason, created_at)
       `)
       .eq('tenant_id', tenantId)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false }),
     supabase
       .from('outbound_notifications')
