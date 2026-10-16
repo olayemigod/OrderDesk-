@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.5"
+  version: "0.1.6"
   status: governing
 ---
 
@@ -53,12 +53,13 @@ Mobile owns or prioritises:
 - unified orders and fulfilment;
 - WhatsApp order handling and merchant takeover;
 - permitted branch switching;
-- stock lookup, receiving, transfer and stock count;
+- stock lookup, governed purchase receiving where authorised, stock transfers, stock count and controlled adjustment;
 - cashier shifts, expenses and simple cash movement;
 - Bluetooth receipt printing;
 - basic operational reports;
 - quick AI assistance;
-- offline-capable selling where supported.
+- offline-capable selling where supported;
+- lightweight user feedback capture tied to the signed-in account.
 
 Do not turn mobile into a miniature ERP or expose complex administration that belongs on web.
 
@@ -82,6 +83,7 @@ Web owns or prioritises:
 - WhatsApp configuration and analysis;
 - full Report Center;
 - business AI analysis;
+- tenant-scoped feedback participation and submission review for Owners/Managers;
 - merchant settings, audit and integrations.
 
 # 2. Shared commerce core
@@ -174,6 +176,10 @@ Order-line rules:
 3. Draft order edits must go through a governed server/domain command; clients must not write order-item rows directly.
 4. A draft edit must preserve branch authority, capability checks, current UOM/price validation and audit history.
 5. Once payment, financial-document or inventory activity exists, order lines must not be silently rewritten as if they were still an untouched draft.
+6. An unwanted commercially untouched unpaid POS draft may be deleted only through an audited soft-delete command. A draft with payment, stock or financial-document effects is not eligible for deletion.
+7. Soft-deleted drafts and ordinary active drafts must not inflate completed-sales or commercial-performance reporting. Reports must intentionally select the governed lifecycle states they measure.
+8. Sale returns are quantity- and line-aware. Returning a sale never implies that every originally sold line or quantity is returned; track sold, already-returned and remaining returnable quantity per line.
+9. A partial return preserves the original sale and payment history, restores only the approved returned stock quantity using the historical UOM snapshot, and leaves any remaining quantity available for later governed return where policy allows.
 
 ## Customer identity and selling context
 
@@ -193,11 +199,11 @@ Rules:
 
 ## Inventory
 
-Mobile inventory is operational: stock lookup, branch availability, receiving, transfers, stock count, controlled adjustment, low stock and movement history.
+Mobile inventory is operational: stock lookup, branch availability, governed purchase receiving, transfers, stock count, controlled adjustment, low stock and movement history.
 
 Operational reference rules:
 
-1. SellerTray generates a unique operational reference by default on every user-created operational transaction that needs a business reference, including stock receipts, adjustments, purchase receipts, stock counts, stock transfers, cash in, cash out and expenses.
+1. SellerTray generates a unique operational reference by default on every user-created operational transaction that needs a business reference, including stock adjustments, purchase receipts, stock counts, stock transfers, cash in, cash out and expenses.
 2. The generated reference remains editable and may be replaced with a meaningful external reference, such as a supplier delivery note, voucher, receipt, count sheet or other source document, where that improves traceability.
 3. Apply the same generated-by-default rule across mobile and web surfaces that create the same governed transaction; do not require blank/manual-only reference entry on one channel while another channel generates it.
 4. User-facing business references are not substitutes for internal idempotency keys; preserve both concepts where retry safety requires them.
@@ -205,15 +211,37 @@ Operational reference rules:
 
 Reason rules:
 
-1. Stock receipt and stock adjustment reason entry should use a governed merchant-facing reason vocabulary rather than unrestricted free text by default.
+1. Stock adjustment reason entry should use a governed merchant-facing reason vocabulary rather than unrestricted free text by default.
 2. Add an “Other approved …” reason only where the workflow genuinely needs it; do not let clients invent internal reason codes.
 3. Cancellation/explanation workflows may still require a concise free-text explanation where the audit trail needs human context.
 
+Receiving rules:
+
+1. Do not expose a generic mobile **Receive Stock** action that can bypass purchasing or transfer authority.
+2. Supplier-delivered stock enters a Branch through the governed Purchase Order/Purchase Receiving flow and only for physically received quantities.
+3. Stock sent from another Branch enters through the governed Stock Transfer receipt flow.
+4. Purchase receiving is management/procurement authority; do not grant it to Staff merely because they can view or operate ordinary inventory tasks.
+5. Controlled stock adjustment remains available only for governed correction scenarios and must not be used as a substitute for purchasing or Branch transfer.
+
 ## More
 
-Place secondary capabilities here according to permission: Customers, Suppliers where appropriate, Expenses, Cash & Shift, WhatsApp, Returns, Held Sales, Reports, AI Assistant, Transfers, Devices & Printers, Profile, Settings and Sync Status.
+Place secondary capabilities here according to permission: Customers, Suppliers where appropriate, Expenses, Cash & Shift, WhatsApp, Returns, Held Sales, Reports, AI Assistant, Transfers, Devices & Printers, Feedback, Profile, Settings and Sync Status.
 
 Navigation must be capability-aware; do not show actions merely to fail after tap.
+
+## Feedback
+
+SellerTray feedback is tied to authenticated business membership and is part of the product quality loop, not a separate anonymous truth store.
+
+Rules:
+
+1. Mobile must be able to tell whether the signed-in user has submitted feedback for the current business, including submission count and latest submission time where available.
+2. A user may submit feedback again later; do not lock the user permanently after the first response.
+3. Feedback may carry merchant-facing type, optional rating, message, Branch context, app/platform context and submission timestamp.
+4. Feedback access is tenant-isolated. A user cannot inspect or submit feedback for a business they do not belong to.
+5. Merchant Web provides an Owner/Manager management dashboard showing participation, who has or has not submitted, ratings and recent submissions for that business.
+6. Staff do not gain management-dashboard access merely because they may submit feedback from mobile.
+7. Do not create a separate feedback identity system; use the authenticated SellerTray user and tenant membership.
 
 # 4. Professional UX rules
 
@@ -230,6 +258,8 @@ Rules:
 5. Reuse shared components where behaviour is equivalent.
 6. Error messages must explain what happened and the next safe action.
 7. Merchants should not need to understand ledger, conversion, sync or payment internals.
+8. Appearance uses a persisted font-size slider rather than only fixed Small/Large choices. The preference must apply consistently across appropriate SellerTray mobile text surfaces through a shared typography primitive or equivalent central mechanism; do not implement screen-specific font scaling that drifts between Home, Sell, Orders, Inventory and More.
+9. Font scaling must preserve usable layouts and touch targets; it changes readable text sizing, not business logic or transaction truth.
 
 # 5. Branch invariants
 
@@ -290,12 +320,13 @@ Rules:
 1. Never silently overwrite stock from a count.
 2. Stock count flow is Start Count -> Capture -> Review Variance -> Authorised Apply.
 3. Sale reduces stock exactly once.
-4. Return restores stock only according to approved return state/policy.
+4. Return restores stock only according to approved return state/policy and only for the approved returned line quantities.
 5. Transfer out and transfer receipt must remain auditable and duplicate-safe.
 6. Retried requests must not duplicate stock effects.
 7. A Purchase Order does not create on-hand stock. It records procurement intent for a specific branch.
 8. Purchase stock enters inventory only when a physical receipt is posted for that Purchase Order. Partial receipts post only the physically received quantity.
 9. Stock needed by another branch must be received against that branch’s Purchase Order or moved through a governed Stock Transfer after receipt; do not create global phantom stock from placing a purchase.
+10. Generic direct stock receipt must not bypass Purchase Receiving or Stock Transfer receiving.
 
 # 8. WhatsApp preservation and unification
 
@@ -340,6 +371,11 @@ Payment and shift rules:
 7. Physical card terminals are merchant operational methods. Never advertise a physical terminal or drawer cash as a remote WhatsApp/customer payment option.
 8. WhatsApp/customer-facing payment options remain limited to methods the remote customer can actually use, such as bank transfer, configured gateways, cash on delivery or pay on pickup as policy allows.
 9. Merchant Web manages payment methods and Branch assignments; mobile performs the sale and shift reconciliation using the same governed payment truth.
+10. Erroneous cash-in, cash-out or expense activity may be corrected only through an authorised governed correction command. Do not directly edit or delete posted cash-history rows.
+11. User-facing **Edit** means supersede the original activity with an audited replacement; user-facing **Remove** means supersede it without a replacement. The original row and correction record remain immutable audit history.
+12. Cash correction requires explicit correction authority, Branch authority, writable subscription state, an open shift and a human correction reason. Staff must not receive correction authority merely because they can record ordinary cash activity.
+13. Correction commands must be idempotent and drawer totals/read models must use only effective non-superseded cash activity.
+14. Closed shifts are historical evidence and are not reopened or rewritten by cash correction; use shift review/follow-up for historical discrepancies.
 
 # 10. Bluetooth printing and hardware
 
@@ -362,6 +398,8 @@ Shared report dimensions should include as applicable: period, branch, staff, pr
 Web reporting should cover sales, inventory, stock movement/valuation, low/out-of-stock, cash/shift, expenses, customers, staff, branch performance, profitability and WhatsApp performance as approved.
 
 Report totals must reconcile to underlying transactions; UOM quantity reporting must normalise correctly where aggregation requires it.
+
+Draft and audit-deleted draft orders are operational work-in-progress, not completed commercial truth. Sales/performance reports must exclude them unless a specific report is explicitly designed to analyse drafts.
 
 # 12. AI governance
 
@@ -392,6 +430,8 @@ Example capabilities:
 - can_give_discount
 - can_view_profit
 - can_refund_sale
+- can_correct_cash_movement
+- can_manage_purchasing
 - can_close_shift
 
 Rules:
@@ -400,6 +440,7 @@ Rules:
 2. Test read and write/action separately.
 3. Branch scope and capability scope must both pass.
 4. Preserve appropriate historical read/audit access when current operational authority changes.
+5. Do not infer management authority from a neighbouring operational capability; for example, ordinary stock operation does not imply purchase receiving and ordinary cash entry does not imply cash correction.
 
 # 15. Approved implementation phases
 
@@ -419,11 +460,11 @@ Search/grid, barcode, UOM, cart, customer, pricing/discount policy, hold/resume,
 
 ## Phase 4 — Inventory
 
-Branch stock, ledger, receiving, adjustments, returns impact, transfers, counts, low stock, movement history and UOM conversion integrity.
+Branch stock, ledger, governed purchase receiving, adjustments, returns impact, transfers, counts, low stock, movement history and UOM conversion integrity.
 
 ## Phase 5 — Branch + cashier operations
 
-Branch assignment/switching, register/device, opening shift, expenses, cash movements, expected cash, closing shift, variance, manager review and permission boundaries.
+Branch assignment/switching, register/device, opening shift, expenses, cash movements, governed correction, expected cash, closing shift, variance, manager review and permission boundaries.
 
 ## Phase 6 — Bluetooth/device layer
 
@@ -435,7 +476,7 @@ Connect current WhatsApp functionality to the shared customer, Product/UOM, bran
 
 ## Phase 8 — Merchant Web V1
 
-Overview, Sales, Orders, Products, UOM, Pricing, Inventory, Customers, Branches, Staff, Payments, Cash, WhatsApp and Settings.
+Overview, Sales, Orders, Products, UOM, Pricing, Inventory, Customers, Branches, Staff, Payments, Cash, WhatsApp, tenant feedback review and Settings.
 
 ## Phase 9 — Purchasing
 
@@ -477,6 +518,8 @@ Verify information architecture, primary action, branch context, loading/empty/e
 
 For phone POS specifically, verify the Products -> Cart -> Payment stage separation, tile-default catalogue, scalable paging/loading, direct quantity entry, and that large catalogues do not require scrolling through the cart or payment UI.
 
+Where adjustable font sizing is implemented, verify the persisted slider affects the appropriate SellerTray-wide text surfaces without breaking critical layouts.
+
 ## Permission gate
 
 Verify representative allowed/denied read, allowed/denied write/action, branch isolation and multi-branch switching.
@@ -487,11 +530,11 @@ Verify Stock UOM, alternate conversion, UOM-specific price, UOM barcode where im
 
 ## Inventory gate
 
-Verify sale deduction, return restoration, receiving, transfer, adjustment, stock count reconciliation, movement history and retry safety.
+Verify sale deduction, return restoration, purchase receiving, transfer, adjustment, stock count reconciliation, movement history and retry safety. Verify supplier stock cannot bypass Purchase Receiving and inter-Branch stock cannot bypass Stock Transfer.
 
 ## Payment gate
 
-Verify success, pending verification, failure, retry/idempotency, split payment where applicable and refund/reference behaviour. For POS shifts, also verify Branch assignment, per-shift payment-method snapshot, separate cash/non-cash totals, drawer variance isolation and retry-safe payment attribution.
+Verify success, pending verification, failure, retry/idempotency, split payment where applicable and refund/reference behaviour. For POS shifts, also verify Branch assignment, per-shift payment-method snapshot, separate cash/non-cash totals, drawer variance isolation, retry-safe payment attribution and governed cash correction without destructive history mutation.
 
 ## WhatsApp regression gate
 
@@ -503,11 +546,15 @@ Verify successful print, unavailable/failing printer after successful sale, repr
 
 ## Reporting gate
 
-Verify filters/totals against source transactions, especially period, branch, source channel, UOM-normalised quantity, payment state and returns/cancellations.
+Verify filters/totals against source transactions, especially period, branch, source channel, UOM-normalised quantity, payment state and returns/cancellations. Verify operational drafts and audit-deleted drafts do not inflate completed sales/performance totals.
 
 ## Offline gate
 
 When offline is touched, verify local commit, queued sync, repeated sync, duplicate prevention, conflict outcome and user-visible sync status.
+
+## Feedback gate
+
+When feedback is touched, verify signed-in submission state, repeat submission, tenant isolation, Owner/Manager dashboard access and denial for unauthorised/non-member users.
 
 # 18. Anti-divergence rules
 
@@ -519,15 +566,21 @@ Do not:
 - automatically derive alternate UOM price by multiplication unless explicitly configured;
 - infer branch later when it should be captured at transaction time;
 - silently change stock from a stock count;
+- expose generic stock receiving that bypasses Purchase Receiving or Stock Transfer;
 - put full management administration into mobile;
 - make merchant web a stretched mobile app;
 - collapse phone Products, Cart and Payment into one unbounded long POS screen;
 - make manual/free-text references the only operational-reference path when SellerTray can safely generate one;
 - write draft order-item changes directly from a client instead of through governed domain commands;
+- hard-delete eligible POS drafts instead of preserving governed deletion audit history;
+- treat a return as an automatic full-order return when only selected lines/quantities are being returned;
+- directly edit or delete posted cash movement/expense history instead of using governed correction;
 - let print failure undo a completed sale;
 - let AI bypass permissions/domain services;
 - duplicate payment or stock effects on retries;
 - expose phase/code/project/internal implementation names in user-facing UI;
+- implement font-size preference separately per screen so SellerTray surfaces drift;
+- expose feedback across tenant boundaries or give Staff management feedback visibility by default;
 - expand SellerTray into a full ERP without explicit approval;
 - declare implementation complete without focused verification.
 
@@ -556,8 +609,8 @@ If these cannot be answered, do not create a new isolated implementation path; r
 
 The redesign MVP is a coherent operating product rather than scattered advanced features.
 
-Mobile MVP direction: redesigned Home/Sell/Orders/Inventory/More shell, POS, customers, unified orders, WhatsApp orders, branch awareness, inventory, UOM, payments, cashier shifts, expenses, Bluetooth printing and basic reports.
+Mobile MVP direction: redesigned Home/Sell/Orders/Inventory/More shell, POS, customers, unified orders, WhatsApp orders, branch awareness, inventory, UOM, payments, cashier shifts, expenses/cash corrections, Bluetooth printing, feedback capture and basic reports.
 
-Merchant web MVP direction: management dashboard, sales/orders, products, UOM/pricing, inventory, purchasing, customers, branches, staff, payments, cash review, WhatsApp administration, Report Center and settings.
+Merchant web MVP direction: management dashboard, sales/orders, products, UOM/pricing, inventory, purchasing, customers, branches, staff, payments, cash review, WhatsApp administration, tenant feedback dashboard, Report Center and settings.
 
 Existing WhatsApp functionality must remain operational throughout the transition. AI expansion and deep offline hardening follow the stable transactional core.
