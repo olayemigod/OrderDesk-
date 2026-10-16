@@ -61,22 +61,23 @@ requireValue(
   'Mobile must generate a non-user-facing inventory command identity',
 );
 requireValue(
-  workspace.includes('setOperationCommandId(createInventoryOperationCommandId(mode))') &&
-    workspace.includes('commandId: operationCommandId') &&
-    workspace.includes("onPress={() => setOperationReference(createOperationalReference(operationMode))}"),
-  'Inventory form must preserve its hidden command identity while allowing the visible reference to change',
+  workspace.includes("setCommandId(createInventoryOperationCommandId('adjust'))") &&
+    workspace.includes('commandId,') &&
+    workspace.includes("onPress={() => setReference(createOperationalReference('adjust'))}"),
+  'Inventory adjustment form must preserve its hidden command identity while allowing the visible reference to change',
 );
 requireValue(
   !workspace.includes("'Branch replenishment'") &&
     !workspace.includes("'Stock count correction'") &&
     workspace.includes("'Inventory recovery'") &&
-    workspace.includes("reason !== 'Opening stock'"),
-  'Mobile inventory reasons must route branch transfers and stock counts to their governed workflows',
+    workspace.includes('Supplier deliveries are received from Purchase Receiving') &&
+    workspace.includes('Stock sent from another branch is received through Stock Transfers'),
+  'Mobile inventory must route supplier receipts and branch transfers to their governed workflows',
 );
 requireValue(
   workspace.includes("reason === 'Damage' || reason === 'Expiry' || reason === 'Missing / shrinkage'") &&
     workspace.includes("reason === 'Inventory recovery'") &&
-    workspace.includes('disabled={forcedAdjustmentDirection !== null}'),
+    workspace.includes('disabled={forcedDirection !== null}'),
   'Mobile inventory adjustments must enforce direction-safe reason semantics',
 );
 
