@@ -29,6 +29,7 @@ select extensions.has_table('public','sellertray_feedback','feedback table exist
 select extensions.has_function('public','submit_sellertray_feedback',array['uuid','uuid','text','smallint','text','text','text','jsonb'],'feedback submission command exists');
 select extensions.has_function('public','sellertray_feedback_state',array['uuid'],'feedback state command exists');
 
+grant select,update on sellertray_feedback_fixture to authenticated;
 set local role authenticated;
 select set_config('request.jwt.claim.sub',(select user_id::text from sellertray_feedback_fixture),true);
 select set_config('request.jwt.claim.role','authenticated',true);
