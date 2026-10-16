@@ -1,4 +1,4 @@
-import { loadPrintJob, type PrintJob, updatePrintJob } from '../data/printerRepository';
+import { loadPrintJob, type PrintJob, type ReceiptCopyDefinition, updatePrintJob } from '../data/printerRepository';
 import { sendBluetoothPrintBytes } from './bluetoothPrinter';
 import { buildEscPosPrintBytes } from './escPosReceipt';
 
@@ -14,8 +14,14 @@ export async function executePreparedPrintJob(tenantId: string, job: PrintJob): 
     await updatePrintJob({ tenantId, jobId: job.jobId, status: 'printing' });
     started = true;
 
-    const bytes = buildEscPosPrintBytes(job.contentSnapshot, job.paperWidthMm);
-    await sendBluetoothPrintBytes(job.hardwareIdentifier, bytes);
+    const copies = receiptCopies(job);
+    for (const copy of copies) {
+      const snapshot = job.contentSnapshot.documentType === 'receipt'
+        ? { ...job.contentSnapshot, copyLabel: copy.label }
+        : job.contentSnapshot;
+      const bytes = buildEscPosPrintBytes(snapshot, job.paperWidthMm);
+      await sendBluetoothPrintBytes(job.hardwareIdentifier, bytes);
+    }
     hardwareWriteCompleted = true;
 
     try {
@@ -48,6 +54,14 @@ export async function executePreparedPrintJob(tenantId: string, job: PrintJob): 
     }
     throw new Error(message);
   }
+}
+
+function receiptCopies(job: PrintJob): ReceiptCopyDefinition[] {
+  if (job.contentSnapshot.documentType !== 'receipt') return [{ type: 'customer', label: '', sortOrder: 1 }];
+  const configured = job.contentSnapshot.copyDefinitions?.filter((copy) => copy.label.trim()) ?? [];
+  return configured.length > 0
+    ? [...configured].sort((a, b) => a.sortOrder - b.sortOrder)
+    : [{ type: 'customer', label: 'Customer Copy', sortOrder: 1 }];
 }
 
 async function reconcilePrintedStatus(tenantId: string, jobId: string): Promise<boolean> {
