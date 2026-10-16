@@ -1,7 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.115.0';
 
 type JsonRecord = Record<string, unknown>;
-type CashShiftAction = 'open' | 'movement' | 'close' | 'review';
+type CashShiftAction = 'open' | 'movement' | 'correct' | 'close' | 'review';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -60,6 +60,7 @@ Deno.serve(async (request) => {
 
   let rpcName: string;
   let rpcArgs: JsonRecord;
+  let responseShiftId: string | null = null;
 
   if (action === 'open') {
     const branchId = cleanUuid(body.branchId);
@@ -100,6 +101,47 @@ Deno.serve(async (request) => {
       p_reason: reason,
       p_expense_category: movementType === 'expense' ? expenseCategory : null,
       p_command_id: commandId,
+      p_actor_user_id: userId,
+    };
+  } else if (action === 'correct') {
+    const shiftId = cleanUuid(body.shiftId);
+    const movementId = cleanUuid(body.movementId);
+    const correctionKind = body.correctionKind === 'replace' || body.correctionKind === 'remove'
+      ? body.correctionKind
+      : null;
+    const correctionReason = cleanText(body.correctionReason, 500);
+    const commandId = cleanCommandId(body.commandId);
+    if (!shiftId || !movementId || !correctionKind || !correctionReason || !commandId) {
+      return json({ error: 'Shift, cash activity, correction action, reason and retry identity are required' }, 400);
+    }
+
+    const replacementType = correctionKind === 'replace' ? cleanMovementType(body.replacementType) : null;
+    const replacementAmount = correctionKind === 'replace' ? cleanPositiveNumber(body.replacementAmount) : null;
+    const replacementReference = correctionKind === 'replace' ? cleanText(body.replacementReference, 160) : null;
+    const replacementReason = correctionKind === 'replace' ? cleanText(body.replacementReason, 500) : null;
+    const replacementExpenseCategory = correctionKind === 'replace' ? cleanText(body.replacementExpenseCategory, 120) : null;
+    if (correctionKind === 'replace'
+      && (!replacementType || replacementAmount === null || !replacementReference || !replacementReason)) {
+      return json({ error: 'Replacement cash activity, amount, reference and reason are required' }, 400);
+    }
+    if (replacementType === 'expense' && !replacementExpenseCategory) {
+      return json({ error: 'Expense category is required' }, 400);
+    }
+
+    responseShiftId = shiftId;
+    rpcName = 'correct_sellertray_shift_cash_movement';
+    rpcArgs = {
+      p_tenant_id: tenantId,
+      p_shift_id: shiftId,
+      p_movement_id: movementId,
+      p_correction_kind: correctionKind,
+      p_correction_reason: correctionReason,
+      p_command_id: commandId,
+      p_replacement_type: replacementType,
+      p_replacement_amount: replacementAmount,
+      p_replacement_reference: replacementReference,
+      p_replacement_reason: replacementReason,
+      p_replacement_expense_category: replacementType === 'expense' ? replacementExpenseCategory : null,
       p_actor_user_id: userId,
     };
   } else if (action === 'close') {
@@ -146,17 +188,17 @@ Deno.serve(async (request) => {
       ? 403
       : /not found/i.test(message)
         ? 404
-        : /already|open shift|cannot|close|variance|different facts|unavailable|invalid/i.test(message)
+        : /already|open shift|cannot|close|variance|different facts|unavailable|invalid|corrected/i.test(message)
           ? 409
           : 400;
     return json({ error: message }, status);
   }
 
-  return json({ ok: true, action, ...result });
+  return json({ ok: true, action, ...(responseShiftId ? { shiftId: responseShiftId } : {}), ...result });
 });
 
 function cleanAction(value: unknown): CashShiftAction | null {
-  return value === 'open' || value === 'movement' || value === 'close' || value === 'review'
+  return value === 'open' || value === 'movement' || value === 'correct' || value === 'close' || value === 'review'
     ? value
     : null;
 }
@@ -202,6 +244,11 @@ function isResult(action: CashShiftAction, value: unknown): value is JsonRecord 
     return typeof row.movementId === 'string'
       && typeof row.shiftId === 'string'
       && (row.movementType === 'cash_in' || row.movementType === 'cash_out' || row.movementType === 'expense');
+  }
+  if (action === 'correct') {
+    return typeof row.correctionId === 'string'
+      && typeof row.movementId === 'string'
+      && (row.correctionKind === 'replace' || row.correctionKind === 'remove');
   }
   if (typeof row.shiftId !== 'string') return false;
   if (action === 'open') return row.status === 'open';
