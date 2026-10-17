@@ -1,0 +1,2 @@
+.overview-action { width: 100%; border: 0; border-top: 1px solid var(--border); background: transparent; text-align: left; cursor: pointer; }
+.overview-action:hover { background: var(--surface-subtle); }
