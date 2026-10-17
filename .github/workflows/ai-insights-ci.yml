@@ -30,7 +30,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout exact candidate source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
       - name: Verify exact candidate checkout
@@ -43,7 +43,7 @@ jobs:
           deno-version: v2.x
       - name: Typecheck merchant AI Edge Function
         run: deno check supabase/functions/merchant-ai/index.ts
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
       - name: Verify AI browser and server authority boundary
