@@ -22,7 +22,7 @@ export function useOfflineSalesSync() {
   const [backendReachable, setBackendReachable] = useState<boolean | null>(null);
   const backendReachableRef = useRef<boolean | null>(null);
   const syncRunning = useRef(false);
-  const reachabilityRunning = useRef(false);
+  const reachabilityPromiseRef = useRef<Promise<boolean> | null>(null);
 
   const updateReachability = useCallback((reachable: boolean) => {
     backendReachableRef.current = reachable;
@@ -30,25 +30,32 @@ export function useOfflineSalesSync() {
   }, []);
 
   const probeReachability = useCallback(async () => {
-    if (reachabilityRunning.current) return backendReachableRef.current !== false;
-    reachabilityRunning.current = true;
+    if (reachabilityPromiseRef.current) return reachabilityPromiseRef.current;
+
+    const probe = (async () => {
+      try {
+        const { error } = await supabase.auth.getUser();
+        if (error && isLikelyConnectivityError(error)) {
+          updateReachability(false);
+          return false;
+        }
+        updateReachability(true);
+        return true;
+      } catch (error) {
+        if (isLikelyConnectivityError(error)) {
+          updateReachability(false);
+          return false;
+        }
+        updateReachability(true);
+        return true;
+      }
+    })();
+
+    reachabilityPromiseRef.current = probe;
     try {
-      const { error } = await supabase.auth.getUser();
-      if (error && isLikelyConnectivityError(error)) {
-        updateReachability(false);
-        return false;
-      }
-      updateReachability(true);
-      return true;
-    } catch (error) {
-      if (isLikelyConnectivityError(error)) {
-        updateReachability(false);
-        return false;
-      }
-      updateReachability(true);
-      return true;
+      return await probe;
     } finally {
-      reachabilityRunning.current = false;
+      if (reachabilityPromiseRef.current === probe) reachabilityPromiseRef.current = null;
     }
   }, [updateReachability]);
 
@@ -59,9 +66,8 @@ export function useOfflineSalesSync() {
     }
     const rows = await loadOfflinePosSales(userId);
     setSales(rows);
-    void probeReachability();
     return rows;
-  }, [actorUserId, probeReachability]);
+  }, [actorUserId]);
 
   const replaySale = useCallback(async (sale: OfflinePosSale) => {
     const orderId = await prepareGovernedPosDraft({
@@ -139,12 +145,18 @@ export function useOfflineSalesSync() {
       clearInterval(interval);
       interval = null;
     };
+    const probeAndRecover = async () => {
+      if (!actorUserId || appState !== 'active') return;
+      const wasOffline = backendReachableRef.current === false;
+      const reachable = await probeReachability();
+      if (reachable && wasOffline) void syncNow(actorUserId);
+    };
     const startPolling = () => {
       stopPolling();
       if (!actorUserId || appState !== 'active') return;
-      void probeReachability();
+      void probeAndRecover();
       interval = setInterval(() => {
-        void probeReachability();
+        void probeAndRecover();
       }, ACTIVE_REACHABILITY_INTERVAL_MS);
     };
 
@@ -167,6 +179,7 @@ export function useOfflineSalesSync() {
   const connectionState = useMemo<'online' | 'syncing' | 'offline'>(() => {
     if (backendReachable === false) return 'offline';
     if (syncing) return 'syncing';
+    if (backendReachable === true) return 'online';
     const waiting = sales.some((sale) => sale.status === 'pending' && sale.attempts > 0 && /waiting for a connection/i.test(sale.lastError ?? ''));
     return waiting ? 'offline' : 'online';
   }, [backendReachable, sales, syncing]);
