@@ -1,0 +1,297 @@
+import { useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+
+import type { MerchantBusiness } from '../data/businessRepository';
+import type { ManualOrderLineInput } from '../data/ordersRepository';
+import { useCatalogue } from '../hooks/useCatalogue';
+
+type Props = {
+  business: MerchantBusiness;
+  onCreate: (input: {
+    customerName: string;
+    customerPhone: string;
+    note?: string | null;
+    items: ManualOrderLineInput[];
+  }) => Promise<string>;
+  onCreated: (orderId: string) => void;
+};
+
+export function ManualOrderComposer({ business, onCreate, onCreated }: Props) {
+  const { items, loading, error: catalogueError } = useCatalogue(business.id);
+  const [open, setOpen] = useState(false);
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [note, setNote] = useState('');
+  const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const activeItems = items.filter((item) => item.isActive && item.price !== null);
+  const selected = useMemo(
+    () => activeItems
+      .filter((item) => (quantities[item.id] ?? 0) > 0)
+      .map((item) => ({ item, quantity: quantities[item.id] ?? 0 })),
+    [activeItems, quantities],
+  );
+
+  const total = selected.reduce((sum, row) => sum + ((row.item.price ?? 0) * row.quantity), 0);
+
+  function changeQuantity(itemId: string, delta: number) {
+    setQuantities((current) => {
+      const next = Math.max(0, Math.min(9999, (current[itemId] ?? 0) + delta));
+      return { ...current, [itemId]: next };
+    });
+  }
+
+  async function create() {
+    if (!customerName.trim()) return setError('Enter the customer name.');
+    if (!customerPhone.trim()) return setError('Enter the customer phone number.');
+    if (!selected.length) return setError('Choose at least one product.');
+
+    setSubmitting(true);
+    setError(null);
+    try {
+      const orderId = await onCreate({
+        customerName: customerName.trim(),
+        customerPhone: customerPhone.trim(),
+        note: note.trim() || null,
+        items: selected.map(({ item, quantity }) => ({ catalogItemId: item.id, quantity })),
+      });
+      setCustomerName('');
+      setCustomerPhone('');
+      setNote('');
+      setQuantities({});
+      setOpen(false);
+      onCreated(orderId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to create order.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <Pressable onPress={() => setOpen(true)} style={({ pressed }) => [styles.newButton, pressed && styles.pressed]}>
+        <Text style={styles.newButtonText}>+ New order</Text>
+      </Pressable>
+    );
+  }
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.heading}>
+        <View style={styles.headingCopy}>
+          <Text style={styles.eyebrow}>MANUAL ORDER</Text>
+          <Text style={styles.title}>Create an order</Text>
+          <Text style={styles.subtitle}>
+            Use this for phone, walk-in or manually captured orders. WhatsApp orders will continue to arrive automatically.
+          </Text>
+        </View>
+        <Pressable disabled={submitting} onPress={() => setOpen(false)}>
+          <Text style={styles.close}>Close</Text>
+        </Pressable>
+      </View>
+
+      <Field label="Customer name" required hint="The name you want staff to recognise in the order list.">
+        <TextInput
+          value={customerName}
+          onChangeText={setCustomerName}
+          placeholder="e.g. Aisha Bello"
+          editable={!submitting}
+          style={styles.input}
+        />
+      </Field>
+
+      <Field label="Customer phone" required hint="Include the country code where possible, e.g. +2348012345678.">
+        <TextInput
+          value={customerPhone}
+          onChangeText={setCustomerPhone}
+          placeholder="+234..."
+          keyboardType="phone-pad"
+          editable={!submitting}
+          style={styles.input}
+        />
+      </Field>
+
+      <Field label="Order note" hint="Optional instruction or context from the customer.">
+        <TextInput
+          value={note}
+          onChangeText={setNote}
+          placeholder="e.g. Deliver before 4pm"
+          multiline
+          editable={!submitting}
+          style={[styles.input, styles.noteInput]}
+        />
+      </Field>
+
+      <View style={styles.productsBlock}>
+        <Text style={styles.label}>Products *</Text>
+        <Text style={styles.hint}>Tap + to add products from your catalogue. Prices are copied automatically.</Text>
+
+        {catalogueError ? <Text style={styles.error}>{catalogueError}</Text> : null}
+        {loading && !activeItems.length ? <Text style={styles.muted}>Loading products…</Text> : null}
+        {!loading && !activeItems.length ? (
+          <Text style={styles.emptyText}>No active priced products yet. Add products from the Products tab first.</Text>
+        ) : null}
+
+        {activeItems.map((item) => {
+          const quantity = quantities[item.id] ?? 0;
+          return (
+            <View key={item.id} style={[styles.productRow, quantity > 0 && styles.productRowSelected]}>
+              <View style={styles.productCopy}>
+                <Text style={styles.productName}>{item.name}</Text>
+                <Text style={styles.productPrice}>{money(item.price ?? 0, business.currency)}</Text>
+              </View>
+              <View style={styles.quantityControls}>
+                <Pressable
+                  disabled={submitting || quantity === 0}
+                  onPress={() => changeQuantity(item.id, -1)}
+                  style={[styles.qtyButton, quantity === 0 && styles.disabled]}
+                >
+                  <Text style={styles.qtyButtonText}>−</Text>
+                </Pressable>
+                <Text style={styles.qtyValue}>{quantity}</Text>
+                <Pressable
+                  disabled={submitting}
+                  onPress={() => changeQuantity(item.id, 1)}
+                  style={styles.qtyButton}
+                >
+                  <Text style={styles.qtyButtonText}>+</Text>
+                </Pressable>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+
+      {selected.length ? (
+        <View style={styles.totalRow}>
+          <Text style={styles.totalLabel}>Order total</Text>
+          <Text style={styles.total}>{money(total, business.currency)}</Text>
+        </View>
+      ) : null}
+
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+
+      <Pressable
+        disabled={submitting || !selected.length}
+        onPress={() => void create()}
+        style={({ pressed }) => [styles.createButton, pressed && styles.pressed, (submitting || !selected.length) && styles.disabled]}
+      >
+        <Text style={styles.createButtonText}>{submitting ? 'Creating order…' : 'Create order'}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function Field({
+  label,
+  required = false,
+  hint,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.label}>{label}{required ? ' *' : ''}</Text>
+      {hint ? <Text style={styles.hint}>{hint}</Text> : null}
+      {children}
+    </View>
+  );
+}
+
+function money(value: number, currency: string) {
+  return new Intl.NumberFormat('en-NG', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+const styles = StyleSheet.create({
+  newButton: {
+    minHeight: 46,
+    borderRadius: 12,
+    backgroundColor: '#246BFD',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  newButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D0D5DD',
+    borderRadius: 18,
+    padding: 16,
+    gap: 15,
+  },
+  heading: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  headingCopy: { flex: 1 },
+  eyebrow: { color: '#246BFD', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
+  title: { color: '#101828', fontSize: 20, fontWeight: '900', marginTop: 3 },
+  subtitle: { color: '#667085', fontSize: 12, lineHeight: 18, marginTop: 4 },
+  close: { color: '#667085', fontSize: 12, fontWeight: '800' },
+  field: { gap: 6 },
+  label: { color: '#344054', fontSize: 12, fontWeight: '900' },
+  hint: { color: '#667085', fontSize: 10, lineHeight: 15 },
+  input: {
+    minHeight: 46,
+    borderWidth: 1,
+    borderColor: '#D0D5DD',
+    borderRadius: 11,
+    paddingHorizontal: 12,
+    backgroundColor: '#FFFFFF',
+    color: '#101828',
+  },
+  noteInput: { minHeight: 76, paddingTop: 12, textAlignVertical: 'top' },
+  productsBlock: { gap: 8 },
+  productRow: {
+    minHeight: 58,
+    borderWidth: 1,
+    borderColor: '#EAECF0',
+    borderRadius: 12,
+    padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  productRowSelected: { borderColor: '#84ADFF', backgroundColor: '#F5F8FF' },
+  productCopy: { flex: 1 },
+  productName: { color: '#101828', fontSize: 13, fontWeight: '900' },
+  productPrice: { color: '#667085', fontSize: 11, marginTop: 2 },
+  quantityControls: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  qtyButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: '#D0D5DD',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  qtyButtonText: { color: '#101828', fontSize: 18, fontWeight: '900' },
+  qtyValue: { minWidth: 24, textAlign: 'center', color: '#101828', fontSize: 13, fontWeight: '900' },
+  totalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  totalLabel: { color: '#667085', fontSize: 12, fontWeight: '800' },
+  total: { color: '#101828', fontSize: 18, fontWeight: '900' },
+  createButton: {
+    minHeight: 48,
+    borderRadius: 12,
+    backgroundColor: '#246BFD',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  createButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
+  muted: { color: '#667085', fontSize: 11 },
+  emptyText: { color: '#667085', fontSize: 11, lineHeight: 17 },
+  error: { color: '#B42318', fontSize: 11, lineHeight: 16 },
+  disabled: { opacity: 0.45 },
+  pressed: { opacity: 0.8 },
+});

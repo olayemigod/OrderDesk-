@@ -1,0 +1,186 @@
+import { useCallback, useEffect, useState } from 'react';
+
+import {
+  addOrderItem,
+  completeOrderFulfillment,
+  createManualOrder,
+  deleteOrderItem,
+  loadOrders,
+  startOrderDelivery,
+  subscribeToOrderChanges,
+  unsubscribeFromOrderChanges,
+  updateOrderItem,
+  updateOrderStatus,
+  type ManualOrderInput,
+  type OrderFulfillmentInput,
+  type OrderItemInput,
+} from '../data/ordersRepository';
+import type { MerchantOrder, OrderStatus } from '../domain/order';
+
+export function useOrders(tenantId: string | null) {
+  const [orders, setOrders] = useState<MerchantOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    if (!tenantId) {
+      setOrders([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const next = await loadOrders(tenantId);
+      setOrders(next);
+      setError(null);
+    } catch (err) {
+      setError(errorMessage(err, 'Unable to load orders.'));
+    } finally {
+      setLoading(false);
+    }
+  }, [tenantId]);
+
+  useEffect(() => {
+    void refresh();
+    if (!tenantId) return undefined;
+
+    const channel = subscribeToOrderChanges(tenantId, () => {
+      void refresh();
+    });
+
+    return () => {
+      void unsubscribeFromOrderChanges(channel);
+    };
+  }, [refresh, tenantId]);
+
+  const createOrder = useCallback(
+    async (input: Omit<ManualOrderInput, 'tenantId'>) => {
+      if (!tenantId) throw new Error('No active business selected.');
+      try {
+        const orderId = await createManualOrder({ ...input, tenantId });
+        await refresh();
+        setError(null);
+        return orderId;
+      } catch (err) {
+        setError(errorMessage(err, 'Unable to create order.'));
+        throw err;
+      }
+    },
+    [refresh, tenantId],
+  );
+
+  const setStatus = useCallback(
+    async (orderId: string, status: OrderStatus, reason?: string | null) => {
+      const previous = orders;
+      const normalizedReason = reason?.trim() || null;
+      setOrders((current) =>
+        current.map((order) =>
+          order.id === orderId
+            ? { ...order, status, statusReason: normalizedReason }
+            : order,
+        ),
+      );
+
+      try {
+        await updateOrderStatus(orderId, status, normalizedReason);
+        setError(null);
+      } catch (err) {
+        setOrders(previous);
+        setError(errorMessage(err, 'Unable to update order.'));
+        throw err;
+      }
+    },
+    [orders],
+  );
+
+  const startDelivery = useCallback(
+    async (orderId: string, input: OrderFulfillmentInput) => {
+      try {
+        await startOrderDelivery(orderId, input);
+        await refresh();
+        setError(null);
+      } catch (err) {
+        setError(errorMessage(err, 'Unable to start delivery.'));
+        throw err;
+      }
+    },
+    [refresh],
+  );
+
+  const completeFulfillment = useCallback(
+    async (orderId: string, input: OrderFulfillmentInput) => {
+      try {
+        await completeOrderFulfillment(orderId, input);
+        await refresh();
+        setError(null);
+      } catch (err) {
+        setError(errorMessage(err, 'Unable to complete fulfillment.'));
+        throw err;
+      }
+    },
+    [refresh],
+  );
+
+  const addItem = useCallback(
+    async (orderId: string, item: OrderItemInput) => {
+      try {
+        await addOrderItem(orderId, item);
+        await refresh();
+      } catch (err) {
+        setError(errorMessage(err, 'Unable to add order item.'));
+        throw err;
+      }
+    },
+    [refresh],
+  );
+
+  const editItem = useCallback(
+    async (itemId: string, item: OrderItemInput) => {
+      try {
+        await updateOrderItem(itemId, item);
+        await refresh();
+      } catch (err) {
+        setError(errorMessage(err, 'Unable to update order item.'));
+        throw err;
+      }
+    },
+    [refresh],
+  );
+
+  const removeItem = useCallback(
+    async (itemId: string) => {
+      try {
+        await deleteOrderItem(itemId);
+        await refresh();
+      } catch (err) {
+        setError(errorMessage(err, 'Unable to remove order item.'));
+        throw err;
+      }
+    },
+    [refresh],
+  );
+
+  return {
+    orders,
+    loading,
+    error,
+    refresh,
+    createOrder,
+    setStatus,
+    startDelivery,
+    completeFulfillment,
+    addItem,
+    editItem,
+    removeItem,
+  };
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (error && typeof error === 'object' && 'message' in error && typeof (error as { message?: unknown }).message === 'string') {
+    return (error as { message: string }).message;
+  }
+  return fallback;
+}

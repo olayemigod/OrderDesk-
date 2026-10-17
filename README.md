@@ -1,29 +1,84 @@
-# OrderDesk
+# SellerTray
 
-OrderDesk is a lightweight AI-assisted order management SaaS for small merchants who sell through WhatsApp.
+SellerTray is a focused mobile SaaS for merchants who sell through WhatsApp.
 
-## Product contract
+Customers remain on WhatsApp. Merchants use the SellerTray mobile app to review, correct and progress structured orders created from customer conversations. The MVP deliberately excludes ERP, POS, accounting, inventory valuation and general CRM scope.
 
-- Customers stay on WhatsApp.
-- Merchants operate from a mobile app.
-- OrderDesk converts free-form customer messages into structured draft orders.
-- Merchants confirm, edit, accept, reject, and progress orders from the app.
-- The MVP is intentionally not an ERP, POS, inventory suite, CRM, or accounting system.
+> Historical repository, database and RPC identifiers may still contain `orderdesk`. Those are internal compatibility identifiers; the production product identity is SellerTray.
 
-## MVP vertical slice
+## MVP flow
 
-1. WhatsApp message arrives.
-2. Webhook stores the conversation event.
-3. Order parser turns order intent into a structured draft.
-4. Merchant sees the draft in the mobile inbox.
-5. Merchant reviews and accepts it.
-6. Order status is updated and can be communicated back to the customer.
+1. A customer sends an order through WhatsApp.
+2. SellerTray validates and stores the inbound message idempotently.
+3. The parser structures the request and matches wording against the merchant catalogue.
+4. Recognised products inherit merchant-controlled prices; SellerTray does not invent prices.
+5. Ambiguous or incomplete orders enter merchant review.
+6. The merchant corrects items, quantity or price and accepts or rejects the order.
+7. Accepted orders progress through `processing -> ready -> completed`.
+8. Configured customer status notifications are queued for WhatsApp delivery.
 
-## Proposed stack
+## Current product state
 
-- Mobile: Expo + React Native + TypeScript
-- Backend: Supabase Postgres, Auth, Realtime and Edge Functions
-- WhatsApp: Meta WhatsApp Cloud API webhook adapter
-- AI: provider-neutral order parsing boundary so the model can be changed without changing domain logic
+The core SaaS and code-side production hardening are complete on the governed MVP branch:
 
-Implementation begins on a feature branch after this repository bootstrap commit.
+- Auth, password recovery and self-service workspace provisioning.
+- Tenant/RLS isolation and Owner / Manager / Staff permissions.
+- Catalogue, aliases and deterministic pricing.
+- Review-first order inbox and governed workflow.
+- WhatsApp ingestion and outbound notification foundations.
+- Business insights.
+- Trial/subscription lifecycle and Paystack adapter.
+- ProcessEdge SaaS operations console.
+- Structured Edge Function observability and request-size hardening.
+- Business-data export and governed account deletion.
+- SellerTray production identity, deep-link compatibility and Android EAS profiles.
+- Release/rollback runbook and automated repository release preflight.
+
+## Production identity
+
+- App name: **SellerTray**
+- Version: **1.0.0**
+- Android package: `ng.processedge.sellertray`
+- Canonical scheme: `sellertray://`
+- Temporary beta compatibility scheme: `orderdesk://`
+- Preview Android artifact: APK
+- Google Play artifact: AAB
+
+## Run locally
+
+From `apps/mobile`:
+
+```bash
+npm install
+npm run typecheck
+npm run preflight
+npx expo start --web --port 3000 -c
+```
+
+The mobile client may contain only public client configuration such as the Supabase project URL and publishable key. Service-role keys, AI credentials, Meta/WhatsApp credentials, Paystack secrets and worker tokens must remain server-side.
+
+## Main repository areas
+
+- `apps/mobile` — Expo / React Native merchant app.
+- `supabase/migrations` — governed database migrations.
+- `supabase/functions` — WhatsApp, parser, provisioning, team, billing, admin and lifecycle server functions.
+- `docs/saas_rollout_status.md` — authoritative implementation/release state.
+- `docs/release_runbook.md` — Android release, native smoke and rollback contract.
+- `docs/data_lifecycle.md` — export, deletion, retention and recovery contract.
+
+## Release acceptance still required
+
+Code completion is not the same as production acceptance. Remaining gates are external:
+
+- Supabase Auth native redirects and leaked-password protection.
+- SellerTray launcher/adaptive icon and splash branding.
+- Legal approval/publication of SellerTray Privacy Policy and Terms.
+- Production Auth/SMTP email delivery.
+- Signed preview APK plus physical-device smoke.
+- Production AAB.
+- Meta WhatsApp production inbound/outbound acceptance.
+- Live AI parser acceptance.
+- Outbound WhatsApp worker acceptance.
+- Approved SellerTray commercial price and Paystack test billing acceptance.
+
+PR #1 remains draft until the relevant gates above pass.

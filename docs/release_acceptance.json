@@ -1,0 +1,197 @@
+{
+  "schemaVersion": 1,
+  "product": "SellerTray",
+  "version": "1.0.0",
+  "androidPackage": "ng.processedge.sellertray",
+  "updatedAt": "2026-09-13",
+  "codeCheckpoint": {
+    "status": "accepted",
+    "commit": "3aa14582ea012dc4905f35ee5c450df89d85895d",
+    "ciRun": 361,
+    "evidence": "Mobile CI #361 passed locked dependency install, production dependency audit, TypeScript, production Android bundle smoke and SellerTray release preflight. The checkpoint also includes Send Email Hook v3 secure-email-change hardening."
+  },
+  "gates": [
+    {
+      "id": "public_account_deletion_resource",
+      "required": true,
+      "status": "accepted",
+      "owner": "ProcessEdge",
+      "evidence": "https://processedge.com.ng/sellertray/account-deletion returns HTTP 200"
+    },
+    {
+      "id": "in_app_legal_acceptance",
+      "required": true,
+      "status": "accepted",
+      "owner": "ProcessEdge",
+      "evidence": "Versioned user_legal_acceptances active; current Terms/Privacy version 2026-09-12; account-lifecycle v14 ACTIVE; channel-consent v2 requires current Terms/Privacy before Owner WhatsApp processing authorization. Owner export now includes safe WhatsApp media/candidate/consent/catalogue-setting records and deletion removes SellerTray chat/catalogue image storage objects.",
+      "acceptance": "Authenticated sessions are gated on current Terms/Privacy acceptance; the server records version/timestamp; material legal updates require renewed acceptance before WhatsApp channel authorization can be current."
+    },
+    {
+      "id": "supabase_auth_redirects",
+      "required": true,
+      "status": "accepted",
+      "owner": "ProcessEdge",
+      "evidence": "Verified in Supabase Dashboard on 11 September 2026: Site URL is https://processedge.com.ng/sellertray and Redirect URLs include sellertray://auth-confirm, sellertray://reset-password, orderdesk://auth-confirm and orderdesk://reset-password.",
+      "acceptance": "Accepted. Preserve these values through native release; orderdesk:// entries are temporary compatibility redirects and should be removed only after beta-link migration is complete."
+    },
+    {
+      "id": "supabase_leaked_password_protection",
+      "required": true,
+      "status": "waived",
+      "owner": "ProcessEdge",
+      "evidence": "Attempted in Supabase Dashboard on 11 September 2026. Supabase rejected the change with: leaked password protection via HaveIBeenPwned.org is available on Pro plans and up. Current project plan does not support the feature.",
+      "acceptance": "Do not block the current SellerTray MVP solely on this plan-gated feature. Keep email confirmation, minimum password length, rate limiting and existing Auth controls in force. Re-enable this gate when the Supabase project is upgraded to Pro, then turn leaked-password protection on and rerun the security advisor.",
+      "disposition": "Plan-gated on current Supabase tier; re-open when upgraded to Pro."
+    },
+    {
+      "id": "sellertray_brand_assets",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": null,
+      "acceptance": "Commit approved launcher icon, Android adaptive icon and splash/launch branding and reference them from Expo config."
+    },
+    {
+      "id": "sellertray_legal_policy",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": "SellerTray Terms/Privacy updated to legal version 2026-09-12 with explicit WhatsApp webhook message/content/metadata purposes, channel authorization and merchant-controlled chat-image catalogue capture. ProcessEdge production commits 83c08263f76cf61c0588c2f20ca012eca4d3c0eb and e4a6d7aff597b20613f6b53186718af629f6ca9a deployed READY on Vercel (latest production deployment dpl_EtPZ7BsPm7MWpUDES5N6bzYqpTFt). SellerTray database current Terms/Privacy versions are 2026-09-12; account-lifecycle v13 and channel-consent v2 enforce renewed acceptance. Independent legal review remains pending.",
+      "acceptance": "Production publication, explicit WhatsApp/webhook disclosure, versioned renewed acceptance and SellerTray-specific routes are complete. Obtain independent legal review/approval of the published wording, then record approval evidence before marking this gate accepted."
+    },
+    {
+      "id": "production_auth_email",
+      "required": true,
+      "status": "accepted",
+      "owner": "ProcessEdge",
+      "evidence": "Live Auth email transport accepted on 11 September 2026. Signup confirmation and password-recovery emails were received successfully through Supabase Auth Send Email Hook -> SellerTray send-auth-email Edge Function -> Resend on the verified processedge.com.ng domain. Post-acceptance hardening deployed send-auth-email v3 with the current Supabase Secure Email Change token-hash mapping; Mobile CI #361 passed.",
+      "acceptance": "Email transport/branding path accepted. Native return through sellertray://auth-confirm and sellertray://reset-password remains part of signed preview APK device acceptance and does not block this transport gate.",
+      "disposition": "Transport and SellerTray branding accepted; native deep-link return is covered by android_native_smoke."
+    },
+    {
+      "id": "mobile_experience_hardening",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": "Physical-device QA identified the original discoverability/mobile UX gaps. The consolidated hardening is now implemented: Home/Orders/Products/More IA, guided setup, labelled product/auth forms, manual order creation, segmented settings, Android navigation clearance/back behavior, de-emphasized single account-closure path, SellerTray identity cleanup, and hardened account lifecycle. Android QA APK #34 completed successfully from mobile commit 302d1641d275e928cc2a973376b48f34f6e7d4c0 and is ready for physical-device retest.",
+      "acceptance": "On a current-head QA APK, verify Home/Orders/Products/More navigation, Android-safe tab interaction, labelled product creation, guided setup, manual order creation, segmented More settings, non-prominent single account-closure path, no user-facing OrderDesk copy, working sign-out, and successful disposable-account deletion."
+    },
+    {
+      "id": "android_preview_apk",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": null,
+      "acceptance": "Create a signed preview APK from the exact release candidate and record the EAS build identifier."
+    },
+    {
+      "id": "android_native_smoke",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": "Earlier device smoke passed password-recovery deep-link return, signup confirmation deep-link return, sign-in and merchant/business provisioning. The prior QA exposed UX/navigation/account-deletion issues, which have now been hardened. Android QA APK #34 succeeded from commit 302d1641d275e928cc2a973376b48f34f6e7d4c0; branch head 3aa14582ea012dc4905f35ee5c450df89d85895d differs only by docs/mobile_experience_standard.md and the server-side send-auth-email function, so APK #34 is mobile-source equivalent to current head and is the authoritative device-retest build.",
+      "acceptance": "Complete remaining physical-device smoke: catalogue tenant-scope, full order lifecycle, business data export, permanent sign-out on rebuilt APK, disposable account deletion/relaunch, and visible-secret/error-message check."
+    },
+    {
+      "id": "android_production_aab",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": null,
+      "acceptance": "Create the signed production AAB after preview acceptance and record versionCode/build identifier."
+    },
+    {
+      "id": "meta_whatsapp_production",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": "Secure multi-merchant foundation implemented: unique tenant/Phone Number ID ownership; private encrypted BISU credential storage; server-only Embedded Signup authorization-code exchange; Meta token app/scope validation; WABA/phone verification; WABA subscribed_apps registration; per-phone outbound credential resolution; per-tenant WhatsApp media credential resolution. Live Naijalivemedia WABA 945806458591609 / Phone Number ID 1319301597937414 is connected and webhook-tested. Approval/runbook: docs/meta_tech_provider_approval.md. Merchant onboarding now explicitly states that SellerTray does not require a Meta payment method merely to connect; Meta billing setup remains separate and may be required only for Meta-billable messaging. Meta approval artifacts prepared in docs/meta_tech_provider_approval.md and docs/meta_app_review_submission.md, including ready-to-paste permission explanations, reviewer navigation, evidence-video checklists and secret-handling rules.",
+      "acceptance": "Complete ProcessEdge Meta Business/Tech Provider requirements; obtain the access level/permissions required for independent-merchant Embedded Signup; create and record the production Embedded Signup Configuration ID/redirect configuration; wire the merchant launcher; prove a second merchant can self-connect without manual Phone Number ID entry; pass correct-tenant inbound plus outbound status-message E2E; disclose that Meta messaging charges are separate from SellerTray; and recheck effective WhatsApp Business terms/data-sharing classification before release."
+    },
+    {
+      "id": "ai_parser_production",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": "order-parser v7 and whatsapp-webhook v13 deploy non-content outcome/token/context telemetry including cached input; AI catalogue context is capped at 160 ranked items and 6 aliases/item; ProcessEdge overview and Owner export are wired; RLS/cross-tenant/cascade/token/context-integrity smokes passed; live external-AI sample remains zero because production parser acceptance is pending",
+      "acceptance": "Configure server-only parser credentials and pass live AI parse, deterministic full-catalogue price matching, bounded-context quality, AI_ORDER_ACTIVITY metering, safe-fallback acceptance and ai_parser_attempts capture with model/token/context/outcome evidence."
+    },
+    {
+      "id": "outbound_whatsapp_worker",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": null,
+      "acceptance": "Configure worker/Meta credentials and prove pending notification delivery plus delivery/failure reconciliation."
+    },
+    {
+      "id": "usage_billing_settlement_foundation",
+      "required": true,
+      "status": "accepted",
+      "owner": "ProcessEdge",
+      "evidence": "S9C/S9D deployed; paystack-webhook v5, usage-settlement v5, account-lifecycle v6, billing-checkout v5; settlement Cron ACTIVE; closed-period/currency/deletion/concurrency guards smoke-tested; dual charging interlock defaults off; atomic pending-settlement claim proved first claim=1 and second claim=0; Mobile CI #235 passed",
+      "acceptance": "AI_ORDER_ACTIVITY metering is idempotent and trial-free; price/currency/period are snapshotted; only closed single-currency periods settle; reusable authorization storage is encrypted/server-only; closed periods are prepared automatically without money movement; self-service deletion blocks unsettled priced usage; debit requires both the server live flag and database commercial flag; a pending settlement is atomically claimed before contacting Paystack so concurrent charge calls cannot issue duplicate provider requests; ambiguous provider state can be reconciled by reference without another debit; safe settlement history is exportable and ProcessEdge sees only non-secret health indicators."
+    },
+    {
+      "id": "paystack_commercial_activation",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": "S9C metering and S9D postpaid settlement foundation are deployed; usage-settlement v5 requires dual charging gates and atomic debit claim; both charging gates remain disabled; base price, usage rate, reusable authorization and Paystack acceptance remain unset/pending",
+      "acceptance": "Approve SellerTray monthly base price and flat AI-assisted activity price after reviewing representative AI telemetry; configure Paystack plan/secret, BILLING_AUTH_ENCRYPTION_KEY and USAGE_SETTLEMENT_TOKEN; capture a reusable authorization in test mode; pass base checkout, closed-period/currency-safe idempotent usage settlement, exact amount/currency webhook reconciliation and Verify Transaction reconciliation; then explicitly enable both USAGE_BILLING_LIVE and subscription_plans.usage_charging_enabled."
+    },
+    {
+      "id": "google_play_data_safety",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": "docs/google_play_data_safety.md prepared from current mobile/backend data flows",
+      "acceptance": "Verify provider sharing classifications, enter the final Data Safety answers in Play Console, and confirm they match the approved SellerTray Privacy Policy."
+    },
+    {
+      "id": "google_play_app_content",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": "docs/google_play_submission.md prepared",
+      "acceptance": "Complete App access, ads, target audience, IARC content rating, Financial features, privacy/deletion and any applicable Play declarations."
+    },
+    {
+      "id": "play_review_access",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": null,
+      "acceptance": "Create a stable non-admin SellerTray review tenant and enter credentials/instructions only in Play Console App access."
+    },
+    {
+      "id": "google_play_store_listing",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": "docs/google_play_store_listing.md prepared; Play listing/assets not yet submitted",
+      "acceptance": "Enter approved store copy/category/contact details, upload approved icon/graphics/screenshots from the signed candidate, and verify reviewer credentials."
+    },
+    {
+      "id": "provider_data_sharing_classification",
+      "required": true,
+      "status": "pending",
+      "owner": "ProcessEdge",
+      "evidence": "docs/data_processor_review.md: Supabase/Paystack processor treatment supported; OpenAI conditional on production data controls; WhatsApp processor treatment supported for Customer Data but September 23, 2026 effective-terms check remains",
+      "acceptance": "On/after the applicable Meta terms effective date, recheck WhatsApp Business terms; record OpenAI production data controls and Paystack payload scope; then freeze Play shared/not-shared treatment consistent with the approved Privacy Policy."
+    }
+  ],
+  "qaBuild": {
+    "status": "ready_for_device_retest",
+    "sourceCommit": "302d1641d275e928cc2a973376b48f34f6e7d4c0",
+    "mobileEquivalentHead": "3aa14582ea012dc4905f35ee5c450df89d85895d",
+    "workflow": "Android QA APK #34",
+    "workflowRunId": 34639904042,
+    "artifactId": 10280815039,
+    "artifactName": "sellertray-qa-302d1641d275e928cc2a973376b48f34f6e7d4c0",
+    "artifactArchiveDigest": "sha256:4f8dcffaa8f4d34f94de641d7a954c2b926ce0398104df987fd611531866f72c",
+    "note": "Latest consolidated QA-only standalone APK. GitHub Actions #34 completed successfully and the staged APK SHA-256 was independently rechecked after artifact extraction. The current branch contains no apps/mobile changes after this source commit, so this is the correct APK for physical-device retest. It still uses the temporary QA signing path and does not satisfy the branded android_preview_apk or production AAB gates.",
+    "apkSha256": "f8829990c1d62614e2545fc2a633a3cb63fb835b4e65d9bc1923d88d9fcdbb7f",
+    "apkSizeBytes": 69198401
+  }
+}

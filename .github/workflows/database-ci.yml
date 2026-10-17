@@ -1,0 +1,64 @@
+name: Database CI
+
+concurrency:
+  group: database-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/tests/**'
+      - 'supabase/config.toml'
+      - '.github/workflows/database-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/tests/**'
+      - 'supabase/config.toml'
+      - '.github/workflows/database-ci.yml'
+
+jobs:
+  pgtap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.117.0
+
+      - name: Initialize local Supabase config
+        run: |
+          if [ ! -f supabase/config.toml ]; then
+            supabase init
+          fi
+
+          # The repository checkout directory ends in a hyphen (OrderDesk-).
+          # Supabase derives Docker DNS names from project_id, so normalize the
+          # local-only CI id to a DNS-safe value.
+          sed -i -E 's/^project_id = ".*"$/project_id = "sellertray-ci"/' supabase/config.toml
+          grep -q '^project_id = "sellertray-ci"$' supabase/config.toml
+
+      - name: Start database-only Supabase stack
+        run: >-
+          supabase start --debug
+          -x gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+
+      - name: Replay all migrations
+        run: supabase db reset
+
+      - name: Run SellerTray database tests
+        run: supabase test db
+
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup

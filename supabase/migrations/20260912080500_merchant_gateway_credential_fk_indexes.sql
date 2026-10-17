@@ -1,0 +1,5 @@
+create index merchant_gateway_credentials_method_idx
+  on sellertray_private.merchant_gateway_credentials(tenant_id,payment_method_id);
+
+create index merchant_gateway_credentials_updated_by_idx
+  on sellertray_private.merchant_gateway_credentials(updated_by_user_id);
