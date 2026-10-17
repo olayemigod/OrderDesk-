@@ -8,11 +8,17 @@ Before planning, editing, reviewing, refactoring, testing, or documenting any Se
 
 `.agents/skills/sellertray-project-implementation/SKILL.md`
 
-That skill is the repository-level implementation contract for the SellerTray redesign. It governs mobile UX, merchant web boundaries, shared commerce architecture, POS, inventory, branch awareness, UOM, WhatsApp commerce, payments, Bluetooth printing, reporting, AI, permissions, offline behaviour, implementation phases, QA gates, and anti-divergence rules.
+For any task touching inventory valuation, stock history, purchasing cost, COGS, profitability, inventory reports, transfers, returns, or offline/backdated stock events, also read and follow:
+
+`.agents/skills/sellertray-project-implementation/VALUATION.md`
+
+`VALUATION.md` is a normative extension of the governing SellerTray skill for those valuation-related boundaries. It does not replace or weaken any rule in `SKILL.md`.
+
+That governing skill and its applicable normative extensions are the repository-level implementation contract for the SellerTray redesign. They govern mobile UX, merchant web boundaries, shared commerce architecture, POS, inventory, branch awareness, UOM, WhatsApp commerce, payments, Bluetooth printing, reporting, AI, permissions, offline behaviour, implementation phases, QA gates, and anti-divergence rules.
 
 The originating SellerTray redesign conversation is the primary decision record when it is available to the agent. The repository skill is the durable fallback and must be used when that thread is unavailable.
 
-A later explicit user decision overrides older guidance. When product direction changes materially, update the governing skill in the same workstream so later agents do not inherit stale instructions.
+A later explicit user decision overrides older guidance. When product direction changes materially, update the governing skill or its applicable normative extension in the same workstream so later agents do not inherit stale instructions.
 
 ## Non-negotiable product model
 
