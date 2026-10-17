@@ -44,7 +44,10 @@ declare
   v_branch_name text;
 begin
   if tg_op = 'UPDATE' and new.branch_id is not distinct from old.branch_id then
-    new.branch_name_snapshot := old.branch_name_snapshot;
+    if new.branch_name_snapshot is distinct from old.branch_name_snapshot then
+      raise exception 'SellerTray order Branch attribution is immutable'
+        using errcode = '55000';
+    end if;
     return new;
   end if;
 
@@ -68,7 +71,7 @@ revoke all on function public.snapshot_sellertray_order_branch_name() from publi
 
 drop trigger if exists zz_snapshot_sellertray_order_branch_name on public.orders;
 create trigger zz_snapshot_sellertray_order_branch_name
-before insert or update of tenant_id, branch_id on public.orders
+before insert or update of tenant_id, branch_id, branch_name_snapshot on public.orders
 for each row execute function public.snapshot_sellertray_order_branch_name();
 
 create or replace function public.apply_sellertray_order_operator_snapshot(
