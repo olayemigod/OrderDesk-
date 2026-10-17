@@ -31,6 +31,7 @@ jobs:
       EXPO_PUBLIC_SUPABASE_URL: https://eujxswjspolugrzlsjnn.supabase.co
       EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_NlNRn9grGvfwZ1cYP09OvA_XSHOA-3I
       SELLERTRAY_QA_SIGNING_CERT_SHA256: fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c
+      SELLERTRAY_ANDROID_NDK_VERSION: 27.1.12297006
 
     steps:
       - name: Checkout
@@ -87,6 +88,52 @@ jobs:
             echo "SellerTray QA signing certificate changed: $actual" >&2
             exit 1
           fi
+
+      - name: Provision required Android NDK
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager_bin="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          ndk_dir="${ANDROID_HOME}/ndk/${SELLERTRAY_ANDROID_NDK_VERSION}"
+
+          if [ ! -x "$sdkmanager_bin" ]; then
+            echo "Android sdkmanager was not found at $sdkmanager_bin" >&2
+            exit 1
+          fi
+
+          if [ -f "$ndk_dir/source.properties" ]; then
+            echo "Android NDK ${SELLERTRAY_ANDROID_NDK_VERSION} is already installed."
+            exit 0
+          fi
+
+          # A failed SDK Manager download can leave a partial directory that makes
+          # later Gradle invocations fail in a less obvious way. Remove only the
+          # exact required NDK version before retrying its installation.
+          rm -rf "$ndk_dir"
+
+          installed=false
+          for attempt in 1 2 3; do
+            echo "Installing Android NDK ${SELLERTRAY_ANDROID_NDK_VERSION} (attempt ${attempt}/3)..."
+            if yes | "$sdkmanager_bin" "ndk;${SELLERTRAY_ANDROID_NDK_VERSION}"; then
+              if [ -f "$ndk_dir/source.properties" ]; then
+                installed=true
+                break
+              fi
+            fi
+
+            rm -rf "$ndk_dir"
+            if [ "$attempt" -lt 3 ]; then
+              sleep $((attempt * 10))
+            fi
+          done
+
+          if [ "$installed" != true ]; then
+            echo "Unable to provision Android NDK ${SELLERTRAY_ANDROID_NDK_VERSION} after 3 attempts." >&2
+            exit 1
+          fi
+
+          grep '^Pkg.Revision' "$ndk_dir/source.properties"
 
       - name: Build standalone QA release APK
         run: |
