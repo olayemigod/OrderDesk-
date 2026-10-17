@@ -8,9 +8,11 @@ import type {
   FulfillmentStatus,
   NotificationEventKey,
   OrderNotification,
+  OrderSource,
   OrderStatus,
   ParserSource,
   PaymentStatus,
+  ReturnStatus,
 } from '../domain/order';
 import { supabase } from '../lib/supabase';
 
@@ -34,8 +36,22 @@ type OrderNotificationRow = {
   sent_at: string | null;
 };
 
+type OrderPaymentEvidenceRow = {
+  order_id: string;
+  method_type: string;
+  provider: string;
+  status: string;
+  amount: number | string;
+  currency: string;
+};
+
+type BranchRow = { id: string; name: string };
+
 type OrderRow = {
   id: string;
+  branch_id: string;
+  pos_operator_user_id: string | null;
+  pos_operator_name: string | null;
   public_order_id: string;
   status: OrderStatus;
   status_reason: string | null;
@@ -50,8 +66,12 @@ type OrderRow = {
   customer_confirmed_at: string | null;
   payment_status: PaymentStatus;
   amount_paid: number | string;
+  currency: string;
   payment_confirmed_at: string | null;
-  source: 'whatsapp' | 'manual';
+  return_status: ReturnStatus;
+  returned_amount: number | string;
+  returned_at: string | null;
+  source: OrderSource;
   customer_note: string | null;
   parser_confidence: number | string | null;
   parser_source: ParserSource;
@@ -68,9 +88,13 @@ type OrderRow = {
     | null;
   order_items: Array<{
     id: string;
+    catalog_item_id: string | null;
     item_name: string;
     original_item_name: string | null;
     quantity: number | string;
+    selected_uom: string;
+    conversion_factor: number | string;
+    stock_quantity: number | string;
     unit_price: number | string | null;
     match_source: MatchSource;
     match_confidence: number | string | null;
@@ -97,7 +121,6 @@ export type ManualOrderInput = {
   items: ManualOrderLineInput[];
 };
 
-
 function one<T>(value: T | T[] | null): T | null {
   if (Array.isArray(value)) return value[0] ?? null;
   return value;
@@ -109,12 +132,31 @@ function toNumber(value: number | string | null): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function mapOrder(row: OrderRow, notifications: OrderNotification[]): MerchantOrder {
+function mapOrder(
+  row: OrderRow,
+  branchName: string,
+  notifications: OrderNotification[],
+  paymentEvidence: OrderPaymentEvidenceRow[],
+): MerchantOrder {
   const customer = one(row.customers);
   const sourceMessage = one(row.inbound_messages);
+  const confirmedPayments = paymentEvidence.filter((payment) => payment.status === 'confirmed');
+  const confirmedPayment = confirmedPayments.length === 1 ? confirmedPayments[0] : null;
+  const amountPaid = toNumber(row.amount_paid) ?? 0;
+  const cashReturnSupported = Boolean(
+    confirmedPayment
+    && confirmedPayment.method_type === 'cash'
+    && confirmedPayment.provider === 'pos_cash'
+    && (toNumber(confirmedPayment.amount) ?? -1) === amountPaid
+    && confirmedPayment.currency === row.currency,
+  );
 
   return {
     id: row.id,
+    branchId: row.branch_id,
+    branchName,
+    posOperatorUserId: row.pos_operator_user_id,
+    posOperatorName: row.pos_operator_name,
     customerId: customer?.id ?? '',
     publicOrderId: row.public_order_id,
     customerName: customer?.display_name || customer?.phone || customer?.wa_id || 'WhatsApp customer',
@@ -132,8 +174,12 @@ function mapOrder(row: OrderRow, notifications: OrderNotification[]): MerchantOr
     fulfillmentConfirmedBy: row.fulfillment_confirmed_by,
     customerConfirmedAt: row.customer_confirmed_at,
     paymentStatus: row.payment_status,
-    amountPaid: toNumber(row.amount_paid) ?? 0,
+    amountPaid,
     paymentConfirmedAt: row.payment_confirmed_at,
+    cashReturnSupported,
+    returnStatus: row.return_status,
+    returnedAmount: toNumber(row.returned_amount) ?? 0,
+    returnedAt: row.returned_at,
     source: row.source,
     customerMessage: sourceMessage?.text_body || row.customer_note || '',
     confidence: toNumber(row.parser_confidence),
@@ -156,9 +202,13 @@ function mapOrder(row: OrderRow, notifications: OrderNotification[]): MerchantOr
       .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()),
     items: (row.order_items ?? []).map((item) => ({
       id: item.id,
+      catalogItemId: item.catalog_item_id,
       name: item.item_name,
       originalName: item.original_item_name,
       quantity: toNumber(item.quantity) ?? 1,
+      selectedUom: item.selected_uom,
+      conversionFactor: toNumber(item.conversion_factor) ?? 1,
+      stockQuantity: toNumber(item.stock_quantity) ?? (toNumber(item.quantity) ?? 1),
       unitPrice: toNumber(item.unit_price),
       matchSource: item.match_source,
       matchConfidence: toNumber(item.match_confidence),
@@ -169,11 +219,14 @@ function mapOrder(row: OrderRow, notifications: OrderNotification[]): MerchantOr
 export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
   if (!tenantId) return [];
 
-  const [ordersResult, notificationsResult] = await Promise.all([
+  const [ordersResult, notificationsResult, paymentsResult, branchesResult] = await Promise.all([
     supabase
       .from('orders')
       .select(`
         id,
+        branch_id,
+        pos_operator_user_id,
+        pos_operator_name,
         public_order_id,
         status,
         status_reason,
@@ -188,7 +241,11 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
         customer_confirmed_at,
         payment_status,
         amount_paid,
+        currency,
         payment_confirmed_at,
+        return_status,
+        returned_amount,
+        returned_at,
         source,
         customer_note,
         parser_confidence,
@@ -198,20 +255,31 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
         created_at,
         customers(id, display_name, phone, wa_id),
         inbound_messages!orders_source_message_same_tenant(text_body),
-        order_items(id, item_name, original_item_name, quantity, unit_price, match_source, match_confidence),
+        order_items(id, catalog_item_id, item_name, original_item_name, quantity, selected_uom, conversion_factor, stock_quantity, unit_price, match_source, match_confidence),
         order_status_events(id, event_type, from_status, to_status, actor_kind, reason, created_at)
       `)
       .eq('tenant_id', tenantId)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false }),
     supabase
       .from('outbound_notifications')
       .select('id, order_id, event_key, delivery_status, message_body, created_at, sent_at')
       .eq('tenant_id', tenantId)
       .order('created_at', { ascending: false }),
+    supabase
+      .from('order_payments')
+      .select('order_id,method_type,provider,status,amount,currency')
+      .eq('tenant_id', tenantId),
+    supabase
+      .from('branches')
+      .select('id,name')
+      .eq('tenant_id', tenantId),
   ]);
 
   if (ordersResult.error) throw ordersResult.error;
   if (notificationsResult.error) throw notificationsResult.error;
+  if (paymentsResult.error) throw paymentsResult.error;
+  if (branchesResult.error) throw branchesResult.error;
 
   const notificationsByOrder = new Map<string, OrderNotification[]>();
   for (const row of (notificationsResult.data ?? []) as OrderNotificationRow[]) {
@@ -228,8 +296,24 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
     notificationsByOrder.set(row.order_id, bucket);
   }
 
+  const paymentsByOrder = new Map<string, OrderPaymentEvidenceRow[]>();
+  for (const row of (paymentsResult.data ?? []) as OrderPaymentEvidenceRow[]) {
+    const bucket = paymentsByOrder.get(row.order_id) ?? [];
+    bucket.push(row);
+    paymentsByOrder.set(row.order_id, bucket);
+  }
+
+  const branchNames = new Map(
+    ((branchesResult.data ?? []) as BranchRow[]).map((branch) => [branch.id, branch.name] as const),
+  );
+
   return ((ordersResult.data ?? []) as unknown as OrderRow[]).map((row) =>
-    mapOrder(row, notificationsByOrder.get(row.id) ?? []),
+    mapOrder(
+      row,
+      branchNames.get(row.branch_id) ?? 'Branch',
+      notificationsByOrder.get(row.id) ?? [],
+      paymentsByOrder.get(row.id) ?? [],
+    ),
   );
 }
 
@@ -264,6 +348,16 @@ export async function createManualOrder(input: ManualOrderInput): Promise<string
 
   if (!orderId) throw new Error('SellerTray returned an invalid order id.');
   return orderId;
+}
+
+export async function canManageOrderActions(tenantId: string, orderId: string): Promise<boolean> {
+  if (!tenantId || !orderId) return false;
+  const { data, error } = await supabase.rpc('get_sellertray_order_action_authority', {
+    p_tenant_id: tenantId,
+    p_order_id: orderId,
+  });
+  if (error) return false;
+  return data === true;
 }
 
 export type OrderFulfillmentInput = {
@@ -321,59 +415,62 @@ export async function completeOrderFulfillment(
 }
 
 export async function updateOrderStatus(
+  tenantId: string,
   orderId: string,
   status: OrderStatus,
   reason?: string | null,
 ): Promise<void> {
-  const { error } = await supabase
-    .from('orders')
-    .update({
-      status,
-      status_reason: reason?.trim() || null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', orderId);
-
-  if (error) throw error;
-}
-
-export async function addOrderItem(orderId: string, item: OrderItemInput): Promise<void> {
-  const { data: order, error: orderError } = await supabase
-    .from('orders')
-    .select('tenant_id')
-    .eq('id', orderId)
-    .single();
-
-  if (orderError) throw orderError;
-  if (!order?.tenant_id) throw new Error('Unable to resolve the order tenant.');
-
-  const { error } = await supabase.from('order_items').insert({
-    tenant_id: order.tenant_id,
-    order_id: orderId,
-    item_name: item.name.trim(),
-    quantity: item.quantity,
-    unit_price: item.unitPrice,
+  const { error } = await supabase.rpc('transition_sellertray_order', {
+    p_tenant_id: tenantId,
+    p_order_id: orderId,
+    p_status: status,
+    p_reason: reason?.trim() || null,
   });
-
   if (error) throw error;
 }
 
-export async function updateOrderItem(itemId: string, item: OrderItemInput): Promise<void> {
-  const { error } = await supabase
-    .from('order_items')
-    .update({
-      item_name: item.name.trim(),
-      quantity: item.quantity,
-      unit_price: item.unitPrice,
-    })
-    .eq('id', itemId);
-
+async function mutateOrderItem(
+  tenantId: string,
+  orderId: string,
+  action: 'add' | 'update' | 'delete',
+  itemId: string | null,
+  item: OrderItemInput | null,
+): Promise<void> {
+  const { error } = await supabase.rpc('mutate_sellertray_order_item', {
+    p_tenant_id: tenantId,
+    p_order_id: orderId,
+    p_action: action,
+    p_item_id: itemId,
+    p_item_name: item?.name.trim() || null,
+    p_quantity: item?.quantity ?? null,
+    p_unit_price: item?.unitPrice ?? null,
+  });
   if (error) throw error;
 }
 
-export async function deleteOrderItem(itemId: string): Promise<void> {
-  const { error } = await supabase.from('order_items').delete().eq('id', itemId);
-  if (error) throw error;
+export async function addOrderItem(
+  tenantId: string,
+  orderId: string,
+  item: OrderItemInput,
+): Promise<void> {
+  await mutateOrderItem(tenantId, orderId, 'add', null, item);
+}
+
+export async function updateOrderItem(
+  tenantId: string,
+  orderId: string,
+  itemId: string,
+  item: OrderItemInput,
+): Promise<void> {
+  await mutateOrderItem(tenantId, orderId, 'update', itemId, item);
+}
+
+export async function deleteOrderItem(
+  tenantId: string,
+  orderId: string,
+  itemId: string,
+): Promise<void> {
+  await mutateOrderItem(tenantId, orderId, 'delete', itemId, null);
 }
 
 export function subscribeToOrderChanges(tenantId: string, onChange: () => void): RealtimeChannel {
@@ -392,6 +489,11 @@ export function subscribeToOrderChanges(tenantId: string, onChange: () => void):
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'order_status_events', filter: `tenant_id=eq.${tenantId}` },
+      onChange,
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'order_payments', filter: `tenant_id=eq.${tenantId}` },
       onChange,
     )
     .on(

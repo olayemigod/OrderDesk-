@@ -47,6 +47,7 @@ class ParserProviderError extends Error {
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') ?? '';
 const OPENAI_PARSER_MODEL = Deno.env.get('OPENAI_PARSER_MODEL') ?? 'gpt-5.6-luna';
 const ORDER_PARSER_TOKEN = Deno.env.get('ORDER_PARSER_TOKEN') ?? '';
+const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
 const MAX_MESSAGE_LENGTH = 4000;
 const MAX_CATALOGUE_ITEMS = 500;
@@ -80,14 +81,17 @@ Deno.serve(withObservability('order-parser', async (request) => {
     return json({ error: 'Method not allowed' }, 405);
   }
 
-  if (!ORDER_PARSER_TOKEN || !OPENAI_API_KEY) {
-    console.error('Order parser is not activated: required server secrets are missing.');
+  if (!OPENAI_API_KEY) {
+    console.error('Order parser is not activated: OpenAI server secret is missing.');
     return json({ error: 'Parser not configured' }, 503);
   }
 
   const authorization = request.headers.get('authorization') ?? '';
-  const expectedAuthorization = `Bearer ${ORDER_PARSER_TOKEN}`;
-  if (!constantTimeEqual(authorization, expectedAuthorization)) {
+  const acceptedTokens = [ORDER_PARSER_TOKEN, SERVICE_ROLE_KEY].filter(Boolean);
+  const authorized = acceptedTokens.some((token) =>
+    constantTimeEqual(authorization, `Bearer ${token}`)
+  );
+  if (!authorized) {
     return json({ error: 'Unauthorized' }, 401);
   }
 
@@ -156,8 +160,10 @@ async function extractOrder(input: ParserRequest): Promise<{ parsed: ParsedOrder
           content:
             'You extract purchase-order line items from short WhatsApp messages for a small merchant. ' +
             'Return only products the customer is actually ordering and their numeric quantities. ' +
-            'Use the supplied merchant catalogue names and aliases only to understand abbreviations, packaging, spelling and informal wording. ' +
-            'For each item name, preserve the customer wording when it is clear; otherwise use the closest catalogue name. ' +
+            'Use the supplied merchant catalogue names and aliases to understand abbreviations, packaging, spelling, size notation, word order and informal wording. ' +
+            'When the customer wording uniquely refers to a supplied catalogue item, return that exact catalogue name. For example, catalogue "Rice" plus "2 bags of rice" should return name "Rice", quantity 2; catalogue "50kg Semolina" plus "semo 50kg" should return name "50kg Semolina". ' +
+            'Do not guess between multiple catalogue variants when the customer omitted a distinguishing size, flavour or pack attribute; preserve the customer wording so SellerTray can request review or clarification. ' +
+            'When no supplied catalogue item matches safely, preserve the customer wording rather than inventing a catalogue product. ' +
             'Ignore greetings, delivery instructions, addresses, payment discussion, thanks and non-order chatter. ' +
             'Never invent a product, quantity, catalogue ID or selling price. Selling prices are deliberately outside your output. ' +
             'If no purchase line can be identified safely, return an empty items array. ' +

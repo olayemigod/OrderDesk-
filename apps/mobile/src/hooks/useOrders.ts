@@ -15,6 +15,7 @@ import {
   type OrderFulfillmentInput,
   type OrderItemInput,
 } from '../data/ordersRepository';
+import { isLikelyConnectivityError } from '../data/offlineSalesRepository';
 import type { MerchantOrder, OrderStatus } from '../domain/order';
 
 export function useOrders(tenantId: string | null) {
@@ -36,7 +37,7 @@ export function useOrders(tenantId: string | null) {
       setOrders(next);
       setError(null);
     } catch (err) {
-      setError(errorMessage(err, 'Unable to load orders.'));
+      setError(isLikelyConnectivityError(err) ? null : errorMessage(err, 'Unable to load orders.'));
     } finally {
       setLoading(false);
     }
@@ -73,6 +74,7 @@ export function useOrders(tenantId: string | null) {
 
   const setStatus = useCallback(
     async (orderId: string, status: OrderStatus, reason?: string | null) => {
+      if (!tenantId) throw new Error('No active business selected.');
       const previous = orders;
       const normalizedReason = reason?.trim() || null;
       setOrders((current) =>
@@ -84,7 +86,7 @@ export function useOrders(tenantId: string | null) {
       );
 
       try {
-        await updateOrderStatus(orderId, status, normalizedReason);
+        await updateOrderStatus(tenantId, orderId, status, normalizedReason);
         setError(null);
       } catch (err) {
         setOrders(previous);
@@ -92,7 +94,7 @@ export function useOrders(tenantId: string | null) {
         throw err;
       }
     },
-    [orders],
+    [orders, tenantId],
   );
 
   const startDelivery = useCallback(
@@ -125,41 +127,48 @@ export function useOrders(tenantId: string | null) {
 
   const addItem = useCallback(
     async (orderId: string, item: OrderItemInput) => {
+      if (!tenantId) throw new Error('No active business selected.');
       try {
-        await addOrderItem(orderId, item);
+        await addOrderItem(tenantId, orderId, item);
         await refresh();
       } catch (err) {
         setError(errorMessage(err, 'Unable to add order item.'));
         throw err;
       }
     },
-    [refresh],
+    [refresh, tenantId],
   );
 
   const editItem = useCallback(
     async (itemId: string, item: OrderItemInput) => {
+      if (!tenantId) throw new Error('No active business selected.');
+      const parentOrder = orders.find((order) => order.items.some((line) => line.id === itemId));
+      if (!parentOrder) throw new Error('Unable to resolve the order for this item.');
       try {
-        await updateOrderItem(itemId, item);
+        await updateOrderItem(tenantId, parentOrder.id, itemId, item);
         await refresh();
       } catch (err) {
         setError(errorMessage(err, 'Unable to update order item.'));
         throw err;
       }
     },
-    [refresh],
+    [orders, refresh, tenantId],
   );
 
   const removeItem = useCallback(
     async (itemId: string) => {
+      if (!tenantId) throw new Error('No active business selected.');
+      const parentOrder = orders.find((order) => order.items.some((line) => line.id === itemId));
+      if (!parentOrder) throw new Error('Unable to resolve the order for this item.');
       try {
-        await deleteOrderItem(itemId);
+        await deleteOrderItem(tenantId, parentOrder.id, itemId);
         await refresh();
       } catch (err) {
         setError(errorMessage(err, 'Unable to remove order item.'));
         throw err;
       }
     },
-    [refresh],
+    [orders, refresh, tenantId],
   );
 
   return {

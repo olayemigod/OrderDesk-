@@ -166,7 +166,6 @@ const requiredBlockedAndroidPermissions = [
   "android.permission.BODY_SENSORS_BACKGROUND",
   "android.permission.ACTIVITY_RECOGNITION",
   "android.permission.BLUETOOTH_SCAN",
-  "android.permission.BLUETOOTH_CONNECT",
   "android.permission.SCHEDULE_EXACT_ALARM",
   "android.permission.USE_EXACT_ALARM",
   "android.permission.MANAGE_EXTERNAL_STORAGE",
@@ -178,9 +177,10 @@ const blockedAndroidPermissions = new Set(app.android?.blockedPermissions ?? [])
 for (const permission of requiredBlockedAndroidPermissions) {
   requireValue(blockedAndroidPermissions.has(permission), 'Sensitive Android permission must remain blocked: '+permission);
 }
-requireValue(app.android?.versionCode === 7, 'Android versionCode must be 7 for the merchant-reference QA line');
+requireValue(app.android?.versionCode === 19, 'Android versionCode must be 19 for the merchant-reference QA line');
 requireValue(app.ios?.bundleIdentifier === 'ng.processedge.sellertray', 'iOS bundle ID must match SellerTray identity');
 requireValue(pkg.dependencies?.['expo-notifications'] === '57.0.18', 'SellerTray mobile must pin expo-notifications for native push');
+requireValue(pkg.dependencies?.['expo-constants'] === '57.0.17', 'SellerTray mobile must pin expo-constants for Expo push project identity');
 requireValue(
   (app.plugins ?? []).some((plugin) => Array.isArray(plugin) ? plugin[0] === 'expo-notifications' : plugin === 'expo-notifications'),
   'Expo notifications config plugin must be enabled',
@@ -220,8 +220,8 @@ requireValue(authEmailConfirmation.includes('SellerTray'), 'Signup confirmation 
 requireValue(authEmailConfirmation.includes('{{ .ConfirmationURL }}'), 'Signup confirmation template must preserve Supabase ConfirmationURL');
 requireValue(authEmailRecovery.includes('SellerTray'), 'Password recovery template must use SellerTray branding');
 requireValue(authEmailRecovery.includes('{{ .ConfirmationURL }}'), 'Password recovery template must preserve Supabase ConfirmationURL');
-requireValue(authEmailConfirmation.includes('https://processedge.com.ng/sellertray/privacy'), 'Signup confirmation template must link the SellerTray Privacy Policy');
-requireValue(authEmailRecovery.includes('https://processedge.com.ng/sellertray/privacy'), 'Password recovery template must link the SellerTray Privacy Policy');
+requireValue(authEmailConfirmation.includes('https://sellertray.vercel.app/privacy'), 'Signup confirmation template must link the SellerTray Privacy Policy');
+requireValue(authEmailRecovery.includes('https://sellertray.vercel.app/privacy'), 'Password recovery template must link the SellerTray Privacy Policy');
 requireValue(!authEmailConfirmation.includes('OrderDesk') && !authEmailRecovery.includes('OrderDesk'), 'Production Auth email templates must not expose the OrderDesk beta name');
 requireValue(authEmailTemplateReadme.includes('Send Email Auth Hook'), 'Auth email deployment notes must retain the Send Email Hook contract');
 const sendAuthEmailFunction = read(join(repoRoot, 'supabase/functions/send-auth-email/index.ts'));
@@ -244,8 +244,8 @@ const provisionedApp = read(join(mobileRoot, 'src/ProvisionedApp.tsx'));
 const legalGate = read(join(mobileRoot, 'src/components/LegalAcceptanceGate.tsx'));
 requireValue(provisionedApp.includes('<LegalAcceptanceGate>'), 'Authenticated SellerTray sessions must pass through LegalAcceptanceGate');
 requireValue(legalGate.includes('acceptSellerTrayLegal'), 'LegalAcceptanceGate must record acceptance through the lifecycle repository');
-requireValue(legalGate.includes('https://processedge.com.ng/sellertray/privacy'), 'LegalAcceptanceGate privacy URL is missing');
-requireValue(legalGate.includes('https://processedge.com.ng/sellertray/terms'), 'LegalAcceptanceGate terms URL is missing');
+requireValue(legalGate.includes('https://sellertray.vercel.app/privacy'), 'LegalAcceptanceGate privacy URL is missing');
+requireValue(legalGate.includes('https://sellertray.vercel.app/terms'), 'LegalAcceptanceGate terms URL is missing');
 requireValue(authGate.includes('signupLegalAccepted'), 'SellerTray signup must require legal acknowledgement');
 requireValue(authGate.includes('Email address') && authGate.includes('Confirm password'), 'Authentication forms must retain visible field labels');
 requireValue(authGate.includes("keyboardShouldPersistTaps=\"handled\""), 'Authentication forms must remain keyboard-safe and scrollable');
@@ -264,11 +264,20 @@ const businessRepository = read(join(mobileRoot, 'src/data/businessRepository.ts
 const provisionBusinessFunction = read(join(repoRoot, 'supabase/functions/provision-business/index.ts'));
 requireValue(settingsHub.includes('<AccountDataControls business={business} />'), 'Active merchants must reach AccountDataControls through More > Account & privacy');
 requireValue(saasApp.includes("supabase.auth.signOut({ scope: 'local' })"), 'Workspace quick sign-out must be device-local');
-requireValue(saasApp.includes('label="Products"') && saasApp.includes("onChange('products')"), 'Products must have a first-class bottom tab');
+requireValue(saasApp.includes('label="Catalogue"') && saasApp.includes("onChange('products')"), 'Catalogue must have a first-class bottom tab');
+requireValue(saasApp.includes('label="Conversations"') && saasApp.includes("onChange('inbox')"), 'WhatsApp conversations must have a first-class Conversations bottom tab');
+requireValue(saasApp.includes("if (selectedOrder)") && saasApp.includes("Orders"), 'Order details must remain a mobile drill-in flow with a visible back action');
+requireValue(saasApp.includes('Captured order messages') && saasApp.includes('Linked order'), 'Inbox must expose captured WhatsApp order messages and linked-order navigation');
+requireValue(saasApp.includes('conversationUnreadBadge') && saasApp.includes('Unread messages in this view'), 'Conversations must expose per-conversation unread bubbles and unread summary');
+requireValue(saasApp.includes('merchantUnreadCount') && saasApp.includes('markAllMerchantNotificationsRead'), 'Notification bell and Activity Center must use durable per-user unread state');
+requireValue(saasApp.includes('usePushNotifications'), 'SellerTray shell must register native merchant push notifications');
+requireValue(catalogueView.includes('Manage') && catalogueView.includes('Search products, categories or SKU'), 'Catalogue must retain merchant-first search and optional WhatsApp mapping controls');
+const paymentSettingsUi = read(join(mobileRoot, 'src/components/PaymentMethodsSettings.tsx'));
+requireValue(paymentSettingsUi.includes('Transactions') && paymentSettingsUi.includes('Payment methods'), 'Payments must keep operational transactions separate from payment-method configuration');
 requireValue(saasApp.includes('label="More"') && saasApp.includes("onChange('more')"), 'Business/settings must be separated behind More');
 requireValue(saasApp.includes("paddingBottom: Platform.OS === 'android' ? 46 : 10"), 'Android bottom navigation must retain system-navigation clearance');
 requireValue(settingsHub.includes("BackHandler.addEventListener('hardwareBackPress'"), 'Android settings must support native back navigation');
-requireValue(settingsHub.includes('SellerTray 1.0.0 · Android build 7'), 'More screen must expose the current Android build marker');
+requireValue(read(join(mobileRoot, 'src/redesign/MoreWorkspace.tsx')).includes('Android build '+app.android.versionCode), 'More screen must expose the current Android build marker');
 requireValue(saasApp.includes("StatusBar.currentHeight"), 'Android status-bar safe area must remain enforced in the merchant workspace');
 requireValue(catalogueView.includes('Product name') && catalogueView.includes('Selling price') && catalogueView.includes('Customer words / aliases'), 'Product editor must retain visible field labels and guidance');
 requireValue(manualOrderComposer.includes('Create an order') && manualOrderComposer.includes('Customer name') && manualOrderComposer.includes('Products *'), 'Orders must expose guided manual order creation');
@@ -310,7 +319,7 @@ requireValue(orderFulfillmentPanel.includes('Mark delivered & complete') && orde
 requireValue(orderFulfillmentPanel.includes('Customer confirmed receipt on WhatsApp'), 'Completed orders must show customer receipt-confirmation provenance');
 requireValue(
   saasApp.includes('order.publicOrderId') &&
-    saasApp.includes('Search order ref, customer, phone, message or product'),
+    saasApp.includes('Search orders, customers or products'),
   'Merchant-scoped order references must be visible in the merchant order UI',
 );
 const orderIdSelfServiceMigration = read(join(repoRoot, 'supabase/migrations/20260912053000_order_ids_whatsapp_self_service.sql'));
@@ -353,6 +362,7 @@ const pdfReceiptMigration = read(join(repoRoot, 'supabase/migrations/20260912054
 const whatsappNotificationWorker = read(join(repoRoot, 'supabase/functions/send-whatsapp-notifications/index.ts'));
 const merchantPushWorker = read(join(repoRoot, 'supabase/functions/send-merchant-push/index.ts'));
 const merchantPushMigration = read(join(repoRoot, 'supabase/migrations/20260913023000_merchant_push_and_per_user_unread.sql'));
+const genericWhatsappMessageMigration = read(join(repoRoot, 'supabase/migrations/20260913024000_generic_whatsapp_message_notifications.sql'));
 requireValue(
   pdfReceiptMigration.includes("'receipts', 'receipts', false") &&
     pdfReceiptMigration.includes("media_type = 'document'") &&
@@ -386,9 +396,14 @@ requireValue(
     merchantPushMigration.includes('merchant_conversation_reads'),
   'Per-user notification, conversation unread, and push-device contracts are missing',
 );
+requireValue(
+  genericWhatsappMessageMigration.includes("'new_whatsapp_message'") &&
+    genericWhatsappMessageMigration.includes('queue_sellertray_unhandled_whatsapp_message_notification'),
+  'Ordinary WhatsApp messages must produce merchant alerts without duplicating order/change-request alerts',
+);
 requireValue(accountControls.includes('DELETE MY SELLERTRAY ACCOUNT'), 'Account deletion confirmation must use SellerTray');
-requireValue(accountControls.includes('https://processedge.com.ng/sellertray/privacy'), 'In-app SellerTray privacy URL is missing');
-requireValue(accountControls.includes('https://processedge.com.ng/sellertray/terms'), 'In-app SellerTray terms URL is missing');
+requireValue(accountControls.includes('https://sellertray.vercel.app/privacy'), 'In-app SellerTray privacy URL is missing');
+requireValue(accountControls.includes('https://sellertray.vercel.app/terms'), 'In-app SellerTray terms URL is missing');
 
 const orderParserFunction = read(join(repoRoot, 'supabase/functions/order-parser/index.ts'));
 const merchantOrderFunction = read(join(repoRoot, 'supabase/functions/merchant-order/index.ts'));
@@ -407,7 +422,7 @@ const whatsappConnectionFunction = read(join(repoRoot, 'supabase/functions/whats
 const whatsappConnectionMigration = read(join(repoRoot, 'supabase/migrations/20260912235000_whatsapp_multi_merchant_connections.sql'));
 const catalogueFromChatFunction = read(join(repoRoot, 'supabase/functions/catalogue-from-chat/index.ts'));
 const orderChangeRequestFunction = read(join(repoRoot, 'supabase/functions/order-change-request/index.ts'));
-const orderChangeNotificationMigration = read(join(repoRoot, 'supabase/migrations/20260913011500_customer_order_change_notifications.sql'));
+const orderChangeNotificationMigration = read(join(repoRoot, 'supabase/migrations/20260913002145_customer_order_change_notifications.sql'));
 const orderChangeRealtimeMigration = read(join(repoRoot, 'supabase/migrations/20260913014500_order_change_request_realtime.sql'));
 const merchantNotificationsRepository = read(join(mobileRoot, 'src/data/merchantNotificationsRepository.ts'));
 const orderChangeRequestsRepository = read(join(mobileRoot, 'src/data/orderChangeRequestsRepository.ts'));
@@ -988,7 +1003,7 @@ const commercialPricingProposal = read(join(repoRoot, 'docs/commercial_pricing_p
 const whatsappConnectionView = read(join(mobileRoot, 'src/components/WhatsAppConnectionView.tsx'));
 requireValue(releaseRunbook.includes('ng.processedge.sellertray'), 'Release runbook must record the frozen Android package');
 requireValue(releaseRunbook.includes('sellertray://auth-confirm'), 'Release runbook must record SellerTray Auth redirects');
-requireValue(lifecycle.includes('https://processedge.com.ng/sellertray/account-deletion'), 'Data lifecycle must record the public deletion resource');
+requireValue(lifecycle.includes('https://sellertray.vercel.app/account-deletion'), 'Data lifecycle must record the public deletion resource');
 requireValue(
   metaTechProviderRunbook.includes('Meta Tech Provider') &&
     metaTechProviderRunbook.includes('Embedded Signup') &&

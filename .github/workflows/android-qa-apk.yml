@@ -4,8 +4,17 @@ on:
   push:
     branches:
       - feat/mvp-foundation
+      - feat/sellertray-brand-ui-v1
+      - feat/sellertray-mobile-shell-v2
+      - fix/sellertray-redesign-integration
     paths:
       - 'apps/mobile/**'
+      - 'supabase/**'
+      - '.github/workflows/android-qa-apk.yml'
+  pull_request:
+    paths:
+      - 'apps/mobile/**'
+      - 'supabase/**'
       - '.github/workflows/android-qa-apk.yml'
   workflow_dispatch:
 
@@ -24,34 +33,130 @@ jobs:
       run:
         working-directory: apps/mobile
     env:
-      EXPO_PUBLIC_SUPABASE_URL: https://eujxswjspolugrzlsjnn.supabase.co
-      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_NlNRn9grGvfwZ1cYP09OvA_XSHOA-3I
+      EXPO_NO_TELEMETRY: '1'
+      SELLERTRAY_QA_SIGNING_CERT_SHA256: fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c
+      SELLERTRAY_ANDROID_NDK_VERSION: 27.1.12297006
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout exact candidate source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact candidate checkout
+        id: source
+        run: |
+          expected="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+          actual="$(git rev-parse HEAD)"
+          if [ "$actual" != "$expected" ]; then
+            echo "SellerTray QA source mismatch: expected $expected, checked out $actual" >&2
+            exit 1
+          fi
+          printf 'sha=%s\n' "$actual" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: apps/mobile/package-lock.json
 
       - name: Setup Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Install locked dependencies
-        run: npm ci
+        run: npm ci --no-audit --no-fund
+
+      - name: Load governed QA runtime configuration
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const qa = require('./eas.json').build?.qa?.env ?? {};
+          const required = [
+            'EXPO_PUBLIC_SUPABASE_URL',
+            'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+            'EXPO_PUBLIC_EAS_PROJECT_ID',
+          ];
+          const missing = required.filter((key) => !qa[key]);
+          if (missing.length) {
+            throw new Error(`Missing governed QA runtime configuration: ${missing.join(', ')}`);
+          }
+          fs.appendFileSync(
+            process.env.GITHUB_ENV,
+            required.map((key) => `${key}=${qa[key]}`).join('\n') + '\n',
+          );
+          NODE
 
       - name: Typecheck
         run: npm run typecheck
 
+      - name: SellerTray release preflight
+        run: npm run preflight
+
       - name: Generate Android native project
         run: npx expo prebuild --platform android --clean --no-install
+
+      - name: Verify barcode camera permission
+        run: |
+          manifest="android/app/src/main/AndroidManifest.xml"
+          camera_line="$(grep 'android.permission.CAMERA' "$manifest" || true)"
+          if [ -z "$camera_line" ]; then
+            echo "SellerTray barcode scanner is missing android.permission.CAMERA" >&2
+            exit 1
+          fi
+          if printf '%s\n' "$camera_line" | grep -q 'tools:node="remove"'; then
+            echo "SellerTray barcode scanner CAMERA permission is marked for removal" >&2
+            exit 1
+          fi
+          active_audio="$(grep 'android.permission.RECORD_AUDIO' "$manifest" | grep -v 'tools:node="remove"' || true)"
+          if [ -n "$active_audio" ]; then
+            echo "SellerTray barcode scanning must not request active RECORD_AUDIO permission" >&2
+            printf '%s\n' "$active_audio" >&2
+            exit 1
+          fi
+
+      - name: Verify QA signing lineage
+        run: |
+          actual="$(keytool -exportcert -alias androiddebugkey -keystore android/app/debug.keystore -storepass android | sha256sum | awk '{print $1}')"
+          if [ "$actual" != "$SELLERTRAY_QA_SIGNING_CERT_SHA256" ]; then
+            echo "SellerTray QA signing certificate changed: $actual" >&2
+            exit 1
+          fi
+
+      - name: Provision required Android NDK
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager_bin="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          ndk_dir="${ANDROID_HOME}/ndk/${SELLERTRAY_ANDROID_NDK_VERSION}"
+          test -x "$sdkmanager_bin"
+          if [ -f "$ndk_dir/source.properties" ]; then
+            grep '^Pkg.Revision' "$ndk_dir/source.properties"
+            exit 0
+          fi
+          rm -rf "$ndk_dir"
+          for attempt in 1 2 3; do
+            echo "Installing NDK attempt ${attempt}/3"
+            set +o pipefail
+            yes | "$sdkmanager_bin" "ndk;${SELLERTRAY_ANDROID_NDK_VERSION}"
+            sdk_status=${PIPESTATUS[1]}
+            set -o pipefail
+            if [ "$sdk_status" -eq 0 ] && [ -f "$ndk_dir/source.properties" ]; then
+              grep '^Pkg.Revision' "$ndk_dir/source.properties"
+              exit 0
+            fi
+            rm -rf "$ndk_dir"
+            if [ "$attempt" -lt 3 ]; then
+              sleep $((attempt * 10))
+            fi
+          done
+          echo "Unable to provision required Android NDK" >&2
+          exit 1
 
       - name: Build standalone QA release APK
         run: |
@@ -64,13 +169,21 @@ jobs:
           mkdir -p qa-artifact
           cp android/app/build/outputs/apk/release/app-release.apk qa-artifact/sellertray-qa.apk
           sha256sum qa-artifact/sellertray-qa.apk > qa-artifact/sellertray-qa.apk.sha256
+          printf '%s\n' "${{ steps.source.outputs.sha }}" > qa-artifact/source-commit.txt
+          node -p "require('./app.json').expo.android.versionCode" > qa-artifact/version-code.txt
+          printf '%s\n' "ng.processedge.sellertray" > qa-artifact/package-name.txt
+          printf '%s\n' "$SELLERTRAY_QA_SIGNING_CERT_SHA256" > qa-artifact/signing-cert-sha256.txt
 
       - name: Upload QA APK
         uses: actions/upload-artifact@v4
         with:
-          name: sellertray-qa-${{ github.sha }}
+          name: sellertray-qa-${{ steps.source.outputs.sha }}
           path: |
             apps/mobile/qa-artifact/sellertray-qa.apk
             apps/mobile/qa-artifact/sellertray-qa.apk.sha256
+            apps/mobile/qa-artifact/source-commit.txt
+            apps/mobile/qa-artifact/version-code.txt
+            apps/mobile/qa-artifact/package-name.txt
+            apps/mobile/qa-artifact/signing-cert-sha256.txt
           if-no-files-found: error
           retention-days: 14

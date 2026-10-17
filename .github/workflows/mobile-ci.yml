@@ -14,6 +14,7 @@ on:
       - 'supabase/migrations/**'
       - 'supabase/templates/**'
       - 'apps/mobile/**'
+      - 'scripts/check-internal-authority-rpc-boundary.mjs'
       - 'docs/release_runbook.md'
       - 'docs/data_lifecycle.md'
       - 'docs/release_acceptance.json'
@@ -33,6 +34,7 @@ on:
       - 'supabase/migrations/**'
       - 'supabase/templates/**'
       - 'apps/mobile/**'
+      - 'scripts/check-internal-authority-rpc-boundary.mjs'
       - 'docs/release_runbook.md'
       - 'docs/data_lifecycle.md'
       - 'docs/release_acceptance.json'
@@ -46,26 +48,34 @@ on:
       - '.github/workflows/mobile-ci.yml'
 
 jobs:
-  typecheck:
+  verify:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     defaults:
       run:
         working-directory: apps/mobile
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout exact candidate source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact candidate checkout
+        run: |
+          expected="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
 
       - name: Setup Node 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
 
+      - name: Enforce internal authority RPC boundary
+        run: node ../../scripts/check-internal-authority-rpc-boundary.mjs
+
       - name: Install locked dependencies
         run: npm ci --no-audit --no-fund
-
-      - name: Audit production dependencies
-        run: npm audit --omit=dev --audit-level=high
 
       - name: Typecheck
         run: npm run typecheck
@@ -83,3 +93,32 @@ jobs:
 
       - name: SellerTray release preflight
         run: npm run preflight
+
+  dependency-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Checkout exact candidate source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact candidate checkout
+        run: |
+          expected="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Audit production dependencies
+        run: node scripts/dependency-audit-policy.mjs

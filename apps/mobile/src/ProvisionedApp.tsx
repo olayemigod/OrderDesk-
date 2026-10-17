@@ -1,13 +1,14 @@
-import { ActivityIndicator, Platform, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 
-import SaasApp from './SaasApp';
 import { AuthGate } from './components/AuthGate';
 import { CreateBusinessView } from './components/CreateBusinessView';
 import { LegalAcceptanceGate } from './components/LegalAcceptanceGate';
 import { PlatformAdminView } from './components/PlatformAdminView';
+import { SellerTrayLoadingScreen } from './components/SellerTrayLoadingScreen';
 import { useBusinesses } from './hooks/useBusinesses';
 import { usePlatformAdmin } from './hooks/usePlatformAdmin';
 import { supabase } from './lib/supabase';
+import RedesignWorkspace from './redesign/RedesignWorkspace';
 
 export default function ProvisionedApp() {
   return (
@@ -30,12 +31,7 @@ function ProvisioningGate() {
   const platformAdmin = usePlatformAdmin();
 
   if ((loading || platformAdmin.loading) && !activeBusiness && !platformAdmin.overview) {
-    return (
-      <SafeAreaView style={styles.centered}>
-        <ActivityIndicator size="large" />
-        <Text style={styles.muted}>Preparing your SellerTray account…</Text>
-      </SafeAreaView>
-    );
+    return <SellerTrayLoadingScreen message="Preparing your SellerTray account…" />;
   }
 
   if (!activeBusiness && platformAdmin.isPlatformAdmin) {
@@ -90,22 +86,13 @@ function ProvisioningGate() {
     );
   }
 
-  return <SaasApp />;
+  return <RedesignWorkspace />;
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F6F7F9', paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) : 0 },
+  safeArea: { flex: 1, backgroundColor: '#F8FAFC', paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) : 0 },
   page: { paddingBottom: 36 },
   adminPage: { padding: 18, paddingBottom: 36, gap: 18 },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    padding: 24,
-    backgroundColor: '#F6F7F9',
-  },
-  muted: { color: '#667085', fontSize: 12 },
   errorCard: {
     marginHorizontal: 20,
     marginTop: 16,

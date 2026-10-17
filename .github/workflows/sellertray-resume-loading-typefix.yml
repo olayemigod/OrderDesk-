@@ -1,0 +1,36 @@
+name: SellerTray Resume Loading Typefix
+
+on:
+  push:
+    branches:
+      - feat/sellertray-brand-ui-v1
+    paths:
+      - 'scripts/fix-sellertray-resume-loading-row.mjs'
+      - '.github/workflows/sellertray-resume-loading-typefix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/sellertray-brand-ui-v1
+          fetch-depth: 0
+      - name: Apply Resume Sale loading style fix
+        run: node scripts/fix-sellertray-resume-loading-row.mjs
+      - name: Commit patch
+        run: |
+          if git diff --quiet; then
+            echo "No patch changes produced" >&2
+            exit 1
+          fi
+          git config user.name "sellertray-qa-bot"
+          git config user.email "sellertray-qa-bot@users.noreply.github.com"
+          git add apps/mobile/src/redesign/ResumePosDraftWorkspace.tsx
+          git commit -m "Fix Resume Sale loading style typecheck"
+          git push origin HEAD:feat/sellertray-brand-ui-v1

@@ -1,0 +1,51 @@
+name: SellerTray AI CI
+
+on:
+  push:
+    branches:
+      - feat/sellertray-ai-insights-v1
+      - feat/sellertray-brand-ui-v1
+    paths:
+      - 'supabase/functions/merchant-ai/**'
+      - 'supabase/migrations/**ai_insight**'
+      - 'supabase/tests/ai_insight_authority.test.sql'
+      - 'apps/merchant-web/src/AiInsights.tsx'
+      - 'apps/merchant-web/scripts/ai-security-preflight.mjs'
+      - '.github/workflows/ai-insights-ci.yml'
+  pull_request:
+    paths:
+      - 'supabase/functions/merchant-ai/**'
+      - 'supabase/migrations/**ai_insight**'
+      - 'supabase/tests/ai_insight_authority.test.sql'
+      - 'apps/merchant-web/src/AiInsights.tsx'
+      - 'apps/merchant-web/scripts/ai-security-preflight.mjs'
+      - '.github/workflows/ai-insights-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  edge-typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact candidate source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      - name: Verify exact candidate checkout
+        run: |
+          expected="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Typecheck merchant AI Edge Function
+        run: deno check supabase/functions/merchant-ai/index.ts
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Verify AI browser and server authority boundary
+        working-directory: apps/merchant-web
+        run: node scripts/ai-security-preflight.mjs

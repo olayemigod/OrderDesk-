@@ -1,4 +1,4 @@
-export type OrderStatus =
+﻿export type OrderStatus =
   | 'draft'
   | 'needs_review'
   | 'accepted'
@@ -28,6 +28,10 @@ export type PaymentStatus =
   | 'paid'
   | 'payment_issue';
 
+export type ReturnStatus = 'none' | 'partial' | 'returned';
+
+export type OrderSource = 'whatsapp' | 'manual' | 'pos';
+
 export type MatchSource =
   | 'legacy'
   | 'catalogue_name'
@@ -35,7 +39,9 @@ export type MatchSource =
   | 'normalized_name'
   | 'normalized_alias'
   | 'unmatched'
-  | 'manual';
+  | 'manual'
+  | 'merchant_match'
+  | 'one_off';
 
 export type OrderStatusEvent = {
   id: string;
@@ -82,9 +88,13 @@ export type OrderNotification = {
 
 export type OrderItem = {
   id: string;
+  catalogItemId: string | null;
   name: string;
   originalName: string | null;
   quantity: number;
+  selectedUom: string;
+  conversionFactor: number;
+  stockQuantity: number;
   unitPrice: number | null;
   matchSource: MatchSource;
   matchConfidence: number | null;
@@ -92,6 +102,10 @@ export type OrderItem = {
 
 export type MerchantOrder = {
   id: string;
+  branchId: string;
+  branchName: string;
+  posOperatorUserId: string | null;
+  posOperatorName: string | null;
   customerId: string;
   publicOrderId: string;
   customerName: string;
@@ -111,7 +125,11 @@ export type MerchantOrder = {
   paymentStatus: PaymentStatus;
   amountPaid: number;
   paymentConfirmedAt: string | null;
-  source: 'whatsapp' | 'manual';
+  cashReturnSupported?: boolean;
+  returnStatus: ReturnStatus;
+  returnedAmount: number;
+  returnedAt: string | null;
+  source: OrderSource;
   customerMessage: string;
   confidence: number | null;
   parserSource: ParserSource;

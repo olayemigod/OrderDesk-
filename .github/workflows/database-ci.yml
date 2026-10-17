@@ -12,7 +12,9 @@ on:
     paths:
       - 'supabase/migrations/**'
       - 'supabase/tests/**'
+      - 'supabase/functions/**'
       - 'supabase/config.toml'
+      - 'apps/mobile/src/data/**'
       - '.github/workflows/database-ci.yml'
   push:
     branches:
@@ -20,7 +22,9 @@ on:
     paths:
       - 'supabase/migrations/**'
       - 'supabase/tests/**'
+      - 'supabase/functions/**'
       - 'supabase/config.toml'
+      - 'apps/mobile/src/data/**'
       - '.github/workflows/database-ci.yml'
 
 jobs:
@@ -28,8 +32,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout exact candidate source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact candidate checkout
+        run: |
+          expected="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1

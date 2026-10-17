@@ -1,8 +1,8 @@
-# SellerTray Meta Tech Provider Approval Runbook
+﻿# SellerTray Meta Tech Provider Approval Runbook
 
-**Status:** APPROVAL PREPARATION IN PROGRESS  
-**Product:** SellerTray  
-**Owner:** ProcessEdge Solutions Limited  
+**Status:** APPROVAL PREPARATION IN PROGRESS
+**Product:** SellerTray
+**Owner:** ProcessEdge Solutions Limited
 **Updated:** 2026-09-13
 
 ## Goal

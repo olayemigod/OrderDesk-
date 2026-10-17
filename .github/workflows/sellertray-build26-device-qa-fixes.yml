@@ -1,0 +1,35 @@
+name: SellerTray Build 26 Device QA Fixes
+
+on:
+  push:
+    branches:
+      - feat/sellertray-brand-ui-v1
+    paths:
+      - 'scripts/apply-sellertray-build26-device-qa-fixes.mjs'
+      - '.github/workflows/sellertray-build26-device-qa-fixes.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/sellertray-brand-ui-v1
+          fetch-depth: 0
+      - name: Apply governed device QA corrections
+        run: node scripts/apply-sellertray-build26-device-qa-fixes.mjs
+      - name: Commit corrections
+        run: |
+          if git diff --quiet; then
+            echo "No patch changes produced" >&2
+            exit 1
+          fi
+          git config user.name "sellertray-qa-bot"
+          git config user.email "sellertray-qa-bot@users.noreply.github.com"
+          git add apps/mobile supabase/migrations supabase/tests
+          git commit -m "Fix SellerTray Build 26 device QA defects"
+          git push origin HEAD:feat/sellertray-brand-ui-v1

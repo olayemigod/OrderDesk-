@@ -52,8 +52,12 @@ select extensions.ok(has_function_privilege('service_role','public.claim_sellert
 select extensions.ok(not has_table_privilege('authenticated','public.customers','UPDATE'),'authenticated clients cannot directly update customer identity rows');
 select extensions.ok(has_function_privilege('authenticated','public.update_sellertray_customer_profile(uuid,uuid,text,text)','EXECUTE'),'authenticated clients use the governed customer-profile RPC');
 
-select extensions.ok(has_column_privilege('authenticated','public.orders','status','UPDATE'),'authenticated merchant may update order status');
-select extensions.ok(has_column_privilege('authenticated','public.orders','status_reason','UPDATE'),'authenticated merchant may update status reason');
+select extensions.ok(not has_column_privilege('authenticated','public.orders','status','UPDATE'),'authenticated merchants cannot bypass the governed order status command');
+select extensions.ok(
+  not has_column_privilege('authenticated','public.orders','status_reason','UPDATE')
+  and has_function_privilege('authenticated','public.transition_sellertray_order(uuid,uuid,text,text)','EXECUTE'),
+  'authenticated merchants manage order status and reason through the governed transition command'
+);
 
 select extensions.ok(not has_column_privilege('authenticated','public.orders','fulfillment_method','UPDATE'),'fulfillment method is server-governed');
 select extensions.ok(not has_column_privilege('authenticated','public.orders','fulfillment_status','UPDATE'),'fulfillment status is server-governed');

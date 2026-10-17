@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 
 export type PaymentMethodType =
   | 'bank_transfer'
+  | 'card_terminal'
   | 'paystack'
   | 'flutterwave'
   | 'cash_on_delivery'
@@ -78,24 +79,21 @@ export async function loadPaymentMethods(tenantId: string): Promise<MerchantPaym
     .order('created_at', { ascending: true });
 
   if (error) throw error;
+  return mapPaymentMethodRows((data ?? []) as PaymentMethodRow[]);
+}
 
-  return ((data ?? []) as PaymentMethodRow[]).map((row) => ({
-    id: row.id,
-    tenantId: row.tenant_id,
-    methodType: row.method_type,
-    displayName: row.display_name,
-    isEnabled: row.is_enabled,
-    isDefault: row.is_default,
-    sortOrder: row.sort_order,
-    mode: row.mode,
-    configurationStatus: row.configuration_status,
-    bankName: row.bank_name,
-    bankAccountName: row.bank_account_name,
-    bankAccountNumber: row.bank_account_number,
-    bankCode: row.bank_code,
-    instructions: row.instructions,
-    updatedAt: row.updated_at,
-  }));
+export async function loadBranchCustomerPaymentMethods(
+  tenantId: string,
+  branchId: string,
+): Promise<MerchantPaymentMethod[]> {
+  if (!tenantId || !branchId) return [];
+
+  const { data, error } = await supabase.rpc('get_sellertray_branch_customer_payment_methods', {
+    p_tenant_id: tenantId,
+    p_branch_id: branchId,
+  });
+  if (error) throw error;
+  return mapPaymentMethodRows((data ?? []) as PaymentMethodRow[]);
 }
 
 export async function savePaymentMethod(
@@ -135,43 +133,46 @@ export async function connectPaymentGateway(
   secretKey: string,
   secretHash?: string | null,
 ): Promise<void> {
-  await invokePaymentSettings({
-    action: 'connect_gateway',
-    tenantId,
-    methodId,
-    provider,
-    secretKey: secretKey.trim(),
-    secretHash: cleanOptional(secretHash),
-  });
+  await invokePaymentSettings({ action: 'connect_gateway', tenantId, methodId, provider, secretKey: secretKey.trim(), secretHash: cleanOptional(secretHash) });
 }
 
-export async function disconnectPaymentGateway(
-  tenantId: string,
-  methodId: string,
-): Promise<void> {
-  await invokePaymentSettings({
-    action: 'disconnect_gateway',
-    tenantId,
-    methodId,
-  });
+export async function disconnectPaymentGateway(tenantId: string, methodId: string): Promise<void> {
+  await invokePaymentSettings({ action: 'disconnect_gateway', tenantId, methodId });
+}
+
+export async function assignPaymentMethodBranches(tenantId: string, methodId: string, branchIds: string[]): Promise<void> {
+  await invokePaymentSettings({ action: 'assign_branches', tenantId, methodId, branchIds });
+}
+
+function mapPaymentMethodRows(rows: PaymentMethodRow[]): MerchantPaymentMethod[] {
+  return rows.map((row) => ({
+    id: row.id,
+    tenantId: row.tenant_id,
+    methodType: row.method_type,
+    displayName: row.display_name,
+    isEnabled: row.is_enabled,
+    isDefault: row.is_default,
+    sortOrder: row.sort_order,
+    mode: row.mode,
+    configurationStatus: row.configuration_status,
+    bankName: row.bank_name,
+    bankAccountName: row.bank_account_name,
+    bankAccountNumber: row.bank_account_number,
+    bankCode: row.bank_code,
+    instructions: row.instructions,
+    updatedAt: row.updated_at,
+  }));
 }
 
 async function invokePaymentSettings(body: Record<string, unknown>): Promise<unknown> {
   const { data, error } = await supabase.functions.invoke('payment-settings', { body });
-
   if (error) {
     let message = error.message || 'SellerTray could not update payment settings.';
     if (error.context && typeof error.context === 'object' && 'clone' in error.context) {
-      try {
-        const payload = await (error.context as Response).clone().json() as { error?: string };
-        if (payload?.error) message = payload.error;
-      } catch {
-        // Keep the SDK message.
-      }
+      try { const payload = await (error.context as Response).clone().json() as { error?: string }; if (payload?.error) message = payload.error; } catch {}
     }
     throw new Error(message);
   }
-
   return data;
 }
 
