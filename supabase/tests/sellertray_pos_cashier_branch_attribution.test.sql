@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(14);
+select extensions.plan(15);
 
 create temp table sellertray_attribution_fixture (
   tenant_id uuid not null,
@@ -78,14 +78,25 @@ select extensions.is(
 
 select extensions.is(
   (select o.pos_operator_user_id from public.orders o where o.id=(select order_id from sellertray_attribution_fixture)),
+  null::uuid,
+  'an unpaid POS draft is not prematurely attributed to its eventual checkout cashier'
+);
+
+select public.set_sellertray_pos_operator_snapshot(
+  tenant_id,order_id,cashier_user_id
+)
+from sellertray_attribution_fixture;
+
+select extensions.is(
+  (select o.pos_operator_user_id from public.orders o where o.id=(select order_id from sellertray_attribution_fixture)),
   (select cashier_user_id from sellertray_attribution_fixture),
-  'POS order snapshots the authenticated cashier through canonical operator identity'
+  'checkout snapshots the authenticated cashier through canonical operator identity'
 );
 
 select extensions.is(
   (select o.pos_operator_name from public.orders o where o.id=(select order_id from sellertray_attribution_fixture)),
   'Ada Cashier',
-  'POS order snapshots the cashier display name'
+  'checkout snapshots the cashier display name'
 );
 
 update public.branches
@@ -108,7 +119,7 @@ select extensions.is(
   'historical cashier display does not drift when the user profile changes'
 );
 
-select public.apply_sellertray_order_cashier_snapshot(
+select public.apply_sellertray_order_operator_snapshot(
   tenant_id,order_id,manager_user_id
 )
 from sellertray_attribution_fixture;
@@ -133,10 +144,10 @@ select extensions.ok(
   exists(
     select 1 from pg_trigger
     where tgrelid='public.commercial_action_ledger'::regclass
-      and tgname='snapshot_sellertray_order_cashier_from_audit'
+      and tgname='snapshot_sellertray_order_operator_from_audit'
       and not tgisinternal
   ),
-  'cashier attribution is fed from the governed commercial audit ledger'
+  'settlement audit can backfill canonical operator attribution when needed'
 );
 
 select extensions.ok(
@@ -156,9 +167,9 @@ select extensions.ok(
 );
 
 select extensions.ok(
-  position('set_sellertray_pos_operator_snapshot' in pg_get_functiondef('public.apply_sellertray_order_cashier_snapshot(uuid,uuid,uuid)'::regprocedure)) > 0
-  and position('v_existing_operator is not null' in pg_get_functiondef('public.apply_sellertray_order_cashier_snapshot(uuid,uuid,uuid)'::regprocedure)) > 0,
-  'automatic cashier capture reuses canonical first-write POS operator authority'
+  position('set_sellertray_pos_operator_snapshot' in pg_get_functiondef('public.apply_sellertray_order_operator_snapshot(uuid,uuid,uuid)'::regprocedure)) > 0
+  and position('v_existing_operator is not null' in pg_get_functiondef('public.apply_sellertray_order_operator_snapshot(uuid,uuid,uuid)'::regprocedure)) > 0,
+  'fallback attribution reuses canonical first-write POS operator authority'
 );
 
 select * from extensions.finish();
