@@ -37,8 +37,21 @@ jobs:
       SELLERTRAY_ANDROID_NDK_VERSION: 27.1.12297006
 
     steps:
-      - name: Checkout
+      - name: Checkout exact candidate source
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact candidate checkout
+        id: source
+        run: |
+          expected="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+          actual="$(git rev-parse HEAD)"
+          if [ "$actual" != "$expected" ]; then
+            echo "SellerTray QA source mismatch: expected $expected, checked out $actual" >&2
+            exit 1
+          fi
+          printf 'sha=%s\n' "$actual" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node 22
         uses: actions/setup-node@v4
@@ -134,7 +147,7 @@ jobs:
           mkdir -p qa-artifact
           cp android/app/build/outputs/apk/release/app-release.apk qa-artifact/sellertray-qa.apk
           sha256sum qa-artifact/sellertray-qa.apk > qa-artifact/sellertray-qa.apk.sha256
-          printf '%s\n' "${GITHUB_SHA}" > qa-artifact/source-commit.txt
+          printf '%s\n' "${{ steps.source.outputs.sha }}" > qa-artifact/source-commit.txt
           node -p "require('./app.json').expo.android.versionCode" > qa-artifact/version-code.txt
           printf '%s\n' "ng.processedge.sellertray" > qa-artifact/package-name.txt
           printf '%s\n' "$SELLERTRAY_QA_SIGNING_CERT_SHA256" > qa-artifact/signing-cert-sha256.txt
@@ -142,7 +155,7 @@ jobs:
       - name: Upload QA APK
         uses: actions/upload-artifact@v4
         with:
-          name: sellertray-qa-${{ github.sha }}
+          name: sellertray-qa-${{ steps.source.outputs.sha }}
           path: |
             apps/mobile/qa-artifact/sellertray-qa.apk
             apps/mobile/qa-artifact/sellertray-qa.apk.sha256
