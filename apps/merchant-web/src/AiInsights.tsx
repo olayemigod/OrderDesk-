@@ -63,9 +63,9 @@ export default function AiInsights({ tenantId }: { tenantId: string }) {
     </div>
 
     <article className="panel ai-question-panel">
-      <form onSubmit={(event) => void ask(event)}>
+      <form onSubmit={(event) => void ask(event)} aria-busy={busy}>
         <div className="ai-question-head">
-          <div><h3>What do you want to know?</h3><p className="muted">SellerTray answers from the selected business only.</p></div>
+          <div><h3 id="sellertray-ai-question-heading">What do you want to know?</h3><p id="sellertray-ai-question-help" className="muted">SellerTray answers from the selected business only.</p></div>
           <label className="select-field ai-period"><span>Analysis period</span><select value={days} onChange={(event) => setDays(Number(event.target.value))} disabled={busy}>
             <option value={7}>Last 7 days</option>
             <option value={30}>Last 30 days</option>
@@ -74,18 +74,21 @@ export default function AiInsights({ tenantId }: { tenantId: string }) {
           </select></label>
         </div>
         <textarea
+          id="sellertray-ai-question"
           className="ai-question-input"
           rows={4}
           maxLength={1200}
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
           placeholder="Example: Which products are moving fastest and which ones need restocking?"
+          aria-labelledby="sellertray-ai-question-heading"
+          aria-describedby="sellertray-ai-question-help"
           disabled={busy}
         />
         <div className="ai-suggestions">
           {SUGGESTIONS.map((suggestion) => <button key={suggestion} type="button" className="ai-suggestion" onClick={() => chooseSuggestion(suggestion)} disabled={busy}>{suggestion}</button>)}
         </div>
-        {error ? <div className="error-banner compact">{error}</div> : null}
+        {error ? <div className="error-banner compact" role="alert" aria-live="assertive">{error}</div> : null}
         <div className="ai-submit-row">
           <span className="muted">SellerTray AI can recommend what to review, but it cannot execute sales, stock, payment, purchasing or settings changes.</span>
           <button className="primary-button" type="submit" disabled={busy || !question.trim()}>{busy ? 'Analysing' : 'Ask SellerTray'}</button>
@@ -93,7 +96,7 @@ export default function AiInsights({ tenantId }: { tenantId: string }) {
       </form>
     </article>
 
-    {result ? <article className="panel ai-answer-panel">
+    {result ? <article className="panel ai-answer-panel" aria-live="polite">
       <div className="panel-head">
         <div><p className="eyebrow">SellerTray answer</p><h3>{periodLabel(result.days)}</h3></div>
         <span className={`status-pill ${result.confidence === 'high' ? 'good' : result.confidence === 'low' ? 'bad' : 'neutral'}`}>{title(result.confidence)} confidence</span>

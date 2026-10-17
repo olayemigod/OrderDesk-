@@ -57,6 +57,15 @@ requireValue(
 );
 
 requireValue(
+  ai.includes('aria-labelledby="sellertray-ai-question-heading"') &&
+    ai.includes('aria-describedby="sellertray-ai-question-help"') &&
+    ai.includes('role="alert"') &&
+    ai.includes('aria-live="polite"') &&
+    ai.includes('aria-busy={busy}'),
+  'Ask SellerTray must expose labelled question input, announced errors/results and busy state for assistive technology.',
+);
+
+requireValue(
   !ai.includes('api.openai.com') &&
     !ai.includes('OPENAI_API_KEY') &&
     !ai.includes('SELLERTRAY_AI_INSIGHTS_MODEL') &&
