@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(5);
+select extensions.plan(6);
 
 select extensions.ok(
   (
@@ -62,6 +62,11 @@ select public.save_sellertray_product_uom(
 )
 from sellertray_inventory_options_fixture;
 
+select public.set_sellertray_low_stock_policy(
+  tenant_id,branch_id,product_id,7,20,owner_user_id
+)
+from sellertray_inventory_options_fixture;
+
 update sellertray_inventory_options_fixture
 set options=public.get_sellertray_inventory_product_options(tenant_id,branch_id);
 
@@ -92,6 +97,17 @@ select extensions.ok(
       and (uom->>'conversion_factor')::numeric=12
   ),
   'Inventory Product options expose governed Stock and alternate UOM choices'
+);
+
+select extensions.ok(
+  exists(
+    select 1
+    from sellertray_inventory_options_fixture f,jsonb_array_elements(f.options) option
+    where option->>'id'=f.product_id::text
+      and (option->>'low_stock_threshold')::numeric=7
+      and (option->>'reorder_target')::numeric=20
+  ),
+  'Inventory Product options expose saved Branch low-stock policy even when the Product is not currently low'
 );
 
 select extensions.throws_ok(
