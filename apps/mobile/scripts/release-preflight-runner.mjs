@@ -85,6 +85,15 @@ requireValue(
 const staleVersionCodeCheck = "requireValue(app.android?.versionCode === 19, 'Android versionCode must be 19 for the merchant-reference QA line');";
 const currentVersionCodeCheck = `requireValue(app.android?.versionCode === ${JSON.parse(fs.readFileSync(appPath, 'utf8')).expo.android?.versionCode}, 'Android versionCode must match the current merchant-reference QA line');`;
 const staleCameraBlockedEntry = '  "android.permission.CAMERA",\n';
+const staleMoreBuildMarkerCheck = "requireValue(read(join(mobileRoot, 'src/redesign/MoreWorkspace.tsx')).includes('Android build '+app.android.versionCode), 'More screen must expose the current Android build marker');";
+const currentMoreBuildMarkerCheck = `const moreWorkspaceReleaseMarker = read(join(mobileRoot, 'src/redesign/MoreWorkspace.tsx'));
+requireValue(
+  moreWorkspaceReleaseMarker.includes("import Constants from 'expo-constants';") &&
+    moreWorkspaceReleaseMarker.includes('Constants.expoConfig?.android?.versionCode') &&
+    moreWorkspaceReleaseMarker.includes('Android build \\${androidBuild}') &&
+    !/Android build \\d+/.test(moreWorkspaceReleaseMarker),
+  'More screen must derive the current Android build marker from Expo config',
+);`;
 
 const app = JSON.parse(fs.readFileSync(appPath, 'utf8')).expo;
 const pkg = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
@@ -136,6 +145,8 @@ if (source.split(staleVersionCodeCheck).length !== 2) throw new Error('Expected 
 source = source.replace(staleVersionCodeCheck, currentVersionCodeCheck);
 if (source.split(staleCameraBlockedEntry).length !== 2) throw new Error('Expected exactly one legacy blocked camera permission in release preflight');
 source = source.replace(staleCameraBlockedEntry, '');
+if (source.split(staleMoreBuildMarkerCheck).length !== 2) throw new Error('Expected exactly one legacy More build-marker guard in release preflight');
+source = source.replace(staleMoreBuildMarkerCheck, currentMoreBuildMarkerCheck);
 
 fs.writeFileSync(runtimePath, source);
 try {
