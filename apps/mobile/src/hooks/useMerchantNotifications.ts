@@ -8,6 +8,7 @@ import {
   unsubscribeFromMerchantNotifications,
   type MerchantNotification,
 } from '../data/merchantNotificationsRepository';
+import { isLikelyConnectivityError } from '../data/offlineSalesRepository';
 
 export function useMerchantNotifications(tenantId: string | null) {
   const [notifications, setNotifications] = useState<MerchantNotification[]>([]);
@@ -26,7 +27,11 @@ export function useMerchantNotifications(tenantId: string | null) {
       setNotifications(await loadMerchantNotifications(tenantId));
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to load notifications.');
+      if (isLikelyConnectivityError(err)) {
+        setError(null);
+      } else {
+        setError(err instanceof Error ? err.message : 'Unable to load notifications.');
+      }
     } finally {
       setLoading(false);
     }

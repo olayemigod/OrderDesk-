@@ -15,6 +15,7 @@ import {
   type OrderFulfillmentInput,
   type OrderItemInput,
 } from '../data/ordersRepository';
+import { isLikelyConnectivityError } from '../data/offlineSalesRepository';
 import type { MerchantOrder, OrderStatus } from '../domain/order';
 
 export function useOrders(tenantId: string | null) {
@@ -36,7 +37,7 @@ export function useOrders(tenantId: string | null) {
       setOrders(next);
       setError(null);
     } catch (err) {
-      setError(errorMessage(err, 'Unable to load orders.'));
+      setError(isLikelyConnectivityError(err) ? null : errorMessage(err, 'Unable to load orders.'));
     } finally {
       setLoading(false);
     }
