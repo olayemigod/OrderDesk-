@@ -13,6 +13,7 @@ const internalAuthorityHelpers = [
   'sellertray_current_user_can_read_branch',
   'sellertray_user_can_operate_branch',
   'sellertray_user_has_capability',
+  'sellertray_user_can_manage_products',
   'sellertray_user_can_access_notification_scope',
   'sellertray_current_user_can_access_notification_scope',
   'sellertray_user_can_receive_notification_scope',

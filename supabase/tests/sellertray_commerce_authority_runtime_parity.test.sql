@@ -51,10 +51,10 @@ select extensions.ok(
 );
 
 select extensions.ok(
-  has_function_privilege('authenticated','public.sellertray_user_can_manage_products(uuid,uuid)','EXECUTE')
-  and has_function_privilege('service_role','public.sellertray_user_can_manage_products(uuid,uuid)','EXECUTE')
+  has_function_privilege('service_role','public.sellertray_user_can_manage_products(uuid,uuid)','EXECUTE')
+  and not has_function_privilege('authenticated','public.sellertray_user_can_manage_products(uuid,uuid)','EXECUTE')
   and not has_function_privilege('anon','public.sellertray_user_can_manage_products(uuid,uuid)','EXECUTE'),
-  'product management authority is available only to governed signed-in/server callers'
+  'product management authority helper remains internal to governed commands'
 );
 
 select extensions.ok(
