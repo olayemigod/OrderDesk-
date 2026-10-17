@@ -4,6 +4,9 @@ export const demoOrders: MerchantOrder[] = [
   {
     id: 'OD-1003',
     branchId: 'demo-branch-main',
+    branchName: 'Main Branch',
+    cashierUserId: null,
+    cashierName: null,
     customerId: 'demo-customer-1',
     publicOrderId: 'ST-260908-0000000000001003',
     customerName: 'Amina Yusuf',
@@ -66,6 +69,9 @@ export const demoOrders: MerchantOrder[] = [
   {
     id: 'OD-1002',
     branchId: 'demo-branch-main',
+    branchName: 'Main Branch',
+    cashierUserId: null,
+    cashierName: null,
     customerId: 'demo-customer-2',
     publicOrderId: 'ST-260908-0000000000001002',
     customerName: 'Tunde Bello',
@@ -115,6 +121,9 @@ export const demoOrders: MerchantOrder[] = [
   {
     id: 'OD-1001',
     branchId: 'demo-branch-main',
+    branchName: 'Main Branch',
+    cashierUserId: null,
+    cashierName: null,
     customerId: 'demo-customer-3',
     publicOrderId: 'ST-260908-0000000000001001',
     customerName: 'Chidinma Okeke',
