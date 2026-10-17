@@ -29,6 +29,9 @@ export default function InventoryManagement({ tenantId, branch, branches, stockR
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [policyProductId, setPolicyProductId] = useState<string | null>(null);
+  const [policyThreshold, setPolicyThreshold] = useState('');
+  const [policyTarget, setPolicyTarget] = useState('');
   const [adjustProductId, setAdjustProductId] = useState('');
   const [adjustUomId, setAdjustUomId] = useState('');
   const [adjustQty, setAdjustQty] = useState('');
@@ -47,52 +50,48 @@ export default function InventoryManagement({ tenantId, branch, branches, stockR
 
   const selectedProduct = products.find((row) => row.id === adjustProductId) ?? null;
   const lineProduct = products.find((row) => row.id === lineProductId) ?? null;
+  const policyProduct = policyProductId ? stockRows.find((row) => row.catalog_item_id === policyProductId) ?? null : null;
   const visibleStock = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return stockRows.filter((row) => !needle || [row.item_name, row.sku ?? '', row.category ?? ''].some((value) => value.toLowerCase().includes(needle)));
   }, [stockRows, search]);
 
-  useEffect(() => { void loadProducts(); }, [tenantId]);
   useEffect(() => {
-    setMessage(null); setError(null); setCount(null); setTransfers([]); setMovements([]); setLowStock([]);
+    setMessage(null); setError(null); setCount(null); setTransfers([]); setMovements([]); setLowStock([]); setProducts([]); setPolicyProductId(null);
     if (branch) void loadBranchInventory();
   }, [tenantId, branch?.id]);
   useEffect(() => {
     const uom = selectedProduct?.catalog_item_uoms?.find((row) => row.uom_name.toLowerCase() === selectedProduct.stock_uom.toLowerCase()) ?? selectedProduct?.catalog_item_uoms?.[0];
     setAdjustUomId(uom?.id ?? '');
-  }, [adjustProductId]);
+  }, [adjustProductId, products]);
   useEffect(() => {
     const uom = lineProduct?.catalog_item_uoms?.find((row) => row.uom_name.toLowerCase() === lineProduct.stock_uom.toLowerCase()) ?? lineProduct?.catalog_item_uoms?.[0];
     setLineUomId(uom?.id ?? '');
-  }, [lineProductId]);
-
-  async function loadProducts() {
-    const { data, error: loadError } = await supabase.from('catalog_items').select('id,name,stock_uom,catalog_item_uoms(id,uom_name,conversion_factor,allow_fractional)').eq('tenant_id', tenantId).eq('is_active', true).order('name');
-    if (loadError) { setError(loadError.message); return; }
-    const next = (data ?? []) as unknown as Product[];
-    setProducts(next);
-    setAdjustProductId((current) => next.some((row) => row.id === current) ? current : next[0]?.id ?? '');
-    setLineProductId((current) => next.some((row) => row.id === current) ? current : next[0]?.id ?? '');
-  }
+  }, [lineProductId, products]);
 
   async function loadBranchInventory() {
     if (!branch) return;
     setLoading(true); setError(null);
     try {
-      const [lowResult, movementResult, transferResult, countResult, capabilityResult] = await Promise.all([
+      const [lowResult, movementResult, transferResult, countResult, capabilityResult, productResult] = await Promise.all([
         supabase.rpc('get_sellertray_low_stock', { p_tenant_id: tenantId, p_branch_id: branch.id }),
         supabase.rpc('get_sellertray_stock_movements', { p_tenant_id: tenantId, p_branch_id: branch.id, p_catalog_item_id: null, p_limit: 200 }),
         supabase.rpc('get_sellertray_stock_transfers', { p_tenant_id: tenantId, p_branch_id: branch.id, p_limit: 100 }),
         supabase.rpc('get_sellertray_active_stock_count', { p_tenant_id: tenantId, p_branch_id: branch.id }),
         supabase.rpc('get_sellertray_inventory_capabilities', { p_tenant_id: tenantId, p_branch_id: branch.id }),
+        supabase.rpc('get_sellertray_inventory_product_options', { p_tenant_id: tenantId, p_branch_id: branch.id }),
       ]);
-      for (const result of [lowResult, movementResult, transferResult, countResult, capabilityResult]) if (result.error) throw result.error;
+      for (const result of [lowResult, movementResult, transferResult, countResult, capabilityResult, productResult]) if (result.error) throw result.error;
       setLowStock((lowResult.data ?? []) as LowStockRow[]);
       setMovements((movementResult.data ?? []) as Movement[]);
       setTransfers((transferResult.data ?? []) as Transfer[]);
       setCount((countResult.data ?? null) as StockCount | null);
       const cap = Array.isArray(capabilityResult.data) ? capabilityResult.data[0] : capabilityResult.data;
       setCapabilities((cap ?? {}) as Capabilities);
+      const nextProducts = (productResult.data ?? []) as Product[];
+      setProducts(nextProducts);
+      setAdjustProductId((current) => nextProducts.some((row) => row.id === current) ? current : nextProducts[0]?.id ?? '');
+      setLineProductId((current) => nextProducts.some((row) => row.id === current) ? current : nextProducts[0]?.id ?? '');
       setTransferDestination((current) => branches.some((row) => row.id === current && row.id !== branch.id) ? current : branches.find((row) => row.id !== branch.id)?.id ?? '');
     } catch (cause) { setError(errorMessage(cause, 'Unable to load inventory management data.')); }
     finally { setLoading(false); }
@@ -116,17 +115,27 @@ export default function InventoryManagement({ tenantId, branch, branches, stockR
     } catch (cause) { setError(errorMessage(cause, 'Unable to post this stock adjustment.')); } finally { setBusy(false); }
   }
 
-  async function savePolicy(row: StockRow) {
-    if (!branch) return;
+  function editPolicy(row: StockRow) {
     const current = lowStock.find((item) => item.catalog_item_id === row.catalog_item_id);
-    const thresholdText = window.prompt(`Low-stock threshold in ${row.stock_uom}`, String(current ? numberValue(current.low_stock_threshold) : 0));
-    if (thresholdText == null) return;
-    const targetText = window.prompt(`Reorder target in ${row.stock_uom} (leave blank for none)`, current?.reorder_target == null ? '' : String(numberValue(current.reorder_target)));
-    if (targetText == null) return;
-    const threshold = Number(thresholdText); const target = targetText.trim() ? Number(targetText) : null;
+    setPolicyProductId(row.catalog_item_id);
+    setPolicyThreshold(String(current ? numberValue(current.low_stock_threshold) : 0));
+    setPolicyTarget(current?.reorder_target == null ? '' : String(numberValue(current.reorder_target)));
+    setError(null);
+    setMessage(null);
+  }
+
+  async function savePolicy(event: FormEvent) {
+    event.preventDefault();
+    if (!branch || !policyProduct) return;
+    const threshold = Number(policyThreshold);
+    const target = policyTarget.trim() ? Number(policyTarget) : null;
     if (!Number.isFinite(threshold) || threshold < 0 || (target != null && (!Number.isFinite(target) || target < threshold))) { setError('Enter a valid threshold and a reorder target that is not below it.'); return; }
-    setBusy(true); setError(null);
-    try { await invoke('inventory-operation', { tenantId, branchId: branch.id, productId: row.catalog_item_id, operation: 'policy', lowStockThreshold: threshold, reorderTarget: target }); setMessage('Low-stock policy updated.'); await loadBranchInventory(); }
+    setBusy(true); setError(null); setMessage(null);
+    try {
+      await invoke('inventory-operation', { tenantId, branchId: branch.id, productId: policyProduct.catalog_item_id, operation: 'policy', lowStockThreshold: threshold, reorderTarget: target });
+      setPolicyProductId(null); setPolicyThreshold(''); setPolicyTarget('');
+      setMessage('Low-stock policy updated.'); await loadBranchInventory();
+    }
     catch (cause) { setError(errorMessage(cause, 'Unable to update this low-stock policy.')); } finally { setBusy(false); }
   }
 
@@ -193,9 +202,13 @@ export default function InventoryManagement({ tenantId, branch, branches, stockR
 
     {tab === 'stock' ? <>
       <article className="panel"><div className="panel-head"><div><p className="eyebrow">Branch stock</p><h3>On-hand quantities</h3></div><input className="search-input" placeholder="Search products" value={search} onChange={(event) => setSearch(event.target.value)} /></div>
-        <Table headers={['Product','SKU','Category','On hand','Stock unit','Last movement','Low-stock policy']}>{visibleStock.map((row) => <tr key={row.catalog_item_id}><td><strong>{row.item_name}</strong></td><td>{row.sku || '—'}</td><td>{row.category || '—'}</td><td className={numberValue(row.quantity_on_hand) <= 0 ? 'danger-text' : ''}>{formatNumber(numberValue(row.quantity_on_hand))}</td><td>{row.stock_uom}</td><td>{row.last_movement_at ? dateTime(row.last_movement_at) : 'No movement'}</td><td><button className="text-button" disabled={busy} onClick={() => void savePolicy(row)}>Set policy</button></td></tr>)}</Table>
+        <Table headers={['Product','SKU','Category','On hand','Stock unit','Last movement','Low-stock policy']}>{visibleStock.map((row) => <tr key={row.catalog_item_id}><td><strong>{row.item_name}</strong></td><td>{row.sku || '—'}</td><td>{row.category || '—'}</td><td className={numberValue(row.quantity_on_hand) <= 0 ? 'danger-text' : ''}>{formatNumber(numberValue(row.quantity_on_hand))}</td><td>{row.stock_uom}</td><td>{row.last_movement_at ? dateTime(row.last_movement_at) : 'No movement'}</td><td><button className="text-button" disabled={busy} onClick={() => editPolicy(row)}>Edit policy</button></td></tr>)}</Table>
         {!visibleStock.length ? <Empty title="No stock rows" body="Products appear here when the shared catalogue and stock ledger are available for this Branch." /> : null}
       </article>
+      {policyProduct ? <form className="panel product-editor-stack" onSubmit={savePolicy}><div className="panel-head"><div><p className="eyebrow">Replenishment policy</p><h3>{policyProduct.item_name}</h3><p className="muted">Set thresholds in {policyProduct.stock_uom} for {branch.name}. This does not move or invent stock.</p></div><button type="button" className="text-button" disabled={busy} onClick={() => setPolicyProductId(null)}>Close</button></div><div className="form-grid">
+        <label className="field">Low-stock threshold<input type="number" min="0" step="any" value={policyThreshold} onChange={(event) => setPolicyThreshold(event.target.value)} /></label>
+        <label className="field">Reorder target<input type="number" min="0" step="any" value={policyTarget} onChange={(event) => setPolicyTarget(event.target.value)} placeholder="Optional" /></label>
+      </div><div className="form-actions"><button className="primary-button" disabled={busy}>{busy ? 'Saving…' : 'Save policy'}</button></div></form> : null}
       {capabilities.can_adjust_stock ? <form className="panel product-editor-stack" onSubmit={submitAdjustment}><div className="panel-head"><div><p className="eyebrow">Controlled correction</p><h3>Adjust stock</h3></div></div><p className="muted">Use this only for corrections, damage, expiry, shrinkage or recovery. Supplier receipts belong in Purchasing and Branch receipts belong in Transfers.</p><div className="form-grid">
         <label className="field">Product<select value={adjustProductId} onChange={(event) => setAdjustProductId(event.target.value)}>{products.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
         <label className="field">Unit<select value={adjustUomId} onChange={(event) => setAdjustUomId(event.target.value)}>{selectedProduct?.catalog_item_uoms?.map((row) => <option key={row.id} value={row.id}>{row.uom_name}</option>)}</select></label>
