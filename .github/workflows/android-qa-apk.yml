@@ -107,12 +107,18 @@ jobs:
           rm -rf "$ndk_dir"
           for attempt in 1 2 3; do
             echo "Installing NDK attempt ${attempt}/3"
-            if yes | "$sdkmanager_bin" "ndk;${SELLERTRAY_ANDROID_NDK_VERSION}" && [ -f "$ndk_dir/source.properties" ]; then
+            set +o pipefail
+            yes | "$sdkmanager_bin" "ndk;${SELLERTRAY_ANDROID_NDK_VERSION}"
+            sdk_status=${PIPESTATUS[1]}
+            set -o pipefail
+            if [ "$sdk_status" -eq 0 ] && [ -f "$ndk_dir/source.properties" ]; then
               grep '^Pkg.Revision' "$ndk_dir/source.properties"
               exit 0
             fi
             rm -rf "$ndk_dir"
-            sleep $((attempt * 10))
+            if [ "$attempt" -lt 3 ]; then
+              sleep $((attempt * 10))
+            fi
           done
           echo "Unable to provision required Android NDK" >&2
           exit 1
