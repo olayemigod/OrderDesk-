@@ -1,16 +1,10 @@
 begin;
 
 alter table public.orders
-  add column if not exists branch_name_snapshot text,
-  add column if not exists cashier_user_id uuid,
-  add column if not exists cashier_name_snapshot text;
+  add column if not exists branch_name_snapshot text;
 
 comment on column public.orders.branch_name_snapshot is
   'Branch display name captured for the commercial transaction. Do not reconstruct historical output from the mutable branch row.';
-comment on column public.orders.cashier_user_id is
-  'Authenticated SellerTray operator captured for POS work when known.';
-comment on column public.orders.cashier_name_snapshot is
-  'Human cashier/operator name captured for POS receipts, order history and audit display.';
 
 update public.orders o
 set branch_name_snapshot = b.name
@@ -88,33 +82,29 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_name text;
+  v_existing_operator uuid;
 begin
   if p_tenant_id is null or p_order_id is null or p_actor_user_id is null then
     return;
   end if;
 
-  if not exists (
-    select 1
-    from public.tenant_members tm
-    where tm.tenant_id = p_tenant_id
-      and tm.user_id = p_actor_user_id
-  ) then
-    return;
-  end if;
-
-  select public.sellertray_user_display_name(p_actor_user_id) into v_name;
-  if nullif(btrim(coalesce(v_name, '')), '') is null then
-    return;
-  end if;
-
-  update public.orders o
-  set cashier_user_id = coalesce(o.cashier_user_id, p_actor_user_id),
-      cashier_name_snapshot = coalesce(o.cashier_name_snapshot, v_name)
+  select o.pos_operator_user_id
+    into v_existing_operator
+  from public.orders o
   where o.tenant_id = p_tenant_id
     and o.id = p_order_id
     and o.source = 'pos'
-    and (o.cashier_user_id is null or o.cashier_name_snapshot is null);
+  for update;
+
+  if not found or v_existing_operator is not null then
+    return;
+  end if;
+
+  perform public.set_sellertray_pos_operator_snapshot(
+    p_tenant_id,
+    p_order_id,
+    p_actor_user_id
+  );
 end;
 $$;
 
@@ -158,15 +148,26 @@ with first_pos_actor as (
     and cal.actor_user_id is not null
     and cal.action_type in ('pos_draft_created', 'pos_sale_completed', 'pos_payment_awaiting_confirmation')
   order by cal.tenant_id, cal.target_order_id, cal.created_at asc
+), attribution as (
+  select
+    o.tenant_id,
+    o.id as order_id,
+    a.actor_user_id,
+    public.sellertray_user_display_name(a.actor_user_id) as operator_name
+  from public.orders o
+  join first_pos_actor a
+    on a.tenant_id = o.tenant_id
+   and a.order_id = o.id
+  where o.source = 'pos'
+    and o.pos_operator_user_id is null
 )
 update public.orders o
-set cashier_user_id = a.actor_user_id,
-    cashier_name_snapshot = public.sellertray_user_display_name(a.actor_user_id)
-from first_pos_actor a
+set pos_operator_user_id = a.actor_user_id,
+    pos_operator_name = left(coalesce(nullif(btrim(a.operator_name), ''), 'Cashier'), 120)
+from attribution a
 where o.tenant_id = a.tenant_id
   and o.id = a.order_id
-  and o.source = 'pos'
-  and (o.cashier_user_id is null or o.cashier_name_snapshot is null);
+  and o.pos_operator_user_id is null;
 
 create or replace function public.snapshot_sellertray_print_order_attribution()
 returns trigger
@@ -182,7 +183,7 @@ begin
     return new;
   end if;
 
-  select o.branch_name_snapshot, o.cashier_name_snapshot
+  select o.branch_name_snapshot, o.pos_operator_name
     into v_branch_name, v_cashier_name
   from public.orders o
   where o.tenant_id = new.tenant_id
@@ -202,6 +203,7 @@ $$;
 revoke all on function public.snapshot_sellertray_print_order_attribution() from public, anon, authenticated;
 grant execute on function public.snapshot_sellertray_print_order_attribution() to service_role;
 
+drop trigger if exists sellertray_snapshot_receipt_pos_operator on public.sellertray_print_jobs;
 drop trigger if exists zz_snapshot_sellertray_print_order_attribution on public.sellertray_print_jobs;
 create trigger zz_snapshot_sellertray_print_order_attribution
 before insert on public.sellertray_print_jobs
