@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.8"
+  version: "0.1.9"
   status: governing
 ---
 
@@ -207,6 +207,7 @@ Rules:
 11. Cash is cashier-confirmed physical drawer tender. Manual bank-transfer and terminal confirmation authority is merchant-configurable and must still preserve Branch access plus the configured payment capability boundary.
 12. A branch change invalidates stale Product/Cart/Payment context safely.
 13. Tablet or desktop layouts may use a denser split-screen treatment where appropriate, but do not force that pattern onto small Android phones.
+14. Zero-stock products may remain visible in the selling catalogue for discoverability, but they must be clearly marked unavailable and the sale action disabled. Governed branch-stock validation remains authoritative at cart/payment commit and must not be replaced by the visual disabled state.
 
 After successful completion, support fast continuation, normally **New Sale**.
 
@@ -328,6 +329,7 @@ Rules:
 4. Branch switching must invalidate stale cart/register/stock/payment context safely.
 5. Branch attribution should be captured on the transaction, not reconstructed later when avoidable.
 6. Consolidated multi-branch analysis primarily belongs on web.
+7. When branch names are shown in historical orders, receipts or audit views, use the captured transaction snapshot rather than recomputing history from a mutable Branch name.
 
 # 6. UOM invariants
 
@@ -438,6 +440,7 @@ Receipt copy rules:
 6. A reprint is an explicit audited print attempt and must never replay the sale. Printing failure must never roll back or replay the completed commercial transaction.
 7. Merchant receipt footer and SellerTray platform attribution are separate concepts. Do not hard-code ProcessEdge Solutions Limited into merchant receipt content. Thermal output must use printer-safe text and must not expose internal customer sentinels such as `pos:walk-in`.
 8. Test prints remain distinct from commercial receipt copies and may identify SellerTray for device verification.
+9. Commercial receipt output should show the transaction Branch and captured Cashier/operator when available, using immutable order snapshots so later Branch or user-profile renames do not rewrite historical receipt attribution.
 
 Critical invariant:
 
@@ -497,6 +500,7 @@ Rules:
 3. Branch scope and capability scope must both pass.
 4. Preserve appropriate historical read/audit access when current operational authority changes.
 5. Do not infer management authority from a neighbouring operational capability; for example, ordinary stock operation does not imply purchase receiving and ordinary cash entry does not imply cash correction.
+6. The persisted/internal `staff` role is merchant-facing **Cashier**. User interfaces should use **Cashier**, **Manager** and **Owner** labels as appropriate; do not rename persisted role values casually or create a parallel role model solely for display terminology.
 
 # 15. Approved implementation phases
 
