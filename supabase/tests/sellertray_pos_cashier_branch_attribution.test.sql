@@ -67,8 +67,8 @@ set order_id=public.create_sellertray_pos_order_atomic(
 );
 
 select extensions.has_column('public','orders','branch_name_snapshot','orders captures branch display history');
-select extensions.has_column('public','orders','cashier_user_id','orders captures cashier identity');
-select extensions.has_column('public','orders','cashier_name_snapshot','orders captures cashier display history');
+select extensions.has_column('public','orders','pos_operator_user_id','orders captures canonical POS operator identity');
+select extensions.has_column('public','orders','pos_operator_name','orders captures canonical POS operator display history');
 
 select extensions.is(
   (select o.branch_name_snapshot from public.orders o where o.id=(select order_id from sellertray_attribution_fixture)),
@@ -77,13 +77,13 @@ select extensions.is(
 );
 
 select extensions.is(
-  (select o.cashier_user_id from public.orders o where o.id=(select order_id from sellertray_attribution_fixture)),
+  (select o.pos_operator_user_id from public.orders o where o.id=(select order_id from sellertray_attribution_fixture)),
   (select cashier_user_id from sellertray_attribution_fixture),
-  'POS order snapshots the authenticated cashier identity'
+  'POS order snapshots the authenticated cashier through canonical operator identity'
 );
 
 select extensions.is(
-  (select o.cashier_name_snapshot from public.orders o where o.id=(select order_id from sellertray_attribution_fixture)),
+  (select o.pos_operator_name from public.orders o where o.id=(select order_id from sellertray_attribution_fixture)),
   'Ada Cashier',
   'POS order snapshots the cashier display name'
 );
@@ -103,7 +103,7 @@ select extensions.isnt(
 );
 
 select extensions.is(
-  (select o.cashier_name_snapshot from public.orders o where o.id=(select order_id from sellertray_attribution_fixture)),
+  (select o.pos_operator_name from public.orders o where o.id=(select order_id from sellertray_attribution_fixture)),
   'Ada Cashier',
   'historical cashier display does not drift when the user profile changes'
 );
@@ -114,7 +114,7 @@ select public.apply_sellertray_order_cashier_snapshot(
 from sellertray_attribution_fixture;
 
 select extensions.is(
-  (select o.cashier_user_id from public.orders o where o.id=(select order_id from sellertray_attribution_fixture)),
+  (select o.pos_operator_user_id from public.orders o where o.id=(select order_id from sellertray_attribution_fixture)),
   (select cashier_user_id from sellertray_attribution_fixture),
   'later operators cannot overwrite the original POS cashier snapshot'
 );
@@ -156,9 +156,9 @@ select extensions.ok(
 );
 
 select extensions.ok(
-  position('coalesce(o.cashier_user_id, p_actor_user_id)' in pg_get_functiondef('public.apply_sellertray_order_cashier_snapshot(uuid,uuid,uuid)'::regprocedure)) > 0
-  and position('coalesce(o.cashier_name_snapshot, v_name)' in pg_get_functiondef('public.apply_sellertray_order_cashier_snapshot(uuid,uuid,uuid)'::regprocedure)) > 0,
-  'cashier capture is first-write preserving rather than mutable history'
+  position('set_sellertray_pos_operator_snapshot' in pg_get_functiondef('public.apply_sellertray_order_cashier_snapshot(uuid,uuid,uuid)'::regprocedure)) > 0
+  and position('v_existing_operator is not null' in pg_get_functiondef('public.apply_sellertray_order_cashier_snapshot(uuid,uuid,uuid)'::regprocedure)) > 0,
+  'automatic cashier capture reuses canonical first-write POS operator authority'
 );
 
 select * from extensions.finish();
