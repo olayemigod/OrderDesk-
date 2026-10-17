@@ -20,31 +20,37 @@ export function useOfflineSalesSync() {
   const [syncing, setSyncing] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [backendReachable, setBackendReachable] = useState<boolean | null>(null);
+  const backendReachableRef = useRef<boolean | null>(null);
   const syncRunning = useRef(false);
   const reachabilityRunning = useRef(false);
 
+  const updateReachability = useCallback((reachable: boolean) => {
+    backendReachableRef.current = reachable;
+    setBackendReachable(reachable);
+  }, []);
+
   const probeReachability = useCallback(async () => {
-    if (reachabilityRunning.current) return backendReachable !== false;
+    if (reachabilityRunning.current) return backendReachableRef.current !== false;
     reachabilityRunning.current = true;
     try {
       const { error } = await supabase.auth.getUser();
       if (error && isLikelyConnectivityError(error)) {
-        setBackendReachable(false);
+        updateReachability(false);
         return false;
       }
-      setBackendReachable(true);
+      updateReachability(true);
       return true;
     } catch (error) {
       if (isLikelyConnectivityError(error)) {
-        setBackendReachable(false);
+        updateReachability(false);
         return false;
       }
-      setBackendReachable(true);
+      updateReachability(true);
       return true;
     } finally {
       reachabilityRunning.current = false;
     }
-  }, [backendReachable]);
+  }, [updateReachability]);
 
   const refresh = useCallback(async (userId = actorUserId) => {
     if (!userId) {
@@ -93,12 +99,12 @@ export function useOfflineSalesSync() {
       await syncOfflinePosSales(userId, replaySale);
       await refresh(userId);
       setLastSyncAt(new Date().toISOString());
-      setBackendReachable(true);
+      updateReachability(true);
     } finally {
       syncRunning.current = false;
       setSyncing(false);
     }
-  }, [actorUserId, probeReachability, refresh, replaySale]);
+  }, [actorUserId, probeReachability, refresh, replaySale, updateReachability]);
 
   const discard = useCallback(async (clientReference: string) => {
     if (!actorUserId) return;
