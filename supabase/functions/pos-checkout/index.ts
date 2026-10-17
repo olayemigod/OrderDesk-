@@ -75,6 +75,18 @@ Deno.serve(async(request)=>{
   if(membershipError)return json({error:membershipError.message},400);
   if(!membership)return json({error:'You do not have access to this business'},403);
 
+  // Persist the authenticated POS operator before settlement. This is an immutable
+  // transaction fact and is idempotent for retries by the same cashier.
+  const {error:operatorError}=await admin.rpc('set_sellertray_pos_operator_snapshot',{
+    p_tenant_id:tenantId,
+    p_order_id:orderId,
+    p_actor_user_id:userId,
+  });
+  if(operatorError){
+    const message=operatorError.message??'Unable to record cashier for this sale';
+    return json({error:message},statusForCheckoutError(message));
+  }
+
   const allocationMode=body.allocations!==undefined||body.payLater===true||body.commandId!==undefined;
   let result:CheckoutResult;
 
