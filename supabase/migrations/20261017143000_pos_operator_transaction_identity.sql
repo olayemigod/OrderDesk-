@@ -112,8 +112,7 @@ begin
 
   update public.orders
   set pos_operator_user_id=p_actor_user_id,
-      pos_operator_name=v_name,
-      updated_at=now()
+      pos_operator_name=v_name
   where tenant_id=p_tenant_id and id=p_order_id
   returning * into v_order;
 
