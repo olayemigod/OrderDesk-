@@ -6,7 +6,7 @@ import { loadCommerceProducts, type CommerceBranch, type CommerceProduct } from 
 import { loadActiveStockCount, loadInventoryCapabilities, type InventoryCapabilities, type StockCountDetail } from '../data/inventoryRepository';
 import { loadLowStock } from '../data/lowStockRepository';
 import { isLikelyConnectivityError, loadCommerceProductCache, saveCommerceProductCache } from '../data/offlineSalesRepository';
-import { sellerTrayUserMessage } from '../data/userFacingError';
+import { sellerTrayBackgroundError } from '../data/userFacingError';
 import { useBusinesses } from '../hooks/useBusinesses';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
@@ -47,13 +47,14 @@ export function InventoryTabWorkspace({ tenantId, branch, currency = '' }: Props
       try { setLow((await loadLowStock(tenantId, branch.id)).length); } catch { setLow(null); }
       if (nextCap.canCountStock || nextCap.canApplyStockCount) {
         try { setCount(await loadActiveStockCount(tenantId, branch.id)); }
-        catch (error) { setCount(null); setAccessError(sellerTrayUserMessage(error, 'Stock count is unavailable right now.')); }
+        catch (error) { setCount(null); setAccessError(sellerTrayBackgroundError(error, 'Stock count is unavailable right now.')); }
       } else setCount(null);
     } catch (error) {
       setCap(NONE); setCount(null); setLow(null);
-      const cached = isLikelyConnectivityError(error) ? await loadCommerceProductCache(tenantId) : null;
+      const connectivityFailure = isLikelyConnectivityError(error);
+      const cached = connectivityFailure ? await loadCommerceProductCache(tenantId) : null;
       setProducts(cached?.data ?? []);
-      setAccessError(isLikelyConnectivityError(error) ? 'Inventory actions need a connection. Saved stock remains available to view.' : sellerTrayUserMessage(error, 'Inventory action access could not be verified.'));
+      setAccessError(connectivityFailure ? null : sellerTrayBackgroundError(error, 'Inventory action access could not be verified.'));
     } finally { setLoading(false); }
   }
 
@@ -69,7 +70,7 @@ export function InventoryTabWorkspace({ tenantId, branch, currency = '' }: Props
     <Card dark={dark} icon="pricetags-outline" title="Products" text="Search products, add one quickly or use a barcode as an optional shortcut." onPress={() => setProductsOpen(true)} />
     <Card dark={dark} icon={low && low > 0 ? 'alert-circle-outline' : 'checkmark-circle-outline'} title="Low stock" text={low === null ? 'Open branch stock alerts.' : low === 0 ? 'No product is at or below its branch threshold.' : `${low} product${low === 1 ? '' : 's'} need replenishment attention.`} onPress={() => setLowOpen(true)} alert={Boolean(low && low > 0)} badge={low && low > 0 ? low : undefined} />
     <Card dark={dark} icon="git-compare-outline" title="Stock transfers" text={cap.canTransferStock ? 'Move stock between accessible branches and confirm dispatch or receipt.' : 'View incoming and outgoing transfer history for this branch.'} onPress={() => setTransferOpen(true)} />
-    {loading ? <View style={[styles.card, dark && darkStyles.card]}><ActivityIndicator size="small"/><View style={styles.copy}><Text style={[styles.title,dark&&darkStyles.title]}>Stock count</Text><Text style={[styles.text,dark&&darkStyles.body]}>Checking count access…</Text></View></View> : canCount ? <Card dark={dark} icon={count ? 'clipboard' : 'clipboard-outline'} title={count?.status === 'review' ? 'Review stock count' : count ? 'Continue stock count' : 'Stock count'} text={count ? `${count.reference} · ${count.status === 'review' ? 'Variance review ready' : `${count.capturedItems}/${count.totalItems} products counted`}` : 'Count physical stock, review variances, then apply authorised reconciliation.'} onPress={() => setCountOpen(true)} active={Boolean(count)} /> : accessError ? <View style={[styles.permission,dark&&darkStyles.subtle]}><Ionicons name="shield-outline" size={18} color={theme.colors.muted}/><Text style={[styles.permissionText,dark&&darkStyles.body]}>Inventory action access could not be verified. Inventory viewing remains available.</Text></View> : null}
+    {loading ? <View style={[styles.card, dark && darkStyles.card]}><ActivityIndicator size="small"/><View style={styles.copy}><Text style={[styles.title,dark&&darkStyles.title]}>Stock count</Text><Text style={[styles.text,dark&&darkStyles.body]}>Checking count access…</Text></View></View> : canCount ? <Card dark={dark} icon={count ? 'clipboard' : 'clipboard-outline'} title={count?.status === 'review' ? 'Review stock count' : count ? 'Continue stock count' : 'Stock count'} text={count ? `${count.reference} · ${count.status === 'review' ? 'Variance review ready' : `${count.capturedItems}/${count.totalItems} products counted`}` : 'Count physical stock, review variances, then apply authorised reconciliation.'} onPress={() => setCountOpen(true)} active={Boolean(count)} /> : accessError ? <View style={[styles.permission,dark&&darkStyles.subtle]}><Ionicons name="shield-outline" size={18} color={theme.colors.muted}/><Text style={[styles.permissionText,dark&&darkStyles.body]}>{accessError}</Text></View> : null}
     <InventoryWorkspace key={`${tenantId}:${branch.id}:${version}`} tenantId={tenantId} branch={branch}/>
   </View>;
 }
