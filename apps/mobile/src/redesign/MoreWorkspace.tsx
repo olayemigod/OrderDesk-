@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -62,6 +63,9 @@ export function MoreWorkspace({
   const [canReceivePurchases, setCanReceivePurchases] = useState(false);
   const openSyncCount = offlineSales.filter((sale) => sale.status !== 'synced').length;
   const reviewCount = offlineSales.filter((sale) => sale.status === 'needs_review' || sale.status === 'failed').length;
+  const appVersion = Constants.expoConfig?.version ?? '1.0.0';
+  const androidBuild = Constants.expoConfig?.android?.versionCode;
+  const buildStamp = androidBuild ? `SellerTray ${appVersion} · Android build ${androidBuild}` : `SellerTray ${appVersion}`;
 
   function closeOperationalWorkspaces() {
     setCashOpen(false);
@@ -204,7 +208,7 @@ export function MoreWorkspace({
       </Pressable>
 
       <View style={styles.settingsBlock}><Text style={[styles.sectionLabel, dark && darkStyles.bodyText]}>BUSINESS</Text><SettingsHub business={business} onSaveBusiness={onSaveBusiness} /></View>
-      <Text style={[styles.buildStamp, dark && darkStyles.bodyText]}>SellerTray 1.0.0 · Android build 30</Text>
+      <Text style={[styles.buildStamp, dark && darkStyles.bodyText]}>{buildStamp}</Text>
     </View>
   );
 }
