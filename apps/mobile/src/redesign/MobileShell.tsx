@@ -15,6 +15,7 @@ import {
 import { SellerTrayBrand } from '../components/SellerTrayBrand';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
+import { NotificationsWorkspace } from './NotificationsWorkspace';
 
 export type SellerTrayPrimaryTab = 'home' | 'sell' | 'orders' | 'inventory' | 'more';
 export type SellerTraySyncState = 'online' | 'syncing' | 'offline';
@@ -55,7 +56,6 @@ export function MobileShell({
   orderAttentionCount = 0,
   syncState = 'online',
   onTabChange,
-  onOpenNotifications,
   onOpenBranchSwitcher,
   onRefresh,
   children,
@@ -63,6 +63,7 @@ export function MobileShell({
   const appearance = useSellerTrayAppearance();
   const dark = appearance.dark;
   const [refreshing, setRefreshing] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   async function handleRefresh() {
     if (!onRefresh || refreshing) return;
@@ -89,8 +90,7 @@ export function MobileShell({
             <SyncPill state={syncState} />
             <Pressable
               accessibilityLabel="Open notifications"
-              disabled={!onOpenNotifications}
-              onPress={onOpenNotifications}
+              onPress={() => setNotificationsOpen(true)}
               style={({ pressed }) => [
                 styles.iconButton,
                 dark && darkStyles.card,
@@ -159,7 +159,7 @@ export function MobileShell({
             />
           ) : undefined}
         >
-          {children}
+          {notificationsOpen ? <NotificationsWorkspace onClose={() => setNotificationsOpen(false)} /> : children}
         </ScrollView>
 
         <View style={[styles.bottomNav, dark && darkStyles.bottomNav]}>
@@ -168,9 +168,12 @@ export function MobileShell({
               key={tab.key}
               icon={tab.icon}
               label={tab.label}
-              active={activeTab === tab.key}
+              active={!notificationsOpen && activeTab === tab.key}
               count={tab.key === 'orders' ? orderAttentionCount : 0}
-              onPress={() => onTabChange(tab.key)}
+              onPress={() => {
+                setNotificationsOpen(false);
+                onTabChange(tab.key);
+              }}
             />
           ))}
         </View>
