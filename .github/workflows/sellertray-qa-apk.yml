@@ -26,6 +26,8 @@ jobs:
     env:
       EXPO_NO_TELEMETRY: '1'
       EXPO_PUBLIC_SELLERTRAY_MOBILE_REDESIGN: '1'
+      SELLERTRAY_QA_SIGNING_CERT_SHA256: fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c
+      SELLERTRAY_ANDROID_NDK_VERSION: 27.1.12297006
 
     steps:
       - name: Checkout requested SellerTray revision
@@ -58,6 +60,33 @@ jobs:
       - name: Install locked dependencies
         run: npm ci --no-audit --no-fund
 
+      - name: Load governed QA runtime configuration
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const qa = require('./eas.json').build?.qa?.env ?? {};
+          const required = [
+            'EXPO_PUBLIC_SUPABASE_URL',
+            'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+            'EXPO_PUBLIC_EAS_PROJECT_ID',
+          ];
+          const missing = required.filter((key) => !qa[key]);
+          if (missing.length) {
+            throw new Error(`Missing governed QA runtime configuration: ${missing.join(', ')}`);
+          }
+          fs.appendFileSync(
+            process.env.GITHUB_ENV,
+            required.map((key) => `${key}=${qa[key]}`).join('\n') + '\n',
+          );
+          NODE
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: SellerTray release preflight
+        run: npm run preflight
+
       - name: Generate Android project
         run: npx expo prebuild --platform android --no-install --clean
 
@@ -80,6 +109,48 @@ jobs:
             printf '%s\n' "$active_audio" >&2
             exit 1
           fi
+
+      - name: Verify QA signing lineage
+        shell: bash
+        run: |
+          actual="$(keytool -exportcert -alias androiddebugkey -keystore android/app/debug.keystore -storepass android | sha256sum | awk '{print $1}')"
+          if [ "$actual" != "$SELLERTRAY_QA_SIGNING_CERT_SHA256" ]; then
+            echo "SellerTray QA signing certificate changed: $actual" >&2
+            exit 1
+          fi
+
+      - name: Provision required Android NDK
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager_bin="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          ndk_dir="${ANDROID_HOME}/ndk/${SELLERTRAY_ANDROID_NDK_VERSION}"
+          test -x "$sdkmanager_bin"
+          if [ -f "$ndk_dir/source.properties" ]; then
+            grep '^Pkg.Revision' "$ndk_dir/source.properties"
+            exit 0
+          fi
+          rm -rf "$ndk_dir"
+          for attempt in 1 2 3; do
+            echo "Installing NDK attempt ${attempt}/3"
+            set +e
+            set +o pipefail
+            yes | "$sdkmanager_bin" "ndk;${SELLERTRAY_ANDROID_NDK_VERSION}"
+            sdk_status=${PIPESTATUS[1]}
+            set -o pipefail
+            set -e
+            if [ "$sdk_status" -eq 0 ] && [ -f "$ndk_dir/source.properties" ]; then
+              grep '^Pkg.Revision' "$ndk_dir/source.properties"
+              exit 0
+            fi
+            rm -rf "$ndk_dir"
+            if [ "$attempt" -lt 3 ]; then
+              sleep $((attempt * 10))
+            fi
+          done
+          echo "Unable to provision required Android NDK" >&2
+          exit 1
 
       - name: Build release APK
         shell: bash
@@ -118,4 +189,5 @@ jobs:
           echo "## SellerTray QA APK" >> "$GITHUB_STEP_SUMMARY"
           echo "Source revision: ${{ steps.source.outputs.sha }}" >> "$GITHUB_STEP_SUMMARY"
           echo "Builder: GitHub Actions native Android/Gradle" >> "$GITHUB_STEP_SUMMARY"
+          echo "Runtime config: governed QA profile injected at bundle time" >> "$GITHUB_STEP_SUMMARY"
           echo "EAS cloud build: not used" >> "$GITHUB_STEP_SUMMARY"
