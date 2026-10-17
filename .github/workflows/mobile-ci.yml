@@ -55,8 +55,16 @@ jobs:
       run:
         working-directory: apps/mobile
     steps:
-      - name: Checkout
+      - name: Checkout exact candidate source
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact candidate checkout
+        run: |
+          expected="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
 
       - name: Setup Node 22
         uses: actions/setup-node@v4
@@ -93,8 +101,16 @@ jobs:
       run:
         working-directory: apps/mobile
     steps:
-      - name: Checkout
+      - name: Checkout exact candidate source
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact candidate checkout
+        run: |
+          expected="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
 
       - name: Setup Node 22
         uses: actions/setup-node@v4
