@@ -23,13 +23,13 @@ requireValue(
 
 requireValue(
   app.includes("import PurchasingManagement from './PurchasingManagement'") &&
-    navigation.includes("{ id: 'purchasing', label: 'Purchasing', section: 'Stock', available: true }") &&
+    navigation.includes("{ id: 'purchasing', label: 'Purchase Orders & Receiving', section: 'Purchasing', available: true }") &&
     app.includes("page === 'purchasing' && <PurchasingManagement tenantId={business.id} currency={business.currency}"),
   'Merchant Web must expose the governed Purchasing workspace.',
 );
 
 requireValue(
-  navigation.includes("{ id: 'suppliers', label: 'Suppliers', section: 'Stock', available: true }") &&
+  navigation.includes("{ id: 'suppliers', label: 'Suppliers', section: 'Purchasing', available: true }") &&
     app.includes("page === 'suppliers'") &&
     app.includes('<ManagementPage page={page}') &&
     management.includes("import SuppliersManagement from './SuppliersManagement'") &&
@@ -39,7 +39,7 @@ requireValue(
 
 requireValue(
   app.includes("import OrdersManagement from './OrdersManagement'") &&
-    navigation.includes("{ id: 'orders', label: 'Orders', section: 'Business', available: true }") &&
+    navigation.includes("{ id: 'orders', label: 'Orders', section: 'Sales', available: true }") &&
     app.includes("page === 'orders' && branch && <OrdersManagement tenantId={business.id} branchId={branch.id} currency={business.currency}") &&
     orders.includes("functions.invoke('order-draft-action'") &&
     orders.includes(".is('deleted_at', null)") &&
