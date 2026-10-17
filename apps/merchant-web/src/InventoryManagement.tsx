@@ -7,7 +7,7 @@ type LowStockRow = { catalog_item_id: string; item_name: string; sku: string | n
 type Movement = { id: string; catalog_item_id: string; item_name: string; movement_type: string; quantity_delta: number | string; stock_uom: string; source_uom: string; source_quantity: number | string; conversion_factor: number | string; reference_type: string; reference_id: string; business_at: string; reason: string | null };
 type Transfer = { id: string; reference: string; status: string; source_branch_id: string; source_branch_name: string; destination_branch_id: string; destination_branch_name: string; item_count: number; created_at: string; dispatched_at: string | null; received_at: string | null };
 type ProductUom = { id: string; uom_name: string; conversion_factor: number | string; allow_fractional: boolean };
-type Product = { id: string; name: string; stock_uom: string; catalog_item_uoms: ProductUom[] | null };
+type Product = { id: string; name: string; stock_uom: string; low_stock_threshold: number | string; reorder_target: number | string | null; catalog_item_uoms: ProductUom[] | null };
 type CountItem = { productId: string; productName: string; stockUom: string; captured: boolean; selectedUom: string | null; countedQuantity: number | null; expectedStockQuantity: number | null; varianceQuantity: number | null };
 type StockCount = { countId: string; reference: string; reason: string; status: 'counting' | 'review' | 'applied' | 'cancelled'; totalItems: number; capturedItems: number; items: CountItem[] };
 type Capabilities = { can_receive_stock?: boolean; can_adjust_stock?: boolean; can_count_stock?: boolean; can_apply_stock_count?: boolean };
@@ -116,7 +116,7 @@ export default function InventoryManagement({ tenantId, branch, branches, stockR
   }
 
   function editPolicy(row: StockRow) {
-    const current = lowStock.find((item) => item.catalog_item_id === row.catalog_item_id);
+    const current = products.find((item) => item.id === row.catalog_item_id);
     setPolicyProductId(row.catalog_item_id);
     setPolicyThreshold(String(current ? numberValue(current.low_stock_threshold) : 0));
     setPolicyTarget(current?.reorder_target == null ? '' : String(numberValue(current.reorder_target)));
