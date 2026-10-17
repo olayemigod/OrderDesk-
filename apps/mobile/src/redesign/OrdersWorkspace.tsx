@@ -277,7 +277,7 @@ export function OrdersWorkspace({
                 <Text style={[styles.customerName, dark && darkStyles.titleText]}>{order.customerName}</Text>
                 <Text style={[styles.orderMeta, dark && darkStyles.bodyText]}>{order.publicOrderId} · {sourceLabel(order.source)} · {order.items.length} {order.items.length === 1 ? 'item' : 'items'}</Text>
                 <Text style={[styles.orderAttribution, dark && darkStyles.bodyText]}>
-                  Branch: {order.branchName}{order.cashierName ? ` · Cashier: ${order.cashierName}` : ''}
+                  Branch: {order.branchName}{order.posOperatorName ? ` · Cashier: ${order.posOperatorName}` : ''}
                 </Text>
               </View>
               <View style={styles.orderValueWrap}>
