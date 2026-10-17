@@ -40,6 +40,11 @@ export default function InventoryManagement({ tenantId, branch, branches, stockR
   const [adjustReference, setAdjustReference] = useState(() => reference('ADJ'));
   const [countReference, setCountReference] = useState(() => reference('COUNT'));
   const [countReason, setCountReason] = useState('Routine stock count');
+  const [countEntryProductId, setCountEntryProductId] = useState<string | null>(null);
+  const [countEntryUomId, setCountEntryUomId] = useState('');
+  const [countEntryQty, setCountEntryQty] = useState('');
+  const [countCancelOpen, setCountCancelOpen] = useState(false);
+  const [countCancelReason, setCountCancelReason] = useState('');
   const [transferDestination, setTransferDestination] = useState('');
   const [transferReference, setTransferReference] = useState(() => reference('TRF'));
   const [transferReason, setTransferReason] = useState('Branch replenishment');
@@ -47,10 +52,15 @@ export default function InventoryManagement({ tenantId, branch, branches, stockR
   const [lineProductId, setLineProductId] = useState('');
   const [lineUomId, setLineUomId] = useState('');
   const [lineQty, setLineQty] = useState('');
+  const [transferCancelId, setTransferCancelId] = useState<string | null>(null);
+  const [transferCancelReason, setTransferCancelReason] = useState('');
 
   const selectedProduct = products.find((row) => row.id === adjustProductId) ?? null;
   const lineProduct = products.find((row) => row.id === lineProductId) ?? null;
   const policyProduct = policyProductId ? stockRows.find((row) => row.catalog_item_id === policyProductId) ?? null : null;
+  const countEntryItem = count?.items.find((item) => item.productId === countEntryProductId) ?? null;
+  const countEntryProduct = countEntryProductId ? products.find((row) => row.id === countEntryProductId) ?? null : null;
+  const transferToCancel = transferCancelId ? transfers.find((row) => row.id === transferCancelId) ?? null : null;
   const visibleStock = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return stockRows.filter((row) => !needle || [row.item_name, row.sku ?? '', row.category ?? ''].some((value) => value.toLowerCase().includes(needle)));
@@ -58,6 +68,8 @@ export default function InventoryManagement({ tenantId, branch, branches, stockR
 
   useEffect(() => {
     setMessage(null); setError(null); setCount(null); setTransfers([]); setMovements([]); setLowStock([]); setProducts([]); setPolicyProductId(null);
+    setCountEntryProductId(null); setCountEntryUomId(''); setCountEntryQty(''); setCountCancelOpen(false); setCountCancelReason('');
+    setTransferCancelId(null); setTransferCancelReason('');
     if (branch) void loadBranchInventory();
   }, [tenantId, branch?.id]);
   useEffect(() => {
@@ -142,30 +154,70 @@ export default function InventoryManagement({ tenantId, branch, branches, stockR
   async function startCount(event: FormEvent) {
     event.preventDefault(); if (!branch) return;
     setBusy(true); setError(null);
-    try { await invoke('stock-count', { action: 'start', tenantId, branchId: branch.id, reference: countReference, reason: countReason }); setMessage('Stock count started.'); setCountReference(reference('COUNT')); await loadBranchInventory(); }
+    try {
+      await invoke('stock-count', { action: 'start', tenantId, branchId: branch.id, reference: countReference, reason: countReason });
+      setMessage('Stock count started.'); setCountReference(reference('COUNT')); setCountEntryProductId(null); setCountCancelOpen(false); await loadBranchInventory();
+    }
     catch (cause) { setError(errorMessage(cause, 'Unable to start stock count.')); } finally { setBusy(false); }
   }
 
-  async function captureCount(item: CountItem) {
-    if (!count) return;
+  function openCountEntry(item: CountItem) {
     const product = products.find((row) => row.id === item.productId);
-    const uom = product?.catalog_item_uoms?.find((row) => row.uom_name.toLowerCase() === item.stockUom.toLowerCase()) ?? product?.catalog_item_uoms?.[0];
-    if (!uom) { setError(`No usable unit is configured for ${item.productName}.`); return; }
-    const entered = window.prompt(`Counted quantity for ${item.productName} (${uom.uom_name})`, item.countedQuantity == null ? '' : String(item.countedQuantity));
-    if (entered == null) return;
-    const quantity = Number(entered); if (!Number.isFinite(quantity) || quantity < 0) { setError('Counted quantity must be zero or greater.'); return; }
-    setBusy(true); setError(null);
-    try { await invoke('stock-count', { action: 'capture', tenantId, countId: count.countId, productId: item.productId, uomId: uom.id, quantity }); await loadBranchInventory(); }
-    catch (cause) { setError(errorMessage(cause, 'Unable to save this counted quantity.')); } finally { setBusy(false); }
+    const selectedName = item.selectedUom?.trim().toLowerCase();
+    const uom = product?.catalog_item_uoms?.find((row) => selectedName && row.uom_name.toLowerCase() === selectedName)
+      ?? product?.catalog_item_uoms?.find((row) => row.uom_name.toLowerCase() === item.stockUom.toLowerCase())
+      ?? product?.catalog_item_uoms?.[0];
+    if (!product || !uom) { setError(`No usable unit is configured for ${item.productName}.`); return; }
+    setCountEntryProductId(item.productId);
+    setCountEntryUomId(uom.id);
+    setCountEntryQty(item.countedQuantity == null ? '' : String(item.countedQuantity));
+    setCountCancelOpen(false);
+    setError(null); setMessage(null);
   }
 
-  async function countAction(action: 'submit' | 'apply' | 'cancel') {
+  async function saveCountEntry(event: FormEvent) {
+    event.preventDefault();
+    if (!count || !countEntryItem || !countEntryProduct) return;
+    const uom = countEntryProduct.catalog_item_uoms?.find((row) => row.id === countEntryUomId);
+    const quantity = Number(countEntryQty);
+    if (!uom || countEntryQty.trim() === '' || !Number.isFinite(quantity) || quantity < 0) { setError('Choose a unit and enter a counted quantity of zero or greater.'); return; }
+    setBusy(true); setError(null); setMessage(null);
+    try {
+      await invoke('stock-count', { action: 'capture', tenantId, countId: count.countId, productId: countEntryItem.productId, uomId: uom.id, quantity });
+      setMessage(`Count saved for ${countEntryItem.productName}.`);
+      setCountEntryProductId(null); setCountEntryUomId(''); setCountEntryQty('');
+      await loadBranchInventory();
+    } catch (cause) { setError(errorMessage(cause, 'Unable to save this counted quantity.')); } finally { setBusy(false); }
+  }
+
+  async function countAction(action: 'submit' | 'apply') {
     if (!count) return;
-    const body: Record<string, unknown> = { action, tenantId, countId: count.countId };
-    if (action === 'cancel') { const reason = window.prompt('Why is this stock count being cancelled?'); if (!reason?.trim()) return; body.reason = reason; }
-    setBusy(true); setError(null);
-    try { await invoke('stock-count', body); setMessage(action === 'apply' ? 'Stock count applied.' : action === 'submit' ? 'Stock count ready for review.' : 'Stock count cancelled.'); await loadBranchInventory(); }
+    setBusy(true); setError(null); setMessage(null);
+    try {
+      await invoke('stock-count', { action, tenantId, countId: count.countId });
+      setCountEntryProductId(null); setCountCancelOpen(false); setCountCancelReason('');
+      setMessage(action === 'apply' ? 'Stock count applied.' : 'Stock count ready for review.');
+      await loadBranchInventory();
+    }
     catch (cause) { setError(errorMessage(cause, 'Unable to complete this stock count action.')); } finally { setBusy(false); }
+  }
+
+  function openCountCancel() {
+    setCountCancelOpen(true); setCountCancelReason(''); setCountEntryProductId(null); setError(null); setMessage(null);
+  }
+
+  async function cancelCount(event: FormEvent) {
+    event.preventDefault();
+    if (!count) return;
+    const reason = countCancelReason.trim();
+    if (!reason) { setError('Enter the reason for cancelling this stock count.'); return; }
+    setBusy(true); setError(null); setMessage(null);
+    try {
+      await invoke('stock-count', { action: 'cancel', tenantId, countId: count.countId, reason });
+      setCountCancelOpen(false); setCountCancelReason(''); setCountEntryProductId(null);
+      setMessage('Stock count cancelled.'); await loadBranchInventory();
+    }
+    catch (cause) { setError(errorMessage(cause, 'Unable to cancel this stock count.')); } finally { setBusy(false); }
   }
 
   function addTransferLine() {
@@ -176,19 +228,40 @@ export default function InventoryManagement({ tenantId, branch, branches, stockR
   async function createTransfer(event: FormEvent) {
     event.preventDefault(); if (!branch) return;
     if (!transferDestination || !transferLines.length || !transferReference.trim() || !transferReason.trim()) { setError('Choose a destination and add at least one product.'); return; }
-    setBusy(true); setError(null);
+    setBusy(true); setError(null); setMessage(null);
     try {
       await invoke('stock-transfer', { action: 'create', tenantId, sourceBranchId: branch.id, destinationBranchId: transferDestination, reference: transferReference, reason: transferReason, items: transferLines.map((row) => ({ catalogItemId: row.productId, uomId: row.uomId, quantity: Number(row.quantity) })) });
       setMessage('Stock transfer saved as draft.'); setTransferLines([]); setTransferReference(reference('TRF')); await loadBranchInventory();
     } catch (cause) { setError(errorMessage(cause, 'Unable to create this stock transfer.')); } finally { setBusy(false); }
   }
 
-  async function transferAction(transfer: Transfer, action: 'dispatch' | 'receive' | 'cancel') {
-    const body: Record<string, unknown> = { action, tenantId, transferId: transfer.id };
-    if (action === 'cancel') { const reason = window.prompt('Why is this transfer being cancelled?'); if (!reason?.trim()) return; body.reason = reason; }
-    setBusy(true); setError(null);
-    try { await invoke('stock-transfer', body); setMessage(action === 'dispatch' ? 'Transfer dispatched.' : action === 'receive' ? 'Transfer received into the destination Branch.' : 'Transfer cancelled.'); await loadBranchInventory(); }
+  async function transferAction(transfer: Transfer, action: 'dispatch' | 'receive') {
+    setBusy(true); setError(null); setMessage(null);
+    try {
+      await invoke('stock-transfer', { action, tenantId, transferId: transfer.id });
+      setMessage(action === 'dispatch' ? 'Transfer dispatched.' : 'Transfer received into the destination Branch.');
+      if (transferCancelId === transfer.id) { setTransferCancelId(null); setTransferCancelReason(''); }
+      await loadBranchInventory();
+    }
     catch (cause) { setError(errorMessage(cause, 'Unable to complete this transfer action.')); } finally { setBusy(false); }
+  }
+
+  function openTransferCancel(transfer: Transfer) {
+    setTransferCancelId(transfer.id); setTransferCancelReason(''); setError(null); setMessage(null);
+  }
+
+  async function cancelTransfer(event: FormEvent) {
+    event.preventDefault();
+    if (!transferToCancel) return;
+    const reason = transferCancelReason.trim();
+    if (!reason) { setError('Enter the reason for cancelling this transfer.'); return; }
+    setBusy(true); setError(null); setMessage(null);
+    try {
+      await invoke('stock-transfer', { action: 'cancel', tenantId, transferId: transferToCancel.id, reason });
+      setTransferCancelId(null); setTransferCancelReason('');
+      setMessage('Transfer cancelled.'); await loadBranchInventory();
+    }
+    catch (cause) { setError(errorMessage(cause, 'Unable to cancel this transfer.')); } finally { setBusy(false); }
   }
 
   if (!branch) return <div className="page-stack"><Heading title="Inventory" note="Choose a Branch to manage stock." /><Empty title="No active Branch" body="Inventory actions require an explicit Branch context." /></div>;
@@ -221,10 +294,17 @@ export default function InventoryManagement({ tenantId, branch, branches, stockR
 
     {tab === 'movements' ? <article className="panel"><div className="panel-head"><div><p className="eyebrow">Audit trail</p><h3>Stock movement history</h3></div><button className="secondary-button" disabled={loading} onClick={() => void loadBranchInventory()}>Refresh</button></div><Table headers={['When','Product','Movement','Quantity','Source','Reference','Reason']}>{movements.map((row) => <tr key={row.id}><td>{dateTime(row.business_at)}</td><td><strong>{row.item_name}</strong></td><td>{label(row.movement_type)}</td><td className={numberValue(row.quantity_delta) < 0 ? 'danger-text' : ''}>{signed(numberValue(row.quantity_delta))} {row.stock_uom}</td><td>{formatNumber(numberValue(row.source_quantity))} {row.source_uom}</td><td>{row.reference_id || '—'}</td><td>{row.reason || '—'}</td></tr>)}</Table>{!movements.length ? <Empty title="No movements yet" body="Posted sales, returns, purchase receipts, adjustments, counts and transfers will appear here." /> : null}</article> : null}
 
-    {tab === 'counts' ? <>{count ? <article className="panel"><div className="panel-head"><div><p className="eyebrow">{label(count.status)}</p><h3>{count.reference}</h3><p className="muted">{count.capturedItems} of {count.totalItems} products captured</p></div><div className="form-actions">{count.status === 'counting' ? <button className="primary-button" disabled={busy || count.capturedItems !== count.totalItems} onClick={() => void countAction('submit')}>Review variance</button> : null}{count.status === 'review' && capabilities.can_apply_stock_count ? <button className="primary-button" disabled={busy} onClick={() => void countAction('apply')}>Apply count</button> : null}{count.status !== 'applied' && count.status !== 'cancelled' ? <button className="secondary-button" disabled={busy} onClick={() => void countAction('cancel')}>Cancel</button> : null}</div></div><Table headers={['Product','Counted','Expected','Variance','Action']}>{count.items.map((item) => <tr key={item.productId}><td><strong>{item.productName}</strong></td><td>{item.captured ? `${formatNumber(item.countedQuantity ?? 0)} ${item.selectedUom ?? item.stockUom}` : 'Not counted'}</td><td>{item.expectedStockQuantity == null ? 'Hidden until review' : `${formatNumber(item.expectedStockQuantity)} ${item.stockUom}`}</td><td className={item.varianceQuantity != null && item.varianceQuantity !== 0 ? 'danger-text' : ''}>{item.varianceQuantity == null ? '—' : `${signed(item.varianceQuantity)} ${item.stockUom}`}</td><td>{count.status === 'counting' ? <button className="text-button" disabled={busy} onClick={() => void captureCount(item)}>{item.captured ? 'Update count' : 'Enter count'}</button> : '—'}</td></tr>)}</Table></article> : capabilities.can_count_stock ? <form className="panel product-editor-stack" onSubmit={startCount}><div className="panel-head"><div><p className="eyebrow">Physical verification</p><h3>Start stock count</h3></div></div><div className="form-grid"><label className="field">Reference<input value={countReference} onChange={(event) => setCountReference(event.target.value)} /></label><label className="field">Reason<input value={countReason} onChange={(event) => setCountReason(event.target.value)} /></label></div><div className="form-actions"><button className="primary-button" disabled={busy}>Start count</button></div></form> : <Empty title="Stock count unavailable" body="Your SellerTray permissions do not allow starting a stock count for this Branch." />}</> : null}
+    {tab === 'counts' ? <>
+      {count ? <article className="panel"><div className="panel-head"><div><p className="eyebrow">{label(count.status)}</p><h3>{count.reference}</h3><p className="muted">{count.capturedItems} of {count.totalItems} products captured</p></div><div className="form-actions">{count.status === 'counting' ? <button className="primary-button" disabled={busy || count.capturedItems !== count.totalItems} onClick={() => void countAction('submit')}>Review variance</button> : null}{count.status === 'review' && capabilities.can_apply_stock_count ? <button className="primary-button" disabled={busy} onClick={() => void countAction('apply')}>Apply count</button> : null}{count.status !== 'applied' && count.status !== 'cancelled' ? <button className="secondary-button" disabled={busy} onClick={openCountCancel}>Cancel</button> : null}</div></div><Table headers={['Product','Counted','Expected','Variance','Action']}>{count.items.map((item) => <tr key={item.productId}><td><strong>{item.productName}</strong></td><td>{item.captured ? `${formatNumber(item.countedQuantity ?? 0)} ${item.selectedUom ?? item.stockUom}` : 'Not counted'}</td><td>{item.expectedStockQuantity == null ? 'Hidden until review' : `${formatNumber(item.expectedStockQuantity)} ${item.stockUom}`}</td><td className={item.varianceQuantity != null && item.varianceQuantity !== 0 ? 'danger-text' : ''}>{item.varianceQuantity == null ? '—' : `${signed(item.varianceQuantity)} ${item.stockUom}`}</td><td>{count.status === 'counting' ? <button className="text-button" disabled={busy} onClick={() => openCountEntry(item)}>{item.captured ? 'Update count' : 'Enter count'}</button> : '—'}</td></tr>)}</Table></article> : capabilities.can_count_stock ? <form className="panel product-editor-stack" onSubmit={startCount}><div className="panel-head"><div><p className="eyebrow">Physical verification</p><h3>Start stock count</h3></div></div><div className="form-grid"><label className="field">Reference<input value={countReference} onChange={(event) => setCountReference(event.target.value)} /></label><label className="field">Reason<input value={countReason} onChange={(event) => setCountReason(event.target.value)} /></label></div><div className="form-actions"><button className="primary-button" disabled={busy}>Start count</button></div></form> : <Empty title="Stock count unavailable" body="Your SellerTray permissions do not allow starting a stock count for this Branch." />}
+      {count?.status === 'counting' && countEntryItem && countEntryProduct ? <form className="panel product-editor-stack" onSubmit={saveCountEntry}><div className="panel-head"><div><p className="eyebrow">Count entry</p><h3>{countEntryItem.productName}</h3><p className="muted">Record what was physically counted. Expected stock stays hidden until review.</p></div><button type="button" className="text-button" disabled={busy} onClick={() => setCountEntryProductId(null)}>Close</button></div><div className="form-grid"><label className="field">Unit<select value={countEntryUomId} onChange={(event) => setCountEntryUomId(event.target.value)}>{countEntryProduct.catalog_item_uoms?.map((row) => <option key={row.id} value={row.id}>{row.uom_name}</option>)}</select></label><label className="field">Counted quantity<input required type="number" min="0" step="any" value={countEntryQty} onChange={(event) => setCountEntryQty(event.target.value)} /></label></div><div className="form-actions"><button className="primary-button" disabled={busy}>{busy ? 'Saving…' : 'Save count'}</button></div></form> : null}
+      {count && countCancelOpen && count.status !== 'applied' && count.status !== 'cancelled' ? <form className="panel product-editor-stack" onSubmit={cancelCount}><div className="panel-head"><div><p className="eyebrow">Cancel stock count</p><h3>{count.reference}</h3><p className="muted">Cancellation keeps the count history but prevents it from being applied.</p></div><button type="button" className="text-button" disabled={busy} onClick={() => setCountCancelOpen(false)}>Close</button></div><div className="form-grid"><label className="field">Reason<input required value={countCancelReason} onChange={(event) => setCountCancelReason(event.target.value)} placeholder="Why is this count being cancelled?" /></label></div><div className="form-actions"><button className="danger-button" disabled={busy}>{busy ? 'Cancelling…' : 'Cancel stock count'}</button></div></form> : null}
+    </> : null}
 
-    {tab === 'transfers' ? <><article className="panel"><div className="panel-head"><div><p className="eyebrow">Branch movement</p><h3>Stock transfers</h3></div></div><Table headers={['Reference','From','To','Products','Status','Created','Action']}>{transfers.map((row) => <tr key={row.id}><td><strong>{row.reference}</strong></td><td>{row.source_branch_name}</td><td>{row.destination_branch_name}</td><td>{row.item_count}</td><td>{label(row.status)}</td><td>{dateTime(row.created_at)}</td><td><div className="form-actions">{row.status === 'draft' && row.source_branch_id === branch.id ? <button className="text-button" disabled={busy} onClick={() => void transferAction(row,'dispatch')}>Dispatch</button> : null}{row.status === 'dispatched' && row.destination_branch_id === branch.id ? <button className="text-button" disabled={busy} onClick={() => void transferAction(row,'receive')}>Receive</button> : null}{row.status === 'draft' ? <button className="text-button" disabled={busy} onClick={() => void transferAction(row,'cancel')}>Cancel</button> : null}</div></td></tr>)}</Table>{!transfers.length ? <Empty title="No transfers" body="Transfers involving this Branch will appear here." /> : null}</article>
-      {branches.some((row) => row.id !== branch.id) ? <form className="panel product-editor-stack" onSubmit={createTransfer}><div className="panel-head"><div><p className="eyebrow">Move between Branches</p><h3>New stock transfer</h3></div></div><div className="form-grid"><label className="field">Destination<select value={transferDestination} onChange={(event) => setTransferDestination(event.target.value)}>{branches.filter((row) => row.id !== branch.id).map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label><label className="field">Reference<input value={transferReference} onChange={(event) => setTransferReference(event.target.value)} /></label><label className="field">Reason<input value={transferReason} onChange={(event) => setTransferReason(event.target.value)} /></label></div><div className="form-grid"><label className="field">Product<select value={lineProductId} onChange={(event) => setLineProductId(event.target.value)}>{products.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label><label className="field">Unit<select value={lineUomId} onChange={(event) => setLineUomId(event.target.value)}>{lineProduct?.catalog_item_uoms?.map((row) => <option key={row.id} value={row.id}>{row.uom_name}</option>)}</select></label><label className="field">Quantity<input type="number" min="0" step="any" value={lineQty} onChange={(event) => setLineQty(event.target.value)} /></label><div className="field"><span>Transfer line</span><button type="button" className="secondary-button" onClick={addTransferLine}>Add product</button></div></div>{transferLines.length ? <Table headers={['Product','Unit','Quantity','']}>{transferLines.map((line,index) => { const product = products.find((row) => row.id === line.productId); const uom = product?.catalog_item_uoms?.find((row) => row.id === line.uomId); return <tr key={`${line.productId}-${index}`}><td>{product?.name ?? 'Product'}</td><td>{uom?.uom_name ?? 'Unit'}</td><td>{line.quantity}</td><td><button type="button" className="text-button" onClick={() => setTransferLines((rows) => rows.filter((_,i) => i !== index))}>Remove</button></td></tr>; })}</Table> : null}<div className="form-actions"><button className="primary-button" disabled={busy || !transferLines.length}>Save transfer</button></div></form> : <Empty title="One Branch only" body="Add another Branch before creating stock transfers." />}</> : null}
+    {tab === 'transfers' ? <>
+      <article className="panel"><div className="panel-head"><div><p className="eyebrow">Branch movement</p><h3>Stock transfers</h3></div></div><Table headers={['Reference','From','To','Products','Status','Created','Action']}>{transfers.map((row) => <tr key={row.id}><td><strong>{row.reference}</strong></td><td>{row.source_branch_name}</td><td>{row.destination_branch_name}</td><td>{row.item_count}</td><td>{label(row.status)}</td><td>{dateTime(row.created_at)}</td><td><div className="form-actions">{row.status === 'draft' && row.source_branch_id === branch.id ? <button className="text-button" disabled={busy} onClick={() => void transferAction(row,'dispatch')}>Dispatch</button> : null}{row.status === 'dispatched' && row.destination_branch_id === branch.id ? <button className="text-button" disabled={busy} onClick={() => void transferAction(row,'receive')}>Receive</button> : null}{row.status === 'draft' ? <button className="text-button" disabled={busy} onClick={() => openTransferCancel(row)}>Cancel</button> : null}</div></td></tr>)}</Table>{!transfers.length ? <Empty title="No transfers" body="Transfers involving this Branch will appear here." /> : null}</article>
+      {transferToCancel ? <form className="panel product-editor-stack" onSubmit={cancelTransfer}><div className="panel-head"><div><p className="eyebrow">Cancel transfer</p><h3>{transferToCancel.reference}</h3><p className="muted">{transferToCancel.source_branch_name} → {transferToCancel.destination_branch_name}. The reason is retained with the governed transfer history.</p></div><button type="button" className="text-button" disabled={busy} onClick={() => setTransferCancelId(null)}>Close</button></div><div className="form-grid"><label className="field">Reason<input required value={transferCancelReason} onChange={(event) => setTransferCancelReason(event.target.value)} placeholder="Why is this transfer being cancelled?" /></label></div><div className="form-actions"><button className="danger-button" disabled={busy}>{busy ? 'Cancelling…' : 'Cancel transfer'}</button></div></form> : null}
+      {branches.some((row) => row.id !== branch.id) ? <form className="panel product-editor-stack" onSubmit={createTransfer}><div className="panel-head"><div><p className="eyebrow">Move between Branches</p><h3>New stock transfer</h3></div></div><div className="form-grid"><label className="field">Destination<select value={transferDestination} onChange={(event) => setTransferDestination(event.target.value)}>{branches.filter((row) => row.id !== branch.id).map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label><label className="field">Reference<input value={transferReference} onChange={(event) => setTransferReference(event.target.value)} /></label><label className="field">Reason<input value={transferReason} onChange={(event) => setTransferReason(event.target.value)} /></label></div><div className="form-grid"><label className="field">Product<select value={lineProductId} onChange={(event) => setLineProductId(event.target.value)}>{products.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label><label className="field">Unit<select value={lineUomId} onChange={(event) => setLineUomId(event.target.value)}>{lineProduct?.catalog_item_uoms?.map((row) => <option key={row.id} value={row.id}>{row.uom_name}</option>)}</select></label><label className="field">Quantity<input type="number" min="0" step="any" value={lineQty} onChange={(event) => setLineQty(event.target.value)} /></label><div className="field"><span>Transfer line</span><button type="button" className="secondary-button" onClick={addTransferLine}>Add product</button></div></div>{transferLines.length ? <Table headers={['Product','Unit','Quantity','']}>{transferLines.map((line,index) => { const product = products.find((row) => row.id === line.productId); const uom = product?.catalog_item_uoms?.find((row) => row.id === line.uomId); return <tr key={`${line.productId}-${index}`}><td>{product?.name ?? 'Product'}</td><td>{uom?.uom_name ?? 'Unit'}</td><td>{line.quantity}</td><td><button type="button" className="text-button" onClick={() => setTransferLines((rows) => rows.filter((_,i) => i !== index))}>Remove</button></td></tr>; })}</Table> : null}<div className="form-actions"><button className="primary-button" disabled={busy || !transferLines.length}>Save transfer</button></div></form> : <Empty title="One Branch only" body="Add another Branch before creating stock transfers." />}
+    </> : null}
   </div>;
 }
 
