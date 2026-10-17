@@ -134,10 +134,12 @@ jobs:
           rm -rf "$ndk_dir"
           for attempt in 1 2 3; do
             echo "Installing NDK attempt ${attempt}/3"
+            set +e
             set +o pipefail
             yes | "$sdkmanager_bin" "ndk;${SELLERTRAY_ANDROID_NDK_VERSION}"
             sdk_status=${PIPESTATUS[1]}
             set -o pipefail
+            set -e
             if [ "$sdk_status" -eq 0 ] && [ -f "$ndk_dir/source.properties" ]; then
               grep '^Pkg.Revision' "$ndk_dir/source.properties"
               exit 0
