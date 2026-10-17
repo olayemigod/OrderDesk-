@@ -82,7 +82,13 @@ export async function checkoutPosPaymentAllocations(input: {
       allocations: input.allocations,
     },
   });
-  if (error) throw new Error(sellerTrayUserMessage(await functionErrorMessage(error, 'Unable to process this payment.'), 'This payment could not be processed. Please try again.'));
+  if (error) {
+    const message = sellerTrayUserMessage(
+      await functionErrorMessage(error, 'Unable to process this payment.'),
+      'This payment could not be processed. Please try again.',
+    );
+    throw new Error(message ?? 'Connect to continue.');
+  }
   if (!isAllocationCheckoutResult(data)) {
     throw new Error('SellerTray returned an invalid payment allocation result.');
   }
