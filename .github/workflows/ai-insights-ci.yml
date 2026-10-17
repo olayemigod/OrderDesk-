@@ -4,12 +4,21 @@ on:
   push:
     branches:
       - feat/sellertray-ai-insights-v1
+      - feat/sellertray-brand-ui-v1
     paths:
       - 'supabase/functions/merchant-ai/**'
+      - 'supabase/migrations/**ai_insight**'
+      - 'supabase/tests/ai_insight_authority.test.sql'
+      - 'apps/merchant-web/src/AiInsights.tsx'
+      - 'apps/merchant-web/scripts/ai-security-preflight.mjs'
       - '.github/workflows/ai-insights-ci.yml'
   pull_request:
     paths:
       - 'supabase/functions/merchant-ai/**'
+      - 'supabase/migrations/**ai_insight**'
+      - 'supabase/tests/ai_insight_authority.test.sql'
+      - 'apps/merchant-web/src/AiInsights.tsx'
+      - 'apps/merchant-web/scripts/ai-security-preflight.mjs'
       - '.github/workflows/ai-insights-ci.yml'
 
 permissions:
@@ -26,3 +35,9 @@ jobs:
           deno-version: v2.x
       - name: Typecheck merchant AI Edge Function
         run: deno check supabase/functions/merchant-ai/index.ts
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify AI browser and server authority boundary
+        working-directory: apps/merchant-web
+        run: node scripts/ai-security-preflight.mjs
