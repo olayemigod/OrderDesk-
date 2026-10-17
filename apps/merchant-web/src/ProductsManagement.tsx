@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type Dispatch, type FormEvent, type ReactNode, type SetStateAction } from 'react';
+import ProductActivity from './ProductActivity';
 import { errorMessage, numberValue, supabase } from './supabase';
 
 type ProductUom = {
@@ -73,7 +74,7 @@ type UomDraft = {
 };
 
 type ProductStatus = 'active' | 'archived' | 'all';
-type ProductTab = 'overview' | 'units' | 'pricing' | 'stock';
+type ProductTab = 'overview' | 'units' | 'pricing' | 'stock' | 'activity';
 
 const PAGE_SIZE = 25;
 const EMPTY_PAGE: ProductPage = {
@@ -511,6 +512,7 @@ export default function ProductsManagement({
           <TabButton id="units" label="Units & Barcodes" active={tab} onClick={setTab} />
           <TabButton id="pricing" label="Pricing" active={tab} onClick={setTab} />
           <TabButton id="stock" label="Stock" active={tab} onClick={setTab} />
+          <TabButton id="activity" label="Activity" active={tab} onClick={setTab} />
         </div>
 
         {tab === 'overview' ? <ProductOverviewForm
@@ -570,6 +572,8 @@ export default function ProductsManagement({
           </tbody></table></div> : <div className="empty-state"><strong>No readable Branch stock</strong><p>No Branch inventory is available to your current management scope.</p></div>}
           <div className="product-stock-callout"><strong>No opening stock is created here.</strong><span>Use Inventory for governed receiving, transfers, counts and authorised adjustments.</span></div>
         </section> : null}
+
+        {tab === 'activity' ? <ProductActivity tenantId={tenantId} productId={detail.id} /> : null}
       </> : null}
 
       {!creating && !selectedId && !listLoading ? <div className="panel empty-state"><strong>Select a product</strong><p>Open a product from the catalogue or add a new one.</p></div> : null}
