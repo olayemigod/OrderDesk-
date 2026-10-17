@@ -204,7 +204,7 @@ export function MoreWorkspace({
       </Pressable>
 
       <View style={styles.settingsBlock}><Text style={[styles.sectionLabel, dark && darkStyles.bodyText]}>BUSINESS</Text><SettingsHub business={business} onSaveBusiness={onSaveBusiness} /></View>
-      <Text style={[styles.buildStamp, dark && darkStyles.bodyText]}>SellerTray 1.0.0 · Android build 29</Text>
+      <Text style={[styles.buildStamp, dark && darkStyles.bodyText]}>SellerTray 1.0.0 · Android build 30</Text>
     </View>
   );
 }
