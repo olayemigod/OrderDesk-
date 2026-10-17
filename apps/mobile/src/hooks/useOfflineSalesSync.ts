@@ -12,6 +12,8 @@ import {
 } from '../data/offlineSalesRepository';
 import { supabase } from '../lib/supabase';
 
+const ACTIVE_REACHABILITY_INTERVAL_MS = 5_000;
+
 export function useOfflineSalesSync() {
   const [actorUserId, setActorUserId] = useState('');
   const [sales, setSales] = useState<OfflinePosSale[]>([]);
@@ -19,8 +21,11 @@ export function useOfflineSalesSync() {
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [backendReachable, setBackendReachable] = useState<boolean | null>(null);
   const syncRunning = useRef(false);
+  const reachabilityRunning = useRef(false);
 
   const probeReachability = useCallback(async () => {
+    if (reachabilityRunning.current) return backendReachable !== false;
+    reachabilityRunning.current = true;
     try {
       const { error } = await supabase.auth.getUser();
       if (error && isLikelyConnectivityError(error)) {
@@ -36,8 +41,10 @@ export function useOfflineSalesSync() {
       }
       setBackendReachable(true);
       return true;
+    } finally {
+      reachabilityRunning.current = false;
     }
-  }, []);
+  }, [backendReachable]);
 
   const refresh = useCallback(async (userId = actorUserId) => {
     if (!userId) {
@@ -118,15 +125,42 @@ export function useOfflineSalesSync() {
   }, [actorUserId, refresh, syncNow]);
 
   useEffect(() => {
+    let appState = AppState.currentState;
+    let interval: ReturnType<typeof setInterval> | null = null;
+
+    const stopPolling = () => {
+      if (!interval) return;
+      clearInterval(interval);
+      interval = null;
+    };
+    const startPolling = () => {
+      stopPolling();
+      if (!actorUserId || appState !== 'active') return;
+      void probeReachability();
+      interval = setInterval(() => {
+        void probeReachability();
+      }, ACTIVE_REACHABILITY_INTERVAL_MS);
+    };
+
+    startPolling();
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active' && actorUserId) void syncNow(actorUserId);
+      appState = state;
+      if (state === 'active') {
+        startPolling();
+        if (actorUserId) void syncNow(actorUserId);
+      } else {
+        stopPolling();
+      }
     });
-    return () => subscription.remove();
-  }, [actorUserId, syncNow]);
+    return () => {
+      stopPolling();
+      subscription.remove();
+    };
+  }, [actorUserId, probeReachability, syncNow]);
 
   const connectionState = useMemo<'online' | 'syncing' | 'offline'>(() => {
-    if (syncing) return 'syncing';
     if (backendReachable === false) return 'offline';
+    if (syncing) return 'syncing';
     const waiting = sales.some((sale) => sale.status === 'pending' && sale.attempts > 0 && /waiting for a connection/i.test(sale.lastError ?? ''));
     return waiting ? 'offline' : 'online';
   }, [backendReachable, sales, syncing]);
