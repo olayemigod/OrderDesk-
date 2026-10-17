@@ -396,7 +396,9 @@ export default function RedesignWorkspace() {
     });
   }
 
-  const workspaceError = ordersError || notifications.error || branchError || inventorySummaryError || cashShiftError || refundAuthorityError;
+  const workspaceError = offline.connectionState === 'offline'
+    ? null
+    : ordersError || notifications.error || branchError || inventorySummaryError || cashShiftError || refundAuthorityError;
   const workspaceSyncing = branchLoading || inventorySummaryLoading || cashShiftLoading || refundAuthorityLoading;
   const syncState = offline.connectionState === 'offline'
     ? 'offline'
