@@ -81,7 +81,7 @@ export function TeamManagementView({ business }: Props) {
         <Text style={[styles.eyebrow, appearance.dark && darkStyles.bodyText]}>TEAM ACCESS</Text>
         <Text style={[styles.title, appearance.dark && darkStyles.titleText]}>People and roles</Text>
         <Text style={[styles.helper, appearance.dark && darkStyles.bodyText]}>
-          Cashiers can run day-to-day order workflows. Managers can also maintain business/catalogue settings and manage Cashiers. Owners retain protected account control.
+          Cashiers run day-to-day selling and cashier workflows. Managers can also maintain business and catalogue settings and manage Cashiers. Owners retain protected account control.
         </Text>
       </View>
 
@@ -273,6 +273,8 @@ function canCancelInvitation(actorRole: 'owner' | 'manager' | 'staff', invitatio
 
 function formatRole(role: string): string {
   if (role === 'staff') return 'Cashier';
+  if (role === 'manager') return 'Manager';
+  if (role === 'owner') return 'Owner';
   return role.charAt(0).toUpperCase() + role.slice(1);
 }
 

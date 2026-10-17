@@ -277,7 +277,7 @@ export function OrdersWorkspace({
                 <Text style={[styles.customerName, dark && darkStyles.titleText]}>{order.customerName}</Text>
                 <Text style={[styles.orderMeta, dark && darkStyles.bodyText]}>{order.publicOrderId} · {sourceLabel(order.source)} · {order.items.length} {order.items.length === 1 ? 'item' : 'items'}</Text>
                 <Text style={[styles.orderAttribution, dark && darkStyles.bodyText]}>
-                  {order.branchName}{order.source === 'pos' && order.posOperatorName ? ` · Cashier: ${order.posOperatorName}` : ''}
+                  Branch: {order.branchName}{order.posOperatorName ? ` · Cashier: ${order.posOperatorName}` : ''}
                 </Text>
               </View>
               <View style={styles.orderValueWrap}>
@@ -518,7 +518,7 @@ const styles = StyleSheet.create({
   orderIdentity: { flex: 1, gap: 3 },
   customerName: { color: theme.colors.navy, fontSize: 16, fontWeight: '900' },
   orderMeta: { color: theme.colors.muted, fontSize: 12, lineHeight: 18 },
-  orderAttribution: { color: theme.colors.slate, fontSize: 11, fontWeight: '700', lineHeight: 17 },
+  orderAttribution: { color: theme.colors.slate, fontSize: 12, fontWeight: '700', lineHeight: 18 },
   orderValueWrap: { alignItems: 'flex-end', flexDirection: 'row', gap: 7 },
   orderValue: { color: theme.colors.navy, fontSize: 15, fontWeight: '900' },
   orderStateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
