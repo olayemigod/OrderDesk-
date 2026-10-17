@@ -71,7 +71,7 @@ create trigger zz_snapshot_sellertray_order_branch_name
 before insert or update of tenant_id, branch_id on public.orders
 for each row execute function public.snapshot_sellertray_order_branch_name();
 
-create or replace function public.apply_sellertray_order_cashier_snapshot(
+create or replace function public.apply_sellertray_order_operator_snapshot(
   p_tenant_id uuid,
   p_order_id uuid,
   p_actor_user_id uuid
@@ -108,10 +108,10 @@ begin
 end;
 $$;
 
-revoke all on function public.apply_sellertray_order_cashier_snapshot(uuid,uuid,uuid) from public, anon, authenticated;
-grant execute on function public.apply_sellertray_order_cashier_snapshot(uuid,uuid,uuid) to service_role;
+revoke all on function public.apply_sellertray_order_operator_snapshot(uuid,uuid,uuid) from public, anon, authenticated;
+grant execute on function public.apply_sellertray_order_operator_snapshot(uuid,uuid,uuid) to service_role;
 
-create or replace function public.snapshot_sellertray_order_cashier_from_audit()
+create or replace function public.snapshot_sellertray_order_operator_from_audit()
 returns trigger
 language plpgsql
 security definer
@@ -120,8 +120,8 @@ as $$
 begin
   if new.target_order_id is not null
      and new.actor_user_id is not null
-     and new.action_type in ('pos_draft_created', 'pos_sale_completed', 'pos_payment_awaiting_confirmation') then
-    perform public.apply_sellertray_order_cashier_snapshot(
+     and new.action_type in ('pos_sale_completed', 'pos_payment_awaiting_confirmation') then
+    perform public.apply_sellertray_order_operator_snapshot(
       new.tenant_id,
       new.target_order_id,
       new.actor_user_id
@@ -131,12 +131,13 @@ begin
 end;
 $$;
 
-revoke all on function public.snapshot_sellertray_order_cashier_from_audit() from public, anon, authenticated;
+revoke all on function public.snapshot_sellertray_order_operator_from_audit() from public, anon, authenticated;
 
 drop trigger if exists snapshot_sellertray_order_cashier_from_audit on public.commercial_action_ledger;
-create trigger snapshot_sellertray_order_cashier_from_audit
+drop trigger if exists snapshot_sellertray_order_operator_from_audit on public.commercial_action_ledger;
+create trigger snapshot_sellertray_order_operator_from_audit
 after insert on public.commercial_action_ledger
-for each row execute function public.snapshot_sellertray_order_cashier_from_audit();
+for each row execute function public.snapshot_sellertray_order_operator_from_audit();
 
 with first_pos_actor as (
   select distinct on (cal.tenant_id, cal.target_order_id)
@@ -146,7 +147,7 @@ with first_pos_actor as (
   from public.commercial_action_ledger cal
   where cal.target_order_id is not null
     and cal.actor_user_id is not null
-    and cal.action_type in ('pos_draft_created', 'pos_sale_completed', 'pos_payment_awaiting_confirmation')
+    and cal.action_type in ('pos_sale_completed', 'pos_payment_awaiting_confirmation')
   order by cal.tenant_id, cal.target_order_id, cal.created_at asc
 ), attribution as (
   select
