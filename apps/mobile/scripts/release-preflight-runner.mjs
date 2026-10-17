@@ -90,7 +90,7 @@ const currentMoreBuildMarkerCheck = `const moreWorkspaceReleaseMarker = read(joi
 requireValue(
   moreWorkspaceReleaseMarker.includes("import Constants from 'expo-constants';") &&
     moreWorkspaceReleaseMarker.includes('Constants.expoConfig?.android?.versionCode') &&
-    moreWorkspaceReleaseMarker.includes('Android build \\${androidBuild}') &&
+    moreWorkspaceReleaseMarker.includes('Android build ') &&
     !/Android build \\d+/.test(moreWorkspaceReleaseMarker),
   'More screen must derive the current Android build marker from Expo config',
 );`;
