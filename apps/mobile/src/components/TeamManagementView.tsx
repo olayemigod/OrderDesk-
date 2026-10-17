@@ -81,7 +81,7 @@ export function TeamManagementView({ business }: Props) {
         <Text style={[styles.eyebrow, appearance.dark && darkStyles.bodyText]}>TEAM ACCESS</Text>
         <Text style={[styles.title, appearance.dark && darkStyles.titleText]}>People and roles</Text>
         <Text style={[styles.helper, appearance.dark && darkStyles.bodyText]}>
-          Staff can run day-to-day order workflows. Managers can also maintain business/catalogue settings and manage Staff. Owners retain protected account control.
+          Cashiers run day-to-day selling and cashier workflows. Managers can also maintain business and catalogue settings and manage Cashiers. Owners retain protected account control.
         </Text>
       </View>
 
@@ -114,7 +114,7 @@ export function TeamManagementView({ business }: Props) {
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="email-address"
-            placeholder="staff@business.com"
+            placeholder="cashier@business.com"
             placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
             style={[styles.input, appearance.dark && darkStyles.input]}
           />
@@ -122,7 +122,7 @@ export function TeamManagementView({ business }: Props) {
             {business.role === 'owner' ? (
               <RoleButton label="Manager" active={role === 'manager'} disabled={busy} onPress={() => setRoleDraft('manager')} />
             ) : null}
-            <RoleButton label="Staff" active={role === 'staff'} disabled={busy} onPress={() => setRoleDraft('staff')} />
+            <RoleButton label="Cashier" active={role === 'staff'} disabled={busy} onPress={() => setRoleDraft('staff')} />
           </View>
           <Pressable
             disabled={busy || !email.trim()}
@@ -132,13 +132,13 @@ export function TeamManagementView({ business }: Props) {
             <Text style={styles.primaryButtonText}>{busy ? 'Working…' : 'Add / invite member'}</Text>
           </Pressable>
           <Text style={[styles.inviteHelper, appearance.dark && darkStyles.bodyText]}>
-            If the email already belongs to an SellerTray account, access is added immediately. Otherwise a 7-day pending invitation is created. Automatic invitation email delivery will be enabled with production SMTP.
+            If the email already belongs to a SellerTray account, access is added immediately. Otherwise a 7-day pending invitation is created. Automatic invitation email delivery will be enabled with production SMTP.
           </Text>
         </View>
       ) : (
         <View style={[styles.readOnlyBox, appearance.dark && darkStyles.subtleCard]}>
           <Text style={[styles.readOnlyTitle, appearance.dark && darkStyles.titleText]}>Team roster is view only</Text>
-          <Text style={[styles.helper, appearance.dark && darkStyles.bodyText]}>Staff cannot invite, remove or change team roles.</Text>
+          <Text style={[styles.helper, appearance.dark && darkStyles.bodyText]}>Cashiers cannot invite, remove or change team roles.</Text>
         </View>
       )}
 
@@ -208,7 +208,7 @@ function MemberRow({
             onPress={() => onSetRole(member.role === 'manager' ? 'staff' : 'manager')}
             style={[styles.smallButton, appearance.dark && darkStyles.secondaryButton]}
           >
-            <Text style={[styles.smallButtonText, appearance.dark && darkStyles.titleText]}>{member.role === 'manager' ? 'Make Staff' : 'Make Manager'}</Text>
+            <Text style={[styles.smallButtonText, appearance.dark && darkStyles.titleText]}>{member.role === 'manager' ? 'Make Cashier' : 'Make Manager'}</Text>
           </Pressable>
         ) : null}
         {canRemove ? (
@@ -272,6 +272,9 @@ function canCancelInvitation(actorRole: 'owner' | 'manager' | 'staff', invitatio
 }
 
 function formatRole(role: string): string {
+  if (role === 'staff') return 'Cashier';
+  if (role === 'manager') return 'Manager';
+  if (role === 'owner') return 'Owner';
   return role.charAt(0).toUpperCase() + role.slice(1);
 }
 
