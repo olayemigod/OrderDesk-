@@ -103,6 +103,7 @@ export type OrderItem = {
 export type MerchantOrder = {
   id: string;
   branchId: string;
+  branchName: string;
   posOperatorUserId: string | null;
   posOperatorName: string | null;
   customerId: string;
