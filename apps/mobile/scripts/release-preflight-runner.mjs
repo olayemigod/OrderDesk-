@@ -116,8 +116,14 @@ for (const label of ['Home', 'Sell', 'Orders', 'Inventory', 'More']) {
   if (!redesignWorkspace.includes(label)) throw new Error(`Redesign workspace is missing required primary navigation label: ${label}`);
 }
 const moreWorkspace = fs.readFileSync(moreWorkspacePath, 'utf8');
-const expectedBuildMarker = `Android build ${app.android?.versionCode}`;
-if (!moreWorkspace.includes('SellerTray ') || !moreWorkspace.includes(expectedBuildMarker)) throw new Error('Redesigned More screen must expose the current Android build marker');
+if (
+  !moreWorkspace.includes("import Constants from 'expo-constants';") ||
+  !moreWorkspace.includes('Constants.expoConfig?.android?.versionCode') ||
+  !moreWorkspace.includes('Android build ${androidBuild}') ||
+  /Android build \d+/.test(moreWorkspace)
+) {
+  throw new Error('Redesigned More screen must derive its Android build marker from the current Expo config without a hard-coded build number');
+}
 
 let source = fs.readFileSync(sourcePath, 'utf8');
 if (source.split(staleOrderChangeCheck).length !== 2) throw new Error('Expected exactly one legacy order-change governance check in release preflight');
