@@ -12,6 +12,16 @@ type ProductUom = {
   isDefaultPurchase: boolean;
 };
 
+type ProductBranchStock = {
+  branchId: string;
+  branchCode: string;
+  branchName: string;
+  isDefault: boolean;
+  isActive: boolean;
+  quantityOnHand: number;
+  lastMovementAt: string | null;
+};
+
 type ProductListItem = {
   id: string;
   name: string;
@@ -29,6 +39,7 @@ type ProductDetail = ProductListItem & {
   createdAt: string;
   updatedAt: string;
   uoms: ProductUom[];
+  branchStock: ProductBranchStock[];
 };
 
 type ProductPage = {
@@ -553,9 +564,11 @@ export default function ProductsManagement({
         </section> : null}
 
         {tab === 'stock' ? <section className="panel product-stock-panel">
-          <div><p className="eyebrow">Stock</p><h3>Branch inventory</h3><p className="muted">Product setup does not hold a separate stock quantity. On-hand stock is maintained by the governed inventory ledger for each Branch.</p></div>
-          <div className="product-stock-callout"><strong>No opening stock is created here.</strong><span>Use Inventory for receiving, transfers, counts and authorised adjustments.</span></div>
-          <p className="muted product-stock-navigation">Open Inventory from the Catalogue & Inventory menu to review Branch stock or perform an authorised stock operation.</p>
+          <div className="panel-head"><div><p className="eyebrow">Stock</p><h3>Branch inventory</h3><p className="muted">Read-only on-hand stock from the governed inventory ledger. Product setup does not maintain a separate quantity.</p></div><div className="product-price-summary"><span>Total readable stock</span><strong>{formatNumber(detail.branchStock.reduce((sum, branch) => sum + branch.quantityOnHand, 0))} {detail.stockUom}</strong></div></div>
+          {detail.branchStock.length ? <div className="table-wrap"><table className="compact-table"><thead><tr><th>Branch</th><th>Status</th><th>On hand</th><th>Last movement</th></tr></thead><tbody>
+            {detail.branchStock.map((branch) => <tr key={branch.branchId}><td><strong>{branch.branchName}</strong><div className="muted">{branch.branchCode}{branch.isDefault ? ' · Default' : ''}</div></td><td><span className={branch.isActive ? 'status-pill good' : 'status-pill neutral'}>{branch.isActive ? 'Active' : 'Inactive'}</span></td><td><strong>{formatNumber(branch.quantityOnHand)} {detail.stockUom}</strong></td><td>{branch.lastMovementAt ? dateTime(branch.lastMovementAt) : 'No movement yet'}</td></tr>)}
+          </tbody></table></div> : <div className="empty-state"><strong>No readable Branch stock</strong><p>No Branch inventory is available to your current management scope.</p></div>}
+          <div className="product-stock-callout"><strong>No opening stock is created here.</strong><span>Use Inventory for governed receiving, transfers, counts and authorised adjustments.</span></div>
         </section> : null}
       </> : null}
 
@@ -666,6 +679,18 @@ function parseDetail(value: unknown): ProductDetail {
         isDefaultPurchase: uom.isDefaultPurchase === true,
       } satisfies ProductUom;
     }).filter((item) => item.id),
+    branchStock: array(row.branchStock).map((value) => {
+      const branch = object(value);
+      return {
+        branchId: String(branch.branchId ?? ''),
+        branchCode: String(branch.branchCode ?? ''),
+        branchName: String(branch.branchName ?? 'Branch'),
+        isDefault: branch.isDefault === true,
+        isActive: branch.isActive === true,
+        quantityOnHand: numberValue(branch.quantityOnHand),
+        lastMovementAt: nullableString(branch.lastMovementAt),
+      } satisfies ProductBranchStock;
+    }).filter((item) => item.branchId),
   };
 }
 
@@ -696,4 +721,8 @@ function money(value: number, currency: string): string {
 function dateOnly(value: string): string {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium' }).format(date);
+}
+function dateTime(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
