@@ -6,15 +6,25 @@
   "updatedAt": "2026-10-17",
   "codeCheckpoint": {
     "status": "accepted",
-    "commit": "8f957444f3b9a49c6f844edea34055d729a7f0e4",
-    "ciRun": 1728,
-    "evidence": "Exact-head SellerTray validation on 8f957444f3b9a49c6f844edea34055d729a7f0e4 passed Mobile CI #1728, Mobile Native CI #559, Database CI #1176, Merchant Web CI #725, SellerTray AI CI #481, SellerTray Offline CI #503 and Android QA APK #784. All pull-request gates verify checkout of the actual candidate SHA. Live Supabase includes the product-authority helper boundary and denies its internal helper to anon/authenticated while retaining service-role execution."
+    "commit": "da20629e658228b55d15b8b8e22cdf8e9a7150b3",
+    "ciRun": 1735,
+    "evidence": "Exact-head SellerTray validation on da20629e658228b55d15b8b8e22cdf8e9a7150b3 passed Mobile CI #1735, Mobile Native CI #563, Database CI #1180, Merchant Web CI #730, SellerTray AI CI #485, SellerTray Offline CI #508 and Android QA APK #791. All gates verify checkout of the actual candidate SHA. Live Supabase retains the current product-authority helper boundary. Merchant Web runtime is application-code equivalent to the production deployment source because the only changes after the deployed a6a2b9c checkpoint are three mobile offline/connectivity hooks and the Android versionCode."
   },
   "technicalReleaseCheckpoint": {
     "status": "accepted",
-    "commit": "8f957444f3b9a49c6f844edea34055d729a7f0e4",
+    "commit": "da20629e658228b55d15b8b8e22cdf8e9a7150b3",
     "acceptedAt": "2026-10-17",
-    "evidence": "Phase E technical hardening checkpoint: exact-source CI provenance, full database replay/tests, mobile/native/offline/AI/web validation, current-head QA APK, live Supabase authority convergence, production Merchant Web application-code equivalence and security-advisor review. External commercial, legal, Meta and store-submission gates remain independently tracked below and are not implied complete by this checkpoint."
+    "evidence": "Phase E technical hardening checkpoint: exact-source CI provenance; full database migration replay and pgTAP coverage; mobile/native/offline/AI/Merchant Web validation; exact-head QA APK; live Supabase authority convergence and security-advisor review; isolated Merchant/Admin Vercel projects; integration-only Merchant build guard; validated Merchant production deployment dpl_C7JBrrobs6FSb8vpbXHu7HzQevJs; and current-head mobile offline-status hardening. The production Merchant build removed the prior >500 kB chunk warning, with the largest application chunk 240.32 kB and largest vendor chunk 174.46 kB. Canonical sellertray-merchant.vercel.app returned HTTP 200 after deployment with no error/fatal runtime logs in the available retention window. Current integration differs from the deployed Merchant source only in mobile files, so Merchant Web application code remains equivalent. External commercial, legal, Meta, physical-device and store-submission gates remain independently tracked below and are not implied complete by this checkpoint."
+  },
+  "merchantWebProduction": {
+    "status": "ready",
+    "sourceCommit": "a6a2b9c0695897f2c18ab95f8d5125914e43c938",
+    "applicationEquivalentTo": "da20629e658228b55d15b8b8e22cdf8e9a7150b3",
+    "deploymentId": "dpl_C7JBrrobs6FSb8vpbXHu7HzQevJs",
+    "canonicalUrl": "https://sellertray-merchant.vercel.app",
+    "project": "sellertray-merchant",
+    "framework": "vite",
+    "evidence": "Exact validated integration SHA a6a2b9c was deployed to the dedicated Merchant project. Vercel built successfully, assigned the canonical Merchant alias and served the expected SellerTray merchant-management application. Comparison from a6a2b9c to the current runtime checkpoint da20629e contains only apps/mobile/app.json and three mobile offline/connectivity hooks; apps/merchant-web is unchanged."
   },
   "gates": [
     {
@@ -75,7 +85,7 @@
       "required": true,
       "status": "pending",
       "owner": "ProcessEdge",
-      "evidence": "Current mobile source at 8f957444f3b9a49c6f844edea34055d729a7f0e4 passes Mobile CI #1728, Native #559 and Android QA #784; exact-head QA APK evidence is recorded below. Remaining acceptance is physical-device validation of the complete current interaction surface.",
+      "evidence": "Current mobile source at da20629e658228b55d15b8b8e22cdf8e9a7150b3 passes Mobile CI #1735, Native #563, Offline #508 and Android QA #791; exact-head QA APK evidence is recorded below. This checkpoint also contains the device-QA-driven offline-status recovery fix. Remaining acceptance is physical-device validation of the complete current interaction surface.",
       "acceptance": "Complete current-head device QA across navigation, POS, orders, inventory, cash, returns, printing, account lifecycle, permissions and error/offline behavior."
     },
     {
@@ -83,7 +93,7 @@
       "required": true,
       "status": "pending",
       "owner": "ProcessEdge",
-      "evidence": "GitHub Android QA #784 produced an exact-head standalone QA APK for source 8f957444f3b9a49c6f844edea34055d729a7f0e4, versionCode 30. This remains QA-signed and is not the formal EAS production-signing preview gate.",
+      "evidence": "GitHub Android QA #791 produced an exact-head standalone QA APK for source da20629e658228b55d15b8b8e22cdf8e9a7150b3, versionCode 31. This remains QA-signed and is not the formal production-signing preview gate.",
       "acceptance": "After device acceptance, create and record the formally signed preview build using the approved production signing path."
     },
     {
@@ -91,7 +101,7 @@
       "required": true,
       "status": "pending",
       "owner": "ProcessEdge",
-      "evidence": "Native compile and release APK build are green on the exact current head; physical-device smoke remains an explicit human acceptance gate.",
+      "evidence": "Native compile and release APK build are green on the exact current runtime head; physical-device smoke remains an explicit human acceptance gate.",
       "acceptance": "Complete current-head physical-device smoke including auth/deep links, branch isolation, complete sale lifecycle, offline replay, printing, export/sign-out and disposable-account deletion/relaunch."
     },
     {
@@ -184,17 +194,17 @@
   ],
   "qaBuild": {
     "status": "ready_for_device_retest",
-    "sourceCommit": "8f957444f3b9a49c6f844edea34055d729a7f0e4",
-    "mobileEquivalentHead": "8f957444f3b9a49c6f844edea34055d729a7f0e4",
-    "workflow": "Android QA APK #784",
-    "workflowRunId": 39014634477,
-    "artifactId": 12094009658,
-    "artifactName": "sellertray-qa-8f957444f3b9a49c6f844edea34055d729a7f0e4",
-    "artifactArchiveDigest": "sha256:d363fadff9a6acb82a61df5c71c95e4f4b7703d77fb9308c545e1bd9ac9e59eb",
-    "note": "Exact-head standalone QA APK. GitHub Actions checked out and verified the actual candidate SHA before building. The artifact is QA-signed and remains a device-test build; it does not satisfy the formal production-signed preview or AAB gates.",
-    "apkSha256": "8c4f062904f2ef7ed8d9c5dd47ba37de87fd72a99d10c77d68d00759e780547c",
-    "apkSizeBytes": 98803196,
-    "versionCode": 30,
+    "sourceCommit": "da20629e658228b55d15b8b8e22cdf8e9a7150b3",
+    "mobileEquivalentHead": "da20629e658228b55d15b8b8e22cdf8e9a7150b3",
+    "workflow": "Android QA APK #791",
+    "workflowRunId": 39019246395,
+    "artifactId": 12095804525,
+    "artifactName": "sellertray-qa-da20629e658228b55d15b8b8e22cdf8e9a7150b3",
+    "artifactArchiveDigest": "sha256:ebb3e18c68c8e1a0492a547273891a0e19ebcca2657eeddbe43aa04696cec34f",
+    "note": "Exact-head standalone QA APK. GitHub Actions checked out and verified the actual candidate SHA before building. The artifact was independently unpacked and its packaged APK checksum reverified. The artifact is QA-signed and remains a device-test build; it does not satisfy the formal production-signed preview or AAB gates.",
+    "apkSha256": "04c83d364ef72838c1d6a1bbe62f7e9950216175ece373292954f20210d4668b",
+    "apkSizeBytes": 98805448,
+    "versionCode": 31,
     "packageName": "ng.processedge.sellertray",
     "signingCertSha256": "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c"
   }
