@@ -104,8 +104,8 @@ export type MerchantOrder = {
   id: string;
   branchId: string;
   branchName: string;
-  cashierUserId: string | null;
-  cashierName: string | null;
+  posOperatorUserId: string | null;
+  posOperatorName: string | null;
   customerId: string;
   publicOrderId: string;
   customerName: string;
