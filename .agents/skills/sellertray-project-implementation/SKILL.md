@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.7"
+  version: "0.1.8"
   status: governing
 ---
 
@@ -85,6 +85,51 @@ Web owns or prioritises:
 - business AI analysis;
 - tenant-scoped feedback participation and submission review for Owners/Managers;
 - merchant settings, audit and integrations.
+
+### Merchant Web UX and information architecture contract
+
+Merchant Web must present as a professional management application, not a collection of independently styled pages.
+
+Shell rules:
+
+1. Use the real SellerTray identity, real navigation icons and text labels. Do not use generated initials or placeholder brand marks as the permanent navigation language.
+2. Desktop uses a persistent management sidebar with collapsible groups and a top bar that keeps Business and active Branch context obvious.
+3. On narrower screens, the sidebar collapses into an overlay/slide-over navigation drawer. Do not convert the full management hierarchy into a horizontally scrolling navigation strip.
+4. Mobile web remains management-first: forms become one column, page actions collapse intelligently, tables reduce columns or become cards where appropriate, and detail drawers may become full-screen sheets.
+5. Merchant Web management quick actions should focus on management work such as Add Product, Create Purchase Order, Transfer Stock and Invite Staff. **New Sale** is not the primary Merchant Web action because mobile performs sales.
+6. Build shared Merchant Web UI primitives for AppShell, Sidebar, TopBar, PageHeader, buttons, cards, stat cards, tables, filters, search, badges, tabs, drawers, modals, form fields, selects, date range, skeletons, empty/error states, toasts and confirmations rather than repeating one-off patterns.
+
+Approved primary Merchant Web navigation groups are:
+
+- **Dashboard**
+- **Sales** — Sales, Orders, Customers, Returns
+- **Catalogue & Inventory** — Products, Inventory
+- **Purchasing** — Purchase Orders/Receiving, Suppliers
+- **Money** — Payments/Receivables, Cash & Shifts
+- **Channels** — WhatsApp, Devices & Printers
+- **Insights** — Report Center, Ask SellerTray
+- **Business** — Branches, Team & Permissions, Feedback, Settings
+
+Do not expose every product sub-feature as a permanent top-level navigation item. Categories, Units & Barcodes and Pricing belong within Product management unless a later explicit decision changes this.
+
+Dashboard direction:
+
+1. The management dashboard should answer: **How is my business doing, and what needs my attention?**
+2. Use governed reporting/read models rather than reconstructing sales, payment or stock truth in browser code.
+3. Headline KPIs may include supported Sales, Orders, Amount Collected, Outstanding, Expenses and Average Sale. Do not invent profit/margin until authoritative cost data exists.
+4. Provide actionable attention items for supported low stock, payment verification, fulfilment, transfer receipt, purchase receipt, cash variance and WhatsApp connection issues, with drill-down to the relevant management view.
+5. Branch comparison and consolidated multi-branch analysis remain web responsibilities.
+
+Product-management direction:
+
+1. Product creation remains product-definition only. **Creating a product must never create, infer or invent stock.** Opening stock, receiving, transfer and adjustment remain separate governed inventory operations.
+2. Initial creation should stay simple: Product name, SKU, Category, Stock UOM, selling price, fractional-quantity policy and product image where supported. Advanced configuration follows after save.
+3. Product list/search must scale to large catalogues using governed pagination/filtering rather than loading an unbounded full catalogue into one client-side list.
+4. Product management should support useful filters such as Category, Active/Archived, Missing barcode, Missing price, Low stock and UOM where supported by governed data.
+5. Product detail should converge on management sections such as **Overview**, **Units & Barcodes**, **Pricing**, **Stock** and **Activity**.
+6. Web is the richer surface for alternate UOMs, conversion factors, UOM-specific prices, multiple barcodes, selling/purchase defaults, category management, product images, detailed pricing, bulk administration and audit/activity history.
+7. Stock display on Product management must read Branch stock truth from the governed inventory model; it must not maintain a separate product-quantity truth.
+8. Product/UOM/barcode/pricing mutations must continue through governed SellerTray commands/RPC boundaries and preserve UOM, Branch, permission, audit and inventory invariants.
 
 # 2. Shared commerce core
 
@@ -526,6 +571,8 @@ Apply relevant gates to every slice.
 ## UX gate
 
 Verify information architecture, primary action, branch context, loading/empty/error states, small-screen behaviour, business-facing labels and tap efficiency.
+
+For Merchant Web, verify the approved navigation grouping, SellerTray identity, visible Business/Branch context, collapsible desktop navigation and slide-over/drawer navigation on narrow screens. Do not accept a horizontally scrolling full administration hierarchy as the responsive navigation solution.
 
 For phone POS specifically, verify the Products -> Cart -> Payment stage separation, tile-default catalogue, scalable paging/loading, direct quantity entry, and that large catalogues do not require scrolling through the cart or payment UI.
 
