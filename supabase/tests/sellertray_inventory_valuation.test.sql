@@ -143,12 +143,12 @@ select tenant_id,receipt1_id,poi1_id,product_id,uom_id,'Box',10,2,20,movement1_i
 from sellertray_valuation_fixture;
 
 select extensions.is(
-  (select stock_unit_cost from public.sellertray_purchase_receipt_items where id=(select min(id) from public.sellertray_purchase_receipt_items where tenant_id=(select tenant_id from sellertray_valuation_fixture))),
+  (select stock_unit_cost from public.sellertray_purchase_receipt_items where tenant_id=(select tenant_id from sellertray_valuation_fixture) and inventory_movement_id=(select movement1_id from sellertray_valuation_fixture)),
   100::numeric,
   'purchase receipt converts selected-UOM cost to authoritative Stock-UOM unit cost'
 );
 select extensions.is(
-  (select currency from public.sellertray_purchase_receipt_items where tenant_id=(select tenant_id from sellertray_valuation_fixture) limit 1),
+  (select currency from public.sellertray_purchase_receipt_items where tenant_id=(select tenant_id from sellertray_valuation_fixture) and inventory_movement_id=(select movement1_id from sellertray_valuation_fixture)),
   'NGN',
   'purchase receipt cost snapshot preserves business currency'
 );
