@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(15);
+select extensions.plan(16);
 
 create temp table sellertray_attribution_fixture (
   tenant_id uuid not null,
@@ -74,6 +74,17 @@ select extensions.is(
   (select o.branch_name_snapshot from public.orders o where o.id=(select order_id from sellertray_attribution_fixture)),
   (select b.name from public.branches b where b.id=(select branch_id from sellertray_attribution_fixture)),
   'POS order snapshots the branch name at transaction time'
+);
+
+select extensions.throws_ok(
+  $$
+    update public.orders
+    set branch_name_snapshot='Tampered Branch'
+    where id=(select order_id from sellertray_attribution_fixture)
+  $$,
+  '55000',
+  'SellerTray order Branch attribution is immutable',
+  'historical branch snapshot rejects a direct rewrite'
 );
 
 select extensions.is(
