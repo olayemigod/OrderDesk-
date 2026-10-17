@@ -276,6 +276,9 @@ export function OrdersWorkspace({
               <View style={styles.orderIdentity}>
                 <Text style={[styles.customerName, dark && darkStyles.titleText]}>{order.customerName}</Text>
                 <Text style={[styles.orderMeta, dark && darkStyles.bodyText]}>{order.publicOrderId} · {sourceLabel(order.source)} · {order.items.length} {order.items.length === 1 ? 'item' : 'items'}</Text>
+                <Text style={[styles.orderAttribution, dark && darkStyles.bodyText]}>
+                  Branch: {order.branchName}{order.cashierName ? ` · Cashier: ${order.cashierName}` : ''}
+                </Text>
               </View>
               <View style={styles.orderValueWrap}>
                 <Text style={[styles.orderValue, dark && darkStyles.titleText]}>{total === null ? 'Needs pricing' : formatMoney(total, businessCurrency)}</Text>
@@ -515,6 +518,7 @@ const styles = StyleSheet.create({
   orderIdentity: { flex: 1, gap: 3 },
   customerName: { color: theme.colors.navy, fontSize: 16, fontWeight: '900' },
   orderMeta: { color: theme.colors.muted, fontSize: 12, lineHeight: 18 },
+  orderAttribution: { color: theme.colors.slate, fontSize: 12, fontWeight: '700', lineHeight: 18 },
   orderValueWrap: { alignItems: 'flex-end', flexDirection: 'row', gap: 7 },
   orderValue: { color: theme.colors.navy, fontSize: 15, fontWeight: '900' },
   orderStateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
