@@ -31,8 +31,7 @@ jobs:
       run:
         working-directory: apps/mobile
     env:
-      EXPO_PUBLIC_SUPABASE_URL: https://eujxswjspolugrzlsjnn.supabase.co
-      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_NlNRn9grGvfwZ1cYP09OvA_XSHOA-3I
+      EXPO_NO_TELEMETRY: '1'
       SELLERTRAY_QA_SIGNING_CERT_SHA256: fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c
       SELLERTRAY_ANDROID_NDK_VERSION: 27.1.12297006
 
@@ -67,7 +66,28 @@ jobs:
           java-version: '17'
 
       - name: Install locked dependencies
-        run: npm ci
+        run: npm ci --no-audit --no-fund
+
+      - name: Load governed QA runtime configuration
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const qa = require('./eas.json').build?.qa?.env ?? {};
+          const required = [
+            'EXPO_PUBLIC_SUPABASE_URL',
+            'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+            'EXPO_PUBLIC_EAS_PROJECT_ID',
+          ];
+          const missing = required.filter((key) => !qa[key]);
+          if (missing.length) {
+            throw new Error(`Missing governed QA runtime configuration: ${missing.join(', ')}`);
+          }
+          fs.appendFileSync(
+            process.env.GITHUB_ENV,
+            required.map((key) => `${key}=${qa[key]}`).join('\n') + '\n',
+          );
+          NODE
 
       - name: Typecheck
         run: npm run typecheck
