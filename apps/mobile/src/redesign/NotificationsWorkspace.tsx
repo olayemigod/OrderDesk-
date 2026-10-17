@@ -2,21 +2,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { SellerTrayText as Text } from '../components/SellerTrayText';
-import type { MerchantNotification } from '../data/merchantNotificationsRepository';
+import { useBusinesses } from '../hooks/useBusinesses';
+import { useMerchantNotifications } from '../hooks/useMerchantNotifications';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
-type Props = {
-  notifications: MerchantNotification[];
-  loading: boolean;
-  onClose: () => void;
-  onMarkRead: (id: string) => Promise<void>;
-  onMarkAllRead: () => Promise<void>;
-};
+type Props = { onClose: () => void };
 
-export function NotificationsWorkspace({ notifications, loading, onClose, onMarkRead, onMarkAllRead }: Props) {
+export function NotificationsWorkspace({ onClose }: Props) {
   const dark = useSellerTrayAppearance().dark;
-  const unread = notifications.filter((item) => !item.isRead).length;
+  const { activeBusiness } = useBusinesses();
+  const notifications = useMerchantNotifications(activeBusiness?.id ?? null);
+  const unread = notifications.unreadCount;
 
   return <View style={styles.stack}>
     <View style={styles.heading}>
@@ -28,12 +25,12 @@ export function NotificationsWorkspace({ notifications, loading, onClose, onMark
       <Pressable accessibilityLabel="Close notifications" onPress={onClose} style={[styles.icon, dark && darkStyles.card]}><Ionicons name="close" size={21} color={dark ? theme.colors.cloud : theme.colors.navy}/></Pressable>
     </View>
 
-    {unread > 0 ? <Pressable onPress={() => void onMarkAllRead()} style={styles.markAll}><Ionicons name="checkmark-done-outline" size={18} color={theme.colors.greenDark}/><Text style={styles.markAllText}>Mark all as read</Text></Pressable> : null}
+    {unread > 0 ? <Pressable onPress={() => void notifications.markAllRead()} style={styles.markAll}><Ionicons name="checkmark-done-outline" size={18} color={theme.colors.greenDark}/><Text style={styles.markAllText}>Mark all as read</Text></Pressable> : null}
 
-    {loading && notifications.length === 0 ? <ActivityIndicator /> : notifications.length === 0 ? (
+    {notifications.loading && notifications.notifications.length === 0 ? <ActivityIndicator /> : notifications.notifications.length === 0 ? (
       <View style={[styles.empty, dark && darkStyles.card]}><Ionicons name="notifications-off-outline" size={24} color={theme.colors.muted}/><Text style={[styles.help, dark && darkStyles.body]}>No notifications yet.</Text></View>
-    ) : notifications.map((item) => (
-      <Pressable key={item.id} onPress={() => { if (!item.isRead) void onMarkRead(item.id); }} style={[styles.card, dark && darkStyles.card, !item.isRead && styles.unread]}>
+    ) : notifications.notifications.map((item) => (
+      <Pressable key={item.id} onPress={() => { if (!item.isRead) void notifications.markRead(item.id); }} style={[styles.card, dark && darkStyles.card, !item.isRead && styles.unread]}>
         <View style={[styles.dot, item.isRead && styles.dotRead]} />
         <View style={styles.copy}>
           <View style={styles.row}><Text style={[styles.itemTitle, dark && darkStyles.title]}>{item.title}</Text>{!item.isRead ? <Text style={styles.newLabel}>NEW</Text> : null}</View>
