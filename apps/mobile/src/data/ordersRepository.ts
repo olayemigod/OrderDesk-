@@ -48,6 +48,9 @@ type OrderPaymentEvidenceRow = {
 type OrderRow = {
   id: string;
   branch_id: string;
+  branch_name_snapshot: string | null;
+  cashier_user_id: string | null;
+  cashier_name_snapshot: string | null;
   public_order_id: string;
   status: OrderStatus;
   status_reason: string | null;
@@ -149,6 +152,9 @@ function mapOrder(
   return {
     id: row.id,
     branchId: row.branch_id,
+    branchName: row.branch_name_snapshot?.trim() || 'Branch',
+    cashierUserId: row.cashier_user_id,
+    cashierName: row.cashier_name_snapshot?.trim() || null,
     customerId: customer?.id ?? '',
     publicOrderId: row.public_order_id,
     customerName: customer?.display_name || customer?.phone || customer?.wa_id || 'WhatsApp customer',
@@ -217,6 +223,9 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
       .select(`
         id,
         branch_id,
+        branch_name_snapshot,
+        cashier_user_id,
+        cashier_name_snapshot,
         public_order_id,
         status,
         status_reason,
