@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import InventoryCostBasisManagement from './InventoryCostBasisManagement';
 import { errorMessage, numberValue, supabase } from './supabase';
 
 type Branch = { id: string; code: string; name: string; isDefault: boolean };
@@ -120,9 +121,11 @@ export default function InventoryReportCenter({ tenantId, currency }: { tenantId
       <Metric label="Unvalued" value={formatNumber(summary.unvalued)} note="No governed cost evidence" />
     </div>
 
+    {branch ? <InventoryCostBasisManagement tenantId={tenantId} branchId={branch.id} branchName={branch.name} currency={reportCurrency} onChanged={() => loadValuation(branch.id, asOf)} /> : null}
+
     <article className="panel">
       <div className="panel-head"><div><p className="eyebrow">As-of stock value</p><h3>{branch ? branch.name : 'Inventory valuation'}</h3></div><span className="muted">{asOfLabel(asOf)}</span></div>
-      <p className="muted">Known inventory value never invents cost. Partial or unvalued stock stays visible until authoritative purchase-cost history is available.</p>
+      <p className="muted">Known inventory value never invents cost. Partial or unvalued stock stays visible until authoritative purchase-cost history or verified historical cost evidence is available.</p>
       {visibleRows.length ? <div className="table-wrap"><table><thead><tr><th>Product</th><th>On hand</th><th>Valued</th><th>Unvalued</th><th>Average unit cost</th><th>Known value</th><th>Status</th><th>Last movement</th></tr></thead><tbody>
         {visibleRows.map((row) => <tr key={row.catalog_item_id}>
           <td><strong>{row.item_name}</strong><small className="report-subline">{row.sku || 'No SKU'}{row.category ? ` · ${row.category}` : ''}</small></td>
