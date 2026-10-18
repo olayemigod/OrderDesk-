@@ -169,7 +169,8 @@ export default function MerchantApp() {
       {page === 'orders' && branch && <OrdersManagement tenantId={business.id} branchId={branch.id} currency={business.currency} />}
       {page === 'orders' && !branch && <PageTable eyebrow="Orders" title="Choose a Branch" note="Select a Branch to review open orders and POS drafts."><Empty title="No active Branch" body="Orders are reviewed within a Branch so fulfilment and transaction context remain clear." /></PageTable>}
       {page === 'customers' && <CustomersManagement tenantId={business.id} currency={business.currency} />}
-      {page === 'returns' && <ReturnsManagement tenantId={business.id} />}
+      {page === 'returns' && branch && <ReturnsManagement tenantId={business.id} branchId={branch.id} />}
+      {page === 'returns' && !branch && <PageTable eyebrow="Returns" title="Choose a Branch" note="Select a Branch to review completed returns."><Empty title="No active Branch" body="Returns are reviewed within a Branch so refund, UOM and restored-stock context remain clear." /></PageTable>}
       {page === 'inventory' && <InventoryManagement tenantId={business.id} branch={branch} branches={branches} stockRows={workspace.stock} />}
       {page === 'payments' && <PaymentsManagement tenantId={business.id} />}
       {page === 'cash' && <Cash business={business} branch={branch} rows={workspace.shifts} />}
