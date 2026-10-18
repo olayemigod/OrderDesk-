@@ -158,7 +158,7 @@ begin
     'collected',coalesce(sum(coalesce(o.amount_paid,0)) filter(where o.status='completed'),0),
     'outstanding',coalesce(sum(
       greatest(coalesce(o.total_amount,0)-coalesce(o.amount_paid,0),0)
-    ) filter(where o.status in ('completed','ready_for_pickup','out_for_delivery')),0)
+    ) filter(where o.status in ('accepted','processing','ready','completed')),0)
   ) into v_summary
   from public.orders o
   where o.tenant_id=p_tenant_id
@@ -175,7 +175,7 @@ begin
       'totalAmount',coalesce(q.total_amount,0),
       'amountPaid',coalesce(q.amount_paid,0),
       'outstandingBalance',case
-        when q.status in ('completed','ready_for_pickup','out_for_delivery')
+        when q.status in ('accepted','processing','ready','completed')
           then greatest(coalesce(q.total_amount,0)-coalesce(q.amount_paid,0),0)
         else 0
       end,
