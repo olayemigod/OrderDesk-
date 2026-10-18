@@ -134,7 +134,7 @@ export default function SupplierPaymentsCenter({ tenantId }: { tenantId: string 
 
     {selectedPurchase ? <div className="page-stack">
       <div className="section-heading compact-heading"><div><p className="eyebrow">Selected Purchase Order</p><h3>{selectedPurchase.reference}</h3><p className="muted">{selectedPurchase.supplierName} · {selectedPurchase.branchName}</p></div><strong>{money(selectedPurchase.totalAmount, selectedPurchase.currency)}</strong></div>
-      <PurchasePaymentManagement tenantId={tenantId} purchaseOrderId={selectedPurchase.id} />
+      <PurchasePaymentManagement tenantId={tenantId} purchaseOrderId={selectedPurchase.id} onChanged={() => { void refresh(selectedPurchase.id); }} />
     </div> : null}
   </div>;
 }
