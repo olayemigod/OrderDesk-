@@ -389,8 +389,7 @@ begin
   if v_order.status<>'completed' or v_order.customer_id is null then
     raise exception 'Only a completed named-customer sale can receive a balance payment' using errcode='23514';
   end if;
-  if not public.sellertray_user_can_operate_branch(p_tenant_id,v_order.branch_id,v_user_id)
-     or not public.sellertray_user_has_capability(p_tenant_id,v_user_id,'can_manage_order_payment') then
+  if not public.sellertray_user_can_manage_order_payment(p_tenant_id,v_order.id,v_user_id) then
     raise exception 'You do not have permission to collect this customer balance' using errcode='42501';
   end if;
 
