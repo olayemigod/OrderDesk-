@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(26);
+select extensions.plan(27);
 
 select extensions.ok(
   (
