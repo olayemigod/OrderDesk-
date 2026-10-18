@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { SupplierOutstandingSummary } from './SupplierPaymentManagement';
 import { errorMessage, supabase } from './supabase';
 
 type Supplier = {
@@ -13,6 +14,7 @@ type Supplier = {
 };
 
 type SupplierDraft = Omit<Supplier, 'id'>;
+type SupplierStatus = 'all' | 'active' | 'inactive';
 
 const EMPTY_SUPPLIER: SupplierDraft = {
   name: '',
@@ -28,6 +30,8 @@ export default function SuppliersManagement({ tenantId }: { tenantId: string }) 
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
   const [draft, setDraft] = useState<SupplierDraft>(EMPTY_SUPPLIER);
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<SupplierStatus>('all');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +41,17 @@ export default function SuppliersManagement({ tenantId }: { tenantId: string }) 
     () => suppliers.find((row) => row.id === selectedSupplierId) ?? null,
     [suppliers, selectedSupplierId],
   );
+  const filteredSuppliers = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return suppliers.filter((row) => {
+      const matchesStatus = statusFilter === 'all'
+        || (statusFilter === 'active' ? row.isActive : !row.isActive);
+      if (!matchesStatus) return false;
+      if (!normalizedQuery) return true;
+      return [row.name, row.contactName, row.phone, row.email]
+        .some((value) => value.toLowerCase().includes(normalizedQuery));
+    });
+  }, [suppliers, query, statusFilter]);
 
   useEffect(() => { void loadSuppliers(); }, [tenantId]);
 
@@ -74,6 +89,8 @@ export default function SuppliersManagement({ tenantId }: { tenantId: string }) 
   function startNewSupplier() {
     setSelectedSupplierId(null);
     setDraft(EMPTY_SUPPLIER);
+    setQuery('');
+    setStatusFilter('all');
     setError(null);
     setMessage(null);
   }
@@ -111,7 +128,7 @@ export default function SuppliersManagement({ tenantId }: { tenantId: string }) 
 
   return <div className="page-stack purchasing-page">
     <div className="section-heading purchasing-heading">
-      <div><p className="eyebrow">Stock</p><h2>Suppliers</h2></div>
+      <div><p className="eyebrow">Purchasing</p><h2>Suppliers</h2></div>
       <p className="muted">Manage the suppliers used for Purchase Orders and supplier payments.</p>
     </div>
     {error ? <div className="error-banner">{error}<button onClick={() => setError(null)}>Dismiss</button></div> : null}
@@ -119,10 +136,18 @@ export default function SuppliersManagement({ tenantId }: { tenantId: string }) 
     <div className="purchase-two-column">
       <article className="panel purchase-list-panel">
         <div className="panel-head"><div><p className="eyebrow">Suppliers</p><h3>Supplier directory</h3></div><button className="secondary-button" onClick={startNewSupplier}>New supplier</button></div>
-        {suppliers.length ? <div className="device-list">{suppliers.map((row) => <button key={row.id} className={selectedSupplierId === row.id ? 'device-row selected' : 'device-row'} onClick={() => setSelectedSupplierId(row.id)}><span><strong>{row.name}</strong><small>{row.contactName || row.phone || row.email || 'No contact details'}</small></span><span className="device-row-badges"><em className={row.isActive ? 'good' : 'muted'}>{row.isActive ? 'Active' : 'Inactive'}</em></span></button>)}</div> : <div className="empty-state"><strong>No suppliers</strong><p>Add a supplier before creating a Purchase Order.</p></div>}
+        {suppliers.length ? <>
+          <div className="purchase-field-grid">
+            <label>Search<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name, contact, phone or email" /></label>
+            <label>Status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as SupplierStatus)}><option value="all">All suppliers</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
+          </div>
+          <p className="muted">Showing {filteredSuppliers.length} of {suppliers.length} suppliers.</p>
+          {filteredSuppliers.length ? <div className="device-list">{filteredSuppliers.map((row) => <button key={row.id} className={selectedSupplierId === row.id ? 'device-row selected' : 'device-row'} onClick={() => { setSelectedSupplierId(row.id); setError(null); setMessage(null); }}><span><strong>{row.name}</strong><small>{row.contactName || row.phone || row.email || 'No contact details'}</small></span><span className="device-row-badges"><em className={row.isActive ? 'good' : 'muted'}>{row.isActive ? 'Active' : 'Inactive'}</em></span></button>)}</div> : <div className="empty-state"><strong>No matching suppliers</strong><p>Adjust the search or status filter.</p></div>}
+        </> : <div className="empty-state"><strong>No suppliers</strong><p>Add a supplier before creating a Purchase Order.</p></div>}
       </article>
       <form className="panel purchase-form" onSubmit={saveSupplier}>
         <div className="panel-head"><div><p className="eyebrow">Supplier details</p><h3>{selectedSupplier?.name ?? 'New supplier'}</h3></div></div>
+        {selectedSupplier ? <SupplierOutstandingSummary tenantId={tenantId} supplierId={selectedSupplier.id} /> : null}
         <div className="purchase-field-grid">
           <label>Supplier name<input required value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} /></label>
           <label>Contact person<input value={draft.contactName} onChange={(event) => setDraft((current) => ({ ...current, contactName: event.target.value }))} /></label>
