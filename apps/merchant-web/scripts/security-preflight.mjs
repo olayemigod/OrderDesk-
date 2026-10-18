@@ -7,6 +7,7 @@ const supabaseClient = read('src/supabase.ts');
 const main = read('src/main.tsx');
 const app = read('src/MerchantApp.tsx');
 const dashboard = read('src/DashboardOverview.tsx');
+const cash = read('src/CashShiftsManagement.tsx');
 const management = read('src/ManagementPage.tsx');
 const products = read('src/ProductsManagement.tsx');
 const team = read('src/TeamBranchesManagement.tsx');
@@ -21,7 +22,7 @@ const purchasingOperations = read('src/PurchasingOperationsManagement.tsx');
 const supplierPayments = read('src/SupplierPaymentManagement.tsx');
 const supplierPaymentsCenter = read('src/SupplierPaymentsCenter.tsx');
 const vercel = read('vercel.json');
-const browserSource = [supabaseClient, main, app, dashboard, management, products, team, whatsapp, devices, reports, salesReports, procurementReports, settings, purchasing, purchasingOperations, supplierPayments, supplierPaymentsCenter].join('\n');
+const browserSource = [supabaseClient, main, app, dashboard, cash, management, products, team, whatsapp, devices, reports, salesReports, procurementReports, settings, purchasing, purchasingOperations, supplierPayments, supplierPaymentsCenter].join('\n');
 const failures = [];
 const requireValue = (condition, message) => { if (!condition) failures.push(message); };
 const excludes = (source, values) => values.every((value) => !source.includes(value));
@@ -30,7 +31,8 @@ requireValue(excludes(browserSource, ['SERVICE_ROLE', 'SUPABASE_SECRET', 'platfo
 requireValue(main.includes("import MerchantApp from './MerchantApp'") && main.includes('<MerchantApp />'), 'Merchant Web entrypoint must render the governed MerchantApp shell.');
 requireValue(supabaseClient.includes('VITE_SUPABASE_PUBLISHABLE_KEY') && supabaseClient.includes('persistSession: true') && supabaseClient.includes('autoRefreshToken: true'), 'Merchant Web must use the browser publishable key with a persisted merchant session.');
 requireValue(app.includes('sellertray_list_businesses_for_current_user') && app.includes("const MANAGEMENT_ROLES: MerchantRole[] = ['owner', 'manager']") && app.includes('managementBusinesses.length === 0') && app.includes('Use SellerTray mobile for daily operations'), 'Merchant Web management must remain Owner/Manager scoped.');
-requireValue(app.includes('get_sellertray_accessible_branches') && app.includes('get_sellertray_branch_stock') && app.includes('get_sellertray_cash_shift_history') && app.includes('<DashboardOverview') && dashboard.includes("rpc('sellertray_report_center'"), 'Merchant Web must consume shared governed Branch, inventory, cashier and reporting read models.');
+requireValue(app.includes('get_sellertray_accessible_branches') && app.includes('get_sellertray_branch_stock') && app.includes('<CashShiftsManagement') && cash.includes("rpc('get_sellertray_cash_shift_management_list'") && cash.includes("rpc('get_sellertray_cash_shift_management_detail'") && cash.includes("functions.invoke('cash-shift'") && cash.includes("action: 'correct'") && cash.includes("action: 'review'") && app.includes('<DashboardOverview') && dashboard.includes("rpc('sellertray_report_center'"), 'Merchant Web must consume shared governed Branch, inventory, cashier and reporting read models.');
+requireValue(excludes(cash, ["from('sellertray_cash_shifts')", "from('sellertray_shift_cash_movements')", "from('sellertray_shift_cash_movement_corrections')", "action: 'open'", "action: 'movement'", "action: 'close'"]), 'Merchant Web cash management must not bypass governed reads or perform mobile cashier operations.');
 
 requireValue(management.includes('<ProductsManagement') && ['save_sellertray_product', 'set_sellertray_product_active', 'save_sellertray_product_uom', 'delete_sellertray_product_uom'].every((name) => products.includes(`rpc('${name}'`)), 'Products and Pricing must use governed product and UOM commands.');
 requireValue(excludes(products, ["from('catalog_item_uoms').insert", "from('catalog_item_uoms').update", "from('catalog_item_uoms').delete", "from('catalog_items').insert", "from('catalog_items').update", "from('catalog_items').delete"]), 'Merchant Web must not bypass product and UOM commands with raw writes.');
