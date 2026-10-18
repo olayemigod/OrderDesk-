@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import ManagementPage from './ManagementPage';
+import CashShiftsManagement from './CashShiftsManagement';
 import { errorMessage, numberValue, supabase } from './supabase';
 
 type MerchantRole = 'owner' | 'manager' | 'staff';
@@ -236,7 +237,7 @@ export default function App() {
       {page === 'overview' && <Overview business={business} branch={branch} data={workspace} go={setPage} />}
       {page === 'orders' && <Orders business={business} branch={branch} rows={workspace.orders} />}
       {page === 'inventory' && <Inventory branch={branch} rows={workspace.stock} />}
-      {page === 'cash' && <Cash business={business} branch={branch} rows={workspace.shifts} />}
+      {page === 'cash' && <CashShiftsManagement tenantId={business.id} currency={business.currency} branches={branches} initialBranchId={branchId} />}
       {page === 'whatsapp' && <WhatsApp business={business} />}
       {page === 'reports' && <Reports business={business} report={workspace.report} />}
       {(page === 'products' || page === 'team' || page === 'devices' || page === 'settings') && <ManagementPage page={page} tenantId={business.id} currency={business.currency} onBranchesChanged={refresh} />}
@@ -326,14 +327,6 @@ function Inventory({ branch, rows }: { branch: Branch | null; rows: StockRow[] }
     {rows.length ? <Table headers={['Product', 'SKU', 'Category', 'On hand', 'Stock UOM', 'Last movement']}>
       {rows.map((row) => <tr key={row.catalog_item_id}><td><strong>{row.item_name}</strong></td><td>{row.sku || '—'}</td><td>{row.category || '—'}</td><td className={numberValue(row.quantity_on_hand) <= 0 ? 'danger-text' : ''}>{formatNumber(numberValue(row.quantity_on_hand))}</td><td>{row.stock_uom}</td><td>{row.last_movement_at ? dateTime(row.last_movement_at) : 'No movement'}</td></tr>)}
     </Table> : <Empty title="No stock rows" body="Receive or count stock from SellerTray operations to establish inventory." />}
-  </PageTable>;
-}
-
-function Cash({ business, branch, rows }: { business: Business; branch: Branch | null; rows: ShiftRow[] }) {
-  return <PageTable eyebrow={branch?.name ?? 'Branch'} title="Cash & Shifts" note="Review opening cash, expected cash, declared cash and close variance.">
-    {rows.length ? <Table headers={['Register', 'Status', 'Opening', 'Expected', 'Declared', 'Variance', 'Opened']}>
-      {rows.map((row) => <tr key={row.shift_id}><td><strong>{row.register_name}</strong></td><td><Pill value={row.status} /></td><td>{money(numberValue(row.opening_cash), row.currency || business.currency)}</td><td>{row.expected_cash == null ? '—' : money(numberValue(row.expected_cash), row.currency || business.currency)}</td><td>{row.declared_cash == null ? '—' : money(numberValue(row.declared_cash), row.currency || business.currency)}</td><td className={row.variance != null && numberValue(row.variance) !== 0 ? 'danger-text' : ''}>{row.variance == null ? '—' : money(numberValue(row.variance), row.currency || business.currency)}</td><td>{dateTime(row.opened_at)}</td></tr>)}
-    </Table> : <Empty title="No cashier shifts" body="Shift history will appear after a register is operated in this Branch." />}
   </PageTable>;
 }
 
