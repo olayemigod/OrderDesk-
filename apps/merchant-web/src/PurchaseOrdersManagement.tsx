@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { errorMessage, numberValue, supabase } from './supabase';
 
 type Branch = { id: string; name: string; isDefault: boolean };
@@ -15,6 +15,8 @@ export default function PurchaseOrdersManagement({ tenantId, currency }: { tenan
   const [branches, setBranches] = useState<Branch[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [productsBranchId, setProductsBranchId] = useState<string | null>(null);
+  const [productsLoading, setProductsLoading] = useState(false);
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -29,6 +31,8 @@ export default function PurchaseOrdersManagement({ tenantId, currency }: { tenan
   const [receiptQuantities, setReceiptQuantities] = useState<Record<string, string>>({});
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const productRequestRef = useRef(0);
+  const detailRequestRef = useRef(0);
   const total = useMemo(() => draft.items.reduce((sum,row) => sum + positive(row.quantity) * nonNegative(row.unitCost), 0), [draft.items]);
 
   useEffect(() => { void load(); }, [tenantId]);
@@ -49,14 +53,7 @@ export default function PurchaseOrdersManagement({ tenantId, currency }: { tenan
       const nextBranches=((branchResult.data??[]) as Array<Record<string,unknown>>).map(row=>({id:String(row.id??''),name:String(row.name??'Branch'),isDefault:row.is_default===true})).filter(row=>row.id);
       const nextSuppliers=((supplierResult.data??[]) as Array<Record<string,unknown>>).map(row=>({id:String(row.id??''),name:String(row.name??'Supplier'),isActive:row.isActive===true||row.is_active===true})).filter(row=>row.id);
       const nextOrders=((orderResult.data??[]) as Array<Record<string,unknown>>).map(mapOrder);
-      const optionBranchId=nextBranches.find(row=>row.isDefault)?.id??nextBranches[0]?.id??'';
-      let nextProducts:Product[]=[];
-      if(optionBranchId){
-        const productResult=await supabase.rpc('get_sellertray_purchase_product_options',{p_tenant_id:tenantId,p_branch_id:optionBranchId});
-        if(productResult.error)throw productResult.error;
-        nextProducts=parseProducts(productResult.data);
-      }
-      setBranches(nextBranches); setSuppliers(nextSuppliers); setProducts(nextProducts); setOrders(nextOrders);
+      setBranches(nextBranches); setSuppliers(nextSuppliers); setOrders(nextOrders);
       const wanted=preferred??selectedId;
       const nextId=wanted&&nextOrders.some(row=>row.id===wanted)?wanted:nextOrders[0]?.id??null;
       setSelectedId(nextId);
@@ -65,26 +62,68 @@ export default function PurchaseOrdersManagement({ tenantId, currency }: { tenan
     finally{setLoading(false);}
   }
 
+  async function loadProductOptions(branchId:string,reconcileDraft:boolean) {
+    const requestId=++productRequestRef.current;
+    setProducts([]); setProductsBranchId(null);
+    if(!branchId){setProductsLoading(false);return;}
+    setProductsLoading(true);
+    try{
+      const {data,error:rpcError}=await supabase.rpc('get_sellertray_purchase_product_options',{p_tenant_id:tenantId,p_branch_id:branchId});
+      if(rpcError)throw rpcError;
+      if(requestId!==productRequestRef.current)return;
+      const nextProducts=parseProducts(data);
+      setProducts(nextProducts); setProductsBranchId(branchId);
+      if(reconcileDraft){
+        setDraft(current=>{
+          if(current.branchId!==branchId)return current;
+          return {...current,items:current.items.map(line=>reconcileLineForProducts(line,nextProducts))};
+        });
+      }
+    }catch(cause){
+      if(requestId===productRequestRef.current){
+        setProducts([]); setProductsBranchId(null);
+        setError(errorMessage(cause,'Unable to load products for this Branch.'));
+      }
+    }finally{
+      if(requestId===productRequestRef.current)setProductsLoading(false);
+    }
+  }
+
   async function loadDetail(id:string){
+    const requestId=++detailRequestRef.current;
     try{
       const {data,error:rpcError}=await supabase.rpc('get_sellertray_purchase_order_detail',{p_tenant_id:tenantId,p_purchase_order_id:id});
       if(rpcError)throw rpcError;
+      if(requestId!==detailRequestRef.current)return;
       const next=parseDetail(data);
       setDetail(next);
       setDraft({reference:next.reference,branchId:next.branchId,supplierId:next.supplierId,expectedDate:next.expectedDate??'',notes:next.notes??'',items:next.items.map(item=>({key:item.itemId,productId:item.catalogItemId,uomId:item.uomId,quantity:String(item.orderedQuantity),unitCost:String(item.unitCost)}))});
-    }catch(cause){setError(errorMessage(cause,'Unable to load this Purchase Order.'));}
+      await loadProductOptions(next.branchId,false);
+    }catch(cause){if(requestId===detailRequestRef.current)setError(errorMessage(cause,'Unable to load this Purchase Order.'));}
   }
 
   function startNew(branchRows=branches,supplierRows=suppliers){
+    detailRequestRef.current+=1;
     setSelectedId(null); setDetail(null); setReceivingOpen(false); setCancelOpen(false);
-    setDraft({reference:reference('PO'),branchId:branchRows.find(row=>row.isDefault)?.id??branchRows[0]?.id??'',supplierId:supplierRows.find(row=>row.isActive)?.id??supplierRows[0]?.id??'',expectedDate:'',notes:'',items:[emptyLine()]});
+    const branchId=branchRows.find(row=>row.isDefault)?.id??branchRows[0]?.id??'';
+    setDraft({reference:reference('PO'),branchId,supplierId:supplierRows.find(row=>row.isActive)?.id??supplierRows[0]?.id??'',expectedDate:'',notes:'',items:[emptyLine()]});
     setError(null); setMessage(null);
+    void loadProductOptions(branchId,false);
   }
+
+  function changeBranch(branchId:string){
+    if(branchId===draft.branchId)return;
+    setDraft(current=>({...current,branchId}));
+    setError(null); setMessage(null);
+    void loadProductOptions(branchId,true);
+  }
+
   function updateLine(key:string,patch:Partial<DraftLine>){setDraft(current=>({...current,items:current.items.map(line=>line.key===key?{...line,...patch}:line)}));}
   function chooseProduct(line:DraftLine,productId:string){const product=products.find(row=>row.id===productId);const uom=product?.uoms.find(row=>row.isDefaultPurchase)??product?.uoms[0];updateLine(line.key,{productId,uomId:uom?.id??''});}
 
   async function save(event:FormEvent){
     event.preventDefault();
+    if(productsLoading||productsBranchId!==draft.branchId){setError('Wait for the governed product options for this Branch to finish loading.');return;}
     const items=draft.items.map(row=>({catalogItemId:row.productId,uomId:row.uomId,quantity:positive(row.quantity),unitCost:nonNegative(row.unitCost)}));
     if(!draft.branchId||!draft.supplierId||items.some(row=>!row.catalogItemId||!row.uomId||row.quantity<=0)){setError('Choose a Branch, Supplier and valid products, units and quantities.');return;}
     setBusy(true);setError(null);setMessage(null);
@@ -178,24 +217,25 @@ export default function PurchaseOrdersManagement({ tenantId, currency }: { tenan
           <div className="panel-head"><div><p className="eyebrow">{detail?label(detail.status):'New'}</p><h3>{detail?.reference??'New Purchase Order'}</h3></div><strong>{money(total,currency)}</strong></div>
           <div className="form-grid">
             <label className="field">Reference<input value={draft.reference} disabled={!!detail&&detail.status!=='draft'} onChange={e=>setDraft(current=>({...current,reference:e.target.value}))}/></label>
-            <label className="field">Branch<select value={draft.branchId} disabled={!!detail&&detail.status!=='draft'} onChange={e=>setDraft(current=>({...current,branchId:e.target.value}))}>{branches.map(row=><option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
+            <label className="field">Branch<select value={draft.branchId} disabled={busy||(!!detail&&detail.status!=='draft')} onChange={e=>changeBranch(e.target.value)}>{branches.map(row=><option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
             <label className="field">Supplier<select value={draft.supplierId} disabled={!!detail&&detail.status!=='draft'} onChange={e=>setDraft(current=>({...current,supplierId:e.target.value}))}>{suppliers.filter(row=>row.isActive||row.id===draft.supplierId).map(row=><option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
             <label className="field">Expected date<input type="date" value={draft.expectedDate} disabled={!!detail&&detail.status!=='draft'} onChange={e=>setDraft(current=>({...current,expectedDate:e.target.value}))}/></label>
           </div>
+          {productsLoading?<p className="muted">Loading products and purchase units for this Branch…</p>:null}
           <Table headers={['Product','Unit','Quantity','Unit cost','Line total','']}>
             {draft.items.map(line=>{const product=products.find(row=>row.id===line.productId);const selectedUom=product?.uoms.find(row=>row.id===line.uomId);const snapshot=detail?.items.find(item=>item.itemId===line.key);const editable=!detail||detail.status==='draft';return <tr key={line.key}>
-              <td>{editable?<select value={line.productId} onChange={e=>chooseProduct(line,e.target.value)}><option value="">Choose product</option>{products.map(row=><option key={row.id} value={row.id}>{row.name}</option>)}</select>:<strong>{snapshot?.productName??product?.name??'Product'}</strong>}</td>
-              <td>{editable?<select value={line.uomId} onChange={e=>updateLine(line.key,{uomId:e.target.value})}>{product?.uoms.map(uom=><option key={uom.id} value={uom.id}>{uom.name}</option>)}</select>:snapshot?.selectedUom??selectedUom?.name??'—'}</td>
+              <td>{editable?<select value={line.productId} disabled={productsLoading||productsBranchId!==draft.branchId} onChange={e=>chooseProduct(line,e.target.value)}><option value="">{productsLoading?'Loading products…':'Choose product'}</option>{line.productId&&!product&&snapshot?<option value={line.productId} disabled>{snapshot.productName} (unavailable)</option>:null}{products.map(row=><option key={row.id} value={row.id}>{row.name}</option>)}</select>:<strong>{snapshot?.productName??product?.name??'Product'}</strong>}</td>
+              <td>{editable?<select value={line.uomId} disabled={productsLoading||!product} onChange={e=>updateLine(line.key,{uomId:e.target.value})}><option value="">Choose unit</option>{product?.uoms.map(uom=><option key={uom.id} value={uom.id}>{uom.name}</option>)}</select>:snapshot?.selectedUom??selectedUom?.name??'—'}</td>
               <td>{editable?<input type="number" min="0" step={selectedUom?.allowFractional===false?'1':'any'} value={line.quantity} onChange={e=>updateLine(line.key,{quantity:e.target.value})}/>:formatNumber(snapshot?.orderedQuantity??positive(line.quantity))}</td>
               <td>{editable?<input type="number" min="0" step="any" value={line.unitCost} onChange={e=>updateLine(line.key,{unitCost:e.target.value})}/>:money(snapshot?.unitCost??nonNegative(line.unitCost),detail?.currency||currency)}</td>
               <td>{money(positive(line.quantity)*nonNegative(line.unitCost),detail?.currency||currency)}</td>
               <td>{editable&&draft.items.length>1?<button type="button" className="text-button" onClick={()=>setDraft(current=>({...current,items:current.items.filter(row=>row.key!==line.key)}))}>Remove</button>:null}</td>
             </tr>})}
           </Table>
-          {!detail||detail.status==='draft'?<button type="button" className="text-button" onClick={()=>setDraft(current=>({...current,items:[...current.items,emptyLine()]}))}>Add product</button>:null}
+          {!detail||detail.status==='draft'?<button type="button" className="text-button" disabled={productsLoading} onClick={()=>setDraft(current=>({...current,items:[...current.items,emptyLine()]}))}>Add product</button>:null}
           <label className="field">Notes<textarea value={draft.notes} disabled={!!detail&&detail.status!=='draft'} onChange={e=>setDraft(current=>({...current,notes:e.target.value}))}/></label>
           <div className="form-actions">
-            {!detail||detail.status==='draft'?<button className="primary-button" disabled={busy}>Save Purchase Order</button>:null}
+            {!detail||detail.status==='draft'?<button className="primary-button" disabled={busy||productsLoading||productsBranchId!==draft.branchId}>Save Purchase Order</button>:null}
             {detail?.status==='draft'?<button type="button" className="secondary-button" disabled={busy} onClick={()=>void place()}>Place order</button>:null}
             {detail?.status==='ordered'||detail?.status==='partially_received'?<button type="button" className="primary-button" disabled={busy} onClick={openReceiving}>Receive delivery</button>:null}
             {detail&&['draft','ordered'].includes(detail.status)?<button type="button" className="secondary-button" disabled={busy} onClick={openCancel}>Cancel</button>:null}
@@ -223,6 +263,12 @@ export default function PurchaseOrdersManagement({ tenantId, currency }: { tenan
   </div>;
 }
 
+function reconcileLineForProducts(line:DraftLine,products:Product[]):DraftLine{
+  const product=products.find(row=>row.id===line.productId);
+  if(!product)return {...line,productId:'',uomId:''};
+  const uom=product.uoms.find(row=>row.id===line.uomId)??product.uoms.find(row=>row.isDefaultPurchase)??product.uoms[0];
+  return {...line,uomId:uom?.id??''};
+}
 function parseProducts(value:unknown):Product[]{return Array.isArray(value)?value.map(raw=>{const row=raw as Record<string,unknown>;const uoms=Array.isArray(row.uoms)?row.uoms.map(rawUom=>{const uom=rawUom as Record<string,unknown>;return{id:String(uom.id??''),name:String(uom.name??'Unit'),conversionFactor:numberValue(uom.conversionFactor),allowFractional:uom.allowFractional===true,isDefaultPurchase:uom.isDefaultPurchase===true};}).filter(uom=>uom.id):[];return{id:String(row.id??''),name:String(row.name??'Product'),uoms};}).filter(row=>row.id&&row.uoms.length):[];}
 function mapOrder(row:Record<string,unknown>):OrderRow{return{id:String(row.id??row.purchase_order_id??''),reference:String(row.reference??'Purchase Order'),status:String(row.status??'draft'),branchId:String(row.branch_id??''),branchName:String(row.branch_name??'Branch'),supplierId:String(row.supplier_id??''),supplierName:String(row.supplier_name??'Supplier'),currency:String(row.currency??'NGN'),totalAmount:numberValue(row.total_amount),itemCount:numberValue(row.item_count),expectedDate:typeof row.expected_date==='string'?row.expected_date:null,createdAt:String(row.created_at??'')}};
 function parseDetail(value:unknown):Detail{const row=(value??{}) as Record<string,unknown>;const items=Array.isArray(row.items)?row.items.map(raw=>{const item=raw as Record<string,unknown>;return{itemId:String(item.itemId??''),catalogItemId:String(item.catalogItemId??''),uomId:String(item.uomId??''),productName:String(item.productName??'Product'),selectedUom:String(item.selectedUom??''),orderedQuantity:numberValue(item.orderedQuantity),unitCost:numberValue(item.unitCost),lineTotal:numberValue(item.lineTotal),receivedQuantity:numberValue(item.receivedQuantity),remainingQuantity:numberValue(item.remainingQuantity)}}):[];const receipts=Array.isArray(row.receipts)?row.receipts.map(raw=>{const item=raw as Record<string,unknown>;return{receiptId:String(item.receiptId??''),reference:String(item.reference??'Receipt'),receivedAt:String(item.receivedAt??''),itemCount:numberValue(item.itemCount)}}):[];return{purchaseOrderId:String(row.purchaseOrderId??''),reference:String(row.reference??'Purchase Order'),status:String(row.status??'draft'),branchId:String(row.branchId??''),branchName:String(row.branchName??'Branch'),supplierId:String(row.supplierId??''),supplierName:String(row.supplierName??'Supplier'),currency:String(row.currency??'NGN'),totalAmount:numberValue(row.totalAmount),expectedDate:typeof row.expectedDate==='string'?row.expectedDate:null,notes:typeof row.notes==='string'?row.notes:null,items,receipts};}
