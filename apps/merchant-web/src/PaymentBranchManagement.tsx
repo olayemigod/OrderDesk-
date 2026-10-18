@@ -2,8 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { errorMessage, supabase } from './supabase';
 
 type Branch = { id: string; name: string; isDefault: boolean };
-type Method = { id: string; methodType: string; displayName: string; isEnabled: boolean; sortOrder: number };
-type Assignment = { payment_method_id: string; branch_id: string; is_enabled: boolean };
+type Method = { id: string; methodType: string; displayName: string; isEnabled: boolean; sortOrder: number; branchIds: string[] };
 
 export default function PaymentBranchManagement({ tenantId }: { tenantId: string }) {
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -29,32 +28,30 @@ export default function PaymentBranchManagement({ tenantId }: { tenantId: string
     setLoading(true);
     setError(null);
     try {
-      const [branchResult, methodResult, assignmentResult] = await Promise.all([
+      const [branchResult, methodResult] = await Promise.all([
         supabase.rpc('get_sellertray_accessible_branches', { p_tenant_id: tenantId }),
-        supabase.from('merchant_payment_methods').select('id,method_type,display_name,is_enabled,sort_order').eq('tenant_id', tenantId).order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
-        supabase.from('sellertray_branch_payment_methods').select('payment_method_id,branch_id,is_enabled').eq('tenant_id', tenantId),
+        supabase.rpc('get_sellertray_payment_methods_management', { p_tenant_id: tenantId }),
       ]);
       if (branchResult.error) throw branchResult.error;
       if (methodResult.error) throw methodResult.error;
-      if (assignmentResult.error) throw assignmentResult.error;
 
       const nextBranches = ((branchResult.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
         id: String(row.id ?? ''),
         name: String(row.name ?? 'Branch'),
         isDefault: row.is_default === true,
       })).filter((row) => row.id);
-      const nextMethods = ((methodResult.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+      const response = (methodResult.data ?? {}) as Record<string, unknown>;
+      const rawMethods = Array.isArray(response.items) ? response.items as Array<Record<string, unknown>> : [];
+      const nextMethods = rawMethods.map((row) => ({
         id: String(row.id ?? ''),
-        methodType: String(row.method_type ?? ''),
-        displayName: String(row.display_name ?? 'Payment method'),
-        isEnabled: row.is_enabled === true,
-        sortOrder: Number(row.sort_order ?? 100),
+        methodType: String(row.methodType ?? ''),
+        displayName: String(row.displayName ?? 'Payment method'),
+        isEnabled: row.isEnabled === true,
+        sortOrder: Number(row.sortOrder ?? 100),
+        branchIds: Array.isArray(row.branchIds) ? row.branchIds.map(String) : [],
       })).filter((row) => row.id);
       const map: Record<string, Set<string>> = {};
-      for (const method of nextMethods) map[method.id] = new Set<string>();
-      for (const row of (assignmentResult.data ?? []) as Assignment[]) {
-        if (row.is_enabled && map[row.payment_method_id]) map[row.payment_method_id].add(row.branch_id);
-      }
+      for (const method of nextMethods) map[method.id] = new Set(method.branchIds);
       setBranches(nextBranches);
       setMethods(nextMethods);
       setAssignments(map);
