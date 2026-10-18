@@ -64,7 +64,7 @@ begin
       and r.status='completed'
       and o.branch_id=p_branch_id
       and o.deleted_at is null
-      and o.status='completed'
+      and o.status = 'completed'
       and (
         v_search is null
         or lower(coalesce(o.public_order_id,'')) like '%'||lower(v_search)||'%'
@@ -158,7 +158,7 @@ begin
     and o.branch_id=p_branch_id
     and r.id=p_return_id
     and o.deleted_at is null
-    and o.status='completed';
+    and o.status = 'completed';
 
   if v_return is null then
     raise exception 'Return not found' using errcode='P0002';
