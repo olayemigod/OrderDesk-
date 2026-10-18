@@ -48,9 +48,11 @@ const METHODS: Array<{ value: PaymentMethod; label: string }> = [
 export function PurchasePaymentManagement({
   tenantId,
   purchaseOrderId,
+  onChanged,
 }: {
   tenantId: string;
   purchaseOrderId: string;
+  onChanged?: () => void;
 }) {
   const [summary, setSummary] = useState<PaymentSummary | null>(null);
   const [reference, setReference] = useState('');
@@ -124,6 +126,7 @@ export function PurchasePaymentManagement({
       setNotes('');
       setPaidAt(nowLocalInput());
       await refresh();
+      onChanged?.();
     } catch (cause) {
       setError(errorMessage(cause, 'Unable to record supplier payment.'));
     } finally {
@@ -150,6 +153,7 @@ export function PurchasePaymentManagement({
       setReverseId(null);
       setReverseReason('');
       await refresh();
+      onChanged?.();
     } catch (cause) {
       setError(errorMessage(cause, 'Unable to reverse supplier payment.'));
     } finally {
