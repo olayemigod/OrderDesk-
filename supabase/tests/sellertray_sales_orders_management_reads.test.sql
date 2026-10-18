@@ -167,12 +167,20 @@ from sellertray_sales_orders_read_fixture;
 update sellertray_sales_orders_read_fixture f
 set open_order_id=o.id
 from public.orders o
-where o.tenant_id=f.tenant_id and o.public_order_id='MGRREAD/OPEN';
+where o.tenant_id=f.tenant_id
+  and o.branch_id=f.branch_id
+  and o.status='accepted'
+  and o.source='manual'
+  and o.total_amount=100;
 
 update sellertray_sales_orders_read_fixture f
 set completed_order_id=o.id
 from public.orders o
-where o.tenant_id=f.tenant_id and o.public_order_id='MGRREAD/SALE-POS';
+where o.tenant_id=f.tenant_id
+  and o.branch_id=f.branch_id
+  and o.status='completed'
+  and o.source='pos'
+  and o.total_amount=1000;
 
 insert into public.order_items(tenant_id,order_id,item_name,quantity,unit_price,selected_uom,conversion_factor,stock_quantity)
 select tenant_id,open_order_id,'Blue Paint',2,50,'Each',1,2
@@ -180,11 +188,21 @@ from sellertray_sales_orders_read_fixture
 union all
 select f.tenant_id,o.id,'Red Paint',2,500,'Each',1,2
 from sellertray_sales_orders_read_fixture f
-join public.orders o on o.tenant_id=f.tenant_id and o.public_order_id='MGRREAD/SALE-POS'
+join public.orders o
+  on o.tenant_id=f.tenant_id
+ and o.branch_id=f.branch_id
+ and o.status='completed'
+ and o.source='pos'
+ and o.total_amount=1000
 union all
 select f.tenant_id,o.id,'Brush',4,500,'Each',1,4
 from sellertray_sales_orders_read_fixture f
-join public.orders o on o.tenant_id=f.tenant_id and o.public_order_id='MGRREAD/SALE-WA';
+join public.orders o
+  on o.tenant_id=f.tenant_id
+ and o.branch_id=f.branch_id
+ and o.status='completed'
+ and o.source='whatsapp'
+ and o.total_amount=2000;
 
 select set_config('request.jwt.claim.sub',(select owner_user_id::text from sellertray_sales_orders_read_fixture),true);
 select set_config('request.jwt.claim.role','authenticated',true);
