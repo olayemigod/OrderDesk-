@@ -45,11 +45,15 @@ begin
       r.order_id,
       o.public_order_id,
       r.reason,
-      r.returned_amount,
+      r.amount as returned_amount,
       r.currency,
       coalesce(nullif(btrim(c.display_name),''),nullif(btrim(c.phone),''),'Walk-in customer') as customer_name,
       r.created_at,
-      coalesce((select count(*) from public.sale_return_items ri where ri.return_id=r.id),0) as line_count
+      coalesce((
+        select count(*)
+        from public.sale_return_items ri
+        where ri.tenant_id=r.tenant_id and ri.sale_return_id=r.id
+      ),0) as line_count
     from public.sale_returns r
     join public.orders o
       on o.tenant_id=r.tenant_id and o.id=r.order_id
@@ -57,6 +61,7 @@ begin
       on c.tenant_id=o.tenant_id and c.id=o.customer_id
     where r.tenant_id=p_tenant_id
       and r.branch_id=p_branch_id
+      and r.status='completed'
       and o.branch_id=p_branch_id
       and o.deleted_at is null
       and o.status='completed'
@@ -68,8 +73,9 @@ begin
         or lower(coalesce(r.reason,'')) like '%'||lower(v_search)||'%'
         or exists(
           select 1 from public.sale_return_items ri
-          where ri.return_id=r.id
-            and lower(coalesce(ri.item_name_snapshot,'')) like '%'||lower(v_search)||'%'
+          where ri.tenant_id=r.tenant_id
+            and ri.sale_return_id=r.id
+            and lower(coalesce(ri.product_name,'')) like '%'||lower(v_search)||'%'
         )
       )
   ), paged as (
@@ -139,7 +145,7 @@ begin
     'publicOrderId',o.public_order_id,
     'customerName',coalesce(nullif(btrim(c.display_name),''),nullif(btrim(c.phone),''),'Walk-in customer'),
     'reason',r.reason,
-    'returnedAmount',r.returned_amount,
+    'returnedAmount',r.amount,
     'currency',r.currency,
     'createdAt',r.created_at
   ) into v_return
@@ -148,6 +154,7 @@ begin
   left join public.customers c on c.tenant_id=o.tenant_id and c.id=o.customer_id
   where r.tenant_id=p_tenant_id
     and r.branch_id=p_branch_id
+    and r.status='completed'
     and o.branch_id=p_branch_id
     and r.id=p_return_id
     and o.deleted_at is null
@@ -160,17 +167,17 @@ begin
   select coalesce(jsonb_agg(jsonb_build_object(
     'id',ri.id,
     'orderItemId',ri.order_item_id,
-    'itemName',ri.item_name_snapshot,
-    'selectedUom',ri.selected_uom_snapshot,
-    'returnedQuantity',ri.returned_quantity,
-    'returnedStockQuantity',ri.returned_stock_quantity,
-    'originalQuantity',ri.original_quantity,
-    'conversionFactor',ri.conversion_factor_snapshot,
-    'unitPrice',ri.unit_price_snapshot,
-    'lineAmount',ri.line_amount
+    'itemName',ri.product_name,
+    'selectedUom',ri.selected_uom,
+    'returnedQuantity',ri.quantity,
+    'returnedStockQuantity',ri.stock_quantity,
+    'conversionFactor',ri.conversion_factor,
+    'unitPrice',ri.unit_price,
+    'lineAmount',ri.line_total
   ) order by ri.created_at,ri.id),'[]'::jsonb) into v_items
   from public.sale_return_items ri
-  where ri.return_id=p_return_id;
+  where ri.tenant_id=p_tenant_id
+    and ri.sale_return_id=p_return_id;
 
   return v_return||jsonb_build_object('items',v_items);
 end;
