@@ -465,7 +465,7 @@ function mapDetail(row: Record<string, unknown>): ShiftDetail {
     corrections: (Array.isArray(row.corrections) ? row.corrections : []).map((raw) => {
       const item = raw as Record<string, unknown>;
       return {
-        correctionId: String(item.correctionId ?? ''), correctionKind: item.correctionKind === 'remove' ? 'remove' : 'replace', reason: String(item.reason ?? ''),
+        correctionId: String(item.correctionId ?? ''), correctionKind: (item.correctionKind === 'remove' ? 'remove' : 'replace') as Correction['correctionKind'], reason: String(item.reason ?? ''),
         actorUserId: String(item.actorUserId ?? ''), actorName: String(item.actorName ?? 'Team member'), originalMovementId: String(item.originalMovementId ?? ''),
         replacementMovementId: typeof item.replacementMovementId === 'string' ? item.replacementMovementId : null, createdAt: String(item.createdAt ?? ''),
       };
