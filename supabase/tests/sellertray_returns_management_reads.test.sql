@@ -34,7 +34,15 @@ create temp table sellertray_returns_read_fixture (
   customer_id uuid not null,
   second_customer_id uuid not null,
   foreign_customer_id uuid not null,
+  primary_order_id uuid,
+  secondary_order_id uuid,
+  alt_order_id uuid,
+  open_order_id uuid,
+  deleted_order_id uuid,
+  foreign_order_id uuid,
   primary_return_id uuid not null,
+  primary_public_order_id text,
+  secondary_public_order_id text,
   list_result jsonb,
   page_result jsonb,
   page_two_result jsonb,
@@ -110,73 +118,100 @@ select tenant_id,'Current Red Paint','RET-RED',450,'Each',true from sellertray_r
 union all
 select other_tenant_id,'Foreign Current Product','RET-FOREIGN',900,'Each',true from sellertray_returns_read_fixture;
 
+-- Public order references are server-assigned by SellerTray. Supplied values are
+-- intentionally not used for fixture lookup or assertions below.
 insert into public.orders(
   tenant_id,customer_id,branch_id,public_order_id,status,source,total_amount,amount_paid,payment_status,created_at
 )
-select tenant_id,customer_id,branch_id,'RETREAD/1001','completed','pos',450,450,'paid',now()-interval '10 days' from sellertray_returns_read_fixture
+select tenant_id,customer_id,branch_id,'IGNORED-PRIMARY','completed','pos',450,450,'paid',now()-interval '10 days' from sellertray_returns_read_fixture
 union all
-select tenant_id,second_customer_id,branch_id,'RETREAD/1002','completed','whatsapp',450,450,'paid',now()-interval '9 days' from sellertray_returns_read_fixture
+select tenant_id,second_customer_id,branch_id,'IGNORED-SECONDARY','completed','whatsapp',450,450,'paid',now()-interval '9 days' from sellertray_returns_read_fixture
 union all
-select tenant_id,customer_id,other_branch_id,'RETREAD/ALT','completed','pos',800,800,'paid',now()-interval '8 days' from sellertray_returns_read_fixture
+select tenant_id,customer_id,other_branch_id,'IGNORED-ALT','completed','pos',800,800,'paid',now()-interval '8 days' from sellertray_returns_read_fixture
 union all
-select tenant_id,customer_id,branch_id,'RETREAD/OPEN','accepted','pos',111,111,'paid',now()-interval '7 days' from sellertray_returns_read_fixture
+select tenant_id,customer_id,branch_id,'IGNORED-OPEN','accepted','pos',111,111,'paid',now()-interval '7 days' from sellertray_returns_read_fixture
 union all
-select other_tenant_id,foreign_customer_id,foreign_branch_id,'RETREAD/FOREIGN','completed','pos',900,900,'paid',now()-interval '6 days' from sellertray_returns_read_fixture;
+select tenant_id,customer_id,branch_id,'IGNORED-DELETED','draft','pos',222,222,'paid',now()-interval '5 days' from sellertray_returns_read_fixture
+union all
+select other_tenant_id,foreign_customer_id,foreign_branch_id,'IGNORED-FOREIGN','completed','pos',900,900,'paid',now()-interval '6 days' from sellertray_returns_read_fixture;
 
-insert into public.orders(
-  tenant_id,customer_id,branch_id,public_order_id,status,source,total_amount,amount_paid,payment_status,
-  created_at,deleted_at,deleted_by_user_id,deletion_reason,deletion_command_hash
-)
-select tenant_id,customer_id,branch_id,'RETREAD/DELETED','draft','pos',222,222,'paid',
-  now()-interval '5 days',now()-interval '1 day',owner_user_id,'Historical fixture exclusion','abcdef0123456789abcdef0123456789'
-from sellertray_returns_read_fixture;
+update sellertray_returns_read_fixture f
+set primary_order_id=(
+      select o.id from public.orders o
+      where o.tenant_id=f.tenant_id and o.branch_id=f.branch_id and o.status='completed' and o.source='pos' and o.total_amount=450
+      limit 1
+    ),
+    secondary_order_id=(
+      select o.id from public.orders o
+      where o.tenant_id=f.tenant_id and o.branch_id=f.branch_id and o.status='completed' and o.source='whatsapp' and o.total_amount=450
+      limit 1
+    ),
+    alt_order_id=(
+      select o.id from public.orders o
+      where o.tenant_id=f.tenant_id and o.branch_id=f.other_branch_id and o.status='completed' and o.total_amount=800
+      limit 1
+    ),
+    open_order_id=(
+      select o.id from public.orders o
+      where o.tenant_id=f.tenant_id and o.branch_id=f.branch_id and o.status='accepted' and o.total_amount=111
+      limit 1
+    ),
+    deleted_order_id=(
+      select o.id from public.orders o
+      where o.tenant_id=f.tenant_id and o.branch_id=f.branch_id and o.status='draft' and o.source='pos' and o.total_amount=222
+      limit 1
+    ),
+    foreign_order_id=(
+      select o.id from public.orders o
+      where o.tenant_id=f.other_tenant_id and o.branch_id=f.foreign_branch_id and o.status='completed' and o.total_amount=900
+      limit 1
+    );
 
--- order_items.line_total is generated from quantity * unit_price. The fixture
--- leaves that column to the database instead of writing derived commercial truth.
+update sellertray_returns_read_fixture f
+set primary_public_order_id=o1.public_order_id,
+    secondary_public_order_id=o2.public_order_id
+from public.orders o1,public.orders o2
+where o1.id=f.primary_order_id and o2.id=f.secondary_order_id;
+
+-- order_items.line_total is generated from quantity * unit_price.
 insert into public.order_items(
   tenant_id,order_id,catalog_item_id,item_name,quantity,unit_price,selected_uom,conversion_factor,stock_quantity
 )
-select o.tenant_id,o.id,ci.id,'Current Blue Paint',2,100,'Box',12,24
-from public.orders o join sellertray_returns_read_fixture f on f.tenant_id=o.tenant_id
-join public.catalog_items ci on ci.tenant_id=o.tenant_id and ci.sku='RET-BLUE'
-where o.public_order_id='RETREAD/1001'
+select f.tenant_id,f.primary_order_id,ci.id,'Current Blue Paint',2,100,'Box',12,24
+from sellertray_returns_read_fixture f
+join public.catalog_items ci on ci.tenant_id=f.tenant_id and ci.sku='RET-BLUE'
 union all
-select o.tenant_id,o.id,ci.id,'Current Brush',5,50,'Each',1,5
-from public.orders o join sellertray_returns_read_fixture f on f.tenant_id=o.tenant_id
-join public.catalog_items ci on ci.tenant_id=o.tenant_id and ci.sku='RET-BRUSH'
-where o.public_order_id='RETREAD/1001'
+select f.tenant_id,f.primary_order_id,ci.id,'Current Brush',5,50,'Each',1,5
+from sellertray_returns_read_fixture f
+join public.catalog_items ci on ci.tenant_id=f.tenant_id and ci.sku='RET-BRUSH'
 union all
-select o.tenant_id,o.id,ci.id,'Current Red Paint',1,450,'Carton',6,6
-from public.orders o join sellertray_returns_read_fixture f on f.tenant_id=o.tenant_id
-join public.catalog_items ci on ci.tenant_id=o.tenant_id and ci.sku='RET-RED'
-where o.public_order_id='RETREAD/1002'
+select f.tenant_id,f.secondary_order_id,ci.id,'Current Red Paint',1,450,'Carton',6,6
+from sellertray_returns_read_fixture f
+join public.catalog_items ci on ci.tenant_id=f.tenant_id and ci.sku='RET-RED'
 union all
-select o.tenant_id,o.id,ci.id,'Current Red Paint',1,800,'Each',1,1
-from public.orders o join sellertray_returns_read_fixture f on f.tenant_id=o.tenant_id
-join public.catalog_items ci on ci.tenant_id=o.tenant_id and ci.sku='RET-RED'
-where o.public_order_id='RETREAD/ALT'
+select f.tenant_id,f.alt_order_id,ci.id,'Current Red Paint',1,800,'Each',1,1
+from sellertray_returns_read_fixture f
+join public.catalog_items ci on ci.tenant_id=f.tenant_id and ci.sku='RET-RED'
 union all
-select o.tenant_id,o.id,ci.id,'Current Red Paint',1,111,'Each',1,1
-from public.orders o join sellertray_returns_read_fixture f on f.tenant_id=o.tenant_id
-join public.catalog_items ci on ci.tenant_id=o.tenant_id and ci.sku='RET-RED'
-where o.public_order_id='RETREAD/OPEN'
+select f.tenant_id,f.open_order_id,ci.id,'Current Red Paint',1,111,'Each',1,1
+from sellertray_returns_read_fixture f
+join public.catalog_items ci on ci.tenant_id=f.tenant_id and ci.sku='RET-RED'
 union all
-select o.tenant_id,o.id,ci.id,'Current Red Paint',1,222,'Each',1,1
-from public.orders o join sellertray_returns_read_fixture f on f.tenant_id=o.tenant_id
-join public.catalog_items ci on ci.tenant_id=o.tenant_id and ci.sku='RET-RED'
-where o.public_order_id='RETREAD/DELETED'
+select f.tenant_id,f.deleted_order_id,ci.id,'Current Red Paint',1,222,'Each',1,1
+from sellertray_returns_read_fixture f
+join public.catalog_items ci on ci.tenant_id=f.tenant_id and ci.sku='RET-RED'
 union all
-select o.tenant_id,o.id,ci.id,'Foreign Current Product',1,900,'Each',1,1
-from public.orders o join sellertray_returns_read_fixture f on f.other_tenant_id=o.tenant_id
-join public.catalog_items ci on ci.tenant_id=o.tenant_id and ci.sku='RET-FOREIGN'
-where o.public_order_id='RETREAD/FOREIGN';
+select f.other_tenant_id,f.foreign_order_id,ci.id,'Foreign Current Product',1,900,'Each',1,1
+from sellertray_returns_read_fixture f
+join public.catalog_items ci on ci.tenant_id=f.other_tenant_id and ci.sku='RET-FOREIGN';
 
 insert into public.order_financial_documents(
   tenant_id,order_id,document_type,document_reference,currency,amount,status,issued_at
 )
-select o.tenant_id,o.id,'invoice','INV-RETREAD-'||replace(o.public_order_id,'/','-'),'NGN',o.total_amount,'issued',o.created_at
+select o.tenant_id,o.id,'invoice','INV-RETREAD-'||substr(o.id::text,1,8),'NGN',o.total_amount,'issued',o.created_at
 from public.orders o
-where o.public_order_id like 'RETREAD/%';
+join sellertray_returns_read_fixture f
+  on o.id in (f.primary_order_id,f.secondary_order_id,f.alt_order_id,f.open_order_id,f.deleted_order_id);
 
 insert into public.order_payments(
   tenant_id,order_id,invoice_document_id,method_type,provider,status,amount,currency,
@@ -185,82 +220,79 @@ insert into public.order_payments(
 select o.tenant_id,o.id,d.id,'cash','pos_cash','confirmed',o.total_amount,'NGN',
        o.created_at+interval '5 minutes','system',o.created_at+interval '5 minutes',o.created_at+interval '5 minutes'
 from public.orders o
-join public.order_financial_documents d on d.tenant_id=o.tenant_id and d.order_id=o.id and d.document_type='invoice'
-where o.public_order_id like 'RETREAD/%';
+join sellertray_returns_read_fixture f
+  on o.id in (f.primary_order_id,f.secondary_order_id,f.alt_order_id,f.open_order_id,f.deleted_order_id)
+join public.order_financial_documents d
+  on d.tenant_id=o.tenant_id and d.order_id=o.id and d.document_type='invoice';
 
--- The primary return ID is allocated before the commercial fixtures are written.
--- That avoids a post-hoc lookup becoming part of the test's correctness contract.
+-- Return rows use the real accountable owner actor required by the governed return trigger.
 insert into public.sale_returns(
-  id,tenant_id,branch_id,order_id,original_payment_id,return_type,status,amount,currency,reason,created_at
+  id,tenant_id,branch_id,order_id,original_payment_id,return_type,status,amount,currency,reason,actor_user_id,created_at
 )
-select
-  case when o.tenant_id=f.tenant_id and o.public_order_id='RETREAD/1001' then f.primary_return_id else gen_random_uuid() end,
-  o.tenant_id,o.branch_id,o.id,p.id,'partial','completed',
-  case o.public_order_id
-    when 'RETREAD/1001' then 300
-    when 'RETREAD/1002' then 450
-    when 'RETREAD/ALT' then 800
-    when 'RETREAD/OPEN' then 111
-    when 'RETREAD/DELETED' then 222
-    when 'RETREAD/FOREIGN' then 900
-  end,
-  'NGN',
-  case o.public_order_id
-    when 'RETREAD/1001' then 'Damaged seal'
-    when 'RETREAD/1002' then 'Wrong shade'
-    when 'RETREAD/ALT' then 'Alternate Branch return'
-    when 'RETREAD/OPEN' then 'Non-completed order fixture'
-    when 'RETREAD/DELETED' then 'Deleted draft fixture'
-    when 'RETREAD/FOREIGN' then 'Foreign Business return'
-  end,
-  case o.public_order_id
-    when 'RETREAD/1001' then now()-interval '1 hour'
-    when 'RETREAD/1002' then now()-interval '2 hours'
-    when 'RETREAD/ALT' then now()-interval '30 minutes'
-    when 'RETREAD/OPEN' then now()-interval '3 hours'
-    when 'RETREAD/DELETED' then now()-interval '4 hours'
-    when 'RETREAD/FOREIGN' then now()-interval '20 minutes'
-  end
-from public.orders o
-join public.order_payments p on p.tenant_id=o.tenant_id and p.order_id=o.id
-cross join sellertray_returns_read_fixture f
-where o.public_order_id like 'RETREAD/%'
-  and o.tenant_id in (f.tenant_id,f.other_tenant_id);
+select f.primary_return_id,f.tenant_id,f.branch_id,f.primary_order_id,p.id,'partial','completed',300,'NGN','Damaged seal',f.owner_user_id,now()-interval '1 hour'
+from sellertray_returns_read_fixture f
+join public.order_payments p on p.tenant_id=f.tenant_id and p.order_id=f.primary_order_id
+union all
+select gen_random_uuid(),f.tenant_id,f.branch_id,f.secondary_order_id,p.id,'partial','completed',450,'NGN','Wrong shade',f.owner_user_id,now()-interval '2 hours'
+from sellertray_returns_read_fixture f
+join public.order_payments p on p.tenant_id=f.tenant_id and p.order_id=f.secondary_order_id
+union all
+select gen_random_uuid(),f.tenant_id,f.other_branch_id,f.alt_order_id,p.id,'partial','completed',800,'NGN','Alternate Branch return',f.owner_user_id,now()-interval '30 minutes'
+from sellertray_returns_read_fixture f
+join public.order_payments p on p.tenant_id=f.tenant_id and p.order_id=f.alt_order_id
+union all
+select gen_random_uuid(),f.tenant_id,f.branch_id,f.open_order_id,p.id,'partial','completed',111,'NGN','Non-completed order fixture',f.owner_user_id,now()-interval '3 hours'
+from sellertray_returns_read_fixture f
+join public.order_payments p on p.tenant_id=f.tenant_id and p.order_id=f.open_order_id
+union all
+select gen_random_uuid(),f.tenant_id,f.branch_id,f.deleted_order_id,p.id,'partial','completed',222,'NGN','Deleted draft fixture',f.owner_user_id,now()-interval '4 hours'
+from sellertray_returns_read_fixture f
+join public.order_payments p on p.tenant_id=f.tenant_id and p.order_id=f.deleted_order_id;
 
--- Return line_total is intentionally persisted: it is immutable historical refund evidence.
+-- sale_return_items.line_total is persisted immutable refund evidence.
 insert into public.sale_return_items(
   tenant_id,sale_return_id,order_item_id,catalog_item_id,product_name,selected_uom,
   quantity,conversion_factor,stock_quantity,unit_price,line_total,created_at
 )
 select r.tenant_id,r.id,oi.id,oi.catalog_item_id,'Blue Paint Historic','Box',1.5,12,18,100,150,r.created_at
-from public.sale_returns r
-join public.orders o on o.tenant_id=r.tenant_id and o.id=r.order_id and o.public_order_id='RETREAD/1001'
-join public.order_items oi on oi.tenant_id=o.tenant_id and oi.order_id=o.id and oi.item_name='Current Blue Paint'
+from sellertray_returns_read_fixture f
+join public.sale_returns r on r.tenant_id=f.tenant_id and r.order_id=f.primary_order_id
+join public.order_items oi on oi.tenant_id=r.tenant_id and oi.order_id=r.order_id and oi.item_name='Current Blue Paint'
 union all
 select r.tenant_id,r.id,oi.id,oi.catalog_item_id,'Brush Historic','Each',3,1,3,50,150,r.created_at+interval '1 second'
-from public.sale_returns r
-join public.orders o on o.tenant_id=r.tenant_id and o.id=r.order_id and o.public_order_id='RETREAD/1001'
-join public.order_items oi on oi.tenant_id=o.tenant_id and oi.order_id=o.id and oi.item_name='Current Brush'
+from sellertray_returns_read_fixture f
+join public.sale_returns r on r.tenant_id=f.tenant_id and r.order_id=f.primary_order_id
+join public.order_items oi on oi.tenant_id=r.tenant_id and oi.order_id=r.order_id and oi.item_name='Current Brush'
 union all
 select r.tenant_id,r.id,oi.id,oi.catalog_item_id,'Red Paint Historic','Carton',1,6,6,450,450,r.created_at
-from public.sale_returns r join public.orders o on o.tenant_id=r.tenant_id and o.id=r.order_id and o.public_order_id='RETREAD/1002'
-join public.order_items oi on oi.tenant_id=o.tenant_id and oi.order_id=o.id
+from sellertray_returns_read_fixture f
+join public.sale_returns r on r.tenant_id=f.tenant_id and r.order_id=f.secondary_order_id
+join public.order_items oi on oi.tenant_id=r.tenant_id and oi.order_id=r.order_id
 union all
 select r.tenant_id,r.id,oi.id,oi.catalog_item_id,'Alternate Branch Historic','Each',1,1,1,800,800,r.created_at
-from public.sale_returns r join public.orders o on o.tenant_id=r.tenant_id and o.id=r.order_id and o.public_order_id='RETREAD/ALT'
-join public.order_items oi on oi.tenant_id=o.tenant_id and oi.order_id=o.id
+from sellertray_returns_read_fixture f
+join public.sale_returns r on r.tenant_id=f.tenant_id and r.order_id=f.alt_order_id
+join public.order_items oi on oi.tenant_id=r.tenant_id and oi.order_id=r.order_id
 union all
 select r.tenant_id,r.id,oi.id,oi.catalog_item_id,'Open Order Historic','Each',1,1,1,111,111,r.created_at
-from public.sale_returns r join public.orders o on o.tenant_id=r.tenant_id and o.id=r.order_id and o.public_order_id='RETREAD/OPEN'
-join public.order_items oi on oi.tenant_id=o.tenant_id and oi.order_id=o.id
+from sellertray_returns_read_fixture f
+join public.sale_returns r on r.tenant_id=f.tenant_id and r.order_id=f.open_order_id
+join public.order_items oi on oi.tenant_id=r.tenant_id and oi.order_id=r.order_id
 union all
 select r.tenant_id,r.id,oi.id,oi.catalog_item_id,'Deleted Order Historic','Each',1,1,1,222,222,r.created_at
-from public.sale_returns r join public.orders o on o.tenant_id=r.tenant_id and o.id=r.order_id and o.public_order_id='RETREAD/DELETED'
-join public.order_items oi on oi.tenant_id=o.tenant_id and oi.order_id=o.id
-union all
-select r.tenant_id,r.id,oi.id,oi.catalog_item_id,'Foreign Product Historic','Each',1,1,1,900,900,r.created_at
-from public.sale_returns r join public.orders o on o.tenant_id=r.tenant_id and o.id=r.order_id and o.public_order_id='RETREAD/FOREIGN'
-join public.order_items oi on oi.tenant_id=o.tenant_id and oi.order_id=o.id;
+from sellertray_returns_read_fixture f
+join public.sale_returns r on r.tenant_id=f.tenant_id and r.order_id=f.deleted_order_id
+join public.order_items oi on oi.tenant_id=r.tenant_id and oi.order_id=r.order_id;
+
+-- Soft deletion is valid only for POS drafts, and happens after fixture payment/return
+-- creation so payment projection triggers never mutate an already deleted draft.
+update public.orders o
+set deleted_at=now()-interval '1 day',
+    deleted_by_user_id=f.owner_user_id,
+    deletion_reason='Historical fixture exclusion',
+    deletion_command_hash='abcdef0123456789abcdef0123456789'
+from sellertray_returns_read_fixture f
+where o.id=f.deleted_order_id;
 
 select set_config('request.jwt.claim.sub',(select owner_user_id::text from sellertray_returns_read_fixture),true);
 select set_config('request.jwt.claim.role','authenticated',true);
@@ -280,23 +312,23 @@ select extensions.ok(
   and jsonb_array_length((select page_result->'items' from sellertray_returns_read_fixture))=1,
   'Returns paging preserves full-result aggregates independently from page size'
 );
-select extensions.is((select page_result->'items'->0->>'publicOrderId' from sellertray_returns_read_fixture),'RETREAD/1001','Returns first page follows deterministic newest-return ordering');
-select extensions.is((select page_two_result->'items'->0->>'publicOrderId' from sellertray_returns_read_fixture),'RETREAD/1002','Returns offset paging advances deterministically through the filtered set');
+select extensions.is((select page_result->'items'->0->>'publicOrderId' from sellertray_returns_read_fixture),(select primary_public_order_id from sellertray_returns_read_fixture),'Returns first page follows deterministic newest-return ordering');
+select extensions.is((select page_two_result->'items'->0->>'publicOrderId' from sellertray_returns_read_fixture),(select secondary_public_order_id from sellertray_returns_read_fixture),'Returns offset paging advances deterministically through the filtered set');
 
-select extensions.is((public.get_sellertray_returns_management_list((select tenant_id from sellertray_returns_read_fixture),(select branch_id from sellertray_returns_read_fixture),'RETREAD/ALT',50,0)->>'totalCount')::integer,0,'Returns list excludes returns from another Branch');
-select extensions.is((public.get_sellertray_returns_management_list((select tenant_id from sellertray_returns_read_fixture),(select branch_id from sellertray_returns_read_fixture),'RETREAD/FOREIGN',50,0)->>'totalCount')::integer,0,'Returns list excludes returns from another Business');
-select extensions.is((public.get_sellertray_returns_management_list((select tenant_id from sellertray_returns_read_fixture),(select branch_id from sellertray_returns_read_fixture),'RETREAD/OPEN',50,0)->>'totalCount')::integer,0,'Returns list excludes return rows attached to non-completed orders');
-select extensions.is((public.get_sellertray_returns_management_list((select tenant_id from sellertray_returns_read_fixture),(select branch_id from sellertray_returns_read_fixture),'RETREAD/DELETED',50,0)->>'totalCount')::integer,0,'Returns list excludes return artifacts attached to soft-deleted POS drafts');
+select extensions.is((public.get_sellertray_returns_management_list((select tenant_id from sellertray_returns_read_fixture),(select branch_id from sellertray_returns_read_fixture),'Alternate Branch return',50,0)->>'totalCount')::integer,0,'Returns list excludes returns from another Branch');
+select extensions.is((public.get_sellertray_returns_management_list((select tenant_id from sellertray_returns_read_fixture),(select branch_id from sellertray_returns_read_fixture),'Foreign Returns',50,0)->>'totalCount')::integer,0,'Returns list excludes another Business customer identity');
+select extensions.is((public.get_sellertray_returns_management_list((select tenant_id from sellertray_returns_read_fixture),(select branch_id from sellertray_returns_read_fixture),'Non-completed order fixture',50,0)->>'totalCount')::integer,0,'Returns list excludes return rows attached to non-completed orders');
+select extensions.is((public.get_sellertray_returns_management_list((select tenant_id from sellertray_returns_read_fixture),(select branch_id from sellertray_returns_read_fixture),'Deleted draft fixture',50,0)->>'totalCount')::integer,0,'Returns list excludes return artifacts attached to soft-deleted POS drafts');
 select extensions.ok(position('9991000000001' in (select list_result::text from sellertray_returns_read_fixture))=0,'Returns list does not expose raw WhatsApp identity');
 
-select extensions.is((public.get_sellertray_returns_management_list((select tenant_id from sellertray_returns_read_fixture),(select branch_id from sellertray_returns_read_fixture),'RETREAD/1001',50,0)->>'totalCount')::integer,1,'Returns search matches public order ID server-side');
+select extensions.is((public.get_sellertray_returns_management_list((select tenant_id from sellertray_returns_read_fixture),(select branch_id from sellertray_returns_read_fixture),(select primary_public_order_id from sellertray_returns_read_fixture),50,0)->>'totalCount')::integer,1,'Returns search matches the actual server-generated public order ID');
 select extensions.is((public.get_sellertray_returns_management_list((select tenant_id from sellertray_returns_read_fixture),(select branch_id from sellertray_returns_read_fixture),'Ada Returns',50,0)->>'totalCount')::integer,1,'Returns search matches governed customer display name server-side');
 select extensions.is((public.get_sellertray_returns_management_list((select tenant_id from sellertray_returns_read_fixture),(select branch_id from sellertray_returns_read_fixture),'Damaged seal',50,0)->>'totalCount')::integer,1,'Returns search matches immutable return reason server-side');
 select extensions.is((public.get_sellertray_returns_management_list((select tenant_id from sellertray_returns_read_fixture),(select branch_id from sellertray_returns_read_fixture),'Blue Paint Historic',50,0)->>'totalCount')::integer,1,'Returns search matches immutable returned-product snapshot server-side');
 
 select extensions.is(jsonb_array_length((select detail_result->'items' from sellertray_returns_read_fixture)),2,'Return detail loads all immutable returned lines through the governed read model');
 select extensions.ok(
-  (select detail_result->>'publicOrderId' from sellertray_returns_read_fixture)='RETREAD/1001'
+  (select detail_result->>'publicOrderId' from sellertray_returns_read_fixture)=(select primary_public_order_id from sellertray_returns_read_fixture)
   and ((select detail_result->>'returnedAmount' from sellertray_returns_read_fixture))::numeric=300::numeric
   and (select detail_result->>'reason' from sellertray_returns_read_fixture)='Damaged seal',
   'Return detail preserves immutable return header evidence'
