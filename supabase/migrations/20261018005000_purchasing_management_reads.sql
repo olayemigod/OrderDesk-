@@ -28,17 +28,11 @@ begin
   if p_tenant_id is null then
     raise exception 'Business is required' using errcode='22023';
   end if;
-  if not exists(
-    select 1 from public.tenant_members tm
-    where tm.tenant_id=p_tenant_id
-      and tm.user_id=v_user_id
-      and tm.role in ('owner','manager')
-  ) then
+  if not public.sellertray_purchase_management_role(p_tenant_id,v_user_id) then
     raise exception 'Owner or Manager access is required to manage purchasing' using errcode='42501';
   end if;
   if p_branch_id is not null and not exists(
-    select 1 from public.branches b
-    where b.tenant_id=p_tenant_id and b.id=p_branch_id
+    select 1 from public.branches b where b.tenant_id=p_tenant_id and b.id=p_branch_id
   ) then
     raise exception 'Branch not found' using errcode='P0002';
   end if;
@@ -62,14 +56,12 @@ begin
       po.created_at,
       po.ordered_at,
       po.received_at,
-      coalesce(values.received_value,0) as received_value,
-      case when po.status in ('ordered','partially_received') then coalesce(values.open_commitment,0) else 0 end as open_commitment,
-      coalesce(values.item_count,0) as item_count
+      coalesce(m.item_count,0) as item_count,
+      coalesce(m.received_value,0) as received_value,
+      case when po.status in ('ordered','partially_received') then coalesce(m.open_commitment,0) else 0 end as open_commitment
     from public.sellertray_purchase_orders po
-    join public.branches b
-      on b.tenant_id=po.tenant_id and b.id=po.branch_id
-    join public.sellertray_suppliers s
-      on s.tenant_id=po.tenant_id and s.id=po.supplier_id
+    join public.branches b on b.tenant_id=po.tenant_id and b.id=po.branch_id
+    join public.sellertray_suppliers s on s.tenant_id=po.tenant_id and s.id=po.supplier_id
     left join lateral (
       select
         count(*)::integer as item_count,
@@ -77,7 +69,7 @@ begin
         coalesce(sum(greatest(coalesce(poi.ordered_quantity,0)-coalesce(poi.received_quantity,0),0)*coalesce(poi.unit_cost,0)),0) as open_commitment
       from public.sellertray_purchase_order_items poi
       where poi.tenant_id=po.tenant_id and poi.purchase_order_id=po.id
-    ) values on true
+    ) m on true
     where po.tenant_id=p_tenant_id
       and (p_branch_id is null or po.branch_id=p_branch_id)
       and (v_status is null or po.status=v_status)
@@ -99,9 +91,7 @@ begin
       )
   ),
   paged as (
-    select * from filtered
-    order by created_at desc,id desc
-    limit v_limit offset v_offset
+    select * from filtered order by created_at desc,id desc limit v_limit offset v_offset
   )
   select jsonb_build_object(
     'items',coalesce((
@@ -122,8 +112,7 @@ begin
         'createdAt',p.created_at,
         'orderedAt',p.ordered_at,
         'receivedAt',p.received_at
-      ) order by p.created_at desc,p.id desc)
-      from paged p
+      ) order by p.created_at desc,p.id desc) from paged p
     ),'[]'::jsonb),
     'totalCount',(select count(*) from filtered),
     'orderedValue',coalesce((select sum(total_amount) from filtered where status in ('ordered','partially_received','received')),0),
@@ -154,6 +143,8 @@ declare
   v_items jsonb;
   v_receipts jsonb;
   v_paid numeric := 0;
+  v_total numeric := 0;
+  v_status text;
 begin
   if v_user_id is null then
     raise exception 'SellerTray authentication required' using errcode='42501';
@@ -161,33 +152,30 @@ begin
   if p_tenant_id is null or p_purchase_order_id is null then
     raise exception 'Business and Purchase Order are required' using errcode='22023';
   end if;
-  if not exists(
-    select 1 from public.tenant_members tm
-    where tm.tenant_id=p_tenant_id
-      and tm.user_id=v_user_id
-      and tm.role in ('owner','manager')
-  ) then
+  if not public.sellertray_purchase_management_role(p_tenant_id,v_user_id) then
     raise exception 'Owner or Manager access is required to manage purchasing' using errcode='42501';
   end if;
 
-  select jsonb_build_object(
-    'purchaseOrderId',po.id,
-    'reference',po.reference,
-    'status',po.status,
-    'branchId',po.branch_id,
-    'branchName',b.name,
-    'supplierId',po.supplier_id,
-    'supplierName',s.name,
-    'currency',po.currency,
-    'totalAmount',coalesce(po.total_amount,0),
-    'expectedDate',po.expected_date,
-    'notes',po.notes,
-    'createdAt',po.created_at,
-    'orderedAt',po.ordered_at,
-    'receivedAt',po.received_at,
-    'cancelledAt',po.cancelled_at,
-    'cancelReason',po.cancel_reason
-  ) into v_order
+  select
+    jsonb_build_object(
+      'purchaseOrderId',po.id,
+      'reference',po.reference,
+      'status',po.status,
+      'branchId',po.branch_id,
+      'branchName',b.name,
+      'supplierId',po.supplier_id,
+      'supplierName',s.name,
+      'currency',po.currency,
+      'totalAmount',coalesce(po.total_amount,0),
+      'expectedDate',po.expected_date,
+      'notes',po.notes,
+      'createdAt',po.created_at,
+      'orderedAt',po.ordered_at,
+      'receivedAt',po.received_at,
+      'cancelledAt',po.cancelled_at,
+      'cancelReason',po.cancel_reason
+    ),coalesce(po.total_amount,0),po.status
+  into v_order,v_total,v_status
   from public.sellertray_purchase_orders po
   join public.branches b on b.tenant_id=po.tenant_id and b.id=po.branch_id
   join public.sellertray_suppliers s on s.tenant_id=po.tenant_id and s.id=po.supplier_id
@@ -233,12 +221,15 @@ begin
   ) ri on true
   where pr.tenant_id=p_tenant_id and pr.purchase_order_id=p_purchase_order_id;
 
-  v_paid:=public.sellertray_purchase_paid_amount(p_tenant_id,p_purchase_order_id);
+  if v_status in ('ordered','partially_received','received') then
+    v_paid:=public.sellertray_purchase_paid_amount(p_tenant_id,p_purchase_order_id);
+  end if;
+
   return v_order||jsonb_build_object(
     'items',v_items,
     'receipts',v_receipts,
     'paidAmount',v_paid,
-    'outstandingAmount',greatest(coalesce((v_order->>'totalAmount')::numeric,0)-v_paid,0)
+    'outstandingAmount',case when v_status in ('ordered','partially_received','received') then greatest(v_total-v_paid,0) else 0 end
   );
 end;
 $$;
@@ -270,12 +261,7 @@ begin
   if p_tenant_id is null then
     raise exception 'Business is required' using errcode='22023';
   end if;
-  if not exists(
-    select 1 from public.tenant_members tm
-    where tm.tenant_id=p_tenant_id
-      and tm.user_id=v_user_id
-      and tm.role in ('owner','manager')
-  ) then
+  if not public.sellertray_purchase_management_role(p_tenant_id,v_user_id) then
     raise exception 'Owner or Manager access is required to manage suppliers' using errcode='42501';
   end if;
   if v_status='all' then v_status:=null; end if;
@@ -292,22 +278,12 @@ begin
       coalesce(sum(public.sellertray_purchase_paid_amount(po.tenant_id,po.id)),0) as paid_amount,
       max(coalesce(po.ordered_at,po.created_at)) as last_purchase_at
     from public.sellertray_purchase_orders po
-    where po.tenant_id=p_tenant_id
-      and po.status in ('ordered','partially_received','received')
+    where po.tenant_id=p_tenant_id and po.status in ('ordered','partially_received','received')
     group by po.supplier_id
   ),
   filtered as materialized (
     select
-      s.id,
-      s.name,
-      s.contact_name,
-      s.phone,
-      s.email,
-      s.address,
-      s.notes,
-      s.is_active,
-      s.created_at,
-      s.updated_at,
+      s.id,s.name,s.contact_name,s.phone,s.email,s.address,s.notes,s.is_active,s.created_at,s.updated_at,
       coalesce(pm.purchase_count,0) as purchase_count,
       coalesce(pm.open_purchase_count,0) as open_purchase_count,
       coalesce(pm.purchase_total,0) as purchase_total,
@@ -327,9 +303,7 @@ begin
       )
   ),
   paged as (
-    select * from filtered
-    order by name,id
-    limit v_limit offset v_offset
+    select * from filtered order by name,id limit v_limit offset v_offset
   )
   select jsonb_build_object(
     'items',coalesce((select jsonb_agg(jsonb_build_object(
@@ -385,12 +359,7 @@ begin
   if p_tenant_id is null or p_supplier_id is null then
     raise exception 'Business and supplier are required' using errcode='22023';
   end if;
-  if not exists(
-    select 1 from public.tenant_members tm
-    where tm.tenant_id=p_tenant_id
-      and tm.user_id=v_user_id
-      and tm.role in ('owner','manager')
-  ) then
+  if not public.sellertray_purchase_management_role(p_tenant_id,v_user_id) then
     raise exception 'Owner or Manager access is required to manage suppliers' using errcode='42501';
   end if;
 
@@ -433,7 +402,7 @@ begin
     'currency',h.currency,
     'totalAmount',h.total_amount,
     'paidAmount',h.paid_amount,
-    'outstandingAmount',greatest(h.total_amount-h.paid_amount,0),
+    'outstandingAmount',case when h.status in ('ordered','partially_received','received') then greatest(h.total_amount-h.paid_amount,0) else 0 end,
     'orderedAt',h.ordered_at,
     'receivedAt',h.received_at,
     'createdAt',h.created_at
@@ -442,7 +411,7 @@ begin
     select
       po.id,po.reference,po.status,po.branch_id,b.name as branch_name,po.currency,
       coalesce(po.total_amount,0) as total_amount,
-      public.sellertray_purchase_paid_amount(po.tenant_id,po.id) as paid_amount,
+      case when po.status in ('ordered','partially_received','received') then public.sellertray_purchase_paid_amount(po.tenant_id,po.id) else 0 end as paid_amount,
       po.ordered_at,po.received_at,po.created_at
     from public.sellertray_purchase_orders po
     join public.branches b on b.tenant_id=po.tenant_id and b.id=po.branch_id
