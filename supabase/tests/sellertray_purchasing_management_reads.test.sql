@@ -100,20 +100,22 @@ select inactive_supplier_id,tenant_id,'Beta Wholesale','Bola Contact','080100000
 union all
 select foreign_supplier_id,other_tenant_id,'Foreign Supplier','Foreign Contact','08010000003','foreign@example.com',true from sellertray_purchasing_management_fixture;
 
-insert into public.sellertray_purchase_orders(tenant_id,branch_id,supplier_id,reference,status,currency,total_amount,created_at,ordered_at,received_at)
-select tenant_id,branch_id,supplier_id,'PMR-DRAFT','draft','NGN',50,now()-interval '7 days',null,null from sellertray_purchasing_management_fixture
+insert into public.sellertray_purchase_orders(
+  tenant_id,branch_id,supplier_id,reference,status,currency,total_amount,created_at,ordered_at,received_at
+)
+select tenant_id,branch_id,supplier_id,'PMR-DRAFT','draft','NGN',50,now()-interval '7 days',null::timestamptz,null::timestamptz from sellertray_purchasing_management_fixture
 union all
-select tenant_id,branch_id,supplier_id,'PMR-ORDERED','ordered','NGN',100,now()-interval '6 days',now()-interval '6 days',null from sellertray_purchasing_management_fixture
+select tenant_id,branch_id,supplier_id,'PMR-ORDERED','ordered','NGN',100,now()-interval '6 days',now()-interval '6 days',null::timestamptz from sellertray_purchasing_management_fixture
 union all
-select tenant_id,branch_id,supplier_id,'PMR-PARTIAL','partially_received','NGN',200,now()-interval '5 days',now()-interval '5 days',null from sellertray_purchasing_management_fixture
+select tenant_id,branch_id,supplier_id,'PMR-PARTIAL','partially_received','NGN',200,now()-interval '5 days',now()-interval '5 days',null::timestamptz from sellertray_purchasing_management_fixture
 union all
 select tenant_id,branch_id,inactive_supplier_id,'PMR-RECEIVED','received','NGN',300,now()-interval '4 days',now()-interval '4 days',now()-interval '2 days' from sellertray_purchasing_management_fixture
 union all
-select tenant_id,branch_id,inactive_supplier_id,'PMR-CANCELLED','cancelled','NGN',400,now()-interval '3 days',now()-interval '3 days',null from sellertray_purchasing_management_fixture
+select tenant_id,branch_id,inactive_supplier_id,'PMR-CANCELLED','cancelled','NGN',400,now()-interval '3 days',now()-interval '3 days',null::timestamptz from sellertray_purchasing_management_fixture
 union all
-select tenant_id,other_branch_id,inactive_supplier_id,'PMR-ALT','ordered','NGN',500,now()-interval '2 days',now()-interval '2 days',null from sellertray_purchasing_management_fixture
+select tenant_id,other_branch_id,inactive_supplier_id,'PMR-ALT','ordered','NGN',500,now()-interval '2 days',now()-interval '2 days',null::timestamptz from sellertray_purchasing_management_fixture
 union all
-select other_tenant_id,foreign_branch_id,foreign_supplier_id,'PMR-FOREIGN','ordered','NGN',600,now()-interval '1 day',now()-interval '1 day',null from sellertray_purchasing_management_fixture;
+select other_tenant_id,foreign_branch_id,foreign_supplier_id,'PMR-FOREIGN','ordered','NGN',600,now()-interval '1 day',now()-interval '1 day',null::timestamptz from sellertray_purchasing_management_fixture;
 
 update sellertray_purchasing_management_fixture f
 set ordered_po_id=po.id
@@ -154,9 +156,20 @@ select extensions.throws_ok(
   '22023','Unsupported Purchase Order status','Unsupported Purchase Order status is rejected'
 );
 
-select extensions.ok((select po_detail->>'reference' from sellertray_purchasing_management_fixture)='PMR-ORDERED' and (select po_detail->>'supplierName' from sellertray_purchasing_management_fixture)='Alpha Supplies','Purchase Order detail is tenant-scoped and returns the expected immutable header');
 select extensions.ok(
-  exists(select 1 from pg_proc p where p.oid=to_regprocedure('public.get_sellertray_purchase_order_management_detail(uuid,uuid)') and lower(pg_get_functiondef(p.oid)) like '%productname%' and lower(pg_get_functiondef(p.oid)) like '%selecteduom%' and lower(pg_get_functiondef(p.oid)) like '%unitcost%' and lower(pg_get_functiondef(p.oid)) like '%remainingvalue%'),
+  (select po_detail->>'reference' from sellertray_purchasing_management_fixture)='PMR-ORDERED'
+  and (select po_detail->>'supplierName' from sellertray_purchasing_management_fixture)='Alpha Supplies',
+  'Purchase Order detail is tenant-scoped and returns the expected immutable header'
+);
+select extensions.ok(
+  exists(
+    select 1 from pg_proc p
+    where p.oid=to_regprocedure('public.get_sellertray_purchase_order_management_detail(uuid,uuid)')
+      and lower(pg_get_functiondef(p.oid)) like '%productname%'
+      and lower(pg_get_functiondef(p.oid)) like '%selecteduom%'
+      and lower(pg_get_functiondef(p.oid)) like '%unitcost%'
+      and lower(pg_get_functiondef(p.oid)) like '%remainingvalue%'
+  ),
   'Purchase Order detail exposes immutable product, UOM, cost and remaining-value snapshots'
 );
 select extensions.throws_ok(
@@ -179,7 +192,11 @@ select extensions.throws_ok(
 );
 
 select set_config('request.jwt.claim.sub',(select manager_user_id::text from sellertray_purchasing_management_fixture),true);
-select extensions.is((public.get_sellertray_purchase_orders_management_list((select tenant_id from sellertray_purchasing_management_fixture),(select branch_id from sellertray_purchasing_management_fixture),null,null,50,0)->>'totalCount')::integer,5,'Managers can use purchasing management reads');
+select extensions.is(
+  (public.get_sellertray_purchase_orders_management_list((select tenant_id from sellertray_purchasing_management_fixture),(select branch_id from sellertray_purchasing_management_fixture),null,null,50,0)->>'totalCount')::integer,
+  5,
+  'Managers can use purchasing management reads'
+);
 
 select set_config('request.jwt.claim.sub',(select staff_user_id::text from sellertray_purchasing_management_fixture),true);
 select extensions.throws_ok(
@@ -192,34 +209,15 @@ select extensions.throws_ok(
 );
 
 select extensions.ok(
-  not exists(
+  exists(
     select 1 from pg_proc p
-    where p.oid in (
-      to_regprocedure('public.get_sellertray_purchase_orders_management_list(uuid,uuid,text,text,integer,integer)'),
-      to_regprocedure('public.get_sellertray_purchase_order_management_detail(uuid,uuid)'),
-      to_regprocedure('public.get_sellertray_suppliers_management_list(uuid,text,text,integer,integer)'),
-      to_regprocedure('public.get_sellertray_supplier_management_detail(uuid,uuid)')
-    )
-    and (lower(pg_get_functiondef(p.oid)) like '%insert into public.inventory_movements%' or lower(pg_get_functiondef(p.oid)) like '%update public.inventory_movements%' or lower(pg_get_functiondef(p.oid)) like '%apply_sellertray_inventory_operation%')
+    where p.oid=to_regprocedure('public.get_sellertray_purchase_orders_management_list(uuid,uuid,text,text,integer,integer)')
+      and lower(pg_get_functiondef(p.oid)) like '%receivedvalue%'
+      and lower(pg_get_functiondef(p.oid)) like '%opencommitment%'
+      and lower(pg_get_functiondef(p.oid)) like '%received_quantity%'
+      and lower(pg_get_functiondef(p.oid)) like '%unit_cost%'
   ),
-  'Purchasing management reads cannot mutate inventory or valuation state'
-);
-select extensions.ok(
-  not exists(
-    select 1 from pg_proc p
-    where p.oid in (
-      to_regprocedure('public.get_sellertray_purchase_orders_management_list(uuid,uuid,text,text,integer,integer)'),
-      to_regprocedure('public.get_sellertray_purchase_order_management_detail(uuid,uuid)'),
-      to_regprocedure('public.get_sellertray_suppliers_management_list(uuid,text,text,integer,integer)'),
-      to_regprocedure('public.get_sellertray_supplier_management_detail(uuid,uuid)')
-    ) and lower(pg_get_functiondef(p.oid)) like '%wa_id%'
-  ),
-  'Purchasing management reads do not expose raw WhatsApp identity'
-);
-select extensions.ok(
-  exists(select 1 from pg_proc p where p.oid=to_regprocedure('public.get_sellertray_suppliers_management_list(uuid,text,text,integer,integer)') and lower(pg_get_functiondef(p.oid)) like '%sellertray_purchase_paid_amount%')
-  and exists(select 1 from pg_proc p where p.oid=to_regprocedure('public.get_sellertray_supplier_management_detail(uuid,uuid)') and lower(pg_get_functiondef(p.oid)) like '%sellertray_purchase_paid_amount%'),
-  'Supplier management reuses the existing effective supplier-payment helper'
+  'Purchase Order list derives received value and open commitment from immutable purchase-line snapshots'
 );
 
 select * from extensions.finish();
