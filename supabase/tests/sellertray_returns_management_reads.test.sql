@@ -268,10 +268,10 @@ select extensions.throws_ok(
   '22023','Business and Branch are required','Returns management requires explicit Branch scope'
 );
 select extensions.ok(
-  (select lower(pg_get_functiondef('public.get_sellertray_returns_management_list(uuid,uuid,text,integer,integer)'::regprocedure)) like '%o.deleted_at is null%')
-  and (select lower(pg_get_functiondef('public.get_sellertray_returns_management_list(uuid,uuid,text,integer,integer)'::regprocedure)) like '%o.status = ''completed''%')
-  and (select lower(pg_get_functiondef('public.get_sellertray_return_management_detail(uuid,uuid,uuid)'::regprocedure)) like '%o.deleted_at is null%')
-  and (select lower(pg_get_functiondef('public.get_sellertray_return_management_detail(uuid,uuid,uuid)'::regprocedure)) like '%o.status = ''completed''%'),
+  (select lower(pg_get_functiondef('public.get_sellertray_returns_management_list(uuid,uuid,text,integer,integer)'::regprocedure)) ~ 'o\.deleted_at[[:space:]]+is[[:space:]]+null')
+  and (select lower(pg_get_functiondef('public.get_sellertray_returns_management_list(uuid,uuid,text,integer,integer)'::regprocedure)) ~ 'o\.status[[:space:]]*=[[:space:]]*''completed''')
+  and (select lower(pg_get_functiondef('public.get_sellertray_return_management_detail(uuid,uuid,uuid)'::regprocedure)) ~ 'o\.deleted_at[[:space:]]+is[[:space:]]+null')
+  and (select lower(pg_get_functiondef('public.get_sellertray_return_management_detail(uuid,uuid,uuid)'::regprocedure)) ~ 'o\.status[[:space:]]*=[[:space:]]*''completed'''),
   'Both Returns management reads defensively require completed, non-deleted parent sales'
 );
 
