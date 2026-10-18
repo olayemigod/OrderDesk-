@@ -118,8 +118,24 @@ select tenant_id,'Current Red Paint','RET-RED',450,'Each',true from sellertray_r
 union all
 select other_tenant_id,'Foreign Current Product','RET-FOREIGN',900,'Each',true from sellertray_returns_read_fixture;
 
--- Public order references are server-assigned by SellerTray. Supplied values are
--- intentionally not used for fixture lookup or assertions below.
+-- Alternate units are configured through the same persisted UOM model used by
+-- SellerTray commerce. The stock-UOM rows already exist via the product trigger.
+insert into public.catalog_item_uoms(
+  tenant_id,catalog_item_id,uom_name,conversion_factor,selling_price,allow_fractional,
+  is_default_selling,is_default_purchase
+)
+select ci.tenant_id,ci.id,'Box',12,100,true,false,false
+from public.catalog_items ci
+join sellertray_returns_read_fixture f on f.tenant_id=ci.tenant_id
+where ci.sku='RET-BLUE'
+union all
+select ci.tenant_id,ci.id,'Carton',6,450,true,false,false
+from public.catalog_items ci
+join sellertray_returns_read_fixture f on f.tenant_id=ci.tenant_id
+where ci.sku='RET-RED';
+
+-- Public order references are server-assigned. Supplied values are not used for
+-- fixture lookup or assertions.
 insert into public.orders(
   tenant_id,customer_id,branch_id,public_order_id,status,source,total_amount,amount_paid,payment_status,created_at
 )
@@ -173,7 +189,8 @@ set primary_public_order_id=o1.public_order_id,
 from public.orders o1,public.orders o2
 where o1.id=f.primary_order_id and o2.id=f.secondary_order_id;
 
--- order_items.line_total is generated from quantity * unit_price.
+-- order_items.line_total is database-generated. UOM snapshots below are valid
+-- against the configured product UOM rows above.
 insert into public.order_items(
   tenant_id,order_id,catalog_item_id,item_name,quantity,unit_price,selected_uom,conversion_factor,stock_quantity
 )
@@ -225,7 +242,7 @@ join sellertray_returns_read_fixture f
 join public.order_financial_documents d
   on d.tenant_id=o.tenant_id and d.order_id=o.id and d.document_type='invoice';
 
--- Return rows use the real accountable owner actor required by the governed return trigger.
+-- Return rows use an accountable owner actor as required by governed return authority.
 insert into public.sale_returns(
   id,tenant_id,branch_id,order_id,original_payment_id,return_type,status,amount,currency,reason,actor_user_id,created_at
 )
@@ -249,7 +266,7 @@ select gen_random_uuid(),f.tenant_id,f.branch_id,f.deleted_order_id,p.id,'partia
 from sellertray_returns_read_fixture f
 join public.order_payments p on p.tenant_id=f.tenant_id and p.order_id=f.deleted_order_id;
 
--- sale_return_items.line_total is persisted immutable refund evidence.
+-- sale_return_items.line_total is immutable historical refund evidence.
 insert into public.sale_return_items(
   tenant_id,sale_return_id,order_item_id,catalog_item_id,product_name,selected_uom,
   quantity,conversion_factor,stock_quantity,unit_price,line_total,created_at
@@ -284,8 +301,9 @@ from sellertray_returns_read_fixture f
 join public.sale_returns r on r.tenant_id=f.tenant_id and r.order_id=f.deleted_order_id
 join public.order_items oi on oi.tenant_id=r.tenant_id and oi.order_id=r.order_id;
 
--- Soft deletion is valid only for POS drafts, and happens after fixture payment/return
--- creation so payment projection triggers never mutate an already deleted draft.
+-- A soft-deleted sales artifact is valid only as a POS draft. It is deleted after
+-- fixture payment/return creation so payment projection triggers do not touch an
+-- already deleted order.
 update public.orders o
 set deleted_at=now()-interval '1 day',
     deleted_by_user_id=f.owner_user_id,
