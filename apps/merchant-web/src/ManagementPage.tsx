@@ -23,7 +23,7 @@ export default function ManagementPage({
   onBranchesChanged?: () => void | Promise<void>;
 }) {
   if (page === 'products') return <ProductsManagement tenantId={tenantId} currency={currency} />;
-  if (page === 'suppliers') return <SuppliersManagement tenantId={tenantId} />;
+  if (page === 'suppliers') return <SuppliersManagement tenantId={tenantId} currency={currency} />;
   if (page === 'branches') return <BranchesManagement tenantId={tenantId} onBranchesChanged={onBranchesChanged} />;
   if (page === 'team') return <TeamBranchesManagement tenantId={tenantId} onBranchesChanged={onBranchesChanged} />;
   if (page === 'devices') return <DeviceManagement tenantId={tenantId} />;

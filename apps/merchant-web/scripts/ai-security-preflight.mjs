@@ -34,7 +34,7 @@ requireValue(
     app.includes("page === 'suppliers'") &&
     app.includes('<ManagementPage page={page}') &&
     management.includes("import SuppliersManagement from './SuppliersManagement'") &&
-    management.includes("if (page === 'suppliers') return <SuppliersManagement tenantId={tenantId} />"),
+    management.includes("if (page === 'suppliers') return <SuppliersManagement tenantId={tenantId} currency={currency} />"),
   'Merchant Web must expose governed Supplier management through the shared management shell.',
 );
 
