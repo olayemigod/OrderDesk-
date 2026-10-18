@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import AiInsights from './AiInsights';
+import CashShiftsManagement from './CashShiftsManagement';
 import CustomersManagement from './CustomersManagement';
 import DashboardOverview from './DashboardOverview';
 import InventoryManagement from './InventoryManagement';
@@ -14,7 +15,7 @@ import SalesManagement from './SalesManagement';
 import WhatsAppManagement from './WhatsAppManagement';
 import { SellerTrayBrand, SellerTrayMark, NavIcon, ShellIcon } from './merchantShell';
 import { AVAILABLE_MERCHANT_PORTAL_NAVIGATION, MERCHANT_PORTAL_SECTIONS, type MerchantPortalPage, type MerchantPortalSection } from './portalNavigation';
-import { errorMessage, numberValue, supabase } from './supabase';
+import { errorMessage, supabase } from './supabase';
 
 type MerchantRole = 'owner' | 'manager' | 'staff';
 type ManagementRole = 'owner' | 'manager';
@@ -22,8 +23,7 @@ type Page = MerchantPortalPage;
 type Business = { id: string; name: string; merchantCode: string; role: MerchantRole; currency: string; subscriptionStatus: string; whatsappConnectionStatus: string };
 type Branch = { id: string; code: string; name: string; isDefault: boolean };
 type StockRow = { catalog_item_id: string; item_name: string; sku: string | null; category: string | null; stock_uom: string; quantity_on_hand: number | string; last_movement_at: string | null };
-type ShiftRow = { shift_id: string; register_name: string; status: string; currency: string; opening_cash: number | string; expected_cash: number | string | null; declared_cash: number | string | null; variance: number | string | null; opened_at: string };
-type Workspace = { stock: StockRow[]; shifts: ShiftRow[] };
+type Workspace = { stock: StockRow[] };
 
 const MANAGEMENT_ROLES: MerchantRole[] = ['owner', 'manager'];
 const NAV = AVAILABLE_MERCHANT_PORTAL_NAVIGATION;
@@ -36,7 +36,7 @@ export default function MerchantApp() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchId, setBranchId] = useState('');
   const [page, setPage] = useState<Page>('overview');
-  const [workspace, setWorkspace] = useState<Workspace>({ stock: [], shifts: [] });
+  const [workspace, setWorkspace] = useState<Workspace>({ stock: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dark, setDark] = useState(() => localStorage.getItem('sellertray.merchant.theme') === 'dark');
@@ -83,19 +83,16 @@ export default function MerchantApp() {
       if (branchResult.error) throw branchResult.error;
       const nextBranches = ((branchResult.data ?? []) as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id ?? ''), code: String(row.code ?? ''), name: String(row.name ?? 'Branch'), isDefault: row.is_default === true } satisfies Branch));
       const chosen = nextBranches.find((row) => row.id === branchId)?.id ?? nextBranches.find((row) => row.isDefault)?.id ?? nextBranches[0]?.id ?? '';
-      setBranches(nextBranches); setBranchId(chosen); setWorkspace({ stock: [], shifts: [] });
+      setBranches(nextBranches); setBranchId(chosen); setWorkspace({ stock: [] });
       if (chosen) await loadBranchData(tenantId, chosen);
     } catch (cause) { setError(errorMessage(cause, 'Unable to load SellerTray management data.')); } finally { setLoading(false); }
   }
 
   async function loadBranchData(tenantId: string, selectedBranchId: string) {
     try {
-      const [stockResult, shiftResult] = await Promise.all([
-        supabase.rpc('get_sellertray_branch_stock', { p_tenant_id: tenantId, p_branch_id: selectedBranchId }),
-        supabase.rpc('get_sellertray_cash_shift_history', { p_tenant_id: tenantId, p_branch_id: selectedBranchId, p_limit: 50 }),
-      ]);
-      if (stockResult.error) throw stockResult.error; if (shiftResult.error) throw shiftResult.error;
-      setWorkspace({ stock: (stockResult.data ?? []) as StockRow[], shifts: (shiftResult.data ?? []) as ShiftRow[] });
+      const stockResult = await supabase.rpc('get_sellertray_branch_stock', { p_tenant_id: tenantId, p_branch_id: selectedBranchId });
+      if (stockResult.error) throw stockResult.error;
+      setWorkspace({ stock: (stockResult.data ?? []) as StockRow[] });
     } catch (cause) { setError(errorMessage(cause, 'Unable to load this Branch.')); }
   }
 
@@ -173,7 +170,7 @@ export default function MerchantApp() {
       {page === 'returns' && !branch && <PageTable eyebrow="Returns" title="Choose a Branch" note="Select a Branch to review completed returns."><Empty title="No active Branch" body="Returns are reviewed within a Branch so refund, UOM and restored-stock context remain clear." /></PageTable>}
       {page === 'inventory' && <InventoryManagement tenantId={business.id} branch={branch} branches={branches} stockRows={workspace.stock} />}
       {page === 'payments' && <PaymentsManagement tenantId={business.id} />}
-      {page === 'cash' && <Cash business={business} branch={branch} rows={workspace.shifts} />}
+      {page === 'cash' && <CashShiftsManagement tenantId={business.id} currency={business.currency} branches={branches} initialBranchId={branchId} />}
       {page === 'whatsapp' && <WhatsAppManagement tenantId={business.id} role={managementRole} branches={branches} connectionStatusHint={business.whatsappConnectionStatus} />}
       {page === 'reports' && <ReportCenter tenantId={business.id} currency={business.currency} />}
       {page === 'ai' && <AiInsights tenantId={business.id} />}
@@ -188,19 +185,13 @@ function Login() {
   async function submit(event: FormEvent) { event.preventDefault(); setBusy(true); setMessage(''); try { const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password }); if (error) throw error; } catch (cause) { setMessage(errorMessage(cause, 'Unable to sign in.')); } finally { setBusy(false); } }
   return <div className="login-shell"><section className="login-brand"><SellerTrayMark large /><p className="eyebrow">SellerTray</p><h1>Manage the business. Keep selling on mobile.</h1><p>Review sales, products, stock, purchasing, money, channels and Branch performance from one governed merchant workspace.</p></section><form className="login-card" onSubmit={submit}><div><p className="eyebrow">Merchant Web</p><h2>Sign in</h2><p className="muted">Use the same SellerTray account you use for your business.</p></div><label>Email<input type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label><label>Password<input type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} /></label>{message ? <div className="error-banner compact">{message}</div> : null}<button className="primary-button" disabled={busy}>{busy ? 'Signing in' : 'Continue'}</button></form></div>;
 }
-function Cash({ business, branch, rows }: { business: Business; branch: Branch | null; rows: ShiftRow[] }) { return <PageTable eyebrow={branch?.name ?? 'Branch'} title="Cash & Shifts" note="Review opening cash, expected cash, declared cash and close variance.">{rows.length ? <Table headers={['Register', 'Status', 'Opening', 'Expected', 'Declared', 'Variance', 'Opened']}>{rows.map((row) => <tr key={row.shift_id}><td><strong>{row.register_name}</strong></td><td><Pill value={row.status} /></td><td>{money(numberValue(row.opening_cash), row.currency || business.currency)}</td><td>{row.expected_cash == null ? '—' : money(numberValue(row.expected_cash), row.currency || business.currency)}</td><td>{row.declared_cash == null ? '—' : money(numberValue(row.declared_cash), row.currency || business.currency)}</td><td className={row.variance != null && numberValue(row.variance) !== 0 ? 'danger-text' : ''}>{row.variance == null ? '—' : money(numberValue(row.variance), row.currency || business.currency)}</td><td>{dateTime(row.opened_at)}</td></tr>)}</Table> : <Empty title="No cashier shifts" body="Shift history will appear after a register is operated in this Branch." />}</PageTable>; }
 function Select({ label, value, onChange, disabled, children }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean; children: ReactNode }) { return <label className="select-field"><span>{label}</span><select value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled}>{children}</select></label>; }
 function Context({ label, value }: { label: string; value: string }) { return <div><span>{label}</span><strong>{value}</strong></div>; }
 function Heading({ eyebrow, title: heading, note }: { eyebrow: string; title: string; note?: string }) { return <div className="section-heading"><div><p className="eyebrow">{eyebrow}</p><h2>{heading}</h2></div>{note ? <p className="muted">{note}</p> : null}</div>; }
 function PageTable({ eyebrow, title: heading, note, children }: { eyebrow: string; title: string; note: string; children: ReactNode }) { return <div className="page-stack"><Heading eyebrow={eyebrow} title={heading} note={note} /><article className="panel">{children}</article></div>; }
-function Table({ headers, children }: { headers: string[]; children: ReactNode }) { return <div className="table-wrap"><table><thead><tr>{headers.map((header) => <th key={header}>{header}</th>)}</tr></thead><tbody>{children}</tbody></table></div>; }
 function Empty({ title: heading, body }: { title: string; body: string }) { return <div className="empty-state"><strong>{heading}</strong><p>{body}</p></div>; }
-function Pill({ value }: { value: string }) { const text = value.toLowerCase(); const tone = /paid|completed|connected|reviewed|active/.test(text) ? 'good' : /failed|cancel|error|past_due/.test(text) ? 'bad' : 'neutral'; return <span className={`status-pill ${tone}`}>{statusText(value)}</span>; }
 function Status({ title: heading, body, action }: { title: string; body: string; action?: ReactNode }) { return <div className="status-page"><div className="status-card"><SellerTrayMark large /><p className="eyebrow">SellerTray</p><h1>{heading}</h1><p>{body}</p>{action}</div></div>; }
 function merchantRole(value: unknown): MerchantRole { return value === 'owner' || value === 'manager' || value === 'staff' ? value : 'staff'; }
 function accountInitial(value: string | undefined): string { return value?.trim().charAt(0).toUpperCase() || 'S'; }
 function title(value: string): string { return value ? value[0].toUpperCase() + value.slice(1) : value; }
 function statusText(value: string): string { return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()); }
-function formatNumber(value: number): string { return new Intl.NumberFormat('en-NG', { maximumFractionDigits: 2 }).format(value); }
-function money(value: number, currency: string): string { try { return new Intl.NumberFormat('en-NG', { style: 'currency', currency: currency || 'NGN', maximumFractionDigits: 2 }).format(value); } catch { return `${currency || 'NGN'} ${formatNumber(value)}`; } }
-function dateTime(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(date); }
