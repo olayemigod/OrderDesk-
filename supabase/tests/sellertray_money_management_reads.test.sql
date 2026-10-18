@@ -84,6 +84,8 @@ with x as (
   select tenant_id,branch_id,customer_id,'needs_review','manual','Money payment','manual','{}'::text[],'NGN',100,'2026-10-10 09:00+00'::timestamptz from money_fixture returning id
 )
 update money_fixture f set payment_order_id=x.id from x;
+insert into public.order_items(tenant_id,order_id,item_name,original_item_name,quantity,unit_price,match_source,match_confidence)
+select tenant_id,payment_order_id,'Money Payment Item','Money Payment Item',1,100,'manual',1 from money_fixture;
 update public.orders set status='accepted' where id=(select payment_order_id from money_fixture);
 insert into public.order_payments(tenant_id,order_id,invoice_document_id,method_type,provider,status,amount,currency,provider_reference,created_at)
 select f.tenant_id,f.payment_order_id,d.id,'bank_transfer','manual_bank','pending_verification',100,'NGN','MONEYREF001','2026-10-10 09:30+00'::timestamptz
