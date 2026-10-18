@@ -37,8 +37,9 @@ select extensions.ok(
 );
 select extensions.ok(
   position('returned_amount' in pg_get_functiondef('public.collect_sellertray_customer_receivable(uuid,uuid,uuid,numeric,uuid)'::regprocedure))>0
-  and position('sellertray_record_pos_payment_allocation' in pg_get_functiondef('public.collect_sellertray_customer_receivable(uuid,uuid,uuid,numeric,uuid)'::regprocedure))>0,
-  'Receivable collection keeps canonical allocation authority while using return-adjusted balance truth'
+  and position('sellertray_record_pos_payment_allocation' in pg_get_functiondef('public.collect_sellertray_customer_receivable(uuid,uuid,uuid,numeric,uuid)'::regprocedure))>0
+  and position('sellertray_user_can_manage_order_payment' in pg_get_functiondef('public.collect_sellertray_customer_receivable(uuid,uuid,uuid,numeric,uuid)'::regprocedure))>0,
+  'Receivable collection keeps canonical allocation and payment authority while using return-adjusted balance truth'
 );
 
 create temp table money_fixture(
