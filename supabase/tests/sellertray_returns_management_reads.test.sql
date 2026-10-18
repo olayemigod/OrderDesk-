@@ -34,7 +34,7 @@ create temp table sellertray_returns_read_fixture (
   customer_id uuid not null,
   second_customer_id uuid not null,
   foreign_customer_id uuid not null,
-  primary_return_id uuid,
+  primary_return_id uuid not null,
   list_result jsonb,
   page_result jsonb,
   page_two_result jsonb,
@@ -43,10 +43,10 @@ create temp table sellertray_returns_read_fixture (
 
 insert into sellertray_returns_read_fixture(
   tenant_id,other_tenant_id,owner_user_id,manager_user_id,staff_user_id,
-  customer_id,second_customer_id,foreign_customer_id
+  customer_id,second_customer_id,foreign_customer_id,primary_return_id
 ) values(
   gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),
-  gen_random_uuid(),gen_random_uuid(),gen_random_uuid()
+  gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid()
 );
 
 insert into auth.users(id,email,aud,role,created_at,updated_at)
@@ -132,50 +132,42 @@ select tenant_id,customer_id,branch_id,'RETREAD/DELETED','draft','pos',222,222,'
 from sellertray_returns_read_fixture;
 
 -- order_items.line_total is generated from quantity * unit_price. The fixture
--- deliberately leaves that column to the database so the test mirrors the
--- governed production schema rather than writing derived commercial truth.
+-- leaves that column to the database instead of writing derived commercial truth.
 insert into public.order_items(
   tenant_id,order_id,catalog_item_id,item_name,quantity,unit_price,selected_uom,conversion_factor,stock_quantity
 )
 select o.tenant_id,o.id,ci.id,'Current Blue Paint',2,100,'Box',12,24
-from public.orders o
-join sellertray_returns_read_fixture f on f.tenant_id=o.tenant_id
+from public.orders o join sellertray_returns_read_fixture f on f.tenant_id=o.tenant_id
 join public.catalog_items ci on ci.tenant_id=o.tenant_id and ci.sku='RET-BLUE'
 where o.public_order_id='RETREAD/1001'
 union all
 select o.tenant_id,o.id,ci.id,'Current Brush',5,50,'Each',1,5
-from public.orders o
-join sellertray_returns_read_fixture f on f.tenant_id=o.tenant_id
+from public.orders o join sellertray_returns_read_fixture f on f.tenant_id=o.tenant_id
 join public.catalog_items ci on ci.tenant_id=o.tenant_id and ci.sku='RET-BRUSH'
 where o.public_order_id='RETREAD/1001'
 union all
 select o.tenant_id,o.id,ci.id,'Current Red Paint',1,450,'Carton',6,6
-from public.orders o
-join sellertray_returns_read_fixture f on f.tenant_id=o.tenant_id
+from public.orders o join sellertray_returns_read_fixture f on f.tenant_id=o.tenant_id
 join public.catalog_items ci on ci.tenant_id=o.tenant_id and ci.sku='RET-RED'
 where o.public_order_id='RETREAD/1002'
 union all
 select o.tenant_id,o.id,ci.id,'Current Red Paint',1,800,'Each',1,1
-from public.orders o
-join sellertray_returns_read_fixture f on f.tenant_id=o.tenant_id
+from public.orders o join sellertray_returns_read_fixture f on f.tenant_id=o.tenant_id
 join public.catalog_items ci on ci.tenant_id=o.tenant_id and ci.sku='RET-RED'
 where o.public_order_id='RETREAD/ALT'
 union all
 select o.tenant_id,o.id,ci.id,'Current Red Paint',1,111,'Each',1,1
-from public.orders o
-join sellertray_returns_read_fixture f on f.tenant_id=o.tenant_id
+from public.orders o join sellertray_returns_read_fixture f on f.tenant_id=o.tenant_id
 join public.catalog_items ci on ci.tenant_id=o.tenant_id and ci.sku='RET-RED'
 where o.public_order_id='RETREAD/OPEN'
 union all
 select o.tenant_id,o.id,ci.id,'Current Red Paint',1,222,'Each',1,1
-from public.orders o
-join sellertray_returns_read_fixture f on f.tenant_id=o.tenant_id
+from public.orders o join sellertray_returns_read_fixture f on f.tenant_id=o.tenant_id
 join public.catalog_items ci on ci.tenant_id=o.tenant_id and ci.sku='RET-RED'
 where o.public_order_id='RETREAD/DELETED'
 union all
 select o.tenant_id,o.id,ci.id,'Foreign Current Product',1,900,'Each',1,1
-from public.orders o
-join sellertray_returns_read_fixture f on f.other_tenant_id=o.tenant_id
+from public.orders o join sellertray_returns_read_fixture f on f.other_tenant_id=o.tenant_id
 join public.catalog_items ci on ci.tenant_id=o.tenant_id and ci.sku='RET-FOREIGN'
 where o.public_order_id='RETREAD/FOREIGN';
 
@@ -193,45 +185,49 @@ insert into public.order_payments(
 select o.tenant_id,o.id,d.id,'cash','pos_cash','confirmed',o.total_amount,'NGN',
        o.created_at+interval '5 minutes','system',o.created_at+interval '5 minutes',o.created_at+interval '5 minutes'
 from public.orders o
-join public.order_financial_documents d
-  on d.tenant_id=o.tenant_id and d.order_id=o.id and d.document_type='invoice'
+join public.order_financial_documents d on d.tenant_id=o.tenant_id and d.order_id=o.id and d.document_type='invoice'
 where o.public_order_id like 'RETREAD/%';
 
+-- The primary return ID is allocated before the commercial fixtures are written.
+-- That avoids a post-hoc lookup becoming part of the test's correctness contract.
 insert into public.sale_returns(
-  tenant_id,branch_id,order_id,original_payment_id,return_type,status,amount,currency,reason,created_at
+  id,tenant_id,branch_id,order_id,original_payment_id,return_type,status,amount,currency,reason,created_at
 )
-select o.tenant_id,o.branch_id,o.id,p.id,'partial','completed',
-       case o.public_order_id
-         when 'RETREAD/1001' then 300
-         when 'RETREAD/1002' then 450
-         when 'RETREAD/ALT' then 800
-         when 'RETREAD/OPEN' then 111
-         when 'RETREAD/DELETED' then 222
-         when 'RETREAD/FOREIGN' then 900
-       end,
-       'NGN',
-       case o.public_order_id
-         when 'RETREAD/1001' then 'Damaged seal'
-         when 'RETREAD/1002' then 'Wrong shade'
-         when 'RETREAD/ALT' then 'Alternate Branch return'
-         when 'RETREAD/OPEN' then 'Non-completed order fixture'
-         when 'RETREAD/DELETED' then 'Deleted draft fixture'
-         when 'RETREAD/FOREIGN' then 'Foreign Business return'
-       end,
-       case o.public_order_id
-         when 'RETREAD/1001' then now()-interval '1 hour'
-         when 'RETREAD/1002' then now()-interval '2 hours'
-         when 'RETREAD/ALT' then now()-interval '30 minutes'
-         when 'RETREAD/OPEN' then now()-interval '3 hours'
-         when 'RETREAD/DELETED' then now()-interval '4 hours'
-         when 'RETREAD/FOREIGN' then now()-interval '20 minutes'
-       end
+select
+  case when o.tenant_id=f.tenant_id and o.public_order_id='RETREAD/1001' then f.primary_return_id else gen_random_uuid() end,
+  o.tenant_id,o.branch_id,o.id,p.id,'partial','completed',
+  case o.public_order_id
+    when 'RETREAD/1001' then 300
+    when 'RETREAD/1002' then 450
+    when 'RETREAD/ALT' then 800
+    when 'RETREAD/OPEN' then 111
+    when 'RETREAD/DELETED' then 222
+    when 'RETREAD/FOREIGN' then 900
+  end,
+  'NGN',
+  case o.public_order_id
+    when 'RETREAD/1001' then 'Damaged seal'
+    when 'RETREAD/1002' then 'Wrong shade'
+    when 'RETREAD/ALT' then 'Alternate Branch return'
+    when 'RETREAD/OPEN' then 'Non-completed order fixture'
+    when 'RETREAD/DELETED' then 'Deleted draft fixture'
+    when 'RETREAD/FOREIGN' then 'Foreign Business return'
+  end,
+  case o.public_order_id
+    when 'RETREAD/1001' then now()-interval '1 hour'
+    when 'RETREAD/1002' then now()-interval '2 hours'
+    when 'RETREAD/ALT' then now()-interval '30 minutes'
+    when 'RETREAD/OPEN' then now()-interval '3 hours'
+    when 'RETREAD/DELETED' then now()-interval '4 hours'
+    when 'RETREAD/FOREIGN' then now()-interval '20 minutes'
+  end
 from public.orders o
 join public.order_payments p on p.tenant_id=o.tenant_id and p.order_id=o.id
-where o.public_order_id like 'RETREAD/%';
+cross join sellertray_returns_read_fixture f
+where o.public_order_id like 'RETREAD/%'
+  and o.tenant_id in (f.tenant_id,f.other_tenant_id);
 
--- Return line_total is intentionally persisted: it is part of the immutable
--- historical refund snapshot and must not be recomputed from live catalogue data.
+-- Return line_total is intentionally persisted: it is immutable historical refund evidence.
 insert into public.sale_return_items(
   tenant_id,sale_return_id,order_item_id,catalog_item_id,product_name,selected_uom,
   quantity,conversion_factor,stock_quantity,unit_price,line_total,created_at
@@ -265,12 +261,6 @@ union all
 select r.tenant_id,r.id,oi.id,oi.catalog_item_id,'Foreign Product Historic','Each',1,1,1,900,900,r.created_at
 from public.sale_returns r join public.orders o on o.tenant_id=r.tenant_id and o.id=r.order_id and o.public_order_id='RETREAD/FOREIGN'
 join public.order_items oi on oi.tenant_id=o.tenant_id and oi.order_id=o.id;
-
-update sellertray_returns_read_fixture f
-set primary_return_id=r.id
-from public.sale_returns r
-join public.orders o on o.tenant_id=r.tenant_id and o.id=r.order_id
-where r.tenant_id=f.tenant_id and o.public_order_id='RETREAD/1001';
 
 select set_config('request.jwt.claim.sub',(select owner_user_id::text from sellertray_returns_read_fixture),true);
 select set_config('request.jwt.claim.role','authenticated',true);
