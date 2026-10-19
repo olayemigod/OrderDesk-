@@ -15,8 +15,8 @@ as $$
 begin
   if tg_op='DELETE' then
     -- Direct cash-ledger deletion stays forbidden while the Business exists.
-    -- The existing governed tenant lifecycle may cascade historical evidence
-    -- only after the parent tenant row is no longer visible to this trigger.
+    -- The governed tenant lifecycle may cascade historical evidence once the
+    -- parent tenant row is no longer visible to this trigger.
     if not exists (
       select 1
       from public.tenants t
@@ -100,5 +100,35 @@ $$;
 
 revoke all on function public.prevent_sellertray_cash_correction_mutation()
   from public,anon,authenticated;
+
+-- Correction evidence and its original/replacement movements form a protected
+-- graph. RESTRICT links in both directions can prevent the existing governed
+-- tenant cascade from removing that graph. CASCADE is safe here because normal
+-- direct movement/correction deletion is still stopped by the immutable BEFORE
+-- triggers above; it only lets an already-authorised parent Business teardown
+-- carry the whole graph with it.
+alter table public.sellertray_shift_cash_movement_corrections
+  drop constraint if exists sellertray_cash_correction_shift_same_branch,
+  add constraint sellertray_cash_correction_shift_same_branch
+    foreign key (tenant_id,branch_id,register_id,shift_id)
+    references public.sellertray_cash_shifts(tenant_id,branch_id,register_id,id)
+    on delete cascade,
+  drop constraint if exists sellertray_cash_correction_original_same_tenant,
+  add constraint sellertray_cash_correction_original_same_tenant
+    foreign key (tenant_id,original_movement_id)
+    references public.sellertray_shift_cash_movements(tenant_id,id)
+    on delete cascade,
+  drop constraint if exists sellertray_cash_correction_replacement_same_tenant,
+  add constraint sellertray_cash_correction_replacement_same_tenant
+    foreign key (tenant_id,replacement_movement_id)
+    references public.sellertray_shift_cash_movements(tenant_id,id)
+    on delete cascade;
+
+alter table public.sellertray_shift_cash_movements
+  drop constraint if exists sellertray_shift_cash_movements_superseded_correction_same_tenant,
+  add constraint sellertray_shift_cash_movements_superseded_correction_same_tenant
+    foreign key (tenant_id,superseded_by_correction_id)
+    references public.sellertray_shift_cash_movement_corrections(tenant_id,id)
+    on delete cascade;
 
 commit;
