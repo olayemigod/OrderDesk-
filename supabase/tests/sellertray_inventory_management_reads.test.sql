@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(32);
+select extensions.plan(34);
 
 select extensions.ok(
   (select p.prosecdef and p.provolatile='s' from pg_proc p where p.oid=to_regprocedure('public.get_sellertray_inventory_management_stock(uuid,uuid,text,text,text,timestamptz,integer,integer)'))
@@ -133,6 +133,12 @@ select extensions.is(
   (public.get_sellertray_inventory_management_stock((select tenant_id from inventory_management_fixture),(select branch_id from inventory_management_fixture),null,'out_of_stock','all','2026-10-19 12:00:00+00',50,0)->>'totalCount')::integer,
   1,'Stock-state filtering is server-side'
 );
+select extensions.ok(
+  (public.get_sellertray_inventory_management_stock((select tenant_id from inventory_management_fixture),(select branch_id from inventory_management_fixture),null,'in_stock','all','2026-10-19 12:00:00+00',50,0)->>'totalCount')::integer=1
+  and (public.get_sellertray_inventory_management_stock((select tenant_id from inventory_management_fixture),(select branch_id from inventory_management_fixture),null,'in_stock','all','2026-10-19 12:00:00+00',50,0)->>'lowStockCount')::integer=1
+  and (public.get_sellertray_inventory_management_stock((select tenant_id from inventory_management_fixture),(select branch_id from inventory_management_fixture),null,'in_stock','all','2026-10-19 12:00:00+00',50,0)->>'outOfStockCount')::integer=0,
+  'Stock summary aggregates honor the active stock filter across the full result set'
+);
 select extensions.is(
   (public.get_sellertray_inventory_management_stock((select tenant_id from inventory_management_fixture),(select branch_id from inventory_management_fixture),null,'all','unvalued','2026-10-19 12:00:00+00',50,0)->>'totalCount')::integer,
   1,'Valuation-state filtering is server-side'
@@ -199,6 +205,12 @@ select extensions.ok(
   (select (transfers->>'openCount')::integer=1 from inventory_management_fixture)
   and (public.get_sellertray_inventory_management_transfers((select tenant_id from inventory_management_fixture),(select branch_id from inventory_management_fixture),null,'draft',null,null,50,0)->>'totalCount')::integer=1,
   'Transfer status filtering and open-transfer aggregate use the full Branch result set'
+);
+select extensions.ok(
+  (public.get_sellertray_inventory_management_transfers((select tenant_id from inventory_management_fixture),(select branch_id from inventory_management_fixture),null,'received',null,null,50,0)->>'totalCount')::integer=0
+  and (public.get_sellertray_inventory_management_transfers((select tenant_id from inventory_management_fixture),(select branch_id from inventory_management_fixture),null,'received',null,null,50,0)->>'openCount')::integer=0
+  and (public.get_sellertray_inventory_management_transfers((select tenant_id from inventory_management_fixture),(select branch_id from inventory_management_fixture),null,'received',null,null,50,0)->>'draftCount')::integer=0,
+  'Transfer summary aggregates honor the active status filter across the full result set'
 );
 select extensions.ok(
   (select jsonb_array_length(public.get_sellertray_inventory_management_transfers(tenant_id,branch_id,null,'all',null,null,1,0)->'items')=1
