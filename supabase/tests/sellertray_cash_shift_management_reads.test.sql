@@ -22,8 +22,9 @@ select extensions.ok(
 );
 select extensions.ok(
   exists(select 1 from pg_trigger where tgrelid='public.sellertray_shift_cash_movements'::regclass and tgname='guard_sellertray_cash_movement_history' and not tgisinternal)
+  and not exists(select 1 from pg_trigger where tgrelid='public.sellertray_shift_cash_movements'::regclass and tgname='prevent_sellertray_shift_cash_movements_mutation' and not tgisinternal)
   and exists(select 1 from pg_trigger where tgrelid='public.sellertray_shift_cash_movement_corrections'::regclass and tgname='prevent_sellertray_cash_correction_mutation' and not tgisinternal),
-  'Cash movement and correction audit history are protected by immutable triggers'
+  'Cash movement and correction audit history use the correction-aware immutable guards without the legacy overlap'
 );
 select extensions.ok(
   position('sellertray_user_can_read_branch' in pg_get_functiondef('public.get_sellertray_cash_shift_management_list(uuid,uuid,uuid,text,text,date,date,integer,integer)'::regprocedure))>0
@@ -177,7 +178,14 @@ select extensions.is(((select detail_result->>'expectedCash' from cash_mgmt_fixt
 select extensions.is(jsonb_array_length((select detail_result->'movements' from cash_mgmt_fixture)),1,'Shift detail exposes effective cash movements');
 select extensions.ok((select (detail_result->>'canCorrect')::boolean from cash_mgmt_fixture),'Open shift detail exposes governed correction authority');
 select extensions.ok(not (select (detail_result->>'canReview')::boolean from cash_mgmt_fixture),'Open shift is not reviewable before close');
-select extensions.is(jsonb_array_length((select detail_result->'paymentSummary' from cash_mgmt_fixture)),0,'Shift detail reuses the governed payment-method summary');
+select extensions.ok(
+  jsonb_array_length((select detail_result->'paymentSummary' from cash_mgmt_fixture))=1
+  and (select detail_result->'paymentSummary'->0->>'methodType' from cash_mgmt_fixture)='cash'
+  and (select detail_result->'paymentSummary'->0->>'displayName' from cash_mgmt_fixture)='Cash'
+  and ((select detail_result->'paymentSummary'->0->>'transactionCount' from cash_mgmt_fixture))::integer=0
+  and ((select detail_result->'paymentSummary'->0->>'amount' from cash_mgmt_fixture))::numeric=0,
+  'Shift detail reuses the governed payment-method snapshot including zero-activity cash'
+);
 
 update cash_mgmt_fixture set correction_result=public.correct_sellertray_shift_cash_movement(
   tenant_id,open_shift_id,movement_id,'replace','Correct float amount','cashmgmt-correct-001','cash_in',80,'FLOAT-MGMT-002','Corrected float',null,owner_id
@@ -192,16 +200,29 @@ select extensions.ok(
 );
 
 do $$
+declare
+  v_update_rejected boolean := false;
+  v_delete_rejected boolean := false;
 begin
   begin
     update public.sellertray_shift_cash_movements set amount=9999
     where id=(select movement_id from cash_mgmt_fixture);
   exception when sqlstate '55000' then
-    update cash_mgmt_fixture set movement_mutation_rejected=true;
+    v_update_rejected := true;
   end;
+
+  begin
+    delete from public.sellertray_shift_cash_movements
+    where id=(select movement_id from cash_mgmt_fixture);
+  exception when sqlstate '55000' then
+    v_delete_rejected := true;
+  end;
+
+  update cash_mgmt_fixture
+  set movement_mutation_rejected=v_update_rejected and v_delete_rejected;
 end
 $$;
-select extensions.ok((select movement_mutation_rejected from cash_mgmt_fixture),'Cash movement history rejects destructive mutation');
+select extensions.ok((select movement_mutation_rejected from cash_mgmt_fixture),'Cash movement history rejects destructive update and direct deletion');
 
 do $$
 begin
