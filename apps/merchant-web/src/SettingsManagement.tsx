@@ -93,18 +93,15 @@ export default function SettingsManagement({ tenantId }: { tenantId: string }) {
     setLoading(true); setError(null);
     try {
       const [profileResult, policyResult, methodsResult] = await Promise.all([
-        supabase.from('tenants').select('name,business_email,business_phone,business_type,logo_url,currency,timezone').eq('id', tenantId).single(),
+        supabase.rpc('get_sellertray_business_profile', { p_tenant_id: tenantId }),
         supabase.rpc('sellertray_get_operational_policy', { p_tenant_id: tenantId }),
         supabase.from('merchant_payment_methods').select('id,method_type,display_name,is_enabled,is_default,sort_order,mode,configuration_status,bank_name,bank_account_name,bank_account_number,bank_code,instructions').eq('tenant_id', tenantId).order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
       ]);
       if (profileResult.error) throw profileResult.error;
       if (policyResult.error) throw policyResult.error;
       if (methodsResult.error) throw methodsResult.error;
-      const p = profileResult.data as Record<string, unknown>;
-      setProfile({
-        name: String(p.name ?? ''), businessEmail: optionalText(p.business_email), businessPhone: optionalText(p.business_phone),
-        businessType: optionalText(p.business_type), logoUrl: optionalText(p.logo_url), currency: String(p.currency ?? 'NGN'), timezone: String(p.timezone ?? 'Africa/Lagos'),
-      });
+      const profileRow = Array.isArray(profileResult.data) ? profileResult.data[0] : profileResult.data;
+      setProfile(parseBusinessProfile(profileRow));
       setPolicy(parsePolicy(policyResult.data));
       const nextMethods = ((methodsResult.data ?? []) as Array<Record<string, unknown>>).map(parsePaymentMethod).filter((row) => row.id);
       setMethods(nextMethods);
@@ -123,12 +120,19 @@ export default function SettingsManagement({ tenantId }: { tenantId: string }) {
       if (!name) throw new Error('Business name is required.');
       if (!/^[A-Z]{3}$/.test(currency)) throw new Error('Currency must be a 3-letter code.');
       if (!timezone) throw new Error('Timezone is required.');
-      const { error: updateError } = await supabase.from('tenants').update({
-        name, business_email: clean(profile.businessEmail), business_phone: clean(profile.businessPhone), business_type: clean(profile.businessType),
-        logo_url: clean(profile.logoUrl), currency, timezone,
-      }).eq('id', tenantId);
-      if (updateError) throw updateError;
-      setProfile((current) => ({ ...current, name, currency, timezone })); setMessage('Business profile saved.');
+      const { data, error: rpcError } = await supabase.rpc('save_sellertray_business_profile', {
+        p_tenant_id: tenantId,
+        p_name: name,
+        p_business_email: clean(profile.businessEmail),
+        p_business_phone: clean(profile.businessPhone),
+        p_business_type: clean(profile.businessType),
+        p_logo_url: clean(profile.logoUrl),
+        p_currency: currency,
+        p_timezone: timezone,
+      });
+      if (rpcError) throw rpcError;
+      setProfile(parseBusinessProfile(data));
+      setMessage('Business profile saved.');
     } catch (cause) { setError(errorMessage(cause, 'Unable to save the business profile.')); }
     finally { setBusy(null); }
   }
@@ -211,17 +215,17 @@ export default function SettingsManagement({ tenantId }: { tenantId: string }) {
   if (loading) return <article className="panel"><p className="muted">Loading business settings…</p></article>;
 
   return <div className="page-stack settings-page">
-    <div className="section-heading"><div><p className="eyebrow">Merchant management</p><h2>Settings</h2></div><p className="muted">Business identity, selling rules and payment configuration use the same SellerTray controls as mobile.</p></div>
-    {error ? <div className="error-banner">{error}<button onClick={() => setError(null)}>Dismiss</button></div> : null}
-    {message ? <div className="success-banner">{message}<button onClick={() => setMessage(null)}>Dismiss</button></div> : null}
+    <div className="section-heading"><div><p className="eyebrow">Merchant management</p><h2>Settings</h2></div><p className="muted">Business identity, selling rules and payment configuration use the same governed SellerTray controls as mobile and WhatsApp.</p></div>
+    {error ? <div className="error-banner">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div> : null}
+    {message ? <div className="success-banner">{message}<button type="button" onClick={() => setMessage(null)}>Dismiss</button></div> : null}
 
     <form className="panel settings-form" onSubmit={saveProfile}>
-      <div className="panel-head"><div><p className="eyebrow">Business profile</p><h3>Business details</h3></div></div>
+      <div className="panel-head"><div><p className="eyebrow">Business profile</p><h3>Business details</h3><p className="muted">These details are shared business identity. Currency and timezone affect SellerTray management and reporting context.</p></div></div>
       <div className="settings-grid two">
-        <Field label="Business name"><input required value={profile.name} onChange={(event) => setProfile((current) => ({ ...current, name: event.target.value }))} /></Field>
-        <Field label="Business type"><input value={profile.businessType} onChange={(event) => setProfile((current) => ({ ...current, businessType: event.target.value }))} placeholder="Retail, fashion, services…" /></Field>
-        <Field label="Business email"><input type="email" value={profile.businessEmail} onChange={(event) => setProfile((current) => ({ ...current, businessEmail: event.target.value }))} /></Field>
-        <Field label="Business phone"><input value={profile.businessPhone} onChange={(event) => setProfile((current) => ({ ...current, businessPhone: event.target.value }))} /></Field>
+        <Field label="Business name"><input required maxLength={160} value={profile.name} onChange={(event) => setProfile((current) => ({ ...current, name: event.target.value }))} /></Field>
+        <Field label="Business type"><input maxLength={120} value={profile.businessType} onChange={(event) => setProfile((current) => ({ ...current, businessType: event.target.value }))} placeholder="Retail, fashion, services…" /></Field>
+        <Field label="Business email"><input type="email" maxLength={320} value={profile.businessEmail} onChange={(event) => setProfile((current) => ({ ...current, businessEmail: event.target.value }))} /></Field>
+        <Field label="Business phone"><input maxLength={60} value={profile.businessPhone} onChange={(event) => setProfile((current) => ({ ...current, businessPhone: event.target.value }))} /></Field>
         <Field label="Currency"><input maxLength={3} value={profile.currency} onChange={(event) => setProfile((current) => ({ ...current, currency: event.target.value.toUpperCase() }))} /></Field>
         <Field label="Timezone"><input value={profile.timezone} onChange={(event) => setProfile((current) => ({ ...current, timezone: event.target.value }))} placeholder="Africa/Lagos" /></Field>
       </div>
@@ -251,8 +255,8 @@ export default function SettingsManagement({ tenantId }: { tenantId: string }) {
 
     <div className="settings-payment-layout">
       <article className="panel settings-method-list">
-        <div className="panel-head"><div><p className="eyebrow">Payments</p><h3>Payment methods</h3></div><button className="secondary-button" onClick={() => newPaymentMethod()}>New method</button></div>
-        {methods.length ? <div className="device-list">{methods.map((row) => <button key={row.id} className={selectedMethodId === row.id ? 'device-row selected' : 'device-row'} onClick={() => setSelectedMethodId(row.id)}><span><strong>{row.displayName}</strong><small>{paymentLabel(row.methodType)} · {row.mode === 'test' ? 'Test' : 'Live'}</small></span><span className="device-row-badges">{row.isDefault ? <em>Default</em> : null}<em className={row.isEnabled ? 'good' : 'muted'}>{row.isEnabled ? 'Enabled' : 'Disabled'}</em></span></button>)}</div> : <div className="empty-state"><strong>No payment methods</strong><p>Add how customers or counter staff can receive payments.</p></div>}
+        <div className="panel-head"><div><p className="eyebrow">Payments</p><h3>Payment methods</h3></div><button type="button" className="secondary-button" onClick={() => newPaymentMethod()}>New method</button></div>
+        {methods.length ? <div className="device-list">{methods.map((row) => <button type="button" key={row.id} className={selectedMethodId === row.id ? 'device-row selected' : 'device-row'} onClick={() => setSelectedMethodId(row.id)}><span><strong>{row.displayName}</strong><small>{paymentLabel(row.methodType)} · {row.mode === 'test' ? 'Test' : 'Live'}</small></span><span className="device-row-badges">{row.isDefault ? <em>Default</em> : null}<em className={row.isEnabled ? 'good' : 'muted'}>{row.isEnabled ? 'Enabled' : 'Disabled'}</em></span></button>)}</div> : <div className="empty-state"><strong>No payment methods</strong><p>Add how customers or counter staff can receive payments.</p></div>}
       </article>
 
       <form className="panel settings-form" onSubmit={savePaymentMethod}>
@@ -282,6 +286,18 @@ export default function SettingsManagement({ tenantId }: { tenantId: string }) {
 
 function Field({ label: title, children }: { label: string; children: ReactNode }) { return <label className="settings-field"><span>{title}</span>{children}</label>; }
 function Toggle({ label: title, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) { return <label className="settings-toggle"><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /><span>{title}</span></label>; }
+function parseBusinessProfile(value: unknown): BusinessProfile {
+  const row = object(value);
+  return {
+    name: String(row.name ?? ''),
+    businessEmail: optionalText(row.businessEmail ?? row.business_email),
+    businessPhone: optionalText(row.businessPhone ?? row.business_phone),
+    businessType: optionalText(row.businessType ?? row.business_type),
+    logoUrl: optionalText(row.logoUrl ?? row.logo_url),
+    currency: String(row.currency ?? 'NGN'),
+    timezone: String(row.timezone ?? 'Africa/Lagos'),
+  };
+}
 function parsePolicy(value: unknown): OperationalPolicy {
   const row = object(value); const paymentGate = row.paymentGate; const whatsappPushMode = row.whatsappPushMode;
   return {
