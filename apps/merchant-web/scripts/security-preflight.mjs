@@ -8,6 +8,7 @@ const main = read('src/main.tsx');
 const app = read('src/MerchantApp.tsx');
 const dashboard = read('src/DashboardOverview.tsx');
 const cash = read('src/CashShiftsManagement.tsx');
+const inventory = read('src/InventoryManagement.tsx');
 const management = read('src/ManagementPage.tsx');
 const products = read('src/ProductsManagement.tsx');
 const team = read('src/TeamBranchesManagement.tsx');
@@ -22,7 +23,7 @@ const purchasingOperations = read('src/PurchasingOperationsManagement.tsx');
 const supplierPayments = read('src/SupplierPaymentManagement.tsx');
 const supplierPaymentsCenter = read('src/SupplierPaymentsCenter.tsx');
 const vercel = read('vercel.json');
-const browserSource = [supabaseClient, main, app, dashboard, cash, management, products, team, whatsapp, devices, reports, salesReports, procurementReports, settings, purchasing, purchasingOperations, supplierPayments, supplierPaymentsCenter].join('\n');
+const browserSource = [supabaseClient, main, app, dashboard, cash, inventory, management, products, team, whatsapp, devices, reports, salesReports, procurementReports, settings, purchasing, purchasingOperations, supplierPayments, supplierPaymentsCenter].join('\n');
 const failures = [];
 const requireValue = (condition, message) => { if (!condition) failures.push(message); };
 const excludes = (source, values) => values.every((value) => !source.includes(value));
@@ -31,7 +32,9 @@ requireValue(excludes(browserSource, ['SERVICE_ROLE', 'SUPABASE_SECRET', 'platfo
 requireValue(main.includes("import MerchantApp from './MerchantApp'") && main.includes('<MerchantApp />'), 'Merchant Web entrypoint must render the governed MerchantApp shell.');
 requireValue(supabaseClient.includes('VITE_SUPABASE_PUBLISHABLE_KEY') && supabaseClient.includes('persistSession: true') && supabaseClient.includes('autoRefreshToken: true'), 'Merchant Web must use the browser publishable key with a persisted merchant session.');
 requireValue(app.includes('sellertray_list_businesses_for_current_user') && app.includes("const MANAGEMENT_ROLES: MerchantRole[] = ['owner', 'manager']") && app.includes('managementBusinesses.length === 0') && app.includes('Use SellerTray mobile for daily operations'), 'Merchant Web management must remain Owner/Manager scoped.');
-requireValue(app.includes('get_sellertray_accessible_branches') && app.includes('get_sellertray_branch_stock') && app.includes('<CashShiftsManagement') && cash.includes("rpc('get_sellertray_cash_shift_management_list'") && cash.includes("rpc('get_sellertray_cash_shift_management_detail'") && cash.includes("functions.invoke('cash-shift'") && cash.includes("action: 'correct'") && cash.includes("action: 'review'") && app.includes('<DashboardOverview') && dashboard.includes("rpc('sellertray_report_center'"), 'Merchant Web must consume shared governed Branch, inventory, cashier and reporting read models.');
+requireValue(app.includes('get_sellertray_accessible_branches') && app.includes('<InventoryManagement') && ['get_sellertray_inventory_management_stock', 'get_sellertray_inventory_management_movements', 'get_sellertray_inventory_management_transfers'].every((name) => inventory.includes(`rpc('${name}'`)) && app.includes('<CashShiftsManagement') && cash.includes("rpc('get_sellertray_cash_shift_management_list'") && cash.includes("rpc('get_sellertray_cash_shift_management_detail'") && cash.includes("functions.invoke('cash-shift'") && cash.includes("action: 'correct'") && cash.includes("action: 'review'") && app.includes('<DashboardOverview') && dashboard.includes("rpc('sellertray_report_center'"), 'Merchant Web must consume shared governed Branch, inventory, cashier and reporting read models.');
+requireValue(!app.includes('get_sellertray_branch_stock') && excludes(inventory, ["rpc('get_sellertray_branch_stock'", "rpc('get_sellertray_stock_movements'", "rpc('get_sellertray_stock_transfers'", "from('inventory_movements')", "from('sellertray_inventory_valuation_entries')", "from('sellertray_inventory_valuation_state')", "from('stock_transfers')"]), 'Merchant Web Inventory must use management read RPCs rather than raw or bounded snapshot inventory reads.');
+requireValue(inventory.includes('Known stock value') && inventory.includes('never treats unknown cost as zero') && inventory.includes('valuationStatus') && inventory.includes('averageUnitCost == null'), 'Merchant Web Inventory must expose governed valuation completeness and must not present unknown cost as zero.');
 requireValue(excludes(cash, ["from('sellertray_cash_shifts')", "from('sellertray_shift_cash_movements')", "from('sellertray_shift_cash_movement_corrections')", "action: 'open'", "action: 'movement'", "action: 'close'"]), 'Merchant Web cash management must not bypass governed reads or perform mobile cashier operations.');
 
 requireValue(management.includes('<ProductsManagement') && ['save_sellertray_product', 'set_sellertray_product_active', 'save_sellertray_product_uom', 'delete_sellertray_product_uom'].every((name) => products.includes(`rpc('${name}'`)), 'Products and Pricing must use governed product and UOM commands.');
