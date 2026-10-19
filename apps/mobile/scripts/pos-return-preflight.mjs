@@ -24,7 +24,7 @@ const partialReturnMigration = read(join(repoRoot, 'supabase/migrations/20261016
 const draftDeletionMigration = read(join(repoRoot, 'supabase/migrations/20261016044000_pos_draft_deletion.sql'));
 const refundAuthorityMigration = read(join(repoRoot, 'supabase/migrations/20261014203000_pos_refund_authority_convergence.sql'));
 const shiftReconciliationMigration = read(join(repoRoot, 'supabase/migrations/20261014202000_pos_cash_shift_reconciliation.sql'));
-const teamManagementWeb = read(join(repoRoot, 'apps/merchant-web/src/TeamBranchesManagement.tsx'));
+const teamManagementWeb = read(join(repoRoot, 'apps/merchant-web/src/TeamPermissionsManagement.tsx'));
 
 requireValue(
   domain.includes("export type ReturnStatus = 'none' | 'partial' | 'returned';")

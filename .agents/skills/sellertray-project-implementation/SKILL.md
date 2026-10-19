@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.8"
+  version: "0.1.9"
   status: governing
 ---
 
@@ -96,7 +96,7 @@ Shell rules:
 2. Desktop uses a persistent management sidebar with collapsible groups and a top bar that keeps Business and active Branch context obvious.
 3. On narrower screens, the sidebar collapses into an overlay/slide-over navigation drawer. Do not convert the full management hierarchy into a horizontally scrolling navigation strip.
 4. Mobile web remains management-first: forms become one column, page actions collapse intelligently, tables reduce columns or become cards where appropriate, and detail drawers may become full-screen sheets.
-5. Merchant Web management quick actions should focus on management work such as Add Product, Create Purchase Order, Transfer Stock and Invite Staff. **New Sale** is not the primary Merchant Web action because mobile performs sales.
+5. Merchant Web management quick actions should focus on management work such as Add Product, Create Purchase Order, Transfer Stock and Invite Cashier. **New Sale** is not the primary Merchant Web action because mobile performs sales.
 6. Build shared Merchant Web UI primitives for AppShell, Sidebar, TopBar, PageHeader, buttons, cards, stat cards, tables, filters, search, badges, tabs, drawers, modals, form fields, selects, date range, skeletons, empty/error states, toasts and confirmations rather than repeating one-off patterns.
 
 Approved primary Merchant Web navigation groups are:
@@ -479,6 +479,10 @@ Operations requiring live verification can remain online-only.
 
 Prefer capability-based authorisation underneath understandable business roles.
 
+### Role naming and compatibility
+
+SellerTray merchant-facing team roles are **Owner**, **Manager** and **Cashier**. The existing internal/database compatibility role value `staff` may remain where changing it would create unnecessary migration or API risk, but merchant-facing invitation, team-management, receipt/operator and permission UI should label that operational role **Cashier**. Do not create a second authority model merely to rename the internal value; `staff` and merchant-facing Cashier refer to the same governed operational role unless a later explicit decision changes the role model.
+
 Example capabilities:
 
 - can_adjust_stock
@@ -532,7 +536,7 @@ Connect current WhatsApp functionality to the shared customer, Product/UOM, bran
 
 ## Phase 8 — Merchant Web V1
 
-Overview, Sales, Orders, Products, UOM, Pricing, Inventory, Customers, Branches, Staff, Payments, Cash, WhatsApp, tenant feedback review and Settings.
+Overview, Sales, Orders, Products, UOM, Pricing, Inventory, Customers, Branches, Cashiers/Managers, Payments, Cash, WhatsApp, tenant feedback review and Settings.
 
 ## Phase 9 — Purchasing
 
