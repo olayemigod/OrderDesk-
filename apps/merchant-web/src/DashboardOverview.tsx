@@ -5,22 +5,37 @@ import { errorMessage, numberValue, supabase } from './supabase';
 
 type DashboardPeriod = 1 | 7 | 30;
 type Summary = {
-  orders: { total: number; completed: number; orderValue: number; averageOrderValue: number; whatsapp: number };
-  payments: { paidValue: number; awaitingPayment: number; verificationRequired: number; failed: number; exceptions: number };
-  fulfillment: { awaitingFulfillment: number };
-  topItems: Array<{ name: string; quantity: number; value: number }>;
+  salesCount: number;
+  salesValue: number;
+  collectedValue: number;
+  returnedValue: number;
+  averageSale: number;
+  whatsappSales: number;
 };
-type BranchRow = { branchId: string; branchName: string; orders: number; orderValue: number; paidValue: number; whatsappOrders: number; cashVariance: number };
-type ChannelRow = { channel: string; orders: number; orderValue: number };
-type Report = { days: number; summary: Summary; branchPerformance: BranchRow[]; channels: ChannelRow[] };
+type Attention = {
+  verificationRequired: number;
+  paymentIssues: number;
+  awaitingPayment: number;
+  awaitingFulfillment: number;
+  openShifts: number;
+  cashVarianceBranches: number;
+  lowStockItems: number;
+  outOfStockItems: number;
+  openTransfers: number;
+  total: number;
+};
+type BranchRow = { branchId: string; branchName: string; salesCount: number; salesValue: number; collectedValue: number; returnedValue: number; whatsappSales: number; cashVariance: number };
+type ChannelRow = { channel: string; salesCount: number; salesValue: number };
+type ProductRow = { catalogItemId: string; name: string; stockUom: string; stockQuantity: number; salesValue: number };
+type Report = { dateFrom: string; dateTo: string; summary: Summary; attention: Attention; branchPerformance: BranchRow[]; channels: ChannelRow[]; topProducts: ProductRow[] };
 
 const PERIODS: Array<{ days: DashboardPeriod; label: string }> = [
-  { days: 1, label: '24 hours' },
+  { days: 1, label: 'Today' },
   { days: 7, label: '7 days' },
   { days: 30, label: '30 days' },
 ];
 
-export default function DashboardOverview({ tenantId, currency, go }: { tenantId: string; currency: string; go: (page: MerchantPortalPage) => void }) {
+export default function DashboardOverview({ tenantId, currency, go, openBranch }: { tenantId: string; currency: string; go: (page: MerchantPortalPage) => void; openBranch: (page: MerchantPortalPage, branchId: string) => void }) {
   const [days, setDays] = useState<DashboardPeriod>(30);
   const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -37,9 +52,14 @@ export default function DashboardOverview({ tenantId, currency, go }: { tenantId
     setLoading(true);
     setError(null);
     try {
-      const { data, error: rpcError } = await supabase.rpc('sellertray_report_center', {
+      const range = dateRange(days);
+      const { data, error: rpcError } = await supabase.rpc('get_sellertray_report_management', {
         p_tenant_id: tenantId,
-        p_days: days,
+        p_date_from: range.from,
+        p_date_to: range.to,
+        p_branch_id: null,
+        p_source: null,
+        p_payment_method: null,
       });
       if (rpcError) throw rpcError;
       if (requestId === requestRef.current) setReport(parse(data));
@@ -50,21 +70,12 @@ export default function DashboardOverview({ tenantId, currency, go }: { tenantId
     }
   }
 
-  const cashVarianceBranches = report?.branchPerformance.filter((row) => row.cashVariance !== 0).length ?? 0;
-  const attention = report
-    ? report.summary.payments.verificationRequired
-      + report.summary.payments.failed
-      + report.summary.payments.exceptions
-      + report.summary.fulfillment.awaitingFulfillment
-      + cashVarianceBranches
-    : 0;
-
   return <div className="page-stack dashboard-overview">
     <div className="dashboard-heading">
       <div>
-        <p className="eyebrow">{periodLabel(report?.days ?? days)}</p>
+        <p className="eyebrow">{report ? rangeLabel(report.dateFrom, report.dateTo) : periodLabel(days)}</p>
         <h2>Business overview</h2>
-        <p className="muted dashboard-heading-copy">See performance and the management work that needs attention.</p>
+        <p className="muted dashboard-heading-copy">See governed business performance and the management work that needs attention.</p>
       </div>
       <div className="dashboard-heading-actions">
         <div className="dashboard-periods" role="group" aria-label="Dashboard reporting period">
@@ -93,32 +104,36 @@ export default function DashboardOverview({ tenantId, currency, go }: { tenantId
 
     {report ? <>
       <div className="metric-grid dashboard-metric-grid">
-        <Metric label="Sales" value={money(report.summary.orders.orderValue, currency)} note={`${formatNumber(report.summary.orders.completed)} completed`} />
-        <Metric label="Orders" value={formatNumber(report.summary.orders.total)} note={`${formatNumber(report.summary.orders.whatsapp)} from WhatsApp`} />
-        <Metric label="Collected" value={money(report.summary.payments.paidValue, currency)} note="Confirmed collections" />
-        <Metric label="Awaiting payment" value={formatNumber(report.summary.payments.awaitingPayment)} note="Orders not yet paid" />
-        <Metric label="Average sale" value={money(report.summary.orders.averageOrderValue, currency)} note={periodLabel(report.days)} />
+        <Metric label="Sales" value={money(report.summary.salesValue, currency)} note={`${formatNumber(report.summary.salesCount)} completed`} />
+        <Metric label="Completed sales" value={formatNumber(report.summary.salesCount)} note={`${formatNumber(report.summary.whatsappSales)} from WhatsApp`} />
+        <Metric label="Collected" value={money(report.summary.collectedValue, currency)} note="Recorded collections on completed sales" />
+        <Metric label="Awaiting payment" value={formatNumber(report.attention.awaitingPayment)} note="Current open orders" />
+        <Metric label="Average sale" value={money(report.summary.averageSale, currency)} note={report.summary.returnedValue > 0 ? `${money(report.summary.returnedValue, currency)} returned` : rangeLabel(report.dateFrom, report.dateTo)} />
       </div>
 
       <div className="two-column dashboard-primary-grid">
         <article className="panel dashboard-attention-panel">
           <div className="panel-head">
-            <div><p className="eyebrow">Needs attention</p><h3>{attention ? `${formatNumber(attention)} items to review` : 'No current exceptions'}</h3></div>
+            <div><p className="eyebrow">Needs attention</p><h3>{report.attention.total ? `${formatNumber(report.attention.total)} items to review` : 'No current exceptions'}</h3></div>
           </div>
-          <Action label="Payment verification" value={report.summary.payments.verificationRequired} onClick={() => go('payments')} />
-          <Action label="Payment failures or exceptions" value={report.summary.payments.failed + report.summary.payments.exceptions} onClick={() => go('payments')} />
-          <Action label="Awaiting fulfilment" value={report.summary.fulfillment.awaitingFulfillment} onClick={() => go('orders')} />
-          <Action label="Branches with cash variance" value={cashVarianceBranches} onClick={() => go('cash')} />
+          <Action label="Payment verification" value={report.attention.verificationRequired} onClick={() => go('payments')} />
+          <Action label="Payment failures or exceptions" value={report.attention.paymentIssues} onClick={() => go('payments')} />
+          <Action label="Awaiting fulfilment" value={report.attention.awaitingFulfillment} onClick={() => go('orders')} />
+          <Action label="Open cashier shifts" value={report.attention.openShifts} onClick={() => go('cash')} />
+          <Action label="Branches with cash variance" value={report.attention.cashVarianceBranches} onClick={() => go('cash')} />
+          <Action label="Low-stock products" value={report.attention.lowStockItems} onClick={() => go('inventory')} />
+          <Action label="Out-of-stock products" value={report.attention.outOfStockItems} onClick={() => go('inventory')} />
+          <Action label="Open stock transfers" value={report.attention.openTransfers} onClick={() => go('inventory')} />
         </article>
 
         <article className="panel">
           <div className="panel-head">
-            <div><p className="eyebrow">Sales channels</p><h3>Where sales originate</h3></div>
+            <div><p className="eyebrow">Sales channels</p><h3>Where completed sales originate</h3></div>
             <button className="text-button" type="button" onClick={() => go('reports')}>Full report</button>
           </div>
           {report.channels.length ? <div className="dashboard-list">{report.channels.slice(0, 5).map((row) => <div className="dashboard-list-row" key={row.channel}>
-            <div><strong>{label(row.channel)}</strong><span>{formatNumber(row.orders)} orders</span></div>
-            <strong>{money(row.orderValue, currency)}</strong>
+            <div><strong>{label(row.channel)}</strong><span>{formatNumber(row.salesCount)} sales</span></div>
+            <strong>{money(row.salesValue, currency)}</strong>
           </div>)}</div> : <Empty body="Channel performance will appear after completed sales." />}
         </article>
       </div>
@@ -129,8 +144,8 @@ export default function DashboardOverview({ tenantId, currency, go }: { tenantId
           <button className="text-button" type="button" onClick={() => go('reports')}>Full report</button>
         </div>
         {report.branchPerformance.length ? <>
-          <div className="table-wrap dashboard-branch-table"><table><thead><tr><th>Branch</th><th>Orders</th><th>Sales</th><th>Collected</th><th>WhatsApp</th><th>Cash variance</th></tr></thead><tbody>{report.branchPerformance.map((row) => <tr key={row.branchId}><td><strong>{row.branchName}</strong></td><td>{formatNumber(row.orders)}</td><td>{money(row.orderValue, currency)}</td><td>{money(row.paidValue, currency)}</td><td>{formatNumber(row.whatsappOrders)}</td><td className={row.cashVariance !== 0 ? 'danger-text' : ''}>{money(row.cashVariance, currency)}</td></tr>)}</tbody></table></div>
-          <div className="dashboard-branch-cards">{report.branchPerformance.map((row) => <div className="dashboard-branch-card" key={row.branchId}><div className="dashboard-branch-card-head"><strong>{row.branchName}</strong><span>{formatNumber(row.orders)} orders</span></div><div><span>Sales</span><strong>{money(row.orderValue, currency)}</strong></div><div><span>Collected</span><strong>{money(row.paidValue, currency)}</strong></div><div><span>WhatsApp</span><strong>{formatNumber(row.whatsappOrders)}</strong></div><div><span>Cash variance</span><strong className={row.cashVariance !== 0 ? 'danger-text' : ''}>{money(row.cashVariance, currency)}</strong></div></div>)}</div>
+          <div className="table-wrap dashboard-branch-table"><table><thead><tr><th>Branch</th><th>Sales</th><th>Value</th><th>Collected</th><th>WhatsApp</th><th>Returns</th><th>Cash variance</th></tr></thead><tbody>{report.branchPerformance.map((row) => <tr key={row.branchId}><td><button className="text-button" type="button" onClick={() => openBranch('sales', row.branchId)}>{row.branchName}</button></td><td>{formatNumber(row.salesCount)}</td><td>{money(row.salesValue, currency)}</td><td>{money(row.collectedValue, currency)}</td><td>{formatNumber(row.whatsappSales)}</td><td>{money(row.returnedValue, currency)}</td><td className={row.cashVariance !== 0 ? 'danger-text' : ''}>{money(row.cashVariance, currency)}</td></tr>)}</tbody></table></div>
+          <div className="dashboard-branch-cards">{report.branchPerformance.map((row) => <button className="dashboard-branch-card" type="button" key={row.branchId} onClick={() => openBranch('sales', row.branchId)}><div className="dashboard-branch-card-head"><strong>{row.branchName}</strong><span>{formatNumber(row.salesCount)} sales</span></div><div><span>Sales</span><strong>{money(row.salesValue, currency)}</strong></div><div><span>Collected</span><strong>{money(row.collectedValue, currency)}</strong></div><div><span>Returns</span><strong>{money(row.returnedValue, currency)}</strong></div><div><span>Cash variance</span><strong className={row.cashVariance !== 0 ? 'danger-text' : ''}>{money(row.cashVariance, currency)}</strong></div></button>)}</div>
         </> : <Empty body="Branch performance will appear as completed sales and cashier activity are recorded." />}
       </article>
 
@@ -139,24 +154,26 @@ export default function DashboardOverview({ tenantId, currency, go }: { tenantId
           <div><p className="eyebrow">Top products</p><h3>Best-selling products</h3></div>
           <button className="text-button" type="button" onClick={() => go('products')}>Manage products</button>
         </div>
-        {report.summary.topItems.length ? <div className="dashboard-list">{report.summary.topItems.slice(0, 8).map((row) => <div className="dashboard-list-row" key={row.name}><div><strong>{row.name}</strong><span>{formatNumber(row.quantity)} sold</span></div><strong>{money(row.value, currency)}</strong></div>)}</div> : <Empty body="Product performance will appear after completed sales." />}
+        {report.topProducts.length ? <div className="dashboard-list">{report.topProducts.slice(0, 8).map((row) => <div className="dashboard-list-row" key={row.catalogItemId || row.name}><div><strong>{row.name}</strong><span>{formatNumber(row.stockQuantity)} {row.stockUom} sold</span></div><strong>{money(row.salesValue, currency)}</strong></div>)}</div> : <Empty body="Product performance will appear after completed sales." />}
       </article>
     </> : null}
   </div>;
 }
 
 function parse(value: unknown): Report {
-  const root = object(value), summary = object(root.summary), orders = object(summary.orders), payments = object(summary.payments), fulfillment = object(summary.fulfillment);
+  const root = object(value), summary = object(root.summary), attention = object(root.attention);
   return {
-    days: numberValue(root.days),
+    dateFrom: String(root.dateFrom ?? ''),
+    dateTo: String(root.dateTo ?? ''),
     summary: {
-      orders: { total: numberValue(orders.total), completed: numberValue(orders.completed), orderValue: numberValue(orders.orderValue), averageOrderValue: numberValue(orders.averageOrderValue), whatsapp: numberValue(orders.whatsapp) },
-      payments: { paidValue: numberValue(payments.paidValue), awaitingPayment: numberValue(payments.awaitingPayment), verificationRequired: numberValue(payments.verificationRequired), failed: numberValue(payments.failed), exceptions: numberValue(payments.exceptions) },
-      fulfillment: { awaitingFulfillment: numberValue(fulfillment.awaitingFulfillment) },
-      topItems: array(summary.topItems).map((item) => { const row = object(item); return { name: String(row.name ?? 'Product'), quantity: numberValue(row.quantity), value: numberValue(row.value) }; }),
+      salesCount: numberValue(summary.salesCount), salesValue: numberValue(summary.salesValue), collectedValue: numberValue(summary.collectedValue), returnedValue: numberValue(summary.returnedValue), averageSale: numberValue(summary.averageSale), whatsappSales: numberValue(summary.whatsappSales),
     },
-    branchPerformance: array(root.branchPerformance).map((item) => { const row = object(item); return { branchId: String(row.branchId ?? ''), branchName: String(row.branchName ?? 'Branch'), orders: numberValue(row.orders), orderValue: numberValue(row.orderValue), paidValue: numberValue(row.paidValue), whatsappOrders: numberValue(row.whatsappOrders), cashVariance: numberValue(row.cashVariance) }; }).filter((row) => row.branchId),
-    channels: array(root.channels).map((item) => { const row = object(item); return { channel: String(row.channel ?? 'other'), orders: numberValue(row.orders), orderValue: numberValue(row.orderValue) }; }),
+    attention: {
+      verificationRequired: numberValue(attention.verificationRequired), paymentIssues: numberValue(attention.paymentIssues), awaitingPayment: numberValue(attention.awaitingPayment), awaitingFulfillment: numberValue(attention.awaitingFulfillment), openShifts: numberValue(attention.openShifts), cashVarianceBranches: numberValue(attention.cashVarianceBranches), lowStockItems: numberValue(attention.lowStockItems), outOfStockItems: numberValue(attention.outOfStockItems), openTransfers: numberValue(attention.openTransfers), total: numberValue(attention.total),
+    },
+    branchPerformance: array(root.branchPerformance).map((item) => { const row = object(item); return { branchId: String(row.branchId ?? ''), branchName: String(row.branchName ?? 'Branch'), salesCount: numberValue(row.salesCount), salesValue: numberValue(row.salesValue), collectedValue: numberValue(row.collectedValue), returnedValue: numberValue(row.returnedValue), whatsappSales: numberValue(row.whatsappSales), cashVariance: numberValue(row.cashVariance) }; }).filter((row) => row.branchId),
+    channels: array(root.channels).map((item) => { const row = object(item); return { channel: String(row.channel ?? 'other'), salesCount: numberValue(row.salesCount), salesValue: numberValue(row.salesValue) }; }),
+    topProducts: array(root.topProducts).map((item) => { const row = object(item); return { catalogItemId: String(row.catalogItemId ?? ''), name: String(row.name ?? 'Product'), stockUom: String(row.stockUom ?? 'unit'), stockQuantity: numberValue(row.stockQuantity), salesValue: numberValue(row.salesValue) }; }),
   };
 }
 
@@ -169,4 +186,8 @@ function array(value: unknown): unknown[] { return Array.isArray(value) ? value 
 function label(value: string): string { return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()); }
 function formatNumber(value: number): string { return new Intl.NumberFormat('en-NG', { maximumFractionDigits: 2 }).format(value); }
 function money(value: number, currency: string): string { try { return new Intl.NumberFormat('en-NG', { style: 'currency', currency: currency || 'NGN', maximumFractionDigits: 2 }).format(value); } catch { return `${currency || 'NGN'} ${formatNumber(value)}`; } }
-function periodLabel(days: number): string { return days === 1 ? 'Last 24 hours' : `Last ${days} days`; }
+function periodLabel(days: number): string { return days === 1 ? 'Today' : `Last ${days} days`; }
+function dateRange(days: number): { from: string; to: string } { const to = new Date(); const from = new Date(to); from.setDate(from.getDate()-(days-1)); return { from: isoDate(from), to: isoDate(to) }; }
+function isoDate(value: Date): string { return `${value.getFullYear()}-${String(value.getMonth()+1).padStart(2,'0')}-${String(value.getDate()).padStart(2,'0')}`; }
+function rangeLabel(from: string, to: string): string { if (!from || !to) return 'Selected period'; if (from===to) return dateOnly(from); return `${dateOnly(from)} – ${dateOnly(to)}`; }
+function dateOnly(value: string): string { const date = new Date(`${value}T00:00:00`); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium' }).format(date); }
