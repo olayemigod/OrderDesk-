@@ -5,7 +5,7 @@ import FeedbackDashboard from './FeedbackDashboard';
 import ProductsManagement from './ProductsManagement';
 import SettingsManagement from './SettingsManagement';
 import SuppliersManagement from './SuppliersManagement';
-import TeamBranchesManagement from './TeamBranchesManagement';
+import TeamPermissionsManagement from './TeamPermissionsManagement';
 import { errorMessage, supabase } from './supabase';
 
 type ManagementPageId = 'products' | 'suppliers' | 'branches' | 'team' | 'devices' | 'feedback' | 'settings';
@@ -25,7 +25,7 @@ export default function ManagementPage({
   if (page === 'products') return <ProductsManagement tenantId={tenantId} currency={currency} />;
   if (page === 'suppliers') return <SuppliersManagement tenantId={tenantId} currency={currency} />;
   if (page === 'branches') return <BranchesManagement tenantId={tenantId} onBranchesChanged={onBranchesChanged} />;
-  if (page === 'team') return <TeamBranchesManagement tenantId={tenantId} onBranchesChanged={onBranchesChanged} />;
+  if (page === 'team') return <TeamPermissionsManagement tenantId={tenantId} />;
   if (page === 'devices') return <DeviceManagement tenantId={tenantId} />;
   if (page === 'feedback') return <FeedbackDashboard tenantId={tenantId} />;
   return <SettingsManagement tenantId={tenantId} />;
