@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(28);
+select extensions.plan(32);
 
 select extensions.ok(
   (select p.prosecdef and p.provolatile='s' from pg_proc p where p.oid=to_regprocedure('public.get_sellertray_inventory_management_stock(uuid,uuid,text,text,text,timestamptz,integer,integer)'))
