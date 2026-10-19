@@ -22,8 +22,6 @@ type ManagementRole = 'owner' | 'manager';
 type Page = MerchantPortalPage;
 type Business = { id: string; name: string; merchantCode: string; role: MerchantRole; currency: string; subscriptionStatus: string; whatsappConnectionStatus: string };
 type Branch = { id: string; code: string; name: string; isDefault: boolean };
-type StockRow = { catalog_item_id: string; item_name: string; sku: string | null; category: string | null; stock_uom: string; quantity_on_hand: number | string; last_movement_at: string | null };
-type Workspace = { stock: StockRow[] };
 
 const MANAGEMENT_ROLES: MerchantRole[] = ['owner', 'manager'];
 const NAV = AVAILABLE_MERCHANT_PORTAL_NAVIGATION;
@@ -36,7 +34,6 @@ export default function MerchantApp() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchId, setBranchId] = useState('');
   const [page, setPage] = useState<Page>('overview');
-  const [workspace, setWorkspace] = useState<Workspace>({ stock: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dark, setDark] = useState(() => localStorage.getItem('sellertray.merchant.theme') === 'dark');
@@ -52,7 +49,6 @@ export default function MerchantApp() {
   useEffect(() => { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; localStorage.setItem('sellertray.merchant.theme', dark ? 'dark' : 'light'); }, [dark]);
   useEffect(() => { if (session) void loadBusinesses(); }, [session?.access_token]);
   useEffect(() => { if (businessId) void loadWorkspace(businessId); }, [businessId]);
-  useEffect(() => { if (businessId && branchId) void loadBranchData(businessId, branchId); }, [branchId]);
   useEffect(() => {
     if (!navOpen) return;
     const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setNavOpen(false); };
@@ -83,17 +79,8 @@ export default function MerchantApp() {
       if (branchResult.error) throw branchResult.error;
       const nextBranches = ((branchResult.data ?? []) as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id ?? ''), code: String(row.code ?? ''), name: String(row.name ?? 'Branch'), isDefault: row.is_default === true } satisfies Branch));
       const chosen = nextBranches.find((row) => row.id === branchId)?.id ?? nextBranches.find((row) => row.isDefault)?.id ?? nextBranches[0]?.id ?? '';
-      setBranches(nextBranches); setBranchId(chosen); setWorkspace({ stock: [] });
-      if (chosen) await loadBranchData(tenantId, chosen);
+      setBranches(nextBranches); setBranchId(chosen);
     } catch (cause) { setError(errorMessage(cause, 'Unable to load SellerTray management data.')); } finally { setLoading(false); }
-  }
-
-  async function loadBranchData(tenantId: string, selectedBranchId: string) {
-    try {
-      const stockResult = await supabase.rpc('get_sellertray_branch_stock', { p_tenant_id: tenantId, p_branch_id: selectedBranchId });
-      if (stockResult.error) throw stockResult.error;
-      setWorkspace({ stock: (stockResult.data ?? []) as StockRow[] });
-    } catch (cause) { setError(errorMessage(cause, 'Unable to load this Branch.')); }
   }
 
   async function refresh() { if (businessId) await loadWorkspace(businessId); }
@@ -168,7 +155,7 @@ export default function MerchantApp() {
       {page === 'customers' && <CustomersManagement tenantId={business.id} currency={business.currency} />}
       {page === 'returns' && branch && <ReturnsManagement tenantId={business.id} branchId={branch.id} />}
       {page === 'returns' && !branch && <PageTable eyebrow="Returns" title="Choose a Branch" note="Select a Branch to review completed returns."><Empty title="No active Branch" body="Returns are reviewed within a Branch so refund, UOM and restored-stock context remain clear." /></PageTable>}
-      {page === 'inventory' && <InventoryManagement tenantId={business.id} branch={branch} branches={branches} stockRows={workspace.stock} />}
+      {page === 'inventory' && <InventoryManagement tenantId={business.id} branch={branch} branches={branches} />}
       {page === 'payments' && <PaymentsManagement tenantId={business.id} />}
       {page === 'cash' && <CashShiftsManagement tenantId={business.id} currency={business.currency} branches={branches} initialBranchId={branchId} />}
       {page === 'whatsapp' && <WhatsAppManagement tenantId={business.id} role={managementRole} branches={branches} connectionStatusHint={business.whatsappConnectionStatus} />}
