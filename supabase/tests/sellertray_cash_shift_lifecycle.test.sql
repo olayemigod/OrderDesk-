@@ -63,10 +63,28 @@ select extensions.ok(
   'cash movement evidence exists before lifecycle cleanup'
 );
 
+-- Tenant teardown must also work after governed correction history exists, not
+-- only for a pristine cash ledger. Replacing 20 with 15 makes expected cash 115.
+select public.correct_sellertray_shift_cash_movement(
+  tenant_id,
+  shift_id,
+  movement_id,
+  'replace',
+  'Lifecycle correction evidence',
+  'lifecycle-correct-001',
+  'cash_in',
+  15,
+  'LIFECYCLE-CASH-IN-CORRECTED',
+  'Corrected lifecycle cash evidence',
+  null,
+  owner_user_id
+)
+from sellertray_cash_lifecycle_fixture;
+
 select extensions.is(
   (
     select public.close_sellertray_cash_shift(
-      tenant_id,shift_id,120,null,owner_user_id
+      tenant_id,shift_id,115,null,owner_user_id
     )->>'status'
     from sellertray_cash_lifecycle_fixture
   ),
@@ -107,7 +125,7 @@ select extensions.ok(
     select 1 from public.tenants t
     where t.id=(select tenant_id from sellertray_cash_lifecycle_fixture)
   ),
-  'governed parent business deletion is not blocked by cashier history'
+  'governed parent business deletion is not blocked by corrected cashier history'
 );
 
 select extensions.is(
@@ -123,7 +141,7 @@ select extensions.is(
     select count(*)::integer from public.sellertray_shift_cash_movements m
     where m.tenant_id=(select tenant_id from sellertray_cash_lifecycle_fixture)
   ),
-  0,'cash movement history follows parent business deletion'
+  0,'corrected cash movement history follows parent business deletion'
 );
 
 select extensions.is(
