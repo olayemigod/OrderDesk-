@@ -142,12 +142,12 @@ begin
       from paged x
     ),'[]'::jsonb),
     'totalCount',(select count(*) from filtered),
-    'lowStockCount',(select count(*) from base_filtered where is_low_stock),
-    'outOfStockCount',(select count(*) from base_filtered where is_out_of_stock),
-    'valuedCount',(select count(*) from base_filtered where valuation_status='valued'),
-    'partialValuationCount',(select count(*) from base_filtered where valuation_status='partial'),
-    'unvaluedCount',(select count(*) from base_filtered where valuation_status='unvalued'),
-    'emptyCount',(select count(*) from base_filtered where valuation_status='empty'),
+    'lowStockCount',(select count(*) from filtered where is_low_stock),
+    'outOfStockCount',(select count(*) from filtered where is_out_of_stock),
+    'valuedCount',(select count(*) from filtered where valuation_status='valued'),
+    'partialValuationCount',(select count(*) from filtered where valuation_status='partial'),
+    'unvaluedCount',(select count(*) from filtered where valuation_status='unvalued'),
+    'emptyCount',(select count(*) from filtered where valuation_status='empty'),
     'knownInventoryValue',coalesce((select sum(known_inventory_value) from filtered),0),
     'currency',v_currency,
     'asOf',p_as_of,
@@ -439,9 +439,9 @@ begin
       from paged x
     ),'[]'::jsonb),
     'totalCount',(select count(*) from filtered),
-    'openCount',(select count(*) from base_filtered where status in ('draft','dispatched')),
-    'draftCount',(select count(*) from base_filtered where status='draft'),
-    'dispatchedCount',(select count(*) from base_filtered where status='dispatched'),
+    'openCount',(select count(*) from filtered where status in ('draft','dispatched')),
+    'draftCount',(select count(*) from filtered where status='draft'),
+    'dispatchedCount',(select count(*) from filtered where status='dispatched'),
     'limit',v_limit,
     'offset',v_offset
   ) into v_result;
