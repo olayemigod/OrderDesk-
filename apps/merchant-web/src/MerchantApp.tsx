@@ -86,6 +86,7 @@ export default function MerchantApp() {
   async function refresh() { if (businessId) await loadWorkspace(businessId); }
   async function signOut() { await supabase.auth.signOut(); }
   function navigate(next: Page) { setPage(next); setNavOpen(false); }
+  function openBranchPage(next: Page, nextBranchId: string) { setBranchId(nextBranchId); navigate(next); }
   function toggleSection(section: MerchantPortalSection) {
     setCollapsedSections((current) => {
       const next = new Set(current);
@@ -147,7 +148,7 @@ export default function MerchantApp() {
 
       {error ? <div className="error-banner">{error}<button onClick={() => setError(null)}>Dismiss</button></div> : null}
       <section className="context-bar" aria-label="Current business context"><Context label="Business code" value={business.merchantCode || '—'} /><Context label="Subscription" value={statusText(business.subscriptionStatus)} /><Context label="Active Branch" value={branch?.name ?? 'No active Branch'} /></section>
-      {page === 'overview' && <DashboardOverview tenantId={business.id} currency={business.currency} go={navigate} />}
+      {page === 'overview' && <DashboardOverview tenantId={business.id} currency={business.currency} go={navigate} openBranch={openBranchPage} />}
       {page === 'sales' && branch && <SalesManagement tenantId={business.id} branchId={branch.id} />}
       {page === 'sales' && !branch && <PageTable eyebrow="Sales" title="Choose a Branch" note="Select a Branch to review completed sales."><Empty title="No active Branch" body="Sales are reviewed within a Branch so transaction and stock context remain clear." /></PageTable>}
       {page === 'orders' && branch && <OrdersManagement tenantId={business.id} branchId={branch.id} currency={business.currency} />}
@@ -159,7 +160,7 @@ export default function MerchantApp() {
       {page === 'payments' && <PaymentsManagement tenantId={business.id} />}
       {page === 'cash' && <CashShiftsManagement tenantId={business.id} currency={business.currency} branches={branches} initialBranchId={branchId} />}
       {page === 'whatsapp' && <WhatsAppManagement tenantId={business.id} role={managementRole} branches={branches} connectionStatusHint={business.whatsappConnectionStatus} />}
-      {page === 'reports' && <ReportCenter tenantId={business.id} currency={business.currency} />}
+      {page === 'reports' && <ReportCenter tenantId={business.id} currency={business.currency} branches={branches} go={navigate} openBranch={openBranchPage} />}
       {page === 'ai' && <AiInsights tenantId={business.id} />}
       {page === 'purchasing' && <PurchasingManagement tenantId={business.id} currency={business.currency} />}
       {managementPage && <ManagementPage page={page} tenantId={business.id} currency={business.currency} onBranchesChanged={refresh} />}

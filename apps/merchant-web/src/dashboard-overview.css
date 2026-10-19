@@ -36,7 +36,8 @@
 .dashboard-empty p { margin: 0; font-size: .78rem; }
 
 .dashboard-branch-cards { display: none; }
-.dashboard-branch-card { padding: 13px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface-alt); }
+.dashboard-branch-card { width: 100%; padding: 13px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface-alt); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.dashboard-branch-card:hover { background: var(--surface); border-color: #c8d3dc; }
 .dashboard-branch-card-head { padding-bottom: 10px; margin-bottom: 5px; border-bottom: 1px solid var(--border); }
 .dashboard-branch-card-head, .dashboard-branch-card > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .dashboard-branch-card > div:not(.dashboard-branch-card-head) { padding: 5px 0; }
