@@ -9,10 +9,12 @@ import type { BusinessProfileInput, MerchantBusiness } from '../data/businessRep
 import type { CashShift } from '../data/cashShiftRepository';
 import type { CommerceBranch } from '../data/commerceRepository';
 import { loadSellerTrayFeedbackState, type SellerTrayFeedbackState } from '../data/feedbackRepository';
+import { loadMoneyOperationOptions } from '../data/moneyRepository';
 import type { OfflinePosSale } from '../data/offlineSalesRepository';
 import { loadPurchaseReceivingAuthority } from '../data/purchasingRepository';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
+import { BusinessExpenseWorkspace } from './BusinessExpenseWorkspace';
 import { CashShiftWorkspace } from './CashShiftWorkspace';
 import { FeedbackWorkspace } from './FeedbackWorkspace';
 import { PrinterWorkspace } from './PrinterWorkspace';
@@ -56,6 +58,7 @@ export function MoreWorkspace({
   const dark = appearance.dark;
   const [cashOpen, setCashOpen] = useState(false);
   const [cashOutOpen, setCashOutOpen] = useState(false);
+  const [businessExpenseOpen, setBusinessExpenseOpen] = useState(false);
   const [purchaseReceivingOpen, setPurchaseReceivingOpen] = useState(false);
   const [printerOpen, setPrinterOpen] = useState(false);
   const [whatsappOpen, setWhatsappOpen] = useState(false);
@@ -63,6 +66,7 @@ export function MoreWorkspace({
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [feedbackState, setFeedbackState] = useState<SellerTrayFeedbackState | null>(null);
   const [canReceivePurchases, setCanReceivePurchases] = useState(false);
+  const [canRecordBusinessExpense, setCanRecordBusinessExpense] = useState(false);
   const openSyncCount = offlineSales.filter((sale) => sale.status !== 'synced').length;
   const reviewCount = offlineSales.filter((sale) => sale.status === 'needs_review' || sale.status === 'failed').length;
   const appVersion = Constants.expoConfig?.version ?? '1.0.0';
@@ -72,6 +76,7 @@ export function MoreWorkspace({
   function closeOperationalWorkspaces() {
     setCashOpen(false);
     setCashOutOpen(false);
+    setBusinessExpenseOpen(false);
     setPurchaseReceivingOpen(false);
     setPrinterOpen(false);
     setWhatsappOpen(false);
@@ -104,6 +109,7 @@ export function MoreWorkspace({
     closeOperationalWorkspaces();
     setFeedbackState(null);
     setCanReceivePurchases(false);
+    setCanRecordBusinessExpense(false);
     let active = true;
 
     void loadSellerTrayFeedbackState(business.id)
@@ -122,6 +128,14 @@ export function MoreWorkspace({
         if (active) setCanReceivePurchases(false);
       });
 
+    void loadMoneyOperationOptions(business.id, branch.id)
+      .then((options) => {
+        if (active) setCanRecordBusinessExpense(options.canRecordBusinessExpense);
+      })
+      .catch(() => {
+        if (active) setCanRecordBusinessExpense(false);
+      });
+
     return () => {
       active = false;
     };
@@ -132,6 +146,9 @@ export function MoreWorkspace({
   }
   if (cashOutOpen) {
     return <TypedCashOutWorkspace tenantId={business.id} branch={branch} activeShift={activeShift} onClose={() => setCashOutOpen(false)} onShiftChanged={onShiftChanged} />;
+  }
+  if (businessExpenseOpen && canRecordBusinessExpense) {
+    return <BusinessExpenseWorkspace tenantId={business.id} branch={branch} onClose={() => setBusinessExpenseOpen(false)} />;
   }
   if (purchaseReceivingOpen && canReceivePurchases) {
     return <PurchaseReceivingWorkspace tenantId={business.id} branch={branch} onClose={() => setPurchaseReceivingOpen(false)} />;
@@ -177,6 +194,17 @@ export function MoreWorkspace({
         </View>
         <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
       </Pressable>
+
+      {canRecordBusinessExpense ? (
+        <Pressable onPress={() => { closeOperationalWorkspaces(); setBusinessExpenseOpen(true); }} style={({ pressed }) => [styles.operationCard, dark && darkStyles.card, pressed && styles.pressed]}>
+          <View style={[styles.operationIcon, styles.operationIconActive]}><Ionicons name="receipt-outline" size={23} color={theme.colors.greenDark} /></View>
+          <View style={styles.operationCopy}>
+            <Text style={[styles.operationTitle, dark && darkStyles.titleText]}>Business Expense</Text>
+            <Text style={[styles.operationText, dark && darkStyles.bodyText]}>Owner/Manager spending from Cash or Bank. Cash funding creates one governed drawer effect.</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
+        </Pressable>
+      ) : null}
 
       <Pressable onPress={() => { closeOperationalWorkspaces(); setSyncOpen(true); }} style={({ pressed }) => [styles.operationCard, dark && darkStyles.card, pressed && styles.pressed]}>
         <View style={[styles.operationIcon, openSyncCount > 0 && styles.operationIconWarning]}><Ionicons name={offlineSyncing ? 'sync-outline' : openSyncCount > 0 ? 'cloud-upload-outline' : 'cloud-done-outline'} size={23} color={openSyncCount > 0 ? theme.colors.warning : theme.colors.greenDark} /></View>
