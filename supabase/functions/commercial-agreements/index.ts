@@ -43,7 +43,6 @@ Deno.serve(async (request) => {
 
   const action = cleanAction(body.action);
   if (!action) return json({ error: 'Unsupported commercial agreement action' }, 400);
-  const requestId = cleanText(request.headers.get('x-request-id'), 128) ?? crypto.randomUUID();
 
   try {
     if (action === 'merchant_list') {
@@ -68,7 +67,7 @@ Deno.serve(async (request) => {
         p_tenant_id: tenantId,
         p_agreement_id: agreementId,
         p_accepted_legal_name: legalName,
-        p_request_evidence: { channel: 'merchant_web', request_id: requestId },
+        p_request_evidence: { channel: 'merchant_web' },
         p_command_id: commandId,
         p_actor_user_id: userId,
       });
