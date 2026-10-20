@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(29);
+select extensions.plan(30);
 
 create temp table sellertray_c1a_fixture (
   admin_user_id uuid not null,
@@ -123,7 +123,7 @@ select extensions.ok(
   and to_regclass('public.sellertray_commercial_agreements') is not null
   and to_regclass('public.sellertray_commercial_agreement_acceptances') is not null
   and to_regprocedure('public.publish_sellertray_commercial_agreement_template_version(text,text,text,text,timestamptz,uuid)') is not null
-  and to_regprocedure('public.issue_sellertray_commercial_agreement(uuid,uuid,uuid,uuid,text,text,jsonb,uuid,uuid)') is not null
+  and to_regprocedure('public.issue_sellertray_commercial_agreement(uuid,uuid,uuid,uuid,text,text,uuid,uuid)') is not null
   and to_regprocedure('public.accept_sellertray_commercial_agreement(uuid,uuid,text,jsonb,uuid,uuid)') is not null,
   'C1A agreement tables and governed commands exist'
 );
@@ -247,7 +247,6 @@ set installment_agreement_id=public.issue_sellertray_commercial_agreement(
   f.tenant_id,f.commercial_order_id,f.installment_obligation_id,f.installment_template_id,
   'AGR-INSTALL-'||upper(substr(f.tenant_id::text,1,8)),
   'Merchant-specific installment agreement for C1A test',
-  jsonb_build_object('commercial_order_id',f.commercial_order_id,'installment_obligation_id',f.installment_obligation_id),
   null,f.admin_user_id
 );
 update sellertray_c1a_fixture f
@@ -255,7 +254,6 @@ set subscription_agreement_id=public.issue_sellertray_commercial_agreement(
   f.tenant_id,f.commercial_order_id,null,f.subscription_template_id,
   'AGR-SUB-'||upper(substr(f.tenant_id::text,1,8)),
   'Merchant-specific subscription order for C1A test',
-  jsonb_build_object('commercial_order_id',f.commercial_order_id),
   null,f.admin_user_id
 );
 
@@ -274,12 +272,27 @@ select extensions.ok(
   'merchant agreement snapshots exact template and rendered-content integrity facts'
 );
 
+select extensions.ok(
+  exists(
+    select 1
+    from public.sellertray_commercial_agreements a
+    join sellertray_c1a_fixture f on a.id=f.installment_agreement_id
+    where a.commercial_snapshot->>'commercial_order_id'=f.commercial_order_id::text
+      and a.commercial_snapshot->>'order_reference'='C1A-'||upper(substr(f.tenant_id::text,1,8))
+      and a.commercial_snapshot->>'currency'='NGN'
+      and jsonb_array_length(a.commercial_snapshot->'price_snapshots')=1
+      and a.commercial_snapshot#>>'{installment,installment_obligation_id}'=f.installment_obligation_id::text
+      and a.commercial_snapshot#>>'{installment,structure_code}'='two_installment_70_30'
+      and jsonb_array_length(a.commercial_snapshot#>'{installment,schedule}')=2
+  ),
+  'agreement commercial snapshot is derived server-side from governed C1 order, pricing and installment facts'
+);
+
 select extensions.is(
   public.issue_sellertray_commercial_agreement(
     f.tenant_id,f.commercial_order_id,null,f.subscription_template_id,
     'AGR-SUB-'||upper(substr(f.tenant_id::text,1,8)),
     'Merchant-specific subscription order for C1A test',
-    jsonb_build_object('commercial_order_id',f.commercial_order_id),
     null,f.admin_user_id
   ),
   f.subscription_agreement_id,
@@ -358,7 +371,6 @@ set replacement_agreement_id=public.issue_sellertray_commercial_agreement(
   f.tenant_id,f.commercial_order_id,f.installment_obligation_id,f.installment_template_id,
   'AGR-INSTALL-R2-'||upper(substr(f.tenant_id::text,1,8)),
   'Replacement merchant-specific installment agreement for C1A test',
-  jsonb_build_object('commercial_order_id',f.commercial_order_id,'installment_obligation_id',f.installment_obligation_id,'replacement',true),
   f.installment_agreement_id,f.admin_user_id
 );
 select extensions.ok(
