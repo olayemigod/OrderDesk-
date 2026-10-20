@@ -61,6 +61,8 @@ export type CreatePosDraftInput = {
   customerName?: string | null;
   customerPhone?: string | null;
   note?: string | null;
+  expectedTaxConfigurationId?: string | null;
+  expectedTaxConfigurationRevision?: number | null;
   items: PosDraftLine[];
 };
 
@@ -102,7 +104,6 @@ export type PosPendingPaymentCheckoutResult = PosCheckoutResultBase & {
 };
 
 export type PosCheckoutResult = PosSettledCheckoutResult | PosPendingPaymentCheckoutResult;
-
 export type PosCashCheckoutResult = PosSettledCheckoutResult;
 
 type BranchRow = {
@@ -230,6 +231,18 @@ export async function createPosDraft(input: CreatePosDraftInput): Promise<string
   if (input.items.length === 0) throw new Error('Add at least one product.');
 
   const clientReference = cleanOptional(input.clientReference);
+  const hasTaxContext = input.expectedTaxConfigurationRevision !== undefined
+    && input.expectedTaxConfigurationRevision !== null;
+  if (hasTaxContext) {
+    const revision = input.expectedTaxConfigurationRevision!;
+    const configurationId = cleanOptional(input.expectedTaxConfigurationId);
+    if (!Number.isInteger(revision) || revision < 0) throw new Error('Queued sale tax context is invalid.');
+    if ((revision === 0 && configurationId !== null) || (revision > 0 && !configurationId)) {
+      throw new Error('Queued sale tax context is invalid.');
+    }
+    if (!clientReference) throw new Error('Queued sale tax context requires a stable sale reference.');
+  }
+
   const { data, error } = await supabase.functions.invoke('merchant-order', {
     body: {
       mode: 'pos',
@@ -240,6 +253,10 @@ export async function createPosDraft(input: CreatePosDraftInput): Promise<string
       customerName: cleanOptional(input.customerName),
       customerPhone: cleanOptional(input.customerPhone),
       note: cleanOptional(input.note),
+      ...(hasTaxContext ? {
+        expectedTaxConfigurationId: cleanOptional(input.expectedTaxConfigurationId),
+        expectedTaxConfigurationRevision: input.expectedTaxConfigurationRevision,
+      } : {}),
       items: input.items.map((item) => ({
         catalogItemId: item.catalogItemId,
         uomId: item.uomId,
