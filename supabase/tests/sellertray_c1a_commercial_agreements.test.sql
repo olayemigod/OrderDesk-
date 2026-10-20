@@ -100,6 +100,8 @@ select tenant_id,commercial_order_id,1,'subscription',yearly_price_id,'Annual Se
 from sellertray_c1a_fixture;
 set constraints all immediate;
 
+set constraints all deferred;
+
 with inserted as (
   insert into public.sellertray_commercial_installment_obligations(
     tenant_id,commercial_order_id,structure_code,currency,obligated_amount,created_by_user_id
