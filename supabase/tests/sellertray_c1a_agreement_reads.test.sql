@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(5);
+select extensions.plan(7);
 
 select extensions.ok(
   to_regprocedure('public.get_sellertray_commercial_agreement_center(uuid,uuid)') is not null
@@ -41,6 +41,18 @@ select extensions.ok(
   and position('sellertray_commercial_installment_obligations' in pg_get_functiondef('public.get_sellertray_commercial_agreement_admin(uuid,uuid)'::regprocedure))>0
   and position('sellertray_commercial_agreements' in pg_get_functiondef('public.get_sellertray_commercial_agreement_admin(uuid,uuid)'::regprocedure))>0,
   'Admin agreement projection consumes the governed platform and C1/C1A authorities'
+);
+
+select extensions.ok(
+  position('on conflict do nothing' in lower(pg_get_functiondef('public.accept_sellertray_commercial_agreement(uuid,uuid,text,jsonb,uuid,uuid)'::regprocedure)))>0
+  and position('command_id=p_command_id' in replace(pg_get_functiondef('public.accept_sellertray_commercial_agreement(uuid,uuid,text,jsonb,uuid,uuid)'::regprocedure),' ',''))>0,
+  'C1A acceptance keeps strict command-idempotent replay handling'
+);
+
+select extensions.ok(
+  position('agreement_id=v_agreement.id' in replace(pg_get_functiondef('public.accept_sellertray_commercial_agreement(uuid,uuid,text,jsonb,uuid,uuid)'::regprocedure),' ',''))>0
+  and position('already accepted with different acceptance facts' in pg_get_functiondef('public.accept_sellertray_commercial_agreement(uuid,uuid,text,jsonb,uuid,uuid)'::regprocedure))>0,
+  'C1A acceptance can recover a committed acceptance after client reload only when signer facts match'
 );
 
 select * from extensions.finish();
