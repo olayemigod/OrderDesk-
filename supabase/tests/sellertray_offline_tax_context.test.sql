@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(8);
+select extensions.plan(9);
 
 create temp table sellertray_offline_tax_fixture (
   tenant_id uuid not null,
@@ -13,6 +13,7 @@ create temp table sellertray_offline_tax_fixture (
   tax_configuration_id uuid,
   tax_revision bigint,
   queued_order_id uuid,
+  replay_order_id uuid,
   stale_order_id uuid,
   stale_bind_rejected boolean not null default false,
   locked_post_rejected boolean not null default false,
@@ -145,6 +146,44 @@ select extensions.is(
   true,
   'binding the same offline tax context is idempotent'
 );
+
+-- Recreate the lost-response boundary: bind a queued sale, let server posting
+-- move it out of draft, then call the binder again with the same immutable tax
+-- context. The replay must be acknowledged rather than stranded locally.
+update sellertray_offline_tax_fixture
+set replay_order_id=public.create_sellertray_pos_order_idempotent(
+  tenant_id,branch_id,owner_user_id,null,null,null,'Offline replay after posting',
+  jsonb_build_array(jsonb_build_object(
+    'catalog_item_id',product_id,
+    'uom_id',uom_id,
+    'quantity',1,
+    'expected_selling_price',100,
+    'expected_conversion_factor',1
+  )),
+  gen_random_uuid()
+);
+
+select public.bind_sellertray_offline_tax_context(
+  tenant_id,replay_order_id,owner_user_id,tax_configuration_id,tax_revision
+)
+from sellertray_offline_tax_fixture;
+
+set local request.jwt.claim.role='service_role';
+update public.orders o
+set status='accepted',updated_at=now()
+from sellertray_offline_tax_fixture f
+where o.tenant_id=f.tenant_id and o.id=f.replay_order_id;
+
+select extensions.is(
+  (select (public.bind_sellertray_offline_tax_context(
+    tenant_id,replay_order_id,owner_user_id,tax_configuration_id,tax_revision
+  )->>'replayed')::boolean from sellertray_offline_tax_fixture),
+  true,
+  'matching offline tax context replay is accepted after server posting moved the sale out of draft'
+);
+
+select set_config('request.jwt.claim.sub',(select owner_user_id::text from sellertray_offline_tax_fixture),true);
+select set_config('request.jwt.claim.role','authenticated',true);
 
 update sellertray_offline_tax_fixture
 set stale_order_id=public.create_sellertray_pos_order_idempotent(
