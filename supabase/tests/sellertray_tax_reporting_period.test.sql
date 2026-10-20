@@ -129,25 +129,46 @@ select public.save_sellertray_tax_settings(
   (select tenant_id from sellertray_tax_period_fixture),true,10,false
 );
 
-set local request.jwt.claim.role='service_role';
+-- Existing Tax Authority coverage proves that the return command reverses the
+-- original tax snapshot. This regression is specifically about reporting time,
+-- so create the completed immutable return evidence directly in Period C rather
+-- than creating it now and mutating its protected timestamp afterwards.
+with inserted_return as (
+  insert into public.sale_returns(
+    tenant_id,branch_id,order_id,original_payment_id,return_type,status,
+    amount,currency,reason,actor_user_id,
+    subtotal_amount,tax_amount,tax_configuration_id,tax_configuration_revision,
+    tax_rate_percent,created_at
+  )
+  select
+    f.tenant_id,
+    f.branch_id,
+    f.order_id,
+    p.id,
+    'partial',
+    'completed',
+    round((o.gross_amount/2)::numeric,2),
+    o.currency,
+    'Cross-period historical tax return',
+    f.owner_user_id,
+    round((o.subtotal_amount/2)::numeric,2),
+    round((o.tax_amount/2)::numeric,2),
+    o.tax_configuration_id,
+    o.tax_configuration_revision,
+    o.tax_rate_percent,
+    ((current_date+10)::timestamp at time zone 'Africa/Lagos')
+  from sellertray_tax_period_fixture f
+  join public.orders o
+    on o.tenant_id=f.tenant_id and o.id=f.order_id
+  join public.order_payments p
+    on p.tenant_id=f.tenant_id and p.order_id=f.order_id
+   and p.method_type='cash' and p.provider='pos_cash' and p.status='confirmed'
+  order by p.confirmed_at,p.id
+  limit 1
+  returning id
+)
 update sellertray_tax_period_fixture
-set return_result=public.return_sellertray_pos_cash_sale(
-  tenant_id,order_id,owner_user_id,'Cross-period historical tax return',
-  jsonb_build_array(jsonb_build_object('orderItemId',(
-    select oi.id from public.order_items oi
-    where oi.order_id=order_id order by oi.id limit 1
-  ),'quantity',1)),
-  'tax-period-return-1'
-);
-
--- Period C is the completed return event. Move the fixture clock forward so the
--- report regression can prove sale posting and tax reversal are independent.
-update public.sale_returns sr
-set created_at=((current_date+10)::timestamp at time zone 'Africa/Lagos')
-where sr.id=(select (return_result->>'returnId')::uuid from sellertray_tax_period_fixture);
-
-select set_config('request.jwt.claim.sub',(select owner_user_id::text from sellertray_tax_period_fixture),true);
-select set_config('request.jwt.claim.role','authenticated',true);
+set return_result=jsonb_build_object('returnId',(select id from inserted_return));
 
 select extensions.is(
   (public.get_sellertray_tax_report_summary(
