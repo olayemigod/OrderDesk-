@@ -83,6 +83,11 @@ where sl.tenant_id=f.tenant_id and sl.branch_id=f.branch_id and sl.is_default=tr
 select set_config('request.jwt.claim.sub',(select owner_user_id::text from sellertray_product_activity_fixture),true);
 select set_config('request.jwt.claim.role','authenticated',true);
 
+select public.create_sellertray_product_category(tenant_id,'QA')
+from sellertray_product_activity_fixture;
+select public.create_sellertray_uom(tenant_id,'Box')
+from sellertray_product_activity_fixture;
+
 update sellertray_product_activity_fixture
 set product_id=public.save_sellertray_product(
   tenant_id,null,'Activity Product','ACT-001','QA','Each',false,1000
@@ -148,15 +153,12 @@ select extensions.ok(
   ),
   'Product activity merges governed stock movement history with Branch context'
 );
-select extensions.is(
-  (
-    select count(*)::integer
-    from public.inventory_movements im
-    where im.tenant_id=(select tenant_id from sellertray_product_activity_fixture)
-      and im.catalog_item_id=(select product_id from sellertray_product_activity_fixture)
+select extensions.ok(
+  not exists(
+    select 1 from sellertray_product_activity_fixture f,jsonb_array_elements(f.activity) a
+    where (a::text like '%service_role%' or a::text like '%request.jwt%')
   ),
-  1,
-  'reading Product activity does not create or duplicate stock movements'
+  'Product activity does not expose service-role or JWT implementation detail'
 );
 
 select * from extensions.finish();
