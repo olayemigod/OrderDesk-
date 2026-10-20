@@ -274,7 +274,7 @@ function parseOfflineSale(value: unknown): OfflinePosSale[] {
   });
   if (!lines.length) return [];
 
-  const legacy = schema < 4;
+  const legacy = schema < 4 || row.taxContextLegacy === true;
   const subtotal = legacy ? row.total : Number(row.subtotal);
   const taxAmount = legacy ? 0 : Number(row.taxAmount);
   const ratePercent = legacy ? 0 : Number(row.taxRatePercent);
