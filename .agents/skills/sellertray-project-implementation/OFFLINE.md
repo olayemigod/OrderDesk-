@@ -4,7 +4,7 @@ description: "Normative offline extension for SellerTray POS selling, payments, 
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.0"
+  version: "0.1.1"
   status: governing-extension
 ---
 
@@ -111,17 +111,27 @@ A newly queued offline sale carries the governed tax configuration identity/revi
 
 If tax settings changed in a way that makes the queued transaction unsafe to post under its recorded commercial facts, SellerTray must fail to review rather than silently repricing or applying a new tax after the customer already paid.
 
-# 7. Current implementation status and pending correction
+# 7. Current implementation status
 
-As of this governance version, SellerTray already caches Branch POS payment methods, including Bank Transfer, but the current offline sale-completion outbox is still limited to the older Cash/Draft completion path.
+SellerTray now caches governed Branch POS payment methods and supports offline POS completion intents for Draft, Cash and Bank.
 
-That limitation is **an implementation gap, not the approved product rule**.
+The Bank implementation contract is:
 
-Pending implementation must extend the offline POS payment/outbox/replay flow so Bank payment remains available under the rules above. Do not report "offline means Cash only" as intended SellerTray behavior.
+1. Mobile may expose only a previously cached governed Branch Bank method; it must not invent or substitute payment configuration while offline.
+2. The offline outbox stores the selected Bank method snapshot, transfer/provider reference, capture timestamp and a stable checkout command identity together with the existing Business, Branch, cashier, customer, Product/UOM/price/conversion and tax snapshots.
+3. Reconnection replay uses the same generic POS payment authority used online: `pos-checkout` -> `checkout_sellertray_pos_sale`.
+4. Offline Bank replay submits the allocation with `confirmNow=false`; it must enter `pending_verification` / `verification_required`, not `paid`.
+5. Bank evidence is bound to the governed `order_payments` allocation within the shared checkout transaction and is audited through the existing SellerTray payment-event authority.
+6. A successful replay does not finalize stock. Existing governed manual/provider confirmation remains responsible for confirming the payment and permitting final POS stock posting.
+7. Replays reuse the original checkout command and deterministic allocation identity. They must not create duplicate order, payment or stock effects.
+8. A stale/removed Branch Bank method, changed evidence, reused provider/reference or other authority conflict fails closed into review; clients must not silently switch to Cash or another Bank account.
+9. Legacy offline outbox records remain readable so existing Draft/Cash intents survive the schema extension.
+
+Do not reintroduce the older Bank-only checkout path as a separate mobile payment truth. Future offline payment work must continue through the shared governed payment authority unless a later explicit product decision changes this architecture.
 
 # 8. Required QA for offline Bank payment
 
-Before the pending correction is considered complete, verify at minimum:
+Before an offline Bank change is considered complete, verify at minimum:
 
 - SellerTray backend offline while a cached Branch Bank method remains selectable;
 - Bank method is not converted into Cash and creates no drawer effect;
