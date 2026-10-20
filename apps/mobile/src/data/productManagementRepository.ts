@@ -10,8 +10,38 @@ export type MobileProductDraft = {
   sellingPrice: number;
 };
 
+export type CatalogueMasterOption = {
+  id: string;
+  name: string;
+};
+
+export type CatalogueMasters = {
+  categories: CatalogueMasterOption[];
+  uoms: CatalogueMasterOption[];
+};
+
 export async function loadManagedProducts(tenantId: string): Promise<CommerceProduct[]> {
   return loadCommerceProducts(tenantId, { includeInactive: true });
+}
+
+export async function loadCatalogueMasters(tenantId: string): Promise<CatalogueMasters> {
+  const { data, error } = await supabase.rpc('get_sellertray_catalogue_masters', {
+    p_tenant_id: tenantId,
+  });
+  if (error) throw error;
+  const root = object(data);
+  return {
+    categories: masterOptions(root.categories),
+    uoms: masterOptions(root.uoms),
+  };
+}
+
+export async function createProductCategory(tenantId: string, name: string): Promise<CatalogueMasterOption> {
+  return createMaster('create_sellertray_product_category', tenantId, name, 'category');
+}
+
+export async function createBusinessUom(tenantId: string, name: string): Promise<CatalogueMasterOption> {
+  return createMaster('create_sellertray_uom', tenantId, name, 'unit');
 }
 
 export async function saveManagedProduct(
@@ -71,6 +101,33 @@ export async function assignStockUomBarcode(
   if (error) throw error;
 }
 
+async function createMaster(
+  rpc: 'create_sellertray_product_category' | 'create_sellertray_uom',
+  tenantId: string,
+  name: string,
+  label: string,
+): Promise<CatalogueMasterOption> {
+  const cleanName = name.trim();
+  if (!cleanName) throw new Error(`Enter a ${label} name.`);
+  const { data, error } = await supabase.rpc(rpc, {
+    p_tenant_id: tenantId,
+    p_name: cleanName,
+  });
+  if (error) throw error;
+  const row = object(data);
+  const option = { id: String(row.id ?? ''), name: String(row.name ?? '').trim() };
+  if (!option.id || !option.name) throw new Error(`SellerTray did not return the ${label}.`);
+  return option;
+}
+
+function masterOptions(value: unknown): CatalogueMasterOption[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => {
+    const row = object(item);
+    return { id: String(row.id ?? ''), name: String(row.name ?? '').trim() };
+  }).filter((item) => item.id && item.name);
+}
+
 function validateProduct(input: MobileProductDraft): MobileProductDraft {
   const name = input.name.trim();
   const stockUom = input.stockUom.trim();
@@ -90,4 +147,8 @@ function validateProduct(input: MobileProductDraft): MobileProductDraft {
 function cleanOptional(value: string | null): string | null {
   const clean = value?.trim() ?? '';
   return clean || null;
+}
+
+function object(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
