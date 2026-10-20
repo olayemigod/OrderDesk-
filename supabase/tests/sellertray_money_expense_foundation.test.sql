@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(24);
+select extensions.plan(25);
 
 create temp table sellertray_money_fixture (
   tenant_id uuid not null,
@@ -71,8 +71,7 @@ insert into public.merchant_payment_methods(
 )
 select gen_random_uuid(),tenant_id,'bank_transfer','Main Business Bank',true,false,10,'live','ready',
   'Test Bank','SellerTray Money Test','1000000001',owner_user_id,owner_user_id
-from sellertray_money_fixture
-returning id;
+from sellertray_money_fixture;
 
 update sellertray_money_fixture f
 set bank_id=m.id
@@ -293,7 +292,6 @@ end
 $$;
 select extensions.ok((select cross_bank_expense_rejected from sellertray_money_fixture),'Business Expense rejects another Business bank account');
 
--- Typed correction cannot silently reclassify a transfer/withdrawal as an expense.
 do $$
 begin
   begin
