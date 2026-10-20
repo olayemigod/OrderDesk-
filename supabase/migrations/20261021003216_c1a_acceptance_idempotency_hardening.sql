@@ -2,8 +2,10 @@ begin;
 
 -- Preserve strict command idempotency while also making the one-time legal
 -- acceptance resilient to a client timeout/reload after the server committed.
--- A new command for the same immutable agreement may reuse the existing
--- acceptance only when the signer and legal acceptance facts are identical.
+-- Exact retries of an already-committed command return the historical result
+-- before later permission/supersession state is re-evaluated. A new command for
+-- the same immutable agreement may reuse the existing acceptance only when the
+-- current signer remains authorised and every acceptance fact is identical.
 
 create or replace function public.accept_sellertray_commercial_agreement(
   p_tenant_id uuid,
@@ -34,6 +36,24 @@ begin
   end if;
   if char_length(v_name) not between 1 and 200 then
     raise exception 'Enter the authorised representative legal name' using errcode='22023';
+  end if;
+
+  -- A committed command is immutable historical evidence. Returning an exact
+  -- replay is not a new signing act, so later capability revocation or document
+  -- supersession must not turn the committed command into a failure.
+  select a.* into v_existing
+  from public.sellertray_commercial_agreement_acceptances a
+  where a.tenant_id=p_tenant_id and a.command_id=p_command_id;
+
+  if found then
+    if v_existing.agreement_id<>p_agreement_id
+       or v_existing.accepted_by_user_id<>p_actor_user_id
+       or v_existing.accepted_legal_name<>v_name
+       or v_existing.acceptance_method<>'merchant_web_authenticated'
+       or v_existing.request_evidence is distinct from v_evidence then
+      raise exception 'Agreement acceptance command is already used for different facts' using errcode='23505';
+    end if;
+    return v_existing.id;
   end if;
 
   select tm.role into v_role
@@ -78,8 +98,7 @@ begin
     return v_id;
   end if;
 
-  -- Reusing a command identity is only valid for an exact replay, including
-  -- the request evidence attached to that command.
+  -- Concurrent reuse of the same command is valid only for an exact replay.
   select a.* into v_existing
   from public.sellertray_commercial_agreement_acceptances a
   where a.tenant_id=p_tenant_id and a.command_id=p_command_id;
@@ -99,9 +118,10 @@ begin
     return v_existing.id;
   end if;
 
-  -- A client may lose the successful response and retry after a reload with a
-  -- new command ID. Because an agreement version can be accepted only once,
-  -- return the existing acceptance when the legal signer facts are identical.
+  -- A client may lose the successful response and reload, losing its in-memory
+  -- command ID. Because an agreement version can be accepted only once, a new
+  -- command may recover that result only while the signer is still authorised
+  -- and every immutable signer/document/evidence fact is identical.
   select a.* into strict v_existing
   from public.sellertray_commercial_agreement_acceptances a
   where a.tenant_id=p_tenant_id and a.agreement_id=v_agreement.id;
@@ -112,7 +132,8 @@ begin
      or v_existing.accepted_by_user_id<>p_actor_user_id
      or v_existing.accepted_legal_name<>v_name
      or v_existing.accepted_role<>v_role
-     or v_existing.acceptance_method<>'merchant_web_authenticated' then
+     or v_existing.acceptance_method<>'merchant_web_authenticated'
+     or v_existing.request_evidence is distinct from v_evidence then
     raise exception 'SellerTray agreement is already accepted with different acceptance facts'
       using errcode='23505';
   end if;
