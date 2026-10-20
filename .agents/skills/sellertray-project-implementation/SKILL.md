@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.9"
+  version: "0.1.10"
   status: governing
 ---
 
@@ -49,6 +49,7 @@ Mobile owns or prioritises:
 - POS selling and checkout;
 - product search and barcode scan;
 - UOM selection during transactions;
+- lightweight Product creation/editing for authorised Owners/Managers, including create/select against the shared Business Category and UOM masters;
 - customers in selling context;
 - unified orders and fulfilment;
 - WhatsApp order handling and merchant takeover;
@@ -124,12 +125,15 @@ Product-management direction:
 
 1. Product creation remains product-definition only. **Creating a product must never create, infer or invent stock.** Opening stock, receiving, transfer and adjustment remain separate governed inventory operations.
 2. Initial creation should stay simple: Product name, SKU, Category, Stock UOM, selling price, fractional-quantity policy and product image where supported. Advanced configuration follows after save.
-3. Product list/search must scale to large catalogues using governed pagination/filtering rather than loading an unbounded full catalogue into one client-side list.
-4. Product management should support useful filters such as Category, Active/Archived, Missing barcode, Missing price, Low stock and UOM where supported by governed data.
-5. Product detail should converge on management sections such as **Overview**, **Units & Barcodes**, **Pricing**, **Stock** and **Activity**.
-6. Web is the richer surface for alternate UOMs, conversion factors, UOM-specific prices, multiple barcodes, selling/purchase defaults, category management, product images, detailed pricing, bulk administration and audit/activity history.
-7. Stock display on Product management must read Branch stock truth from the governed inventory model; it must not maintain a separate product-quantity truth.
-8. Product/UOM/barcode/pricing mutations must continue through governed SellerTray commands/RPC boundaries and preserve UOM, Branch, permission, audit and inventory invariants.
+3. Product Category and UOM are tenant-scoped **Business master data**, not independent free-entry strings maintained separately by Mobile or Merchant Web. Authorised Owners/Managers may create masters from either Product surface and then select them from the same governed shared vocabulary.
+4. A Product Stock UOM and every product-specific alternate UOM must resolve to an active Business UOM master. Product-specific conversion factors, UOM prices, barcodes and selling/purchase defaults remain on the product-UOM configuration; creating a Business UOM must never invent a conversion, price or stock balance.
+5. Existing or legacy/internal catalogue values must converge into the same Business masters during migration/runtime compatibility rather than creating a second vocabulary. Historical transaction UOM snapshots remain immutable even if master configuration changes later.
+6. Product list/search must scale to large catalogues using governed pagination/filtering rather than loading an unbounded full catalogue into one client-side list.
+7. Product management should support useful filters such as Category, Active/Archived, Missing barcode, Missing price, Low stock and UOM where supported by governed data.
+8. Product detail should converge on management sections such as **Overview**, **Units & Barcodes**, **Pricing**, **Stock** and **Activity**.
+9. Web is the richer surface for alternate UOMs, conversion factors, UOM-specific prices, multiple barcodes, selling/purchase defaults, category management, product images, detailed pricing, bulk administration and audit/activity history.
+10. Stock display on Product management must read Branch stock truth from the governed inventory model; it must not maintain a separate product-quantity truth.
+11. Product/Category/UOM/barcode/pricing mutations must continue through governed SellerTray commands/RPC boundaries and preserve UOM, Branch, permission, audit and inventory invariants.
 
 # 2. Shared commerce core
 
@@ -343,14 +347,15 @@ Example:
 
 Rules:
 
-1. Inventory ledger quantities are stored in Stock UOM.
-2. Transaction lines preserve selected UOM, transaction quantity, conversion factor used and resulting stock quantity.
-3. UOM prices may be independent; never assume alternate price = base price × conversion.
-4. Purchase UOM may differ from Selling UOM.
-5. Barcode may resolve Product + UOM.
-6. Fractional quantity is permitted only where product/UOM policy allows it.
-7. Historical conversion factors used by posted transactions must remain auditable; do not silently reinterpret history after conversion changes.
-8. Branch stock is one quantity truth in Stock UOM, not unrelated balances per alternate UOM.
+1. The Business UOM vocabulary is tenant-scoped governed master data shared by Mobile, Merchant Web, WhatsApp and the shared commerce core. Product-specific UOM rows reference that vocabulary but own their conversion, barcode, fractional and price configuration.
+2. Inventory ledger quantities are stored in Stock UOM.
+3. Transaction lines preserve selected UOM, transaction quantity, conversion factor used and resulting stock quantity.
+4. UOM prices may be independent; never assume alternate price = base price × conversion.
+5. Purchase UOM may differ from Selling UOM.
+6. Barcode may resolve Product + UOM.
+7. Fractional quantity is permitted only where product/UOM policy allows it.
+8. Historical conversion factors used by posted transactions must remain auditable; do not silently reinterpret history after conversion changes.
+9. Branch stock is one quantity truth in Stock UOM, not unrelated balances per alternate UOM.
 
 # 7. Inventory invariants
 
@@ -588,7 +593,7 @@ Verify representative allowed/denied read, allowed/denied write/action, branch i
 
 ## UOM gate
 
-Verify Stock UOM, alternate conversion, UOM-specific price, UOM barcode where implemented, fractional policy, persisted conversion factor and correct stock impact.
+Verify Business UOM master create/select authority, Stock UOM, alternate conversion, UOM-specific price, UOM barcode where implemented, fractional policy, persisted conversion factor and correct stock impact. Verify Mobile and Merchant Web consume the same tenant master vocabulary rather than maintaining separate free-entry lists.
 
 ## Inventory gate
 
@@ -622,13 +627,14 @@ When feedback is touched, verify signed-in submission state, repeat submission, 
 
 1. Do not fork POS, WhatsApp, web and AI into separate commerce truth.
 2. Do not duplicate UOM conversion logic in clients.
-3. Do not let reporting invent business rules independently of transaction state.
-4. Do not add a second payment model for a new channel.
-5. Do not let offline create a parallel permanent database model.
-6. Do not expose cross-tenant or cross-branch data for convenience.
-7. Do not bypass server/domain validation because the UI already checked something.
-8. Do not use generic direct stock receipt where purchasing or transfer receiving is the governed source.
-9. Do not destructively edit posted cash history to correct a mistake.
+3. Do not maintain separate client-side Category or UOM master vocabularies; create/select through the shared Business masters and preserve historical transaction snapshots independently.
+4. Do not let reporting invent business rules independently of transaction state.
+5. Do not add a second payment model for a new channel.
+6. Do not let offline create a parallel permanent database model.
+7. Do not expose cross-tenant or cross-branch data for convenience.
+8. Do not bypass server/domain validation because the UI already checked something.
+9. Do not use generic direct stock receipt where purchasing or transfer receiving is the governed source.
+10. Do not destructively edit posted cash history to correct a mistake.
 
 # 19. Definition of done
 
