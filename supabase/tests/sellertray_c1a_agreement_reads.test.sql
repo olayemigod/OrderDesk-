@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(8);
+select extensions.plan(11);
 
 select extensions.ok(
   to_regprocedure('public.get_sellertray_commercial_agreement_center(uuid,uuid)') is not null
@@ -64,6 +64,33 @@ select extensions.ok(
     in lower(regexp_replace(pg_get_functiondef('public.accept_sellertray_commercial_agreement(uuid,uuid,text,jsonb,uuid,uuid)'::regprocedure),'\s+','','g'))
   ),
   'exact committed acceptance replay is resolved before later current-role authority is re-evaluated'
+);
+
+select extensions.ok(
+  position('authority_confirmed' in pg_get_functiondef('public.accept_sellertray_commercial_agreement(uuid,uuid,text,jsonb,uuid,uuid)'::regprocedure))>0
+  and position('request_evidence is distinct from v_evidence' in pg_get_functiondef('public.accept_sellertray_commercial_agreement(uuid,uuid,text,jsonb,uuid,uuid)'::regprocedure))=0,
+  'C1A retry identity compares stable acceptance claims rather than mutable transport evidence'
+);
+
+select extensions.ok(
+  to_regprocedure('public.build_sellertray_commercial_agreement_snapshot(uuid,uuid,uuid)') is not null
+  and position('public.tenants' in pg_get_functiondef('public.build_sellertray_commercial_agreement_snapshot(uuid,uuid,uuid)'::regprocedure))>0
+  and position('merchant_code' in pg_get_functiondef('public.build_sellertray_commercial_agreement_snapshot(uuid,uuid,uuid)'::regprocedure))>0
+  and position('business_name' in pg_get_functiondef('public.build_sellertray_commercial_agreement_snapshot(uuid,uuid,uuid)'::regprocedure))>0
+  and position('business_email' in pg_get_functiondef('public.build_sellertray_commercial_agreement_snapshot(uuid,uuid,uuid)'::regprocedure))>0
+  and position('business_phone' in pg_get_functiondef('public.build_sellertray_commercial_agreement_snapshot(uuid,uuid,uuid)'::regprocedure))>0
+  and position('business_type' in pg_get_functiondef('public.build_sellertray_commercial_agreement_snapshot(uuid,uuid,uuid)'::regprocedure))>0,
+  'C1A commercial snapshots derive governed merchant identity from the Business authority'
+);
+
+select extensions.ok(
+  not has_function_privilege(
+    'authenticated','public.build_sellertray_commercial_agreement_snapshot(uuid,uuid,uuid)','EXECUTE'
+  )
+  and has_function_privilege(
+    'service_role','public.build_sellertray_commercial_agreement_snapshot(uuid,uuid,uuid)','EXECUTE'
+  ),
+  'C1A merchant identity snapshot builder remains service-authority only'
 );
 
 select * from extensions.finish();
