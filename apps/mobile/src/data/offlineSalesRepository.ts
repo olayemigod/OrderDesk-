@@ -19,7 +19,23 @@ const MAX_OPEN_INTENTS = 50;
 const SYNCED_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type OfflineSaleStatus = 'pending' | 'syncing' | 'needs_review' | 'failed' | 'synced';
-export type OfflineCompletionIntent = 'draft' | 'cash';
+export type OfflineCompletionIntent = 'draft' | 'cash' | 'bank';
+
+export type OfflineBankPaymentEvidence = {
+  checkoutCommandId: string;
+  paymentMethodId: string;
+  providerReference: string;
+  capturedAt: string;
+  methodSnapshot: {
+    paymentMethodId: string;
+    methodType: 'bank_transfer';
+    displayName: string;
+    bankName: string | null;
+    bankAccountName: string | null;
+    bankAccountNumber: string | null;
+    instructions: string | null;
+  };
+};
 
 export type OfflineSaleLine = {
   catalogItemId: string;
@@ -33,7 +49,7 @@ export type OfflineSaleLine = {
 };
 
 export type OfflinePosSale = {
-  schemaVersion: 4;
+  schemaVersion: 5;
   clientReference: string;
   actorUserId: string;
   tenantId: string;
@@ -54,6 +70,7 @@ export type OfflinePosSale = {
   taxContextLegacy: boolean;
   total: number;
   completionIntent: OfflineCompletionIntent;
+  bankPayment: OfflineBankPaymentEvidence | null;
   status: OfflineSaleStatus;
   attempts: number;
   createdAt: string;
@@ -83,6 +100,7 @@ export async function queueOfflinePosSale(input: {
   taxAmount: number;
   total: number;
   completionIntent?: OfflineCompletionIntent;
+  bankPayment?: OfflineBankPaymentEvidence | null;
 }): Promise<OfflinePosSale> {
   const rows = await readOutbox();
   const existing = rows.find((row) => row.clientReference === input.clientReference);
@@ -109,9 +127,19 @@ export async function queueOfflinePosSale(input: {
     throw new Error('Reconnect once to refresh SellerTray tax settings before selling offline.');
   }
 
+  const completionIntent = input.completionIntent ?? 'draft';
+  const bankPayment = input.bankPayment ?? null;
+  if (completionIntent === 'bank') {
+    if (!bankPayment || !isValidBankPaymentEvidence(bankPayment)) {
+      throw new Error('A governed Bank method and valid transfer reference are required for an offline Bank sale.');
+    }
+  } else if (bankPayment) {
+    throw new Error('Bank payment evidence can only be attached to a Bank sale.');
+  }
+
   const now = new Date().toISOString();
   const next: OfflinePosSale = {
-    schemaVersion: 4,
+    schemaVersion: 5,
     clientReference: input.clientReference,
     actorUserId: input.actorUserId,
     tenantId: input.tenantId,
@@ -131,7 +159,8 @@ export async function queueOfflinePosSale(input: {
     taxDisplayBreakdown: input.taxContext.displayTaxBreakdown,
     taxContextLegacy: false,
     total: input.total,
-    completionIntent: input.completionIntent ?? 'draft',
+    completionIntent,
+    bankPayment,
     status: 'pending',
     attempts: 0,
     createdAt: now,
@@ -200,6 +229,7 @@ export async function discardOfflinePosSale(clientReference: string, actorUserId
   const rows = await readOutbox();
   const row = rows.find((item) => item.clientReference === clientReference && item.actorUserId === actorUserId);
   if (row?.completionIntent === 'cash') throw new Error('A completed offline cash sale cannot be discarded. Sync or review it instead.');
+  if (row?.completionIntent === 'bank') throw new Error('An offline Bank transfer sale cannot be discarded. Sync or review it instead.');
   await writeOutbox(rows.filter((item) => item.clientReference !== clientReference || item.actorUserId !== actorUserId));
 }
 
@@ -244,7 +274,7 @@ function classifySyncFailure(error: unknown): { status: 'pending' | 'needs_revie
   }
   if (isLikelyConnectivityError(error)) return { status: 'pending', message: 'Waiting for a connection.' };
   const message = error instanceof Error && error.message ? error.message : 'SellerTray could not sync this offline sale.';
-  if (/permission|access|stock|price|unit|uom|branch|shift|register|read-only|customer|override|tax/i.test(message)) return { status: 'needs_review', message };
+  if (/permission|access|stock|price|unit|uom|branch|shift|register|read-only|customer|override|tax|bank|payment|evidence|reference|verification/i.test(message)) return { status: 'needs_review', message };
   return { status: 'failed', message };
 }
 
@@ -262,7 +292,7 @@ async function writeOutbox(rows: OfflinePosSale[]): Promise<void> { await AsyncS
 function parseOfflineSale(value: unknown): OfflinePosSale[] {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
   const row = value as Record<string, unknown>;
-  if (![1, 2, 3, 4].includes(Number(row.schemaVersion)) || typeof row.clientReference !== 'string' || typeof row.actorUserId !== 'string' || typeof row.tenantId !== 'string' || typeof row.branchId !== 'string' || typeof row.branchName !== 'string' || typeof row.currency !== 'string' || !Array.isArray(row.lines) || typeof row.total !== 'number' || !isOfflineStatus(row.status) || typeof row.attempts !== 'number' || typeof row.createdAt !== 'string' || typeof row.updatedAt !== 'string') return [];
+  if (![1, 2, 3, 4, 5].includes(Number(row.schemaVersion)) || typeof row.clientReference !== 'string' || typeof row.actorUserId !== 'string' || typeof row.tenantId !== 'string' || typeof row.branchId !== 'string' || typeof row.branchName !== 'string' || typeof row.currency !== 'string' || !Array.isArray(row.lines) || typeof row.total !== 'number' || !isOfflineStatus(row.status) || typeof row.attempts !== 'number' || typeof row.createdAt !== 'string' || typeof row.updatedAt !== 'string') return [];
   const schema = Number(row.schemaVersion);
   const lines = (row.lines as Array<Record<string, unknown>>).flatMap((line) => {
     const expected = Number(line.expectedSellingPrice);
@@ -287,8 +317,15 @@ function parseOfflineSale(value: unknown): OfflinePosSale[] {
     || (revision > 0 && configurationId === null)
   )) return [];
 
+  const completionIntent: OfflineCompletionIntent = schema >= 5 && row.completionIntent === 'bank'
+    ? 'bank'
+    : schema >= 3 && row.completionIntent === 'cash'
+      ? 'cash'
+      : 'draft';
+  const bankPayment = completionIntent === 'bank' ? parseBankPaymentEvidence(row.bankPayment) : null;
+
   return [{
-    schemaVersion: 4,
+    schemaVersion: 5,
     clientReference: row.clientReference,
     actorUserId: row.actorUserId,
     tenantId: row.tenantId,
@@ -308,7 +345,8 @@ function parseOfflineSale(value: unknown): OfflinePosSale[] {
     taxDisplayBreakdown: legacy ? false : row.taxDisplayBreakdown === true,
     taxContextLegacy: legacy,
     total: row.total,
-    completionIntent: schema >= 3 && row.completionIntent === 'cash' ? 'cash' : 'draft',
+    completionIntent,
+    bankPayment,
     status: row.status,
     attempts: row.attempts,
     createdAt: row.createdAt,
@@ -318,7 +356,45 @@ function parseOfflineSale(value: unknown): OfflinePosSale[] {
     orderId: nullableString(row.orderId),
   }];
 }
+
+function parseBankPaymentEvidence(value: unknown): OfflineBankPaymentEvidence | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const snapshot = row.methodSnapshot;
+  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return null;
+  const method = snapshot as Record<string, unknown>;
+  const evidence: OfflineBankPaymentEvidence = {
+    checkoutCommandId: typeof row.checkoutCommandId === 'string' ? row.checkoutCommandId : '',
+    paymentMethodId: typeof row.paymentMethodId === 'string' ? row.paymentMethodId : '',
+    providerReference: typeof row.providerReference === 'string' ? row.providerReference : '',
+    capturedAt: typeof row.capturedAt === 'string' ? row.capturedAt : '',
+    methodSnapshot: {
+      paymentMethodId: typeof method.paymentMethodId === 'string' ? method.paymentMethodId : '',
+      methodType: 'bank_transfer',
+      displayName: typeof method.displayName === 'string' ? method.displayName : '',
+      bankName: nullableString(method.bankName),
+      bankAccountName: nullableString(method.bankAccountName),
+      bankAccountNumber: nullableString(method.bankAccountNumber),
+      instructions: nullableString(method.instructions),
+    },
+  };
+  if (method.methodType !== 'bank_transfer' || !isValidBankPaymentEvidence(evidence)) return null;
+  return evidence;
+}
+
+function isValidBankPaymentEvidence(value: OfflineBankPaymentEvidence): boolean {
+  return isUuid(value.checkoutCommandId)
+    && isUuid(value.paymentMethodId)
+    && value.methodSnapshot.paymentMethodId === value.paymentMethodId
+    && value.methodSnapshot.methodType === 'bank_transfer'
+    && Boolean(value.methodSnapshot.displayName.trim())
+    && value.providerReference.length <= 128
+    && /^[A-Za-z0-9._:-]+$/.test(value.providerReference)
+    && Number.isFinite(Date.parse(value.capturedAt));
+}
+
 function isOfflineStatus(value: unknown): value is OfflineSaleStatus { return value === 'pending' || value === 'syncing' || value === 'needs_review' || value === 'failed' || value === 'synced'; }
+function isUuid(value: string): boolean { return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim()); }
 function cleanNullable(value: string | null | undefined): string | null { const clean = value?.trim() ?? ''; return clean || null; }
 function nullableString(value: unknown): string | null { return typeof value === 'string' && value.trim() ? value : null; }
 async function writeCache<T>(key: string, data: T): Promise<void> { await AsyncStorage.setItem(key, JSON.stringify({ savedAt: new Date().toISOString(), data } satisfies OfflineCache<T>)); }
