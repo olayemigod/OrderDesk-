@@ -10,6 +10,7 @@ import {
   syncOfflinePosSales,
   type OfflinePosSale,
 } from '../data/offlineSalesRepository';
+import { checkoutPosPaymentAllocations } from '../data/posPaymentRepository';
 import { loadSellerTrayTaxQuote } from '../data/taxRepository';
 import { supabase } from '../lib/supabase';
 
@@ -113,6 +114,35 @@ export function useOfflineSalesSync() {
       const result = await completePosSale(sale.tenantId, orderId, null);
       if (result.status !== 'completed' || result.paymentStatus !== 'paid') {
         throw new Error('Offline cash sale could not be settled during sync. Review this sale before handing it off.');
+      }
+    } else if (sale.completionIntent === 'bank') {
+      const evidence = sale.bankPayment;
+      if (!evidence) {
+        throw new PosDraftRequestError('Offline Bank payment evidence is missing. Review this queued sale.', 'conflict', 409);
+      }
+      const result = await checkoutPosPaymentAllocations({
+        tenantId: sale.tenantId,
+        orderId,
+        commandId: evidence.checkoutCommandId,
+        payLater: false,
+        allocations: [{
+          paymentMethodId: evidence.paymentMethodId,
+          amount: sale.total,
+          confirmNow: false,
+          providerReference: evidence.providerReference,
+          offlineCapturedAt: evidence.capturedAt,
+        }],
+      });
+      const bankPayment = result.payments.find((payment) => payment.paymentMethodId === evidence.paymentMethodId);
+      if (
+        result.status !== 'awaiting_payment_confirmation'
+        || result.paymentStatus !== 'verification_required'
+        || !bankPayment
+        || bankPayment.methodType !== 'bank_transfer'
+        || bankPayment.status !== 'pending_verification'
+        || result.inventoryMovementCount !== 0
+      ) {
+        throw new PosDraftRequestError('Offline Bank payment did not enter governed verification. Review this queued sale.', 'conflict', 409);
       }
     }
     return orderId;

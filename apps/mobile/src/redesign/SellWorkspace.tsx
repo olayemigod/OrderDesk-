@@ -29,7 +29,7 @@ import {
   saveTaxContextCache,
 } from '../data/offlineSalesRepository';
 import { prepareGovernedPosDraft } from '../data/posDraftPreparationRepository';
-import { loadPosPaymentPolicy, type PosAllocationCheckoutResult, type PosPaymentPolicy } from '../data/posPaymentRepository';
+import { createPosPaymentCommandId, loadPosPaymentPolicy, type PosAllocationCheckoutResult, type PosPaymentPolicy } from '../data/posPaymentRepository';
 import {
   loadSellerTrayTaxQuote,
   previewTaxFromContext,
@@ -48,6 +48,7 @@ type StockShortage = { productName: string; stockUom: string; required: number; 
 type Props = { tenantId: string; actorUserId: string; branch: CommerceBranch; currency: string; onDraftCreated?: (orderId: string) => void; onOfflineSaleQueued?: () => void };
 
 const STOCK_EPSILON = 0.000001;
+const OFFLINE_BANK_REFERENCE_PATTERN = /^[A-Za-z0-9._:-]+$/;
 
 export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraftCreated, onOfflineSaleQueued }: Props) {
   const dark = useSellerTrayAppearance().dark;
@@ -77,6 +78,9 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
   const [notice, setNotice] = useState<string | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [catalogueView, setCatalogueView] = useState<'grid' | 'list'>('grid');
+  const [offlineBankOpen, setOfflineBankOpen] = useState(false);
+  const [offlineBankMethodId, setOfflineBankMethodId] = useState('');
+  const [offlineBankReference, setOfflineBankReference] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -103,6 +107,7 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
   useEffect(() => {
     setCart({}); setQuantityDrafts({}); setPriceDrafts({}); setCustomer(null); setDraftOrderId(null);
     setSaleClientReference(null); setStage('products'); setError(null); setNotice(null);
+    setOfflineBankOpen(false); setOfflineBankMethodId(''); setOfflineBankReference('');
   }, [branch.id]);
 
   const stockByProduct = useMemo(() => new Map(stockRows.map((row) => [row.catalogItemId, row])), [stockRows]);
@@ -118,6 +123,8 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
   const usingSavedData = usingCachedProducts || usingCachedStock || usingCachedPayments || usingCachedPolicy || usingCachedTax;
   const canOverridePrice = posPolicy?.allowPriceOverride === true && posPolicy.canOverridePrice === true;
   const hasPriceOverride = cartLines.some((line) => Math.abs(line.sellingPrice - (line.uom.sellingPrice ?? 0)) > 0.005);
+  const offlineBankMethods = useMemo(() => paymentMethods.filter((method) => method.methodType === 'bank_transfer' && Boolean(method.paymentMethodId)), [paymentMethods]);
+  const selectedOfflineBankMethod = offlineBankMethods.find((method) => method.paymentMethodId === offlineBankMethodId) ?? null;
 
   function selectedUom(product: CommerceProduct): CommerceUom | null {
     const id = selectedUomByProduct[product.id];
@@ -199,6 +206,45 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
     onOfflineSaleQueued?.();
   }
 
+  async function queueOfflineBankSale(clientReference: string) {
+    if (!actorUserId) throw new Error('SellerTray cannot identify the cashier for offline sync.');
+    if (!taxContext) throw new Error('Reconnect once to refresh SellerTray tax settings before selling offline.');
+    if (hasPriceOverride && !canOverridePrice) throw new Error('Selling-price authority is not available offline for this sale.');
+    const method = selectedOfflineBankMethod;
+    if (!method?.paymentMethodId) throw new Error('Choose a cached Branch Bank account.');
+    const providerReference = offlineBankReference.trim();
+    if (!providerReference || providerReference.length > 128 || !OFFLINE_BANK_REFERENCE_PATTERN.test(providerReference)) {
+      throw new Error('Enter the Bank transfer reference using letters, numbers, dot, dash, underscore or colon.');
+    }
+    const offlineQuote = previewTaxFromContext(subtotal, taxContext);
+    const capturedAt = new Date().toISOString();
+    await queueOfflinePosSale({
+      clientReference, actorUserId, tenantId, branchId: branch.id, branchName: branch.name,
+      customerId: customer?.id ?? null, customerName: customer?.name ?? null, customerPhone: customer?.phone ?? null,
+      currency, subtotal: offlineQuote.subtotal, taxContext, taxAmount: offlineQuote.taxAmount,
+      total: offlineQuote.grossAmount, completionIntent: 'bank',
+      bankPayment: {
+        checkoutCommandId: createPosPaymentCommandId(),
+        paymentMethodId: method.paymentMethodId,
+        providerReference,
+        capturedAt,
+        methodSnapshot: {
+          paymentMethodId: method.paymentMethodId,
+          methodType: 'bank_transfer',
+          displayName: method.displayName,
+          bankName: method.bankName,
+          bankAccountName: method.bankAccountName,
+          bankAccountNumber: method.bankAccountNumber,
+          instructions: method.instructions,
+        },
+      },
+      lines: cartLines.map((line) => ({ catalogItemId: line.product.id, uomId: line.uom.id, quantity: line.quantity, expectedSellingPrice: line.uom.sellingPrice ?? 0, sellingPrice: line.sellingPrice, expectedConversionFactor: line.uom.conversionFactor, productName: line.product.name, uomName: line.uom.name })),
+    });
+    clearSale();
+    setNotice(`Bank transfer recorded offline for ${formatMoney(offlineQuote.grossAmount, currency)}. It will sync for verification; stock stays unchanged until the payment is confirmed.`);
+    onOfflineSaleQueued?.();
+  }
+
   async function continueToPayment() {
     if (saving || draftOrderId || !cartLines.length) return;
     if (hasPriceOverride && !canOverridePrice) { setError('You do not have permission to change selling prices.'); return; }
@@ -218,10 +264,27 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
       setDraftOrderId(orderId); setStage('payment'); setNotice(null);
     } catch (cause) {
       if (isLikelyConnectivityError(cause)) {
-        Alert.alert('SellerTray is offline', `Record this ${formatMoney(total, currency)} sale as cash now? It will be queued with its customer, unit, price, tax and stock snapshots and reconciled when SellerTray reconnects.`, [
-          { text: 'Keep cart', style: 'cancel' },
-          { text: 'Record cash sale', onPress: () => void queueOfflineCashSale(clientReference).catch((err) => setError(sellerTrayUserMessage(err, 'This offline sale could not be saved.'))) },
-        ]);
+        const defaultBank = offlineBankMethods.find((method) => method.isDefault) ?? offlineBankMethods[0] ?? null;
+        const bankAction = defaultBank?.paymentMethodId ? {
+          text: 'Bank transfer',
+          onPress: () => {
+            setOfflineBankMethodId(defaultBank.paymentMethodId!);
+            setOfflineBankReference('');
+            setOfflineBankOpen(true);
+          },
+        } : null;
+        Alert.alert(
+          'SellerTray is offline',
+          `Record this ${formatMoney(total, currency)} sale now? Cash completes when synced. A cached Bank transfer will sync into payment verification and will not reduce stock until confirmed.`,
+          bankAction ? [
+            { text: 'Keep cart', style: 'cancel' },
+            { text: 'Record cash sale', onPress: () => void queueOfflineCashSale(clientReference).catch((err) => setError(sellerTrayUserMessage(err, 'This offline sale could not be saved.'))) },
+            bankAction,
+          ] : [
+            { text: 'Keep cart', style: 'cancel' },
+            { text: 'Record cash sale', onPress: () => void queueOfflineCashSale(clientReference).catch((err) => setError(sellerTrayUserMessage(err, 'This offline sale could not be saved.'))) },
+          ],
+        );
       } else setError(sellerTrayUserMessage(cause, 'This sale could not be prepared. Please try again.'));
     } finally { setSaving(false); }
   }
@@ -244,7 +307,7 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
     onDraftCreated?.(orderId);
   }
 
-  function clearSale() { setCart({}); setQuantityDrafts({}); setPriceDrafts({}); setCustomer(null); setDraftOrderId(null); setSaleClientReference(null); setStage('products'); setError(null); }
+  function clearSale() { setCart({}); setQuantityDrafts({}); setPriceDrafts({}); setCustomer(null); setDraftOrderId(null); setSaleClientReference(null); setOfflineBankOpen(false); setOfflineBankMethodId(''); setOfflineBankReference(''); setStage('products'); setError(null); }
 
   function handleBarcode(barcode: string) {
     const clean = barcode.trim(); const match = products.flatMap((product) => product.uoms.map((uom) => ({ product, uom }))).find(({ uom }) => uom.barcode?.trim() === clean);
@@ -257,7 +320,7 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
   return <View style={styles.stack}>
     <BarcodeScannerSheet visible={scannerOpen} onClose={() => setScannerOpen(false)} onBarcode={handleBarcode} />
     <View><Text style={[styles.eyebrow, dark && darkStyles.body]}>SELL · {stage.toUpperCase()}</Text><Text style={[styles.title, dark && darkStyles.title]}>{stage === 'products' ? 'New Sale' : stage === 'cart' ? 'Review Cart' : 'Take Payment'}</Text><Text style={[styles.muted, dark && darkStyles.body]}>Selling from {branch.name}</Text></View>
-    {usingSavedData ? <Notice text="Offline-ready data is in use. Cash sales can continue with the last server tax context and will sync when SellerTray reconnects." warning /> : null}
+    {usingSavedData ? <Notice text="Offline-ready data is in use. Cash and cached Branch Bank methods remain available; Bank transfers sync for verification before stock changes." warning /> : null}
     {notice ? <Notice text={notice} /> : null}
     {error ? <ErrorCard text={error} /> : null}
 
@@ -284,6 +347,15 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
       <View style={[styles.card, dark && darkStyles.card]}>{cartLines.map((line) => <View key={line.key} style={styles.cartLine}><View style={styles.flex}><Text style={[styles.productName, dark && darkStyles.title]}>{line.product.name}</Text><Text style={[styles.muted, dark && darkStyles.body]}>{line.uom.name} · configured {formatMoney(line.uom.sellingPrice ?? 0, currency)}</Text><View style={styles.editRow}><View><Text style={styles.fieldLabel}>Quantity</Text><TextInput keyboardType="decimal-pad" value={quantityDrafts[line.key] ?? formatQuantity(line.quantity)} onChangeText={(value) => setQuantityDrafts((current) => ({ ...current, [line.key]: value.replace(/[^0-9.]/g, '') }))} onEndEditing={() => { const value = Number(quantityDrafts[line.key] ?? line.quantity); if (!setQuantity(line, value)) setQuantityDrafts((current) => ({ ...current, [line.key]: formatQuantity(line.quantity) })); }} style={styles.editInput} /></View><View><Text style={styles.fieldLabel}>Unit price</Text><TextInput editable={canOverridePrice && !draftOrderId} keyboardType="decimal-pad" value={priceDrafts[line.key] ?? formatEditablePrice(line.sellingPrice)} onChangeText={(value) => setPrice(line, value)} onEndEditing={() => commitPrice(line)} style={[styles.priceInput, !canOverridePrice && styles.readOnly]} /></View></View>{canOverridePrice ? <Text style={styles.permissionText}>Price can be changed for this sale.</Text> : <Text style={styles.permissionText}>Configured price applies. Price changes require authorised access.</Text>}</View><View style={styles.lineTotal}><Text style={[styles.price, dark && darkStyles.title]}>{formatMoney(line.quantity * line.sellingPrice, currency)}</Text><Pressable onPress={() => setQuantity(line, 0)}><Ionicons name="trash-outline" size={20} color={theme.colors.danger} /></Pressable></View></View>)}</View>
       <PosCustomerSelector tenantId={tenantId} value={customer} disabled={saving} onChange={setCustomer} />
       <View style={[styles.summary, dark && darkStyles.card]}><View><Text style={[styles.productName, dark && darkStyles.title]}>Sale total</Text>{taxQuote.taxApplied ? <Text style={[styles.muted, dark && darkStyles.body]}>Subtotal {formatMoney(subtotal, currency)} · Tax {formatMoney(taxQuote.taxAmount, currency)} ({formatRate(taxQuote.ratePercent)}%)</Text> : null}</View><Text style={[styles.summaryTotal, dark && darkStyles.title]}>{formatMoney(total, currency)}</Text></View>
+      {offlineBankOpen ? <View style={[styles.card, dark && darkStyles.card]}>
+        <View><Text style={[styles.productName, dark && darkStyles.title]}>Record Bank transfer offline</Text><Text style={[styles.muted, dark && darkStyles.body]}>Use the Bank account the customer paid. SellerTray will submit this payment for verification when the device reconnects.</Text></View>
+        <View style={styles.chips}>{offlineBankMethods.map((method) => <Pressable key={method.paymentMethodId!} onPress={() => setOfflineBankMethodId(method.paymentMethodId!)} style={[styles.chip, method.paymentMethodId === offlineBankMethodId && styles.chipActive]}><Text style={styles.chipText}>{method.displayName}</Text></Pressable>)}</View>
+        {selectedOfflineBankMethod ? <View style={styles.bankDetails}><Text style={[styles.productName, dark && darkStyles.title]}>{selectedOfflineBankMethod.bankName ?? selectedOfflineBankMethod.displayName}</Text>{selectedOfflineBankMethod.bankAccountName ? <Text style={[styles.muted, dark && darkStyles.body]}>{selectedOfflineBankMethod.bankAccountName}</Text> : null}{selectedOfflineBankMethod.bankAccountNumber ? <Text selectable style={[styles.bankAccount, dark && darkStyles.title]}>{selectedOfflineBankMethod.bankAccountNumber}</Text> : null}{selectedOfflineBankMethod.instructions ? <Text style={[styles.muted, dark && darkStyles.body]}>{selectedOfflineBankMethod.instructions}</Text> : null}</View> : null}
+        <View><Text style={styles.fieldLabel}>Transfer reference</Text><TextInput autoCapitalize="characters" autoCorrect={false} value={offlineBankReference} onChangeText={(value) => setOfflineBankReference(value.replace(/\s/g, ''))} placeholder="e.g. NIP123456789" placeholderTextColor={theme.colors.subtle} maxLength={128} style={[styles.bankReferenceInput, dark && darkStyles.title]} /></View>
+        <Text style={[styles.muted, dark && darkStyles.body]}>The reference is stored with the original capture time and cannot be replaced during sync.</Text>
+        <Pressable disabled={!selectedOfflineBankMethod || !offlineBankReference.trim()} onPress={() => void queueOfflineBankSale(saleClientReference ?? createPosClientReference()).catch((cause) => setError(sellerTrayUserMessage(cause, 'This Bank transfer could not be saved offline.')))} style={[styles.primary, (!selectedOfflineBankMethod || !offlineBankReference.trim()) && styles.disabled]}><Ionicons name="business-outline" size={18} color={theme.colors.white} /><Text style={styles.primaryText}>Record Bank transfer</Text></Pressable>
+        <Pressable onPress={() => { setOfflineBankOpen(false); setOfflineBankReference(''); }} style={styles.secondary}><Text style={styles.backText}>Keep cart</Text></Pressable>
+      </View> : null}
       <Pressable disabled={saving || !cartLines.length} onPress={() => void continueToPayment()} style={[styles.primary, (saving || !cartLines.length) && styles.disabled]}>{saving ? <ActivityIndicator color={theme.colors.white} /> : <Ionicons name="card-outline" size={19} color={theme.colors.white} />}<Text style={styles.primaryText}>{saving ? 'Preparing sale…' : 'Continue to payment'}</Text></Pressable>
     </> : null}
 
@@ -312,6 +384,6 @@ function Notice({ text, warning = false }: { text: string; warning?: boolean }) 
 function ErrorCard({ text }: { text: string }) { return <View style={styles.errorCard}><Ionicons name="alert-circle-outline" size={20} color={theme.colors.danger} /><Text style={styles.errorText}>{text}</Text></View>; }
 
 const styles = StyleSheet.create({
-  stack: { gap: 14 }, catalogueToolbar: { flexDirection: 'row', gap: 8, alignItems: 'center' }, searchGrow: { flex: 1 }, viewToggle: { flexDirection: 'row', borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, backgroundColor: theme.colors.white, padding: 3 }, viewButton: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }, viewButtonActive: { backgroundColor: theme.colors.mintSoft }, productGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 }, productList: { gap: 10 }, productTile: { width: '48%', minWidth: 0, justifyContent: 'space-between' }, tilePrice: { color: theme.colors.navy, fontSize: 16, fontWeight: '900' }, addButton: { minHeight: 42 }, productUnavailable: { backgroundColor: '#F2F4F7', borderColor: '#D0D5DD' }, unavailableText: { color: '#98A2B3' }, chipUnavailable: { backgroundColor: '#EAECF0', borderColor: '#D0D5DD' }, eyebrow: { color: theme.colors.muted, fontSize: 11, fontWeight: '900', letterSpacing: 1 }, title: { color: theme.colors.navy, fontSize: 28, lineHeight: 34, fontWeight: '900' }, muted: { color: theme.colors.muted, fontSize: 12, lineHeight: 18 }, row: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' }, flex: { flex: 1, minWidth: 0 }, search: { minHeight: 52, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, backgroundColor: theme.colors.white, paddingLeft: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }, searchInput: { flex: 1, minHeight: 50, color: theme.colors.navy }, iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, card: { borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 13, gap: 10 }, productName: { color: theme.colors.navy, fontSize: 14, fontWeight: '900' }, price: { color: theme.colors.navy, fontSize: 13, fontWeight: '900' }, chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 }, chip: { minHeight: 30, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.pill, paddingHorizontal: 9, justifyContent: 'center' }, chipActive: { borderColor: theme.colors.green, backgroundColor: theme.colors.mintSoft }, chipText: { color: theme.colors.slate, fontSize: 11, fontWeight: '800' }, primary: { minHeight: 48, borderRadius: theme.radius.md, backgroundColor: theme.colors.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: 12 }, primaryText: { color: theme.colors.white, fontSize: 12, fontWeight: '900' }, checkout: { minHeight: 66, borderRadius: theme.radius.lg, backgroundColor: theme.colors.green, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, checkoutTotal: { color: theme.colors.white, fontSize: 20, fontWeight: '900' }, back: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', minHeight: 36 }, backText: { color: theme.colors.greenDark, fontWeight: '900', fontSize: 12 }, cartLine: { backgroundColor: theme.colors.cloud, borderRadius: theme.radius.md, padding: 11, flexDirection: 'row', gap: 8 }, editRow: { flexDirection: 'row', gap: 10, marginTop: 8 }, fieldLabel: { color: theme.colors.muted, fontSize: 10, fontWeight: '800', marginBottom: 3 }, editInput: { width: 72, minHeight: 40, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 10, backgroundColor: theme.colors.white, color: theme.colors.navy, textAlign: 'center' }, priceInput: { width: 112, minHeight: 40, borderWidth: 1, borderColor: theme.colors.green, borderRadius: 10, backgroundColor: theme.colors.white, color: theme.colors.navy, textAlign: 'right', paddingHorizontal: 9 }, readOnly: { borderColor: theme.colors.border, backgroundColor: theme.colors.cloud }, permissionText: { color: theme.colors.muted, fontSize: 10, marginTop: 5 }, lineTotal: { alignItems: 'flex-end', gap: 10 }, summary: { borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }, summaryTotal: { color: theme.colors.navy, fontSize: 24, fontWeight: '900' }, secondary: { minHeight: 44, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, alignItems: 'center', justifyContent: 'center' }, notice: { borderRadius: theme.radius.md, backgroundColor: '#EFF8FF', padding: 11, flexDirection: 'row', gap: 8, alignItems: 'flex-start' }, warning: { backgroundColor: '#FFFAEB' }, noticeText: { flex: 1, color: theme.colors.slate, fontSize: 11, lineHeight: 17 }, errorCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#FDA29B', backgroundColor: theme.colors.dangerSoft, padding: 11, flexDirection: 'row', gap: 8 }, errorText: { flex: 1, color: '#B42318', fontSize: 11, lineHeight: 17 }, empty: { minHeight: 150, justifyContent: 'center', alignItems: 'center', gap: 8 }, disabled: { opacity: 0.45 },
+  stack: { gap: 14 }, catalogueToolbar: { flexDirection: 'row', gap: 8, alignItems: 'center' }, searchGrow: { flex: 1 }, viewToggle: { flexDirection: 'row', borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, backgroundColor: theme.colors.white, padding: 3 }, viewButton: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }, viewButtonActive: { backgroundColor: theme.colors.mintSoft }, productGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 }, productList: { gap: 10 }, productTile: { width: '48%', minWidth: 0, justifyContent: 'space-between' }, tilePrice: { color: theme.colors.navy, fontSize: 16, fontWeight: '900' }, addButton: { minHeight: 42 }, productUnavailable: { backgroundColor: '#F2F4F7', borderColor: '#D0D5DD' }, unavailableText: { color: '#98A2B3' }, chipUnavailable: { backgroundColor: '#EAECF0', borderColor: '#D0D5DD' }, eyebrow: { color: theme.colors.muted, fontSize: 11, fontWeight: '900', letterSpacing: 1 }, title: { color: theme.colors.navy, fontSize: 28, lineHeight: 34, fontWeight: '900' }, muted: { color: theme.colors.muted, fontSize: 12, lineHeight: 18 }, row: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' }, flex: { flex: 1, minWidth: 0 }, search: { minHeight: 52, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, backgroundColor: theme.colors.white, paddingLeft: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }, searchInput: { flex: 1, minHeight: 50, color: theme.colors.navy }, iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, card: { borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 13, gap: 10 }, productName: { color: theme.colors.navy, fontSize: 14, fontWeight: '900' }, price: { color: theme.colors.navy, fontSize: 13, fontWeight: '900' }, chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 }, chip: { minHeight: 30, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.pill, paddingHorizontal: 9, justifyContent: 'center' }, chipActive: { borderColor: theme.colors.green, backgroundColor: theme.colors.mintSoft }, chipText: { color: theme.colors.slate, fontSize: 11, fontWeight: '800' }, primary: { minHeight: 48, borderRadius: theme.radius.md, backgroundColor: theme.colors.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: 12 }, primaryText: { color: theme.colors.white, fontSize: 12, fontWeight: '900' }, checkout: { minHeight: 66, borderRadius: theme.radius.lg, backgroundColor: theme.colors.green, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, checkoutTotal: { color: theme.colors.white, fontSize: 20, fontWeight: '900' }, back: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', minHeight: 36 }, backText: { color: theme.colors.greenDark, fontWeight: '900', fontSize: 12 }, cartLine: { backgroundColor: theme.colors.cloud, borderRadius: theme.radius.md, padding: 11, flexDirection: 'row', gap: 8 }, editRow: { flexDirection: 'row', gap: 10, marginTop: 8 }, fieldLabel: { color: theme.colors.muted, fontSize: 10, fontWeight: '800', marginBottom: 3 }, editInput: { width: 72, minHeight: 40, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 10, backgroundColor: theme.colors.white, color: theme.colors.navy, textAlign: 'center' }, priceInput: { width: 112, minHeight: 40, borderWidth: 1, borderColor: theme.colors.green, borderRadius: 10, backgroundColor: theme.colors.white, color: theme.colors.navy, textAlign: 'right', paddingHorizontal: 9 }, readOnly: { borderColor: theme.colors.border, backgroundColor: theme.colors.cloud }, permissionText: { color: theme.colors.muted, fontSize: 10, marginTop: 5 }, lineTotal: { alignItems: 'flex-end', gap: 10 }, summary: { borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }, summaryTotal: { color: theme.colors.navy, fontSize: 24, fontWeight: '900' }, secondary: { minHeight: 44, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, alignItems: 'center', justifyContent: 'center' }, notice: { borderRadius: theme.radius.md, backgroundColor: '#EFF8FF', padding: 11, flexDirection: 'row', gap: 8, alignItems: 'flex-start' }, warning: { backgroundColor: '#FFFAEB' }, noticeText: { flex: 1, color: theme.colors.slate, fontSize: 11, lineHeight: 17 }, errorCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#FDA29B', backgroundColor: theme.colors.dangerSoft, padding: 11, flexDirection: 'row', gap: 8 }, errorText: { flex: 1, color: '#B42318', fontSize: 11, lineHeight: 17 }, empty: { minHeight: 150, justifyContent: 'center', alignItems: 'center', gap: 8 }, disabled: { opacity: 0.45 }, bankDetails: { borderRadius: theme.radius.md, backgroundColor: theme.colors.cloud, padding: 10, gap: 3 }, bankAccount: { color: theme.colors.navy, fontSize: 16, fontWeight: '900', letterSpacing: 0.5 }, bankReferenceInput: { minHeight: 44, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 10, backgroundColor: theme.colors.white, color: theme.colors.navy, paddingHorizontal: 11 },
 });
 const darkStyles = StyleSheet.create({ card: { backgroundColor: theme.colors.navy, borderColor: '#344054' }, title: { color: theme.colors.cloud }, body: { color: '#D0D5DD' } });

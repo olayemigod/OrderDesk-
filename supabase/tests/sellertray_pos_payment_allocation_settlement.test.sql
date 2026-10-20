@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(16);
+select extensions.plan(20);
 
 select extensions.has_column('public','orders','pos_payment_terms','POS order snapshots payment terms');
 select extensions.has_column('public','orders','pos_checkout_command_id','POS checkout keeps command identity');
@@ -61,6 +61,28 @@ select extensions.ok(
   lower(pg_get_functiondef('public.confirm_sellertray_offline_payment(uuid,uuid,text)'::regprocedure)) like '%sellertray_finalize_pos_order_if_allowed%'
   and lower(pg_get_functiondef('public.confirm_sellertray_offline_payment(uuid,uuid,text)'::regprocedure)) like '%finalize_sellertray_pos_confirmed_payment%',
   'manual confirmation supports new allocations while preserving legacy bank-transfer finalisation'
+);
+
+select extensions.ok(
+  lower(pg_get_functiondef('public.checkout_sellertray_pos_sale(uuid,uuid,jsonb,boolean,uuid,uuid)'::regprocedure)) like '%providerreference%'
+  and lower(pg_get_functiondef('public.checkout_sellertray_pos_sale(uuid,uuid,jsonb,boolean,uuid,uuid)'::regprocedure)) like '%offlinecapturedat%',
+  'checkout consumes immutable offline Bank reference and capture-time evidence'
+);
+select extensions.ok(
+  lower(pg_get_functiondef('public.checkout_sellertray_pos_sale(uuid,uuid,jsonb,boolean,uuid,uuid)'::regprocedure)) like '%v_method_type<>''bank_transfer'' or v_confirm_now%'
+  and lower(pg_get_functiondef('public.checkout_sellertray_pos_sale(uuid,uuid,jsonb,boolean,uuid,uuid)'::regprocedure)) like '%unconfirmed bank payment%',
+  'offline Bank evidence is accepted only for an unconfirmed governed Bank allocation'
+);
+select extensions.ok(
+  lower(pg_get_functiondef('public.checkout_sellertray_pos_sale(uuid,uuid,jsonb,boolean,uuid,uuid)'::regprocedure)) like '%provider_reference=v_provider_reference%'
+  and lower(pg_get_functiondef('public.checkout_sellertray_pos_sale(uuid,uuid,jsonb,boolean,uuid,uuid)'::regprocedure)) like '%customer_claimed_at=v_offline_captured_at%',
+  'offline Bank evidence binds to the existing order payment rather than creating separate payment truth'
+);
+select extensions.ok(
+  lower(pg_get_functiondef('public.checkout_sellertray_pos_sale(uuid,uuid,jsonb,boolean,uuid,uuid)'::regprocedure)) like '%offline-bank-evidence:%'
+  and lower(pg_get_functiondef('public.checkout_sellertray_pos_sale(uuid,uuid,jsonb,boolean,uuid,uuid)'::regprocedure)) like '%offline_bank_evidence%'
+  and lower(pg_get_functiondef('public.checkout_sellertray_pos_sale(uuid,uuid,jsonb,boolean,uuid,uuid)'::regprocedure)) like '%mobile_offline_pos%',
+  'offline Bank evidence creates a deterministic payment audit event'
 );
 
 select * from extensions.finish();

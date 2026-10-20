@@ -15,6 +15,8 @@ export type PosPaymentAllocationInput = {
   paymentMethodId: string | null;
   amount: number;
   confirmNow: boolean;
+  providerReference?: string;
+  offlineCapturedAt?: string;
 };
 
 export type PosPaymentAllocationResult = {
