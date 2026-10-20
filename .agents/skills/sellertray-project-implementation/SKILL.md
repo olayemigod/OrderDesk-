@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.10"
+  version: "0.1.11"
   status: governing
 ---
 
@@ -438,6 +438,21 @@ Payment and shift rules:
 22. Cash & Shift detail must expose a governed sold-item summary for the shift, including Product/UOM, sold quantity, returned quantity where applicable, net quantity, sales value and authoritative historical cost/COGS/valuation status where available. Margin may be shown only when the underlying historical cost is authoritative.
 23. Cash & Shift detail must also expose the shift transaction register with reference, time, Cashier, customer where applicable, source, payment state/method, subtotal, tax, total, paid and outstanding values supported by transaction truth.
 24. Opening transaction items from Cash & Shift review should use an in-place drawer/modal/sheet rather than navigating away from the current shift context. Finalised line snapshots are read-only.
+
+### Money Foundation implementation authority
+
+The current governed Money Foundation implements the rules above with the following shared authority boundaries. Preserve these unless a later explicit product decision replaces them:
+
+1. `sellertray_shift_cash_movements` remains the **single drawer ledger**. Do not create a second cash-balance ledger for Bank Deposit, Owner Withdrawal or Business Expense.
+2. `sellertray_cash_movement_classifications` classifies effective drawer movements as `bank_deposit`, `owner_withdrawal` or cash-funded `business_expense` without changing the underlying drawer arithmetic.
+3. `sellertray_business_expenses` is the immutable management-level Business Expense record. Cash-funded rows link atomically to exactly one governed shift expense movement; bank-funded rows have no drawer effect.
+4. `record_sellertray_typed_cash_out(...)` is the governed typed Cash Out command. Bank Deposit requires an enabled same-Business bank-transfer account; Owner Withdrawal has no Business-bank destination.
+5. `record_sellertray_business_expense(...)` is Owner/Manager authority, Branch-scoped, subscription-aware and idempotent. Bank funding requires an enabled same-Business bank account. Cash funding requires an open same-Branch drawer.
+6. `money-operation` is the shared authenticated Edge Function gateway used by Mobile and Merchant Web for Money mutations. Clients must not write money tables directly.
+7. Cash corrections preserve classification across replacement movements. A classified Bank Deposit or Owner Withdrawal cannot be corrected into an expense, and a cash-funded Business Expense cannot be corrected into a different movement class.
+8. Mobile exposes typed Cash Out and capability-aware Owner/Manager Business Expense workflows under More. The current Mobile repository rejects new generic untyped Cash Out submissions and routes users to the typed workflow; the underlying historical RPC remains compatible with previously deployed activity.
+9. Merchant Web keeps the approved top-level **Cash & Shifts** Money navigation and exposes **Business Expenses** as a management subview rather than creating another permanent top-level navigation item.
+10. `get_sellertray_business_expense_management_list(...)` reports Business Expenses only; Bank Deposits, Owner Withdrawals and ordinary Cashier Expenses must not inflate operating-expense totals.
 
 ### Tax governance
 
