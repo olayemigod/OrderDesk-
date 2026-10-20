@@ -83,6 +83,11 @@ where sl.tenant_id=f.tenant_id and sl.branch_id=f.branch_id and sl.is_default=tr
 select set_config('request.jwt.claim.sub',(select owner_user_id::text from sellertray_product_activity_fixture),true);
 select set_config('request.jwt.claim.role','authenticated',true);
 
+select public.create_sellertray_product_category(tenant_id,'QA')
+from sellertray_product_activity_fixture;
+select public.create_sellertray_business_uom(tenant_id,'Box')
+from sellertray_product_activity_fixture;
+
 update sellertray_product_activity_fixture
 set product_id=public.save_sellertray_product(
   tenant_id,null,'Activity Product','ACT-001','QA','Each',false,1000

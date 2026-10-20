@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.9"
+  version: "0.1.10"
   status: governing
 ---
 
@@ -130,6 +130,10 @@ Product-management direction:
 6. Web is the richer surface for alternate UOMs, conversion factors, UOM-specific prices, multiple barcodes, selling/purchase defaults, category management, product images, detailed pricing, bulk administration and audit/activity history.
 7. Stock display on Product management must read Branch stock truth from the governed inventory model; it must not maintain a separate product-quantity truth.
 8. Product/UOM/barcode/pricing mutations must continue through governed SellerTray commands/RPC boundaries and preserve UOM, Branch, permission, audit and inventory invariants.
+9. **Product Category** and **Business UOM** are governed Business-scoped master data shared by Mobile, Merchant Web, WhatsApp resolution and server/domain services. They are not client-owned free-text vocabularies.
+10. Owners/Managers may create Product Categories and Business UOMs from Merchant Web and from the lightweight authorised Mobile Product workflow. Product forms then select from the same governed active masters on both surfaces.
+11. Saving a Product or product-specific alternate UOM must resolve to an existing active Business master. Clients must not silently create Category/UOM master truth merely because a user typed an unknown string into a Product form.
+12. Product-specific UOM rows continue to own conversion factor, UOM-specific selling price, barcode, fractional policy and selling/purchase defaults. A reusable Business UOM master names the unit; it does not create stock or imply one universal conversion across products.
 
 # 2. Shared commerce core
 
@@ -351,6 +355,9 @@ Rules:
 6. Fractional quantity is permitted only where product/UOM policy allows it.
 7. Historical conversion factors used by posted transactions must remain auditable; do not silently reinterpret history after conversion changes.
 8. Branch stock is one quantity truth in Stock UOM, not unrelated balances per alternate UOM.
+9. Business UOM names are governed tenant-scoped masters. Mobile and Web select the same active Business UOM records; clients must not maintain separate unit vocabularies.
+10. Creating a Business UOM defines a reusable unit name only. It does not create stock, a conversion factor or a universal relationship between units.
+11. Product Stock UOM and alternate product UOM configuration must resolve to the active Business UOM vocabulary. Product-specific conversion remains authoritative for that Product.
 
 # 7. Inventory invariants
 
@@ -391,7 +398,7 @@ Rules:
 4. UOM and branch stock checks use the same shared services as POS.
 5. Shared commerce changes require WhatsApp regression tests.
 
-# 9. Payments and cash
+# 9. Payments, cash, expenses and tax
 
 Use one governed payment model across channels. Preserve idempotency and external references so retries cannot duplicate effects.
 
@@ -403,7 +410,7 @@ Cashier flow:
 
 > Open Shift -> Operate -> Cash Movements/Expenses -> Close Shift -> Reconcile
 
-Track opening cash, cash sales, expenses, cash in/out, expected cash, declared cash, variance and explanation/manager review where required.
+Track opening cash, cash sales, cashier expenses, typed cash in/out, expected cash, declared cash, variance and explanation/manager review where required.
 
 Payment and shift rules:
 
@@ -421,6 +428,25 @@ Payment and shift rules:
 12. Cash correction requires explicit correction authority, Branch authority, writable subscription state, an open shift and a human correction reason. Staff must not receive correction authority merely because they can record ordinary cash activity.
 13. Correction commands must be idempotent and drawer totals/read models must use only effective non-superseded cash activity.
 14. Closed shifts are historical evidence and are not reopened or rewritten by cash correction; use shift review/follow-up for historical discrepancies.
+15. **Cash Out is typed business activity**, not one generic expense bucket. At minimum support **Bank Deposit** and **Owner Withdrawal** as distinct cash-out types.
+16. A Bank Deposit reduces drawer cash but is not an operating expense. It must identify the governed Business bank account that received the funds so cash-to-bank movement is auditable.
+17. An Owner Withdrawal reduces drawer cash but is not an operating expense. Keep it distinct from both Bank Deposit and Cashier Expense in reporting and shift review.
+18. **Cashier Expense** means a cash expense paid from the cashier/open-shift drawer. It belongs to shift cash reconciliation and reduces expected physical drawer cash exactly once.
+19. **Business Expense** is management-level expenditure available to Owner/Manager authority and may be funded from Cash, Bank or another approved governed funding source. A Bank-funded expense identifies the Business bank account used.
+20. When a Business Expense is funded from an open cash drawer, the expense record and its cash effect must commit atomically/idempotently so the drawer is not reduced twice and the expense is not orphaned from its funding movement.
+21. Bank Deposit, Owner Withdrawal, Cashier Expense and Business Expense are separate reporting classifications. Do not count transfers/withdrawals as operating expense or profit reduction unless their business classification actually represents an expense.
+22. Cash & Shift detail must expose a governed sold-item summary for the shift, including Product/UOM, sold quantity, returned quantity where applicable, net quantity, sales value and authoritative historical cost/COGS/valuation status where available. Margin may be shown only when the underlying historical cost is authoritative.
+23. Cash & Shift detail must also expose the shift transaction register with reference, time, Cashier, customer where applicable, source, payment state/method, subtotal, tax, total, paid and outstanding values supported by transaction truth.
+24. Opening transaction items from Cash & Shift review should use an in-place drawer/modal/sheet rather than navigating away from the current shift context. Finalised line snapshots are read-only.
+
+### Tax governance
+
+1. Tax is shared commerce truth and is **settings-governed**. If no tax configuration is active for the Business/transaction context, SellerTray must not calculate or add tax.
+2. When tax is configured and active, authoritative server/domain calculation applies the tax to the sale/order total. Mobile, Merchant Web, WhatsApp and AI must not independently reimplement tax arithmetic as separate truth.
+3. Posted/finalised transactions snapshot the tax basis, rate/configuration identity where applicable, tax amount and resulting total used at posting time so later settings changes do not rewrite history.
+4. Tax display on a receipt/invoice is a separate merchant setting from tax calculation. A merchant may hide the tax breakdown from the printed receipt/invoice only where policy allows; hiding the line must never remove already-applicable tax from the commercial total.
+5. Returns/refunds must reverse the corresponding historical tax for the approved returned quantity/value rather than applying today’s settings to rewrite the original tax history.
+6. Reporting must distinguish subtotal/revenue basis, tax and gross transaction total as required so collected tax is not silently treated as ordinary sales revenue.
 
 # 10. Bluetooth printing and hardware
 
@@ -451,7 +477,7 @@ Mobile reporting is concise and operational. Web hosts the full Report Center.
 
 Shared report dimensions should include as applicable: period, branch, staff, product, category, customer, payment method and source channel.
 
-Web reporting should cover sales, inventory, stock movement/valuation, low/out-of-stock, cash/shift, expenses, customers, staff, branch performance, profitability and WhatsApp performance as approved.
+Web reporting should cover sales, inventory, stock movement/valuation, low/out-of-stock, cash/shift, cashier and Business expenses, customers, staff, branch performance, profitability, tax and WhatsApp performance as approved.
 
 Report totals must reconcile to underlying transactions; UOM quantity reporting must normalise correctly where aggregation requires it.
 
@@ -588,7 +614,7 @@ Verify representative allowed/denied read, allowed/denied write/action, branch i
 
 ## UOM gate
 
-Verify Stock UOM, alternate conversion, UOM-specific price, UOM barcode where implemented, fractional policy, persisted conversion factor and correct stock impact.
+Verify Business UOM master creation/selection where touched, Stock UOM, alternate conversion, UOM-specific price, UOM barcode where implemented, fractional policy, persisted conversion factor and correct stock impact. Verify unknown free-text unit names cannot bypass the governed master vocabulary.
 
 ## Inventory gate
 
@@ -596,7 +622,7 @@ Verify sale deduction, return restoration, purchase receiving, transfer, adjustm
 
 ## Payment gate
 
-Verify success, pending verification, failure, retry/idempotency, split payment where applicable and refund/reference behaviour. For POS shifts, also verify Branch assignment, per-shift payment-method snapshot, separate cash/non-cash totals, drawer variance isolation, retry-safe payment attribution and governed cash correction without destructive history mutation.
+Verify success, pending verification, failure, retry/idempotency, split payment where applicable and refund/reference behaviour. For POS shifts, also verify Branch assignment, per-shift payment-method snapshot, separate cash/non-cash totals, drawer variance isolation, typed Cash Out, expense funding source, retry-safe payment attribution and governed cash correction without destructive history mutation.
 
 ## WhatsApp regression gate
 
@@ -604,11 +630,11 @@ When shared commerce changes, verify customer resolution, Product/UOM resolution
 
 ## Printing gate
 
-Verify successful print, unavailable/failing printer after successful sale, reprint without duplication, configured copy headings/order, custom copy labels, merchant footer/platform attribution separation, printer-safe output, and 58/80mm where implemented.
+Verify successful print, unavailable/failing printer after successful sale, reprint without duplication, configured copy headings/order, custom copy labels, merchant footer/platform attribution separation, printer-safe output, and 58/80mm where implemented. When tax is enabled, verify the merchant’s tax-display preference changes presentation only and not the posted total.
 
 ## Reporting gate
 
-Verify filters/totals against source transactions, especially period, branch, source channel, UOM-normalised quantity, payment state and returns/cancellations. Verify operational drafts and audit-deleted drafts do not inflate completed sales/performance totals.
+Verify filters/totals against source transactions, especially period, branch, source channel, UOM-normalised quantity, payment state, tax, expenses and returns/cancellations. Verify shift item summaries use authoritative historical COGS/valuation rather than current Product cost. Verify operational drafts and audit-deleted drafts do not inflate completed sales/performance totals.
 
 ## Offline gate
 
@@ -629,6 +655,9 @@ When feedback is touched, verify signed-in submission state, repeat submission, 
 7. Do not bypass server/domain validation because the UI already checked something.
 8. Do not use generic direct stock receipt where purchasing or transfer receiving is the governed source.
 9. Do not destructively edit posted cash history to correct a mistake.
+10. Do not let clients invent Category/UOM master records implicitly from unknown Product-form text.
+11. Do not classify Bank Deposit or Owner Withdrawal as operating expense merely because they reduce drawer cash.
+12. Do not calculate tax independently in Mobile, Web, WhatsApp or AI when the shared commerce authority can govern it once.
 
 # 19. Definition of done
 

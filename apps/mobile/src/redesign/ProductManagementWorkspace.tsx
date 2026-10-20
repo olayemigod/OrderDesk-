@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
+import { SellerTraySelectField } from '../components/SellerTraySelectField';
 import { SellerTrayText as Text } from '../components/SellerTrayText';
+import { SellerTrayTextInput } from '../components/SellerTrayTextInput';
 import type { CommerceProduct } from '../data/commerceRepository';
 import {
   isLikelyConnectivityError,
@@ -11,9 +13,13 @@ import {
 } from '../data/offlineSalesRepository';
 import {
   assignStockUomBarcode,
+  createBusinessUom,
+  createProductCategory,
+  loadCatalogueMasterData,
   loadManagedProducts,
   saveManagedProduct,
   setManagedProductActive,
+  type CatalogueMasterData,
   type MobileProductDraft,
 } from '../data/productManagementRepository';
 import { sellerTrayUserMessage } from '../data/userFacingError';
@@ -33,9 +39,12 @@ const EMPTY: MobileProductDraft = {
   sellingPrice: 0,
 };
 
+const EMPTY_MASTERS: CatalogueMasterData = { categories: [], uoms: [] };
+
 export function ProductManagementWorkspace({ tenantId, currency, onClose }: Props) {
   const dark = useSellerTrayAppearance().dark;
   const [products, setProducts] = useState<CommerceProduct[]>([]);
+  const [masters, setMasters] = useState<CatalogueMasterData>(EMPTY_MASTERS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [readOnly, setReadOnly] = useState(false);
@@ -52,8 +61,12 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
     setLoading(true);
     setError(null);
     try {
-      const next = await loadManagedProducts(tenantId);
+      const [next, nextMasters] = await Promise.all([
+        loadManagedProducts(tenantId),
+        loadCatalogueMasterData(tenantId),
+      ]);
       setProducts(next);
+      setMasters(nextMasters);
       setReadOnly(false);
       await saveCommerceProductCache(tenantId, next).catch(() => undefined);
     } catch (cause) {
@@ -61,6 +74,7 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
         const cached = await loadCommerceProductCache(tenantId);
         if (cached) {
           setProducts(cached.data);
+          setMasters(EMPTY_MASTERS);
           setReadOnly(true);
           setNotice('Offline: showing saved products. Connect to add or change products.');
           return;
@@ -70,6 +84,11 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
     } finally {
       setLoading(false);
     }
+  }
+
+  async function refreshMasters() {
+    const next = await loadCatalogueMasterData(tenantId);
+    setMasters(next);
   }
 
   useEffect(() => {
@@ -96,7 +115,10 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
     setError(null);
     setNotice(null);
     if (!product) {
-      setDraft(EMPTY);
+      const defaultUom = masters.uoms.find((item) => item.name.toLowerCase() === 'each')?.name
+        ?? masters.uoms[0]?.name
+        ?? EMPTY.stockUom;
+      setDraft({ ...EMPTY, stockUom: defaultUom });
       setPrice('0');
       return;
     }
@@ -133,6 +155,16 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
     }
     begin(null, barcode);
     setNotice('Barcode captured. Add the product details to finish creating it.');
+  }
+
+  async function addCategory(name: string) {
+    await createProductCategory(tenantId, name);
+    await refreshMasters();
+  }
+
+  async function addUom(name: string) {
+    await createBusinessUom(tenantId, name);
+    await refreshMasters();
   }
 
   async function save() {
@@ -201,7 +233,7 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
           <Text style={[styles.eyebrow, dark && darkStyles.body]}>PRODUCT</Text>
           <Text style={[styles.title, dark && darkStyles.title]}>{editor.product ? 'Edit product' : 'Add product'}</Text>
           <Text style={[styles.help, dark && darkStyles.body]}>
-            Quick product details only. Advanced units, multiple barcodes and detailed pricing stay on Merchant Web.
+            Quick product details only. Advanced conversions, multiple barcodes and detailed pricing stay on Merchant Web.
           </Text>
         </View>
         {editor.barcode ? (
@@ -211,19 +243,38 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
           </View>
         ) : null}
         <Field label="Product name">
-          <TextInput value={draft.name} onChangeText={(name) => setDraft((current) => ({ ...current, name }))} placeholder="Product name" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
+          <SellerTrayTextInput value={draft.name} onChangeText={(name) => setDraft((current) => ({ ...current, name }))} placeholder="Product name" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
         </Field>
         <Field label="SKU (optional)">
-          <TextInput value={draft.sku ?? ''} onChangeText={(sku) => setDraft((current) => ({ ...current, sku }))} placeholder="SKU" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
+          <SellerTrayTextInput value={draft.sku ?? ''} onChangeText={(sku) => setDraft((current) => ({ ...current, sku }))} placeholder="SKU" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
         </Field>
-        <Field label="Category (optional)">
-          <TextInput value={draft.category ?? ''} onChangeText={(category) => setDraft((current) => ({ ...current, category }))} placeholder="Category" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
-        </Field>
-        <Field label="Stock unit">
-          <TextInput value={draft.stockUom} editable={!editor.product} onChangeText={(stockUom) => setDraft((current) => ({ ...current, stockUom }))} placeholder="Each" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input, editor.product && styles.readonly]} />
-        </Field>
+        <SellerTraySelectField
+          label="Category (optional)"
+          value={draft.category}
+          options={masters.categories}
+          allowEmpty
+          emptyLabel="No category"
+          placeholder="Select category"
+          createLabel="Add product category"
+          onCreate={addCategory}
+          onChange={(category) => setDraft((current) => ({ ...current, category }))}
+        />
+        <SellerTraySelectField
+          label="Stock unit"
+          value={draft.stockUom}
+          options={masters.uoms}
+          placeholder="Select unit"
+          createLabel="Add Business unit"
+          onCreate={addUom}
+          onChange={(stockUom) => setDraft((current) => ({ ...current, stockUom: stockUom ?? current.stockUom }))}
+        />
+        {editor.product ? (
+          <Text style={[styles.help, dark && darkStyles.body]}>
+            SellerTray will reject a Stock UOM change when transaction history makes that change unsafe.
+          </Text>
+        ) : null}
         <Field label={priceLabel}>
-          <TextInput value={price} onChangeText={setPrice} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
+          <SellerTrayTextInput value={price} onChangeText={setPrice} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
         </Field>
         <Text style={[styles.help, dark && darkStyles.body]}>
           Creating or editing a product never adds stock. Receive, transfer, count or adjust stock through governed Inventory workflows.
@@ -263,7 +314,7 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
           <Text style={styles.secondaryText}>Scan barcode</Text>
         </Pressable>
       </View>
-      <TextInput value={query} onChangeText={setQuery} placeholder="Search name, SKU, category or barcode" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
+      <SellerTrayTextInput value={query} onChangeText={setQuery} placeholder="Search name, SKU, category or barcode" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
       <Pressable onPress={() => setShowInactive((value) => !value)} style={styles.toggle}>
         <Ionicons name={showInactive ? 'checkbox' : 'square-outline'} size={20} color={theme.colors.greenDark} />
         <Text style={[styles.body, dark && darkStyles.body]}>Show inactive products</Text>
@@ -312,7 +363,6 @@ const styles = StyleSheet.create({
   secondary: { minHeight: 48, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center' },
   secondaryText: { color: theme.colors.greenDark, fontWeight: '900' },
   input: { minHeight: 48, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 13, paddingHorizontal: 12, color: theme.colors.navy, backgroundColor: theme.colors.white },
-  readonly: { opacity: 0.7 },
   field: { gap: 6 },
   label: { fontSize: 12, fontWeight: '900', color: theme.colors.navy },
   toggle: { flexDirection: 'row', alignItems: 'center', gap: 8 },

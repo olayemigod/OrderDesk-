@@ -53,6 +53,9 @@ type ProductPage = {
   items: ProductListItem[];
 };
 
+type CatalogueMasterOption = { id: string; name: string };
+type CatalogueMasters = { categories: CatalogueMasterOption[]; uoms: CatalogueMasterOption[] };
+
 type ProductDraft = {
   name: string;
   sku: string;
@@ -86,6 +89,7 @@ const EMPTY_PAGE: ProductPage = {
   uoms: [],
   items: [],
 };
+const EMPTY_MASTERS: CatalogueMasters = { categories: [], uoms: [] };
 const EMPTY_PRODUCT: ProductDraft = {
   name: '',
   sku: '',
@@ -113,6 +117,7 @@ export default function ProductsManagement({
   currency: string;
 }) {
   const [result, setResult] = useState<ProductPage>(EMPTY_PAGE);
+  const [masters, setMasters] = useState<CatalogueMasters>(EMPTY_MASTERS);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ProductDetail | null>(null);
   const [creating, setCreating] = useState(false);
@@ -129,7 +134,11 @@ export default function ProductsManagement({
   const [page, setPage] = useState(1);
   const [listLoading, setListLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [masterLoading, setMasterLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [masterSaving, setMasterSaving] = useState(false);
+  const [newCategory, setNewCategory] = useState('');
+  const [newUom, setNewUom] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const listRequest = useRef(0);
@@ -147,6 +156,10 @@ export default function ProductsManagement({
     setMissingBarcode(false);
     setMissingPrice(false);
     setPage(1);
+    setMasters(EMPTY_MASTERS);
+    setNewCategory('');
+    setNewUom('');
+    void loadMasters();
   }, [tenantId]);
 
   useEffect(() => {
@@ -160,6 +173,21 @@ export default function ProductsManagement({
     }
     void loadDetail(selectedId);
   }, [tenantId, selectedId, creating]);
+
+  async function loadMasters() {
+    setMasterLoading(true);
+    try {
+      const { data, error: rpcError } = await supabase.rpc('get_sellertray_catalogue_master_data', {
+        p_tenant_id: tenantId,
+      });
+      if (rpcError) throw rpcError;
+      setMasters(parseMasters(data));
+    } catch (cause) {
+      setError(errorMessage(cause, 'Unable to load product categories and units.'));
+    } finally {
+      setMasterLoading(false);
+    }
+  }
 
   async function loadPage(preferredId?: string | null) {
     const requestId = ++listRequest.current;
@@ -240,7 +268,10 @@ export default function ProductsManagement({
     setSelectedId(null);
     setDetail(null);
     setTab('overview');
-    setProductDraft(EMPTY_PRODUCT);
+    const defaultUom = masters.uoms.find((item) => item.name.toLowerCase() === 'each')?.name
+      ?? masters.uoms[0]?.name
+      ?? EMPTY_PRODUCT.stockUom;
+    setProductDraft({ ...EMPTY_PRODUCT, stockUom: defaultUom });
     setUomDraft(EMPTY_UOM);
     setMessage(null);
     setError(null);
@@ -261,6 +292,46 @@ export default function ProductsManagement({
     setMissingBarcode(false);
     setMissingPrice(false);
     setPage(1);
+  }
+
+  async function createCategory(event: FormEvent) {
+    event.preventDefault();
+    const name = newCategory.trim();
+    if (!name || masterSaving) return;
+    setMasterSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const { error: rpcError } = await supabase.rpc('create_sellertray_product_category', { p_tenant_id: tenantId, p_name: name });
+      if (rpcError) throw rpcError;
+      setNewCategory('');
+      await loadMasters();
+      setMessage(`Category “${name}” is available for products.`);
+    } catch (cause) {
+      setError(errorMessage(cause, 'Unable to create this product category.'));
+    } finally {
+      setMasterSaving(false);
+    }
+  }
+
+  async function createBusinessUom(event: FormEvent) {
+    event.preventDefault();
+    const name = newUom.trim();
+    if (!name || masterSaving) return;
+    setMasterSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const { error: rpcError } = await supabase.rpc('create_sellertray_business_uom', { p_tenant_id: tenantId, p_name: name });
+      if (rpcError) throw rpcError;
+      setNewUom('');
+      await loadMasters();
+      setMessage(`Unit “${name}” is available for products.`);
+    } catch (cause) {
+      setError(errorMessage(cause, 'Unable to create this Business unit.'));
+    } finally {
+      setMasterSaving(false);
+    }
   }
 
   async function saveProduct(event: FormEvent) {
@@ -345,7 +416,7 @@ export default function ProductsManagement({
     const factor = Number(uomDraft.conversionFactor);
     const price = uomDraft.sellingPrice.trim() === '' ? null : Number(uomDraft.sellingPrice);
     if (!uomDraft.name.trim() || !Number.isFinite(factor) || factor <= 0 || (price !== null && (!Number.isFinite(price) || price < 0))) {
-      setError('Enter a unit name, positive conversion factor and a valid selling price.');
+      setError('Select a unit, enter a positive conversion factor and a valid selling price.');
       return;
     }
 
@@ -408,13 +479,30 @@ export default function ProductsManagement({
       <div>
         <p className="eyebrow">Catalogue management</p>
         <h2>Products</h2>
-        <p className="muted">Manage product definitions, units, barcodes and selling prices shared by POS and WhatsApp.</p>
+        <p className="muted">Manage product definitions, governed categories and units, barcodes and selling prices shared by POS and WhatsApp.</p>
       </div>
       <button className="primary-button" type="button" onClick={startNewProduct}>Add Product</button>
     </div>
 
     {error ? <div className="error-banner">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div> : null}
     {message ? <div className="success-banner">{message}<button type="button" onClick={() => setMessage(null)}>Dismiss</button></div> : null}
+
+    <section className="panel" aria-label="Catalogue masters">
+      <div className="panel-head">
+        <div><p className="eyebrow">Catalogue masters</p><h3>Categories & Units</h3><p className="muted">Create reusable Business values here, then select them on products. Product creation never creates master data implicitly.</p></div>
+        <span className="muted">{masterLoading ? 'Refreshing…' : `${masters.categories.length} categories · ${masters.uoms.length} units`}</span>
+      </div>
+      <div className="form-grid">
+        <form className="product-search" onSubmit={createCategory}>
+          <input value={newCategory} onChange={(event) => setNewCategory(event.target.value)} placeholder="New product category" aria-label="New product category" />
+          <button className="secondary-button" type="submit" disabled={masterSaving || !newCategory.trim()}>{masterSaving ? 'Saving…' : 'Add Category'}</button>
+        </form>
+        <form className="product-search" onSubmit={createBusinessUom}>
+          <input value={newUom} onChange={(event) => setNewUom(event.target.value)} placeholder="New unit, e.g. Carton" aria-label="New Business unit" />
+          <button className="secondary-button" type="submit" disabled={masterSaving || !newUom.trim()}>{masterSaving ? 'Saving…' : 'Add Unit'}</button>
+        </form>
+      </div>
+    </section>
 
     <section className="panel product-filter-panel" aria-label="Product filters">
       <form className="product-search" onSubmit={applySearch}>
@@ -489,8 +577,8 @@ export default function ProductsManagement({
         draft={productDraft}
         setDraft={setProductDraft}
         currency={currency}
-        categories={result.categories}
-        uoms={result.uoms}
+        categories={masters.categories}
+        uoms={masters.uoms}
         saving={saving}
         onSubmit={saveProduct}
         note="Creating a product defines the catalogue item only. It does not add opening stock or change inventory."
@@ -520,8 +608,8 @@ export default function ProductsManagement({
           draft={productDraft}
           setDraft={setProductDraft}
           currency={currency}
-          categories={result.categories}
-          uoms={result.uoms}
+          categories={masters.categories}
+          uoms={masters.uoms}
           saving={saving}
           onSubmit={saveProduct}
           detail={detail}
@@ -542,7 +630,7 @@ export default function ProductsManagement({
             </div>
             <form className="uom-editor" onSubmit={saveUom}>
               <h4>{uomDraft.id ? 'Edit unit' : 'Add alternate unit'}</h4>
-              <Field label="Unit name"><input required value={uomDraft.name} onChange={(event) => setUomDraft((current) => ({ ...current, name: event.target.value }))} /></Field>
+              <Field label="Unit name"><select required value={uomDraft.name} onChange={(event) => setUomDraft((current) => ({ ...current, name: event.target.value }))}><option value="">Select unit</option>{masters.uoms.map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}</select></Field>
               <Field label={`Conversion to ${detail.stockUom}`}><input required inputMode="decimal" value={uomDraft.conversionFactor} onChange={(event) => setUomDraft((current) => ({ ...current, conversionFactor: event.target.value }))} /></Field>
               <Field label={`Selling price (${currency})`}><input inputMode="decimal" value={uomDraft.sellingPrice} onChange={(event) => setUomDraft((current) => ({ ...current, sellingPrice: event.target.value }))} placeholder="Optional" /></Field>
               <Field label="Barcode"><input value={uomDraft.barcode} onChange={(event) => setUomDraft((current) => ({ ...current, barcode: event.target.value }))} placeholder="Optional" /></Field>
@@ -597,8 +685,8 @@ function ProductOverviewForm({
   draft: ProductDraft;
   setDraft: Dispatch<SetStateAction<ProductDraft>>;
   currency: string;
-  categories: string[];
-  uoms: string[];
+  categories: CatalogueMasterOption[];
+  uoms: CatalogueMasterOption[];
   saving: boolean;
   onSubmit: (event: FormEvent) => void;
   note?: string;
@@ -609,13 +697,11 @@ function ProductOverviewForm({
     <div className="form-grid">
       <Field label="Product name"><input required value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} /></Field>
       <Field label="SKU"><input value={draft.sku} onChange={(event) => setDraft((current) => ({ ...current, sku: event.target.value }))} placeholder="Optional" /></Field>
-      <Field label="Category"><input list="sellertray-product-categories" value={draft.category} onChange={(event) => setDraft((current) => ({ ...current, category: event.target.value }))} placeholder="Optional" /></Field>
-      <Field label="Stock UOM"><input required list="sellertray-product-uoms" value={draft.stockUom} onChange={(event) => setDraft((current) => ({ ...current, stockUom: event.target.value }))} /></Field>
+      <Field label="Category"><select value={draft.category} onChange={(event) => setDraft((current) => ({ ...current, category: event.target.value }))}><option value="">No category</option>{categories.map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}</select></Field>
+      <Field label="Stock UOM"><select required value={draft.stockUom} onChange={(event) => setDraft((current) => ({ ...current, stockUom: event.target.value }))}><option value="">Select unit</option>{uoms.map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}</select></Field>
       <Field label={`Selling price (${currency})`}><input required inputMode="decimal" value={draft.sellingPrice} onChange={(event) => setDraft((current) => ({ ...current, sellingPrice: event.target.value }))} /></Field>
       <label className="check-card"><input type="checkbox" checked={draft.allowFractionalStock} onChange={(event) => setDraft((current) => ({ ...current, allowFractionalStock: event.target.checked }))} /><span><strong>Allow fractional Stock UOM</strong><small>Use when stock can be held or sold in partial base units.</small></span></label>
     </div>
-    <datalist id="sellertray-product-categories">{categories.map((value) => <option key={value} value={value} />)}</datalist>
-    <datalist id="sellertray-product-uoms">{uoms.map((value) => <option key={value} value={value} />)}</datalist>
     {detail ? <div className="product-audit-meta"><span>Created {dateOnly(detail.createdAt)}</span><span>Updated {dateOnly(detail.updatedAt)}</span></div> : null}
     <div className="form-actions"><button className="primary-button" disabled={saving}>{saving ? 'Saving…' : detail ? 'Save changes' : 'Save Product'}</button></div>
   </form>;
@@ -627,6 +713,21 @@ function TabButton({ id, label, active, onClick }: { id: ProductTab; label: stri
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return <label className="field"><span>{label}</span>{children}</label>;
+}
+
+function parseMasters(value: unknown): CatalogueMasters {
+  const root = object(value);
+  return {
+    categories: parseMasterOptions(root.categories),
+    uoms: parseMasterOptions(root.uoms),
+  };
+}
+
+function parseMasterOptions(value: unknown): CatalogueMasterOption[] {
+  return array(value).map((entry) => {
+    const row = object(entry);
+    return { id: String(row.id ?? ''), name: String(row.name ?? '').trim() };
+  }).filter((item) => item.id && item.name);
 }
 
 function parsePage(value: unknown): ProductPage {
