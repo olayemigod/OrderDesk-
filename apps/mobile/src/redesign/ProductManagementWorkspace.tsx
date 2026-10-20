@@ -11,9 +11,14 @@ import {
 } from '../data/offlineSalesRepository';
 import {
   assignStockUomBarcode,
+  createBusinessUom,
+  createProductCategory,
+  loadCatalogueMasters,
   loadManagedProducts,
   saveManagedProduct,
   setManagedProductActive,
+  type CatalogueMasterOption,
+  type CatalogueMasters,
   type MobileProductDraft,
 } from '../data/productManagementRepository';
 import { sellerTrayUserMessage } from '../data/userFacingError';
@@ -32,12 +37,15 @@ const EMPTY: MobileProductDraft = {
   allowFractionalStock: false,
   sellingPrice: 0,
 };
+const EMPTY_MASTERS: CatalogueMasters = { categories: [], uoms: [] };
 
 export function ProductManagementWorkspace({ tenantId, currency, onClose }: Props) {
   const dark = useSellerTrayAppearance().dark;
   const [products, setProducts] = useState<CommerceProduct[]>([]);
+  const [masters, setMasters] = useState<CatalogueMasters>(EMPTY_MASTERS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [masterSaving, setMasterSaving] = useState(false);
   const [readOnly, setReadOnly] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -46,14 +54,20 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [draft, setDraft] = useState<MobileProductDraft>(EMPTY);
   const [price, setPrice] = useState('0');
+  const [newCategory, setNewCategory] = useState('');
+  const [newUom, setNewUom] = useState('');
   const [scannerOpen, setScannerOpen] = useState(false);
 
   async function refresh() {
     setLoading(true);
     setError(null);
     try {
-      const next = await loadManagedProducts(tenantId);
+      const [next, nextMasters] = await Promise.all([
+        loadManagedProducts(tenantId),
+        loadCatalogueMasters(tenantId),
+      ]);
       setProducts(next);
+      setMasters(nextMasters);
       setReadOnly(false);
       await saveCommerceProductCache(tenantId, next).catch(() => undefined);
     } catch (cause) {
@@ -61,6 +75,7 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
         const cached = await loadCommerceProductCache(tenantId);
         if (cached) {
           setProducts(cached.data);
+          setMasters(deriveMasters(cached.data));
           setReadOnly(true);
           setNotice('Offline: showing saved products. Connect to add or change products.');
           return;
@@ -95,8 +110,13 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
     setEditor({ product, barcode });
     setError(null);
     setNotice(null);
+    setNewCategory('');
+    setNewUom('');
     if (!product) {
-      setDraft(EMPTY);
+      const defaultUom = masters.uoms.find((item) => item.name.trim().toLowerCase() === 'each')?.name
+        ?? masters.uoms[0]?.name
+        ?? 'Each';
+      setDraft({ ...EMPTY, stockUom: defaultUom });
       setPrice('0');
       return;
     }
@@ -135,6 +155,42 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
     setNotice('Barcode captured. Add the product details to finish creating it.');
   }
 
+  async function addCategory() {
+    if (masterSaving || readOnly) return;
+    setMasterSaving(true);
+    setError(null);
+    try {
+      const created = await createProductCategory(tenantId, newCategory);
+      const next = await loadCatalogueMasters(tenantId);
+      setMasters(next);
+      setDraft((current) => ({ ...current, category: created.name }));
+      setNewCategory('');
+      setNotice(`Category “${created.name}” created and selected.`);
+    } catch (cause) {
+      setError(sellerTrayUserMessage(cause, 'Unable to create this category.'));
+    } finally {
+      setMasterSaving(false);
+    }
+  }
+
+  async function addUom() {
+    if (masterSaving || readOnly || editor?.product) return;
+    setMasterSaving(true);
+    setError(null);
+    try {
+      const created = await createBusinessUom(tenantId, newUom);
+      const next = await loadCatalogueMasters(tenantId);
+      setMasters(next);
+      setDraft((current) => ({ ...current, stockUom: created.name }));
+      setNewUom('');
+      setNotice(`Unit “${created.name}” created and selected.`);
+    } catch (cause) {
+      setError(sellerTrayUserMessage(cause, 'Unable to create this unit.'));
+    } finally {
+      setMasterSaving(false);
+    }
+  }
+
   async function save() {
     if (!editor || saving || readOnly) return;
     setSaving(true);
@@ -161,6 +217,7 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
       const wasEdit = Boolean(editor.product);
       setEditor(null);
       setProducts(next);
+      setMasters(await loadCatalogueMasters(tenantId));
       setReadOnly(false);
       await saveCommerceProductCache(tenantId, next).catch(() => undefined);
       setNotice(wasEdit ? 'Product updated.' : 'Product created. Stock was not changed.');
@@ -201,7 +258,7 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
           <Text style={[styles.eyebrow, dark && darkStyles.body]}>PRODUCT</Text>
           <Text style={[styles.title, dark && darkStyles.title]}>{editor.product ? 'Edit product' : 'Add product'}</Text>
           <Text style={[styles.help, dark && darkStyles.body]}>
-            Quick product details only. Advanced units, multiple barcodes and detailed pricing stay on Merchant Web.
+            Categories and units use the same governed Business masters as Merchant Web. Advanced conversions, multiple barcodes and detailed pricing stay on Merchant Web.
           </Text>
         </View>
         {editor.barcode ? (
@@ -217,10 +274,24 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
           <TextInput value={draft.sku ?? ''} onChangeText={(sku) => setDraft((current) => ({ ...current, sku }))} placeholder="SKU" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
         </Field>
         <Field label="Category (optional)">
-          <TextInput value={draft.category ?? ''} onChangeText={(category) => setDraft((current) => ({ ...current, category }))} placeholder="Category" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
+          <MasterChoices
+            options={masters.categories}
+            selected={draft.category}
+            onSelect={(category) => setDraft((current) => ({ ...current, category }))}
+            allowNone
+            dark={dark}
+          />
+          <MasterCreator value={newCategory} onChange={setNewCategory} onAdd={() => void addCategory()} placeholder="New category" disabled={masterSaving} dark={dark} />
         </Field>
         <Field label="Stock unit">
-          <TextInput value={draft.stockUom} editable={!editor.product} onChangeText={(stockUom) => setDraft((current) => ({ ...current, stockUom }))} placeholder="Each" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input, editor.product && styles.readonly]} />
+          {editor.product ? (
+            <View style={[styles.readonlyBox, dark && darkStyles.input]}><Text style={[styles.body, dark && darkStyles.title]}>{draft.stockUom}</Text></View>
+          ) : (
+            <>
+              <MasterChoices options={masters.uoms} selected={draft.stockUom} onSelect={(stockUom) => setDraft((current) => ({ ...current, stockUom }))} dark={dark} />
+              <MasterCreator value={newUom} onChange={setNewUom} onAdd={() => void addUom()} placeholder="New unit, e.g. Carton" disabled={masterSaving} dark={dark} />
+            </>
+          )}
         </Field>
         <Field label={priceLabel}>
           <TextInput value={price} onChangeText={setPrice} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
@@ -228,12 +299,13 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
         <Text style={[styles.help, dark && darkStyles.body]}>
           Creating or editing a product never adds stock. Receive, transfer, count or adjust stock through governed Inventory workflows.
         </Text>
+        {notice ? <Text style={styles.notice}>{notice}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        <Pressable disabled={saving} onPress={() => void save()} style={[styles.primary, saving && styles.disabled]}>
+        <Pressable disabled={saving || masterSaving} onPress={() => void save()} style={[styles.primary, (saving || masterSaving) && styles.disabled]}>
           <Text style={styles.primaryText}>{saving ? 'Saving…' : 'Save product'}</Text>
         </Pressable>
         {editor.product ? (
-          <Pressable disabled={saving} onPress={() => void toggleActive()} style={styles.secondary}>
+          <Pressable disabled={saving || masterSaving} onPress={() => void toggleActive()} style={styles.secondary}>
             <Text style={styles.secondaryText}>{editor.product.isActive ? 'Deactivate product' : 'Activate product'}</Text>
           </Pressable>
         ) : null}
@@ -289,8 +361,70 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
   );
 }
 
+function MasterChoices({
+  options,
+  selected,
+  onSelect,
+  allowNone = false,
+  dark,
+}: {
+  options: CatalogueMasterOption[];
+  selected: string | null;
+  onSelect: (value: string | null) => void;
+  allowNone?: boolean;
+  dark: boolean;
+}) {
+  return <View style={styles.masterOptions}>
+    {allowNone ? <Pressable onPress={() => onSelect(null)} style={[styles.masterChoice, !selected && styles.masterChoiceActive, dark && darkStyles.choice]}><Text style={[styles.masterChoiceText, !selected && styles.masterChoiceTextActive]}>No category</Text></Pressable> : null}
+    {options.map((option) => {
+      const active = (selected ?? '').trim().toLowerCase() === option.name.trim().toLowerCase();
+      return <Pressable key={option.id} onPress={() => onSelect(option.name)} style={[styles.masterChoice, active && styles.masterChoiceActive, dark && darkStyles.choice]}>
+        <Text style={[styles.masterChoiceText, active && styles.masterChoiceTextActive]}>{option.name}</Text>
+      </Pressable>;
+    })}
+  </View>;
+}
+
+function MasterCreator({
+  value,
+  onChange,
+  onAdd,
+  placeholder,
+  disabled,
+  dark,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onAdd: () => void;
+  placeholder: string;
+  disabled: boolean;
+  dark: boolean;
+}) {
+  return <View style={styles.masterCreator}>
+    <TextInput value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={theme.colors.subtle} style={[styles.input, styles.masterCreatorInput, dark && darkStyles.input]} />
+    <Pressable disabled={disabled || !value.trim()} onPress={onAdd} style={[styles.masterAdd, (disabled || !value.trim()) && styles.disabled]}>
+      <Ionicons name="add" size={18} color={theme.colors.greenDark} />
+      <Text style={styles.secondaryText}>Create</Text>
+    </Pressable>
+  </View>;
+}
+
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return <View style={styles.field}><Text style={styles.label}>{label}</Text>{children}</View>;
+}
+
+function deriveMasters(products: CommerceProduct[]): CatalogueMasters {
+  const categoryMap = new Map<string, string>();
+  const uomMap = new Map<string, string>();
+  for (const product of products) {
+    if (product.category?.trim()) categoryMap.set(product.category.trim().toLowerCase(), product.category.trim());
+    if (product.stockUom.trim()) uomMap.set(product.stockUom.trim().toLowerCase(), product.stockUom.trim());
+    for (const uom of product.uoms) if (uom.name.trim()) uomMap.set(uom.name.trim().toLowerCase(), uom.name.trim());
+  }
+  return {
+    categories: [...categoryMap.values()].sort().map((name) => ({ id: `cached-category-${name.toLowerCase()}`, name })),
+    uoms: [...uomMap.values()].sort().map((name) => ({ id: `cached-uom-${name.toLowerCase()}`, name })),
+  };
 }
 
 const styles = StyleSheet.create({
@@ -312,8 +446,8 @@ const styles = StyleSheet.create({
   secondary: { minHeight: 48, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center' },
   secondaryText: { color: theme.colors.greenDark, fontWeight: '900' },
   input: { minHeight: 48, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 13, paddingHorizontal: 12, color: theme.colors.navy, backgroundColor: theme.colors.white },
-  readonly: { opacity: 0.7 },
-  field: { gap: 6 },
+  readonlyBox: { minHeight: 48, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 13, paddingHorizontal: 12, backgroundColor: theme.colors.cloud, justifyContent: 'center' },
+  field: { gap: 8 },
   label: { fontSize: 12, fontWeight: '900', color: theme.colors.navy },
   toggle: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   product: { minHeight: 68, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 16, padding: 12, backgroundColor: theme.colors.white, flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -322,6 +456,14 @@ const styles = StyleSheet.create({
   activeText: { fontSize: 10, fontWeight: '900', color: theme.colors.greenDark },
   inactive: { fontSize: 10, fontWeight: '900', color: theme.colors.muted },
   barcodeCard: { padding: 12, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.mintSoft, flexDirection: 'row', gap: 8, alignItems: 'center' },
+  masterOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  masterChoice: { minHeight: 38, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, justifyContent: 'center', backgroundColor: theme.colors.white },
+  masterChoiceActive: { borderColor: theme.colors.green, backgroundColor: theme.colors.mintSoft },
+  masterChoiceText: { color: theme.colors.slate, fontSize: 12, fontWeight: '800' },
+  masterChoiceTextActive: { color: theme.colors.greenDark },
+  masterCreator: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  masterCreatorInput: { flex: 1 },
+  masterAdd: { minHeight: 48, paddingHorizontal: 12, borderRadius: 13, borderWidth: 1, borderColor: theme.colors.green, flexDirection: 'row', gap: 4, alignItems: 'center', justifyContent: 'center' },
   notice: { color: theme.colors.greenDark, fontSize: 12, fontWeight: '800' },
   offlineNotice: { color: theme.colors.slate, fontSize: 12, fontWeight: '800' },
   error: { color: theme.colors.danger, fontSize: 12, fontWeight: '800' },
@@ -333,4 +475,5 @@ const darkStyles = StyleSheet.create({
   title: { color: theme.colors.cloud },
   body: { color: '#D0D5DD' },
   input: { backgroundColor: '#162F46', borderColor: '#344054', color: theme.colors.cloud },
+  choice: { backgroundColor: '#162F46', borderColor: '#344054' },
 });
