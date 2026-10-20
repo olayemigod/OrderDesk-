@@ -92,7 +92,8 @@ export function SellerTraySelectField({
 
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
         <View style={styles.overlay}>
-          <Pressable style={styles.backdrop} onPress={() => setOpen(false)} />
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setOpen(false)} />
+          <View style={[styles.backdrop, StyleSheet.absoluteFill]} pointerEvents="none" />
           <View style={[styles.sheet, dark && styles.darkSheet]}>
             <View style={styles.sheetHeader}>
               <View style={styles.sheetTitleCopy}>
@@ -175,7 +176,7 @@ const styles = StyleSheet.create({
   placeholder: { color: theme.colors.subtle, fontWeight: '500' },
   disabled: { opacity: 0.55 },
   overlay: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(10, 22, 35, 0.45)' },
+  backdrop: { backgroundColor: 'rgba(10, 22, 35, 0.45)' },
   sheet: {
     maxHeight: '78%',
     backgroundColor: theme.colors.white,
