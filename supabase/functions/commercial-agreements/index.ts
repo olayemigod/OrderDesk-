@@ -62,12 +62,18 @@ Deno.serve(async (request) => {
       const legalName = cleanText(body.legalName, 200);
       if (!tenantId || !agreementId || !commandId) return json({ error: 'Business, agreement and acceptance command are required' }, 400);
       if (!legalName) return json({ error: 'Enter the authorised representative legal name' }, 400);
+      if (body.authorityConfirmed !== true) return json({ error: 'Confirm your authority and agreement acceptance before continuing' }, 400);
 
+      const userAgent = cleanText(request.headers.get('user-agent'), 512);
       const acceptanceId = await rpc<string>('accept_sellertray_commercial_agreement', {
         p_tenant_id: tenantId,
         p_agreement_id: agreementId,
         p_accepted_legal_name: legalName,
-        p_request_evidence: { channel: 'merchant_web' },
+        p_request_evidence: {
+          channel: 'merchant_web',
+          authority_confirmed: true,
+          ...(userAgent ? { user_agent: userAgent } : {}),
+        },
         p_command_id: commandId,
         p_actor_user_id: userId,
       });
