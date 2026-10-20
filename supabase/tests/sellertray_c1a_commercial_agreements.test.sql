@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(27);
+select extensions.plan(29);
 
 create temp table sellertray_c1a_fixture (
   admin_user_id uuid not null,
@@ -209,29 +209,6 @@ end
 $$;
 select extensions.ok((select manager_delegation_rejected from sellertray_c1a_fixture),'Manager cannot self-delegate contract signing authority');
 
-select public.set_sellertray_member_capability(
-  tenant_id,manager_user_id,'can_accept_commercial_agreements',true,owner_user_id
-) from sellertray_c1a_fixture;
-select extensions.ok(
-  public.sellertray_user_has_capability(
-    (select tenant_id from sellertray_c1a_fixture),
-    (select manager_user_id from sellertray_c1a_fixture),
-    'can_accept_commercial_agreements'
-  ),
-  'Owner can explicitly delegate commercial signing authority to a Manager'
-);
-
-select extensions.ok(
-  exists(
-    select 1 from public.tenant_member_capability_events e join sellertray_c1a_fixture f
-      on e.tenant_id=f.tenant_id and e.user_id=f.manager_user_id
-    where e.capability='can_accept_commercial_agreements'
-      and e.new_allowed=true
-      and e.actor_user_id=f.owner_user_id
-  ),
-  'Manager signing delegation is immutably audited through capability events'
-);
-
 do $$
 begin
   begin
@@ -297,6 +274,18 @@ select extensions.ok(
   'merchant agreement snapshots exact template and rendered-content integrity facts'
 );
 
+select extensions.is(
+  public.issue_sellertray_commercial_agreement(
+    f.tenant_id,f.commercial_order_id,null,f.subscription_template_id,
+    'AGR-SUB-'||upper(substr(f.tenant_id::text,1,8)),
+    'Merchant-specific subscription order for C1A test',
+    jsonb_build_object('commercial_order_id',f.commercial_order_id),
+    null,f.admin_user_id
+  ),
+  f.subscription_agreement_id,
+  'identical agreement issuance retries idempotently'
+) from sellertray_c1a_fixture f;
+
 do $$
 begin
   begin
@@ -309,6 +298,29 @@ begin
 end
 $$;
 select extensions.ok((select manager_without_authority_rejected from sellertray_c1a_fixture),'Manager acceptance fails closed without explicit signing authority');
+
+select public.set_sellertray_member_capability(
+  tenant_id,manager_user_id,'can_accept_commercial_agreements',true,owner_user_id
+) from sellertray_c1a_fixture;
+select extensions.ok(
+  public.sellertray_user_has_capability(
+    (select tenant_id from sellertray_c1a_fixture),
+    (select manager_user_id from sellertray_c1a_fixture),
+    'can_accept_commercial_agreements'
+  ),
+  'Owner can explicitly delegate commercial signing authority to a Manager'
+);
+
+select extensions.ok(
+  exists(
+    select 1 from public.tenant_member_capability_events e join sellertray_c1a_fixture f
+      on e.tenant_id=f.tenant_id and e.user_id=f.manager_user_id
+    where e.capability='can_accept_commercial_agreements'
+      and e.new_allowed=true
+      and e.actor_user_id=f.owner_user_id
+  ),
+  'Manager signing delegation is immutably audited through capability events'
+);
 
 update sellertray_c1a_fixture f
 set owner_acceptance_id=public.accept_sellertray_commercial_agreement(
