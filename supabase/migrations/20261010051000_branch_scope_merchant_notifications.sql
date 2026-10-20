@@ -214,6 +214,12 @@ with check (
   )
 );
 
+-- The historical merchant-communications migration defines this RPC with an
+-- older RETURNS TABLE shape. PostgreSQL cannot change OUT parameters through
+-- CREATE OR REPLACE, so explicitly replace the old signature before defining
+-- the Branch-scoped contract below.
+drop function if exists public.sellertray_list_merchant_notifications(uuid,integer);
+
 create or replace function public.sellertray_list_merchant_notifications(
   p_tenant_id uuid,
   p_limit integer default 50
