@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
+import { CatalogueMasterPickerSheet } from '../components/CatalogueMasterPickerSheet';
 import { SellerTrayText as Text } from '../components/SellerTrayText';
+import { SellerTrayTextInput } from '../components/SellerTrayTextInput';
 import type { CommerceProduct } from '../data/commerceRepository';
 import {
   isLikelyConnectivityError,
@@ -11,9 +13,13 @@ import {
 } from '../data/offlineSalesRepository';
 import {
   assignStockUomBarcode,
+  createBusinessUom,
+  createProductCategory,
+  loadCatalogueMasters,
   loadManagedProducts,
   saveManagedProduct,
   setManagedProductActive,
+  type CatalogueMasters,
   type MobileProductDraft,
 } from '../data/productManagementRepository';
 import { sellerTrayUserMessage } from '../data/userFacingError';
@@ -23,6 +29,7 @@ import { BarcodeScannerSheet } from './BarcodeScannerSheet';
 
 type Props = { tenantId: string; currency: string; onClose: () => void };
 type EditorState = { product: CommerceProduct | null; barcode: string };
+type MasterPicker = 'category' | 'uom' | null;
 
 const EMPTY: MobileProductDraft = {
   name: '',
@@ -32,12 +39,15 @@ const EMPTY: MobileProductDraft = {
   allowFractionalStock: false,
   sellingPrice: 0,
 };
+const EMPTY_MASTERS: CatalogueMasters = { categories: [], uoms: [] };
 
 export function ProductManagementWorkspace({ tenantId, currency, onClose }: Props) {
   const dark = useSellerTrayAppearance().dark;
   const [products, setProducts] = useState<CommerceProduct[]>([]);
+  const [masters, setMasters] = useState<CatalogueMasters>(EMPTY_MASTERS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [creatingMaster, setCreatingMaster] = useState(false);
   const [readOnly, setReadOnly] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -47,15 +57,20 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
   const [draft, setDraft] = useState<MobileProductDraft>(EMPTY);
   const [price, setPrice] = useState('0');
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [picker, setPicker] = useState<MasterPicker>(null);
 
   async function refresh() {
     setLoading(true);
     setError(null);
     try {
-      const next = await loadManagedProducts(tenantId);
-      setProducts(next);
+      const [nextProducts, nextMasters] = await Promise.all([
+        loadManagedProducts(tenantId),
+        loadCatalogueMasters(tenantId),
+      ]);
+      setProducts(nextProducts);
+      setMasters(nextMasters);
       setReadOnly(false);
-      await saveCommerceProductCache(tenantId, next).catch(() => undefined);
+      await saveCommerceProductCache(tenantId, nextProducts).catch(() => undefined);
     } catch (cause) {
       if (isLikelyConnectivityError(cause)) {
         const cached = await loadCommerceProductCache(tenantId);
@@ -73,6 +88,9 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
   }
 
   useEffect(() => {
+    setEditor(null);
+    setPicker(null);
+    setMasters(EMPTY_MASTERS);
     void refresh();
   }, [tenantId]);
 
@@ -93,10 +111,14 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
       return;
     }
     setEditor({ product, barcode });
+    setPicker(null);
     setError(null);
     setNotice(null);
     if (!product) {
-      setDraft(EMPTY);
+      const defaultUom = masters.uoms.find((item) => item.name.trim().toLowerCase() === 'each')?.name
+        ?? masters.uoms[0]?.name
+        ?? 'Each';
+      setDraft({ ...EMPTY, stockUom: defaultUom });
       setPrice('0');
       return;
     }
@@ -133,6 +155,27 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
     }
     begin(null, barcode);
     setNotice('Barcode captured. Add the product details to finish creating it.');
+  }
+
+  async function createMaster(kind: Exclude<MasterPicker, null>, name: string) {
+    if (creatingMaster || readOnly) return;
+    setCreatingMaster(true);
+    setError(null);
+    try {
+      const created = kind === 'category'
+        ? await createProductCategory(tenantId, name)
+        : await createBusinessUom(tenantId, name);
+      const nextMasters = await loadCatalogueMasters(tenantId);
+      setMasters(nextMasters);
+      if (kind === 'category') setDraft((current) => ({ ...current, category: created.name }));
+      else setDraft((current) => ({ ...current, stockUom: created.name }));
+      setPicker(null);
+      setNotice(kind === 'category' ? 'Category created and selected.' : 'Unit created and selected.');
+    } catch (cause) {
+      setError(sellerTrayUserMessage(cause, kind === 'category' ? 'Unable to create this category.' : 'Unable to create this unit.'));
+    } finally {
+      setCreatingMaster(false);
+    }
   }
 
   async function save() {
@@ -201,7 +244,7 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
           <Text style={[styles.eyebrow, dark && darkStyles.body]}>PRODUCT</Text>
           <Text style={[styles.title, dark && darkStyles.title]}>{editor.product ? 'Edit product' : 'Add product'}</Text>
           <Text style={[styles.help, dark && darkStyles.body]}>
-            Quick product details only. Advanced units, multiple barcodes and detailed pricing stay on Merchant Web.
+            Quick product details only. Advanced unit conversions, multiple barcodes and detailed pricing stay on Merchant Web.
           </Text>
         </View>
         {editor.barcode ? (
@@ -211,25 +254,31 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
           </View>
         ) : null}
         <Field label="Product name">
-          <TextInput value={draft.name} onChangeText={(name) => setDraft((current) => ({ ...current, name }))} placeholder="Product name" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
+          <SellerTrayTextInput value={draft.name} onChangeText={(name) => setDraft((current) => ({ ...current, name }))} placeholder="Product name" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
         </Field>
         <Field label="SKU (optional)">
-          <TextInput value={draft.sku ?? ''} onChangeText={(sku) => setDraft((current) => ({ ...current, sku }))} placeholder="SKU" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
+          <SellerTrayTextInput value={draft.sku ?? ''} onChangeText={(sku) => setDraft((current) => ({ ...current, sku }))} placeholder="SKU" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
         </Field>
         <Field label="Category (optional)">
-          <TextInput value={draft.category ?? ''} onChangeText={(category) => setDraft((current) => ({ ...current, category }))} placeholder="Category" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
+          <MasterField value={draft.category || 'No category'} dark={dark} onPress={() => setPicker('category')} />
         </Field>
         <Field label="Stock unit">
-          <TextInput value={draft.stockUom} editable={!editor.product} onChangeText={(stockUom) => setDraft((current) => ({ ...current, stockUom }))} placeholder="Each" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input, editor.product && styles.readonly]} />
+          {editor.product ? (
+            <View style={[styles.masterField, styles.readonly, dark && darkStyles.input]}>
+              <Text style={[styles.masterValue, dark && darkStyles.title]}>{draft.stockUom}</Text>
+              <Ionicons name="lock-closed-outline" size={17} color={theme.colors.subtle} />
+            </View>
+          ) : <MasterField value={draft.stockUom || 'Choose unit'} dark={dark} onPress={() => setPicker('uom')} />}
         </Field>
         <Field label={priceLabel}>
-          <TextInput value={price} onChangeText={setPrice} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
+          <SellerTrayTextInput value={price} onChangeText={setPrice} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
         </Field>
         <Text style={[styles.help, dark && darkStyles.body]}>
           Creating or editing a product never adds stock. Receive, transfer, count or adjust stock through governed Inventory workflows.
         </Text>
+        {notice ? <Text style={styles.notice}>{notice}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        <Pressable disabled={saving} onPress={() => void save()} style={[styles.primary, saving && styles.disabled]}>
+        <Pressable disabled={saving || !draft.stockUom} onPress={() => void save()} style={[styles.primary, (saving || !draft.stockUom) && styles.disabled]}>
           <Text style={styles.primaryText}>{saving ? 'Saving…' : 'Save product'}</Text>
         </Pressable>
         {editor.product ? (
@@ -237,6 +286,30 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
             <Text style={styles.secondaryText}>{editor.product.isActive ? 'Deactivate product' : 'Activate product'}</Text>
           </Pressable>
         ) : null}
+
+        <CatalogueMasterPickerSheet
+          visible={picker === 'category'}
+          title="Product category"
+          value={draft.category}
+          options={masters.categories}
+          allowEmpty
+          canCreate={!readOnly}
+          creating={creatingMaster}
+          onClose={() => setPicker(null)}
+          onSelect={(category) => setDraft((current) => ({ ...current, category }))}
+          onCreate={(name) => createMaster('category', name)}
+        />
+        <CatalogueMasterPickerSheet
+          visible={picker === 'uom'}
+          title="Stock unit"
+          value={draft.stockUom}
+          options={masters.uoms}
+          canCreate={!readOnly}
+          creating={creatingMaster}
+          onClose={() => setPicker(null)}
+          onSelect={(stockUom) => stockUom && setDraft((current) => ({ ...current, stockUom }))}
+          onCreate={(name) => createMaster('uom', name)}
+        />
       </View>
     );
   }
@@ -249,8 +322,8 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
           <Text style={[styles.title, dark && darkStyles.title]}>Products</Text>
           <Text style={[styles.help, dark && darkStyles.body]}>Search, add and maintain everyday product details.</Text>
         </View>
-        <Pressable onPress={onClose} style={styles.icon}>
-          <Ionicons name="close" size={21} color={theme.colors.navy} />
+        <Pressable onPress={onClose} style={[styles.icon, dark && darkStyles.card]}>
+          <Ionicons name="close" size={21} color={dark ? theme.colors.cloud : theme.colors.navy} />
         </Pressable>
       </View>
       <View style={styles.actions}>
@@ -263,7 +336,7 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
           <Text style={styles.secondaryText}>Scan barcode</Text>
         </Pressable>
       </View>
-      <TextInput value={query} onChangeText={setQuery} placeholder="Search name, SKU, category or barcode" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
+      <SellerTrayTextInput value={query} onChangeText={setQuery} placeholder="Search name, SKU, category or barcode" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
       <Pressable onPress={() => setShowInactive((value) => !value)} style={styles.toggle}>
         <Ionicons name={showInactive ? 'checkbox' : 'square-outline'} size={20} color={theme.colors.greenDark} />
         <Text style={[styles.body, dark && darkStyles.body]}>Show inactive products</Text>
@@ -293,6 +366,15 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   return <View style={styles.field}><Text style={styles.label}>{label}</Text>{children}</View>;
 }
 
+function MasterField({ value, dark, onPress }: { value: string; dark: boolean; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={[styles.masterField, dark && darkStyles.input]}>
+      <Text style={[styles.masterValue, dark && darkStyles.title]}>{value}</Text>
+      <Ionicons name="chevron-down" size={18} color={theme.colors.subtle} />
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   stack: { gap: 14 },
   heading: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
@@ -312,6 +394,8 @@ const styles = StyleSheet.create({
   secondary: { minHeight: 48, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center', justifyContent: 'center' },
   secondaryText: { color: theme.colors.greenDark, fontWeight: '900' },
   input: { minHeight: 48, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 13, paddingHorizontal: 12, color: theme.colors.navy, backgroundColor: theme.colors.white },
+  masterField: { minHeight: 48, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 13, paddingHorizontal: 12, backgroundColor: theme.colors.white, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  masterValue: { flex: 1, color: theme.colors.navy, fontSize: 14, fontWeight: '700' },
   readonly: { opacity: 0.7 },
   field: { gap: 6 },
   label: { fontSize: 12, fontWeight: '900', color: theme.colors.navy },
