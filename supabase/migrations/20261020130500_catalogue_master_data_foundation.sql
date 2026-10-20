@@ -38,7 +38,14 @@ revoke all on table public.catalog_uoms from anon, authenticated;
 grant all on table public.catalog_categories to service_role;
 grant all on table public.catalog_uoms to service_role;
 
--- Preserve every existing merchant value before guards are enabled.
+-- Product mutation is now command/RPC-only for browser-authenticated clients.
+-- Trusted database/service writers retain their existing ability to seed or
+-- reconcile catalogue rows; the synchronization triggers below make those writes
+-- converge into the same masters rather than creating a second vocabulary.
+revoke insert, update, delete on table public.catalog_items from authenticated;
+revoke insert, update, delete on table public.catalog_item_uoms from authenticated;
+
+-- Preserve every existing merchant value before command validation is enabled.
 insert into public.catalog_categories (tenant_id, name)
 select source.tenant_id, min(source.name) as name
 from (
@@ -101,8 +108,11 @@ begin
   if v_user_id is null then
     raise exception 'SellerTray authentication required' using errcode='42501';
   end if;
-  if not public.sellertray_user_can_manage_products(p_tenant_id, v_user_id) then
-    raise exception 'You do not have permission to manage catalogue masters' using errcode='42501';
+  if not exists (
+    select 1 from public.tenant_members tm
+    where tm.tenant_id=p_tenant_id and tm.user_id=v_user_id
+  ) then
+    raise exception 'You do not have access to this Business catalogue' using errcode='42501';
   end if;
 
   select coalesce(jsonb_agg(jsonb_build_object('id', c.id, 'name', c.name) order by c.name_key, c.id), '[]'::jsonb)
@@ -146,7 +156,9 @@ begin
   insert into public.catalog_categories (tenant_id, name, is_active)
   values (p_tenant_id, v_name, true)
   on conflict (tenant_id, name_key)
-  do update set is_active=true, updated_at=now()
+  do update set
+    is_active=true,
+    updated_at=case when public.catalog_categories.is_active then public.catalog_categories.updated_at else now() end
   returning jsonb_build_object('id', id, 'name', name) into v_result;
 
   return v_result;
@@ -180,88 +192,94 @@ begin
   insert into public.catalog_uoms (tenant_id, name, is_active)
   values (p_tenant_id, v_name, true)
   on conflict (tenant_id, name_key)
-  do update set is_active=true, updated_at=now()
+  do update set
+    is_active=true,
+    updated_at=case when public.catalog_uoms.is_active then public.catalog_uoms.updated_at else now() end
   returning jsonb_build_object('id', id, 'name', name) into v_result;
 
   return v_result;
 end;
 $$;
 
--- Guard all product-table writes, including trusted legacy wrappers, against the
--- same masters. Existing canonical strings remain the stored snapshots.
-create or replace function public.validate_sellertray_catalogue_master_refs()
+-- Trusted direct writes (migrations, tests and server/service reconciliation) are
+-- normalized into the Business masters. Browser-authenticated clients cannot use
+-- this as a bypass because direct product/UOM mutation privileges are revoked.
+create or replace function public.sync_sellertray_catalogue_master_refs()
 returns trigger
 language plpgsql
 security definer
 set search_path=''
 as $$
 declare
-  v_stock_uom text;
-  v_category text;
+  v_stock_uom text := nullif(btrim(coalesce(new.stock_uom, '')), '');
+  v_category text := nullif(btrim(coalesce(new.category, '')), '');
 begin
-  select u.name into v_stock_uom
-  from public.catalog_uoms u
-  where u.tenant_id=new.tenant_id
-    and u.is_active=true
-    and u.name_key=lower(btrim(coalesce(new.stock_uom, '')))
-  limit 1;
   if v_stock_uom is null then
-    raise exception 'Stock UOM must be selected from configured units' using errcode='23514';
+    raise exception 'Stock UOM is required' using errcode='23514';
   end if;
+
+  insert into public.catalog_uoms (tenant_id, name, is_active)
+  values (new.tenant_id, v_stock_uom, true)
+  on conflict (tenant_id, name_key)
+  do update set
+    is_active=true,
+    updated_at=case when public.catalog_uoms.is_active then public.catalog_uoms.updated_at else now() end
+  returning name into v_stock_uom;
   new.stock_uom := v_stock_uom;
 
-  new.category := nullif(btrim(coalesce(new.category, '')), '');
-  if new.category is not null then
-    select c.name into v_category
-    from public.catalog_categories c
-    where c.tenant_id=new.tenant_id
-      and c.is_active=true
-      and c.name_key=lower(new.category)
-    limit 1;
-    if v_category is null then
-      raise exception 'Product category must be selected from configured categories' using errcode='23514';
-    end if;
+  if v_category is not null then
+    insert into public.catalog_categories (tenant_id, name, is_active)
+    values (new.tenant_id, v_category, true)
+    on conflict (tenant_id, name_key)
+    do update set
+      is_active=true,
+      updated_at=case when public.catalog_categories.is_active then public.catalog_categories.updated_at else now() end
+    returning name into v_category;
     new.category := v_category;
+  else
+    new.category := null;
   end if;
 
   return new;
 end;
 $$;
 
-revoke all on function public.validate_sellertray_catalogue_master_refs() from public, anon, authenticated;
-drop trigger if exists validate_sellertray_catalogue_master_refs on public.catalog_items;
-create trigger validate_sellertray_catalogue_master_refs
+revoke all on function public.sync_sellertray_catalogue_master_refs() from public, anon, authenticated;
+drop trigger if exists sync_sellertray_catalogue_master_refs on public.catalog_items;
+create trigger sync_sellertray_catalogue_master_refs
 before insert or update of tenant_id, category, stock_uom on public.catalog_items
-for each row execute function public.validate_sellertray_catalogue_master_refs();
+for each row execute function public.sync_sellertray_catalogue_master_refs();
 
-create or replace function public.validate_sellertray_product_uom_master_ref()
+create or replace function public.sync_sellertray_product_uom_master_ref()
 returns trigger
 language plpgsql
 security definer
 set search_path=''
 as $$
 declare
-  v_uom text;
+  v_uom text := nullif(btrim(coalesce(new.uom_name, '')), '');
 begin
-  select u.name into v_uom
-  from public.catalog_uoms u
-  where u.tenant_id=new.tenant_id
-    and u.is_active=true
-    and u.name_key=lower(btrim(coalesce(new.uom_name, '')))
-  limit 1;
   if v_uom is null then
-    raise exception 'Product unit must be selected from configured units' using errcode='23514';
+    raise exception 'Product unit is required' using errcode='23514';
   end if;
+
+  insert into public.catalog_uoms (tenant_id, name, is_active)
+  values (new.tenant_id, v_uom, true)
+  on conflict (tenant_id, name_key)
+  do update set
+    is_active=true,
+    updated_at=case when public.catalog_uoms.is_active then public.catalog_uoms.updated_at else now() end
+  returning name into v_uom;
   new.uom_name := v_uom;
   return new;
 end;
 $$;
 
-revoke all on function public.validate_sellertray_product_uom_master_ref() from public, anon, authenticated;
-drop trigger if exists catalogue_uom_master_ref_guard on public.catalog_item_uoms;
-create trigger catalogue_uom_master_ref_guard
+revoke all on function public.sync_sellertray_product_uom_master_ref() from public, anon, authenticated;
+drop trigger if exists catalogue_uom_master_ref_sync on public.catalog_item_uoms;
+create trigger catalogue_uom_master_ref_sync
 before insert or update of tenant_id, uom_name on public.catalog_item_uoms
-for each row execute function public.validate_sellertray_product_uom_master_ref();
+for each row execute function public.sync_sellertray_product_uom_master_ref();
 
 -- Keep the existing public signature while changing authority from arbitrary text
 -- to tenant masters. That avoids breaking Mobile/Web callers during convergence.
