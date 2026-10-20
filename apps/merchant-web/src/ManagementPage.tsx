@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import BranchesManagement from './BranchesManagement';
+import CommercialAgreementsManagement from './CommercialAgreementsManagement';
 import DevicesPrintersManagement from './DevicesPrintersManagement';
 import FeedbackDashboard from './FeedbackDashboard';
 import ProductsManagement from './ProductsManagement';
@@ -28,7 +29,7 @@ export default function ManagementPage({
   if (page === 'team') return <TeamPermissionsManagement tenantId={tenantId} />;
   if (page === 'devices') return <DeviceManagement tenantId={tenantId} />;
   if (page === 'feedback') return <FeedbackDashboard tenantId={tenantId} />;
-  return <SettingsManagement tenantId={tenantId} />;
+  return <div className="page-stack"><CommercialAgreementsManagement tenantId={tenantId} /><SettingsManagement tenantId={tenantId} /></div>;
 }
 
 function DeviceManagement({ tenantId }: { tenantId: string }) {
