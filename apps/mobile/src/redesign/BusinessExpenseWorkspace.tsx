@@ -27,6 +27,7 @@ export function BusinessExpenseWorkspace({ tenantId, branch, onClose }: Props) {
   const [fundingSource, setFundingSource] = useState<BusinessExpenseFundingSource>('cash');
   const [bankAccounts, setBankAccounts] = useState<BusinessBankAccount[]>([]);
   const [cashDrawers, setCashDrawers] = useState<OpenCashDrawer[]>([]);
+  const [currency, setCurrency] = useState('NGN');
   const [bankPaymentMethodId, setBankPaymentMethodId] = useState('');
   const [cashShiftId, setCashShiftId] = useState('');
   const [canRecord, setCanRecord] = useState(false);
@@ -45,6 +46,7 @@ export function BusinessExpenseWorkspace({ tenantId, branch, onClose }: Props) {
     setError(null);
     try {
       const options = await loadMoneyOperationOptions(tenantId, branch.id);
+      setCurrency(options.currency);
       setCanRecord(options.canRecordBusinessExpense);
       setBankAccounts(options.bankAccounts);
       setCashDrawers(options.openCashDrawers);
@@ -154,10 +156,10 @@ export function BusinessExpenseWorkspace({ tenantId, branch, onClose }: Props) {
         <Text style={[styles.sectionTitle, dark && darkStyles.titleText]}>Open cash drawer</Text>
         {cashDrawers.length === 0 ? <Text style={[styles.helper, dark && darkStyles.bodyText]}>No open cash drawer is available in {branch.name}. Open a cashier shift or use Bank funding.</Text>
           : <View style={styles.optionList}>{cashDrawers.map((drawer) => <Pressable key={drawer.shiftId} onPress={() => setCashShiftId(drawer.shiftId)} style={[styles.optionChoice, dark && darkStyles.optionChoice, cashShiftId === drawer.shiftId && styles.optionChoiceActive]}>
-            <View style={styles.flexOne}><Text style={[styles.optionTitle, dark && darkStyles.titleText]}>{drawer.registerName}</Text><Text style={[styles.helper, dark && darkStyles.bodyText]}>Expected drawer {formatMoney(drawer.expectedCash, 'NGN')}</Text></View>
+            <View style={styles.flexOne}><Text style={[styles.optionTitle, dark && darkStyles.titleText]}>{drawer.registerName}</Text><Text style={[styles.helper, dark && darkStyles.bodyText]}>Expected drawer {formatMoney(drawer.expectedCash, currency)}</Text></View>
             <Ionicons name={cashShiftId === drawer.shiftId ? 'radio-button-on' : 'radio-button-off'} size={20} color={cashShiftId === drawer.shiftId ? theme.colors.greenDark : theme.colors.muted} />
           </Pressable>)}</View>}
-        {selectedDrawer ? <Text style={[styles.helper, dark && darkStyles.bodyText]}>Selected drawer currently expects {formatMoney(selectedDrawer.expectedCash, 'NGN')}.</Text> : null}
+        {selectedDrawer ? <Text style={[styles.helper, dark && darkStyles.bodyText]}>Selected drawer currently expects {formatMoney(selectedDrawer.expectedCash, currency)}.</Text> : null}
       </Card> : <Card dark={dark}>
         <Text style={[styles.sectionTitle, dark && darkStyles.titleText]}>Business bank account</Text>
         {bankAccounts.length === 0 ? <Text style={[styles.helper, dark && darkStyles.bodyText]}>No enabled Business bank account is available. Configure one in Merchant Web first.</Text>
