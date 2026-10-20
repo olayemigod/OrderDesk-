@@ -10,8 +10,39 @@ export type MobileProductDraft = {
   sellingPrice: number;
 };
 
+export type CatalogueMasterOption = { id: string; name: string };
+export type CatalogueMasters = { categories: CatalogueMasterOption[]; uoms: CatalogueMasterOption[] };
+
 export async function loadManagedProducts(tenantId: string): Promise<CommerceProduct[]> {
   return loadCommerceProducts(tenantId, { includeInactive: true });
+}
+
+export async function loadCatalogueMasters(tenantId: string): Promise<CatalogueMasters> {
+  const { data, error } = await supabase.rpc('get_sellertray_catalogue_masters', { p_tenant_id: tenantId });
+  if (error) throw error;
+  return parseMasters(data);
+}
+
+export async function createProductCategory(tenantId: string, name: string): Promise<CatalogueMasterOption> {
+  const clean = name.trim();
+  if (!clean) throw new Error('Category name is required.');
+  const { data, error } = await supabase.rpc('create_sellertray_product_category', {
+    p_tenant_id: tenantId,
+    p_name: clean,
+  });
+  if (error) throw error;
+  return parseMaster(data, 'category');
+}
+
+export async function createBusinessUom(tenantId: string, name: string): Promise<CatalogueMasterOption> {
+  const clean = name.trim();
+  if (!clean) throw new Error('Unit name is required.');
+  const { data, error } = await supabase.rpc('create_sellertray_uom', {
+    p_tenant_id: tenantId,
+    p_name: clean,
+  });
+  if (error) throw error;
+  return parseMaster(data, 'unit');
 }
 
 export async function saveManagedProduct(
@@ -85,6 +116,31 @@ function validateProduct(input: MobileProductDraft): MobileProductDraft {
     allowFractionalStock: input.allowFractionalStock,
     sellingPrice: input.sellingPrice,
   };
+}
+
+function parseMasters(value: unknown): CatalogueMasters {
+  const row = isRecord(value) ? value : {};
+  return {
+    categories: parseMasterList(row.categories),
+    uoms: parseMasterList(row.uoms),
+  };
+}
+
+function parseMasterList(value: unknown): CatalogueMasterOption[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => parseMaster(item, 'catalogue option'));
+}
+
+function parseMaster(value: unknown, label: string): CatalogueMasterOption {
+  if (!isRecord(value)) throw new Error(`SellerTray returned an invalid ${label}.`);
+  const id = typeof value.id === 'string' ? value.id : '';
+  const name = typeof value.name === 'string' ? value.name.trim() : '';
+  if (!id || !name) throw new Error(`SellerTray returned an invalid ${label}.`);
+  return { id, name };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
 function cleanOptional(value: string | null): string | null {
