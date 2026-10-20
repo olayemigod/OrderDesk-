@@ -5,6 +5,7 @@ import { PosDraftRequestError } from './commerceRepository';
 import type { BranchStockRow } from './inventoryRepository';
 import type { MerchantCustomer } from './customerRepository';
 import type { PosPaymentPolicy } from './posPaymentRepository';
+import type { SellerTrayTaxContext } from './taxRepository';
 
 const OUTBOX_KEY = 'sellertray.offline.pos-sales.v2';
 const LEGACY_OUTBOX_KEY = 'sellertray.offline.pos-drafts.v1';
@@ -13,6 +14,7 @@ const STOCK_KEY_PREFIX = 'sellertray.offline.stock.v1:';
 const PAYMENT_KEY_PREFIX = 'sellertray.offline.payment-methods.v1:';
 const POLICY_KEY_PREFIX = 'sellertray.offline.pos-policy.v1:';
 const CUSTOMER_KEY_PREFIX = 'sellertray.offline.customers.v1:';
+const TAX_KEY_PREFIX = 'sellertray.offline.tax-context.v1:';
 const MAX_OPEN_INTENTS = 50;
 const SYNCED_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -31,7 +33,7 @@ export type OfflineSaleLine = {
 };
 
 export type OfflinePosSale = {
-  schemaVersion: 3;
+  schemaVersion: 4;
   clientReference: string;
   actorUserId: string;
   tenantId: string;
@@ -42,6 +44,14 @@ export type OfflinePosSale = {
   customerPhone: string | null;
   currency: string;
   lines: OfflineSaleLine[];
+  subtotal: number;
+  taxConfigurationId: string | null;
+  taxConfigurationRevision: number | null;
+  taxApplied: boolean;
+  taxRatePercent: number;
+  taxAmount: number;
+  taxDisplayBreakdown: boolean;
+  taxContextLegacy: boolean;
   total: number;
   completionIntent: OfflineCompletionIntent;
   status: OfflineSaleStatus;
@@ -68,6 +78,9 @@ export async function queueOfflinePosSale(input: {
   customerPhone?: string | null;
   currency: string;
   lines: OfflineSaleLine[];
+  subtotal: number;
+  taxContext: SellerTrayTaxContext;
+  taxAmount: number;
   total: number;
   completionIntent?: OfflineCompletionIntent;
 }): Promise<OfflinePosSale> {
@@ -80,10 +93,25 @@ export async function queueOfflinePosSale(input: {
   if (!input.lines.length || input.lines.some((line) => !Number.isFinite(line.sellingPrice) || line.sellingPrice < 0)) {
     throw new Error('Every offline sale line needs a valid selling price.');
   }
+  if (
+    !Number.isFinite(input.subtotal) || input.subtotal < 0
+    || !Number.isFinite(input.taxAmount) || input.taxAmount < 0
+    || !Number.isFinite(input.total) || input.total < 0
+    || Math.abs(input.total - (input.subtotal + input.taxAmount)) > 0.01
+  ) {
+    throw new Error('Offline sale tax totals are invalid.');
+  }
+  if (
+    !Number.isFinite(input.taxContext.revision) || input.taxContext.revision < 0
+    || (input.taxContext.revision === 0 && input.taxContext.configurationId !== null)
+    || (input.taxContext.revision > 0 && !input.taxContext.configurationId)
+  ) {
+    throw new Error('Reconnect once to refresh SellerTray tax settings before selling offline.');
+  }
 
   const now = new Date().toISOString();
   const next: OfflinePosSale = {
-    schemaVersion: 3,
+    schemaVersion: 4,
     clientReference: input.clientReference,
     actorUserId: input.actorUserId,
     tenantId: input.tenantId,
@@ -94,6 +122,14 @@ export async function queueOfflinePosSale(input: {
     customerPhone: cleanNullable(input.customerPhone),
     currency: input.currency,
     lines: input.lines,
+    subtotal: input.subtotal,
+    taxConfigurationId: input.taxContext.configurationId,
+    taxConfigurationRevision: input.taxContext.revision,
+    taxApplied: input.taxContext.taxApplied,
+    taxRatePercent: input.taxContext.ratePercent,
+    taxAmount: input.taxAmount,
+    taxDisplayBreakdown: input.taxContext.displayTaxBreakdown,
+    taxContextLegacy: false,
     total: input.total,
     completionIntent: input.completionIntent ?? 'draft',
     status: 'pending',
@@ -177,6 +213,8 @@ export async function savePosPolicyCache(tenantId: string, policy: PosPaymentPol
 export async function loadPosPolicyCache(tenantId: string): Promise<OfflineCache<PosPaymentPolicy> | null> { return readCache(`${POLICY_KEY_PREFIX}${tenantId}`); }
 export async function saveCustomerCache(tenantId: string, rows: MerchantCustomer[]): Promise<void> { await writeCache(`${CUSTOMER_KEY_PREFIX}${tenantId}`, rows); }
 export async function loadCustomerCache(tenantId: string): Promise<OfflineCache<MerchantCustomer[]> | null> { return readCache(`${CUSTOMER_KEY_PREFIX}${tenantId}`); }
+export async function saveTaxContextCache(tenantId: string, context: SellerTrayTaxContext): Promise<void> { await writeCache(`${TAX_KEY_PREFIX}${tenantId}`, context); }
+export async function loadTaxContextCache(tenantId: string): Promise<OfflineCache<SellerTrayTaxContext> | null> { return readCache(`${TAX_KEY_PREFIX}${tenantId}`); }
 
 export function isLikelyConnectivityError(error: unknown): boolean {
   if (error instanceof PosDraftRequestError) return error.kind === 'network';
@@ -206,7 +244,7 @@ function classifySyncFailure(error: unknown): { status: 'pending' | 'needs_revie
   }
   if (isLikelyConnectivityError(error)) return { status: 'pending', message: 'Waiting for a connection.' };
   const message = error instanceof Error && error.message ? error.message : 'SellerTray could not sync this offline sale.';
-  if (/permission|access|stock|price|unit|uom|branch|shift|register|read-only|customer|override/i.test(message)) return { status: 'needs_review', message };
+  if (/permission|access|stock|price|unit|uom|branch|shift|register|read-only|customer|override|tax/i.test(message)) return { status: 'needs_review', message };
   return { status: 'failed', message };
 }
 
@@ -218,12 +256,13 @@ async function readOutbox(): Promise<OfflinePosSale[]> {
   if (!raw) return [];
   try { const parsed = JSON.parse(raw) as unknown; return Array.isArray(parsed) ? parsed.flatMap(parseOfflineSale) : []; } catch { return []; }
 }
+
 async function writeOutbox(rows: OfflinePosSale[]): Promise<void> { await AsyncStorage.setItem(OUTBOX_KEY, JSON.stringify(rows)); }
 
 function parseOfflineSale(value: unknown): OfflinePosSale[] {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
   const row = value as Record<string, unknown>;
-  if (![1, 2, 3].includes(Number(row.schemaVersion)) || typeof row.clientReference !== 'string' || typeof row.actorUserId !== 'string' || typeof row.tenantId !== 'string' || typeof row.branchId !== 'string' || typeof row.branchName !== 'string' || typeof row.currency !== 'string' || !Array.isArray(row.lines) || typeof row.total !== 'number' || !isOfflineStatus(row.status) || typeof row.attempts !== 'number' || typeof row.createdAt !== 'string' || typeof row.updatedAt !== 'string') return [];
+  if (![1, 2, 3, 4].includes(Number(row.schemaVersion)) || typeof row.clientReference !== 'string' || typeof row.actorUserId !== 'string' || typeof row.tenantId !== 'string' || typeof row.branchId !== 'string' || typeof row.branchName !== 'string' || typeof row.currency !== 'string' || !Array.isArray(row.lines) || typeof row.total !== 'number' || !isOfflineStatus(row.status) || typeof row.attempts !== 'number' || typeof row.createdAt !== 'string' || typeof row.updatedAt !== 'string') return [];
   const schema = Number(row.schemaVersion);
   const lines = (row.lines as Array<Record<string, unknown>>).flatMap((line) => {
     const expected = Number(line.expectedSellingPrice);
@@ -234,7 +273,50 @@ function parseOfflineSale(value: unknown): OfflinePosSale[] {
     return [{ catalogItemId: line.catalogItemId, uomId: line.uomId, quantity, expectedSellingPrice: expected, sellingPrice: selling, expectedConversionFactor: conversion, productName: line.productName, uomName: line.uomName }];
   });
   if (!lines.length) return [];
-  return [{ schemaVersion: 3, clientReference: row.clientReference, actorUserId: row.actorUserId, tenantId: row.tenantId, branchId: row.branchId, branchName: row.branchName, customerId: schema >= 2 ? nullableString(row.customerId) : null, customerName: schema >= 2 ? nullableString(row.customerName) : null, customerPhone: schema >= 2 ? nullableString(row.customerPhone) : null, currency: row.currency, lines, total: row.total, completionIntent: schema >= 3 && row.completionIntent === 'cash' ? 'cash' : 'draft', status: row.status, attempts: row.attempts, createdAt: row.createdAt, updatedAt: row.updatedAt, lastAttemptAt: nullableString(row.lastAttemptAt), lastError: nullableString(row.lastError), orderId: nullableString(row.orderId) }];
+
+  const legacy = schema < 4 || row.taxContextLegacy === true;
+  const subtotal = legacy ? row.total : Number(row.subtotal);
+  const taxAmount = legacy ? 0 : Number(row.taxAmount);
+  const ratePercent = legacy ? 0 : Number(row.taxRatePercent);
+  const revision = legacy ? null : Number(row.taxConfigurationRevision);
+  const configurationId = legacy ? null : nullableString(row.taxConfigurationId);
+  if (!Number.isFinite(subtotal) || !Number.isFinite(taxAmount) || !Number.isFinite(ratePercent)) return [];
+  if (!legacy && (
+    revision === null || !Number.isFinite(revision) || revision < 0
+    || (revision === 0 && configurationId !== null)
+    || (revision > 0 && configurationId === null)
+  )) return [];
+
+  return [{
+    schemaVersion: 4,
+    clientReference: row.clientReference,
+    actorUserId: row.actorUserId,
+    tenantId: row.tenantId,
+    branchId: row.branchId,
+    branchName: row.branchName,
+    customerId: schema >= 2 ? nullableString(row.customerId) : null,
+    customerName: schema >= 2 ? nullableString(row.customerName) : null,
+    customerPhone: schema >= 2 ? nullableString(row.customerPhone) : null,
+    currency: row.currency,
+    lines,
+    subtotal,
+    taxConfigurationId: configurationId,
+    taxConfigurationRevision: revision,
+    taxApplied: legacy ? false : row.taxApplied === true,
+    taxRatePercent: ratePercent,
+    taxAmount,
+    taxDisplayBreakdown: legacy ? false : row.taxDisplayBreakdown === true,
+    taxContextLegacy: legacy,
+    total: row.total,
+    completionIntent: schema >= 3 && row.completionIntent === 'cash' ? 'cash' : 'draft',
+    status: row.status,
+    attempts: row.attempts,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    lastAttemptAt: nullableString(row.lastAttemptAt),
+    lastError: nullableString(row.lastError),
+    orderId: nullableString(row.orderId),
+  }];
 }
 function isOfflineStatus(value: unknown): value is OfflineSaleStatus { return value === 'pending' || value === 'syncing' || value === 'needs_review' || value === 'failed' || value === 'synced'; }
 function cleanNullable(value: string | null | undefined): string | null { const clean = value?.trim() ?? ''; return clean || null; }

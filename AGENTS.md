@@ -16,7 +16,11 @@ For any task touching onboarding, subscriptions, setup fees, Branch commercial a
 
 `.agents/skills/sellertray-project-implementation/COMMERCIAL.md`
 
-`VALUATION.md` and `COMMERCIAL.md` are normative extensions of the governing SellerTray skill for their applicable boundaries. They do not replace or weaken any rule in `SKILL.md`.
+For any task touching offline POS selling, cached payment methods, offline payment capture/verification, outbox replay, sync conflicts, retry/idempotency, or degraded-connectivity payment behavior, also read and follow:
+
+`.agents/skills/sellertray-project-implementation/OFFLINE.md`
+
+`VALUATION.md`, `COMMERCIAL.md` and `OFFLINE.md` are normative extensions of the governing SellerTray skill for their applicable boundaries. They do not replace or weaken any rule in `SKILL.md`.
 
 That governing skill and its applicable normative extensions are the repository-level implementation contract for the SellerTray redesign. They govern mobile UX, merchant web boundaries, Admin Web platform/commercial operations, shared commerce architecture, POS, inventory, branch awareness, UOM, WhatsApp commerce, payments, subscriptions, setup, installments, agreements, guarantees, promotions, Bluetooth printing, reporting, AI, permissions, offline behaviour, implementation phases, QA gates, and anti-divergence rules.
 

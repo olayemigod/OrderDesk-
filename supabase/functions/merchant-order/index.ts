@@ -77,6 +77,18 @@ Deno.serve(async (request) => {
     const clientReferenceProvided = body.clientReference !== undefined && body.clientReference !== null;
     const clientReference = cleanUuid(body.clientReference);
     const lines = parsePosLines(body.items);
+    const taxRevisionProvided = body.expectedTaxConfigurationRevision !== undefined
+      && body.expectedTaxConfigurationRevision !== null;
+    const taxConfigurationIdProvided = body.expectedTaxConfigurationId !== undefined
+      && body.expectedTaxConfigurationId !== null
+      && body.expectedTaxConfigurationId !== '';
+    const expectedTaxConfigurationRevision = taxRevisionProvided
+      ? optionalNonNegativeInteger(body.expectedTaxConfigurationRevision)
+      : null;
+    const expectedTaxConfigurationId = taxConfigurationIdProvided
+      ? cleanUuid(body.expectedTaxConfigurationId)
+      : null;
+    const hasOfflineTaxContext = taxRevisionProvided || taxConfigurationIdProvided;
 
     if (!branchId) return json({ error: 'Branch is required' }, 400);
     if (customerIdProvided && !customerId) return json({ error: 'Selected customer is invalid' }, 400);
@@ -90,6 +102,16 @@ Deno.serve(async (request) => {
       && lines.some((line) => line.expectedSellingPrice === null || line.expectedConversionFactor === null)
     ) {
       return json({ error: 'Offline-ready sale lines require the displayed price and unit conversion' }, 400);
+    }
+    if (hasOfflineTaxContext) {
+      if (!clientReference) return json({ error: 'Queued sale tax context requires a stable sale reference' }, 400);
+      if (expectedTaxConfigurationRevision === null) return json({ error: 'Queued sale tax revision is invalid' }, 400);
+      if (
+        (expectedTaxConfigurationRevision === 0 && expectedTaxConfigurationId !== null)
+        || (expectedTaxConfigurationRevision > 0 && expectedTaxConfigurationId === null)
+      ) {
+        return json({ error: 'Queued sale tax context is invalid' }, 400);
+      }
     }
 
     const { data: branch, error: branchError } = await admin
@@ -156,6 +178,25 @@ Deno.serve(async (request) => {
       return json({ error: message }, status);
     }
 
+    if (hasOfflineTaxContext && expectedTaxConfigurationRevision !== null) {
+      const { error: taxContextError } = await admin.rpc('bind_sellertray_offline_tax_context', {
+        p_tenant_id: tenantId,
+        p_order_id: orderId,
+        p_actor_user_id: userId,
+        p_expected_tax_configuration_id: expectedTaxConfigurationId,
+        p_expected_tax_configuration_revision: expectedTaxConfigurationRevision,
+      });
+      if (taxContextError) {
+        const message = taxContextError.message ?? 'Unable to validate queued sale tax settings';
+        const status = taxContextError.code === '42501'
+          ? 403
+          : /needs review|already locked|tax settings changed/i.test(message)
+            ? 409
+            : 400;
+        return json({ error: message }, status);
+      }
+    }
+
     await writeOrderCreationAudit({
       tenantId,
       userId,
@@ -171,6 +212,10 @@ Deno.serve(async (request) => {
         branch_id: branchId,
         ...(customerId ? { selected_customer_id: customerId } : {}),
         ...(clientReference ? { client_reference: clientReference } : {}),
+        ...(hasOfflineTaxContext ? {
+          offline_tax_configuration_id: expectedTaxConfigurationId,
+          offline_tax_configuration_revision: expectedTaxConfigurationRevision,
+        } : {}),
       },
     });
 
@@ -331,6 +376,7 @@ function normalizePhone(value: unknown): string | null {
 
 function optionalNonNegativeNumber(value: unknown): number | null { if (value === null || value === undefined || value === '') return null; const parsed = typeof value === 'number' ? value : Number(value); return Number.isFinite(parsed) && parsed >= 0 ? parsed : null; }
 function optionalPositiveNumber(value: unknown): number | null { if (value === null || value === undefined || value === '') return null; const parsed = typeof value === 'number' ? value : Number(value); return Number.isFinite(parsed) && parsed > 0 ? parsed : null; }
+function optionalNonNegativeInteger(value: unknown): number | null { if (value === null || value === undefined || value === '') return null; const parsed = typeof value === 'number' ? value : Number(value); return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null; }
 function cleanText(value: unknown, max: number): string | null { if (typeof value !== 'string') return null; const clean = value.trim().replace(/\s+/g, ' '); return clean ? clean.slice(0, max) : null; }
 function cleanUuid(value: unknown): string | null { if (typeof value !== 'string') return null; const clean = value.trim(); return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clean) ? clean : null; }
 

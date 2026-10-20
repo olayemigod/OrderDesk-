@@ -4,6 +4,7 @@ type J = Record<string, unknown>;
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+const MONEY_EPSILON = 0.005;
 
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
@@ -99,8 +100,10 @@ async function loadDocument(id: string): Promise<J | null> {
   const paymentId = typeof row.payment_id === 'string' ? row.payment_id : null;
 
   const orders = await rest<J[]>(
-    '/rest/v1/orders?select=id,public_order_id,created_at,customer_id,' +
-    'order_items(item_name,quantity,unit_price,line_total)' +
+    '/rest/v1/orders?select=' +
+    'id,public_order_id,created_at,customer_id,subtotal_amount,tax_applied,tax_rate_percent,tax_amount,' +
+    'tax_display_breakdown,gross_amount,tax_posted_at,' +
+    'order_items(item_name,quantity,unit_price,line_total,tax_basis_amount,tax_rate_percent,tax_amount,gross_line_total)' +
     '&tenant_id=eq.' + encodeURIComponent(tenantId) +
     '&id=eq.' + encodeURIComponent(orderId) + '&limit=1',
   );
@@ -136,6 +139,13 @@ async function loadDocument(id: string): Promise<J | null> {
     ...row,
     public_order_id: order.public_order_id || '',
     order_created_at: order.created_at || null,
+    subtotal_amount: order.subtotal_amount ?? null,
+    tax_applied: order.tax_applied === true,
+    tax_rate_percent: order.tax_rate_percent ?? null,
+    tax_amount: order.tax_amount ?? null,
+    tax_display_breakdown: order.tax_display_breakdown === true,
+    gross_amount: order.gross_amount ?? null,
+    tax_posted_at: order.tax_posted_at ?? null,
     order_items: Array.isArray(order.order_items) ? order.order_items : [],
     business_name: tenant.name || 'SellerTray merchant',
     business_email: tenant.business_email || null,
@@ -170,9 +180,30 @@ async function buildPdf(document: J): Promise<Uint8Array> {
     page.drawText(pdfText(String(value ?? '')), { x, y, size, font, color });
   };
   const down = (amount = 16) => { y -= amount; };
-  const money = formatMoney(Number(document.amount) || 0, String(document.currency || 'NGN'));
+  const currency = String(document.currency || 'NGN');
+  const documentAmount = moneyNumber(document.amount) ?? 0;
+  const subtotal = moneyNumber(document.subtotal_amount);
+  const taxAmount = moneyNumber(document.tax_amount);
+  const grossAmount = moneyNumber(document.gross_amount);
+  const ratePercent = numberValue(document.tax_rate_percent);
+  const hasPostedTaxSnapshot = typeof document.tax_posted_at === 'string'
+    && subtotal !== null
+    && taxAmount !== null
+    && grossAmount !== null;
+  const showTaxBreakdown = hasPostedTaxSnapshot
+    && document.tax_applied === true
+    && document.tax_display_breakdown === true
+    && (taxAmount ?? 0) > 0;
   const isReceipt = document.document_type === 'receipt';
   const title = isReceipt ? 'PAYMENT RECEIPT' : 'INVOICE';
+
+  if (!isReceipt && hasPostedTaxSnapshot && Math.abs(documentAmount - (grossAmount ?? documentAmount)) >= MONEY_EPSILON) {
+    throw new Error('Invoice amount does not match the posted sale total');
+  }
+  if (hasPostedTaxSnapshot && subtotal !== null && taxAmount !== null && grossAmount !== null
+      && Math.abs((subtotal + taxAmount) - grossAmount) >= MONEY_EPSILON) {
+    throw new Error('Posted sale tax snapshot is inconsistent');
+  }
 
   page.drawRectangle({ x: 0, y: page.getHeight() - 10, width, height: 10, color: blue });
 
@@ -225,29 +256,69 @@ async function buildPdf(document: J): Promise<Uint8Array> {
   down(18);
 
   const items = Array.isArray(document.order_items) ? document.order_items : [];
+  const itemFloor = showTaxBreakdown ? 245 : 190;
   for (const rawItem of items.slice(0, 40)) {
     const item = isRecord(rawItem) ? rawItem : {};
-    const qty = Number(item.quantity) || 0;
-    const unit = Number(item.unit_price);
-    const lineTotal = Number(item.line_total);
+    const qty = numberValue(item.quantity) ?? 0;
+    const baseUnit = numberValue(item.unit_price);
+    const baseLine = moneyNumber(item.tax_basis_amount) ?? moneyNumber(item.line_total) ?? 0;
+    const grossLine = moneyNumber(item.gross_line_total) ?? moneyNumber(item.line_total) ?? baseLine;
+    const displayedLine = showTaxBreakdown ? baseLine : grossLine;
+    const displayedUnit = !showTaxBreakdown && hasPostedTaxSnapshot && qty > 0
+      ? grossLine / qty
+      : baseUnit;
+
     page.drawText(pdfText(String(item.item_name || 'Item')).slice(0, 48), {
       x: columns.item, y, size: 9, font: regular, color: dark,
     });
-    page.drawText(String(qty), { x: columns.qty, y, size: 9, font: regular, color: dark });
-    page.drawText(Number.isFinite(unit) ? formatMoney(unit, String(document.currency)) : '-', {
+    page.drawText(formatQuantity(qty), { x: columns.qty, y, size: 9, font: regular, color: dark });
+    page.drawText(displayedUnit !== null && Number.isFinite(displayedUnit) ? formatMoney(displayedUnit, currency) : '-', {
       x: columns.unit, y, size: 8, font: regular, color: dark,
     });
-    page.drawText(formatMoney(Number.isFinite(lineTotal) ? lineTotal : 0, String(document.currency)), {
+    page.drawText(formatMoney(displayedLine, currency), {
       x: columns.amount, y, size: 8, font: bold, color: dark,
     });
     down(22);
-    if (y < 190) break;
+    if (y < itemFloor) break;
   }
 
   page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 1, color: line });
   down(24);
-  page.drawText(isReceipt ? 'AMOUNT PAID' : 'AMOUNT DUE', { x: 350, y, size: 10, font: bold, color: dark });
-  page.drawText(money, { x: 448, y, size: 11, font: bold, color: blue });
+
+  if (showTaxBreakdown && subtotal !== null && taxAmount !== null && grossAmount !== null) {
+    drawSummaryRow(page, 'SUBTOTAL', formatMoney(subtotal, currency), y, regular, bold, dark, muted);
+    down(18);
+    const taxLabel = ratePercent !== null ? `TAX (${formatRate(ratePercent)}%)` : 'TAX';
+    drawSummaryRow(page, taxLabel, formatMoney(taxAmount, currency), y, regular, bold, dark, muted);
+    down(18);
+    if (isReceipt && Math.abs(documentAmount - grossAmount) >= MONEY_EPSILON) {
+      drawSummaryRow(page, 'SALE TOTAL', formatMoney(grossAmount, currency), y, regular, bold, dark, muted);
+      down(22);
+      drawSummaryRow(page, 'PAYMENT RECEIVED', formatMoney(documentAmount, currency), y, bold, bold, blue, dark);
+    } else {
+      drawSummaryRow(
+        page,
+        isReceipt ? 'AMOUNT PAID' : 'AMOUNT DUE',
+        formatMoney(isReceipt ? documentAmount : grossAmount, currency),
+        y,
+        bold,
+        bold,
+        blue,
+        dark,
+      );
+    }
+  } else {
+    drawSummaryRow(
+      page,
+      isReceipt ? 'AMOUNT PAID' : 'AMOUNT DUE',
+      formatMoney(documentAmount, currency),
+      y,
+      bold,
+      bold,
+      blue,
+      dark,
+    );
+  }
   down(34);
 
   if (isReceipt) {
@@ -266,6 +337,20 @@ async function buildPdf(document: J): Promise<Uint8Array> {
   });
 
   return await pdf.save();
+}
+
+function drawSummaryRow(
+  page: ReturnType<PDFDocument['addPage']>,
+  label: string,
+  value: string,
+  y: number,
+  valueFont: Awaited<ReturnType<PDFDocument['embedFont']>>,
+  labelFont: Awaited<ReturnType<PDFDocument['embedFont']>>,
+  valueColor: ReturnType<typeof rgb>,
+  labelColor: ReturnType<typeof rgb>,
+): void {
+  page.drawText(label, { x: 350, y, size: 9, font: labelFont, color: labelColor });
+  page.drawText(pdfText(value), { x: 448, y, size: 10, font: valueFont, color: valueColor });
 }
 
 async function upload(path: string, pdf: Uint8Array): Promise<void> {
@@ -299,10 +384,6 @@ async function rest<T = unknown>(path: string, init: RequestInit = {}): Promise<
   return (raw ? JSON.parse(raw) : null) as T;
 }
 
-function one(value: unknown): J | null {
-  if (Array.isArray(value)) return isRecord(value[0]) ? value[0] : null;
-  return isRecord(value) ? value : null;
-}
 function isRecord(v: unknown): v is J { return typeof v === 'object' && v !== null && !Array.isArray(v); }
 function uuid(v: unknown): string | null {
   if (typeof v !== 'string') return null;
@@ -321,6 +402,8 @@ function formatMoney(value: number, currency: string): string {
   const safe = /^[A-Z]{3}$/.test(currency) ? currency : 'NGN';
   return safe + ' ' + new Intl.NumberFormat('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 }
+function formatRate(value: number): string { return Number(value.toFixed(6)).toString(); }
+function formatQuantity(value: number): string { return Number.isInteger(value) ? String(value) : Number(value.toFixed(6)).toString(); }
 function formatDate(v: unknown): string {
   if (typeof v !== 'string') return '';
   const d = new Date(v);
@@ -329,12 +412,22 @@ function formatDate(v: unknown): string {
 }
 function humanMethod(v: string): string {
   return ({
+    cash: 'Cash',
     bank_transfer: 'Bank transfer',
+    card_terminal: 'Card terminal',
     paystack: 'Paystack',
     flutterwave: 'Flutterwave',
     cash_on_delivery: 'Cash on delivery',
     pay_on_pickup: 'Pay on pickup',
   } as Record<string, string>)[v] || v.replace(/_/g, ' ');
+}
+function numberValue(v: unknown): number | null {
+  const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() ? Number(v) : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+function moneyNumber(v: unknown): number | null {
+  const n = numberValue(v);
+  return n === null ? null : Number(n.toFixed(2));
 }
 function constantTimeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;

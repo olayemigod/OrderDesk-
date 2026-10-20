@@ -43,6 +43,9 @@ jobs:
           actual="$(git rev-parse HEAD)"
           test "$actual" = "$expected"
 
+      - name: Verify financial document tax rendering contract
+        run: node supabase/functions/financial-document/tax-contract.mjs
+
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
