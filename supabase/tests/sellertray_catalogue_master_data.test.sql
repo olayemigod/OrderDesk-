@@ -32,7 +32,7 @@ select extensions.ok(
   has_function_privilege('authenticated','public.get_sellertray_catalogue_masters(uuid)','EXECUTE')
   and has_function_privilege('authenticated','public.create_sellertray_product_category(uuid,text)','EXECUTE')
   and has_function_privilege('authenticated','public.create_sellertray_uom(uuid,text)','EXECUTE'),
-  'authenticated management clients can use catalogue master RPCs'
+  'authenticated clients can use governed catalogue master RPCs'
 );
 select extensions.ok(
   not has_function_privilege('anon','public.get_sellertray_catalogue_masters(uuid)','EXECUTE')
@@ -46,19 +46,32 @@ select extensions.ok(
   and not has_table_privilege('authenticated','public.catalog_categories','INSERT')
   and not has_table_privilege('authenticated','public.catalog_categories','UPDATE')
   and not has_table_privilege('authenticated','public.catalog_categories','DELETE'),
-  'category master table is not a direct browser write/read boundary'
+  'category master table is not a direct browser boundary'
 );
 select extensions.ok(
   not has_table_privilege('authenticated','public.catalog_uoms','SELECT')
   and not has_table_privilege('authenticated','public.catalog_uoms','INSERT')
   and not has_table_privilege('authenticated','public.catalog_uoms','UPDATE')
   and not has_table_privilege('authenticated','public.catalog_uoms','DELETE'),
-  'UOM master table is not a direct browser write/read boundary'
+  'UOM master table is not a direct browser boundary'
 );
 
 select extensions.ok(
-  lower(pg_get_functiondef(to_regprocedure('public.get_sellertray_catalogue_masters(uuid)'))) like '%sellertray_user_can_manage_products%',
-  'catalogue master reads use shared product-management authority'
+  not has_table_privilege('authenticated','public.catalog_items','INSERT')
+  and not has_table_privilege('authenticated','public.catalog_items','UPDATE')
+  and not has_table_privilege('authenticated','public.catalog_items','DELETE'),
+  'browser product mutation is command/RPC-only'
+);
+select extensions.ok(
+  not has_table_privilege('authenticated','public.catalog_item_uoms','INSERT')
+  and not has_table_privilege('authenticated','public.catalog_item_uoms','UPDATE')
+  and not has_table_privilege('authenticated','public.catalog_item_uoms','DELETE'),
+  'browser product-UOM mutation is command/RPC-only'
+);
+
+select extensions.ok(
+  lower(pg_get_functiondef(to_regprocedure('public.get_sellertray_catalogue_masters(uuid)'))) like '%tenant_members%',
+  'catalogue master reads require Business membership'
 );
 select extensions.ok(
   lower(pg_get_functiondef(to_regprocedure('public.create_sellertray_product_category(uuid,text)'))) like '%sellertray_user_can_manage_products%'
@@ -81,26 +94,25 @@ select extensions.ok(
   'product unit save validates alternate units against the shared UOM master'
 );
 
-select extensions.ok(to_regprocedure('public.validate_sellertray_catalogue_master_refs()') is not null, 'direct product writes have a catalogue-master guard');
-select extensions.ok(to_regprocedure('public.validate_sellertray_product_uom_master_ref()') is not null, 'direct product-UOM writes have a master guard');
-
 select extensions.ok(
-  exists (
+  to_regprocedure('public.sync_sellertray_catalogue_master_refs()') is not null
+  and exists (
     select 1 from pg_trigger t
     where t.tgrelid='public.catalog_items'::regclass
       and not t.tgisinternal
-      and t.tgname='validate_sellertray_catalogue_master_refs'
+      and t.tgname='sync_sellertray_catalogue_master_refs'
   ),
-  'catalog item master guard is installed'
+  'trusted direct product writes synchronize into the same catalogue masters'
 );
 select extensions.ok(
-  exists (
+  to_regprocedure('public.sync_sellertray_product_uom_master_ref()') is not null
+  and exists (
     select 1 from pg_trigger t
     where t.tgrelid='public.catalog_item_uoms'::regclass
       and not t.tgisinternal
-      and t.tgname='catalogue_uom_master_ref_guard'
+      and t.tgname='catalogue_uom_master_ref_sync'
   ),
-  'product UOM master guard is installed'
+  'trusted direct product-UOM writes synchronize into the same UOM master'
 );
 
 select * from extensions.finish();
