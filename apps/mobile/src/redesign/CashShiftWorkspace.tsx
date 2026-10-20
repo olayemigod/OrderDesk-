@@ -444,11 +444,10 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
           <PaymentSummaryCard summary={shift.paymentSummary} dark={dark} />
 
           <Card dark={dark}>
-            <SectionHeader title="Cash activity" subtitle="Cash in, cash out and expenses change the expected drawer cash." icon="cash-outline" dark={dark} />
+            <SectionHeader title="Cash activity" subtitle="Cash in and cashier expenses change the expected drawer cash. Use More → Cash Out for Bank Deposit or Owner Withdrawal." icon="cash-outline" dark={dark} />
             {!movementMode && !correctionMovement && !closeMode ? (
               <View style={styles.choiceWrap}>
                 {capabilities.canRecordCashMovement ? <ChoiceButton label="Cash in" active={false} onPress={() => beginMovement('cash_in')} dark={dark} /> : null}
-                {capabilities.canRecordCashMovement ? <ChoiceButton label="Cash out" active={false} onPress={() => beginMovement('cash_out')} dark={dark} /> : null}
                 {capabilities.canRecordExpense ? <ChoiceButton label="Expense" active={false} onPress={() => beginMovement('expense')} dark={dark} /> : null}
               </View>
             ) : null}
