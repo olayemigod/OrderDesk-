@@ -407,10 +407,10 @@ function ReceiptCopySettings({ tenantId, printer }: { tenantId: string; printer:
     setError(null);
     setMessage(null);
     try {
-      const normalized = copies.map((copy, index) => ({
+      const normalized: ReceiptCopyDefinition[] = copies.map((copy, index) => ({
         type: copy.type,
         label: copy.label.trim(),
-        enabled: true,
+        enabled: true as const,
         sortOrder: index + 1,
       }));
       const { data, error: rpcError } = await supabase.rpc('save_sellertray_printer_receipt_settings', {
