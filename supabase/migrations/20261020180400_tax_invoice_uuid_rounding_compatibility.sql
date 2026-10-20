@@ -1,8 +1,7 @@
 begin;
 
--- PostgreSQL does not provide max(uuid). Tax posting only needs a stable line
--- to receive any cent-level rounding residual, so preserve the original
--- deterministic greatest-UUID intent with UUID ordering instead of an aggregate.
+-- PostgreSQL does not provide max(uuid). Preserve the latest offline-aware
+-- invoice authority and change only the deterministic residual-line selector.
 create or replace function public.ensure_sellertray_invoice_for_order(p_order_id uuid)
 returns uuid
 language plpgsql
@@ -13,6 +12,8 @@ declare
   v_order public.orders%rowtype;
   v_existing_id uuid;
   v_config public.sellertray_tax_configurations%rowtype;
+  v_latest public.sellertray_tax_configurations%rowtype;
+  v_has_config boolean:=false;
   v_subtotal numeric(18,2);
   v_rate numeric(9,6):=0;
   v_tax numeric(18,2):=0;
@@ -37,19 +38,14 @@ begin
   where d.tenant_id=v_order.tenant_id
     and d.order_id=v_order.id
     and d.document_type='invoice';
-  if found then
-    return v_existing_id;
-  end if;
+  if found then return v_existing_id; end if;
 
-  if v_order.status not in ('accepted','processing','ready','completed') then
-    return null;
-  end if;
+  if v_order.status not in ('accepted','processing','ready','completed') then return null; end if;
 
   select coalesce(sum(round((oi.quantity*oi.unit_price)::numeric,2)),0)::numeric(18,2)
   into v_subtotal
   from public.order_items oi
   where oi.tenant_id=v_order.tenant_id and oi.order_id=v_order.id;
-
   if not exists(
     select 1 from public.order_items oi
     where oi.tenant_id=v_order.tenant_id and oi.order_id=v_order.id
@@ -58,19 +54,40 @@ begin
   end if;
   if exists(
     select 1 from public.order_items oi
-    where oi.tenant_id=v_order.tenant_id and oi.order_id=v_order.id
-      and oi.unit_price is null
+    where oi.tenant_id=v_order.tenant_id and oi.order_id=v_order.id and oi.unit_price is null
   ) then
     raise exception 'SellerTray order has unpriced invoice items' using errcode='23514';
   end if;
 
-  select * into v_config
+  select * into v_latest
   from public.sellertray_tax_configurations c
   where c.tenant_id=v_order.tenant_id
   order by c.revision desc
   limit 1;
 
-  if found and v_config.is_active then
+  if v_order.offline_tax_context_locked then
+    if v_order.offline_tax_configuration_revision=0 then
+      if found then
+        raise exception 'Queued sale needs review because Business tax settings changed' using errcode='23514';
+      end if;
+      v_has_config:=false;
+    else
+      if not found
+         or v_latest.id is distinct from v_order.offline_tax_configuration_id
+         or v_latest.revision<>v_order.offline_tax_configuration_revision then
+        raise exception 'Queued sale needs review because Business tax settings changed' using errcode='23514';
+      end if;
+      v_config:=v_latest;
+      v_has_config:=true;
+    end if;
+  else
+    if found then
+      v_config:=v_latest;
+      v_has_config:=true;
+    end if;
+  end if;
+
+  if v_has_config and v_config.is_active then
     v_applied:=true;
     v_rate:=v_config.rate_percent;
     v_display:=v_config.display_tax_breakdown;
@@ -112,8 +129,8 @@ begin
   update public.orders o
   set subtotal_amount=v_subtotal,
       tax_applied=v_applied,
-      tax_configuration_id=case when found then v_config.id else null end,
-      tax_configuration_revision=case when found then v_config.revision else null end,
+      tax_configuration_id=case when v_has_config then v_config.id else null end,
+      tax_configuration_revision=case when v_has_config then v_config.revision else null end,
       tax_rate_percent=v_rate,
       tax_amount=v_tax,
       tax_display_breakdown=v_display,
@@ -127,8 +144,7 @@ begin
     tenant_id,order_id,document_type,document_reference,currency,amount,status
   ) values(
     v_order.tenant_id,v_order.id,'invoice','',coalesce(v_order.currency,'NGN'),v_gross,'issued'
-  )
-  returning id into v_document_id;
+  ) returning id into v_document_id;
 
   return v_document_id;
 end;
