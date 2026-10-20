@@ -92,7 +92,7 @@ set order_id=public.create_sellertray_pos_order_atomic(
 
 -- Period A is order capture. It must not become the tax reporting period.
 update public.orders o
-set created_at=((current_date-10)::timestamp at time zone 'Africa/Lagos')
+set created_at=((((now() at time zone 'Africa/Lagos')::date)-10)::timestamp at time zone 'Africa/Lagos')
 where o.id=(select order_id from sellertray_tax_period_fixture);
 
 select public.open_sellertray_cash_shift(
@@ -111,7 +111,7 @@ select set_config('request.jwt.claim.role','authenticated',true);
 
 select extensions.is(
   (public.get_sellertray_tax_report_summary(
-    (select tenant_id from sellertray_tax_period_fixture),current_date-10,current_date-10,null,'pos'
+    (select tenant_id from sellertray_tax_period_fixture),(now() at time zone 'Africa/Lagos')::date-10,(now() at time zone 'Africa/Lagos')::date-10,null,'pos'
   )->>'salesTax')::numeric,
   0::numeric,
   'order creation period does not recognise tax before finalisation'
@@ -119,7 +119,7 @@ select extensions.is(
 
 select extensions.is(
   (public.get_sellertray_tax_report_summary(
-    (select tenant_id from sellertray_tax_period_fixture),current_date,current_date,null,'pos'
+    (select tenant_id from sellertray_tax_period_fixture),(now() at time zone 'Africa/Lagos')::date,(now() at time zone 'Africa/Lagos')::date,null,'pos'
   )->>'salesTax')::numeric,
   157.50::numeric,
   'tax is recognised in the immutable posting period'
@@ -156,7 +156,7 @@ with inserted_return as (
     o.tax_configuration_id,
     o.tax_configuration_revision,
     o.tax_rate_percent,
-    ((current_date+10)::timestamp at time zone 'Africa/Lagos')
+    ((((now() at time zone 'Africa/Lagos')::date)+10)::timestamp at time zone 'Africa/Lagos')
   from sellertray_tax_period_fixture f
   join public.orders o
     on o.tenant_id=f.tenant_id and o.id=f.order_id
@@ -181,7 +181,7 @@ select extensions.is(
 
 select extensions.is(
   (public.get_sellertray_tax_report_summary(
-    (select tenant_id from sellertray_tax_period_fixture),current_date,current_date,null,'pos'
+    (select tenant_id from sellertray_tax_period_fixture),(now() at time zone 'Africa/Lagos')::date,(now() at time zone 'Africa/Lagos')::date,null,'pos'
   )->>'returnedTax')::numeric,
   0::numeric,
   'sale posting period does not recognise a later tax reversal'
@@ -189,7 +189,7 @@ select extensions.is(
 
 select extensions.is(
   (public.get_sellertray_tax_report_summary(
-    (select tenant_id from sellertray_tax_period_fixture),current_date+10,current_date+10,null,'pos'
+    (select tenant_id from sellertray_tax_period_fixture),(now() at time zone 'Africa/Lagos')::date+10,(now() at time zone 'Africa/Lagos')::date+10,null,'pos'
   )->>'salesTax')::numeric,
   0::numeric,
   'return period does not re-recognise the original sale tax'
@@ -197,7 +197,7 @@ select extensions.is(
 
 select extensions.is(
   (public.get_sellertray_tax_report_summary(
-    (select tenant_id from sellertray_tax_period_fixture),current_date+10,current_date+10,null,'pos'
+    (select tenant_id from sellertray_tax_period_fixture),(now() at time zone 'Africa/Lagos')::date+10,(now() at time zone 'Africa/Lagos')::date+10,null,'pos'
   )->>'returnedTax')::numeric,
   78.75::numeric,
   'return period recognises the historical tax reversal despite current rate changes'
