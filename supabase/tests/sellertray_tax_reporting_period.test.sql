@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(6);
+select extensions.plan(7);
 
 create temp table sellertray_tax_period_fixture (
   tenant_id uuid not null,
@@ -169,6 +169,15 @@ with inserted_return as (
 )
 update sellertray_tax_period_fixture
 set return_result=jsonb_build_object('returnId',(select id from inserted_return));
+
+select extensions.is(
+  (public.get_sellertray_order_profitability(
+    (select tenant_id from sellertray_tax_period_fixture),
+    (select order_id from sellertray_tax_period_fixture)
+  )->>'netRevenue')::numeric,
+  1050::numeric,
+  'profitability excludes collected tax and historical returned tax from net revenue'
+);
 
 select extensions.is(
   (public.get_sellertray_tax_report_summary(
