@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 
-import { completePosSale } from '../data/commerceRepository';
+import { completePosSale, PosDraftRequestError } from '../data/commerceRepository';
 import { prepareGovernedPosDraft } from '../data/posDraftPreparationRepository';
 import {
   discardOfflinePosSale,
@@ -10,6 +10,7 @@ import {
   syncOfflinePosSales,
   type OfflinePosSale,
 } from '../data/offlineSalesRepository';
+import { loadSellerTrayTaxQuote } from '../data/taxRepository';
 import { supabase } from '../lib/supabase';
 
 const ACTIVE_REACHABILITY_INTERVAL_MS = 5_000;
@@ -70,6 +71,25 @@ export function useOfflineSalesSync() {
   }, [actorUserId]);
 
   const replaySale = useCallback(async (sale: OfflinePosSale) => {
+    let expectedTaxConfigurationId = sale.taxConfigurationId;
+    let expectedTaxConfigurationRevision = sale.taxConfigurationRevision;
+
+    // Schema v1-v3 sales predate Tax Authority. They can keep their original
+    // zero-tax commercial amount only while tax remains inactive. Once tax is
+    // active, human review is safer than silently charging tax after payment.
+    if (expectedTaxConfigurationRevision === null || sale.taxContextLegacy) {
+      const currentTax = await loadSellerTrayTaxQuote(sale.tenantId, sale.subtotal);
+      if (currentTax.taxApplied || currentTax.taxAmount > 0.005) {
+        throw new PosDraftRequestError(
+          'Queued sale needs review because tax became active after this offline sale was recorded.',
+          'conflict',
+          409,
+        );
+      }
+      expectedTaxConfigurationId = currentTax.configurationId;
+      expectedTaxConfigurationRevision = currentTax.revision;
+    }
+
     const orderId = await prepareGovernedPosDraft({
       tenantId: sale.tenantId,
       branchId: sale.branchId,
@@ -77,6 +97,8 @@ export function useOfflineSalesSync() {
       customerId: sale.customerId,
       customerName: sale.customerName,
       customerPhone: sale.customerPhone,
+      expectedTaxConfigurationId,
+      expectedTaxConfigurationRevision,
       items: sale.lines.map((line) => ({
         catalogItemId: line.catalogItemId,
         uomId: line.uomId,
