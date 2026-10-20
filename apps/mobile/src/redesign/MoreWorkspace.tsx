@@ -18,6 +18,7 @@ import { FeedbackWorkspace } from './FeedbackWorkspace';
 import { PrinterWorkspace } from './PrinterWorkspace';
 import { PurchaseReceivingWorkspace } from './PurchaseReceivingWorkspace';
 import { SyncStatusWorkspace } from './SyncStatusWorkspace';
+import { TypedCashOutWorkspace } from './TypedCashOutWorkspace';
 import { WhatsAppRuntimeWorkspace } from './WhatsAppRuntimeWorkspace';
 
 type Props = {
@@ -54,6 +55,7 @@ export function MoreWorkspace({
   const appearance = useSellerTrayAppearance();
   const dark = appearance.dark;
   const [cashOpen, setCashOpen] = useState(false);
+  const [cashOutOpen, setCashOutOpen] = useState(false);
   const [purchaseReceivingOpen, setPurchaseReceivingOpen] = useState(false);
   const [printerOpen, setPrinterOpen] = useState(false);
   const [whatsappOpen, setWhatsappOpen] = useState(false);
@@ -69,6 +71,7 @@ export function MoreWorkspace({
 
   function closeOperationalWorkspaces() {
     setCashOpen(false);
+    setCashOutOpen(false);
     setPurchaseReceivingOpen(false);
     setPrinterOpen(false);
     setWhatsappOpen(false);
@@ -127,6 +130,9 @@ export function MoreWorkspace({
   if (cashOpen) {
     return <CashShiftWorkspace tenantId={business.id} branch={branch} onClose={() => setCashOpen(false)} onShiftChanged={onShiftChanged} />;
   }
+  if (cashOutOpen) {
+    return <TypedCashOutWorkspace tenantId={business.id} branch={branch} activeShift={activeShift} onClose={() => setCashOutOpen(false)} onShiftChanged={onShiftChanged} />;
+  }
   if (purchaseReceivingOpen && canReceivePurchases) {
     return <PurchaseReceivingWorkspace tenantId={business.id} branch={branch} onClose={() => setPurchaseReceivingOpen(false)} />;
   }
@@ -158,7 +164,16 @@ export function MoreWorkspace({
             <Text style={[styles.operationTitle, dark && darkStyles.titleText]}>Cash & Shift</Text>
             <View style={[styles.statusPill, !activeShift && styles.statusPillClosed]}><Text style={[styles.statusText, !activeShift && styles.statusTextClosed]}>{activeShift ? 'Open' : 'Closed'}</Text></View>
           </View>
-          <Text style={[styles.operationText, dark && darkStyles.bodyText]}>{activeShift ? `${activeShift.registerName} · Expected cash ${formatMoney(activeShift.expectedCash, activeShift.currency)}` : `Open a cashier shift for ${branch.name}, record expenses and reconcile the drawer.`}</Text>
+          <Text style={[styles.operationText, dark && darkStyles.bodyText]}>{activeShift ? `${activeShift.registerName} · Expected cash ${formatMoney(activeShift.expectedCash, activeShift.currency)}` : `Open a cashier shift for ${branch.name}, record Cashier Expenses and reconcile the drawer.`}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
+      </Pressable>
+
+      <Pressable onPress={() => { closeOperationalWorkspaces(); setCashOutOpen(true); }} style={({ pressed }) => [styles.operationCard, dark && darkStyles.card, pressed && styles.pressed]}>
+        <View style={[styles.operationIcon, activeShift && styles.operationIconActive]}><Ionicons name="arrow-up-circle-outline" size={23} color={theme.colors.greenDark} /></View>
+        <View style={styles.operationCopy}>
+          <Text style={[styles.operationTitle, dark && darkStyles.titleText]}>Cash Out</Text>
+          <Text style={[styles.operationText, dark && darkStyles.bodyText]}>Record a Bank Deposit or Owner Withdrawal from the open drawer without treating it as an operating expense.</Text>
         </View>
         <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
       </Pressable>
