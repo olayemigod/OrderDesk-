@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { errorMessage, supabase } from './supabase';
 
 type Acceptance = {
@@ -39,6 +39,7 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const acceptanceCommandIds = useRef(new Map<string, string>());
 
   useEffect(() => { void load(); }, [tenantId]);
 
@@ -72,6 +73,8 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
     if (!name) { setError('Enter the authorised representative legal name.'); return; }
     if (!confirmed) { setError('Confirm that you are authorised and accept the agreement before continuing.'); return; }
 
+    const commandId = acceptanceCommandIds.current.get(selected.id) ?? crypto.randomUUID();
+    acceptanceCommandIds.current.set(selected.id, commandId);
     setBusy(true); setError(null); setMessage(null);
     try {
       const { data, error: functionError } = await supabase.functions.invoke('commercial-agreements', {
@@ -80,11 +83,12 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
           tenantId,
           agreementId: selected.id,
           legalName: name,
-          commandId: crypto.randomUUID(),
+          commandId,
         },
       });
       if (functionError) throw functionError;
       const next = parseCenter(record(data).center);
+      acceptanceCommandIds.current.delete(selected.id);
       setCenter(next);
       setSelectedId(selected.id);
       setLegalName(''); setConfirmed(false);
