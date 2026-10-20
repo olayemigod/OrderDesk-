@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(18);
+select extensions.plan(20);
 
 select extensions.ok(to_regclass('public.catalogue_categories') is not null, 'Business product category master exists');
 select extensions.ok(to_regclass('public.business_uoms') is not null, 'Business UOM master exists');
@@ -27,6 +27,13 @@ select extensions.ok(
   and not has_table_privilege('authenticated','public.business_uoms','UPDATE')
   and not has_table_privilege('authenticated','public.business_uoms','DELETE'),
   'authenticated clients cannot bypass governed UOM commands'
+);
+select extensions.ok(
+  has_table_privilege('authenticated','public.catalog_items','SELECT')
+  and not has_table_privilege('authenticated','public.catalog_items','INSERT')
+  and not has_table_privilege('authenticated','public.catalog_items','UPDATE')
+  and not has_table_privilege('authenticated','public.catalog_items','DELETE'),
+  'authenticated catalogue access is read-only outside governed product commands'
 );
 
 select extensions.ok(
@@ -75,14 +82,17 @@ select extensions.ok(
   lower(pg_get_functiondef(to_regprocedure('public.save_sellertray_product(uuid,uuid,text,text,text,text,boolean,numeric)'))) like '%business_uoms%'
   and lower(pg_get_functiondef(to_regprocedure('public.save_sellertray_product(uuid,uuid,text,text,text,text,boolean,numeric)'))) like '%catalogue_categories%'
   and lower(pg_get_functiondef(to_regprocedure('public.save_sellertray_product(uuid,uuid,text,text,text,text,boolean,numeric)'))) like '%select an active business unit%'
-  and lower(pg_get_functiondef(to_regprocedure('public.save_sellertray_product(uuid,uuid,text,text,text,text,boolean,numeric)'))) like '%select an active product category%'
-  ,
+  and lower(pg_get_functiondef(to_regprocedure('public.save_sellertray_product(uuid,uuid,text,text,text,text,boolean,numeric)'))) like '%select an active product category%',
   'product save validates selected Business UOM and product category masters'
 );
 select extensions.ok(
   lower(pg_get_functiondef(to_regprocedure('public.save_sellertray_product_uom(uuid,uuid,uuid,text,numeric,numeric,text,boolean,boolean,boolean)'))) like '%business_uoms%'
   and lower(pg_get_functiondef(to_regprocedure('public.save_sellertray_product_uom(uuid,uuid,uuid,text,numeric,numeric,text,boolean,boolean,boolean)'))) like '%select an active business unit%',
   'product-specific UOM command validates the Business UOM vocabulary'
+);
+select extensions.ok(
+  lower(pg_get_functiondef(to_regprocedure('public.save_sellertray_catalogue_item(uuid,uuid,text,text,text,text,numeric,jsonb)'))) like '%save_sellertray_product%',
+  'legacy catalogue command delegates product mutation to governed product authority'
 );
 
 select extensions.ok(
