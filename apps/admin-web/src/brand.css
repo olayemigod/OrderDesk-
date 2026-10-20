@@ -1,0 +1,77 @@
+/* SellerTray approved brand asset overrides */
+
+.brand-logo {
+  display: block;
+  width: 230px;
+  height: 230px;
+  padding: 12px;
+  box-sizing: border-box;
+  border-radius: 22px;
+  border: 1px solid rgba(217, 251, 232, .55);
+  background: #F8FAFC;
+  object-fit: contain;
+  object-position: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .14);
+  color: transparent;
+  font-size: 0;
+}
+
+.status-logo {
+  width: 170px;
+  height: 170px;
+  margin-inline: auto;
+  border-radius: 18px;
+}
+
+.topbar .brand-icon.small-mark {
+  display: block;
+  width: 44px;
+  height: 44px;
+  padding: 3px;
+  box-sizing: border-box;
+  border-radius: 12px;
+  background: #F8FAFC;
+  object-fit: contain;
+  object-position: center;
+  flex: 0 0 auto;
+  color: transparent;
+  font-size: 0;
+}
+
+.auth-brand-panel {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(18,183,106,.20), transparent 34%),
+    linear-gradient(145deg, #102A43 0%, #153D57 58%, #0B5F45 100%);
+}
+
+.auth-brand-panel .eyebrow {
+  margin-top: 20px;
+  color: #D9FBE8;
+}
+
+.auth-brand-panel h1 {
+  color: #F8FAFC;
+}
+
+.auth-brand-panel > p:not(.eyebrow) {
+  color: #D9FBE8;
+}
+
+.primary-button,
+.preview-cta {
+  background: #12B76A;
+}
+
+@media (max-width: 760px) {
+  .brand-logo {
+    width: 180px;
+    height: 180px;
+    padding: 9px;
+    border-radius: 18px;
+  }
+
+  .status-logo {
+    width: 150px;
+    height: 150px;
+  }
+}
