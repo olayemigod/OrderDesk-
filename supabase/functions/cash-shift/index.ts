@@ -88,6 +88,9 @@ Deno.serve(async (request) => {
     if (!shiftId || !movementType || amount === null || !reference || !reason || !commandId) {
       return json({ error: 'Shift, cash activity, amount, reference and reason are required' }, 400);
     }
+    if (movementType === 'cash_out') {
+      return json({ error: 'Cash Out must be recorded as Bank Deposit or Owner Withdrawal from the Cash Out action.' }, 409);
+    }
     if (movementType === 'expense' && !expenseCategory) {
       return json({ error: 'Expense category is required' }, 400);
     }
