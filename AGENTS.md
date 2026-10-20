@@ -12,9 +12,13 @@ For any task touching inventory valuation, stock history, purchasing cost, COGS,
 
 `.agents/skills/sellertray-project-implementation/VALUATION.md`
 
-`VALUATION.md` is a normative extension of the governing SellerTray skill for those valuation-related boundaries. It does not replace or weaken any rule in `SKILL.md`.
+For any task touching onboarding, subscriptions, setup fees, Branch commercial activation, Merchant Web billing, Admin Web commercial operations, installments, payment schedules, agreements/terms, money-back guarantees, supplied setup equipment, plans/pricing, VAT/tax presentation, promotions, merchant-specific commercial terms, referrals/rewards, or SellerTray editions, also read and follow:
 
-That governing skill and its applicable normative extensions are the repository-level implementation contract for the SellerTray redesign. They govern mobile UX, merchant web boundaries, shared commerce architecture, POS, inventory, branch awareness, UOM, WhatsApp commerce, payments, Bluetooth printing, reporting, AI, permissions, offline behaviour, implementation phases, QA gates, and anti-divergence rules.
+`.agents/skills/sellertray-project-implementation/COMMERCIAL.md`
+
+`VALUATION.md` and `COMMERCIAL.md` are normative extensions of the governing SellerTray skill for their applicable boundaries. They do not replace or weaken any rule in `SKILL.md`.
+
+That governing skill and its applicable normative extensions are the repository-level implementation contract for the SellerTray redesign. They govern mobile UX, merchant web boundaries, Admin Web platform/commercial operations, shared commerce architecture, POS, inventory, branch awareness, UOM, WhatsApp commerce, payments, subscriptions, setup, installments, agreements, guarantees, promotions, Bluetooth printing, reporting, AI, permissions, offline behaviour, implementation phases, QA gates, and anti-divergence rules.
 
 The originating SellerTray redesign conversation is the primary decision record when it is available to the agent. The repository skill is the durable fallback and must be used when that thread is unavailable.
 
@@ -22,13 +26,13 @@ A later explicit user decision overrides older guidance. When product direction 
 
 ## Non-negotiable product model
 
-> Mobile performs. Web manages. WhatsApp sells. AI assists. All channels use the same SellerTray commerce, inventory, UOM, customer, branch, payment, permission, and reporting core.
+> Mobile performs. Web manages. WhatsApp sells. AI assists. All channels use the same SellerTray commerce, inventory, UOM, customer, branch, payment, permission, reporting, and applicable commercial core.
 
-Do not implement a change that creates conflicting business truth across mobile, web, WhatsApp, or AI.
+Do not implement a change that creates conflicting business truth across mobile, web, WhatsApp, AI, or Admin operations.
 
 ## Before declaring work complete
 
-Confirm the applicable QA gates from the governing skill, report the tests actually run, preserve existing WhatsApp behaviour unless explicitly changed, and state any migration/build/deployment requirement. Do not describe planned work as completed.
+Confirm the applicable QA gates from the governing skill and normative extensions, report the tests actually run, preserve existing WhatsApp behaviour unless explicitly changed, and state any migration/build/deployment requirement. Do not describe planned work as completed.
 
 ## Standing SellerTray progress conclusion
 
