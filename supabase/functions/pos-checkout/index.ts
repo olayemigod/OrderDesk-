@@ -104,7 +104,22 @@ Deno.serve(async(request)=>{
       const rawMethod=row.paymentMethodId;
       const paymentMethodId=rawMethod===null||rawMethod===undefined||rawMethod===''?null:cleanUuid(rawMethod);
       if(rawMethod!==null&&rawMethod!==undefined&&rawMethod!==''&&!paymentMethodId)return json({error:'A valid payment method is required'},400);
-      allocations.push({paymentMethodId,amount,confirmNow:row.confirmNow===true});
+
+      const hasProviderReference=row.providerReference!==undefined&&row.providerReference!==null&&row.providerReference!=='';
+      const hasCapturedAt=row.offlineCapturedAt!==undefined&&row.offlineCapturedAt!==null&&row.offlineCapturedAt!=='';
+      if(hasProviderReference!==hasCapturedAt)return json({error:'Offline Bank evidence requires both transfer reference and captured time'},400);
+      const providerReference=hasProviderReference?cleanProviderReference(row.providerReference):null;
+      const offlineCapturedAt=hasCapturedAt?cleanIsoTimestamp(row.offlineCapturedAt):null;
+      if(hasProviderReference&&!providerReference)return json({error:'Enter a valid Bank transfer reference'},400);
+      if(hasCapturedAt&&!offlineCapturedAt)return json({error:'Offline Bank evidence has an invalid captured time'},400);
+      if(providerReference&&row.confirmNow===true)return json({error:'Offline Bank payments must be verified before confirmation'},400);
+
+      allocations.push({
+        paymentMethodId,
+        amount,
+        confirmNow:row.confirmNow===true,
+        ...(providerReference&&offlineCapturedAt?{providerReference,offlineCapturedAt}:{}),
+      });
     }
 
     const {data,error}=await admin.rpc('checkout_sellertray_pos_sale',{
@@ -261,7 +276,7 @@ function statusForCheckoutError(message:string){
     ?403
     :/not found/i.test(message)
       ?404
-      :/insufficient stock|not assigned|not enabled|already|inconsistent|conflicts|exceed/i.test(message)
+      :/insufficient stock|not assigned|not enabled|already|inconsistent|conflicts|exceed|provider reference/i.test(message)
         ?409
         :400;
 }
@@ -274,6 +289,18 @@ function cleanText(value:unknown,max:number){
   if(typeof value!=='string')return null;
   const clean=value.trim().replace(/\s+/g,' ');
   return clean?clean.slice(0,max):null;
+}
+function cleanProviderReference(value:unknown){
+  if(typeof value!=='string')return null;
+  const clean=value.trim();
+  return clean.length>0&&clean.length<=128&&/^[A-Za-z0-9._:-]+$/.test(clean)?clean:null;
+}
+function cleanIsoTimestamp(value:unknown){
+  if(typeof value!=='string')return null;
+  const clean=value.trim();
+  if(!clean||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$/.test(clean))return null;
+  const parsed=Date.parse(clean);
+  return Number.isFinite(parsed)?clean:null;
 }
 function numberOrNull(value:unknown){
   const number=typeof value==='number'?value:Number(value);
