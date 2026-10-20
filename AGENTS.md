@@ -16,11 +16,17 @@ For any task touching onboarding, subscriptions, setup fees, Branch commercial a
 
 `.agents/skills/sellertray-project-implementation/COMMERCIAL.md`
 
+For C1 commercial-core work and any implementation that depends on the C1/C1A/C1B/C2 transition boundary, also read and follow:
+
+`.agents/skills/sellertray-project-implementation/COMMERCIAL_C1.md`
+
+`COMMERCIAL_C1.md` records the later approved additive-C1 sequencing decision and overrides older C1/C1A/C1B sequence wording where they conflict.
+
 For any task touching offline POS selling, cached payment methods, offline payment capture/verification, outbox replay, sync conflicts, retry/idempotency, or degraded-connectivity payment behavior, also read and follow:
 
 `.agents/skills/sellertray-project-implementation/OFFLINE.md`
 
-`VALUATION.md`, `COMMERCIAL.md` and `OFFLINE.md` are normative extensions of the governing SellerTray skill for their applicable boundaries. They do not replace or weaken any rule in `SKILL.md`.
+`VALUATION.md`, `COMMERCIAL.md`, `COMMERCIAL_C1.md` and `OFFLINE.md` are normative extensions of the governing SellerTray skill for their applicable boundaries. They do not replace or weaken any rule in `SKILL.md`.
 
 That governing skill and its applicable normative extensions are the repository-level implementation contract for the SellerTray redesign. They govern mobile UX, merchant web boundaries, Admin Web platform/commercial operations, shared commerce architecture, POS, inventory, branch awareness, UOM, WhatsApp commerce, payments, subscriptions, setup, installments, agreements, guarantees, promotions, Bluetooth printing, reporting, AI, permissions, offline behaviour, implementation phases, QA gates, and anti-divergence rules.
 
