@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(7);
+select extensions.plan(8);
 
 select extensions.ok(
   to_regprocedure('public.get_sellertray_commercial_agreement_center(uuid,uuid)') is not null
@@ -53,6 +53,17 @@ select extensions.ok(
   position('agreement_id=v_agreement.id' in replace(pg_get_functiondef('public.accept_sellertray_commercial_agreement(uuid,uuid,text,jsonb,uuid,uuid)'::regprocedure),' ',''))>0
   and position('already accepted with different acceptance facts' in pg_get_functiondef('public.accept_sellertray_commercial_agreement(uuid,uuid,text,jsonb,uuid,uuid)'::regprocedure))>0,
   'C1A acceptance can recover a committed acceptance after client reload only when signer facts match'
+);
+
+select extensions.ok(
+  position(
+    'command_id=p_command_id'
+    in regexp_replace(pg_get_functiondef('public.accept_sellertray_commercial_agreement(uuid,uuid,text,jsonb,uuid,uuid)'::regprocedure),'\s+','','g')
+  ) < position(
+    'selecttm.roleintov_role'
+    in lower(regexp_replace(pg_get_functiondef('public.accept_sellertray_commercial_agreement(uuid,uuid,text,jsonb,uuid,uuid)'::regprocedure),'\s+','','g'))
+  ),
+  'exact committed acceptance replay is resolved before later current-role authority is re-evaluated'
 );
 
 select * from extensions.finish();
