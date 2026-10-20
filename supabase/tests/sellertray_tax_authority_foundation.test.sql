@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(25);
+select extensions.plan(27);
 
 create temp table sellertray_tax_fixture (
   tenant_id uuid not null,
@@ -14,6 +14,7 @@ create temp table sellertray_tax_fixture (
   pack_uom_id uuid,
   shift_id uuid,
   taxed_order_id uuid,
+  rounding_order_id uuid,
   untaxed_order_id uuid,
   taxed_completion jsonb,
   taxed_return jsonb,
@@ -255,6 +256,47 @@ select extensions.is(
   (select o.tax_amount from public.orders o where o.id=(select taxed_order_id from sellertray_tax_fixture)),
   157.50::numeric,
   'later tax-setting changes do not rewrite historical tax amount'
+);
+
+-- Four independently rounded 0.05 lines at 10% initially produce 0.04 line
+-- tax while the authoritative order tax is 0.02. Reconciliation must remove
+-- the negative residual without taking any line below zero.
+insert into public.catalog_item_uoms(
+  tenant_id,catalog_item_id,uom_name,conversion_factor,selling_price,
+  allow_fractional,is_default_selling
+)
+select tenant_id,product_id,v.uom_name,1,0.05,false,false
+from sellertray_tax_fixture
+cross join (values ('Tiny A'),('Tiny B'),('Tiny C'),('Tiny D')) as v(uom_name);
+
+update sellertray_tax_fixture f
+set rounding_order_id=public.create_sellertray_pos_order_atomic(
+  f.tenant_id,f.branch_id,null,null,'Tax rounding counter sale',
+  jsonb_build_array(
+    jsonb_build_object('catalog_item_id',f.product_id,'uom_id',(select u.id from public.catalog_item_uoms u where u.tenant_id=f.tenant_id and u.catalog_item_id=f.product_id and u.uom_name='Tiny A'),'quantity',1),
+    jsonb_build_object('catalog_item_id',f.product_id,'uom_id',(select u.id from public.catalog_item_uoms u where u.tenant_id=f.tenant_id and u.catalog_item_id=f.product_id and u.uom_name='Tiny B'),'quantity',1),
+    jsonb_build_object('catalog_item_id',f.product_id,'uom_id',(select u.id from public.catalog_item_uoms u where u.tenant_id=f.tenant_id and u.catalog_item_id=f.product_id and u.uom_name='Tiny C'),'quantity',1),
+    jsonb_build_object('catalog_item_id',f.product_id,'uom_id',(select u.id from public.catalog_item_uoms u where u.tenant_id=f.tenant_id and u.catalog_item_id=f.product_id and u.uom_name='Tiny D'),'quantity',1)
+  )
+);
+
+set local request.jwt.claim.role='service_role';
+select public.complete_sellertray_pos_cash_sale(
+  tenant_id,rounding_order_id,owner_user_id
+)
+from sellertray_tax_fixture;
+
+select extensions.is(
+  (select o.tax_amount from public.orders o where o.id=(select rounding_order_id from sellertray_tax_fixture)),
+  0.02::numeric,
+  'order-level rounding keeps the authoritative 10 percent tax on the 0.20 subtotal'
+);
+
+select extensions.ok(
+  (select coalesce(sum(oi.tax_amount),0)=0.02 and coalesce(min(oi.tax_amount),0)>=0
+   from public.order_items oi
+   where oi.order_id=(select rounding_order_id from sellertray_tax_fixture)),
+  'negative rounding residual reconciles line tax exactly without any negative line'
 );
 
 set local request.jwt.claim.role='service_role';
