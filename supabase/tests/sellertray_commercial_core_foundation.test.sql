@@ -392,10 +392,10 @@ update sellertray_commercial_fixture set installment_obligation_id=(select id fr
 insert into public.sellertray_commercial_installment_schedule(
   tenant_id,installment_obligation_id,sequence_no,percentage,amount_due,due_at
 )
-select tenant_id,installment_obligation_id,1,70,735,null
+select tenant_id,installment_obligation_id,1,70,735,null::timestamptz
 from sellertray_commercial_fixture
 union all
-select tenant_id,installment_obligation_id,2,30,315,null
+select tenant_id,installment_obligation_id,2,30,315,null::timestamptz
 from sellertray_commercial_fixture;
 
 set constraints all immediate;
@@ -435,7 +435,7 @@ begin
     insert into public.sellertray_commercial_installment_schedule(
       tenant_id,installment_obligation_id,sequence_no,percentage,amount_due,due_at
     )
-    select tenant_id,installment_obligation_id,3,1,1,null
+    select tenant_id,installment_obligation_id,3,1,1,null::timestamptz
     from sellertray_commercial_fixture;
   exception when sqlstate '23514' then
     update sellertray_commercial_fixture set invalid_schedule_rejected=true;
