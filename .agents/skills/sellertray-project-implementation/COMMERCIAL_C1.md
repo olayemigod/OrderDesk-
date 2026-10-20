@@ -4,7 +4,7 @@ description: "Normative C1 boundary for the additive SellerTray commercial-core 
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.0"
+  version: "0.1.1"
   status: governing-extension
 ---
 
@@ -47,6 +47,35 @@ The accounting/authority distinction is mandatory:
 C1A follows C1 and owns versioned terms/templates, merchant-specific agreement snapshots, acceptance evidence, immutable accepted agreements and amendment/replacement history.
 
 No installment subscription may activate before the required C1A agreement has been accepted by an authorised merchant representative and the qualifying payment has been confirmed.
+
+### C1A implementation contract
+
+C1A is additive and must not replace or reinterpret the existing user-level Terms/Privacy consent ledger. `public.user_legal_acceptances` remains the separate evidence that an individual user accepted SellerTray Terms/Privacy versions; it is not Business-specific commercial-contract truth and must not be reused as such.
+
+C1A commercial agreement truth is governed through dedicated service-authority persistence:
+
+- immutable versioned agreement templates;
+- immutable Business-specific agreement snapshots linked to the governed C1 commercial order and, where applicable, its installment obligation;
+- server-computed SHA-256 integrity evidence for both template content and the rendered Business agreement;
+- immutable acceptance evidence linked to the exact agreement/template hashes, accepting user, accepted legal name, accepted authority, timestamp and available request evidence;
+- explicit supersession/replacement links rather than mutation of an issued or accepted agreement;
+- retry-safe agreement issuance keyed by governed agreement reference and retry-safe acceptance keyed by command identity.
+
+Agreement templates and Business agreement snapshots are platform/commercial-management authority. They are not authored or mutated directly by Merchant Web or Mobile clients. The migration must not seed or invent legal wording, prices, due dates, refund terms, equipment-ownership clauses or other unapproved commercial language.
+
+Merchant signing authority is stricter than ordinary operational Manager access:
+
+- a Business Owner is always authorised to accept a current SellerTray commercial agreement for that Business;
+- a Manager is **not** authorised by role alone and must hold the explicit `can_accept_commercial_agreements` capability;
+- only the Business Owner may grant or revoke `can_accept_commercial_agreements`, and it may only be delegated to a Manager;
+- Staff/Cashiers can never accept SellerTray commercial agreements;
+- Merchant Web Team & Permissions may expose this authority only as an Owner-controlled Manager permission and must not imply that standard Manager permissions include contract signing.
+
+Acceptance of an agreement does not confirm a payment and does not activate, extend or release subscription entitlement. C1A must not mutate `public.tenant_subscriptions` or treat acceptance as a payment fact.
+
+`sellertray_installment_agreement_is_accepted(...)` is a governed prerequisite fact for C1B only. It may report whether the **current, non-superseded** installment agreement has immutable acceptance evidence; it must not itself perform payment qualification, entitlement activation, due-state changes or runtime access mutation.
+
+When an agreement is superseded, the earlier immutable agreement and acceptance remain historical evidence, but downstream commercial activation must fail closed until the replacement agreement is accepted where acceptance is required.
 
 ## C1B — Installment activation and entitlement release
 
