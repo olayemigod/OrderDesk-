@@ -83,6 +83,7 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
           tenantId,
           agreementId: selected.id,
           legalName: name,
+          authorityConfirmed: true,
           commandId,
         },
       });
