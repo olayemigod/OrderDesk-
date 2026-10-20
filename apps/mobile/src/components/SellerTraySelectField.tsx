@@ -109,7 +109,7 @@ export function SellerTraySelectField({
               onChangeText={setQuery}
               placeholder="Search"
               placeholderTextColor={theme.colors.subtle}
-              style={[styles.input, dark && styles.darkControl]}
+              style={[styles.input, dark && styles.darkControl, dark && styles.darkInputText]}
             />
 
             <ScrollView style={styles.options} contentContainerStyle={styles.optionContent} keyboardShouldPersistTaps="handled">
@@ -140,7 +140,7 @@ export function SellerTraySelectField({
                     onChangeText={setNewName}
                     placeholder="Name"
                     placeholderTextColor={theme.colors.subtle}
-                    style={[styles.input, styles.createInput, dark && styles.darkControl]}
+                    style={[styles.input, styles.createInput, dark && styles.darkControl, dark && styles.darkInputText]}
                   />
                   <Pressable disabled={creating || !newName.trim()} onPress={() => void create()} style={[styles.createButton, (creating || !newName.trim()) && styles.disabled]}>
                     <Text style={styles.createButtonText}>{creating ? 'Adding…' : 'Add'}</Text>
@@ -202,7 +202,8 @@ const styles = StyleSheet.create({
   createButtonText: { color: theme.colors.white, fontWeight: '900' },
   error: { fontSize: 12, color: '#B42318', fontWeight: '700' },
   darkSheet: { backgroundColor: '#111827' },
-  darkControl: { backgroundColor: '#182230', borderColor: '#344054', color: '#F8FAFC' },
+  darkControl: { backgroundColor: '#182230', borderColor: '#344054' },
+  darkInputText: { color: '#F8FAFC' },
   darkValue: { color: '#F8FAFC' },
   darkBody: { color: '#CBD5E1' },
 });
