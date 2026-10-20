@@ -10,8 +10,54 @@ export type MobileProductDraft = {
   sellingPrice: number;
 };
 
+export type CatalogueMasterOption = {
+  id: string;
+  name: string;
+};
+
+export type CatalogueMasterData = {
+  categories: CatalogueMasterOption[];
+  uoms: CatalogueMasterOption[];
+};
+
 export async function loadManagedProducts(tenantId: string): Promise<CommerceProduct[]> {
   return loadCommerceProducts(tenantId, { includeInactive: true });
+}
+
+export async function loadCatalogueMasterData(tenantId: string): Promise<CatalogueMasterData> {
+  const { data, error } = await supabase.rpc('get_sellertray_catalogue_master_data', {
+    p_tenant_id: tenantId,
+  });
+  if (error) throw error;
+  const root = object(data);
+  return {
+    categories: masterOptions(root.categories),
+    uoms: masterOptions(root.uoms),
+  };
+}
+
+export async function createProductCategory(tenantId: string, name: string): Promise<string> {
+  const cleanName = name.trim();
+  if (!cleanName) throw new Error('Category name is required.');
+  const { data, error } = await supabase.rpc('create_sellertray_product_category', {
+    p_tenant_id: tenantId,
+    p_name: cleanName,
+  });
+  if (error) throw error;
+  if (typeof data !== 'string' || !data) throw new Error('SellerTray did not return the category reference.');
+  return data;
+}
+
+export async function createBusinessUom(tenantId: string, name: string): Promise<string> {
+  const cleanName = name.trim();
+  if (!cleanName) throw new Error('Unit name is required.');
+  const { data, error } = await supabase.rpc('create_sellertray_business_uom', {
+    p_tenant_id: tenantId,
+    p_name: cleanName,
+  });
+  if (error) throw error;
+  if (typeof data !== 'string' || !data) throw new Error('SellerTray did not return the unit reference.');
+  return data;
 }
 
 export async function saveManagedProduct(
@@ -85,6 +131,18 @@ function validateProduct(input: MobileProductDraft): MobileProductDraft {
     allowFractionalStock: input.allowFractionalStock,
     sellingPrice: input.sellingPrice,
   };
+}
+
+function masterOptions(value: unknown): CatalogueMasterOption[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => object(entry))
+    .map((entry) => ({ id: String(entry.id ?? ''), name: String(entry.name ?? '').trim() }))
+    .filter((entry) => entry.id && entry.name);
+}
+
+function object(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function cleanOptional(value: string | null): string | null {
