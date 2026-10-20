@@ -63,16 +63,15 @@ insert into public.catalog_items(
 select product_id,tenant_id,'Offline Tax Product','OFF-TAX',100,true,'Each',false
 from sellertray_offline_tax_fixture;
 
-with added as (
-  insert into public.catalog_item_uoms(
-    tenant_id,catalog_item_id,uom_name,conversion_factor,selling_price,
-    allow_fractional,is_default_selling
-  )
-  select tenant_id,product_id,'Each',1,100,false,true
-  from sellertray_offline_tax_fixture
-  returning id
-)
-update sellertray_offline_tax_fixture set uom_id=(select id from added);
+-- Catalogue governance provisions the default Each UOM for a new product.
+-- Reuse that governed master instead of creating a duplicate fixture row.
+update sellertray_offline_tax_fixture f
+set uom_id=u.id
+from public.catalog_item_uoms u
+where u.tenant_id=f.tenant_id
+  and u.catalog_item_id=f.product_id
+  and lower(btrim(u.uom_name))='each'
+  and u.is_default_selling=true;
 
 select public.record_sellertray_inventory_movement(
   tenant_id,branch_id,location_id,product_id,
