@@ -147,7 +147,7 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
     }
     setCart((current) => ({ ...current, [key]: { key, product, uom, quantity: nextQuantity, sellingPrice: current[key]?.sellingPrice ?? uom.sellingPrice! } }));
     setQuantityDrafts((current) => ({ ...current, [key]: formatQuantity(nextQuantity) }));
-    setPriceDrafts((current) => ({ ...current, [key]: current[lineKeyOr(key)] ?? formatEditablePrice(uom.sellingPrice!) }));
+    setPriceDrafts((current) => ({ ...current, [key]: current[key] ?? formatEditablePrice(uom.sellingPrice!) }));
     setError(null);
   }
 
@@ -375,7 +375,6 @@ async function loadTaxWithCache(tenantId: string) { try { const quote = await lo
 
 function findStockShortage(lines: CartLine[], stock: BranchStockRow[]): StockShortage | null { const available = new Map(stock.map((row) => [row.catalogItemId, row.quantityOnHand])); const required = new Map<string, number>(); for (const line of lines) required.set(line.product.id, (required.get(line.product.id) ?? 0) + line.quantity * line.uom.conversionFactor); for (const [id, quantity] of required) { const onHand = available.get(id) ?? 0; if (quantity > onHand + STOCK_EPSILON) { const line = lines.find((entry) => entry.product.id === id)!; return { productName: line.product.name, stockUom: line.product.stockUom, required: quantity, available: onHand }; } } return null; }
 function cashFallback(): PosPaymentMethod { return { paymentMethodId: null, methodType: 'cash', displayName: 'Cash', sortOrder: 0, isDefault: true, bankName: null, bankAccountName: null, bankAccountNumber: null, instructions: null }; }
-function lineKeyOr(value: string) { return value; }
 function roundMoney(value: number) { return Math.round((value + Number.EPSILON) * 100) / 100; }
 function formatMoney(value: number, currency: string) { try { return new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 2 }).format(value); } catch { return `${currency} ${value.toFixed(2)}`; } }
 function formatRate(value: number) { return Number(value.toFixed(6)).toString(); }
