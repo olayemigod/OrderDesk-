@@ -21,6 +21,7 @@ export type OpenCashDrawer = {
 };
 
 export type MoneyOperationOptions = {
+  currency: string;
   canRecordBusinessExpense: boolean;
   bankAccounts: BusinessBankAccount[];
   openCashDrawers: OpenCashDrawer[];
@@ -52,7 +53,7 @@ export async function loadMoneyOperationOptions(
   tenantId: string,
   branchId: string,
 ): Promise<MoneyOperationOptions> {
-  if (!tenantId || !branchId) return { canRecordBusinessExpense: false, bankAccounts: [], openCashDrawers: [] };
+  if (!tenantId || !branchId) return { currency: 'NGN', canRecordBusinessExpense: false, bankAccounts: [], openCashDrawers: [] };
   const { data, error } = await supabase.rpc('get_sellertray_money_operation_options', {
     p_tenant_id: tenantId,
     p_branch_id: branchId,
@@ -61,6 +62,7 @@ export async function loadMoneyOperationOptions(
   if (!data || typeof data !== 'object') throw new Error('SellerTray returned invalid money options.');
   const row = data as Record<string, unknown>;
   return {
+    currency: typeof row.currency === 'string' && /^[A-Z]{3}$/.test(row.currency) ? row.currency : 'NGN',
     canRecordBusinessExpense: row.canRecordBusinessExpense === true,
     bankAccounts: Array.isArray(row.bankAccounts) ? row.bankAccounts.map(parseBankAccount) : [],
     openCashDrawers: Array.isArray(row.openCashDrawers) ? row.openCashDrawers.map(parseCashDrawer) : [],
