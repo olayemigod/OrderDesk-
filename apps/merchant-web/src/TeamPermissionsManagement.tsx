@@ -25,7 +25,8 @@ type Capability =
   | 'can_review_shift'
   | 'can_print_receipt'
   | 'can_manage_devices'
-  | 'can_view_reports';
+  | 'can_view_reports'
+  | 'can_accept_commercial_agreements';
 type AccessState = {
   userId: string;
   role: MerchantRole;
@@ -33,8 +34,14 @@ type AccessState = {
   branchAccess: Record<string, boolean>;
   capabilities: Record<Capability, boolean>;
 };
+type CapabilityGroup = {
+  title: string;
+  items: Array<{ id: Capability; label: string }>;
+  roles?: MerchantRole[];
+  ownerOnly?: boolean;
+};
 
-const CAPABILITY_GROUPS: Array<{ title: string; items: Array<{ id: Capability; label: string }> }> = [
+const CAPABILITY_GROUPS: CapabilityGroup[] = [
   { title: 'Sales & orders', items: [{ id: 'can_manage_orders', label: 'Manage orders' }, { id: 'can_refund_sale', label: 'Refund completed sales' }] },
   { title: 'Products', items: [{ id: 'can_manage_products', label: 'Manage products' }] },
   { title: 'Inventory', items: [{ id: 'can_receive_stock', label: 'Receive purchased stock' }, { id: 'can_adjust_stock', label: 'Adjust stock' }, { id: 'can_count_stock', label: 'Count stock' }, { id: 'can_apply_stock_count', label: 'Apply stock count' }, { id: 'can_transfer_stock', label: 'Transfer stock' }] },
@@ -43,6 +50,7 @@ const CAPABILITY_GROUPS: Array<{ title: string; items: Array<{ id: Capability; l
   { title: 'Cash & shifts', items: [{ id: 'can_open_shift', label: 'Open shift' }, { id: 'can_record_cash_movement', label: 'Record cash movement' }, { id: 'can_record_expense', label: 'Record expense' }, { id: 'can_close_shift', label: 'Close shift' }, { id: 'can_review_shift', label: 'Review shift' }] },
   { title: 'Devices', items: [{ id: 'can_print_receipt', label: 'Print receipts' }, { id: 'can_manage_devices', label: 'Manage devices' }] },
   { title: 'Reports', items: [{ id: 'can_view_reports', label: 'View reports' }] },
+  { title: 'Commercial authority', roles: ['manager'], ownerOnly: true, items: [{ id: 'can_accept_commercial_agreements', label: 'Accept SellerTray commercial agreements' }] },
 ];
 
 export default function TeamPermissionsManagement({ tenantId }: { tenantId: string }) {
@@ -195,7 +203,7 @@ export default function TeamPermissionsManagement({ tenantId }: { tenantId: stri
   return <div className="page-stack">
     <div className="section-heading">
       <div><p className="eyebrow">Business access</p><h2>Team & Permissions</h2></div>
-      <p className="muted">Invite Managers and Cashiers, assign Cashier Branch access and control operational permissions. Manage Branch identity separately under Branches.</p>
+      <p className="muted">Invite Managers and Cashiers, assign Cashier Branch access, control operational permissions and explicitly delegate commercial agreement authority. Manage Branch identity separately under Branches.</p>
     </div>
     {error ? <div className="error-banner">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div> : null}
     {message ? <div className="success-banner">{message}<button type="button" onClick={() => setMessage(null)}>Dismiss</button></div> : null}
@@ -233,7 +241,7 @@ export default function TeamPermissionsManagement({ tenantId }: { tenantId: stri
           <article className="panel member-editor">
             <div className="panel-head"><div><p className="eyebrow">Team member</p><h3>{selectedMember.email}</h3><p className="muted">{roleLabel(selectedMember.role)}</p></div>{canManageMember(selectedMember) ? <button type="button" className="danger-button" disabled={saving} onClick={() => void removeMember(selectedMember)}>Remove</button> : null}</div>
             {team.actorRole === 'owner' && selectedMember.role !== 'owner' && selectedMember.userId !== actorUserId ? <label className="field role-field"><span>Role</span><select value={selectedMember.role} disabled={saving} onChange={(event) => void changeRole(selectedMember, event.target.value as InviteRole)}><option value="staff">Cashier</option><option value="manager">Manager</option></select></label> : null}
-            {selectedMember.role === 'owner' ? <p className="governance-note">Owner authority is business-wide and protected.</p> : selectedMember.role === 'manager' ? <p className="governance-note">Managers operate across active Branches. Owners can constrain specific operational permissions below.</p> : <p className="governance-note">Cashiers operate only the Branches allowed here. With no custom assignment, the Cashier uses the default Branch.</p>}
+            {selectedMember.role === 'owner' ? <p className="governance-note">Owner authority is business-wide and protected.</p> : selectedMember.role === 'manager' ? <p className="governance-note">Managers operate across active Branches, but Manager status does not grant authority to accept SellerTray commercial agreements. Only an Owner can explicitly delegate that authority below.</p> : <p className="governance-note">Cashiers operate only the Branches allowed here. With no custom assignment, the Cashier uses the default Branch.</p>}
           </article>
 
           {selectedMember.role === 'staff' ? <article className="panel">
@@ -247,8 +255,8 @@ export default function TeamPermissionsManagement({ tenantId }: { tenantId: stri
           </article> : null}
 
           <article className="panel">
-            <div className="panel-head"><div><p className="eyebrow">Permissions</p><h3>Operational access</h3></div></div>
-            <div className="capability-groups">{CAPABILITY_GROUPS.map((group) => <section key={group.title}><h4>{group.title}</h4><div className="capability-grid">{group.items.map((item) => <label className={selectedAccess.capabilities[item.id] ? 'capability-card checked' : 'capability-card'} key={item.id}><input type="checkbox" checked={selectedAccess.capabilities[item.id] === true} disabled={!canManageMember(selectedMember) || saving} onChange={(event) => void setCapability(selectedMember, item.id, event.target.checked)} /><span>{item.label}</span></label>)}</div></section>)}</div>
+            <div className="panel-head"><div><p className="eyebrow">Permissions</p><h3>Operational & commercial access</h3></div></div>
+            <div className="capability-groups">{CAPABILITY_GROUPS.filter((group) => (!group.roles || group.roles.includes(selectedMember.role)) && (!group.ownerOnly || team.actorRole === 'owner')).map((group) => <section key={group.title}><h4>{group.title}</h4><div className="capability-grid">{group.items.map((item) => <label className={selectedAccess.capabilities[item.id] ? 'capability-card checked' : 'capability-card'} key={item.id}><input type="checkbox" checked={selectedAccess.capabilities[item.id] === true} disabled={!canManageMember(selectedMember) || saving} onChange={(event) => void setCapability(selectedMember, item.id, event.target.checked)} /><span>{item.label}</span></label>)}</div></section>)}</div>
           </article>
         </> : <div className="panel empty-state"><strong>Select a team member</strong><p>Review their role, Branch access and operational permissions.</p></div>}
       </div>
