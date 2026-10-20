@@ -57,6 +57,20 @@ type PrinterDraft = {
   isActive: boolean;
 };
 
+type ReceiptCopyType = 'customer' | 'store' | 'audit' | 'accounts' | 'dispatch' | 'production' | 'custom';
+type ReceiptCopyDefinition = {
+  type: ReceiptCopyType;
+  label: string;
+  enabled: true;
+  sortOrder: number;
+};
+
+type ReceiptSettings = {
+  printerId: string;
+  receiptCopyDefinitions: ReceiptCopyDefinition[];
+  merchantReceiptFooter: string | null;
+};
+
 const EMPTY_REGISTER: RegisterDraft = { code: '', name: '', isDefault: false, isActive: true };
 const EMPTY_PRINTER: PrinterDraft = {
   registerId: '',
@@ -66,6 +80,16 @@ const EMPTY_PRINTER: PrinterDraft = {
   isDefault: false,
   isActive: true,
 };
+const COPY_TYPE_LABELS: Record<ReceiptCopyType, string> = {
+  customer: 'Customer Copy',
+  store: 'Store Copy',
+  audit: 'Audit Copy',
+  accounts: 'Accounts Copy',
+  dispatch: 'Dispatch Copy',
+  production: 'Production Copy',
+  custom: 'Custom Copy',
+};
+const COPY_TYPES = Object.keys(COPY_TYPE_LABELS) as ReceiptCopyType[];
 
 export default function DevicesPrintersManagement({
   tenantId,
@@ -248,7 +272,7 @@ export default function DevicesPrintersManagement({
   return <div className="page-stack devices-page">
     <div className="section-heading">
       <div><p className="eyebrow">{branchName || 'Selected Branch'}</p><h2>Devices & Printers</h2></div>
-      <p className="muted">Manage registers and receipt-printer assignments. Bluetooth discovery, pairing and printing stay on SellerTray mobile.</p>
+      <p className="muted">Manage registers, receipt-printer assignments and receipt-copy profiles. Bluetooth discovery, pairing and printing stay on SellerTray mobile.</p>
     </div>
 
     {error ? <div className="error-banner">{error}<button onClick={() => setError(null)}>Dismiss</button></div> : null}
@@ -305,10 +329,12 @@ export default function DevicesPrintersManagement({
           <label><input type="checkbox" checked={printerDraft.isDefault} onChange={(event) => setPrinterDraft((current) => ({ ...current, isDefault: event.target.checked, isActive: event.target.checked ? true : current.isActive }))} /> Default for register</label>
           <label><input type="checkbox" checked={printerDraft.isActive} disabled={printerDraft.isDefault} onChange={(event) => setPrinterDraft((current) => ({ ...current, isActive: event.target.checked }))} /> Active</label>
         </div>
-        <p className="muted device-help">A registered printer stays with its original Branch and register. Test prints and receipt printing run from the Android app.</p>
+        <p className="muted device-help">A registered printer stays with its original Branch and register. Bluetooth pairing and test printing remain on SellerTray mobile.</p>
         <button className="primary-button" disabled={saving || !printerDraft.registerId}>{saving ? 'Saving' : 'Save printer'}</button>
       </form>
     </div>
+
+    {selectedPrinter ? <ReceiptCopySettings tenantId={tenantId} printer={selectedPrinter} /> : <article className="panel"><div className="empty-state"><strong>Receipt-copy profile</strong><p>Save or select a printer to configure the physical copies it prints.</p></div></article>}
 
     <article className="panel">
       <div className="panel-head"><div><p className="eyebrow">Print activity</p><h3>Recent attempts</h3></div><span className="muted">Latest 50</span></div>
@@ -319,8 +345,147 @@ export default function DevicesPrintersManagement({
   </div>;
 }
 
+function ReceiptCopySettings({ tenantId, printer }: { tenantId: string; printer: Printer }) {
+  const [copies, setCopies] = useState<ReceiptCopyDefinition[]>(defaultCopies());
+  const [footer, setFooter] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    void loadSettings();
+  }, [tenantId, printer.id]);
+
+  async function loadSettings() {
+    setLoading(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const { data, error: rpcError } = await supabase.rpc('get_sellertray_printer_receipt_settings', {
+        p_tenant_id: tenantId,
+        p_printer_id: printer.id,
+      });
+      if (rpcError) throw rpcError;
+      const settings = parseReceiptSettings(data, printer.id);
+      setCopies(settings.receiptCopyDefinitions.length ? settings.receiptCopyDefinitions : defaultCopies());
+      setFooter(settings.merchantReceiptFooter ?? '');
+    } catch (cause) {
+      setError(errorMessage(cause, 'Unable to load this printer receipt profile.'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function updateCopy(index: number, patch: Partial<ReceiptCopyDefinition>) {
+    setCopies((current) => current.map((copy, position) => position === index ? { ...copy, ...patch } : copy));
+  }
+
+  function moveCopy(index: number, direction: -1 | 1) {
+    setCopies((current) => {
+      const destination = index + direction;
+      if (destination < 0 || destination >= current.length) return current;
+      const next = [...current];
+      [next[index], next[destination]] = [next[destination], next[index]];
+      return next.map((copy, position) => ({ ...copy, sortOrder: position + 1 }));
+    });
+  }
+
+  function removeCopy(index: number) {
+    if (copies.length <= 1) return;
+    setCopies((current) => current.filter((_, position) => position !== index).map((copy, position) => ({ ...copy, sortOrder: position + 1 })));
+  }
+
+  function addCopy() {
+    if (copies.length >= 8) return;
+    setCopies((current) => [...current, { type: 'custom', label: `Custom Copy ${current.length + 1}`, enabled: true, sortOrder: current.length + 1 }]);
+  }
+
+  async function saveSettings(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const normalized = copies.map((copy, index) => ({
+        type: copy.type,
+        label: copy.label.trim(),
+        enabled: true,
+        sortOrder: index + 1,
+      }));
+      const { data, error: rpcError } = await supabase.rpc('save_sellertray_printer_receipt_settings', {
+        p_tenant_id: tenantId,
+        p_printer_id: printer.id,
+        p_copy_definitions: normalized,
+        p_merchant_footer: footer.trim() || null,
+      });
+      if (rpcError) throw rpcError;
+      const settings = parseReceiptSettings(data, printer.id);
+      setCopies(settings.receiptCopyDefinitions.length ? settings.receiptCopyDefinitions : normalized);
+      setFooter(settings.merchantReceiptFooter ?? '');
+      setMessage('Receipt-copy profile saved. Future print attempts will snapshot this profile and footer.');
+    } catch (cause) {
+      setError(errorMessage(cause, 'Unable to save this receipt-copy profile.'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return <form className="panel device-form" onSubmit={saveSettings}>
+    <div className="panel-head">
+      <div><p className="eyebrow">Receipt-copy profile</p><h3>{printer.displayName}</h3></div>
+      <button type="button" className="secondary-button" disabled={loading || saving || copies.length >= 8} onClick={addCopy}>Add copy</button>
+    </div>
+    <p className="muted">The order below is the physical printing order. Copies reuse the same governed sale and receipt snapshot; they do not create duplicate orders, payments or stock movements.</p>
+    {error ? <div className="error-banner">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div> : null}
+    {message ? <div className="success-banner">{message}<button type="button" onClick={() => setMessage(null)}>Dismiss</button></div> : null}
+    {loading ? <p className="muted">Loading receipt profile…</p> : <div className="device-list">
+      {copies.map((copy, index) => <div className="device-row" key={`${copy.sortOrder}-${index}`}>
+        <span><strong>{index + 1}. {copy.label || 'Receipt copy'}</strong><small>Printed in this position</small></span>
+        <span className="device-row-badges">
+          <button type="button" className="secondary-button" disabled={index === 0 || saving} onClick={() => moveCopy(index, -1)}>Up</button>
+          <button type="button" className="secondary-button" disabled={index === copies.length - 1 || saving} onClick={() => moveCopy(index, 1)}>Down</button>
+          <button type="button" className="secondary-button" disabled={copies.length <= 1 || saving} onClick={() => removeCopy(index)}>Remove</button>
+        </span>
+        <label>Copy type<select value={copy.type} disabled={saving} onChange={(event) => {
+          const nextType = event.target.value as ReceiptCopyType;
+          updateCopy(index, { type: nextType, label: COPY_TYPE_LABELS[nextType] });
+        }}>{COPY_TYPES.map((type) => <option key={type} value={type}>{COPY_TYPE_LABELS[type]}</option>)}</select></label>
+        <label>Merchant-facing label<input required maxLength={40} value={copy.label} disabled={saving} onChange={(event) => updateCopy(index, { label: event.target.value })} /></label>
+      </div>)}
+    </div>}
+    <label>Receipt footer<textarea maxLength={240} rows={3} value={footer} disabled={loading || saving} onChange={(event) => setFooter(event.target.value)} placeholder="Optional message printed on receipts" /></label>
+    <p className="muted device-help">Between 1 and 8 enabled copies are supported. Customer, Store, Audit, Accounts, Dispatch, Production and Custom copy types use this same governed profile. Reprints remain explicit audited print attempts.</p>
+    <div className="form-actions"><button className="primary-button" disabled={loading || saving || copies.length < 1 || copies.some((copy) => !copy.label.trim())}>{saving ? 'Saving…' : 'Save receipt profile'}</button></div>
+  </form>;
+}
+
 function Summary({ label, value, detail }: { label: string; value: number; detail: string }) {
   return <article className="metric-card"><span>{label}</span><strong>{value}</strong><small>{detail}</small></article>;
+}
+
+function defaultCopies(): ReceiptCopyDefinition[] {
+  return [{ type: 'customer', label: 'Customer Copy', enabled: true, sortOrder: 1 }];
+}
+
+function parseReceiptSettings(value: unknown, printerId: string): ReceiptSettings {
+  const root = object(value);
+  const definitions = Array.isArray(root.receiptCopyDefinitions) ? root.receiptCopyDefinitions.map((item, index) => {
+    const row = object(item);
+    const rawType = String(row.type ?? 'custom').toLowerCase();
+    const type: ReceiptCopyType = COPY_TYPES.includes(rawType as ReceiptCopyType) ? rawType as ReceiptCopyType : 'custom';
+    return {
+      type,
+      label: String(row.label ?? COPY_TYPE_LABELS[type]),
+      enabled: true as const,
+      sortOrder: typeof row.sortOrder === 'number' && Number.isFinite(row.sortOrder) ? row.sortOrder : index + 1,
+    };
+  }).filter((copy) => copy.label.trim()).sort((a, b) => a.sortOrder - b.sortOrder) : [];
+  return {
+    printerId: typeof root.printerId === 'string' ? root.printerId : printerId,
+    receiptCopyDefinitions: definitions,
+    merchantReceiptFooter: typeof root.merchantReceiptFooter === 'string' ? root.merchantReceiptFooter : null,
+  };
 }
 
 function parseOverview(value: unknown): Overview {
