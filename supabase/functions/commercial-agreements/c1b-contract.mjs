@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 
+// This contract protects the bounded pre-C2 first-merchant acceptance bridge.
 const source = readFileSync(new URL('./index.ts', import.meta.url), 'utf8');
 
 const required = [
