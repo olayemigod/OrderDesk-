@@ -27,7 +27,7 @@ select admin_user_id,'admin' from c1b_reconcile_fixture;
 insert into public.tenants(id,name,slug,merchant_code,subscription_status)
 select tenant_id,'C1B Reconciliation Recovery Tenant',
        'c1b-reconcile-'||substr(tenant_id::text,1,8),
-       'C1R-'||upper(substr(tenant_id::text,1,6)),'trial'
+       'C1R','trial'
 from c1b_reconcile_fixture;
 
 with inserted as (
