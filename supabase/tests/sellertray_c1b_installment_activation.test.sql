@@ -7,6 +7,7 @@ create temp table sellertray_c1b_fixture (
   owner_user_id uuid not null,
   tenant_id uuid not null,
   branch_id uuid not null,
+  monthly_price_id uuid,
   subscription_price_id uuid,
   setup_price_id uuid,
   commercial_order_id uuid,
@@ -53,6 +54,17 @@ update sellertray_c1b_fixture f
 set branch_id=b.id
 from public.branches b
 where b.tenant_id=f.tenant_id and b.is_default=true;
+
+with inserted as (
+  insert into public.sellertray_commercial_price_versions(
+    price_kind,plan_code,billing_cycle,currency,gross_amount,effective_from,
+    change_reason,created_by_user_id,approved_by_user_id,approved_at
+  )
+  select 'subscription','business','monthly','NGN',80,now()-interval '1 day',
+         'C1B governed monthly anchor',admin_user_id,admin_user_id,now()
+  from sellertray_c1b_fixture returning id
+)
+update sellertray_c1b_fixture set monthly_price_id=(select id from inserted);
 
 with inserted as (
   insert into public.sellertray_commercial_price_versions(
