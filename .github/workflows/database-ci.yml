@@ -49,6 +49,9 @@ jobs:
       - name: Verify C1B installment webhook retry contract
         run: node supabase/functions/paystack-webhook/c1b-contract.mjs
 
+      - name: Verify C1B installment checkout retry contract
+        run: node supabase/functions/billing-checkout/c1b-contract.mjs
+
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
