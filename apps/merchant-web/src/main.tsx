@@ -9,6 +9,8 @@ import './devices.css';
 import './reports.css';
 import './settings.css';
 import './cash-shifts.css';
+import './purchasing.css';
+import './mobile.css';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('SellerTray could not start.');
