@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { SellerTrayInput, SellerTraySelect } from './SellerTrayElements';
 import { errorMessage, supabase } from './supabase';
 
 type MerchantRole = 'owner' | 'manager' | 'staff';
@@ -218,8 +219,8 @@ export default function TeamPermissionsManagement({ tenantId }: { tenantId: stri
     <section className="management-block">
       <div className="management-heading"><div><p className="eyebrow">People</p><h3>Invite team member</h3></div></div>
       <form className="panel invite-form" onSubmit={invite}>
-        <Field label="Email address"><input type="email" required value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="person@example.com" /></Field>
-        {team.actorRole === 'owner' ? <label className="field"><span>Role</span><select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as InviteRole)}><option value="staff">Cashier</option><option value="manager">Manager</option></select></label> : <div className="role-lock"><span>Role</span><strong>Cashier</strong></div>}
+        <Field label="Email address"><SellerTrayInput type="email" required value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="person@example.com" /></Field>
+        {team.actorRole === 'owner' ? <label className="field"><span>Role</span><SellerTraySelect value={inviteRole} onChange={(event) => setInviteRole(event.target.value as InviteRole)}><option value="staff">Cashier</option><option value="manager">Manager</option></SellerTraySelect></label> : <div className="role-lock"><span>Role</span><strong>Cashier</strong></div>}
         <button className="primary-button" disabled={saving}>{saving ? 'Working…' : 'Invite team member'}</button>
       </form>
     </section>
@@ -240,7 +241,7 @@ export default function TeamPermissionsManagement({ tenantId }: { tenantId: stri
         {selectedMember && selectedAccess ? <>
           <article className="panel member-editor">
             <div className="panel-head"><div><p className="eyebrow">Team member</p><h3>{selectedMember.email}</h3><p className="muted">{roleLabel(selectedMember.role)}</p></div>{canManageMember(selectedMember) ? <button type="button" className="danger-button" disabled={saving} onClick={() => void removeMember(selectedMember)}>Remove</button> : null}</div>
-            {team.actorRole === 'owner' && selectedMember.role !== 'owner' && selectedMember.userId !== actorUserId ? <label className="field role-field"><span>Role</span><select value={selectedMember.role} disabled={saving} onChange={(event) => void changeRole(selectedMember, event.target.value as InviteRole)}><option value="staff">Cashier</option><option value="manager">Manager</option></select></label> : null}
+            {team.actorRole === 'owner' && selectedMember.role !== 'owner' && selectedMember.userId !== actorUserId ? <label className="field role-field"><span>Role</span><SellerTraySelect value={selectedMember.role} disabled={saving} onChange={(event) => void changeRole(selectedMember, event.target.value as InviteRole)}><option value="staff">Cashier</option><option value="manager">Manager</option></SellerTraySelect></label> : null}
             {selectedMember.role === 'owner' ? <p className="governance-note">Owner authority is business-wide and protected.</p> : selectedMember.role === 'manager' ? <p className="governance-note">Managers operate across active Branches, but Manager status does not grant authority to accept SellerTray commercial agreements. Only an Owner can explicitly delegate that authority below.</p> : <p className="governance-note">Cashiers operate only the Branches allowed here. With no custom assignment, the Cashier uses the default Branch.</p>}
           </article>
 
@@ -250,13 +251,13 @@ export default function TeamPermissionsManagement({ tenantId }: { tenantId: stri
             <div className="access-grid">{branches.map((branch) => {
               const checked = selectedAccess.usesDefaultBranchFallback ? branch.isDefault && branch.isActive : selectedAccess.branchAccess[branch.id] === true;
               const disabled = !canManageMember(selectedMember) || saving || (!branch.isActive && !checked);
-              return <label className={checked ? 'access-card checked' : 'access-card'} key={branch.id}><input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => void setBranchAccess(selectedMember, branch, event.target.checked)} /><span><strong>{branch.name}</strong><small>{branch.code}{branch.isDefault ? ' · Default' : ''}{!branch.isActive ? ' · Archived' : ''}</small></span></label>;
+              return <label className={checked ? 'access-card checked' : 'access-card'} key={branch.id}><SellerTrayInput type="checkbox" checked={checked} disabled={disabled} onChange={(event) => void setBranchAccess(selectedMember, branch, event.target.checked)} /><span><strong>{branch.name}</strong><small>{branch.code}{branch.isDefault ? ' · Default' : ''}{!branch.isActive ? ' · Archived' : ''}</small></span></label>;
             })}</div>
           </article> : null}
 
           <article className="panel">
             <div className="panel-head"><div><p className="eyebrow">Permissions</p><h3>Operational & commercial access</h3></div></div>
-            <div className="capability-groups">{CAPABILITY_GROUPS.filter((group) => (!group.roles || group.roles.includes(selectedMember.role)) && (!group.ownerOnly || team.actorRole === 'owner')).map((group) => <section key={group.title}><h4>{group.title}</h4><div className="capability-grid">{group.items.map((item) => <label className={selectedAccess.capabilities[item.id] ? 'capability-card checked' : 'capability-card'} key={item.id}><input type="checkbox" checked={selectedAccess.capabilities[item.id] === true} disabled={!canManageMember(selectedMember) || saving} onChange={(event) => void setCapability(selectedMember, item.id, event.target.checked)} /><span>{item.label}</span></label>)}</div></section>)}</div>
+            <div className="capability-groups">{CAPABILITY_GROUPS.filter((group) => (!group.roles || group.roles.includes(selectedMember.role)) && (!group.ownerOnly || team.actorRole === 'owner')).map((group) => <section key={group.title}><h4>{group.title}</h4><div className="capability-grid">{group.items.map((item) => <label className={selectedAccess.capabilities[item.id] ? 'capability-card checked' : 'capability-card'} key={item.id}><SellerTrayInput type="checkbox" checked={selectedAccess.capabilities[item.id] === true} disabled={!canManageMember(selectedMember) || saving} onChange={(event) => void setCapability(selectedMember, item.id, event.target.checked)} /><span>{item.label}</span></label>)}</div></section>)}</div>
           </article>
         </> : <div className="panel empty-state"><strong>Select a team member</strong><p>Review their role, Branch access and operational permissions.</p></div>}
       </div>
