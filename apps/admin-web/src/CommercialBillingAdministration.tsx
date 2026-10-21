@@ -128,6 +128,7 @@ export default function CommercialBillingAdministration({
   const [message, setMessage] = useState<string | null>(null);
   const [setupForm, setSetupForm] = useState<SetupForm | null>(null);
   const setupCommandIds = useRef(new Map<string, string>());
+  const tenantLoadSequence = useRef(0);
 
   const [subscriptionForm, setSubscriptionForm] = useState({ planCode: 'business', currency: 'NGN', monthlyGross: '', taxRate: '', effectiveFrom: nowLocal(), reason: '' });
   const [setupPriceForm, setSetupPriceForm] = useState({ currency: 'NGN', gross: '', taxRate: '', effectiveFrom: nowLocal(), reason: '' });
@@ -146,9 +147,16 @@ export default function CommercialBillingAdministration({
   const canManage = actorRole === 'admin' && onboarding?.canManage === true;
 
   useEffect(() => {
+    setSetupForm(null);
+    setupCommandIds.current.clear();
+    setPurchaseForm((current) => ({ ...current, branchIds: [], orderReference: '', reason: '' }));
+    setAgreementForm((current) => ({ ...current, commercialOrderId: '', templateVersionId: '', reference: '', renderedContent: '', reason: '' }));
+
     if (!selectedTenantId) {
+      tenantLoadSequence.current += 1;
       setOverview(null);
       setOnboarding(null);
+      setLoading(false);
       return;
     }
     void loadTenant(selectedTenantId);
@@ -159,6 +167,7 @@ export default function CommercialBillingAdministration({
   }
 
   async function loadTenant(tenantId: string) {
+    const loadSequence = ++tenantLoadSequence.current;
     setLoading(true);
     setError(null);
     try {
@@ -166,28 +175,38 @@ export default function CommercialBillingAdministration({
         invoke({ action: 'admin_overview', tenantId }),
         invoke({ action: 'admin_onboarding', tenantId }),
       ]);
+      if (loadSequence !== tenantLoadSequence.current) return;
+
       const nextOverview = parseOverview(overviewResponse.overview);
       const nextOnboarding = parseOnboarding(onboardingResponse.onboarding);
+      const activeBranchIds = nextOnboarding.branches.filter((branch) => branch.active).map((branch) => branch.id);
+      const activeBranchSet = new Set(activeBranchIds);
+
       setOverview(nextOverview);
       setOnboarding(nextOnboarding);
-      if (!agreementForm.commercialOrderId && nextOnboarding.orders[0]) {
-        setAgreementForm((current) => ({ ...current, commercialOrderId: nextOnboarding.orders[0].id }));
-      }
-      if (!agreementForm.templateVersionId && nextOnboarding.templates[0]) {
-        setAgreementForm((current) => ({ ...current, templateVersionId: nextOnboarding.templates[0].id }));
-      }
-      if (!purchaseForm.branchIds.length) {
-        setPurchaseForm((current) => ({ ...current, branchIds: nextOnboarding.branches.filter((branch) => branch.active).map((branch) => branch.id) }));
-      }
+      setAgreementForm((current) => ({
+        ...current,
+        commercialOrderId: nextOnboarding.orders.some((order) => order.id === current.commercialOrderId)
+          ? current.commercialOrderId
+          : nextOnboarding.orders[0]?.id ?? '',
+        templateVersionId: nextOnboarding.templates.some((template) => template.id === current.templateVersionId)
+          ? current.templateVersionId
+          : nextOnboarding.templates[0]?.id ?? '',
+      }));
+      setPurchaseForm((current) => {
+        const retainedBranchIds = current.branchIds.filter((branchId) => activeBranchSet.has(branchId));
+        return { ...current, branchIds: retainedBranchIds.length ? retainedBranchIds : activeBranchIds };
+      });
       if (nextOnboarding.plans[0] && !nextOnboarding.plans.some((plan) => plan.code === subscriptionForm.planCode)) {
         setSubscriptionForm((current) => ({ ...current, planCode: nextOnboarding.plans[0].code, currency: nextOnboarding.plans[0].currency || current.currency }));
       }
     } catch (cause) {
+      if (loadSequence !== tenantLoadSequence.current) return;
       setOverview(null);
       setOnboarding(null);
       setError(messageFrom(cause, 'Unable to load governed commercial state for this Business.'));
     } finally {
-      setLoading(false);
+      if (loadSequence === tenantLoadSequence.current) setLoading(false);
     }
   }
 
