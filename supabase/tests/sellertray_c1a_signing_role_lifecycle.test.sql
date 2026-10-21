@@ -19,7 +19,7 @@ select manager_user_id,'c1a-role-manager-'||substr(manager_user_id::text,1,8)||'
 from sellertray_c1a_role_fixture;
 
 insert into public.tenants(id,name,slug,merchant_code,subscription_status)
-select tenant_id,'C1A Role Lifecycle Tenant','c1a-role-'||substr(tenant_id::text,1,8),'C1AR-'||upper(substr(tenant_id::text,1,6)),'trial'
+select tenant_id,'C1A Role Lifecycle Tenant','c1a-role-'||substr(tenant_id::text,1,8),upper(substr(replace(tenant_id::text,'-',''),1,3)),'trial'
 from sellertray_c1a_role_fixture;
 
 insert into public.tenant_members(tenant_id,user_id,role)
