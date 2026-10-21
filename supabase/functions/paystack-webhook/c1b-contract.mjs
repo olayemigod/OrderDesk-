@@ -29,10 +29,17 @@ for (const value of forbidden) {
   }
 }
 
+const providerTimeStart = source.indexOf('function providerPaidAt(data: JsonRecord): string | null');
+const providerTimeEnd = source.indexOf('\nfunction toNumber', providerTimeStart);
+const providerTimeSource = source.slice(providerTimeStart, providerTimeEnd);
+if (providerTimeStart < 0 || providerTimeEnd <= providerTimeStart || providerTimeSource.includes('data.created_at')) {
+  throw new Error('paystack-webhook installment payment time must not fall back to transaction creation time');
+}
+
 const confirmationIndex = source.indexOf("confirm_sellertray_installment_payment_from_checkout");
 const reconciliationIndex = source.indexOf("reconcile_sellertray_installment_entitlement", confirmationIndex);
 if (confirmationIndex < 0 || reconciliationIndex <= confirmationIndex) {
   throw new Error('paystack-webhook must confirm the immutable installment payment before reconciliation');
 }
 
-console.log('paystack-webhook C1B installment retry contract passed');
+console.log('paystack-webhook C1B installment retry/time contract passed');
