@@ -319,14 +319,14 @@ select extensions.ok(
   )->>'entitlementState'='full'
   and exists(
     select 1 from public.sellertray_commercial_entitlement_events provisional
-    join public.sellertray_commercial_entitlement_events full
-      on full.tenant_id=provisional.tenant_id
-     and full.installment_obligation_id=provisional.installment_obligation_id
+    join public.sellertray_commercial_entitlement_events full_event
+      on full_event.tenant_id=provisional.tenant_id
+     and full_event.installment_obligation_id=provisional.installment_obligation_id
     join sellertray_c1b_fixture f on f.installment_obligation_id=provisional.installment_obligation_id
     where provisional.event_type='installment.provisional_activated'
-      and full.event_type='installment.full_entitlement_released'
-      and full.effective_from=provisional.effective_from
-      and full.effective_until=provisional.effective_from+interval '12 months'
+      and full_event.event_type='installment.full_entitlement_released'
+      and full_event.effective_from=provisional.effective_from
+      and full_event.effective_until=provisional.effective_from+interval '12 months'
   ),
   'full settlement keeps original activation and releases one fixed twelve-month term'
 );
