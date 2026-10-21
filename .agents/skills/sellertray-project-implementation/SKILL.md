@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.13"
+  version: "0.1.14"
   status: governing
 ---
 
@@ -508,6 +508,14 @@ Web reporting should cover sales, inventory, stock movement/valuation, low/out-o
 Report totals must reconcile to underlying transactions; UOM quantity reporting must normalise correctly where aggregation requires it.
 
 Draft and audit-deleted draft orders are operational work-in-progress, not completed commercial truth. Sales/performance reports must exclude them unless a specific report is explicitly designed to analyse drafts.
+
+## ProcessEdge Business Dashboard (approved 2026-10-21)
+
+Admin Overview is the ProcessEdge Business Dashboard; Platform Operations owns technical/service health. Business KPIs, equal prior-period comparisons, growth/adoption, deterministic actionable insights and bounded merchant-attention reads must be calculated server-side from governed commercial and reporting facts. Browser rendering must not download the merchant estate to reconstruct business KPIs.
+
+Keep ProcessEdge collections, commercial order value, recognised revenue, merchant GMV and platform usage distinct. Never aggregate currencies without approved FX authority. Completed, non-deleted orders measure merchant sales; identify the period timestamp and disclose gross/tax/return treatment. Activation uses governed activation events, not registration or legacy trial dates. Disclose incomplete legacy coverage rather than label partial collections as total revenue. Run-rate, profit, guarantee/refund exposure and installment aging require their own approved authority; do not invent policy.
+
+The bounded dashboard foundation may precede trial-compatibility retirement as an additive read-only slice. Preserve the controlled real commercial lifecycle acceptance gate before retiring compatibility. Keep legacy trial UI unreachable and remove internal phase terminology from active Admin copy. Drill-down should lead to Merchants and governed Billing & Commercial, without creating a second commercial or access engine.
 
 # 12. AI governance
 

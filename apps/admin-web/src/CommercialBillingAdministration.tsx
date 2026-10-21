@@ -257,7 +257,7 @@ export default function CommercialBillingAdministration({
 
   function createInitialPurchase() {
     if (!canManage) return;
-    if (!onboarding?.eligibleForInitialInstallment) return setError('This Business is not eligible for the pre-C2 initial-installment acceptance path.');
+    if (!onboarding?.eligibleForInitialInstallment) return setError('This Business is not eligible for the initial installment purchase.');
     if (!purchaseForm.branchIds.length) return setError('Select at least one active Branch.');
     if (!purchaseForm.orderReference.trim() || purchaseForm.reason.trim().length < 6) return setError('Enter an order reference and a reason of at least 6 characters.');
     void runMutation('purchase', {
@@ -325,7 +325,7 @@ export default function CommercialBillingAdministration({
 
   return <div className="workspace-grid two">
     <section className="workspace-panel">
-      <div className="workspace-panel-heading"><div><h2>Merchant commercial state</h2><p>Select a Business to review and prepare the controlled first-merchant C1B lifecycle.</p></div></div>
+      <div className="workspace-panel-heading"><div><h2>Merchant commercial state</h2><p>Select a Business to review and prepare the initial merchant activation.</p></div></div>
       <div className="workspace-form-stack">
         <label>Search businesses<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Business, email, phone, plan or status" /></label>
         <label>Business<select value={selectedTenantId} onChange={(event) => { setSelectedTenantId(event.target.value); setSetupForm(null); setMessage(null); setError(null); }}>
@@ -343,8 +343,8 @@ export default function CommercialBillingAdministration({
     </section>
 
     <section className="workspace-panel">
-      <div className="workspace-panel-heading"><div><h2>C1B status</h2><p>Payment obligation, payment confirmation, agreement acceptance and entitlement remain separate authorities.</p></div></div>
-      {!selectedTenantId ? <Empty title="Select a Business" body="Choose a SellerTray Business to load governed commercial state." /> : loading ? <Empty title="Loading" body="Reading governed C1/C1A/C1B records…" /> : overview && onboarding ? <div className="workspace-detail-grid">
+      <div className="workspace-panel-heading"><div><h2>Commercial status</h2><p>Payment obligation, payment confirmation, agreement acceptance and entitlement remain separate authorities.</p></div></div>
+      {!selectedTenantId ? <Empty title="Select a Business" body="Choose a SellerTray Business to load governed commercial state." /> : loading ? <Empty title="Loading" body="Reading commercial, agreement and installment records…" /> : overview && onboarding ? <div className="workspace-detail-grid">
         <Detail label="Governed prices" value={String(onboarding.prices.length)} />
         <Detail label="Commercial orders" value={String(onboarding.orders.length)} />
         <Detail label="Agreements" value={String(onboarding.agreements.length)} />
@@ -356,8 +356,8 @@ export default function CommercialBillingAdministration({
     {message ? <div className="workspace-banner success">{message}</div> : null}
 
     {onboarding ? <section className="workspace-panel" style={{ gridColumn: '1 / -1' }}>
-      <div className="workspace-panel-heading"><div><h2>First-merchant acceptance</h2><p>Bounded pre-C2 bridge: create governed commercial facts without granting entitlement or retiring runtime compatibility.</p></div></div>
-      <div className="workspace-banner warning"><strong>No C2 cutover here.</strong> Annual service is 12 months for exactly 10× monthly price. Installment due dates remain unset.</div>
+      <div className="workspace-panel-heading"><div><h2>Initial merchant activation</h2><p>Prepare pricing, purchase and agreement records. Activation requires accepted terms, confirmed payment and Branch setup readiness.</p></div></div>
+      <div className="workspace-banner warning"><strong>Subscription & setup.</strong> Annual service is 12 months for exactly 10× monthly price. Installment due dates remain unset.</div>
 
       <div className="workspace-module-grid" style={{ marginTop: 16 }}>
         <article className="workspace-module-card">
@@ -428,7 +428,7 @@ export default function CommercialBillingAdministration({
 
     {overview ? <section className="workspace-panel" style={{ gridColumn: '1 / -1' }}>
       <div className="workspace-panel-heading"><div><h2>Installment entitlement</h2><p>No due-date, grace or suspension semantics are inferred.</p></div></div>
-      {overview.installmentBilling.length ? <div className="workspace-form-stack">{overview.installmentBilling.map((item) => <article key={item.installmentObligationId} className="workspace-module-card"><div className="workspace-panel-heading"><div><h3>{structureLabel(item.structureCode)}</h3><p>{money(item.obligatedAmount,item.currency)} · {item.paidInstallmentCount} of {item.installmentCount} installments confirmed</p></div><span className="workspace-status info">{label(item.entitlementState)}</span></div><div className="workspace-detail-grid"><Detail label="Agreement" value={item.agreementAccepted ? 'Accepted' : 'Awaiting acceptance'} /><Detail label="Branch setup" value={item.setupReady ? 'Ready' : `${item.setupReadyCount} of ${item.setupRequiredCount} ready`} /><Detail label="Activation" value={item.activationAt ? formatDate(item.activationAt) : 'Not activated'} /><Detail label="Entitlement end" value={item.fullTermUntil ? formatDate(item.fullTermUntil) : item.provisionalUntil ? formatDate(item.provisionalUntil) : 'Pending prerequisites'} /></div><div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Installment</th><th>Share</th><th>Amount</th><th>Due</th><th>Payment</th></tr></thead><tbody>{item.schedule.map((line) => <tr key={line.id}><td>{line.sequenceNo}</td><td>{line.percentage}%</td><td>{money(line.amountDue,item.currency)}</td><td>{line.dueAt ? formatDate(line.dueAt) : 'Not scheduled'}</td><td>{line.paymentStatus === 'paid' ? `Paid${line.paidAt ? ` ${formatDate(line.paidAt)}` : ''}` : 'Unpaid'}</td></tr>)}</tbody></table></div></article>)}</div> : <Empty title="No installment purchase" body="This Business has no governed C1B installment obligation." />}
+      {overview.installmentBilling.length ? <div className="workspace-form-stack">{overview.installmentBilling.map((item) => <article key={item.installmentObligationId} className="workspace-module-card"><div className="workspace-panel-heading"><div><h3>{structureLabel(item.structureCode)}</h3><p>{money(item.obligatedAmount,item.currency)} · {item.paidInstallmentCount} of {item.installmentCount} installments confirmed</p></div><span className="workspace-status info">{label(item.entitlementState)}</span></div><div className="workspace-detail-grid"><Detail label="Agreement" value={item.agreementAccepted ? 'Accepted' : 'Awaiting acceptance'} /><Detail label="Branch setup" value={item.setupReady ? 'Ready' : `${item.setupReadyCount} of ${item.setupRequiredCount} ready`} /><Detail label="Activation" value={item.activationAt ? formatDate(item.activationAt) : 'Not activated'} /><Detail label="Entitlement end" value={item.fullTermUntil ? formatDate(item.fullTermUntil) : item.provisionalUntil ? formatDate(item.provisionalUntil) : 'Pending prerequisites'} /></div><div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Installment</th><th>Share</th><th>Amount</th><th>Due</th><th>Payment</th></tr></thead><tbody>{item.schedule.map((line) => <tr key={line.id}><td>{line.sequenceNo}</td><td>{line.percentage}%</td><td>{money(line.amountDue,item.currency)}</td><td>{line.dueAt ? formatDate(line.dueAt) : 'Not scheduled'}</td><td>{line.paymentStatus === 'paid' ? `Paid${line.paidAt ? ` ${formatDate(line.paidAt)}` : ''}` : 'Unpaid'}</td></tr>)}</tbody></table></div></article>)}</div> : <Empty title="No installment purchase" body="This Business has no installment obligation." />}
     </section> : null}
   </div>;
 }
