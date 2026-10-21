@@ -1,0 +1,58 @@
+name: Repair Merchant Topbar Selects
+
+on:
+  push:
+    branches:
+      - feat/merchant-ui-elements-catalogue-settings
+    paths:
+      - '.github/workflows/repair-merchant-topbar-selects.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v7
+        with:
+          ref: feat/merchant-ui-elements-catalogue-settings
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Restore custom topbar Select wrappers
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFile, writeFile } from 'node:fs/promises';
+
+          for (const path of ['apps/merchant-web/src/App.tsx', 'apps/merchant-web/src/MerchantApp.tsx']) {
+            const source = await readFile(path, 'utf8');
+            let next = source;
+            next = next.replace(
+              /<SellerTraySelect label="Business" value=\{businessId\} onChange=\{setBusinessId\}>([\s\S]*?)<\/SellerTraySelect>/g,
+              '<Select label="Business" value={businessId} onChange={setBusinessId}>$1</Select>',
+            );
+            next = next.replace(
+              /<SellerTraySelect label="Branch" value=\{branchId\} onChange=\{setBranchId\} disabled=\{!branches\.length\}>([\s\S]*?)<\/SellerTraySelect>/g,
+              '<Select label="Branch" value={branchId} onChange={setBranchId} disabled={!branches.length}>$1</Select>',
+            );
+            if (next === source) throw new Error(`No topbar wrapper repair applied to ${path}`);
+            await writeFile(path, next);
+            console.log(`Repaired ${path}`);
+          }
+          NODE
+      - name: Verify native field contract
+        run: |
+          node apps/merchant-web/scripts/sellertray-elements-preflight.mjs
+          git diff --check
+      - name: Commit repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/merchant-web/src/App.tsx apps/merchant-web/src/MerchantApp.tsx
+          git commit -m "fix(merchant-web): restore topbar Select wrappers"
+          git push origin HEAD:feat/merchant-ui-elements-catalogue-settings
