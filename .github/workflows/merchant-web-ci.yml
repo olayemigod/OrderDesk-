@@ -5,11 +5,13 @@ on:
     branches:
       - feat/sellertray-merchant-web-v1
     paths:
+      - 'package.json'
       - 'apps/merchant-web/**'
       - 'scripts/check-internal-authority-rpc-boundary.mjs'
       - '.github/workflows/merchant-web-ci.yml'
   pull_request:
     paths:
+      - 'package.json'
       - 'apps/merchant-web/**'
       - 'scripts/check-internal-authority-rpc-boundary.mjs'
       - '.github/workflows/merchant-web-ci.yml'
@@ -39,7 +41,7 @@ jobs:
       - name: Enforce internal authority RPC boundary
         run: node ../../scripts/check-internal-authority-rpc-boundary.mjs
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm --prefix . install --no-audit --no-fund
       - name: Typecheck
         run: npm run typecheck
       - name: Security preflight
@@ -66,6 +68,6 @@ jobs:
         with:
           node-version: 22
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm --prefix . install --no-audit --no-fund
       - name: Audit production dependencies
-        run: npm audit --omit=dev --audit-level=high
+        run: npm --prefix . audit --omit=dev --audit-level=high
