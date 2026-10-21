@@ -125,6 +125,12 @@ export type MerchantOrder = {
   paymentStatus: PaymentStatus;
   amountPaid: number;
   paymentConfirmedAt: string | null;
+  subtotalAmount?: number | null;
+  taxApplied?: boolean | null;
+  taxRatePercent?: number | null;
+  taxAmount?: number | null;
+  taxDisplayBreakdown?: boolean | null;
+  grossAmount?: number | null;
   cashReturnSupported?: boolean;
   returnStatus: ReturnStatus;
   returnedAmount: number;
@@ -141,6 +147,17 @@ export type MerchantOrder = {
 };
 
 export function orderTotal(order: MerchantOrder): number | null {
+  if (typeof order.grossAmount === 'number' && Number.isFinite(order.grossAmount)) {
+    return order.grossAmount;
+  }
+
+  // A completed paid sale has already passed the governed payment/finalisation
+  // authority. Its committed paid amount is a safer historical total than
+  // rebuilding the invoice from line snapshots (which exclude posted tax).
+  if (order.status === 'completed' && order.paymentStatus === 'paid' && Number.isFinite(order.amountPaid)) {
+    return order.amountPaid;
+  }
+
   if (order.items.some((item) => item.unitPrice === null)) {
     return null;
   }
