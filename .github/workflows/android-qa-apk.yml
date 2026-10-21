@@ -8,11 +8,13 @@ on:
       - feat/sellertray-mobile-shell-v2
       - fix/sellertray-redesign-integration
     paths:
+      - 'package.json'
       - 'apps/mobile/**'
       - 'supabase/**'
       - '.github/workflows/android-qa-apk.yml'
   pull_request:
     paths:
+      - 'package.json'
       - 'apps/mobile/**'
       - 'supabase/**'
       - '.github/workflows/android-qa-apk.yml'
@@ -68,7 +70,7 @@ jobs:
           java-version: '17'
 
       - name: Install locked dependencies
-        run: npm ci --no-audit --no-fund
+        run: npm --prefix . ci --no-audit --no-fund
 
       - name: Load governed QA runtime configuration
         shell: bash
@@ -178,12 +180,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: sellertray-qa-${{ steps.source.outputs.sha }}
-          path: |
-            apps/mobile/qa-artifact/sellertray-qa.apk
-            apps/mobile/qa-artifact/sellertray-qa.apk.sha256
-            apps/mobile/qa-artifact/source-commit.txt
-            apps/mobile/qa-artifact/version-code.txt
-            apps/mobile/qa-artifact/package-name.txt
-            apps/mobile/qa-artifact/signing-cert-sha256.txt
+          path: apps/mobile/qa-artifact/
           if-no-files-found: error
           retention-days: 14
