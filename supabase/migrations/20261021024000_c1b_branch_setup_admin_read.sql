@@ -47,7 +47,7 @@ begin
     'readinessId',r.id,
     'readyAt',r.ready_at,
     'reason',r.reason,
-    'recordedByUserId',r.recorded_by_user_id,
+    'recordedByUserId',r.actor_user_id,
     'recordedAt',r.recorded_at
   ) order by o.ordered_at,o.id,s.line_no),'[]'::jsonb)
   into v_result

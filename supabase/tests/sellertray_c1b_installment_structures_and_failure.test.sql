@@ -42,8 +42,10 @@ from c1b_structure_fixture;
 insert into public.tenant_members(tenant_id,user_id,role)
 select tenant_id,owner_user_id,'owner' from c1b_structure_fixture;
 
-insert into public.branches(id,tenant_id,code,name,is_default,is_active)
-select branch_id,tenant_id,'HQ','C1B Three HQ',true,true from c1b_structure_fixture;
+update c1b_structure_fixture f
+set branch_id=b.id
+from public.branches b
+where b.tenant_id=f.tenant_id and b.is_default=true;
 
 with inserted as (
   insert into public.sellertray_commercial_price_versions(
