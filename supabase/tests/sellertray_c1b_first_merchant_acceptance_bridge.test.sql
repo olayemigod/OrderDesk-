@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(12);
+select extensions.plan(13);
 
 create temp table c1b_acceptance_fixture (
   admin_user_id uuid not null,
@@ -115,10 +115,11 @@ set constraints all immediate;
 set constraints all deferred;
 
 select extensions.ok(
-  (purchase->>'totalGrossAmount')::numeric=12500
-  and purchase->>'currency'='NGN'
-  and purchase->>'idempotentReplay'='false'
-  from c1b_acceptance_fixture,
+  (select
+    (purchase->>'totalGrossAmount')::numeric=12500
+    and purchase->>'currency'='NGN'
+    and purchase->>'idempotentReplay'='false'
+   from c1b_acceptance_fixture),
   'initial purchase total is annual subscription plus setup for every selected Branch'
 );
 
