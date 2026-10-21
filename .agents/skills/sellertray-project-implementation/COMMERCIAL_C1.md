@@ -4,7 +4,7 @@ description: "Normative C1 boundary for the additive SellerTray commercial-core 
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.3"
+  version: "0.1.4"
   status: governing-extension
 ---
 
@@ -94,6 +94,8 @@ C1B continues to use the existing SellerTray billing-provider authority. It must
 - Paystack installment collection is a one-time transaction for the exact governed installment amount. It must not create or depend on a parallel Paystack subscription plan for that installment.
 - the existing verified Paystack webhook is the provider-confirmation authority. A verified installment `charge.success` records an immutable payment-confirmation fact first and only then attempts entitlement reconciliation as a separate transaction.
 - a reconciliation conflict or runtime-compatibility issue must never roll back or erase an already confirmed provider payment.
+- an installment provider event must not be marked processed after payment confirmation until its entitlement reconciliation succeeds. If reconciliation fails after the payment fact commits, the webhook must remain retryable; the provider retry must replay the same immutable payment confirmation idempotently and retry reconciliation rather than creating another payment.
+- immutable installment payment time must come from deterministic verified provider event data. C1B must not substitute the webhook-processing wall clock when provider payment time is absent or invalid.
 - each installment schedule line may have at most one confirmed payment. Provider reference, provider transaction identity and verified event fingerprint must remain duplicate-safe.
 - later installment checkout must fail closed until all earlier installment schedule lines are confirmed paid.
 
