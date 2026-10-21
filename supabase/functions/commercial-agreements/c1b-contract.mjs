@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 
+// This contract protects the bounded pre-C2 first-merchant acceptance bridge.
 const source = readFileSync(new URL('./index.ts', import.meta.url), 'utf8');
 
 const required = [
@@ -12,10 +13,21 @@ const required = [
   "results.filter((row) => row?.ok !== true)",
   'installmentObligationId',
   'errorCode',
+  "'admin_onboarding'",
+  "'admin_publish_subscription_price'",
+  "'admin_publish_setup_price'",
+  "'admin_create_initial_purchase'",
+  "'get_sellertray_commercial_onboarding_admin'",
+  "'publish_sellertray_subscription_price_pair_admin'",
+  "'publish_sellertray_branch_setup_price_admin'",
+  "'create_sellertray_initial_installment_purchase_admin'",
+  "'publish_sellertray_commercial_agreement_template_admin'",
+  "'issue_sellertray_commercial_agreement_admin'",
+  'p_reason: reason',
 ];
 for (const value of required) {
   if (!source.includes(value)) {
-    throw new Error(`commercial-agreements C1B recovery contract is missing: ${value}`);
+    throw new Error(`commercial-agreements C1B contract is missing: ${value}`);
   }
 }
 
@@ -57,4 +69,21 @@ if (adminAuthHelper < 0 || adminAuthRpc <= adminAuthHelper) {
   throw new Error('Admin C1B recovery authorization must use the governed C1A Admin/Support read authority');
 }
 
-console.log('commercial-agreements C1B reconciliation self-heal contract passed');
+const initialPurchaseAction = source.indexOf("if (action === 'admin_create_initial_purchase')");
+const initialPurchaseRpc = source.indexOf("'create_sellertray_initial_installment_purchase_admin'", initialPurchaseAction);
+if (initialPurchaseAction < 0 || initialPurchaseRpc <= initialPurchaseAction) {
+  throw new Error('First-merchant purchase must use the governed service-authoritative initial-purchase command');
+}
+
+const templateAction = source.indexOf("if (action === 'admin_publish_template')");
+const auditedTemplateRpc = source.indexOf("'publish_sellertray_commercial_agreement_template_admin'", templateAction);
+if (templateAction < 0 || auditedTemplateRpc <= templateAction) {
+  throw new Error('Admin agreement template publication must use the audited Platform Admin wrapper');
+}
+
+const auditedIssueRpc = source.indexOf("'issue_sellertray_commercial_agreement_admin'", auditedTemplateRpc);
+if (auditedIssueRpc <= auditedTemplateRpc) {
+  throw new Error('Admin agreement issuance must use the audited Platform Admin wrapper');
+}
+
+console.log('commercial-agreements C1B reconciliation and first-merchant acceptance contract passed');

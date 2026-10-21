@@ -4,7 +4,7 @@ description: "Normative C1 boundary for the additive SellerTray commercial-core 
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.7"
+  version: "0.1.8"
   status: governing-extension
 ---
 
@@ -138,6 +138,27 @@ Exact installment due dates, grace duration, late-payment penalties and automate
 - billing/agreement/recovery access must remain available while operational write access is read-only.
 
 Merchant Web is the management surface for C1B billing state. Owners may start the next eligible installment payment. Managers may review installment status but do not inherit Owner billing authority. Checkout command identity must survive retries/reloads so the browser cannot create duplicate commercial payment intent.
+
+### Controlled first-merchant acceptance boundary before C2
+
+C1B production deployment alone is not evidence that the legacy runtime model is safe to retire. Before C2 begins, at least one controlled real Business lifecycle must prove the complete governed path without bypassing any authority.
+
+For that acceptance pass, Platform Admin may operate the existing C1/C1A/C1B core through a service-authoritative Admin workflow that:
+
+- publishes effective-dated VAT-inclusive monthly subscription pricing and derives the yearly 10-for-12 price server-side;
+- publishes Branch setup pricing as a separate governed price source;
+- creates exactly one initial annual installment purchase for the selected active Branches from the effective governed prices, with the approved 70:30 or 60:20:20 schedule and **no invented due dates**;
+- publishes immutable versioned agreement templates and issues the Business agreement through the existing C1A issuance authority;
+- requires a Platform Admin reason and writes the existing Platform Admin audit trail for each privileged commercial creation action;
+- gives Platform Support read/review access only, not commercial mutation authority.
+
+The Admin browser may select Business, Branches, approved structure and legal/template content, but it must not author price snapshots, installment amounts, tax arithmetic or canonical commercial agreement facts. Those are computed or snapshotted by the shared service/database authority.
+
+The acceptance bridge must be retry-safe. An immutable commercial order reference is the command identity for initial-purchase creation; replay may return the same governed order only when the commercial subject is identical, and must fail closed on conflicting facts. A Business that already has a governed initial subscription order must not receive a second initial-purchase order through this bridge.
+
+Creating the order/agreement does not activate subscription entitlement. The real acceptance sequence remains: governed commercial order/agreement → authorised Merchant agreement acceptance → governed Branch setup readiness → verified provider payment → reconciliation → provisional entitlement → later full settlement/full entitlement.
+
+No synthetic commercial order, fake provider payment, or manual entitlement mutation is required merely to generate evidence. C2 assessment begins only after a controlled real Business completes the governed lifecycle and the compatibility/runtime effects are verified.
 
 ## C2 — retire trial semantics
 
