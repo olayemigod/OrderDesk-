@@ -5,6 +5,8 @@ export type MerchantPortalPage =
   | 'customers'
   | 'returns'
   | 'products'
+  | 'categories'
+  | 'units'
   | 'inventory'
   | 'purchasing'
   | 'suppliers'
@@ -43,6 +45,8 @@ export const MERCHANT_PORTAL_NAVIGATION: MerchantPortalNavigationItem[] = [
   { id: 'customers', label: 'Customers', section: 'Sales', available: true },
   { id: 'returns', label: 'Returns', section: 'Sales', available: true },
   { id: 'products', label: 'Products', section: 'Catalogue & Inventory', available: true },
+  { id: 'categories', label: 'Categories', section: 'Catalogue & Inventory', available: true },
+  { id: 'units', label: 'Units', section: 'Catalogue & Inventory', available: true },
   { id: 'inventory', label: 'Inventory', section: 'Catalogue & Inventory', available: true },
   { id: 'purchasing', label: 'Purchase Orders & Receiving', section: 'Purchasing', available: true },
   { id: 'suppliers', label: 'Suppliers', section: 'Purchasing', available: true },
