@@ -58,7 +58,7 @@ jobs:
           cache: gradle
 
       - name: Install locked dependencies
-        run: npm ci --no-audit --no-fund
+        run: npm --prefix . ci --no-audit --no-fund
 
       - name: Load governed QA runtime configuration
         shell: bash
