@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { SellerTrayInput, SellerTraySelect } from './SellerTrayElements';
 import { errorMessage, numberValue, supabase } from './supabase';
 
 type Branch = { id: string; name: string; isDefault: boolean };
@@ -150,12 +151,12 @@ export default function PaymentReconciliationManagement({ tenantId, branches }: 
         <button className="secondary-button" disabled={loading} onClick={() => void load()}>{loading ? 'Refreshing' : 'Refresh'}</button>
       </div>
       <div className="settings-grid two">
-        <label className="select-field"><span>View</span><select value={state} onChange={(event) => setState(event.target.value)}><option value="attention">Needs attention</option><option value="confirmed">Confirmed</option><option value="all">All payments</option></select></label>
-        <label className="select-field"><span>Branch</span><select value={branchId} onChange={(event) => setBranchId(event.target.value)}><option value="all">All accessible Branches</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>
-        <label className="select-field"><span>Payment method</span><select value={methodType} onChange={(event) => setMethodType(event.target.value)}><option value="all">All methods</option><option value="cash">Cash</option><option value="bank_transfer">Bank transfer</option><option value="card_terminal">Card terminal</option><option value="paystack">Paystack</option><option value="flutterwave">Flutterwave</option><option value="cash_on_delivery">Cash on delivery</option><option value="pay_on_pickup">Pay on pickup</option></select></label>
-        <label className="field"><span>Search</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Order, customer, reference or provider" /></label>
-        <label className="field"><span>From date</span><input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label>
-        <label className="field"><span>To date</span><input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} /></label>
+        <label className="select-field"><span>View</span><SellerTraySelect value={state} onChange={(event) => setState(event.target.value)}><option value="attention">Needs attention</option><option value="confirmed">Confirmed</option><option value="all">All payments</option></SellerTraySelect></label>
+        <label className="select-field"><span>Branch</span><SellerTraySelect value={branchId} onChange={(event) => setBranchId(event.target.value)}><option value="all">All accessible Branches</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</SellerTraySelect></label>
+        <label className="select-field"><span>Payment method</span><SellerTraySelect value={methodType} onChange={(event) => setMethodType(event.target.value)}><option value="all">All methods</option><option value="cash">Cash</option><option value="bank_transfer">Bank transfer</option><option value="card_terminal">Card terminal</option><option value="paystack">Paystack</option><option value="flutterwave">Flutterwave</option><option value="cash_on_delivery">Cash on delivery</option><option value="pay_on_pickup">Pay on pickup</option></SellerTraySelect></label>
+        <label className="field"><span>Search</span><SellerTrayInput value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Order, customer, reference or provider" /></label>
+        <label className="field"><span>From date</span><SellerTrayInput type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} /></label>
+        <label className="field"><span>To date</span><SellerTrayInput type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} /></label>
       </div>
       {loading && rows.length === 0 ? <div className="empty-state"><p>Loading payments…</p></div> : rows.length === 0 ? <div className="empty-state"><strong>No payments in this view</strong><p>Payment verification and exceptions will appear here when attention is required.</p></div> : <div className="table-wrap"><table><thead><tr><th>Order</th><th>Customer</th><th>Branch</th><th>Method</th><th>Status</th><th>Amount</th><th>Reference</th><th>Exception</th><th>Date</th><th>Action</th></tr></thead><tbody>{rows.map((row) => {
         const offline = ['bank_transfer', 'card_terminal', 'cash_on_delivery', 'pay_on_pickup', 'cash'].includes(row.methodType);
