@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.12"
+  version: "0.1.13"
   status: governing
 ---
 
@@ -43,6 +43,14 @@ Primary navigation is frozen unless explicitly changed:
 3. Orders
 4. Inventory
 5. More
+
+Notification shell rules:
+
+1. The Mobile notification bell is reserved for governed notification events. Its badge is the unread notification count only.
+2. Orders, WhatsApp queues, payments, fulfilment and other operational counts remain on their owning surfaces and must never be reused as the notification-bell badge.
+3. Tapping the bell opens a secondary Notifications surface; Notifications is not a sixth primary Mobile tab.
+4. Selecting an individual notification may navigate to the relevant governed record or owning operational surface, such as Orders, after the notification itself is selected.
+5. If governed unread-notification state is unavailable, do not substitute an operational queue count merely to keep a badge visible.
 
 Mobile owns or prioritises:
 
