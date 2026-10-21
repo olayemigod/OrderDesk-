@@ -61,12 +61,32 @@ type PaymentSummary = {
   amount: number;
   currency: string;
 };
+type ShiftTransaction = {
+  orderId: string;
+  reference: string;
+  customerName: string;
+  source: string;
+  status: string;
+  paymentStatus: string;
+  paymentMethods: string;
+  subtotalAmount: number;
+  taxAmount: number;
+  totalAmount: number;
+  amountPaid: number;
+  capturedInShift: number;
+  outstandingAmount: number;
+  currency: string;
+  operatorName: string;
+  businessAt: string;
+  createdAt: string;
+};
 type ShiftDetail = ShiftRow & {
   closeNote: string | null;
   reviewNote: string | null;
   movements: Movement[];
   corrections: Correction[];
   paymentSummary: PaymentSummary[];
+  transactions: ShiftTransaction[];
   canCorrect: boolean;
   canReview: boolean;
 };
@@ -392,6 +412,11 @@ export default function CashShiftsManagement({
         </div> : null}
 
         <div>
+          <div className="panel-head"><div><p className="eyebrow">Transactions</p><h3>Shift sales & payments</h3><p className="muted">Sales captured against this shift from the immutable payment ledger, with authoritative order totals and historical cashier attribution.</p></div></div>
+          {detail.transactions.length ? <div className="table-wrap"><table><thead><tr><th>Sale</th><th>Customer</th><th>Source</th><th>Payment</th><th>Subtotal</th><th>Tax</th><th>Total</th><th>Paid</th><th>Outstanding</th><th>Cashier</th><th>Time</th></tr></thead><tbody>{detail.transactions.map((row) => <tr key={row.orderId}><td><strong>{row.reference}</strong><br /><small>{label(row.status)}</small></td><td>{row.customerName}</td><td>{label(row.source)}</td><td>{row.paymentMethods || label(row.paymentStatus)}</td><td>{money(row.subtotalAmount, row.currency)}</td><td>{money(row.taxAmount, row.currency)}</td><td><strong>{money(row.totalAmount, row.currency)}</strong></td><td>{money(row.amountPaid, row.currency)}</td><td>{money(row.outstandingAmount, row.currency)}</td><td>{row.operatorName}</td><td>{dateTime(row.businessAt)}</td></tr>)}</tbody></table></div> : <div className="empty-state"><p>No sale transactions are linked to this shift.</p></div>}
+        </div>
+
+        <div>
           <div className="panel-head"><div><p className="eyebrow">Payments</p><h3>Payment-method reconciliation</h3></div></div>
           {detail.paymentSummary.length ? <div className="table-wrap"><table><thead><tr><th>Method</th><th>Transactions</th><th>Amount</th></tr></thead><tbody>{detail.paymentSummary.map((row) => <tr key={row.methodKey}><td>{row.displayName || label(row.methodType)}</td><td>{row.transactionCount}</td><td>{money(row.amount, row.currency || detail.currency)}</td></tr>)}</tbody></table></div> : <div className="empty-state"><p>No captured payments for this shift.</p></div>}
         </div>
@@ -475,6 +500,28 @@ function mapDetail(row: Record<string, unknown>): ShiftDetail {
       const item = raw as Record<string, unknown>;
       return { methodKey: String(item.methodKey ?? ''), paymentMethodId: typeof item.paymentMethodId === 'string' ? item.paymentMethodId : null, methodType: String(item.methodType ?? ''), displayName: String(item.displayName ?? ''), transactionCount: numberValue(item.transactionCount), amount: numberValue(item.amount), currency: String(item.currency ?? base.currency) };
     }).filter((item) => item.methodKey),
+    transactions: (Array.isArray(row.transactions) ? row.transactions : []).map((raw) => {
+      const item = raw as Record<string, unknown>;
+      return {
+        orderId: String(item.orderId ?? ''),
+        reference: String(item.reference ?? 'Sale'),
+        customerName: String(item.customerName ?? 'Walk-in customer'),
+        source: String(item.source ?? 'pos'),
+        status: String(item.status ?? 'unknown'),
+        paymentStatus: String(item.paymentStatus ?? 'unknown'),
+        paymentMethods: String(item.paymentMethods ?? ''),
+        subtotalAmount: numberValue(item.subtotalAmount),
+        taxAmount: numberValue(item.taxAmount),
+        totalAmount: numberValue(item.totalAmount),
+        amountPaid: numberValue(item.amountPaid),
+        capturedInShift: numberValue(item.capturedInShift),
+        outstandingAmount: numberValue(item.outstandingAmount),
+        currency: String(item.currency ?? base.currency),
+        operatorName: String(item.operatorName ?? base.cashierName),
+        businessAt: String(item.businessAt ?? item.createdAt ?? ''),
+        createdAt: String(item.createdAt ?? ''),
+      };
+    }).filter((item) => item.orderId),
     canCorrect: row.canCorrect === true,
     canReview: row.canReview === true,
   };
