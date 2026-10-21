@@ -4,7 +4,7 @@ description: "Normative C1 boundary for the additive SellerTray commercial-core 
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.6"
+  version: "0.1.7"
   status: governing-extension
 ---
 
@@ -100,6 +100,7 @@ C1B continues to use the existing SellerTray billing-provider authority. It must
 - each installment schedule line may have at most one confirmed payment. Provider reference, provider transaction identity and verified event fingerprint must remain duplicate-safe.
 - later installment checkout must fail closed until all earlier installment schedule lines are confirmed paid.
 - checkout command identity must survive ordinary retries/reloads and ambiguous in-flight provider attempts. If provider initialization is explicitly recorded `failed`, that provider reference is a terminal attempt and must **not** be initialized again; Merchant Web must retire that failed command and create a new command/reference only on the Owner's next explicit payment attempt.
+- before the outbound Paystack initialization request, C1B must persist a service-authority initialization-start fact/lease on the governed checkout session. A process crash, transport error, lost response or other ambiguous outcome after that point must keep the same command/reference in `preparing` state and must not be converted into `failed` merely because a replay cannot prove whether Paystack accepted the original request. Only an explicit provider failure observed for that leased attempt may retire it as `failed`; an ambiguous `preparing` attempt remains confirmable by the verified Paystack webhook if payment is later received.
 
 C1B activation has four distinct prerequisites that may commit independently and in any order:
 
