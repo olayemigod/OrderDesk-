@@ -48,12 +48,12 @@ select admin_user_id,'admin' from c1b_initial_purchase_fixture;
 insert into public.tenants(id,name,slug,merchant_code,subscription_status)
 select initial_tenant_id,'C1B Initial Purchase Tenant',
        'c1b-initial-'||substr(initial_tenant_id::text,1,8),
-       'C1I-'||upper(substr(initial_tenant_id::text,1,6)),'trial'
+       'C1I','trial'
 from c1b_initial_purchase_fixture
 union all
 select legacy_tenant_id,'C1B Legacy Active Purchase Tenant',
        'c1b-legacy-purchase-'||substr(legacy_tenant_id::text,1,8),
-       'C1L-'||upper(substr(legacy_tenant_id::text,1,6)),'active'
+       'C1L','active'
 from c1b_initial_purchase_fixture;
 
 insert into public.tenant_members(tenant_id,user_id,role)
