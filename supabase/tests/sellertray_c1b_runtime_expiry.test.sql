@@ -13,10 +13,10 @@ insert into c1b_runtime_fixture(expired_tenant_id,legacy_tenant_id,period_start,
 values(gen_random_uuid(),gen_random_uuid(),now()-interval '3 months',now()-interval '1 day');
 
 insert into public.tenants(id,name,slug,merchant_code,subscription_status)
-select expired_tenant_id,'C1B Expired Tenant','c1b-expired-'||substr(expired_tenant_id::text,1,8),'C1BE-'||upper(substr(expired_tenant_id::text,1,6)),'active'
+select expired_tenant_id,'C1B Expired Tenant','c1b-expired-'||substr(expired_tenant_id::text,1,8),'C1E','active'
 from c1b_runtime_fixture
 union all
-select legacy_tenant_id,'C1B Legacy Active Tenant','c1b-legacy-'||substr(legacy_tenant_id::text,1,8),'C1BL-'||upper(substr(legacy_tenant_id::text,1,6)),'active'
+select legacy_tenant_id,'C1B Legacy Active Tenant','c1b-legacy-'||substr(legacy_tenant_id::text,1,8),'C1L','active'
 from c1b_runtime_fixture;
 
 update public.tenant_subscriptions s
