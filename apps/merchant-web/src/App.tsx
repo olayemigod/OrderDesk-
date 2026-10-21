@@ -220,8 +220,8 @@ export default function App() {
       <header className="topbar">
         <div><p className="eyebrow">{NAV.find((item) => item.id === page)?.label}</p><h1>{business.name}</h1></div>
         <div className="topbar-actions">
-          <SellerTraySelect label="Business" value={businessId} onChange={setBusinessId}>{managementBusinesses.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</SellerTraySelect>
-          <SellerTraySelect label="Branch" value={branchId} onChange={setBranchId} disabled={!branches.length}>{branches.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</SellerTraySelect>
+          <Select label="Business" value={businessId} onChange={setBusinessId}>{managementBusinesses.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</Select>
+          <Select label="Branch" value={branchId} onChange={setBranchId} disabled={!branches.length}>{branches.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</Select>
           <button className="icon-button" onClick={() => setDark((value) => !value)}>{dark ? 'Light' : 'Dark'}</button>
           <button className="secondary-button" disabled={loading} onClick={() => void refresh()}>{loading ? 'Refreshing' : 'Refresh'}</button>
         </div>
