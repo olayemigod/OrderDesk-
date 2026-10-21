@@ -21,6 +21,7 @@ import { HomeDashboard, type HomeAttentionItem } from './HomeDashboard';
 import { InventoryTabWorkspace } from './InventoryTabWorkspace';
 import { MobileShell, type SellerTrayPrimaryTab } from './MobileShell';
 import { MoreWorkspace } from './MoreWorkspace';
+import { NotificationsWorkspace } from './NotificationsWorkspace';
 import { OrdersWorkspace } from './OrdersWorkspace';
 import { ResumePosDraftWorkspace } from './ResumePosDraftWorkspace';
 import { SellWorkspace } from './SellWorkspace';
@@ -30,6 +31,7 @@ export default function RedesignWorkspace() {
   const { activeBusiness, saveProfile } = useBusinesses();
   const offline = useOfflineSalesSync();
   const [tab, setTab] = useState<SellerTrayPrimaryTab>('home');
+  const [showNotifications, setShowNotifications] = useState(false);
   const [merchantName, setMerchantName] = useState('there');
   const [branches, setBranches] = useState<CommerceBranch[]>([]);
   const [activeBranchId, setActiveBranchId] = useState('');
@@ -256,16 +258,19 @@ export default function RedesignWorkspace() {
   if (!activeBusiness) return <SellerTrayLoadingScreen message="Opening your business…" />;
 
   function openCashWorkspace() {
+    setShowNotifications(false);
     setTab('more');
     setCashRouteKey((value) => value + 1);
   }
 
   function openWhatsAppWorkspace() {
+    setShowNotifications(false);
     setTab('more');
     setWhatsappRouteKey((value) => value + 1);
   }
 
   function openSyncWorkspace() {
+    setShowNotifications(false);
     setTab('more');
     setSyncRouteKey((value) => value + 1);
   }
@@ -398,7 +403,7 @@ export default function RedesignWorkspace() {
 
   const workspaceError = offline.connectionState === 'offline'
     ? null
-    : ordersError || notifications.error || branchError || inventorySummaryError || cashShiftError || refundAuthorityError;
+    : ordersError || (!showNotifications ? notifications.error : null) || branchError || inventorySummaryError || cashShiftError || refundAuthorityError;
   const workspaceSyncing = branchLoading || inventorySummaryLoading || cashShiftLoading || refundAuthorityLoading;
   const syncState = offline.connectionState === 'offline'
     ? 'offline'
@@ -417,12 +422,14 @@ export default function RedesignWorkspace() {
       syncState={syncState}
       onRefresh={refreshWorkspace}
       onTabChange={(nextTab) => {
+        setShowNotifications(false);
         if (nextTab !== 'sell') setResumeDraftOrder(null);
         setTab(nextTab);
       }}
       onOpenNotifications={() => {
         setResumeDraftOrder(null);
-        setTab('orders');
+        setShowBranchSwitcher(false);
+        setShowNotifications(true);
       }}
       onOpenBranchSwitcher={() => setShowBranchSwitcher((value) => !value)}
     >
@@ -448,7 +455,24 @@ export default function RedesignWorkspace() {
         </View>
       ) : null}
 
-      {tab === 'home' ? (
+      {showNotifications ? (
+        <NotificationsWorkspace
+          notifications={notifications.notifications}
+          loading={notifications.loading}
+          error={notifications.error}
+          onBack={() => setShowNotifications(false)}
+          onRefresh={notifications.refresh}
+          onMarkRead={notifications.markRead}
+          onMarkAllRead={notifications.markAllRead}
+          onOpenOrder={() => {
+            setShowNotifications(false);
+            setResumeDraftOrder(null);
+            setTab('orders');
+          }}
+        />
+      ) : null}
+
+      {!showNotifications && tab === 'home' ? (
         <HomeDashboard
           merchantName={merchantName}
           branchName={activeBranch?.name ?? null}
@@ -477,7 +501,7 @@ export default function RedesignWorkspace() {
         />
       ) : null}
 
-      {tab === 'sell' ? (
+      {!showNotifications && tab === 'sell' ? (
         activeBranch ? (
           cashShiftLoading ? (
             <ShiftRequiredState loading />
@@ -524,7 +548,7 @@ export default function RedesignWorkspace() {
         )
       ) : null}
 
-      {tab === 'orders' ? (
+      {!showNotifications && tab === 'orders' ? (
         <OrdersWorkspace
           tenantId={activeBusiness.id}
           businessCurrency={activeBusiness.currency}
@@ -545,7 +569,7 @@ export default function RedesignWorkspace() {
         />
       ) : null}
 
-      {tab === 'inventory' ? (
+      {!showNotifications && tab === 'inventory' ? (
         activeBranch ? (
           <InventoryTabWorkspace tenantId={activeBusiness.id} branch={activeBranch} />
         ) : (
@@ -553,7 +577,7 @@ export default function RedesignWorkspace() {
         )
       ) : null}
 
-      {tab === 'more' ? (
+      {!showNotifications && tab === 'more' ? (
         activeBranch ? (
           <MoreWorkspace
             business={activeBusiness}
