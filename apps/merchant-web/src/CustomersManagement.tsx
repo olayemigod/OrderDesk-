@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { SellerTrayInput } from './SellerTrayElements';
 import { errorMessage, numberValue, supabase } from './supabase';
 
 const PAGE_SIZE = 50;
@@ -190,16 +191,16 @@ export default function CustomersManagement({ tenantId, currency }: { tenantId: 
     {error ? <div className="error-banner">{error}<button onClick={() => setError(null)}>Dismiss</button></div> : null}
     {notice ? <div className="success-banner">{notice}<button onClick={() => setNotice(null)}>Dismiss</button></div> : null}
     <div className="product-toolbar panel">
-      <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, phone or email" aria-label="Search customers" />
+      <SellerTrayInput value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, phone or email" aria-label="Search customers" />
       <button className="secondary-button" disabled={loading} onClick={() => void loadCustomers(page, selectedId ?? undefined, search)}>{loading ? 'Refreshing' : 'Refresh'}</button>
       <button className="primary-button" onClick={() => setCreating((value) => !value)}>{creating ? 'Close' : 'Add Customer'}</button>
     </div>
     {creating ? <form className="panel page-stack" onSubmit={createCustomer}>
       <div className="panel-head"><div><p className="eyebrow">New customer</p><h3>Add Customer</h3></div></div>
       <div className="form-grid">
-        <label>Name<input required maxLength={120} value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Customer name" /></label>
-        <label>Phone<input required inputMode="tel" value={newPhone} onChange={(event) => setNewPhone(event.target.value)} placeholder="e.g. 08012345678" /></label>
-        <label>Email <span className="muted">Optional</span><input type="email" value={newEmail} onChange={(event) => setNewEmail(event.target.value)} placeholder="customer@example.com" /></label>
+        <label>Name<SellerTrayInput required maxLength={120} value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Customer name" /></label>
+        <label>Phone<SellerTrayInput required inputMode="tel" value={newPhone} onChange={(event) => setNewPhone(event.target.value)} placeholder="e.g. 08012345678" /></label>
+        <label>Email <span className="muted">Optional</span><SellerTrayInput type="email" value={newEmail} onChange={(event) => setNewEmail(event.target.value)} placeholder="customer@example.com" /></label>
       </div>
       <div className="topbar-actions"><button type="button" className="secondary-button" onClick={() => setCreating(false)}>Cancel</button><button className="primary-button" disabled={saving}>{saving ? 'Saving' : 'Save Customer'}</button></div>
     </form> : null}
@@ -220,9 +221,9 @@ export default function CustomersManagement({ tenantId, currency }: { tenantId: 
         {selected ? <form className="panel page-stack" onSubmit={updateCustomer}>
           <div className="panel-head"><div><p className="eyebrow">Customer</p><h3>{selected.displayName}</h3></div><button className="primary-button" disabled={saving}>{saving ? 'Saving' : 'Save Changes'}</button></div>
           <div className="form-grid">
-            <label>Name<input required maxLength={120} value={editName} onChange={(event) => setEditName(event.target.value)} /></label>
-            <label>Email <span className="muted">Optional</span><input type="email" value={editEmail} onChange={(event) => setEditEmail(event.target.value)} /></label>
-            <label>Phone<input value={selected.phone ?? ''} readOnly aria-readonly="true" /><small className="muted">Phone identity is protected because it links customer history across selling channels.</small></label>
+            <label>Name<SellerTrayInput required maxLength={120} value={editName} onChange={(event) => setEditName(event.target.value)} /></label>
+            <label>Email <span className="muted">Optional</span><SellerTrayInput type="email" value={editEmail} onChange={(event) => setEditEmail(event.target.value)} /></label>
+            <label>Phone<SellerTrayInput value={selected.phone ?? ''} readOnly aria-readonly="true" /><small className="muted">Phone identity is protected because it links customer history across selling channels.</small></label>
           </div>
           {detailLoading ? <p className="muted">Loading customer history…</p> : detail ? <div className="status-grid">
             <Stat label="Completed sales" value={String(detail.summary.completedOrderCount)} />
