@@ -22,7 +22,7 @@ import {
   type CatalogueMasterData,
   type MobileProductDraft,
 } from '../data/productManagementRepository';
-import { sellerTrayUserMessage } from '../data/userFacingError';
+import { sellerTrayBackgroundError, sellerTrayUserMessage } from '../data/userFacingError';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import { BarcodeScannerSheet } from './BarcodeScannerSheet';
@@ -60,6 +60,7 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
   async function refresh() {
     setLoading(true);
     setError(null);
+    setNotice(null);
     try {
       const [next, nextMasters] = await Promise.all([
         loadManagedProducts(tenantId),
@@ -72,15 +73,13 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
     } catch (cause) {
       if (isLikelyConnectivityError(cause)) {
         const cached = await loadCommerceProductCache(tenantId);
-        if (cached) {
-          setProducts(cached.data);
-          setMasters(EMPTY_MASTERS);
-          setReadOnly(true);
-          setNotice('Offline: showing saved products. Connect to add or change products.');
-          return;
-        }
+        setProducts(cached?.data ?? []);
+        setMasters(EMPTY_MASTERS);
+        setReadOnly(true);
+        setError(null);
+        return;
       }
-      setError(sellerTrayUserMessage(cause, 'Products are unavailable right now.'));
+      setError(sellerTrayBackgroundError(cause, 'Products are unavailable right now.'));
     } finally {
       setLoading(false);
     }
@@ -108,7 +107,7 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
 
   function begin(product: CommerceProduct | null, barcode = '') {
     if (readOnly) {
-      setNotice('Connect to the internet to add or change products.');
+      setNotice('Connect to continue.');
       return;
     }
     setEditor({ product, barcode });
@@ -150,7 +149,7 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
       return;
     }
     if (readOnly) {
-      setNotice('This barcode is not in the saved catalogue. Connect to add a new product.');
+      setNotice('Connect to add this product.');
       return;
     }
     begin(null, barcode);
@@ -324,7 +323,7 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
       {loading ? (
         <ActivityIndicator />
       ) : visible.length === 0 ? (
-        <Text style={[styles.help, dark && darkStyles.body]}>No products found.</Text>
+        <Text style={[styles.help, dark && darkStyles.body]}>{readOnly ? 'No saved products are available on this device.' : 'No products found.'}</Text>
       ) : visible.map((product) => (
         <Pressable key={product.id} onPress={() => begin(product)} style={[styles.product, dark && darkStyles.card]}>
           <View style={styles.productCopy}>

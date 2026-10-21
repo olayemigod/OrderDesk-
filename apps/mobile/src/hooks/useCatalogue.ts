@@ -8,6 +8,7 @@ import {
   type CatalogueItem,
   type CatalogueItemInput,
 } from '../data/catalogueRepository';
+import { sellerTrayBackgroundError, sellerTrayUserMessage } from '../data/userFacingError';
 
 export function useCatalogue(tenantId: string | null) {
   const [items, setItems] = useState<CatalogueItem[]>([]);
@@ -27,7 +28,7 @@ export function useCatalogue(tenantId: string | null) {
       setItems(await loadCatalogue(tenantId));
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to load catalogue.');
+      setError(sellerTrayBackgroundError(err, 'Unable to load catalogue.'));
     } finally {
       setLoading(false);
     }
@@ -45,7 +46,7 @@ export function useCatalogue(tenantId: string | null) {
         await refresh();
         setError(null);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unable to add catalogue item.');
+        setError(sellerTrayUserMessage(err, 'Unable to add catalogue item.'));
         throw err;
       }
     },
@@ -60,7 +61,7 @@ export function useCatalogue(tenantId: string | null) {
         await refresh();
         setError(null);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unable to update catalogue item.');
+        setError(sellerTrayUserMessage(err, 'Unable to update catalogue item.'));
         throw err;
       }
     },
@@ -75,7 +76,7 @@ export function useCatalogue(tenantId: string | null) {
         await refresh();
         setError(null);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unable to update catalogue item status.');
+        setError(sellerTrayUserMessage(err, 'Unable to update catalogue item status.'));
         throw err;
       }
     },
