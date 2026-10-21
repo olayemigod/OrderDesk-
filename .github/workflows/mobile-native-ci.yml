@@ -10,6 +10,7 @@ permissions:
 on:
   pull_request:
     paths:
+      - 'package.json'
       - 'apps/mobile/modules/**'
       - 'apps/mobile/app.json'
       - 'apps/mobile/package.json'
@@ -19,6 +20,7 @@ on:
     branches:
       - main
     paths:
+      - 'package.json'
       - 'apps/mobile/modules/**'
       - 'apps/mobile/app.json'
       - 'apps/mobile/package.json'
@@ -56,7 +58,7 @@ jobs:
           java-version: '17'
 
       - name: Install locked dependencies
-        run: npm ci --no-audit --no-fund
+        run: npm --prefix . ci --no-audit --no-fund
 
       - name: Generate Android project
         env:
