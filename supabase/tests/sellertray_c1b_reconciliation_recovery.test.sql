@@ -136,6 +136,12 @@ insert into public.sellertray_commercial_installment_schedule(
 select tenant_id,broken_obligation_id,2,30,300 from c1b_reconcile_fixture;
 set constraints all immediate;
 
+-- SET CONSTRAINTS ALL IMMEDIATE persists for the transaction. Re-defer the C1
+-- order validators before constructing a second order so its header is not
+-- validated before the matching immutable subscription snapshot is inserted.
+set constraints validate_sellertray_commercial_order_amounts_header deferred;
+set constraints validate_sellertray_commercial_order_amounts_snapshot deferred;
+
 -- Second obligation is also valid annual commercial truth. It intentionally has
 -- no agreement or payment yet, so a successful reconciliation remains pending.
 with inserted as (
@@ -212,6 +218,8 @@ update c1b_reconcile_fixture
 set broken_checkout_id=(reserved.result->>'sessionId')::uuid
 from reserved;
 
+select public.begin_sellertray_installment_checkout_initialization(f.broken_checkout_id)
+from c1b_reconcile_fixture f;
 select public.complete_sellertray_installment_checkout_initialization(
   f.broken_checkout_id,s.reference,'https://checkout.example/c1b-reconcile'
 )
