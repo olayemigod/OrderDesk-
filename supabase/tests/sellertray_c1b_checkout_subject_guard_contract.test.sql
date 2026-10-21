@@ -20,25 +20,25 @@ select extensions.ok(
   and position('s.installment_obligation_id=v_obligation.id' in replace(pg_get_functiondef(
     'public.guard_sellertray_initial_purchase_installment_checkout()'::regprocedure
   ),' ',''))>0
-  and position('new.plan_code is distinct from v_plan_code' in pg_get_functiondef(
+  and position('new.plan_codeisdistinctfromv_plan_code' in replace(pg_get_functiondef(
     'public.guard_sellertray_initial_purchase_installment_checkout()'::regprocedure
-  ))>0
-  and position('abs(new.amount - v_schedule.amount_due)' in pg_get_functiondef(
+  ),' ',''))>0
+  and position('abs(new.amount-v_schedule.amount_due)' in replace(pg_get_functiondef(
     'public.guard_sellertray_initial_purchase_installment_checkout()'::regprocedure
-  ))>0,
+  ),' ',''))>0,
   'C1B checkout guard binds order, obligation, schedule, plan and exact governed amount'
 );
 
 select extensions.ok(
-  position('tm.role = ''owner''' in pg_get_functiondef(
+  position('tm.role=''owner''' in replace(pg_get_functiondef(
     'public.guard_sellertray_initial_purchase_installment_checkout()'::regprocedure
-  ))>0
-  and position('new.provider <> ''paystack''' in pg_get_functiondef(
+  ),' ',''))>0
+  and position('new.provider<>''paystack''' in replace(pg_get_functiondef(
     'public.guard_sellertray_initial_purchase_installment_checkout()'::regprocedure
-  ))>0
-  and position('new.status <> ''preparing''' in pg_get_functiondef(
+  ),' ',''))>0
+  and position('new.status<>''preparing''' in replace(pg_get_functiondef(
     'public.guard_sellertray_initial_purchase_installment_checkout()'::regprocedure
-  ))>0
+  ),' ',''))>0
   and position('v_expected_reference' in pg_get_functiondef(
     'public.guard_sellertray_initial_purchase_installment_checkout()'::regprocedure
   ))>0,
