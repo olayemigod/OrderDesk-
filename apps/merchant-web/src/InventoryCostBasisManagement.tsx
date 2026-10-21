@@ -1,3 +1,4 @@
+import { SellerTrayInput } from './SellerTrayElements';
 import { useEffect, useState, type FormEvent } from 'react';
 import { errorMessage, numberValue, supabase } from './supabase';
 
@@ -145,9 +146,9 @@ export default function InventoryCostBasisManagement({ tenantId, branchId, branc
     {editing ? <form className="product-editor-stack" onSubmit={submit}>
       <div className="panel-head"><div><p className="eyebrow">{editing.current_evidence_id ? 'Correct cost basis' : 'Set cost basis'}</p><h3>{editing.item_name}</h3><p className="muted">{formatQuantity(editing.quantity_delta)} {editing.stock_uom} posted {dateTime(editing.business_at)}. Enter cost per {editing.stock_uom} in {editing.currency || currency} from real historical evidence.</p></div><button className="text-button" type="button" disabled={busy} onClick={closeEditor}>Close</button></div>
       <div className="form-grid">
-        <label className="field">Cost per {editing.stock_uom}<input type="number" min="0" step="0.00000001" value={unitCost} onChange={(event) => setUnitCost(event.target.value)} required /></label>
-        <label className="field">Evidence reference<input value={reference} maxLength={160} placeholder="Invoice, opening schedule, count sheet…" onChange={(event) => setReference(event.target.value)} required /></label>
-        <label className="field">Audit reason<input value={reason} maxLength={500} placeholder="Why this historical cost is authoritative" onChange={(event) => setReason(event.target.value)} required /></label>
+        <label className="field">Cost per {editing.stock_uom}<SellerTrayInput type="number" min="0" step="0.00000001" value={unitCost} onChange={(event) => setUnitCost(event.target.value)} required /></label>
+        <label className="field">Evidence reference<SellerTrayInput value={reference} maxLength={160} placeholder="Invoice, opening schedule, count sheet…" onChange={(event) => setReference(event.target.value)} required /></label>
+        <label className="field">Audit reason<SellerTrayInput value={reason} maxLength={500} placeholder="Why this historical cost is authoritative" onChange={(event) => setReason(event.target.value)} required /></label>
       </div>
       <p className="muted">This appends an immutable audit record. Corrections preserve the previous evidence instead of editing it. Stock quantity and the original movement date remain unchanged.</p>
       <div className="form-actions"><button className="primary-button" disabled={busy}>{busy ? 'Replaying valuation…' : editing.current_evidence_id ? 'Record corrected basis' : 'Record cost evidence'}</button></div>

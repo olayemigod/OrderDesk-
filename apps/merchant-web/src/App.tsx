@@ -1,3 +1,4 @@
+import { SellerTraySelect, SellerTrayInput } from './SellerTrayElements';
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import ManagementPage from './ManagementPage';
@@ -269,8 +270,8 @@ function Login() {
     <section className="login-brand"><div className="brand-mark large">S</div><p className="eyebrow">SellerTray</p><h1>Run the business. Keep selling on mobile.</h1><p>Manage orders, stock, Branch performance, cash controls, WhatsApp and reporting from one merchant workspace.</p></section>
     <form className="login-card" onSubmit={submit}>
       <div><p className="eyebrow">Merchant Management</p><h2>Sign in</h2><p className="muted">Use the same SellerTray account you use for your business.</p></div>
-      <label>Email<input type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
-      <label>Password<input type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+      <label>Email<SellerTrayInput type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
+      <label>Password<SellerTrayInput type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} /></label>
       {message ? <div className="error-banner compact">{message}</div> : null}
       <button className="primary-button" disabled={busy}>{busy ? 'Signing in' : 'Continue'}</button>
     </form>
@@ -348,7 +349,7 @@ function Reports({ business, report }: { business: Business; report: Report | nu
 }
 
 function Select({ label, value, onChange, disabled, children }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean; children: ReactNode }) {
-  return <label className="select-field"><span>{label}</span><select value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled}>{children}</select></label>;
+  return <label className="select-field"><span>{label}</span><SellerTraySelect value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled}>{children}</SellerTraySelect></label>;
 }
 function Context({ label, value }: { label: string; value: string }) { return <div><span>{label}</span><strong>{value}</strong></div>; }
 function Heading({ eyebrow, title: heading, note }: { eyebrow: string; title: string; note?: string }) { return <div className="section-heading"><div><p className="eyebrow">{eyebrow}</p><h2>{heading}</h2></div>{note ? <p className="muted">{note}</p> : null}</div>; }

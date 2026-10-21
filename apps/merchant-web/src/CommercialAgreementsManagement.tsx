@@ -1,3 +1,4 @@
+import { SellerTrayInput } from './SellerTrayElements';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { errorMessage, supabase } from './supabase';
 
@@ -222,8 +223,8 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
         {!selected.isCurrent ? <div className="warning-banner">This agreement has been replaced. Review and accept the current replacement where required.</div> : null}
         {selected.isCurrent && !selected.acceptance && !center?.canAccept ? <div className="warning-banner">Only the Business Owner or a Manager explicitly authorised by the Owner can accept SellerTray commercial agreements.</div> : null}
         {selected.isCurrent && !selected.acceptance && center?.canAccept ? <form className="settings-form" onSubmit={accept}>
-          <label className="field"><span>Authorised representative legal name</span><input maxLength={200} required value={legalName} onChange={(event) => setLegalName(event.target.value)} placeholder="Full legal name" /></label>
-          <label className="access-card"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span><strong>I confirm I am authorised to act for this business and accept this agreement.</strong><small>Your authenticated SellerTray identity, authority, agreement version and integrity evidence are recorded.</small></span></label>
+          <label className="field"><span>Authorised representative legal name</span><SellerTrayInput maxLength={200} required value={legalName} onChange={(event) => setLegalName(event.target.value)} placeholder="Full legal name" /></label>
+          <label className="access-card"><SellerTrayInput type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span><strong>I confirm I am authorised to act for this business and accept this agreement.</strong><small>Your authenticated SellerTray identity, authority, agreement version and integrity evidence are recorded.</small></span></label>
           <div className="settings-actions"><button className="primary-button" disabled={busy || !confirmed || !legalName.trim()}>{busy ? 'Recording acceptance…' : 'Accept agreement'}</button></div>
         </form> : null}
       </article> : null}

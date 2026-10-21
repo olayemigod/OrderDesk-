@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 
+import { SellerTrayInput, SellerTraySelect } from './SellerTrayElements';
 import { errorMessage, supabase } from './supabase';
 import { TaxSettings } from './TaxSettings';
 
@@ -98,7 +99,7 @@ export function PosPolicySettings({ tenantId }: { tenantId: string }) {
         <div className="settings-grid two">
           <label className="settings-field">
             <span>Who can confirm bank transfer or terminal payments?</span>
-            <select
+            <SellerTraySelect
               value={policy.manualConfirmationMode}
               onChange={(event) => setPolicy((current) => ({
                 ...current,
@@ -107,7 +108,7 @@ export function PosPolicySettings({ tenantId }: { tenantId: string }) {
             >
               <option value="branch_operator">Branch operators handling the sale</option>
               <option value="payment_manager">Payment managers only</option>
-            </select>
+            </SellerTraySelect>
           </label>
         </div>
 
@@ -124,7 +125,7 @@ export function PosPolicySettings({ tenantId }: { tenantId: string }) {
 }
 
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
-  return <label className="settings-toggle"><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /><span>{label}</span></label>;
+  return <label className="settings-toggle"><SellerTrayInput type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /><span>{label}</span></label>;
 }
 
 function parsePolicy(value: unknown): PosPolicy {

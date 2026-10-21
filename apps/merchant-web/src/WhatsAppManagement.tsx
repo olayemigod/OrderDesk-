@@ -1,3 +1,4 @@
+import { SellerTraySelect } from './SellerTrayElements';
 import { useEffect, useMemo, useState } from 'react';
 import { errorMessage, supabase } from './supabase';
 
@@ -168,7 +169,7 @@ export default function WhatsAppManagement({
       <article className="panel route-panel">
         <div className="panel-head"><div><p className="eyebrow">Receiving Branch</p><h3>{currentBranch?.name || route?.branchName || 'Choose Branch'}</h3></div></div>
         <p className="muted">Future inbound messages are stamped with this Branch. WhatsApp orders inherit that immutable Branch and use the same stock, payments and reporting core as POS.</p>
-        <label className="field route-field"><span>Branch for future WhatsApp conversations</span><select value={selectedBranchId} disabled={!connected || saving || disconnecting || !branches.length} onChange={(event) => setSelectedBranchId(event.target.value)}>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}{branch.isDefault ? ' · Default' : ''}</option>)}</select></label>
+        <label className="field route-field"><span>Branch for future WhatsApp conversations</span><SellerTraySelect value={selectedBranchId} disabled={!connected || saving || disconnecting || !branches.length} onChange={(event) => setSelectedBranchId(event.target.value)}>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}{branch.isDefault ? ' · Default' : ''}</option>)}</SellerTraySelect></label>
         {!connected ? <div className="access-mode-note">Connect WhatsApp before choosing a receiving Branch.</div> : null}
         {connected && !branches.length ? <div className="access-mode-note">Create an active Branch before changing WhatsApp routing.</div> : null}
         <div className="form-actions"><button className="primary-button" disabled={!connected || saving || disconnecting || !selectedBranchId || selectedBranchId === route?.branchId} onClick={() => void saveReceivingBranch()}>{saving ? 'Saving…' : 'Save receiving Branch'}</button></div>

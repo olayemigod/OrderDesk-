@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.11"
+  version: "0.1.12"
   status: governing
 ---
 
@@ -103,14 +103,14 @@ Approved primary Merchant Web navigation groups are:
 
 - **Dashboard**
 - **Sales** — Sales, Orders, Customers, Returns
-- **Catalogue & Inventory** — Products, Inventory
+- **Catalogue & Inventory** — Products, Categories, Units, Inventory
 - **Purchasing** — Purchase Orders/Receiving, Suppliers
 - **Money** — Payments/Receivables, Cash & Shifts
 - **Channels** — WhatsApp, Devices & Printers
 - **Insights** — Report Center, Ask SellerTray
 - **Business** — Branches, Team & Permissions, Feedback, Settings
 
-Do not expose every product sub-feature as a permanent top-level navigation item. Categories, Units & Barcodes and Pricing belong within Product management unless a later explicit decision changes this.
+Categories and Units are approved first-class management entries under **Catalogue & Inventory**. They manage the shared Business-scoped Product Category and Business UOM masters. Product-specific **Units & Barcodes** and **Pricing** remain within Product detail because conversions, barcodes, UOM-specific prices and selling/purchase defaults belong to the Product-specific configuration rather than the reusable Business UOM master.
 
 Dashboard direction:
 
@@ -134,6 +134,9 @@ Product-management direction:
 10. Owners/Managers may create Product Categories and Business UOMs from Merchant Web and from the lightweight authorised Mobile Product workflow. Product forms then select from the same governed active masters on both surfaces.
 11. Saving a Product or product-specific alternate UOM must resolve to an existing active Business master. Clients must not silently create Category/UOM master truth merely because a user typed an unknown string into a Product form.
 12. Product-specific UOM rows continue to own conversion factor, UOM-specific selling price, barcode, fractional policy and selling/purchase defaults. A reusable Business UOM master names the unit; it does not create stock or imply one universal conversion across products.
+13. Merchant Web provides dedicated **Categories** and **Units** management pages for the reusable masters. Master lifecycle mutations must remain governed, Business-isolated and audited; archive/rename operations must fail closed where references or protected defaults make the change unsafe.
+14. The dedicated **Units** page does not own product conversions, barcodes or prices. Those remain Product-specific configuration under **Units & Barcodes** and **Pricing**.
+15. After a new Product is saved, Merchant Web may immediately guide an authorised user into a separate **Opening Inventory** operation. This must remain stock-neutral until the inventory command is explicitly submitted. The guided operation should capture Branch, opening quantity, verified cost per Stock UOM, business date/time and reference/evidence as applicable. Opening quantity and cost must post through the governed inventory/valuation authority, not a catalogue `cost_price` field, and must preserve deterministic historical COGS, auditability and retry idempotency.
 
 # 2. Shared commerce core
 
@@ -577,7 +580,7 @@ Connect current WhatsApp functionality to the shared customer, Product/UOM, bran
 
 ## Phase 8 — Merchant Web V1
 
-Overview, Sales, Orders, Products, UOM, Pricing, Inventory, Customers, Branches, Cashiers/Managers, Payments, Cash, WhatsApp, tenant feedback review and Settings.
+Overview, Sales, Orders, Products, Categories, Units, UOM, Pricing, Inventory, Customers, Branches, Cashiers/Managers, Payments, Cash, WhatsApp, tenant feedback review and Settings.
 
 ## Phase 9 — Purchasing
 

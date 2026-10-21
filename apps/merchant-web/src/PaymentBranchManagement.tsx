@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { SellerTrayInput, SellerTraySelect } from './SellerTrayElements';
 import { errorMessage, supabase } from './supabase';
 
 type Branch = { id: string; name: string; isDefault: boolean };
@@ -163,9 +164,9 @@ export default function PaymentBranchManagement({ tenantId }: { tenantId: string
       {error ? <div className="error-banner compact">{error}</div> : null}
       {message ? <div className="success-banner compact">{message}</div> : null}
       {!methods.length ? <div className="empty-state"><strong>No merchant payment method yet</strong><p>Add bank or online methods in Payment settings, or add a card terminal below.</p></div> : <>
-        <label className="select-field"><span>Payment method</span><select value={selectedMethodId} onChange={(event) => setSelectedMethodId(event.target.value)}>{methods.map((method) => <option key={method.id} value={method.id}>{method.displayName}{method.isEnabled ? '' : ' · Disabled'}</option>)}</select></label>
+        <label className="select-field"><span>Payment method</span><SellerTraySelect value={selectedMethodId} onChange={(event) => setSelectedMethodId(event.target.value)}>{methods.map((method) => <option key={method.id} value={method.id}>{method.displayName}{method.isEnabled ? '' : ' · Disabled'}</option>)}</SellerTraySelect></label>
         {selectedMethod ? <div className="settings-check-grid">
-          {branches.map((branch) => <label key={branch.id} className="check-row"><input type="checkbox" checked={selectedBranches.has(branch.id)} disabled={busy || !selectedMethod.isEnabled} onChange={() => toggleBranch(branch.id)} /><span><strong>{branch.name}</strong><small>{branch.isDefault ? 'Default Branch' : 'Branch'}{selectedMethod.isEnabled ? '' : ' · Enable this payment method first'}</small></span></label>)}
+          {branches.map((branch) => <label key={branch.id} className="check-row"><SellerTrayInput type="checkbox" checked={selectedBranches.has(branch.id)} disabled={busy || !selectedMethod.isEnabled} onChange={() => toggleBranch(branch.id)} /><span><strong>{branch.name}</strong><small>{branch.isDefault ? 'Default Branch' : 'Branch'}{selectedMethod.isEnabled ? '' : ' · Enable this payment method first'}</small></span></label>)}
         </div> : null}
         <div className="settings-actions"><button type="button" className="primary-button" disabled={busy || !selectedMethod} onClick={() => void saveAssignments()}>{busy ? 'Saving' : 'Save Branch availability'}</button></div>
       </>}
@@ -175,8 +176,8 @@ export default function PaymentBranchManagement({ tenantId }: { tenantId: string
       <div className="panel-head"><div><p className="eyebrow">In-person payments</p><h3>Add card terminal</h3></div></div>
       <p className="muted">Use this for a physical POS terminal such as Moniepoint, OPay or a bank terminal. SellerTray records the confirmed terminal sale separately from drawer cash.</p>
       <div className="settings-grid two">
-        <label className="field"><span>Terminal name</span><input value={terminalName} onChange={(event) => setTerminalName(event.target.value)} placeholder="e.g. Moniepoint POS" maxLength={80} /></label>
-        <label className="field"><span>Staff instruction</span><input value={terminalInstructions} onChange={(event) => setTerminalInstructions(event.target.value)} placeholder="Confirm approval before completing sale" maxLength={500} /></label>
+        <label className="field"><span>Terminal name</span><SellerTrayInput value={terminalName} onChange={(event) => setTerminalName(event.target.value)} placeholder="e.g. Moniepoint POS" maxLength={80} /></label>
+        <label className="field"><span>Staff instruction</span><SellerTrayInput value={terminalInstructions} onChange={(event) => setTerminalInstructions(event.target.value)} placeholder="Confirm approval before completing sale" maxLength={500} /></label>
       </div>
       <div className="settings-actions"><button className="secondary-button" disabled={busy || !terminalName.trim()}>{busy ? 'Saving' : 'Add card terminal'}</button></div>
     </form>

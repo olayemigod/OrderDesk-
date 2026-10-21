@@ -1,3 +1,4 @@
+import { SellerTrayInput, SellerTraySelect, SellerTrayTextarea } from './SellerTrayElements';
 import { useEffect, useState, type FormEvent } from 'react';
 import { errorMessage, numberValue, supabase } from './supabase';
 import './supplier-payments.css';
@@ -183,12 +184,12 @@ export function PurchasePaymentManagement({
 
       {summary.outstandingAmount > 0 ? <form className="supplier-payment-form" onSubmit={recordPayment}>
         <div className="supplier-payment-fields">
-          <label><span>Reference</span><input required value={reference} onChange={(event) => setReference(event.target.value)} placeholder="Transfer / receipt reference" /></label>
-          <label><span>Method</span><select value={method} onChange={(event) => setMethod(event.target.value as PaymentMethod)}>{METHODS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-          <label><span>Amount ({summary.currency})</span><input required type="number" min="0.01" step="0.01" max={summary.outstandingAmount} value={amount} onChange={(event) => setAmount(event.target.value)} /></label>
-          <label><span>Paid at</span><input type="datetime-local" value={paidAt} onChange={(event) => setPaidAt(event.target.value)} /></label>
+          <label><span>Reference</span><SellerTrayInput required value={reference} onChange={(event) => setReference(event.target.value)} placeholder="Transfer / receipt reference" /></label>
+          <label><span>Method</span><SellerTraySelect value={method} onChange={(event) => setMethod(event.target.value as PaymentMethod)}>{METHODS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</SellerTraySelect></label>
+          <label><span>Amount ({summary.currency})</span><SellerTrayInput required type="number" min="0.01" step="0.01" max={summary.outstandingAmount} value={amount} onChange={(event) => setAmount(event.target.value)} /></label>
+          <label><span>Paid at</span><SellerTrayInput type="datetime-local" value={paidAt} onChange={(event) => setPaidAt(event.target.value)} /></label>
         </div>
-        <label className="supplier-payment-note"><span>Notes</span><textarea rows={2} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional payment note" /></label>
+        <label className="supplier-payment-note"><span>Notes</span><SellerTrayTextarea rows={2} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional payment note" /></label>
         <div className="supplier-payment-actions"><button className="primary-button" disabled={busy}>{busy ? 'Recording…' : 'Record payment'}</button></div>
         <p className="supplier-payment-hint">Payment records supplier settlement evidence only. Cash entries here do not change a cashier drawer or accounting ledger.</p>
       </form> : <div className="supplier-payment-paid"><strong>Fully paid</strong><span>No outstanding supplier amount remains on this Purchase Order.</span></div>}
@@ -202,7 +203,7 @@ export function PurchasePaymentManagement({
             {payment.reversed ? <em>Reversed{payment.reversalReason ? ` · ${payment.reversalReason}` : ''}{payment.reversedAt ? ` · ${dateTime(payment.reversedAt)}` : ''}</em> : null}
           </div>
           <div className="supplier-payment-row-value"><strong>{money(payment.amount, payment.currency)}</strong>{!payment.reversed ? <button type="button" className="text-button danger-text" disabled={busy} onClick={() => { setReverseId(payment.paymentId); setReverseReason(''); }}>Reverse</button> : null}</div>
-          {reverseId === payment.paymentId ? <div className="supplier-payment-reversal"><input autoFocus value={reverseReason} onChange={(event) => setReverseReason(event.target.value)} placeholder="Required reversal reason" /><button type="button" className="secondary-button danger-text" disabled={busy || !reverseReason.trim()} onClick={() => void reversePayment(payment.paymentId)}>Confirm reversal</button><button type="button" className="text-button" onClick={() => { setReverseId(null); setReverseReason(''); }}>Cancel</button></div> : null}
+          {reverseId === payment.paymentId ? <div className="supplier-payment-reversal"><SellerTrayInput autoFocus value={reverseReason} onChange={(event) => setReverseReason(event.target.value)} placeholder="Required reversal reason" /><button type="button" className="secondary-button danger-text" disabled={busy || !reverseReason.trim()} onClick={() => void reversePayment(payment.paymentId)}>Confirm reversal</button><button type="button" className="text-button" onClick={() => { setReverseId(null); setReverseReason(''); }}>Cancel</button></div> : null}
         </div>) : <p className="muted">No supplier payment has been recorded for this Purchase Order.</p>}
       </div>
     </> : null}

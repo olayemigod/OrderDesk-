@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 
+import { SellerTrayInput } from './SellerTrayElements';
 import { errorMessage, supabase } from './supabase';
 
 type TaxSettingsState = {
@@ -113,7 +114,7 @@ export function TaxSettings({ tenantId }: { tenantId: string }) {
       <div className="settings-grid two">
         <label className="settings-field">
           <span>Tax rate (%)</span>
-          <input
+          <SellerTrayInput
             type="number"
             min={0}
             max={100}
@@ -140,7 +141,7 @@ export function TaxSettings({ tenantId }: { tenantId: string }) {
 }
 
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
-  return <label className="settings-toggle"><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /><span>{label}</span></label>;
+  return <label className="settings-toggle"><SellerTrayInput type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /><span>{label}</span></label>;
 }
 
 function parseTaxSettings(value: unknown): TaxSettingsState {

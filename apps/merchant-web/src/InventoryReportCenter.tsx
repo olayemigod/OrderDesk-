@@ -1,3 +1,4 @@
+import { SellerTraySelect, SellerTrayInput } from './SellerTrayElements';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import InventoryCostBasisManagement from './InventoryCostBasisManagement';
 import { errorMessage, numberValue, supabase } from './supabase';
@@ -107,9 +108,9 @@ export default function InventoryReportCenter({ tenantId, currency }: { tenantId
 
     <form className="panel product-editor-stack" onSubmit={submit}>
       <div className="form-grid">
-        <label className="field">Branch<select value={branchId} disabled={!branches.length || loading} onChange={(event) => void chooseBranch(event.target.value)}>{branches.map((row) => <option key={row.id} value={row.id}>{row.name}{row.code ? ` · ${row.code}` : ''}</option>)}</select></label>
-        <label className="field">Value as of<input type="datetime-local" value={asOf} onChange={(event) => setAsOf(event.target.value)} /></label>
-        <label className="field">Search<input value={search} placeholder="Product, SKU or category" onChange={(event) => setSearch(event.target.value)} /></label>
+        <label className="field">Branch<SellerTraySelect value={branchId} disabled={!branches.length || loading} onChange={(event) => void chooseBranch(event.target.value)}>{branches.map((row) => <option key={row.id} value={row.id}>{row.name}{row.code ? ` · ${row.code}` : ''}</option>)}</SellerTraySelect></label>
+        <label className="field">Value as of<SellerTrayInput type="datetime-local" value={asOf} onChange={(event) => setAsOf(event.target.value)} /></label>
+        <label className="field">Search<SellerTrayInput value={search} placeholder="Product, SKU or category" onChange={(event) => setSearch(event.target.value)} /></label>
       </div>
       <div className="form-actions"><button className="primary-button" disabled={loading || !branchId}>{loading ? 'Loading…' : 'Run valuation'}</button></div>
     </form>

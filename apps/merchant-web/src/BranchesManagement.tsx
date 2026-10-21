@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { SellerTrayInput } from './SellerTrayElements';
 import { errorMessage, supabase } from './supabase';
 
 type Branch = { id: string; code: string; name: string; isDefault: boolean; isActive: boolean; createdAt: string };
@@ -73,10 +74,10 @@ export default function BranchesManagement({ tenantId, onBranchesChanged }: { te
       </article>
       <form className="panel form-stack" onSubmit={save}>
         <div><p className="eyebrow">{selected ? 'Branch details' : 'New Branch'}</p><h3>{selected ? selected.name : 'Add Branch'}</h3><p className="muted">Branch identity is shared by sales, inventory, purchasing, cash, permissions and reporting.</p></div>
-        <label>Branch name<input value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} maxLength={120} required /></label>
-        <label>Branch code<input value={draft.code} onChange={(event) => setDraft((current) => ({ ...current, code: event.target.value }))} maxLength={40} required /></label>
-        <label className="check-row"><input type="checkbox" checked={draft.isDefault} onChange={(event) => setDraft((current) => ({ ...current, isDefault: event.target.checked }))} /><span>Default Branch</span></label>
-        <label className="check-row"><input type="checkbox" checked={draft.isActive} onChange={(event) => setDraft((current) => ({ ...current, isActive: event.target.checked }))} /><span>Active</span></label>
+        <label>Branch name<SellerTrayInput value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} maxLength={120} required /></label>
+        <label>Branch code<SellerTrayInput value={draft.code} onChange={(event) => setDraft((current) => ({ ...current, code: event.target.value }))} maxLength={40} required /></label>
+        <label className="check-row"><SellerTrayInput type="checkbox" checked={draft.isDefault} onChange={(event) => setDraft((current) => ({ ...current, isDefault: event.target.checked }))} /><span>Default Branch</span></label>
+        <label className="check-row"><SellerTrayInput type="checkbox" checked={draft.isActive} onChange={(event) => setDraft((current) => ({ ...current, isActive: event.target.checked }))} /><span>Active</span></label>
         <div className="topbar-actions"><button className="primary-button" disabled={saving}>{saving ? 'Saving' : 'Save Branch'}</button>{selected ? <button type="button" className="secondary-button" onClick={startNew}>Add another</button> : null}</div>
       </form>
     </div>

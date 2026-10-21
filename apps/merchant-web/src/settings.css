@@ -1,4 +1,9 @@
 .settings-page { min-width: 0; }
+.settings-tabs { display: flex; gap: 8px; padding: 6px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-alt); overflow-x: auto; }
+.settings-tab { min-height: 40px; padding: 0 14px; border: 0; border-radius: 9px; background: transparent; color: var(--slate); font: inherit; font-size: .8rem; font-weight: 800; white-space: nowrap; cursor: pointer; }
+.settings-tab:hover { color: var(--navy); background: var(--surface); }
+.settings-tab.active { color: var(--navy); background: var(--surface); box-shadow: 0 1px 3px rgba(15,23,42,.08); }
+[role="tabpanel"][hidden] { display: none; }
 .settings-form { display: grid; gap: 15px; }
 .settings-grid { display: grid; gap: 12px; }
 .settings-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -24,6 +29,7 @@
 }
 
 @media (max-width: 700px) {
+  .settings-tabs { margin-inline: -2px; }
   .settings-grid.two, .settings-check-grid, .settings-check-grid.compact { grid-template-columns: 1fr; }
   .settings-actions { justify-content: stretch; flex-direction: column; }
   .settings-actions button { width: 100%; }
