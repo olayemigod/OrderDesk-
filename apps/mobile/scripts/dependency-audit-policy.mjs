@@ -25,11 +25,16 @@ const exceptions = new Map([
 ]);
 
 const lock = JSON.parse(readFileSync(new URL('../package-lock.json', import.meta.url), 'utf8'));
-const audit = spawnSync('npm', ['audit', '--omit=dev', '--json'], {
+const audit = spawnSync('npm', ['--prefix', '.', 'audit', '--omit=dev', '--json'], {
   cwd: new URL('..', import.meta.url),
   encoding: 'utf8',
   shell: process.platform === 'win32',
 });
+
+if (audit.error) {
+  console.error('Unable to start npm audit:', audit.error);
+  process.exit(1);
+}
 
 if (!audit.stdout?.trim()) {
   console.error(audit.stderr || 'npm audit did not return JSON output');
@@ -45,7 +50,13 @@ try {
   process.exit(1);
 }
 
-const vulnerabilities = report.vulnerabilities ?? {};
+if (report?.error || !report?.vulnerabilities || typeof report.vulnerabilities !== 'object') {
+  console.error('npm audit did not return a valid vulnerability report.');
+  if (report?.error) console.error(JSON.stringify(report.error, null, 2));
+  process.exit(1);
+}
+
+const vulnerabilities = report.vulnerabilities;
 const blocking = Object.entries(vulnerabilities).filter(([, finding]) =>
   ['high', 'critical'].includes(finding?.severity),
 );
