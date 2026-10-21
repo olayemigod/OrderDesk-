@@ -72,6 +72,7 @@ type AgreementCenter = {
 
 type BillingCheckoutResponse = {
   status?: string;
+  needsNewCommand?: boolean;
   authorizationUrl?: string;
   reference?: string;
   installmentScheduleId?: string;
@@ -166,6 +167,11 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
         safeSessionStorageRemove(storageKey);
         setMessage('This installment is already confirmed as paid.');
         await load(selectedId);
+        return;
+      }
+      if (response.status === 'retry_required' && response.needsNewCommand === true) {
+        safeSessionStorageRemove(storageKey);
+        setMessage('The previous secure checkout could not start. Select Pay installment again to create a new payment attempt.');
         return;
       }
       if (typeof response.authorizationUrl !== 'string' || !response.authorizationUrl) {
