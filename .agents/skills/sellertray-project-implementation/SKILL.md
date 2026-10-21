@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.14"
+  version: "0.1.15"
   status: governing
 ---
 
@@ -450,6 +450,7 @@ Payment and shift rules:
 22. Cash & Shift detail must expose a governed sold-item summary for the shift, including Product/UOM, sold quantity, returned quantity where applicable, net quantity, sales value and authoritative historical cost/COGS/valuation status where available. Margin may be shown only when the underlying historical cost is authoritative.
 23. Cash & Shift detail must also expose the shift transaction register with reference, time, Cashier, customer where applicable, source, payment state/method, subtotal, tax, total, paid and outstanding values supported by transaction truth.
 24. Opening transaction items from Cash & Shift review should use an in-place drawer/modal/sheet rather than navigating away from the current shift context. Finalised line snapshots are read-only.
+25. **Expense Category** is governed Business-scoped master data. Business Expense entry must select an active category from the shared master; clients must not create new transaction-category truth by posting arbitrary free text. Posted Business Expenses retain the selected category label snapshot so later master-data changes do not rewrite historical reporting.
 
 ### Money Foundation implementation authority
 
@@ -465,6 +466,7 @@ The current governed Money Foundation implements the rules above with the follow
 8. Mobile exposes typed Cash Out and capability-aware Owner/Manager Business Expense workflows under More. The current Mobile repository rejects new generic untyped Cash Out submissions and routes users to the typed workflow; the underlying historical RPC remains compatible with previously deployed activity.
 9. Merchant Web exposes **Cash & Shifts** and **Business Expenses** as separate permanent entries under the **Money** navigation group. Cash & Shifts owns shift/drawer reconciliation; Business Expenses owns management-level operating expense records. Both consume the same governed Money Foundation and must not create separate financial truth.
 10. `get_sellertray_business_expense_management_list(...)` reports Business Expenses only; Bank Deposits, Owner Withdrawals and ordinary Cashier Expenses must not inflate operating-expense totals.
+11. `sellertray_expense_categories` is the governed Business-scoped Expense Category master. Owner/Manager master writes and category reads must use governed RPC/service boundaries; expense-entry clients select active records. Historical Business Expense rows keep the category label snapshot and are not rewritten when the master evolves.
 
 ### Tax governance
 
@@ -649,7 +651,7 @@ Verify sale deduction, return restoration, purchase receiving, transfer, adjustm
 
 ## Payment gate
 
-Verify success, pending verification, failure, retry/idempotency, split payment where applicable and refund/reference behaviour. For POS shifts, also verify Branch assignment, per-shift payment-method snapshot, separate cash/non-cash totals, drawer variance isolation, typed Cash Out, expense funding source, retry-safe payment attribution and governed cash correction without destructive history mutation.
+Verify success, pending verification, failure, retry/idempotency, split payment where applicable and refund/reference behaviour. For POS shifts, also verify Branch assignment, per-shift payment-method snapshot, separate cash/non-cash totals, drawer variance isolation, typed Cash Out, expense funding source, retry-safe payment attribution and governed cash correction without destructive history mutation. When Business Expense is touched, verify Expense Category selection resolves through the governed Business master and arbitrary transaction free text cannot bypass it.
 
 ## WhatsApp regression gate
 
@@ -685,6 +687,7 @@ When feedback is touched, verify signed-in submission state, repeat submission, 
 10. Do not let clients invent Category/UOM master records implicitly from unknown Product-form text.
 11. Do not classify Bank Deposit or Owner Withdrawal as operating expense merely because they reduce drawer cash.
 12. Do not calculate tax independently in Mobile, Web, WhatsApp or AI when the shared commerce authority can govern it once.
+13. Do not let clients invent Business Expense categories as transaction-time free text; select an active governed Business Expense Category master record.
 
 # 19. Definition of done
 
