@@ -48,6 +48,9 @@ jobs:
       - name: Verify financial document tax rendering contract
         run: node supabase/functions/financial-document/tax-contract.mjs
 
+      - name: Verify tax historical backfill guard contract
+        run: node supabase/tests/tax-backfill-generated-line-contract.mjs
+
       - name: Verify C1B installment webhook retry contract
         run: node supabase/functions/paystack-webhook/c1b-contract.mjs
 
