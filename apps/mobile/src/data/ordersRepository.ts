@@ -64,6 +64,7 @@ type OrderRow = {
   fulfillment_confirmed_by: 'merchant' | 'customer_whatsapp' | null;
   customer_confirmed_at: string | null;
   payment_status: PaymentStatus;
+  total_amount: number | string | null;
   amount_paid: number | string;
   currency: string;
   payment_confirmed_at: string | null;
@@ -172,6 +173,7 @@ function mapOrder(
     fulfillmentConfirmedBy: row.fulfillment_confirmed_by,
     customerConfirmedAt: row.customer_confirmed_at,
     paymentStatus: row.payment_status,
+    totalAmount: toNumber(row.total_amount),
     amountPaid,
     paymentConfirmedAt: row.payment_confirmed_at,
     cashReturnSupported,
@@ -239,6 +241,7 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
         fulfillment_confirmed_by,
         customer_confirmed_at,
         payment_status,
+        total_amount,
         amount_paid,
         currency,
         payment_confirmed_at,
