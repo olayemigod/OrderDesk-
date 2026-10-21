@@ -19,16 +19,16 @@ if (fixMode) {
     if (allowed.has(relativePath)) continue;
 
     const source = await readFile(file, 'utf8');
-    const tags = new Set([...source.matchAll(/<\s*(input|select|textarea)\b/gi)].map((match) => match[1].toLowerCase()));
+    const tags = new Set([...source.matchAll(/<\s*(input|select|textarea)\b/g)].map((match) => match[1]));
     if (!tags.size) continue;
 
     let next = source
-      .replace(/<\s*input\b/gi, '<SellerTrayInput')
-      .replace(/<\s*\/\s*input\s*>/gi, '</SellerTrayInput>')
-      .replace(/<\s*select\b/gi, '<SellerTraySelect')
-      .replace(/<\s*\/\s*select\s*>/gi, '</SellerTraySelect>')
-      .replace(/<\s*textarea\b/gi, '<SellerTrayTextarea')
-      .replace(/<\s*\/\s*textarea\s*>/gi, '</SellerTrayTextarea>');
+      .replace(/<\s*input\b/g, '<SellerTrayInput')
+      .replace(/<\s*\/\s*input\s*>/g, '</SellerTrayInput>')
+      .replace(/<\s*select\b/g, '<SellerTraySelect')
+      .replace(/<\s*\/\s*select\s*>/g, '</SellerTraySelect>')
+      .replace(/<\s*textarea\b/g, '<SellerTrayTextarea')
+      .replace(/<\s*\/\s*textarea\s*>/g, '</SellerTrayTextarea>');
 
     next = ensureSellerTrayImport(next, [...tags].map((tag) => componentByTag[tag]));
     if (next !== source) {
@@ -46,10 +46,10 @@ for (const file of await walk(root)) {
   const relativePath = relative(root, file).replaceAll('\\', '/');
   if (allowed.has(relativePath)) continue;
   const source = await readFile(file, 'utf8');
-  for (const match of source.matchAll(/<\s*(input|select|textarea)\b/gi)) {
+  for (const match of source.matchAll(/<\s*(input|select|textarea)\b/g)) {
     const before = source.slice(0, match.index ?? 0);
     const line = before.split('\n').length;
-    offenders.push(`${relativePath}:${line} raw <${match[1].toLowerCase()}>`);
+    offenders.push(`${relativePath}:${line} raw <${match[1]}>`);
   }
 }
 
