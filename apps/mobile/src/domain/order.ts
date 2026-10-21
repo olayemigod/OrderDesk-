@@ -125,6 +125,12 @@ export type MerchantOrder = {
   paymentStatus: PaymentStatus;
   amountPaid: number;
   paymentConfirmedAt: string | null;
+  subtotalAmount?: number | null;
+  taxApplied?: boolean | null;
+  taxRatePercent?: number | null;
+  taxAmount?: number | null;
+  taxDisplayBreakdown?: boolean | null;
+  grossAmount?: number | null;
   cashReturnSupported?: boolean;
   returnStatus: ReturnStatus;
   returnedAmount: number;
@@ -141,6 +147,10 @@ export type MerchantOrder = {
 };
 
 export function orderTotal(order: MerchantOrder): number | null {
+  if (typeof order.grossAmount === 'number' && Number.isFinite(order.grossAmount)) {
+    return order.grossAmount;
+  }
+
   if (order.items.some((item) => item.unitPrice === null)) {
     return null;
   }
