@@ -235,6 +235,8 @@ select extensions.ok(
   'first checkout snapshots schedule money and replays by command identity'
 );
 
+select public.begin_sellertray_installment_checkout_initialization(f.checkout_1_id)
+from sellertray_c1b_fixture f;
 select public.complete_sellertray_installment_checkout_initialization(
   f.checkout_1_id,s.reference,'https://checkout.example/c1b-first'
 )
@@ -284,6 +286,11 @@ update sellertray_c1b_fixture set checkout_2_id=(reserved.result->>'sessionId'):
 select extensions.ok((select checkout_2_id is not null from sellertray_c1b_fixture),
   'second installment becomes payable only after the first is confirmed');
 
+-- Exercise the crash/lost-response recovery path: the provider attempt has
+-- started, but the authorization URL was never persisted before the signed
+-- provider confirmation arrives. The leased `preparing` checkout is valid.
+select public.begin_sellertray_installment_checkout_initialization(f.checkout_2_id)
+from sellertray_c1b_fixture f;
 update sellertray_c1b_fixture set second_paid_at=now();
 update sellertray_c1b_fixture f
 set payment_2_id=public.confirm_sellertray_installment_payment_from_checkout(
