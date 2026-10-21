@@ -9,7 +9,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "preflight": "node scripts/release-preflight-runner.mjs && node scripts/offline-preflight.mjs && node scripts/pos-settlement-preflight.mjs && node scripts/pos-allocation-preflight.mjs && node scripts/branch-payment-preflight.mjs && node scripts/order-authority-preflight.mjs && node scripts/branch-history-preflight.mjs && node scripts/inventory-operation-preflight.mjs && node scripts/cash-movement-preflight.mjs && node scripts/pos-return-preflight.mjs && node scripts/notification-shell-preflight.mjs && node scripts/font-scale-preflight.mjs && node scripts/camera-permission-preflight.mjs",
+    "preflight": "node scripts/release-preflight-runner.mjs && node scripts/offline-preflight.mjs && node scripts/pos-settlement-preflight.mjs && node scripts/pos-allocation-preflight.mjs && node scripts/branch-payment-preflight.mjs && node scripts/order-authority-preflight.mjs && node scripts/branch-history-preflight.mjs && node scripts/inventory-operation-preflight.mjs && node scripts/cash-movement-preflight.mjs && node scripts/pos-return-preflight.mjs && node scripts/notification-shell-preflight.mjs && node scripts/font-scale-preflight.mjs && node scripts/camera-permission-preflight.mjs && node scripts/sale-history-consistency-preflight.mjs",
     "audit:dependencies": "node scripts/dependency-audit-policy.mjs",
     "release:check": "node scripts/release-readiness.mjs"
   },
@@ -19,7 +19,7 @@
     "@react-native-async-storage/async-storage": "2.2.0",
     "@supabase/supabase-js": "2.115.0",
     "expo": "~57.0.9",
-    "expo-camera": "~57.0.6",
+    "expo-camera": "57.0.6",
     "expo-constants": "57.0.17",
     "expo-image-picker": "57.0.16",
     "expo-notifications": "57.0.18",
