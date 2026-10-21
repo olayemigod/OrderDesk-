@@ -116,6 +116,11 @@ with inserted as (
 )
 update sellertray_c1b_fixture set installment_obligation_id=(select id from inserted);
 
+-- Earlier fixture assertions intentionally force the C1 order snapshot checks
+-- immediate. Re-defer the governed multi-line installment validator so the
+-- complete 70:30 schedule is validated as one obligation, as in production.
+set constraints validate_sellertray_commercial_installment_schedule_line deferred;
+
 with inserted as (
   insert into public.sellertray_commercial_installment_schedule(
     tenant_id,installment_obligation_id,sequence_no,percentage,amount_due
