@@ -100,6 +100,12 @@ select tenant_id,commercial_order_id,2,'branch_setup',setup_price_id,branch_id,'
 from c1b_structure_fixture;
 set constraints all immediate;
 
+-- SET CONSTRAINTS ALL IMMEDIATE persists for the transaction. Re-defer both
+-- installment validators before creating the obligation so validation sees the
+-- complete governed 60:20:20 schedule rather than empty/partial fixture state.
+set constraints validate_sellertray_commercial_installment_obligation deferred;
+set constraints validate_sellertray_commercial_installment_schedule_line deferred;
+
 with inserted as (
   insert into public.sellertray_commercial_installment_obligations(
     tenant_id,commercial_order_id,structure_code,currency,obligated_amount,created_by_user_id
@@ -108,10 +114,6 @@ with inserted as (
   from c1b_structure_fixture returning id
 )
 update c1b_structure_fixture set installment_obligation_id=(select id from inserted);
-
--- The order snapshot above is checked immediately, but the governed installment
--- schedule validator must see the complete 60:20:20 set before reconciling it.
-set constraints validate_sellertray_commercial_installment_schedule_line deferred;
 
 with inserted as (
   insert into public.sellertray_commercial_installment_schedule(
