@@ -45,11 +45,10 @@ type OrderPaymentEvidenceRow = {
   currency: string;
 };
 
-type BranchRow = { id: string; name: string };
-
 type OrderRow = {
   id: string;
   branch_id: string;
+  branch_name_snapshot: string | null;
   pos_operator_user_id: string | null;
   pos_operator_name: string | null;
   public_order_id: string;
@@ -134,7 +133,6 @@ function toNumber(value: number | string | null): number | null {
 
 function mapOrder(
   row: OrderRow,
-  branchName: string,
   notifications: OrderNotification[],
   paymentEvidence: OrderPaymentEvidenceRow[],
 ): MerchantOrder {
@@ -154,7 +152,7 @@ function mapOrder(
   return {
     id: row.id,
     branchId: row.branch_id,
-    branchName,
+    branchName: row.branch_name_snapshot?.trim() || 'Branch',
     posOperatorUserId: row.pos_operator_user_id,
     posOperatorName: row.pos_operator_name,
     customerId: customer?.id ?? '',
@@ -219,12 +217,13 @@ function mapOrder(
 export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
   if (!tenantId) return [];
 
-  const [ordersResult, notificationsResult, paymentsResult, branchesResult] = await Promise.all([
+  const [ordersResult, notificationsResult, paymentsResult] = await Promise.all([
     supabase
       .from('orders')
       .select(`
         id,
         branch_id,
+        branch_name_snapshot,
         pos_operator_user_id,
         pos_operator_name,
         public_order_id,
@@ -270,16 +269,11 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
       .from('order_payments')
       .select('order_id,method_type,provider,status,amount,currency')
       .eq('tenant_id', tenantId),
-    supabase
-      .from('branches')
-      .select('id,name')
-      .eq('tenant_id', tenantId),
   ]);
 
   if (ordersResult.error) throw ordersResult.error;
   if (notificationsResult.error) throw notificationsResult.error;
   if (paymentsResult.error) throw paymentsResult.error;
-  if (branchesResult.error) throw branchesResult.error;
 
   const notificationsByOrder = new Map<string, OrderNotification[]>();
   for (const row of (notificationsResult.data ?? []) as OrderNotificationRow[]) {
@@ -303,14 +297,9 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
     paymentsByOrder.set(row.order_id, bucket);
   }
 
-  const branchNames = new Map(
-    ((branchesResult.data ?? []) as BranchRow[]).map((branch) => [branch.id, branch.name] as const),
-  );
-
   return ((ordersResult.data ?? []) as unknown as OrderRow[]).map((row) =>
     mapOrder(
       row,
-      branchNames.get(row.branch_id) ?? 'Branch',
       notificationsByOrder.get(row.id) ?? [],
       paymentsByOrder.get(row.id) ?? [],
     ),
