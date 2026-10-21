@@ -54,17 +54,7 @@ Deno.serve(async (request) => {
     if (action === 'merchant_list') {
       const tenantId = cleanUuid(body.tenantId);
       if (!tenantId) return json({ error: 'Business is required' }, 400);
-      const [center, installmentBilling] = await Promise.all([
-        rpc<JsonRecord>('get_sellertray_commercial_agreement_center', {
-          p_tenant_id: tenantId,
-          p_actor_user_id: userId,
-        }),
-        rpc<JsonRecord[]>('get_sellertray_installment_billing_states_for_tenant', {
-          p_tenant_id: tenantId,
-          p_actor_user_id: userId,
-        }),
-      ]);
-      return json({ ok: true, center: { ...center, installmentBilling } });
+      return json({ ok: true, center: await loadMerchantCenter(tenantId, userId) });
     }
 
     if (action === 'merchant_accept') {
@@ -93,34 +83,13 @@ Deno.serve(async (request) => {
       // Acceptance is already an immutable committed fact. Reconciliation runs
       // separately so an unrelated runtime-subscription conflict cannot roll it back.
       await reconcileTenantInstallmentsBestEffort(tenantId, 'agreement acceptance');
-
-      const [center, installmentBilling] = await Promise.all([
-        rpc<JsonRecord>('get_sellertray_commercial_agreement_center', {
-          p_tenant_id: tenantId,
-          p_actor_user_id: userId,
-        }),
-        rpc<JsonRecord[]>('get_sellertray_installment_billing_states_for_tenant', {
-          p_tenant_id: tenantId,
-          p_actor_user_id: userId,
-        }),
-      ]);
-      return json({ ok: true, acceptanceId, center: { ...center, installmentBilling } });
+      return json({ ok: true, acceptanceId, center: await loadMerchantCenter(tenantId, userId) });
     }
 
     if (action === 'admin_overview') {
       const tenantId = body.tenantId === null || body.tenantId === undefined || body.tenantId === '' ? null : cleanUuid(body.tenantId);
       if (body.tenantId !== null && body.tenantId !== undefined && body.tenantId !== '' && !tenantId) return json({ error: 'A valid business is required' }, 400);
-      const overview = await rpc<JsonRecord>('get_sellertray_commercial_agreement_admin', {
-        p_actor_user_id: userId,
-        p_tenant_id: tenantId,
-      });
-      const installmentBilling = tenantId
-        ? await rpc<JsonRecord[]>('get_sellertray_installment_billing_states_for_admin', {
-            p_tenant_id: tenantId,
-            p_actor_user_id: userId,
-          })
-        : [];
-      return json({ ok: true, overview: { ...overview, installmentBilling } });
+      return json({ ok: true, overview: await loadAdminOverview(tenantId, userId) });
     }
 
     if (action === 'admin_publish_template') {
@@ -140,11 +109,7 @@ Deno.serve(async (request) => {
         p_effective_from: effectiveFrom,
         p_actor_user_id: userId,
       });
-      const overview = await rpc<JsonRecord>('get_sellertray_commercial_agreement_admin', {
-        p_actor_user_id: userId,
-        p_tenant_id: null,
-      });
-      return json({ ok: true, templateId, overview }, 201);
+      return json({ ok: true, templateId, overview: await loadAdminOverview(null, userId) }, 201);
     }
 
     if (action === 'admin_mark_setup_ready') {
@@ -173,18 +138,7 @@ Deno.serve(async (request) => {
       // Setup readiness is also an independent immutable fact. Never make its
       // persistence contingent on successful runtime entitlement reconciliation.
       await reconcileTenantInstallmentsBestEffort(tenantId, 'setup readiness');
-
-      const [overview, installmentBilling] = await Promise.all([
-        rpc<JsonRecord>('get_sellertray_commercial_agreement_admin', {
-          p_actor_user_id: userId,
-          p_tenant_id: tenantId,
-        }),
-        rpc<JsonRecord[]>('get_sellertray_installment_billing_states_for_admin', {
-          p_tenant_id: tenantId,
-          p_actor_user_id: userId,
-        }),
-      ]);
-      return json({ ok: true, readinessId, overview: { ...overview, installmentBilling } });
+      return json({ ok: true, readinessId, overview: await loadAdminOverview(tenantId, userId) });
     }
 
     const tenantId = cleanUuid(body.tenantId);
@@ -214,22 +168,48 @@ Deno.serve(async (request) => {
       p_supersedes_agreement_id: supersedesAgreementId,
       p_actor_user_id: userId,
     });
-    const [overview, installmentBilling] = await Promise.all([
-      rpc<JsonRecord>('get_sellertray_commercial_agreement_admin', {
-        p_actor_user_id: userId,
-        p_tenant_id: tenantId,
-      }),
-      rpc<JsonRecord[]>('get_sellertray_installment_billing_states_for_admin', {
-        p_tenant_id: tenantId,
-        p_actor_user_id: userId,
-      }),
-    ]);
-    return json({ ok: true, agreementId, overview: { ...overview, installmentBilling } }, 201);
+    return json({ ok: true, agreementId, overview: await loadAdminOverview(tenantId, userId) }, 201);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Commercial agreement request failed';
     return json({ error: message }, statusForError(message));
   }
 });
+
+async function loadMerchantCenter(tenantId: string, userId: string): Promise<JsonRecord> {
+  const [center, installmentBilling] = await Promise.all([
+    rpc<JsonRecord>('get_sellertray_commercial_agreement_center', {
+      p_tenant_id: tenantId,
+      p_actor_user_id: userId,
+    }),
+    rpc<JsonRecord[]>('get_sellertray_installment_billing_states_for_tenant', {
+      p_tenant_id: tenantId,
+      p_actor_user_id: userId,
+    }),
+  ]);
+  return { ...center, installmentBilling };
+}
+
+async function loadAdminOverview(tenantId: string | null, userId: string): Promise<JsonRecord> {
+  const [overview, installmentBilling, branchSetup] = await Promise.all([
+    rpc<JsonRecord>('get_sellertray_commercial_agreement_admin', {
+      p_actor_user_id: userId,
+      p_tenant_id: tenantId,
+    }),
+    tenantId
+      ? rpc<JsonRecord[]>('get_sellertray_installment_billing_states_for_admin', {
+          p_tenant_id: tenantId,
+          p_actor_user_id: userId,
+        })
+      : Promise.resolve([] as JsonRecord[]),
+    tenantId
+      ? rpc<JsonRecord[]>('get_sellertray_commercial_branch_setup_states_for_admin', {
+          p_tenant_id: tenantId,
+          p_actor_user_id: userId,
+        })
+      : Promise.resolve([] as JsonRecord[]),
+  ]);
+  return { ...overview, installmentBilling, branchSetup };
+}
 
 async function reconcileTenantInstallmentsBestEffort(tenantId: string, source: string): Promise<void> {
   try {
