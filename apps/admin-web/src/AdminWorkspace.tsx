@@ -535,8 +535,8 @@ function BillingPage({ session, overview }: { session: Session; overview: Platfo
 
   return (
     <PageFrame eyebrow="Billing & Commercial" title="Commercial administration" description="Governed SellerTray commercial operations for agreements, Branch setup readiness, installment payment state and entitlement release.">
-      <div className="workspace-banner info"><strong>No free trial.</strong> C1B uses governed paid commercial facts. Payment confirmation, agreement acceptance, Branch setup readiness and subscription entitlement remain separate authorities.</div>
-      {legacyTrialCount ? <div className="workspace-banner warning"><strong>{legacyTrialCount} legacy record{legacyTrialCount === 1 ? '' : 's'} still report trial status.</strong> These remain compatibility data until the deliberate C2 migration and are not a current SellerTray offer.</div> : null}
+      <div className="workspace-banner info"><strong>No free trial.</strong> Paid access uses governed commercial records. Payment confirmation, agreement acceptance, Branch setup readiness and subscription entitlement remain separate authorities.</div>
+      {legacyTrialCount ? <div className="workspace-banner warning"><strong>{legacyTrialCount} legacy record{legacyTrialCount === 1 ? '' : 's'} still report trial status.</strong> These are compatibility data awaiting migration and are not a current SellerTray offer.</div> : null}
       <CommercialBillingAdministration session={session} actorRole={overview.actorRole} tenants={tenants} />
     </PageFrame>
   );

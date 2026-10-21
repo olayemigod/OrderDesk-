@@ -11,7 +11,7 @@ test('active entry keeps trial UI unreachable', () => {
   assert.match(main,/import AdminWorkspace/);
   assert.doesNotMatch(main+workspace+dashboard,/import .*SubscriptionAccess|import .*['"]\.\/App['"]|action: 'extend_trial_days'/);
 });
-test('commercial UI uses business terminology', () => assert.doesNotMatch(commercial,/C1B|C1A|pre-C2|No C2/));
+test('active Admin UI uses business terminology', () => assert.doesNotMatch(workspace+commercial+dashboard,/C1B|C1A|pre-C2|No C2|deliberate C2/));
 test('dashboard requests governed aggregates and bounds stale results', () => {
   assert.match(dashboard,/action: 'business_dashboard'/);
   assert.doesNotMatch(dashboard,/overview\.tenants|\.reduce\(/);
