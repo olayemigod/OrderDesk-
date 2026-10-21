@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { SellerTraySelect, SellerTrayTextarea } from './SellerTrayElements';
 import { errorMessage, supabase } from './supabase';
 import './ai-insights.css';
 
@@ -66,14 +67,14 @@ export default function AiInsights({ tenantId }: { tenantId: string }) {
       <form onSubmit={(event) => void ask(event)} aria-busy={busy}>
         <div className="ai-question-head">
           <div><h3 id="sellertray-ai-question-heading">What do you want to know?</h3><p id="sellertray-ai-question-help" className="muted">SellerTray answers from the selected business only.</p></div>
-          <label className="select-field ai-period"><span>Analysis period</span><select value={days} onChange={(event) => setDays(Number(event.target.value))} disabled={busy}>
+          <label className="select-field ai-period"><span>Analysis period</span><SellerTraySelect value={days} onChange={(event) => setDays(Number(event.target.value))} disabled={busy}>
             <option value={7}>Last 7 days</option>
             <option value={30}>Last 30 days</option>
             <option value={90}>Last 90 days</option>
             <option value={365}>Last 365 days</option>
-          </select></label>
+          </SellerTraySelect></label>
         </div>
-        <textarea
+        <SellerTrayTextarea
           id="sellertray-ai-question"
           className="ai-question-input"
           rows={4}
