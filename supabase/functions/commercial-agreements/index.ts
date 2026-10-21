@@ -54,6 +54,12 @@ Deno.serve(async (request) => {
     if (action === 'merchant_list') {
       const tenantId = cleanUuid(body.tenantId);
       if (!tenantId) return json({ error: 'Business is required' }, 400);
+
+      // Authorize the Merchant read before any service-side reconciliation.
+      // Once authorization succeeds, retry reconciliation idempotently so a
+      // previously persisted final prerequisite can self-heal on the next view.
+      await loadMerchantCenter(tenantId, userId);
+      await reconcileTenantInstallmentsBestEffort(tenantId, 'merchant agreement center');
       return json({ ok: true, center: await loadMerchantCenter(tenantId, userId) });
     }
 
@@ -89,6 +95,14 @@ Deno.serve(async (request) => {
     if (action === 'admin_overview') {
       const tenantId = body.tenantId === null || body.tenantId === undefined || body.tenantId === '' ? null : cleanUuid(body.tenantId);
       if (body.tenantId !== null && body.tenantId !== undefined && body.tenantId !== '' && !tenantId) return json({ error: 'A valid business is required' }, 400);
+
+      // Authorize the Admin/Support overview first. Reconciliation is a
+      // deterministic catch-up of already governed facts, not a discretionary
+      // Support mutation, and remains service-authority only.
+      await loadAdminOverview(tenantId, userId);
+      if (tenantId) {
+        await reconcileTenantInstallmentsBestEffort(tenantId, 'admin commercial overview');
+      }
       return json({ ok: true, overview: await loadAdminOverview(tenantId, userId) });
     }
 
@@ -213,9 +227,20 @@ async function loadAdminOverview(tenantId: string | null, userId: string): Promi
 
 async function reconcileTenantInstallmentsBestEffort(tenantId: string, source: string): Promise<void> {
   try {
-    await rpc<JsonRecord[]>('reconcile_sellertray_installment_entitlements_for_tenant', {
+    const results = await rpc<JsonRecord[]>('reconcile_sellertray_installment_entitlements_for_tenant', {
       p_tenant_id: tenantId,
     });
+    const failures = Array.isArray(results) ? results.filter((row) => row?.ok !== true) : [];
+    if (failures.length) {
+      console.error(`SellerTray installment reconciliation after ${source} requires review`, {
+        tenantId,
+        failures: failures.map((row) => ({
+          installmentObligationId: typeof row.installmentObligationId === 'string' ? row.installmentObligationId : null,
+          errorCode: typeof row.errorCode === 'string' ? row.errorCode : null,
+          error: typeof row.error === 'string' ? row.error.slice(0, 300) : 'Installment reconciliation failed',
+        })),
+      });
+    }
   } catch (error) {
     console.error(`SellerTray installment reconciliation after ${source} requires review`, {
       tenantId,
