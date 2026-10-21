@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import CommercialBillingAdministration, { type CommercialAdminTenant } from './CommercialBillingAdministration';
 import { invokeJson, isRecord, supabase } from './supabase';
 
 type SecurityState = 'checking' | 'needs_mfa' | 'needs_enroll' | 'ready';
@@ -388,7 +389,7 @@ function WorkspaceShell({ session, overview, audit, onReload, onAuditRefresh, on
     switch (section) {
       case 'overview': return <OverviewPage overview={overview} onNavigate={navigateTo} />;
       case 'merchants': return <MerchantsPage overview={overview} />;
-      case 'billing': return <BillingPage overview={overview} />;
+      case 'billing': return <BillingPage session={session} overview={overview} />;
       case 'communications': return <CommunicationsPage session={session} overview={overview} audit={audit} onAuditRefresh={onAuditRefresh} />;
       case 'operations': return <OperationsPage session={session} overview={overview} />;
       case 'audit': return <AuditPage audit={audit} onRefresh={onAuditRefresh} />;
@@ -464,8 +465,8 @@ function OverviewPage({ overview, onNavigate }: { overview: PlatformOverview; on
           <PanelHeading title="Admin workstreams" description="Current SellerTray platform administration sequence." />
           <div className="workspace-workstream-list">
             <Workstream title="Admin foundation" status="In progress" body="Professional shell, navigation and governed existing capabilities." />
-            <Workstream title="Commercial core" status="Next" body="Plans, pricing, subscription, setup, entitlement and commercial orders." />
-            <Workstream title="Agreements & installments" status="Planned" body="Immutable terms acceptance, installment schedules and guarantee operations." />
+            <Workstream title="Commercial core" status="In progress" body="Governed pricing, commercial orders, setup readiness and runtime entitlement compatibility." />
+            <Workstream title="Agreements & installments" status="In progress" body="Immutable agreement acceptance, installment schedules, provider payment confirmation and entitlement release." />
           </div>
         </section>
       </div>
@@ -540,40 +541,29 @@ function MerchantSummaryDrawer({ tenant, onClose }: { tenant: TenantSummary; onC
           <Detail label="Team" value={tenant.teamCount ? tenant.teamCount.toLocaleString() : '—'} />
           <Detail label="Current period end" value={formatDate(tenant.currentPeriodEnd)} />
         </div>
-        <div className="workspace-banner info">A1 is read-only here. Subscription, Branch setup, guarantee and commercial mutations move to governed commercial commands in C1/A4 rather than extending the legacy trial model.</div>
+        <div className="workspace-banner info">Commercial setup, agreements and installment entitlement are managed through governed commands in Billing & Commercial. This merchant summary remains read-only.</div>
       </aside>
     </div>
   );
 }
 
-function BillingPage({ overview }: { overview: PlatformOverview }) {
+function BillingPage({ session, overview }: { session: Session; overview: PlatformOverview }) {
   const legacyTrialCount = overview.tenants.filter((tenant) => tenant.subscriptionStatus === 'trial').length;
-  const modules = [
-    ['Plans & Pricing', 'Effective-dated VAT-inclusive prices and approved plan packaging.'],
-    ['Subscriptions', 'Merchant subscription and governed entitlement state.'],
-    ['Installments', '70:30 and 60:20:20 annual first-purchase schedules.'],
-    ['Payments', 'Commercial payment history and settlement state.'],
-    ['Promotions', 'Time-bounded and merchant-targeted commercial offers.'],
-    ['Guarantees', 'One-month money-back guarantee from activation.'],
-    ['Agreements', 'Versioned terms, commercial schedules and immutable acceptances.'],
-  ];
+  const tenants: CommercialAdminTenant[] = overview.tenants.map((tenant) => ({
+    id: tenant.id,
+    name: tenant.name,
+    businessEmail: tenant.businessEmail,
+    businessPhone: tenant.businessPhone,
+    slug: tenant.slug,
+    planCode: tenant.planCode,
+    subscriptionStatus: tenant.subscriptionStatus,
+  }));
 
   return (
-    <PageFrame eyebrow="Billing & Commercial" title="Commercial administration" description="The ProcessEdge control surface for SellerTray plans, subscriptions, installments, guarantees and agreements.">
-      <div className="workspace-banner info"><strong>No free trial.</strong> The approved commercial model uses paid setup and a one-month money-back guarantee from activation. A1 does not expose the legacy trial-extension action.</div>
-      {legacyTrialCount ? <div className="workspace-banner warning"><strong>{legacyTrialCount} legacy record{legacyTrialCount === 1 ? '' : 's'} still report trial status.</strong> These are compatibility data to be migrated deliberately in C2, not an active SellerTray offer.</div> : null}
-      <div className="workspace-module-grid">
-        {modules.map(([title, body]) => <article className="workspace-module-card" key={title}><span className="workspace-module-state">Foundation planned</span><h3>{title}</h3><p>{body}</p></article>)}
-      </div>
-      <section className="workspace-panel">
-        <PanelHeading title="Current access snapshot" description="Read-only compatibility view until the new commercial authority replaces trial-oriented subscription controls." />
-        <div className="workspace-table-wrap">
-          <table className="workspace-table compact-table">
-            <thead><tr><th>Business</th><th>Plan</th><th>State</th><th>Access</th><th>Period end</th></tr></thead>
-            <tbody>{overview.tenants.slice(0, 20).map((tenant) => <tr key={tenant.id}><td><strong>{tenant.name}</strong></td><td>{tenant.planCode ?? '—'}</td><td><StatusPill value={tenant.subscriptionStatus} /></td><td>{friendlyAccess(tenant.accessMode)}</td><td>{formatDate(tenant.currentPeriodEnd)}</td></tr>)}</tbody>
-          </table>
-        </div>
-      </section>
+    <PageFrame eyebrow="Billing & Commercial" title="Commercial administration" description="Governed SellerTray commercial operations for agreements, Branch setup readiness, installment payment state and entitlement release.">
+      <div className="workspace-banner info"><strong>No free trial.</strong> C1B uses governed paid commercial facts. Payment confirmation, agreement acceptance, Branch setup readiness and subscription entitlement remain separate authorities.</div>
+      {legacyTrialCount ? <div className="workspace-banner warning"><strong>{legacyTrialCount} legacy record{legacyTrialCount === 1 ? '' : 's'} still report trial status.</strong> These remain compatibility data until the deliberate C2 migration and are not a current SellerTray offer.</div> : null}
+      <CommercialBillingAdministration session={session} actorRole={overview.actorRole} tenants={tenants} />
     </PageFrame>
   );
 }
