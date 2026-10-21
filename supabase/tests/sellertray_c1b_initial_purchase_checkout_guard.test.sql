@@ -242,11 +242,11 @@ select extensions.ok(
 );
 
 select extensions.ok(
-  (public.reserve_sellertray_installment_checkout(
+  (select (public.reserve_sellertray_installment_checkout(
     f.initial_tenant_id,f.initial_schedule_1_id,gen_random_uuid(),f.initial_owner_id,
     'initial-owner@example.com'
   )->>'status')='preparing'
-  from c1b_initial_purchase_fixture f,
+  from c1b_initial_purchase_fixture f),
   'trial Business may reserve the first installment of its initial annual commercial order'
 );
 
