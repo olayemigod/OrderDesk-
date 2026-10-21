@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { SellerTrayInput, SellerTraySelect, SellerTrayTextarea } from './SellerTrayElements';
 import { errorMessage, numberValue, supabase } from './supabase';
 
 type Branch = { id: string; name: string; isDefault: boolean };
@@ -270,14 +271,14 @@ export default function BusinessExpensesManagement({
       {showCreate ? <div className="settings-card">
         <div className="panel-head compact"><div><h4>New Business Expense</h4><p className="muted">Owner/Manager authority only. Cash funding requires an open drawer; Bank funding requires a governed Business bank account.</p></div></div>
         <div className="settings-grid two">
-          <label className="select-field"><span>Branch</span><select value={createBranchId} onChange={(event) => setCreateBranchId(event.target.value)}>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>
-          <label className="select-field"><span>Funding source</span><select value={fundingSource} onChange={(event) => setFundingSource(event.target.value as FundingSource)}><option value="cash">Cash</option><option value="bank">Bank</option></select></label>
-          {fundingSource === 'bank' ? <label className="select-field"><span>Business bank account</span><select value={bankAccountId} onChange={(event) => setBankAccountId(event.target.value)}><option value="">Choose bank account</option>{bankAccounts.map((bank) => <option key={bank.id} value={bank.id}>{bankLabel(bank)}</option>)}</select></label> : null}
-          {fundingSource === 'cash' ? <label className="select-field"><span>Open cash drawer</span><select value={cashShiftId} onChange={(event) => setCashShiftId(event.target.value)}><option value="">Choose cash drawer</option>{cashDrawers.map((drawer) => <option key={drawer.shiftId} value={drawer.shiftId}>{drawer.registerName} · {money(drawer.expectedCash, businessCurrency)}</option>)}</select></label> : null}
-          <label><span>Expense category</span><input value={expenseCategory} onChange={(event) => setExpenseCategory(event.target.value)} placeholder="e.g. Utilities" maxLength={120} /></label>
-          <label><span>Amount</span><input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" placeholder="0.00" /></label>
-          <label><span>Reference</span><input value={reference} onChange={(event) => setReference(event.target.value)} maxLength={160} /></label>
-          <label className="settings-span-two"><span>Reason</span><textarea value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} placeholder="What was this expense for?" /></label>
+          <label className="select-field"><span>Branch</span><SellerTraySelect value={createBranchId} onChange={(event) => setCreateBranchId(event.target.value)}>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</SellerTraySelect></label>
+          <label className="select-field"><span>Funding source</span><SellerTraySelect value={fundingSource} onChange={(event) => setFundingSource(event.target.value as FundingSource)}><option value="cash">Cash</option><option value="bank">Bank</option></SellerTraySelect></label>
+          {fundingSource === 'bank' ? <label className="select-field"><span>Business bank account</span><SellerTraySelect value={bankAccountId} onChange={(event) => setBankAccountId(event.target.value)}><option value="">Choose bank account</option>{bankAccounts.map((bank) => <option key={bank.id} value={bank.id}>{bankLabel(bank)}</option>)}</SellerTraySelect></label> : null}
+          {fundingSource === 'cash' ? <label className="select-field"><span>Open cash drawer</span><SellerTraySelect value={cashShiftId} onChange={(event) => setCashShiftId(event.target.value)}><option value="">Choose cash drawer</option>{cashDrawers.map((drawer) => <option key={drawer.shiftId} value={drawer.shiftId}>{drawer.registerName} · {money(drawer.expectedCash, businessCurrency)}</option>)}</SellerTraySelect></label> : null}
+          <label><span>Expense category</span><SellerTrayInput value={expenseCategory} onChange={(event) => setExpenseCategory(event.target.value)} placeholder="e.g. Utilities" maxLength={120} /></label>
+          <label><span>Amount</span><SellerTrayInput value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" placeholder="0.00" /></label>
+          <label><span>Reference</span><SellerTrayInput value={reference} onChange={(event) => setReference(event.target.value)} maxLength={160} /></label>
+          <label className="settings-span-two"><span>Reason</span><SellerTrayTextarea value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} placeholder="What was this expense for?" /></label>
         </div>
         {fundingSource === 'cash' && selectedDrawer ? <p className="muted">Selected drawer currently expects {money(selectedDrawer.expectedCash, businessCurrency)}. SellerTray records the expense and its drawer effect atomically.</p> : null}
         {fundingSource === 'cash' && cashDrawers.length === 0 ? <div className="empty-state compact"><strong>No open cash drawer</strong><p>Use Bank funding or open a cashier shift in the selected Branch before recording a cash-funded Business Expense.</p></div> : null}
@@ -286,9 +287,9 @@ export default function BusinessExpensesManagement({
       </div> : null}
 
       <div className="settings-grid three">
-        <label className="select-field"><span>Branch</span><select value={branchId} onChange={(event) => setBranchId(event.target.value)}><option value="all">All accessible Branches</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>
-        <label className="select-field"><span>Funding</span><select value={fundingFilter} onChange={(event) => setFundingFilter(event.target.value)}><option value="all">Cash + Bank</option><option value="cash">Cash</option><option value="bank">Bank</option></select></label>
-        <form onSubmit={(event) => { event.preventDefault(); setSearch(searchDraft.trim()); }}><label><span>Search</span><div className="search-inline"><input value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="Reference, category or reason" /><button className="secondary-button">Apply</button></div></label></form>
+        <label className="select-field"><span>Branch</span><SellerTraySelect value={branchId} onChange={(event) => setBranchId(event.target.value)}><option value="all">All accessible Branches</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</SellerTraySelect></label>
+        <label className="select-field"><span>Funding</span><SellerTraySelect value={fundingFilter} onChange={(event) => setFundingFilter(event.target.value)}><option value="all">Cash + Bank</option><option value="cash">Cash</option><option value="bank">Bank</option></SellerTraySelect></label>
+        <form onSubmit={(event) => { event.preventDefault(); setSearch(searchDraft.trim()); }}><label><span>Search</span><div className="search-inline"><SellerTrayInput value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="Reference, category or reason" /><button className="secondary-button">Apply</button></div></label></form>
       </div>
 
       <div className="table-wrap">
