@@ -55,10 +55,11 @@ Deno.serve(async (request) => {
       const tenantId = cleanUuid(body.tenantId);
       if (!tenantId) return json({ error: 'Business is required' }, 400);
 
-      // Authorize the Merchant read before any service-side reconciliation.
-      // Once authorization succeeds, retry reconciliation idempotently so a
-      // previously persisted final prerequisite can self-heal on the next view.
-      await loadMerchantCenter(tenantId, userId);
+      // Authorize from the narrow C1A Merchant authority before any service-side
+      // reconciliation. Do not make authorization depend on loading every C1B
+      // obligation, because a broken obligation is precisely what recovery may
+      // need to isolate.
+      await authorizeMerchantAgreementRead(tenantId, userId);
       await reconcileTenantInstallmentsBestEffort(tenantId, 'merchant agreement center');
       return json({ ok: true, center: await loadMerchantCenter(tenantId, userId) });
     }
@@ -96,10 +97,10 @@ Deno.serve(async (request) => {
       const tenantId = body.tenantId === null || body.tenantId === undefined || body.tenantId === '' ? null : cleanUuid(body.tenantId);
       if (body.tenantId !== null && body.tenantId !== undefined && body.tenantId !== '' && !tenantId) return json({ error: 'A valid business is required' }, 400);
 
-      // Authorize the Admin/Support overview first. Reconciliation is a
-      // deterministic catch-up of already governed facts, not a discretionary
-      // Support mutation, and remains service-authority only.
-      await loadAdminOverview(tenantId, userId);
+      // Authorize from the narrow C1A Admin/Support authority before any C1B
+      // reconciliation, then load the broader installment/setup projection only
+      // after recovery has had a chance to run.
+      await authorizeAdminAgreementRead(tenantId, userId);
       if (tenantId) {
         await reconcileTenantInstallmentsBestEffort(tenantId, 'admin commercial overview');
       }
@@ -188,6 +189,20 @@ Deno.serve(async (request) => {
     return json({ error: message }, statusForError(message));
   }
 });
+
+async function authorizeMerchantAgreementRead(tenantId: string, userId: string): Promise<void> {
+  await rpc<JsonRecord>('get_sellertray_commercial_agreement_center', {
+    p_tenant_id: tenantId,
+    p_actor_user_id: userId,
+  });
+}
+
+async function authorizeAdminAgreementRead(tenantId: string | null, userId: string): Promise<void> {
+  await rpc<JsonRecord>('get_sellertray_commercial_agreement_admin', {
+    p_actor_user_id: userId,
+    p_tenant_id: tenantId,
+  });
+}
 
 async function loadMerchantCenter(tenantId: string, userId: string): Promise<JsonRecord> {
   const [center, installmentBilling] = await Promise.all([
