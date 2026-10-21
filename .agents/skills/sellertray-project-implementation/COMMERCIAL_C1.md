@@ -4,7 +4,7 @@ description: "Normative C1 boundary for the additive SellerTray commercial-core 
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.8"
+  version: "0.1.9"
   status: governing-extension
 ---
 
@@ -16,7 +16,7 @@ It records the later approved implementation decision for the C1/C1A/C1B/C2 boun
 
 ## C1 is additive
 
-C1 establishes governed commercial records without changing existing runtime subscription behaviour.
+C1 establishes governed commercial records without changing existing runtime subscription behaviour during the C1 foundation/C1A stages. The later C1B reconciliation exception is defined explicitly below and is the only approved pre-C2 path that may update the compatibility runtime row after all governed activation prerequisites are satisfied.
 
 The legacy runtime authority remains `public.tenant_subscriptions` during C1. The existing `public.subscription_plans` identity is the compatibility bridge for C1 plan pricing; C1 must not introduce a second subscription table or a competing runtime entitlement source.
 
@@ -30,12 +30,12 @@ C1 may add:
 
 C1 must not:
 
-- migrate, remove, extend or reinterpret the legacy trial runtime authority;
+- migrate, remove, extend or reinterpret the legacy trial runtime authority outside the explicitly governed C1B reconciliation path below;
 - make entitlement active because an installment obligation or schedule exists;
 - treat a payment obligation as payment confirmation;
 - treat a payment record as agreement acceptance;
 - treat agreement acceptance as payment confirmation;
-- let an entitlement event directly or implicitly update `tenant_subscriptions` during C1;
+- let an entitlement event directly or implicitly update `tenant_subscriptions` during the C1 foundation/C1A stages; C1B reconciliation may update the compatibility row only under its later contract below;
 - hard-code unapproved plan prices, installment due dates, refund rules or equipment-ownership terms.
 
 The accounting/authority distinction is mandatory:
@@ -126,6 +126,8 @@ Entitlement effects are append-only and retry-idempotent. C1B records a determin
 Prerequisite persistence and entitlement reconciliation remain separate. Tenant-wide reconciliation must isolate failures per installment obligation so one conflicting historical order cannot block a later valid order. Service surfaces may retry reconciliation idempotently after an authorised Merchant or Admin/Support billing read succeeds, providing recovery when an earlier acceptance/setup-triggered pass failed after the immutable prerequisite had already committed. Such recovery must not make read authorization optional, must not recreate payment/agreement/setup truth, and must report/log unresolved per-obligation failures rather than silently treating them as success.
 
 `public.tenant_subscriptions` remains the runtime compatibility authority until C2. C1B may update that compatibility row only after governed reconciliation, and must fail closed rather than overwrite a populated runtime period that is not provably owned by the same C1B commercial order.
+
+A pre-C2 trial compatibility row may still carry a legacy runtime `plan_code` that differs from the active governed plan selected for the first commercial purchase. Initial-purchase eligibility is determined by the governed trial compatibility state plus the selected active plan and immutable commercial order facts; it must not require the stale legacy plan code to equal the newly purchased plan. Before C1B reconciliation, the legacy compatibility `plan_code` must remain unchanged. Once the current agreement is accepted, required Branch setup is ready, the qualifying provider payment is confirmed, and reconciliation succeeds, C1B must set `tenant_subscriptions.plan_code` to the plan snapshotted on the governed commercial order while releasing the corresponding provisional/full entitlement. This is the approved compatibility transition, not a C2 cutover and not a second subscription truth.
 
 Legacy active subscriptions keep their existing runtime semantics. For a runtime period that is provably backed by a C1B provisional or full entitlement event, the recorded `current_period_end` is an actual entitlement boundary: write access becomes read-only after that end time even if the compatibility row still says `active`. This prevents a 2- or 3-month provisional entitlement from becoming indefinitely active while preserving the pre-C1B legacy model until C2.
 
