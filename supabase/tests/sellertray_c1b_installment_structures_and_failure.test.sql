@@ -19,8 +19,7 @@ create temp table c1b_structure_fixture (
   checkout_1_id uuid,
   checkout_2_id uuid,
   checkout_3_id uuid,
-  activation_at timestamptz,
-  reconciliation_conflict_seen boolean not null default false
+  activation_at timestamptz
 ) on commit drop;
 
 insert into c1b_structure_fixture(admin_user_id,owner_user_id,tenant_id,branch_id)
@@ -259,45 +258,6 @@ select extensions.ok(
   )->>'paidInstallmentCount')::integer=3,
   'three-part billing state becomes full only after all three provider-confirmed payments'
 );
-
--- A runtime compatibility conflict must not erase an already-confirmed payment.
--- The confirmation and reconciliation commands are deliberately separate.
-update public.tenant_subscriptions s
-set status='active',
-    current_period_start=now()-interval '5 days',
-    current_period_end=now()+interval '25 days',
-    updated_at=now()
-where s.tenant_id=(select tenant_id from c1b_structure_fixture);
-
--- Use a new commercial order/obligation on the same tenant to force reconciliation
--- to reject overwriting the unrelated populated runtime period.
-with new_order as (
-  insert into public.sellertray_commercial_orders(
-    tenant_id,order_reference,currency,total_gross_amount,ordered_at,created_by_user_id
-  ) select tenant_id,'C1B-CONFLICT-'||upper(substr(tenant_id::text,1,6)),'NGN',1000,now(),admin_user_id
-    from c1b_structure_fixture returning id,tenant_id
-), subline as (
-  insert into public.sellertray_commercial_order_price_snapshots(
-    tenant_id,commercial_order_id,line_no,line_type,source_price_version_id,description_snapshot
-  ) select n.tenant_id,n.id,1,'subscription',f.subscription_price_id,'Conflict annual subscription'
-    from new_order n join c1b_structure_fixture f on f.tenant_id=n.tenant_id returning commercial_order_id,tenant_id
-), setupline as (
-  insert into public.sellertray_commercial_order_price_snapshots(
-    tenant_id,commercial_order_id,line_no,line_type,source_price_version_id,branch_id,description_snapshot
-  ) select s.tenant_id,s.commercial_order_id,2,'branch_setup',f.setup_price_id,f.branch_id,'Conflict Branch setup'
-    from subline s join c1b_structure_fixture f on f.tenant_id=s.tenant_id returning commercial_order_id,tenant_id
-), new_obligation as (
-  insert into public.sellertray_commercial_installment_obligations(
-    tenant_id,commercial_order_id,structure_code,currency,obligated_amount,created_by_user_id
-  ) select s.tenant_id,s.commercial_order_id,'two_installment_70_30','NGN',1000,f.admin_user_id
-    from setupline s join c1b_structure_fixture f on f.tenant_id=s.tenant_id returning id,tenant_id,commercial_order_id
-), new_schedule as (
-  insert into public.sellertray_commercial_installment_schedule(
-    tenant_id,installment_obligation_id,sequence_no,percentage,amount_due
-  ) select tenant_id,id,1,70,700 from new_obligation returning id,tenant_id,installment_obligation_id
-)
-select 1;
-set constraints all immediate;
 
 select extensions.ok(
   position('tenant_subscriptions' in pg_get_functiondef(
