@@ -23,13 +23,24 @@ $function$;
 revoke all on function public.guard_orderdesk_subscription_write()
 from public,anon,authenticated;
 
+-- Preserve the approved operational-history lifecycle: return/refund history is
+-- immutable while its Business exists, but may follow the governed parent
+-- Tenant deletion cascade after that Tenant row has been removed.
 create or replace function public.prevent_sellertray_return_mutation()
 returns trigger
 language plpgsql
 set search_path=''
 as $function$
 begin
-  raise exception 'SellerTray return and refund records are immutable' using errcode='55000';
+  if tg_op='DELETE'
+     and not exists(
+       select 1 from public.tenants t where t.id=old.tenant_id
+     ) then
+    return old;
+  end if;
+
+  raise exception 'SellerTray return and refund records are immutable'
+    using errcode='55000';
 end;
 $function$;
 
