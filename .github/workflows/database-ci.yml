@@ -46,6 +46,9 @@ jobs:
       - name: Verify financial document tax rendering contract
         run: node supabase/functions/financial-document/tax-contract.mjs
 
+      - name: Verify C1B installment webhook retry contract
+        run: node supabase/functions/paystack-webhook/c1b-contract.mjs
+
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
