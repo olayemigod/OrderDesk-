@@ -450,8 +450,7 @@ function providerTransactionRef(data: JsonRecord): string | null {
 function providerPaidAt(data: JsonRecord): string | null {
   const value = asString(data.paid_at)
     ?? asString(data.paidAt)
-    ?? asString(data.transaction_date)
-    ?? asString(data.created_at);
+    ?? asString(data.transaction_date);
   if (!value) return null;
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
