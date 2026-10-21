@@ -7,10 +7,10 @@ values
   ('72000000-0000-0000-0000-000000000001','authenticated','authenticated','catalogue-owner@example.com','',now(),now(),now()),
   ('72000000-0000-0000-0000-000000000002','authenticated','authenticated','catalogue-outsider@example.com','',now(),now(),now());
 
-insert into public.tenants(id,name,slug,currency,subscription_status)
+insert into public.tenants(id,name,slug,merchant_code,currency,subscription_status)
 values
-  ('72000000-0000-0000-0000-000000000010','Catalogue Master Test','catalogue-master-test','NGN','active'),
-  ('72000000-0000-0000-0000-000000000020','Catalogue Other Test','catalogue-other-test','NGN','active');
+  ('72000000-0000-0000-0000-000000000010','Catalogue Master Test','catalogue-master-test','CATMASTER1','NGN','active'),
+  ('72000000-0000-0000-0000-000000000020','Catalogue Other Test','catalogue-other-test','CATMASTER2','NGN','active');
 
 insert into public.tenant_members(tenant_id,user_id,role)
 values
