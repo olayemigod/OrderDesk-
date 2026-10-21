@@ -1,8 +1,9 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.115.0';
 
 type JsonRecord = Record<string, unknown>;
-type InventoryAction = 'adjust' | 'policy';
+type InventoryAction = 'adjust' | 'policy' | 'opening';
 type AdjustmentDirection = 'increase' | 'decrease';
+type InventoryOperation = 'adjust' | 'receive';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -90,6 +91,38 @@ Deno.serve(async (request) => {
     return json({ ok: true, ...(data as JsonRecord) });
   }
 
+  if (action === 'opening') {
+    const productId = cleanUuid(body.productId);
+    const quantity = cleanPositiveNumber(body.quantity);
+    const stockUnitCost = cleanNonNegativeNumber(body.stockUnitCost);
+    const reference = cleanText(body.reference, 160);
+    const clientCommandId = cleanCommandId(body.commandId);
+    const costCommandId = cleanUuid(body.costCommandId);
+    const businessAt = cleanBusinessAt(body.businessAt);
+
+    if (!productId || quantity === null || stockUnitCost === null || !reference || !clientCommandId || !costCommandId || !businessAt) {
+      return json({ error: 'Product, positive opening quantity, Stock-UOM unit cost, reference, business date and command identities are required' }, 400);
+    }
+
+    const openingCommandId = makeOpeningInventoryCommandId(businessAt, clientCommandId);
+    const { data: result, error } = await admin.rpc('apply_sellertray_opening_inventory', {
+      p_tenant_id: tenantId,
+      p_branch_id: branchId,
+      p_catalog_item_id: productId,
+      p_quantity: quantity,
+      p_stock_unit_cost: stockUnitCost,
+      p_reference: reference,
+      p_command_id: openingCommandId,
+      p_cost_command_id: costCommandId,
+      p_actor_user_id: userId,
+    });
+
+    if (error || !isInventoryOperationResult(result, 'receive') || !isOpeningInventoryResult(result)) {
+      return rpcError(error?.message, 'SellerTray could not establish opening inventory');
+    }
+    return json({ ok: true, ...result });
+  }
+
   const productId = cleanUuid(body.productId);
   const uomId = cleanUuid(body.uomId);
   const quantity = cleanPositiveNumber(body.quantity);
@@ -122,7 +155,7 @@ Deno.serve(async (request) => {
     p_actor_user_id: userId,
   });
 
-  if (error || !isInventoryOperationResult(result)) {
+  if (error || !isInventoryOperationResult(result, 'adjust')) {
     return rpcError(error?.message, 'SellerTray could not post this stock adjustment');
   }
   return json({ ok: true, ...result });
@@ -141,7 +174,7 @@ function rpcError(messageValue: string | undefined, fallback: string): Response 
 }
 
 function cleanAction(value: unknown): InventoryAction | null {
-  return value === 'adjust' || value === 'policy' ? value : null;
+  return value === 'adjust' || value === 'policy' || value === 'opening' ? value : null;
 }
 function cleanDirection(value: unknown): AdjustmentDirection | null {
   return value === 'increase' || value === 'decrease' ? value : null;
@@ -164,6 +197,14 @@ function cleanNonNegativeNumber(value: unknown): number | null {
   const parsed = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
+function cleanBusinessAt(value: unknown): Date | null {
+  if (typeof value !== 'string') return null;
+  const date = new Date(value);
+  const milliseconds = date.getTime();
+  const minimum = Date.UTC(2020, 0, 1);
+  const maximum = Date.now() + 5 * 60_000;
+  return Number.isFinite(milliseconds) && milliseconds >= minimum && milliseconds <= maximum ? date : null;
+}
 function cleanText(value: unknown, max: number): string | null {
   if (typeof value !== 'string') return null;
   const clean = value.trim().replace(/\s+/g, ' ');
@@ -177,11 +218,16 @@ function requiredDirectionForReason(reason: string): AdjustmentDirection | null 
   if (reason === 'Inventory recovery') return 'increase';
   return null;
 }
-function isInventoryOperationResult(value: unknown): value is JsonRecord {
+function makeOpeningInventoryCommandId(businessAt: Date, clientCommandId: string): string {
+  const stamp = Math.trunc(businessAt.getTime()).toString(36);
+  const nonce = clientCommandId.toLowerCase().replace(/[^0-9a-z]/g, '').slice(-48) || 'opening';
+  return `invop:receive:${stamp}:${nonce}`;
+}
+function isInventoryOperationResult(value: unknown, expectedOperation: InventoryOperation): value is JsonRecord {
   if (!value || typeof value !== 'object') return false;
   const row = value as JsonRecord;
   return typeof row.movementId === 'string'
-    && row.operation === 'adjust'
+    && row.operation === expectedOperation
     && typeof row.productId === 'string'
     && typeof row.productName === 'string'
     && typeof row.sourceUom === 'string'
@@ -192,6 +238,12 @@ function isInventoryOperationResult(value: unknown): value is JsonRecord {
     && typeof row.quantityOnHand === 'number'
     && typeof row.reference === 'string'
     && typeof row.idempotentReplay === 'boolean';
+}
+function isOpeningInventoryResult(value: JsonRecord): boolean {
+  return typeof value.costEvidenceId === 'string'
+    && typeof value.stockUnitCost === 'number'
+    && typeof value.currency === 'string'
+    && value.valuationSource === 'historical_cost_basis';
 }
 
 async function readRequestTextLimited(request: Request, maxBytes: number): Promise<{ ok: true; text: string } | { ok: false }> {
