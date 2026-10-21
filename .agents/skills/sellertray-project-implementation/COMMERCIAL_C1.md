@@ -4,7 +4,7 @@ description: "Normative C1 boundary for the additive SellerTray commercial-core 
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.1"
+  version: "0.1.2"
   status: governing-extension
 ---
 
@@ -69,6 +69,8 @@ Merchant signing authority is stricter than ordinary operational Manager access:
 - a Manager is **not** authorised by role alone and must hold the explicit `can_accept_commercial_agreements` capability;
 - only the Business Owner may grant or revoke `can_accept_commercial_agreements`, and it may only be delegated to a Manager;
 - Staff/Cashiers can never accept SellerTray commercial agreements;
+- demoting a Manager to Staff/Cashier or removing the Manager from the Business must revoke any active `can_accept_commercial_agreements` delegation and audit that revocation;
+- later re-promotion or re-addition as a Manager must **not** reactivate an earlier signing delegation; the Owner must grant it again explicitly;
 - Merchant Web Team & Permissions may expose this authority only as an Owner-controlled Manager permission and must not imply that standard Manager permissions include contract signing.
 
 Acceptance of an agreement does not confirm a payment and does not activate, extend or release subscription entitlement. C1A must not mutate `public.tenant_subscriptions` or treat acceptance as a payment fact.
