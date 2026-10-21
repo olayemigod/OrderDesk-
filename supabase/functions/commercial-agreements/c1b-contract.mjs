@@ -7,6 +7,8 @@ const required = [
   "reconcileTenantInstallmentsBestEffort(tenantId, 'setup readiness')",
   "reconcileTenantInstallmentsBestEffort(tenantId, 'merchant agreement center')",
   "reconcileTenantInstallmentsBestEffort(tenantId, 'admin commercial overview')",
+  'authorizeMerchantAgreementRead',
+  'authorizeAdminAgreementRead',
   "results.filter((row) => row?.ok !== true)",
   'installmentObligationId',
   'errorCode',
@@ -18,17 +20,41 @@ for (const value of required) {
 }
 
 const merchantAction = source.indexOf("if (action === 'merchant_list')");
-const merchantAuthorize = source.indexOf('await loadMerchantCenter(tenantId, userId);', merchantAction);
+const merchantAuthorize = source.indexOf('await authorizeMerchantAgreementRead(tenantId, userId);', merchantAction);
 const merchantReconcile = source.indexOf("reconcileTenantInstallmentsBestEffort(tenantId, 'merchant agreement center')", merchantAction);
-if (merchantAction < 0 || merchantAuthorize < merchantAction || merchantReconcile <= merchantAuthorize) {
-  throw new Error('Merchant C1B self-heal must run only after Merchant read authorization succeeds');
+const merchantFullLoad = source.indexOf('await loadMerchantCenter(tenantId, userId)', merchantReconcile);
+if (
+  merchantAction < 0
+  || merchantAuthorize < merchantAction
+  || merchantReconcile <= merchantAuthorize
+  || merchantFullLoad <= merchantReconcile
+) {
+  throw new Error('Merchant C1B recovery must authorize narrowly before reconciliation and load the full state only afterward');
 }
 
 const adminAction = source.indexOf("if (action === 'admin_overview')");
-const adminAuthorize = source.indexOf('await loadAdminOverview(tenantId, userId);', adminAction);
+const adminAuthorize = source.indexOf('await authorizeAdminAgreementRead(tenantId, userId);', adminAction);
 const adminReconcile = source.indexOf("reconcileTenantInstallmentsBestEffort(tenantId, 'admin commercial overview')", adminAction);
-if (adminAction < 0 || adminAuthorize < adminAction || adminReconcile <= adminAuthorize) {
-  throw new Error('Admin C1B self-heal must run only after Admin/Support read authorization succeeds');
+const adminFullLoad = source.indexOf('await loadAdminOverview(tenantId, userId)', adminReconcile);
+if (
+  adminAction < 0
+  || adminAuthorize < adminAction
+  || adminReconcile <= adminAuthorize
+  || adminFullLoad <= adminReconcile
+) {
+  throw new Error('Admin C1B recovery must authorize narrowly before reconciliation and load the full state only afterward');
+}
+
+const merchantAuthHelper = source.indexOf('async function authorizeMerchantAgreementRead');
+const merchantAuthRpc = source.indexOf("'get_sellertray_commercial_agreement_center'", merchantAuthHelper);
+if (merchantAuthHelper < 0 || merchantAuthRpc <= merchantAuthHelper) {
+  throw new Error('Merchant C1B recovery authorization must use the governed C1A Merchant read authority');
+}
+
+const adminAuthHelper = source.indexOf('async function authorizeAdminAgreementRead');
+const adminAuthRpc = source.indexOf("'get_sellertray_commercial_agreement_admin'", adminAuthHelper);
+if (adminAuthHelper < 0 || adminAuthRpc <= adminAuthHelper) {
+  throw new Error('Admin C1B recovery authorization must use the governed C1A Admin/Support read authority');
 }
 
 console.log('commercial-agreements C1B reconciliation self-heal contract passed');
