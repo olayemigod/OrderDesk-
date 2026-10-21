@@ -5,6 +5,10 @@ type Action =
   | 'merchant_list'
   | 'merchant_accept'
   | 'admin_overview'
+  | 'admin_onboarding'
+  | 'admin_publish_subscription_price'
+  | 'admin_publish_setup_price'
+  | 'admin_create_initial_purchase'
   | 'admin_publish_template'
   | 'admin_issue'
   | 'admin_mark_setup_ready';
@@ -19,6 +23,10 @@ const AGREEMENT_FAMILIES = new Set([
   'money_back_guarantee_terms',
   'branch_setup_equipment_acknowledgement',
   'privacy_data_terms',
+]);
+const INSTALLMENT_STRUCTURES = new Set([
+  'two_installment_70_30',
+  'three_installment_60_20_20',
 ]);
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -54,11 +62,6 @@ Deno.serve(async (request) => {
     if (action === 'merchant_list') {
       const tenantId = cleanUuid(body.tenantId);
       if (!tenantId) return json({ error: 'Business is required' }, 400);
-
-      // Authorize from the narrow C1A Merchant authority before any service-side
-      // reconciliation. Do not make authorization depend on loading every C1B
-      // obligation, because a broken obligation is precisely what recovery may
-      // need to isolate.
       await authorizeMerchantAgreementRead(tenantId, userId);
       await reconcileTenantInstallmentsBestEffort(tenantId, 'merchant agreement center');
       return json({ ok: true, center: await loadMerchantCenter(tenantId, userId) });
@@ -86,25 +89,102 @@ Deno.serve(async (request) => {
         p_command_id: commandId,
         p_actor_user_id: userId,
       });
-
-      // Acceptance is already an immutable committed fact. Reconciliation runs
-      // separately so an unrelated runtime-subscription conflict cannot roll it back.
       await reconcileTenantInstallmentsBestEffort(tenantId, 'agreement acceptance');
       return json({ ok: true, acceptanceId, center: await loadMerchantCenter(tenantId, userId) });
     }
 
     if (action === 'admin_overview') {
-      const tenantId = body.tenantId === null || body.tenantId === undefined || body.tenantId === '' ? null : cleanUuid(body.tenantId);
+      const tenantId = optionalUuid(body.tenantId);
       if (body.tenantId !== null && body.tenantId !== undefined && body.tenantId !== '' && !tenantId) return json({ error: 'A valid business is required' }, 400);
-
-      // Authorize from the narrow C1A Admin/Support authority before any C1B
-      // reconciliation, then load the broader installment/setup projection only
-      // after recovery has had a chance to run.
       await authorizeAdminAgreementRead(tenantId, userId);
-      if (tenantId) {
-        await reconcileTenantInstallmentsBestEffort(tenantId, 'admin commercial overview');
-      }
+      if (tenantId) await reconcileTenantInstallmentsBestEffort(tenantId, 'admin commercial overview');
       return json({ ok: true, overview: await loadAdminOverview(tenantId, userId) });
+    }
+
+    if (action === 'admin_onboarding') {
+      const tenantId = cleanUuid(body.tenantId);
+      if (!tenantId) return json({ error: 'Business is required' }, 400);
+      const onboarding = await rpc<JsonRecord>('get_sellertray_commercial_onboarding_admin', {
+        p_actor_user_id: userId,
+        p_tenant_id: tenantId,
+      });
+      return json({ ok: true, onboarding });
+    }
+
+    if (action === 'admin_publish_subscription_price') {
+      const tenantId = optionalUuid(body.tenantId);
+      const planCode = cleanText(body.planCode, 64);
+      const currency = cleanCurrency(body.currency);
+      const monthlyGrossAmount = cleanPositiveAmount(body.monthlyGrossAmount);
+      const taxRatePercent = cleanOptionalPercent(body.taxRatePercent);
+      const effectiveFrom = cleanIsoTimestamp(body.effectiveFrom);
+      const reason = cleanReason(body.reason);
+      if (!planCode || !currency || monthlyGrossAmount === null || !effectiveFrom || !reason || taxRatePercent === undefined) {
+        return json({ error: 'Plan, currency, positive monthly price, effective time and reason are required' }, 400);
+      }
+      const result = await rpc<JsonRecord>('publish_sellertray_subscription_price_pair_admin', {
+        p_plan_code: planCode,
+        p_currency: currency,
+        p_monthly_gross_amount: monthlyGrossAmount,
+        p_tax_rate_percent: taxRatePercent,
+        p_effective_from: effectiveFrom,
+        p_reason: reason,
+        p_actor_user_id: userId,
+      });
+      return json({
+        ok: true,
+        result,
+        ...(tenantId ? { onboarding: await loadAdminOnboarding(tenantId, userId) } : {}),
+      }, 201);
+    }
+
+    if (action === 'admin_publish_setup_price') {
+      const tenantId = optionalUuid(body.tenantId);
+      const currency = cleanCurrency(body.currency);
+      const grossAmount = cleanPositiveAmount(body.grossAmount);
+      const taxRatePercent = cleanOptionalPercent(body.taxRatePercent);
+      const effectiveFrom = cleanIsoTimestamp(body.effectiveFrom);
+      const reason = cleanReason(body.reason);
+      if (!currency || grossAmount === null || !effectiveFrom || !reason || taxRatePercent === undefined) {
+        return json({ error: 'Currency, positive Branch setup price, effective time and reason are required' }, 400);
+      }
+      const priceVersionId = await rpc<string>('publish_sellertray_branch_setup_price_admin', {
+        p_currency: currency,
+        p_gross_amount: grossAmount,
+        p_tax_rate_percent: taxRatePercent,
+        p_effective_from: effectiveFrom,
+        p_reason: reason,
+        p_actor_user_id: userId,
+      });
+      return json({
+        ok: true,
+        priceVersionId,
+        ...(tenantId ? { onboarding: await loadAdminOnboarding(tenantId, userId) } : {}),
+      }, 201);
+    }
+
+    if (action === 'admin_create_initial_purchase') {
+      const tenantId = cleanUuid(body.tenantId);
+      const planCode = cleanText(body.planCode, 64);
+      const currency = cleanCurrency(body.currency);
+      const branchIds = cleanUuidArray(body.branchIds);
+      const structureCode = cleanInstallmentStructure(body.structureCode);
+      const orderReference = cleanText(body.orderReference, 128);
+      const reason = cleanReason(body.reason);
+      if (!tenantId || !planCode || !currency || !branchIds?.length || !structureCode || !orderReference || !reason) {
+        return json({ error: 'Business, plan, currency, Branches, installment structure, order reference and reason are required' }, 400);
+      }
+      const purchase = await rpc<JsonRecord>('create_sellertray_initial_installment_purchase_admin', {
+        p_tenant_id: tenantId,
+        p_plan_code: planCode,
+        p_currency: currency,
+        p_branch_ids: branchIds,
+        p_structure_code: structureCode,
+        p_order_reference: orderReference,
+        p_reason: reason,
+        p_actor_user_id: userId,
+      });
+      return json({ ok: true, purchase, onboarding: await loadAdminOnboarding(tenantId, userId) }, 201);
     }
 
     if (action === 'admin_publish_template') {
@@ -113,15 +193,17 @@ Deno.serve(async (request) => {
       const title = cleanText(body.title, 200);
       const contentBody = cleanRawText(body.contentBody, 200_000);
       const effectiveFrom = cleanIsoTimestamp(body.effectiveFrom);
-      if (!family || !versionCode || !title || !contentBody || !effectiveFrom) {
-        return json({ error: 'Agreement family, version, title, content and effective time are required' }, 400);
+      const reason = cleanReason(body.reason);
+      if (!family || !versionCode || !title || !contentBody || !effectiveFrom || !reason) {
+        return json({ error: 'Agreement family, version, title, content, effective time and reason are required' }, 400);
       }
-      const templateId = await rpc<string>('publish_sellertray_commercial_agreement_template_version', {
+      const templateId = await rpc<string>('publish_sellertray_commercial_agreement_template_admin', {
         p_agreement_family: family,
         p_version_code: versionCode,
         p_title: title,
         p_content_body: contentBody,
         p_effective_from: effectiveFrom,
+        p_reason: reason,
         p_actor_user_id: userId,
       });
       return json({ ok: true, templateId, overview: await loadAdminOverview(null, userId) }, 201);
@@ -138,7 +220,6 @@ Deno.serve(async (request) => {
       if (!tenantId || !commercialOrderId || !branchId || !commandId || !reason || !readyAt) {
         return json({ error: 'Business, commercial order, Branch, command, reason and setup time are required' }, 400);
       }
-
       const readinessId = await rpc<string>('mark_sellertray_commercial_branch_setup_ready', {
         p_tenant_id: tenantId,
         p_commercial_order_id: commercialOrderId,
@@ -149,9 +230,6 @@ Deno.serve(async (request) => {
         p_ready_at: readyAt,
         p_actor_user_id: userId,
       });
-
-      // Setup readiness is also an independent immutable fact. Never make its
-      // persistence contingent on successful runtime entitlement reconciliation.
       await reconcileTenantInstallmentsBestEffort(tenantId, 'setup readiness');
       return json({ ok: true, readinessId, overview: await loadAdminOverview(tenantId, userId) });
     }
@@ -159,21 +237,18 @@ Deno.serve(async (request) => {
     const tenantId = cleanUuid(body.tenantId);
     const commercialOrderId = cleanUuid(body.commercialOrderId);
     const templateVersionId = cleanUuid(body.templateVersionId);
-    const installmentObligationId = body.installmentObligationId === null || body.installmentObligationId === undefined || body.installmentObligationId === ''
-      ? null
-      : cleanUuid(body.installmentObligationId);
-    const supersedesAgreementId = body.supersedesAgreementId === null || body.supersedesAgreementId === undefined || body.supersedesAgreementId === ''
-      ? null
-      : cleanUuid(body.supersedesAgreementId);
+    const installmentObligationId = optionalUuid(body.installmentObligationId);
+    const supersedesAgreementId = optionalUuid(body.supersedesAgreementId);
     const reference = cleanText(body.reference, 128);
     const renderedContent = cleanRawText(body.renderedContent, 300_000);
-    if (!tenantId || !commercialOrderId || !templateVersionId || !reference || !renderedContent) {
-      return json({ error: 'Business, commercial order, template, reference and agreement content are required' }, 400);
+    const reason = cleanReason(body.reason);
+    if (!tenantId || !commercialOrderId || !templateVersionId || !reference || !renderedContent || !reason) {
+      return json({ error: 'Business, commercial order, template, reference, agreement content and reason are required' }, 400);
     }
     if (body.installmentObligationId && !installmentObligationId) return json({ error: 'A valid installment obligation is required' }, 400);
     if (body.supersedesAgreementId && !supersedesAgreementId) return json({ error: 'A valid replacement agreement is required' }, 400);
 
-    const agreementId = await rpc<string>('issue_sellertray_commercial_agreement', {
+    const agreementId = await rpc<string>('issue_sellertray_commercial_agreement_admin', {
       p_tenant_id: tenantId,
       p_commercial_order_id: commercialOrderId,
       p_installment_obligation_id: installmentObligationId,
@@ -181,6 +256,7 @@ Deno.serve(async (request) => {
       p_agreement_reference: reference,
       p_rendered_content: renderedContent,
       p_supersedes_agreement_id: supersedesAgreementId,
+      p_reason: reason,
       p_actor_user_id: userId,
     });
     return json({ ok: true, agreementId, overview: await loadAdminOverview(tenantId, userId) }, 201);
@@ -199,6 +275,13 @@ async function authorizeMerchantAgreementRead(tenantId: string, userId: string):
 
 async function authorizeAdminAgreementRead(tenantId: string | null, userId: string): Promise<void> {
   await rpc<JsonRecord>('get_sellertray_commercial_agreement_admin', {
+    p_actor_user_id: userId,
+    p_tenant_id: tenantId,
+  });
+}
+
+async function loadAdminOnboarding(tenantId: string, userId: string): Promise<JsonRecord> {
+  return await rpc<JsonRecord>('get_sellertray_commercial_onboarding_admin', {
     p_actor_user_id: userId,
     p_tenant_id: tenantId,
   });
@@ -275,6 +358,10 @@ function cleanAction(value: unknown): Action | null {
   return value === 'merchant_list'
     || value === 'merchant_accept'
     || value === 'admin_overview'
+    || value === 'admin_onboarding'
+    || value === 'admin_publish_subscription_price'
+    || value === 'admin_publish_setup_price'
+    || value === 'admin_create_initial_purchase'
     || value === 'admin_publish_template'
     || value === 'admin_issue'
     || value === 'admin_mark_setup_ready'
@@ -286,10 +373,43 @@ function cleanUuid(value: unknown): string | null {
   const clean = value.trim();
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clean) ? clean : null;
 }
+function optionalUuid(value: unknown): string | null {
+  return value === null || value === undefined || value === '' ? null : cleanUuid(value);
+}
+function cleanUuidArray(value: unknown): string[] | null {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 500) return null;
+  const clean = value.map(cleanUuid);
+  if (clean.some((item) => !item)) return null;
+  const ids = clean as string[];
+  return new Set(ids).size === ids.length ? ids : null;
+}
 function cleanFamily(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const clean = value.trim().toLowerCase();
   return AGREEMENT_FAMILIES.has(clean) ? clean : null;
+}
+function cleanInstallmentStructure(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const clean = value.trim();
+  return INSTALLMENT_STRUCTURES.has(clean) ? clean : null;
+}
+function cleanCurrency(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const clean = value.trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(clean) ? clean : null;
+}
+function cleanPositiveAmount(value: unknown): number | null {
+  const numeric = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : NaN;
+  return Number.isFinite(numeric) && numeric > 0 && numeric <= 1_000_000_000 ? Math.round(numeric * 100) / 100 : null;
+}
+function cleanOptionalPercent(value: unknown): number | null | undefined {
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  return Number.isFinite(numeric) && numeric >= 0 && numeric <= 100 ? numeric : undefined;
+}
+function cleanReason(value: unknown): string | null {
+  const reason = cleanText(value, 1000);
+  return reason && reason.length >= 6 ? reason : null;
 }
 function cleanText(value: unknown, max: number): string | null {
   if (typeof value !== 'string') return null;
@@ -311,9 +431,9 @@ function isRecord(value: unknown): value is JsonRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 function statusForError(message: string): number {
-  if (/access|required|authori[sz]ed|owner|manager|platform administrator|read-only/i.test(message)) return 403;
+  if (/access|required|authori[sz]ed|owner|manager|platform admin|read-only/i.test(message)) return 403;
   if (/not found/i.test(message)) return 404;
-  if (/already|replaced|supersed|different facts|different contractual|conflict/i.test(message)) return 409;
+  if (/already|replaced|supersed|different facts|different contractual|conflict|cannot be duplicated/i.test(message)) return 409;
   return 400;
 }
 async function readRequestTextLimited(request: Request, maxBytes: number): Promise<{ ok: true; text: string } | { ok: false }> {
