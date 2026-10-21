@@ -123,6 +123,7 @@ export type MerchantOrder = {
   fulfillmentConfirmedBy: 'merchant' | 'customer_whatsapp' | null;
   customerConfirmedAt: string | null;
   paymentStatus: PaymentStatus;
+  totalAmount: number | null;
   amountPaid: number;
   paymentConfirmedAt: string | null;
   cashReturnSupported?: boolean;
@@ -141,6 +142,10 @@ export type MerchantOrder = {
 };
 
 export function orderTotal(order: MerchantOrder): number | null {
+  if (order.totalAmount !== null) {
+    return order.totalAmount;
+  }
+
   if (order.items.some((item) => item.unitPrice === null)) {
     return null;
   }
