@@ -440,7 +440,7 @@ function AdminPortal({ session, overview, audit, onAuditRefresh, onSignOut }: { 
     <div className="portal-shell">
       <header className="topbar">
         <div className="topbar-brand">
-          <img className="brand-icon small-mark" src="https://sellertray.vercel.app/brand/sellertray-app-icon-v2.png" alt="" aria-hidden="true" />
+          <img className="brand-icon small-mark" src="/brand/sellertray-admin-logo.webp" alt="" aria-hidden="true" />
           <div><strong>SellerTray Admin</strong><span>ProcessEdge</span></div>
         </div>
         <div className="topbar-actions">
