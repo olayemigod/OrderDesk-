@@ -48,10 +48,13 @@ select extensions.ok(
   and position('provider_initialization_started_at is null' in lower(pg_get_functiondef(
     'public.fail_sellertray_installment_checkout_initialization(uuid)'::regprocedure
   )))>0
+  and position('provider_initialization_started_at is null' in lower(pg_get_functiondef(
+    'public.confirm_sellertray_installment_payment_from_checkout(uuid,text,text,numeric,text,timestamptz,text)'::regprocedure
+  )))>0
   and position("status not in ('preparing','initialized','paid')" in lower(pg_get_functiondef(
     'public.confirm_sellertray_installment_payment_from_checkout(uuid,text,text,numeric,text,timestamptz,text)'::regprocedure
   )))>0,
-  'only a begun attempt may complete/fail while ambiguous preparing sessions remain confirmable by the verified webhook'
+  'only a begun attempt may complete/fail/confirm while a leased ambiguous preparing session remains webhook-confirmable'
 );
 
 select * from extensions.finish();
