@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(8);
+select extensions.plan(10);
 
 create temp table sellertray_c1a_role_fixture (
   owner_user_id uuid not null,
@@ -111,20 +111,28 @@ select extensions.ok(
   not exists(
     select 1 from public.tenant_members tm join sellertray_c1a_role_fixture f
       on tm.tenant_id=f.tenant_id and tm.user_id=f.manager_user_id
-  )
-  and exists(
+  ),
+  'removal deletes the team membership'
+);
+
+select extensions.ok(
+  not exists(
     select 1 from public.tenant_member_capabilities c join sellertray_c1a_role_fixture f
       on c.tenant_id=f.tenant_id and c.user_id=f.manager_user_id
-    where c.capability='can_accept_commercial_agreements' and c.allowed=false
-  )
-  and (
+    where c.capability='can_accept_commercial_agreements' and c.allowed=true
+  ),
+  'removal leaves no active commercial signing override'
+);
+
+select extensions.ok(
+  (
     select count(*) from public.tenant_member_capability_events e join sellertray_c1a_role_fixture f
       on e.tenant_id=f.tenant_id and e.user_id=f.manager_user_id
     where e.capability='can_accept_commercial_agreements'
       and e.previous_allowed=true and e.new_allowed=false
       and e.actor_user_id=f.owner_user_id
   ) >= 2,
-  'removal revokes and audits any active signing delegation before membership deletion'
+  'removal records a second immutable signing-revocation audit event'
 );
 
 insert into public.tenant_members(tenant_id,user_id,role)
