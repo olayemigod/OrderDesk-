@@ -3,6 +3,13 @@ type JsonRecord = Record<string, unknown>;
 type TenantResolution = {
   tenantId: string;
   checkoutReference?: string | null;
+  checkoutSessionId?: string | null;
+  checkoutKind?: 'legacy_subscription' | 'installment' | null;
+  installmentObligationId?: string | null;
+  installmentScheduleId?: string | null;
+  checkoutAmount?: number | string | null;
+  checkoutCurrency?: string | null;
+  checkoutStatus?: string | null;
   usageSettlementReference?: string | null;
   billingEmail?: string | null;
 };
@@ -48,7 +55,7 @@ Deno.serve(withObservability('paystack-webhook', async (request) => {
   try {
     const resolution = await resolveTenant(eventType, data);
     if (resolution) {
-      await applyEvent(eventType, data, resolution);
+      await applyEvent(eventType, data, resolution, fingerprint);
     }
 
     await recordEvent({
@@ -71,13 +78,31 @@ async function resolveTenant(eventType: string, data: JsonRecord): Promise<Tenan
   const reference = asString(data.reference) ?? nestedString(data, ['transaction', 'reference']);
 
   if (eventType === 'charge.success' && reference) {
-    const sessions = await rest<Array<{ tenant_id: string; reference: string; billing_email: string }>>(
-      `/rest/v1/billing_checkout_sessions?select=tenant_id,reference,billing_email&reference=eq.${encodeURIComponent(reference)}&limit=1`,
+    const sessions = await rest<Array<{
+      id: string;
+      tenant_id: string;
+      reference: string;
+      billing_email: string;
+      checkout_kind: 'legacy_subscription' | 'installment';
+      installment_obligation_id: string | null;
+      installment_schedule_id: string | null;
+      amount: number | string | null;
+      currency: string | null;
+      status: string;
+    }>>(
+      `/rest/v1/billing_checkout_sessions?select=id,tenant_id,reference,billing_email,checkout_kind,installment_obligation_id,installment_schedule_id,amount,currency,status&reference=eq.${encodeURIComponent(reference)}&limit=1`,
     );
     if (sessions[0]) {
       return {
         tenantId: sessions[0].tenant_id,
         checkoutReference: sessions[0].reference,
+        checkoutSessionId: sessions[0].id,
+        checkoutKind: sessions[0].checkout_kind,
+        installmentObligationId: sessions[0].installment_obligation_id,
+        installmentScheduleId: sessions[0].installment_schedule_id,
+        checkoutAmount: sessions[0].amount,
+        checkoutCurrency: sessions[0].currency,
+        checkoutStatus: sessions[0].status,
         billingEmail: sessions[0].billing_email,
       };
     }
@@ -115,7 +140,7 @@ async function resolveTenant(eventType: string, data: JsonRecord): Promise<Tenan
     if (email) {
       const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const sessions = await rest<Array<{ tenant_id: string; reference: string }>>(
-        `/rest/v1/billing_checkout_sessions?select=tenant_id,reference&billing_email=eq.${encodeURIComponent(email.toLowerCase())}&created_at=gte.${encodeURIComponent(cutoff)}&order=created_at.desc&limit=2`,
+        `/rest/v1/billing_checkout_sessions?select=tenant_id,reference&billing_email=eq.${encodeURIComponent(email.toLowerCase())}&checkout_kind=eq.legacy_subscription&created_at=gte.${encodeURIComponent(cutoff)}&order=created_at.desc&limit=2`,
       );
       if (sessions.length === 1) return { tenantId: sessions[0].tenant_id, checkoutReference: sessions[0].reference };
     }
@@ -124,7 +149,12 @@ async function resolveTenant(eventType: string, data: JsonRecord): Promise<Tenan
   return null;
 }
 
-async function applyEvent(eventType: string, data: JsonRecord, resolution: TenantResolution): Promise<void> {
+async function applyEvent(
+  eventType: string,
+  data: JsonRecord,
+  resolution: TenantResolution,
+  fingerprint: string,
+): Promise<void> {
   const tenantId = resolution.tenantId;
   const subscriptionCode = subscriptionRef(data);
   const customerCode = customerRef(data);
@@ -139,6 +169,11 @@ async function applyEvent(eventType: string, data: JsonRecord, resolution: Tenan
     }
 
     if (reference !== resolution.checkoutReference) return;
+
+    if (resolution.checkoutKind === 'installment') {
+      await applyInstallmentPaymentSuccess(tenantId, reference, data, resolution, fingerprint);
+      return;
+    }
 
     await rest(`/rest/v1/billing_checkout_sessions?reference=eq.${encodeURIComponent(reference)}`, {
       method: 'PATCH',
@@ -236,6 +271,60 @@ async function applyEvent(eventType: string, data: JsonRecord, resolution: Tenan
       cancel_at_period_end: true,
     });
   }
+}
+
+async function applyInstallmentPaymentSuccess(
+  tenantId: string,
+  reference: string,
+  data: JsonRecord,
+  resolution: TenantResolution,
+  fingerprint: string,
+): Promise<void> {
+  if (!resolution.checkoutSessionId || !resolution.installmentObligationId || !resolution.installmentScheduleId) {
+    throw new Error('Installment checkout is missing governed commercial identity');
+  }
+
+  const expectedAmount = toNumber(resolution.checkoutAmount);
+  const providerAmountSubunit = toNumber(data.amount);
+  const providerCurrency = asString(data.currency)?.toUpperCase() ?? null;
+  if (
+    expectedAmount === null
+    || providerAmountSubunit === null
+    || Math.round(expectedAmount * 100) !== Math.round(providerAmountSubunit)
+    || providerCurrency !== resolution.checkoutCurrency
+  ) {
+    throw new Error('Installment charge does not match the governed amount/currency');
+  }
+
+  const paidAt = asString(data.paid_at) ?? new Date().toISOString();
+  await rpc<string>('confirm_sellertray_installment_payment_from_checkout', {
+    p_checkout_session_id: resolution.checkoutSessionId,
+    p_provider_reference: reference,
+    p_provider_transaction_ref: providerTransactionRef(data),
+    p_amount: expectedAmount,
+    p_currency: resolution.checkoutCurrency,
+    p_paid_at: paidAt,
+    p_provider_event_fingerprint: fingerprint,
+  });
+
+  // Payment confirmation is already committed in its own database transaction.
+  // Reconciliation is deliberately best-effort so a runtime compatibility
+  // conflict cannot erase or cause duplicate provider-payment truth.
+  try {
+    await rpc<JsonRecord>('reconcile_sellertray_installment_entitlement', {
+      p_tenant_id: tenantId,
+      p_installment_obligation_id: resolution.installmentObligationId,
+    });
+  } catch (error) {
+    console.error('SellerTray installment entitlement reconciliation requires review', {
+      tenantId,
+      installmentObligationId: resolution.installmentObligationId,
+      installmentScheduleId: resolution.installmentScheduleId,
+      error: error instanceof Error ? error.message.slice(0, 300) : 'Unknown reconciliation error',
+    });
+  }
+
+  await captureReusableAuthorization(tenantId, data, resolution.billingEmail ?? null);
 }
 
 async function applyUsageSettlementSuccess(
@@ -369,6 +458,14 @@ function toNumber(value: unknown): number | null {
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
+}
+
+async function rpc<T>(name: string, args: JsonRecord): Promise<T> {
+  return await rest<T>(`/rest/v1/rpc/${encodeURIComponent(name)}`, {
+    method: 'POST',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify(args),
+  });
 }
 
 async function updateSubscription(tenantId: string, patch: JsonRecord): Promise<void> {
@@ -638,4 +735,3 @@ async function readRequestTextLimited(
     }
   }
 }
-
