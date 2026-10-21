@@ -7,6 +7,7 @@ const workspace = read('admin-web/src/AdminWorkspace.tsx');
 const main = read('admin-web/src/main.tsx');
 const commercial = read('admin-web/src/CommercialBillingAdministration.tsx');
 const dashboard = read('admin-web/src/BusinessDashboard.tsx');
+const platformAdmin = read('../supabase/functions/platform-admin/index.ts');
 test('active entry keeps trial UI unreachable', () => {
   assert.match(main,/import AdminWorkspace/);
   assert.doesNotMatch(main+workspace+dashboard,/import .*SubscriptionAccess|import .*['"]\.\/App['"]|action: 'extend_trial_days'/);
@@ -16,6 +17,12 @@ test('dashboard requests governed aggregates and bounds stale results', () => {
   assert.match(dashboard,/action: 'business_dashboard'/);
   assert.doesNotMatch(dashboard,/overview\.tenants|\.reduce\(/);
   assert.match(dashboard,/active = false/);
+});
+test('dashboard request is parsed before the Edge Function dispatches it', () => {
+  const parsedAt = platformAdmin.indexOf('body = JSON.parse(bodyRead.text)');
+  const actionAt = platformAdmin.indexOf('const action = cleanAction(body.action)');
+  const dispatchAt = platformAdmin.indexOf("if (action === 'business_dashboard')");
+  assert.ok(parsedAt >= 0 && actionAt > parsedAt && dispatchAt > actionAt);
 });
 test('attention drill-down survives hash routing', () => {
   assert.match(dashboard,/#merchants\?tenant=/);

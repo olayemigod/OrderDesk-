@@ -42,15 +42,6 @@ Deno.serve(withObservability('platform-admin', async (request) => {
 
   let body: JsonRecord;
   try {
-    if (action === 'business_dashboard') {
-      const days = body.days ?? 30;
-      if (typeof days !== 'number' || ![7, 30, 90].includes(days)) return json({ error: 'Business period must be 7, 30 or 90 days' }, 400);
-      const [summary, attention] = await Promise.all([
-        rpc<JsonRecord>('platform_admin_business_summary', { p_actor_user_id: userId, p_days: days }),
-        rpc<JsonRecord>('platform_admin_business_attention', { p_actor_user_id: userId }),
-      ]);
-      return json({ summary, attention });
-    }
     body = JSON.parse(bodyRead.text) as JsonRecord;
   } catch {
     return json({ error: 'Invalid JSON' }, 400);
@@ -60,6 +51,16 @@ Deno.serve(withObservability('platform-admin', async (request) => {
   if (!action) return json({ error: 'Unsupported platform admin action' }, 400);
 
   try {
+    if (action === 'business_dashboard') {
+      const days = body.days ?? 30;
+      if (typeof days !== 'number' || ![7, 30, 90].includes(days)) return json({ error: 'Business period must be 7, 30 or 90 days' }, 400);
+      const [summary, attention] = await Promise.all([
+        rpc<JsonRecord>('platform_admin_business_summary', { p_actor_user_id: userId, p_days: days }),
+        rpc<JsonRecord>('platform_admin_business_attention', { p_actor_user_id: userId }),
+      ]);
+      return json({ summary, attention });
+    }
+
     if (action === 'overview') {
       const overview = await rpc<JsonRecord>('platform_admin_overview', {
         p_actor_user_id: userId,
