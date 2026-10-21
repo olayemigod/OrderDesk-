@@ -1,7 +1,13 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.115.0';
 
 type JsonRecord = Record<string, unknown>;
-type Action = 'merchant_list' | 'merchant_accept' | 'admin_overview' | 'admin_publish_template' | 'admin_issue';
+type Action =
+  | 'merchant_list'
+  | 'merchant_accept'
+  | 'admin_overview'
+  | 'admin_publish_template'
+  | 'admin_issue'
+  | 'admin_mark_setup_ready';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -48,11 +54,17 @@ Deno.serve(async (request) => {
     if (action === 'merchant_list') {
       const tenantId = cleanUuid(body.tenantId);
       if (!tenantId) return json({ error: 'Business is required' }, 400);
-      const center = await rpc<JsonRecord>('get_sellertray_commercial_agreement_center', {
-        p_tenant_id: tenantId,
-        p_actor_user_id: userId,
-      });
-      return json({ ok: true, center });
+      const [center, installmentBilling] = await Promise.all([
+        rpc<JsonRecord>('get_sellertray_commercial_agreement_center', {
+          p_tenant_id: tenantId,
+          p_actor_user_id: userId,
+        }),
+        rpc<JsonRecord[]>('get_sellertray_installment_billing_states_for_tenant', {
+          p_tenant_id: tenantId,
+          p_actor_user_id: userId,
+        }),
+      ]);
+      return json({ ok: true, center: { ...center, installmentBilling } });
     }
 
     if (action === 'merchant_accept') {
@@ -77,11 +89,22 @@ Deno.serve(async (request) => {
         p_command_id: commandId,
         p_actor_user_id: userId,
       });
-      const center = await rpc<JsonRecord>('get_sellertray_commercial_agreement_center', {
-        p_tenant_id: tenantId,
-        p_actor_user_id: userId,
-      });
-      return json({ ok: true, acceptanceId, center });
+
+      // Acceptance is already an immutable committed fact. Reconciliation runs
+      // separately so an unrelated runtime-subscription conflict cannot roll it back.
+      await reconcileTenantInstallmentsBestEffort(tenantId, 'agreement acceptance');
+
+      const [center, installmentBilling] = await Promise.all([
+        rpc<JsonRecord>('get_sellertray_commercial_agreement_center', {
+          p_tenant_id: tenantId,
+          p_actor_user_id: userId,
+        }),
+        rpc<JsonRecord[]>('get_sellertray_installment_billing_states_for_tenant', {
+          p_tenant_id: tenantId,
+          p_actor_user_id: userId,
+        }),
+      ]);
+      return json({ ok: true, acceptanceId, center: { ...center, installmentBilling } });
     }
 
     if (action === 'admin_overview') {
@@ -91,7 +114,13 @@ Deno.serve(async (request) => {
         p_actor_user_id: userId,
         p_tenant_id: tenantId,
       });
-      return json({ ok: true, overview });
+      const installmentBilling = tenantId
+        ? await rpc<JsonRecord[]>('get_sellertray_installment_billing_states_for_admin', {
+            p_tenant_id: tenantId,
+            p_actor_user_id: userId,
+          })
+        : [];
+      return json({ ok: true, overview: { ...overview, installmentBilling } });
     }
 
     if (action === 'admin_publish_template') {
@@ -116,6 +145,46 @@ Deno.serve(async (request) => {
         p_tenant_id: null,
       });
       return json({ ok: true, templateId, overview }, 201);
+    }
+
+    if (action === 'admin_mark_setup_ready') {
+      const tenantId = cleanUuid(body.tenantId);
+      const commercialOrderId = cleanUuid(body.commercialOrderId);
+      const branchId = cleanUuid(body.branchId);
+      const commandId = cleanUuid(body.commandId);
+      const reason = cleanText(body.reason, 1000);
+      const readyAt = cleanIsoTimestamp(body.readyAt);
+      const evidence = isRecord(body.evidence) ? body.evidence : {};
+      if (!tenantId || !commercialOrderId || !branchId || !commandId || !reason || !readyAt) {
+        return json({ error: 'Business, commercial order, Branch, command, reason and setup time are required' }, 400);
+      }
+
+      const readinessId = await rpc<string>('mark_sellertray_commercial_branch_setup_ready', {
+        p_tenant_id: tenantId,
+        p_commercial_order_id: commercialOrderId,
+        p_branch_id: branchId,
+        p_command_id: commandId,
+        p_evidence: evidence,
+        p_reason: reason,
+        p_ready_at: readyAt,
+        p_actor_user_id: userId,
+      });
+
+      // Setup readiness is also an independent immutable fact. Never make its
+      // persistence contingent on successful runtime entitlement reconciliation.
+      await reconcileTenantInstallmentsBestEffort(tenantId, 'setup readiness');
+
+      const [overview, installmentBilling] = await Promise.all([
+        rpc<JsonRecord>('get_sellertray_commercial_agreement_admin', {
+          p_actor_user_id: userId,
+          p_tenant_id: tenantId,
+        }),
+        rpc<JsonRecord[]>('get_sellertray_installment_billing_states_for_admin', {
+          p_tenant_id: tenantId,
+          p_actor_user_id: userId,
+        }),
+      ]);
+      return json({ ok: true, readinessId, overview: { ...overview, installmentBilling } });
     }
 
     const tenantId = cleanUuid(body.tenantId);
@@ -145,16 +214,35 @@ Deno.serve(async (request) => {
       p_supersedes_agreement_id: supersedesAgreementId,
       p_actor_user_id: userId,
     });
-    const overview = await rpc<JsonRecord>('get_sellertray_commercial_agreement_admin', {
-      p_actor_user_id: userId,
-      p_tenant_id: tenantId,
-    });
-    return json({ ok: true, agreementId, overview }, 201);
+    const [overview, installmentBilling] = await Promise.all([
+      rpc<JsonRecord>('get_sellertray_commercial_agreement_admin', {
+        p_actor_user_id: userId,
+        p_tenant_id: tenantId,
+      }),
+      rpc<JsonRecord[]>('get_sellertray_installment_billing_states_for_admin', {
+        p_tenant_id: tenantId,
+        p_actor_user_id: userId,
+      }),
+    ]);
+    return json({ ok: true, agreementId, overview: { ...overview, installmentBilling } }, 201);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Commercial agreement request failed';
     return json({ error: message }, statusForError(message));
   }
 });
+
+async function reconcileTenantInstallmentsBestEffort(tenantId: string, source: string): Promise<void> {
+  try {
+    await rpc<JsonRecord[]>('reconcile_sellertray_installment_entitlements_for_tenant', {
+      p_tenant_id: tenantId,
+    });
+  } catch (error) {
+    console.error(`SellerTray installment reconciliation after ${source} requires review`, {
+      tenantId,
+      error: error instanceof Error ? error.message.slice(0, 300) : 'Unknown reconciliation error',
+    });
+  }
+}
 
 async function rpc<T>(name: string, args: JsonRecord): Promise<T> {
   if (!admin) throw new Error('Server configuration error');
@@ -164,7 +252,12 @@ async function rpc<T>(name: string, args: JsonRecord): Promise<T> {
 }
 
 function cleanAction(value: unknown): Action | null {
-  return value === 'merchant_list' || value === 'merchant_accept' || value === 'admin_overview' || value === 'admin_publish_template' || value === 'admin_issue'
+  return value === 'merchant_list'
+    || value === 'merchant_accept'
+    || value === 'admin_overview'
+    || value === 'admin_publish_template'
+    || value === 'admin_issue'
+    || value === 'admin_mark_setup_ready'
     ? value
     : null;
 }
@@ -193,6 +286,9 @@ function cleanIsoTimestamp(value: unknown): string | null {
   const clean = value.trim();
   const parsed = Date.parse(clean);
   return clean && Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+}
+function isRecord(value: unknown): value is JsonRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 function statusForError(message: string): number {
   if (/access|required|authori[sz]ed|owner|manager|platform administrator|read-only/i.test(message)) return 403;
