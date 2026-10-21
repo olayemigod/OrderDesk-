@@ -4,6 +4,7 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from 'react';
+import './sellertray-elements.css';
 
 function classes(base: string, className?: string) {
   return className ? `${base} ${className}` : base;
