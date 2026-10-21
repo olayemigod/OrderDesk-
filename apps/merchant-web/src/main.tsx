@@ -11,6 +11,7 @@ import './settings.css';
 import './cash-shifts.css';
 import './purchasing.css';
 import './mobile.css';
+import './mobile-features.css';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('SellerTray could not start.');
