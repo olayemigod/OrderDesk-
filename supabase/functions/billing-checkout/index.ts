@@ -191,6 +191,21 @@ async function startInstallmentCheckout(input: {
     });
   }
 
+  // A provider initialization that was explicitly marked failed is a completed
+  // provider attempt. Paystack references are unique, so do not retry the same
+  // failed reference. Tell Merchant Web to retire this command and create a new
+  // command/reference on the next explicit payment attempt.
+  if (reservation.status === 'failed') {
+    return json({
+      status: 'retry_required',
+      needsNewCommand: true,
+      installmentScheduleId: reservation.installmentScheduleId,
+      amount: reservation.amount,
+      currency: reservation.currency,
+      planCode: reservation.planCode,
+    });
+  }
+
   if (
     reservation.status === 'initialized'
     && reservation.authorizationUrl
