@@ -10,6 +10,7 @@ permissions:
 on:
   pull_request:
     paths:
+      - 'package.json'
       - 'supabase/functions/**'
       - 'supabase/migrations/**'
       - 'supabase/templates/**'
@@ -30,6 +31,7 @@ on:
     branches:
       - main
     paths:
+      - 'package.json'
       - 'supabase/functions/**'
       - 'supabase/migrations/**'
       - 'supabase/templates/**'
@@ -75,7 +77,7 @@ jobs:
         run: node ../../scripts/check-internal-authority-rpc-boundary.mjs
 
       - name: Install locked dependencies
-        run: npm ci --no-audit --no-fund
+        run: npm --prefix . ci --no-audit --no-fund
 
       - name: Typecheck
         run: npm run typecheck
@@ -118,7 +120,7 @@ jobs:
           node-version: '22'
 
       - name: Install locked dependencies
-        run: npm ci --no-audit --no-fund
+        run: npm --prefix . ci --no-audit --no-fund
 
       - name: Audit production dependencies
         run: node scripts/dependency-audit-policy.mjs
