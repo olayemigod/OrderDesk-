@@ -1,3 +1,4 @@
+import { SellerTrayInput, SellerTraySelect } from './SellerTrayElements';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MerchantPortalPage } from './portalNavigation';
 import { errorMessage, numberValue, supabase } from './supabase';
@@ -90,11 +91,11 @@ export default function SalesReportCenter({ tenantId, currency, branches, go, op
 
     <article className="panel report-filter-panel">
       <div className="report-filter-grid">
-        <label><span>From</span><input type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => setDateFrom(event.target.value)} /></label>
-        <label><span>To</span><input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} /></label>
-        <label><span>Branch</span><select value={branchId} onChange={(event) => setBranchId(event.target.value)}><option value="">All accessible Branches</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>
-        <label><span>Source</span><select value={source} onChange={(event) => setSource(event.target.value)}><option value="all">All channels</option><option value="pos">POS</option><option value="whatsapp">WhatsApp</option><option value="manual">Manual</option></select></label>
-        <label><span>Payment method</span><select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}><option value="all">All payment methods</option>{methodOptions.map((method) => <option key={method} value={method}>{label(method)}</option>)}</select></label>
+        <label><span>From</span><SellerTrayInput type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => setDateFrom(event.target.value)} /></label>
+        <label><span>To</span><SellerTrayInput type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} /></label>
+        <label><span>Branch</span><SellerTraySelect value={branchId} onChange={(event) => setBranchId(event.target.value)}><option value="">All accessible Branches</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</SellerTraySelect></label>
+        <label><span>Source</span><SellerTraySelect value={source} onChange={(event) => setSource(event.target.value)}><option value="all">All channels</option><option value="pos">POS</option><option value="whatsapp">WhatsApp</option><option value="manual">Manual</option></SellerTraySelect></label>
+        <label><span>Payment method</span><SellerTraySelect value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}><option value="all">All payment methods</option>{methodOptions.map((method) => <option key={method} value={method}>{label(method)}</option>)}</SellerTraySelect></label>
       </div>
       <div className="report-filter-foot"><span className="muted">{report ? `${rangeLabel(report.dateFrom, report.dateTo)} · ${report.timezone}` : 'Exact business-local date range'}</span><button type="button" className="text-button" onClick={() => { setBranchId(''); setSource('all'); setPaymentMethod('all'); const range=dateRange(30); setDateFrom(range.from); setDateTo(range.to); }}>Reset filters</button></div>
     </article>

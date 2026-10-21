@@ -1,3 +1,4 @@
+import { SellerTrayInput, SellerTraySelect, SellerTrayTextarea } from './SellerTrayElements';
 import { useEffect, useState, type FormEvent } from 'react';
 import { errorMessage, numberValue, supabase } from './supabase';
 
@@ -195,8 +196,8 @@ export default function SuppliersManagement({ tenantId, currency }: { tenantId: 
       <article className="panel purchase-list-panel">
         <div className="panel-head"><div><p className="eyebrow">Suppliers</p><h3>Supplier directory</h3></div><button type="button" className="secondary-button" onClick={startNewSupplier}>New supplier</button></div>
         <div className="purchase-field-grid">
-          <label>Search<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name, contact, phone or email" /></label>
-          <label>Status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as SupplierStatus)}><option value="all">All suppliers</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
+          <label>Search<SellerTrayInput value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name, contact, phone or email" /></label>
+          <label>Status<SellerTraySelect value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as SupplierStatus)}><option value="all">All suppliers</option><option value="active">Active</option><option value="inactive">Inactive</option></SellerTraySelect></label>
         </div>
         {loading ? <div className="empty-state"><p>Loading suppliers…</p></div> : suppliers.length ? <div className="device-list">{suppliers.map((row) => <button key={row.id} type="button" className={selectedSupplierId === row.id ? 'device-row selected' : 'device-row'} onClick={() => selectSupplier(row.id)}><span><strong>{row.name}</strong><small>{row.contactName || row.phone || row.email || 'No contact details'}</small></span><span className="device-row-badges"><em className={row.isActive ? 'good' : 'muted'}>{row.isActive ? 'Active' : 'Inactive'}</em><small>{money(row.outstandingAmount, currency)} due</small></span></button>)}</div> : <div className="empty-state"><strong>No matching suppliers</strong><p>Adjust the search or status filter, or add a supplier.</p></div>}
         <div className="toolbar-row"><span className="muted-copy">{pageStart}–{pageEnd} of {totalCount}</span><div className="topbar-actions"><button type="button" className="text-button" disabled={loading || page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>Previous</button><button type="button" className="text-button" disabled={loading || pageEnd >= totalCount} onClick={() => setPage((value) => value + 1)}>Next</button></div></div>
@@ -207,14 +208,14 @@ export default function SuppliersManagement({ tenantId, currency }: { tenantId: 
         {detailLoading ? <div className="empty-state"><p>Loading supplier details…</p></div> : null}
         {selectedDetail && !detailLoading ? <div className="status-grid"><div className="status-stat"><span>Purchase value</span><strong>{money(selectedDetail.purchaseTotal, currency)}</strong></div><div className="status-stat"><span>Paid</span><strong>{money(selectedDetail.paidAmount, currency)}</strong></div><div className="status-stat"><span>Outstanding</span><strong>{money(selectedDetail.outstandingAmount, currency)}</strong></div><div className="status-stat"><span>Purchase Orders</span><strong>{selectedDetail.purchaseCount}</strong></div></div> : null}
         <div className="purchase-field-grid">
-          <label>Supplier name<input required value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} /></label>
-          <label>Contact person<input value={draft.contactName} onChange={(event) => setDraft((current) => ({ ...current, contactName: event.target.value }))} /></label>
-          <label>Phone<input value={draft.phone} onChange={(event) => setDraft((current) => ({ ...current, phone: event.target.value }))} /></label>
-          <label>Email<input type="email" value={draft.email} onChange={(event) => setDraft((current) => ({ ...current, email: event.target.value }))} /></label>
+          <label>Supplier name<SellerTrayInput required value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} /></label>
+          <label>Contact person<SellerTrayInput value={draft.contactName} onChange={(event) => setDraft((current) => ({ ...current, contactName: event.target.value }))} /></label>
+          <label>Phone<SellerTrayInput value={draft.phone} onChange={(event) => setDraft((current) => ({ ...current, phone: event.target.value }))} /></label>
+          <label>Email<SellerTrayInput type="email" value={draft.email} onChange={(event) => setDraft((current) => ({ ...current, email: event.target.value }))} /></label>
         </div>
-        <label>Address<textarea rows={2} value={draft.address} onChange={(event) => setDraft((current) => ({ ...current, address: event.target.value }))} /></label>
-        <label>Notes<textarea rows={3} value={draft.notes} onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))} /></label>
-        <label className="settings-toggle"><input type="checkbox" checked={draft.isActive} onChange={(event) => setDraft((current) => ({ ...current, isActive: event.target.checked }))} /><span>Active supplier</span></label>
+        <label>Address<SellerTrayTextarea rows={2} value={draft.address} onChange={(event) => setDraft((current) => ({ ...current, address: event.target.value }))} /></label>
+        <label>Notes<SellerTrayTextarea rows={3} value={draft.notes} onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))} /></label>
+        <label className="settings-toggle"><SellerTrayInput type="checkbox" checked={draft.isActive} onChange={(event) => setDraft((current) => ({ ...current, isActive: event.target.checked }))} /><span>Active supplier</span></label>
         <div className="purchase-actions"><button className="primary-button" disabled={busy || (!isNew && !selectedSupplierId)}>{busy ? 'Saving' : 'Save supplier'}</button></div>
 
         {selectedDetail && !detailLoading ? <section className="page-stack">

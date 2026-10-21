@@ -1,3 +1,4 @@
+import { SellerTrayInput, SellerTraySelect, SellerTrayTextarea } from './SellerTrayElements';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { errorMessage, supabase } from './supabase';
 
@@ -297,11 +298,11 @@ export default function DevicesPrintersManagement({
 
       <form className="panel device-form" onSubmit={saveRegister}>
         <div className="panel-head"><div><p className="eyebrow">Register details</p><h3>{selectedRegister ? selectedRegister.name : 'New register'}</h3></div></div>
-        <label>Register code<input required maxLength={40} value={registerDraft.code} onChange={(event) => setRegisterDraft((current) => ({ ...current, code: event.target.value.toUpperCase() }))} placeholder="MAIN" /></label>
-        <label>Register name<input required maxLength={120} value={registerDraft.name} onChange={(event) => setRegisterDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Main Register" /></label>
+        <label>Register code<SellerTrayInput required maxLength={40} value={registerDraft.code} onChange={(event) => setRegisterDraft((current) => ({ ...current, code: event.target.value.toUpperCase() }))} placeholder="MAIN" /></label>
+        <label>Register name<SellerTrayInput required maxLength={120} value={registerDraft.name} onChange={(event) => setRegisterDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Main Register" /></label>
         <div className="device-checks">
-          <label><input type="checkbox" checked={registerDraft.isDefault} onChange={(event) => setRegisterDraft((current) => ({ ...current, isDefault: event.target.checked, isActive: event.target.checked ? true : current.isActive }))} /> Default register</label>
-          <label><input type="checkbox" checked={registerDraft.isActive} disabled={registerDraft.isDefault} onChange={(event) => setRegisterDraft((current) => ({ ...current, isActive: event.target.checked }))} /> Active</label>
+          <label><SellerTrayInput type="checkbox" checked={registerDraft.isDefault} onChange={(event) => setRegisterDraft((current) => ({ ...current, isDefault: event.target.checked, isActive: event.target.checked ? true : current.isActive }))} /> Default register</label>
+          <label><SellerTrayInput type="checkbox" checked={registerDraft.isActive} disabled={registerDraft.isDefault} onChange={(event) => setRegisterDraft((current) => ({ ...current, isActive: event.target.checked }))} /> Active</label>
         </div>
         <p className="muted device-help">Setting another register as default moves the default safely. A default register cannot be deactivated directly.</p>
         <button className="primary-button" disabled={saving}>{saving ? 'Saving' : 'Save register'}</button>
@@ -321,13 +322,13 @@ export default function DevicesPrintersManagement({
 
       <form className="panel device-form" onSubmit={savePrinter}>
         <div className="panel-head"><div><p className="eyebrow">Printer details</p><h3>{selectedPrinter ? selectedPrinter.displayName : 'New printer'}</h3></div></div>
-        <label>Register<select required value={printerDraft.registerId} disabled={Boolean(selectedPrinter)} onChange={(event) => setPrinterDraft((current) => ({ ...current, registerId: event.target.value }))}><option value="">Select register</option>{activeRegisters.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
-        <label>Printer name<input required maxLength={120} value={printerDraft.displayName} onChange={(event) => setPrinterDraft((current) => ({ ...current, displayName: event.target.value }))} placeholder="Counter printer" /></label>
-        <label>Bluetooth address or device ID<input required maxLength={160} value={printerDraft.hardwareIdentifier} onChange={(event) => setPrinterDraft((current) => ({ ...current, hardwareIdentifier: event.target.value }))} placeholder="Printer identity from SellerTray mobile" /></label>
-        <label>Paper width<select value={printerDraft.paperWidthMm} onChange={(event) => setPrinterDraft((current) => ({ ...current, paperWidthMm: event.target.value === '80' ? 80 : 58 }))}><option value="58">58 mm</option><option value="80">80 mm</option></select></label>
+        <label>Register<SellerTraySelect required value={printerDraft.registerId} disabled={Boolean(selectedPrinter)} onChange={(event) => setPrinterDraft((current) => ({ ...current, registerId: event.target.value }))}><option value="">Select register</option>{activeRegisters.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</SellerTraySelect></label>
+        <label>Printer name<SellerTrayInput required maxLength={120} value={printerDraft.displayName} onChange={(event) => setPrinterDraft((current) => ({ ...current, displayName: event.target.value }))} placeholder="Counter printer" /></label>
+        <label>Bluetooth address or device ID<SellerTrayInput required maxLength={160} value={printerDraft.hardwareIdentifier} onChange={(event) => setPrinterDraft((current) => ({ ...current, hardwareIdentifier: event.target.value }))} placeholder="Printer identity from SellerTray mobile" /></label>
+        <label>Paper width<SellerTraySelect value={printerDraft.paperWidthMm} onChange={(event) => setPrinterDraft((current) => ({ ...current, paperWidthMm: event.target.value === '80' ? 80 : 58 }))}><option value="58">58 mm</option><option value="80">80 mm</option></SellerTraySelect></label>
         <div className="device-checks">
-          <label><input type="checkbox" checked={printerDraft.isDefault} onChange={(event) => setPrinterDraft((current) => ({ ...current, isDefault: event.target.checked, isActive: event.target.checked ? true : current.isActive }))} /> Default for register</label>
-          <label><input type="checkbox" checked={printerDraft.isActive} disabled={printerDraft.isDefault} onChange={(event) => setPrinterDraft((current) => ({ ...current, isActive: event.target.checked }))} /> Active</label>
+          <label><SellerTrayInput type="checkbox" checked={printerDraft.isDefault} onChange={(event) => setPrinterDraft((current) => ({ ...current, isDefault: event.target.checked, isActive: event.target.checked ? true : current.isActive }))} /> Default for register</label>
+          <label><SellerTrayInput type="checkbox" checked={printerDraft.isActive} disabled={printerDraft.isDefault} onChange={(event) => setPrinterDraft((current) => ({ ...current, isActive: event.target.checked }))} /> Active</label>
         </div>
         <p className="muted device-help">A registered printer stays with its original Branch and register. Bluetooth pairing and test printing remain on SellerTray mobile.</p>
         <button className="primary-button" disabled={saving || !printerDraft.registerId}>{saving ? 'Saving' : 'Save printer'}</button>
@@ -447,14 +448,14 @@ function ReceiptCopySettings({ tenantId, printer }: { tenantId: string; printer:
           <button type="button" className="secondary-button" disabled={index === copies.length - 1 || saving} onClick={() => moveCopy(index, 1)}>Down</button>
           <button type="button" className="secondary-button" disabled={copies.length <= 1 || saving} onClick={() => removeCopy(index)}>Remove</button>
         </span>
-        <label>Copy type<select value={copy.type} disabled={saving} onChange={(event) => {
+        <label>Copy type<SellerTraySelect value={copy.type} disabled={saving} onChange={(event) => {
           const nextType = event.target.value as ReceiptCopyType;
           updateCopy(index, { type: nextType, label: COPY_TYPE_LABELS[nextType] });
-        }}>{COPY_TYPES.map((type) => <option key={type} value={type}>{COPY_TYPE_LABELS[type]}</option>)}</select></label>
-        <label>Merchant-facing label<input required maxLength={40} value={copy.label} disabled={saving} onChange={(event) => updateCopy(index, { label: event.target.value })} /></label>
+        }}>{COPY_TYPES.map((type) => <option key={type} value={type}>{COPY_TYPE_LABELS[type]}</option>)}</SellerTraySelect></label>
+        <label>Merchant-facing label<SellerTrayInput required maxLength={40} value={copy.label} disabled={saving} onChange={(event) => updateCopy(index, { label: event.target.value })} /></label>
       </div>)}
     </div>}
-    <label>Receipt footer<textarea maxLength={240} rows={3} value={footer} disabled={loading || saving} onChange={(event) => setFooter(event.target.value)} placeholder="Optional message printed on receipts" /></label>
+    <label>Receipt footer<SellerTrayTextarea maxLength={240} rows={3} value={footer} disabled={loading || saving} onChange={(event) => setFooter(event.target.value)} placeholder="Optional message printed on receipts" /></label>
     <p className="muted device-help">Between 1 and 8 enabled copies are supported. Customer, Store, Audit, Accounts, Dispatch, Production and Custom copy types use this same governed profile. Reprints remain explicit audited print attempts.</p>
     <div className="form-actions"><button className="primary-button" disabled={loading || saving || copies.length < 1 || copies.some((copy) => !copy.label.trim())}>{saving ? 'Saving…' : 'Save receipt profile'}</button></div>
   </form>;

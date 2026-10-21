@@ -1,3 +1,4 @@
+import { SellerTraySelect } from './SellerTrayElements';
 import { useEffect, useState } from 'react';
 import { errorMessage, numberValue, supabase } from './supabase';
 import './procurement-reports.css';
@@ -79,7 +80,7 @@ export default function ProcurementReportCenter({ tenantId, currency }: { tenant
   return <div className="page-stack procurement-report-center">
     <div className="section-heading report-heading">
       <div><p className="eyebrow">Purchasing performance</p><h2>Purchasing Reports</h2></div>
-      <label className="select-field"><span>Period</span><select value={days} onChange={(event) => setDays(Number(event.target.value))}>{PERIODS.map((value) => <option key={value} value={value}>{periodLabel(value)}</option>)}</select></label>
+      <label className="select-field"><span>Period</span><SellerTraySelect value={days} onChange={(event) => setDays(Number(event.target.value))}>{PERIODS.map((value) => <option key={value} value={value}>{periodLabel(value)}</option>)}</SellerTraySelect></label>
     </div>
 
     <div className="info-banner procurement-report-note">
