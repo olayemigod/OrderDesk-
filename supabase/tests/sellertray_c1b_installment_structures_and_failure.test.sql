@@ -109,6 +109,10 @@ with inserted as (
 )
 update c1b_structure_fixture set installment_obligation_id=(select id from inserted);
 
+-- The order snapshot above is checked immediately, but the governed installment
+-- schedule validator must see the complete 60:20:20 set before reconciling it.
+set constraints validate_sellertray_commercial_installment_schedule_line deferred;
+
 with inserted as (
   insert into public.sellertray_commercial_installment_schedule(
     tenant_id,installment_obligation_id,sequence_no,percentage,amount_due
