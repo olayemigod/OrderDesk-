@@ -166,6 +166,8 @@ with reserved as (
 )
 update c1b_structure_fixture set checkout_1_id=(reserved.result->>'sessionId')::uuid from reserved;
 
+select public.begin_sellertray_installment_checkout_initialization(f.checkout_1_id)
+from c1b_structure_fixture f;
 select public.complete_sellertray_installment_checkout_initialization(
   f.checkout_1_id,s.reference,'https://checkout.example/c1b-three-first'
 )
@@ -220,6 +222,8 @@ with reserved as (
   ) as result from c1b_structure_fixture f
 )
 update c1b_structure_fixture set checkout_2_id=(reserved.result->>'sessionId')::uuid from reserved;
+select public.begin_sellertray_installment_checkout_initialization(f.checkout_2_id)
+from c1b_structure_fixture f;
 select public.complete_sellertray_installment_checkout_initialization(
   f.checkout_2_id,s.reference,'https://checkout.example/c1b-three-second'
 ) from c1b_structure_fixture f join public.billing_checkout_sessions s on s.id=f.checkout_2_id;
@@ -245,6 +249,8 @@ with reserved as (
   ) as result from c1b_structure_fixture f
 )
 update c1b_structure_fixture set checkout_3_id=(reserved.result->>'sessionId')::uuid from reserved;
+select public.begin_sellertray_installment_checkout_initialization(f.checkout_3_id)
+from c1b_structure_fixture f;
 select public.complete_sellertray_installment_checkout_initialization(
   f.checkout_3_id,s.reference,'https://checkout.example/c1b-three-third'
 ) from c1b_structure_fixture f join public.billing_checkout_sessions s on s.id=f.checkout_3_id;
