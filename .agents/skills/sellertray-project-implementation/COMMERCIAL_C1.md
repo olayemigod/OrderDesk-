@@ -4,7 +4,7 @@ description: "Normative C1 boundary for the additive SellerTray commercial-core 
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.4"
+  version: "0.1.5"
   status: governing-extension
 ---
 
@@ -98,6 +98,7 @@ C1B continues to use the existing SellerTray billing-provider authority. It must
 - immutable installment payment time must come from deterministic verified provider event data. C1B must not substitute the webhook-processing wall clock when provider payment time is absent or invalid.
 - each installment schedule line may have at most one confirmed payment. Provider reference, provider transaction identity and verified event fingerprint must remain duplicate-safe.
 - later installment checkout must fail closed until all earlier installment schedule lines are confirmed paid.
+- checkout command identity must survive ordinary retries/reloads and ambiguous in-flight provider attempts. If provider initialization is explicitly recorded `failed`, that provider reference is a terminal attempt and must **not** be initialized again; Merchant Web must retire that failed command and create a new command/reference only on the Owner's next explicit payment attempt.
 
 C1B activation has four distinct prerequisites that may commit independently and in any order:
 
@@ -119,6 +120,8 @@ The approved entitlement arithmetic is fixed:
 - if a provisional entitlement already exists, later agreement replacement/reacceptance may satisfy current-agreement requirements for downstream release but must not shift the original activation timestamp.
 
 Entitlement effects are append-only and retry-idempotent. C1B records a deterministic provisional event and, after complete settlement, a deterministic full-release event. Reconciliation retries must return the same commercial effect rather than extend the term again.
+
+Prerequisite persistence and entitlement reconciliation remain separate. Tenant-wide reconciliation must isolate failures per installment obligation so one conflicting historical order cannot block a later valid order. Service surfaces may retry reconciliation idempotently after an authorised Merchant or Admin/Support billing read succeeds, providing recovery when an earlier acceptance/setup-triggered pass failed after the immutable prerequisite had already committed. Such recovery must not make read authorization optional, must not recreate payment/agreement/setup truth, and must report/log unresolved per-obligation failures rather than silently treating them as success.
 
 `public.tenant_subscriptions` remains the runtime compatibility authority until C2. C1B may update that compatibility row only after governed reconciliation, and must fail closed rather than overwrite a populated runtime period that is not provably owned by the same C1B commercial order.
 
