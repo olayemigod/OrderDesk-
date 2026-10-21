@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.13"
+  version: "0.1.14"
   status: governing
 ---
 
@@ -85,6 +85,7 @@ Web owns or prioritises:
 - customer management and deeper history;
 - payments, settlement and reconciliation;
 - cash/shift review;
+- Business Expense management;
 - branch administration;
 - staff, roles, assignments and permissions;
 - register/device administration;
@@ -113,7 +114,7 @@ Approved primary Merchant Web navigation groups are:
 - **Sales** — Sales, Orders, Customers, Returns
 - **Catalogue & Inventory** — Products, Categories, Units, Inventory
 - **Purchasing** — Purchase Orders/Receiving, Suppliers
-- **Money** — Payments/Receivables, Cash & Shifts
+- **Money** — Payments/Receivables, Cash & Shifts, Business Expenses
 - **Channels** — WhatsApp, Devices & Printers
 - **Insights** — Report Center, Ask SellerTray
 - **Business** — Branches, Team & Permissions, Feedback, Settings
@@ -462,7 +463,7 @@ The current governed Money Foundation implements the rules above with the follow
 6. `money-operation` is the shared authenticated Edge Function gateway used by Mobile and Merchant Web for Money mutations. Clients must not write money tables directly.
 7. Cash corrections preserve classification across replacement movements. A classified Bank Deposit or Owner Withdrawal cannot be corrected into an expense, and a cash-funded Business Expense cannot be corrected into a different movement class.
 8. Mobile exposes typed Cash Out and capability-aware Owner/Manager Business Expense workflows under More. The current Mobile repository rejects new generic untyped Cash Out submissions and routes users to the typed workflow; the underlying historical RPC remains compatible with previously deployed activity.
-9. Merchant Web keeps the approved top-level **Cash & Shifts** Money navigation and exposes **Business Expenses** as a management subview rather than creating another permanent top-level navigation item.
+9. Merchant Web exposes **Cash & Shifts** and **Business Expenses** as separate permanent entries under the **Money** navigation group. Cash & Shifts owns shift/drawer reconciliation; Business Expenses owns management-level operating expense records. Both consume the same governed Money Foundation and must not create separate financial truth.
 10. `get_sellertray_business_expense_management_list(...)` reports Business Expenses only; Bank Deposits, Owner Withdrawals and ordinary Cashier Expenses must not inflate operating-expense totals.
 
 ### Tax governance
@@ -588,7 +589,7 @@ Connect current WhatsApp functionality to the shared customer, Product/UOM, bran
 
 ## Phase 8 — Merchant Web V1
 
-Overview, Sales, Orders, Products, Categories, Units, UOM, Pricing, Inventory, Customers, Branches, Cashiers/Managers, Payments, Cash, WhatsApp, tenant feedback review and Settings.
+Overview, Sales, Orders, Products, Categories, Units, UOM, Pricing, Inventory, Customers, Branches, Cashiers/Managers, Payments, Cash, Business Expenses, WhatsApp, tenant feedback review and Settings.
 
 ## Phase 9 — Purchasing
 

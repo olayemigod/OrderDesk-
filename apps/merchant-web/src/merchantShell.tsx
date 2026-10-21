@@ -17,7 +17,7 @@ export function SellerTrayBrand({ subtitle = 'Merchant Web' }: { subtitle?: stri
 
 type NavIconName =
   | 'overview' | 'sales' | 'orders' | 'customers' | 'returns' | 'products' | 'categories' | 'units' | 'inventory'
-  | 'purchasing' | 'suppliers' | 'payments' | 'cash' | 'whatsapp' | 'devices' | 'reports'
+  | 'purchasing' | 'suppliers' | 'payments' | 'cash' | 'expenses' | 'whatsapp' | 'devices' | 'reports'
   | 'ai' | 'branches' | 'team' | 'feedback' | 'settings';
 
 const NAV_PATHS: Record<NavIconName, string[]> = {
@@ -34,6 +34,7 @@ const NAV_PATHS: Record<NavIconName, string[]> = {
   suppliers: ['M3 21V8l9-5 9 5v13', 'M9 21v-6h6v6', 'M7 10h2', 'M15 10h2'],
   payments: ['M3 6h18v12H3V6Z', 'M3 10h18', 'M7 15h3'],
   cash: ['M4 6h16v12H4V6Z', 'M8 6V4h8v2', 'M12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z'],
+  expenses: ['M6 3h12v18H6V3Z', 'M9 7h6', 'M9 11h6', 'M9 15h3'],
   whatsapp: ['M21 11.5a8.5 8.5 0 0 1-12.7 7.4L3 20l1.2-5.1A8.5 8.5 0 1 1 21 11.5Z', 'M8.5 8.5c1.4 3.2 3.8 5.5 7 7'],
   devices: ['M7 2h10v14H7V2Z', 'M10 20h4', 'M12 16v4', 'M4 6H2v12h5'],
   reports: ['M4 19V9', 'M10 19V5', 'M16 19v-9', 'M22 19V3'],

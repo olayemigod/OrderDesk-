@@ -1,4 +1,4 @@
-import { SellerTrayInput, SellerTraySelect } from './SellerTrayElements';
+import { SellerTrayInput, SellerTraySelect, SellerTrayTabs } from './SellerTrayElements';
 import { useEffect, useState, type FormEvent } from 'react';
 import { errorMessage, numberValue, supabase } from './supabase';
 
@@ -111,6 +111,12 @@ type Tab = 'stock' | 'movements' | 'counts' | 'transfers';
 type TransferLine = { productId: string; uomId: string; quantity: string };
 
 const PAGE_SIZE = 25;
+const INVENTORY_TABS = [
+  { id: 'stock', label: 'Stock' },
+  { id: 'movements', label: 'Movement history' },
+  { id: 'counts', label: 'Stock count' },
+  { id: 'transfers', label: 'Transfers' },
+] as const satisfies readonly { id: Tab; label: string }[];
 const ADJUST_REASONS = ['Data correction', 'Damage', 'Expiry', 'Missing / shrinkage', 'Inventory recovery', 'Other approved adjustment'];
 const EMPTY_STOCK: StockManagementResponse = { items: [], totalCount: 0, lowStockCount: 0, outOfStockCount: 0, valuedCount: 0, partialValuationCount: 0, unvaluedCount: 0, emptyCount: 0, knownInventoryValue: 0, currency: 'NGN', asOf: '', limit: PAGE_SIZE, offset: 0 };
 const EMPTY_MOVEMENTS: MovementManagementResponse = { items: [], totalCount: 0, inflowCount: 0, outflowCount: 0, valuedCount: 0, partialValuationCount: 0, unvaluedCount: 0, knownValueDelta: 0, currency: 'NGN', limit: PAGE_SIZE, offset: 0 };
@@ -456,7 +462,7 @@ export default function InventoryManagement({ tenantId, branch, branches }: { te
       <Metric label="Open transfers" value={transfers.openCount} />
     </div>
     {stock.partialValuationCount || stock.unvaluedCount ? <p className="muted">Some stock has partial or unavailable governed cost evidence. SellerTray shows known value separately and never treats unknown cost as zero.</p> : null}
-    <div className="tab-row">{(['stock','movements','counts','transfers'] as Tab[]).map((value) => <button key={value} className={tab === value ? 'tab active' : 'tab'} onClick={() => setTab(value)}>{value === 'stock' ? 'Stock' : value === 'movements' ? 'Movement history' : value === 'counts' ? 'Stock count' : 'Transfers'}</button>)}</div>
+    <SellerTrayTabs value={tab} options={INVENTORY_TABS} onChange={setTab} ariaLabel="Inventory views" />
 
     {tab === 'stock' ? <>
       <article className="panel">

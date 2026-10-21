@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import AiInsights from './AiInsights';
+import BusinessExpensesManagement from './BusinessExpensesManagement';
 import CashShiftsManagement from './CashShiftsManagement';
 import CustomersManagement from './CustomersManagement';
 import DashboardOverview from './DashboardOverview';
@@ -160,6 +161,7 @@ export default function MerchantApp() {
       {page === 'inventory' && <InventoryManagement tenantId={business.id} branch={branch} branches={branches} />}
       {page === 'payments' && <PaymentsManagement tenantId={business.id} />}
       {page === 'cash' && <CashShiftsManagement tenantId={business.id} currency={business.currency} branches={branches} initialBranchId={branchId} />}
+      {page === 'expenses' && <BusinessExpensesManagement tenantId={business.id} currency={business.currency} branches={branches} initialBranchId={branchId} />}
       {page === 'whatsapp' && <WhatsAppManagement tenantId={business.id} role={managementRole} branches={branches} connectionStatusHint={business.whatsappConnectionStatus} />}
       {page === 'reports' && <ReportCenter tenantId={business.id} currency={business.currency} branches={branches} go={navigate} openBranch={openBranchPage} />}
       {page === 'ai' && <AiInsights tenantId={business.id} />}

@@ -12,6 +12,7 @@ export type MerchantPortalPage =
   | 'suppliers'
   | 'payments'
   | 'cash'
+  | 'expenses'
   | 'whatsapp'
   | 'devices'
   | 'reports'
@@ -52,6 +53,7 @@ export const MERCHANT_PORTAL_NAVIGATION: MerchantPortalNavigationItem[] = [
   { id: 'suppliers', label: 'Suppliers', section: 'Purchasing', available: true },
   { id: 'payments', label: 'Payments & Receivables', section: 'Money', available: true },
   { id: 'cash', label: 'Cash & Shifts', section: 'Money', available: true },
+  { id: 'expenses', label: 'Business Expenses', section: 'Money', available: true },
   { id: 'whatsapp', label: 'WhatsApp', section: 'Channels', available: true },
   { id: 'devices', label: 'Devices & Printers', section: 'Channels', available: true },
   { id: 'reports', label: 'Report Center', section: 'Insights', available: true },
