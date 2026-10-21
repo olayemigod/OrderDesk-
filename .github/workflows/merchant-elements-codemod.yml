@@ -1,0 +1,43 @@
+name: Merchant Elements Codemod
+
+on:
+  push:
+    branches:
+      - feat/merchant-ui-elements-catalogue-settings
+    paths:
+      - '.github/workflows/merchant-elements-codemod.yml'
+      - 'apps/merchant-web/scripts/sellertray-elements-preflight.mjs'
+
+permissions:
+  contents: write
+
+jobs:
+  codemod:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v7
+        with:
+          ref: feat/merchant-ui-elements-catalogue-settings
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Convert raw Merchant Web fields
+        run: node apps/merchant-web/scripts/sellertray-elements-preflight.mjs --fix
+      - name: Verify conversion
+        run: |
+          node apps/merchant-web/scripts/sellertray-elements-preflight.mjs
+          git diff --check
+      - name: Commit converted fields
+        run: |
+          if git diff --quiet -- apps/merchant-web/src; then
+            echo "No Merchant Web field changes required."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/merchant-web/src
+          git commit -m "refactor(merchant-web): use SellerTray field primitives"
+          git push origin HEAD:feat/merchant-ui-elements-catalogue-settings
