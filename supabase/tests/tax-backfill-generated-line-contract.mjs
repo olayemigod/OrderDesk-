@@ -71,15 +71,21 @@ assert.match(runtimeGuard, /subtotal_amount',''\)::numeric = old\.amount/i);
 assert.match(runtimeGuard, /SellerTray return and refund records are immutable/i);
 assert.doesNotMatch(runtimeGuard, /tg_table_name='payment_refunds'/i);
 
-// The immediate restore must contain only strict runtime behavior, not the
-// migration-only table/field exceptions.
+// The immediate restore must remove every migration-only UPDATE exception while
+// preserving the pre-existing governed Tenant-deletion cascade for immutable
+// return/refund history.
 assert.match(runtimeRestoreText, /create or replace function public\.guard_orderdesk_subscription_write\(\)/i);
 assert.match(runtimeRestoreText, /if not public\.orderdesk_subscription_can_write\(v_tenant_id\) then/i);
 assert.match(runtimeRestoreText, /SellerTray subscription is read-only\. Renew or reactivate the business to make changes\./i);
 assert.match(runtimeRestoreText, /create or replace function public\.prevent_sellertray_return_mutation\(\)/i);
+assert.match(runtimeRestoreText, /tg_op='DELETE'/i);
+assert.match(runtimeRestoreText, /not exists\s*\(\s*select 1 from public\.tenants t where t\.id=old\.tenant_id\s*\)/i);
+assert.match(runtimeRestoreText, /return old/i);
 assert.match(runtimeRestoreText, /SellerTray return and refund records are immutable/i);
+assert.doesNotMatch(runtimeRestoreText, /tg_op='UPDATE'/i);
 assert.doesNotMatch(runtimeRestoreText, /tg_table_name/i);
 assert.doesNotMatch(runtimeRestoreText, /tax_basis_amount/i);
+assert.doesNotMatch(runtimeRestoreText, /subtotal_amount/i);
 
 const ordered = readdirSync(migrationsDir)
   .filter((name) => /^2026102017|^2026102018/.test(name))
