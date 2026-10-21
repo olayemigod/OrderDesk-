@@ -151,6 +151,13 @@ export function orderTotal(order: MerchantOrder): number | null {
     return order.grossAmount;
   }
 
+  // A completed paid sale has already passed the governed payment/finalisation
+  // authority. Its committed paid amount is a safer historical total than
+  // rebuilding the invoice from line snapshots (which exclude posted tax).
+  if (order.status === 'completed' && order.paymentStatus === 'paid' && Number.isFinite(order.amountPaid)) {
+    return order.amountPaid;
+  }
+
   if (order.items.some((item) => item.unitPrice === null)) {
     return null;
   }
