@@ -10,6 +10,10 @@ const checkoutRequired = [
   "reservation.status === 'failed'",
   "status: 'retry_required'",
   'needsNewCommand: true',
+  "begin_sellertray_installment_checkout_initialization",
+  "initialization.status === 'failed'",
+  '!initialization.started',
+  "status: 'preparing'",
   "fail_sellertray_installment_checkout_initialization",
   'Retry with the same checkout command.',
 ];
@@ -19,10 +23,19 @@ for (const value of checkoutRequired) {
   }
 }
 
-const failedIndex = checkoutSource.indexOf("reservation.status === 'failed'");
-const initializeIndex = checkoutSource.indexOf("https://api.paystack.co/transaction/initialize", failedIndex);
-if (failedIndex < 0 || initializeIndex <= failedIndex) {
-  throw new Error('billing-checkout must retire an explicitly failed attempt before any new Paystack initialization path');
+const installmentStartIndex = checkoutSource.indexOf('async function startInstallmentCheckout');
+const failedIndex = checkoutSource.indexOf("reservation.status === 'failed'", installmentStartIndex);
+const beginIndex = checkoutSource.indexOf("begin_sellertray_installment_checkout_initialization", installmentStartIndex);
+const initializeIndex = checkoutSource.indexOf("https://api.paystack.co/transaction/initialize", installmentStartIndex);
+const failIndex = checkoutSource.indexOf("fail_sellertray_installment_checkout_initialization", installmentStartIndex);
+if (
+  installmentStartIndex < 0
+  || failedIndex <= installmentStartIndex
+  || beginIndex <= failedIndex
+  || initializeIndex <= beginIndex
+  || failIndex <= initializeIndex
+) {
+  throw new Error('billing-checkout must lease provider initialization before Paystack and retire only an explicit provider failure afterwards');
 }
 
 const merchantRequired = [
@@ -37,4 +50,4 @@ for (const value of merchantRequired) {
   }
 }
 
-console.log('billing-checkout C1B failed-attempt retry contract passed');
+console.log('billing-checkout C1B failed/ambiguous-attempt retry contract passed');
