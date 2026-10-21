@@ -91,7 +91,7 @@ as $$
 declare
   v_branch_name text;
 begin
-  if new.document_type <> 'receipt' or new.order_id is null then
+  if new.job_type <> 'receipt' or new.order_id is null then
     return new;
   end if;
 
