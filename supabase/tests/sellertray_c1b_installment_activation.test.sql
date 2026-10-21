@@ -43,7 +43,7 @@ insert into public.platform_admins(user_id,role)
 select admin_user_id,'admin' from sellertray_c1b_fixture;
 
 insert into public.tenants(id,name,slug,merchant_code,subscription_status)
-select tenant_id,'C1B Installment Tenant','c1b-'||substr(tenant_id::text,1,8),'C1B-'||upper(substr(tenant_id::text,1,6)),'trial'
+select tenant_id,'C1B Installment Tenant','c1b-'||substr(tenant_id::text,1,8),'C1B','trial'
 from sellertray_c1b_fixture;
 
 insert into public.tenant_members(tenant_id,user_id,role)
