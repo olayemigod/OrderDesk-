@@ -1,6 +1,6 @@
 export type ShellIconName = 'menu' | 'close' | 'sun' | 'moon' | 'refresh' | 'chevron';
 
-const SELLERTRAY_APP_ICON = 'https://raw.githubusercontent.com/olayemigod/OrderDesk-/feat/sellertray-brand-ui-v1/apps/mobile/assets/icon.png';
+const SELLERTRAY_APP_ICON = '/brand/sellertray-app-icon.png';
 
 export function SellerTrayMark({ large = false }: { large?: boolean }) {
   return <span className={large ? 'sellertray-mark large' : 'sellertray-mark'} aria-hidden="true">
@@ -16,7 +16,7 @@ export function SellerTrayBrand({ subtitle = 'Merchant Web' }: { subtitle?: stri
 }
 
 type NavIconName =
-  | 'overview' | 'sales' | 'orders' | 'customers' | 'returns' | 'products' | 'inventory'
+  | 'overview' | 'sales' | 'orders' | 'customers' | 'returns' | 'products' | 'categories' | 'units' | 'inventory'
   | 'purchasing' | 'suppliers' | 'payments' | 'cash' | 'whatsapp' | 'devices' | 'reports'
   | 'ai' | 'branches' | 'team' | 'feedback' | 'settings';
 
@@ -27,6 +27,8 @@ const NAV_PATHS: Record<NavIconName, string[]> = {
   customers: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z', 'M22 21v-2a4 4 0 0 0-3-3.87', 'M16 3.13a4 4 0 0 1 0 7.75'],
   returns: ['M9 14 4 9l5-5', 'M4 9h10a6 6 0 0 1 0 12'],
   products: ['M20 12V5l-8-3-8 3v7c0 5 3.5 8 8 10 4.5-2 8-5 8-10Z', 'M8 10h8', 'M12 6v8'],
+  categories: ['M4 5h7v6H4V5Z', 'M13 5h7v6h-7V5Z', 'M4 13h7v6H4v-6Z', 'M13 13h7v6h-7v-6Z'],
+  units: ['M4 7h16', 'M7 4v6', 'M12 5v4', 'M17 4v6', 'M4 17h16', 'M7 14v6', 'M12 15v4', 'M17 14v6'],
   inventory: ['M3 7l9-4 9 4-9 4-9-4Z', 'M3 7v10l9 4 9-4V7', 'M12 11v10'],
   purchasing: ['M3 3h2l2.4 11.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 7H6', 'M10 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z', 'M18 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z'],
   suppliers: ['M3 21V8l9-5 9 5v13', 'M9 21v-6h6v6', 'M7 10h2', 'M15 10h2'],
