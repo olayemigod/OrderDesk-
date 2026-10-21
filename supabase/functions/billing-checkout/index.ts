@@ -12,6 +12,14 @@ type InstallmentReservation = {
   needsProviderInitialization: boolean;
 };
 
+type InstallmentInitializationLease = {
+  started: boolean;
+  status: string;
+  reference?: string | null;
+  authorizationUrl?: string | null;
+  startedAt?: string | null;
+};
+
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const PAYSTACK_SECRET_KEY = Deno.env.get('PAYSTACK_SECRET_KEY') ?? '';
@@ -231,6 +239,55 @@ async function startInstallmentCheckout(input: {
   const amount = toNumber(reservation.amount);
   if (amount === null || amount <= 0 || !/^[A-Z]{3}$/.test(reservation.currency)) {
     return json({ error: 'Governed installment amount is invalid' }, 409);
+  }
+
+  // Acquire the shared initialization lease before any outbound provider call.
+  // If the process crashes or the network becomes ambiguous after this point,
+  // replay keeps the same command/reference and does not re-initialize Paystack.
+  let initialization: InstallmentInitializationLease;
+  try {
+    initialization = await rpc<InstallmentInitializationLease>('begin_sellertray_installment_checkout_initialization', {
+      p_session_id: reservation.sessionId,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to begin installment checkout initialization';
+    return json({ error: message }, statusForGovernedError(message));
+  }
+
+  if (
+    initialization.status === 'initialized'
+    && initialization.authorizationUrl
+    && initialization.reference
+  ) {
+    return json({
+      authorizationUrl: initialization.authorizationUrl,
+      reference: initialization.reference,
+      installmentScheduleId: reservation.installmentScheduleId,
+      amount,
+      currency: reservation.currency,
+    });
+  }
+
+  if (initialization.status === 'failed') {
+    return json({
+      status: 'retry_required',
+      needsNewCommand: true,
+      installmentScheduleId: reservation.installmentScheduleId,
+      amount,
+      currency: reservation.currency,
+      planCode: reservation.planCode,
+    });
+  }
+
+  if (!initialization.started) {
+    return json({
+      status: 'preparing',
+      error: 'Installment checkout provider initialization is already in progress. Retry with the same checkout command.',
+      installmentScheduleId: reservation.installmentScheduleId,
+      amount,
+      currency: reservation.currency,
+      planCode: reservation.planCode,
+    }, 409);
   }
 
   const paystackResponse = await fetch('https://api.paystack.co/transaction/initialize', {
