@@ -4,7 +4,7 @@ description: "Normative C1 boundary for the additive SellerTray commercial-core 
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.5"
+  version: "0.1.6"
   status: governing-extension
 ---
 
@@ -91,6 +91,7 @@ C1B continues to use the existing SellerTray billing-provider authority. It must
 
 - `billing_checkout_sessions` remains the governed checkout-session authority and may distinguish legacy subscription checkout from installment checkout.
 - installment checkout amount, currency, plan identity, commercial order, obligation and schedule identity must come from immutable C1 server-side facts; Merchant Web may send only the governed installment identity and retry command identity.
+- installment checkout is available only for the Business's **initial annual subscription purchase**. The shared checkout boundary must prove the commercial order is the earliest unambiguous subscription order for that Business and fail closed on an earlier or equal-time competing subscription order. A legacy/non-trial Business cannot start a new initial-purchase installment merely by creating another annual commercial order. After C1B activates the original initial-purchase order, later schedule lines on that **same** order remain eligible when same-order entitlement history proves C1B runtime ownership.
 - Paystack installment collection is a one-time transaction for the exact governed installment amount. It must not create or depend on a parallel Paystack subscription plan for that installment.
 - the existing verified Paystack webhook is the provider-confirmation authority. A verified installment `charge.success` records an immutable payment-confirmation fact first and only then attempts entitlement reconciliation as a separate transaction.
 - a reconciliation conflict or runtime-compatibility issue must never roll back or erase an already confirmed provider payment.
