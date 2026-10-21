@@ -24,7 +24,7 @@ select extensions.ok(
   position('platform_admins' in pg_get_functiondef(
     'public.get_sellertray_commercial_branch_setup_states_for_admin(uuid,uuid)'::regprocedure
   ))>0
-  and position("line_type='branch_setup'" in pg_get_functiondef(
+  and position('line_type=''branch_setup''' in pg_get_functiondef(
     'public.get_sellertray_commercial_branch_setup_states_for_admin(uuid,uuid)'::regprocedure
   ))>0,
   'C1B Branch setup projection checks platform role and reads governed setup purchase lines'
