@@ -17,7 +17,11 @@ const authorityMigration = read(join(repoRoot, 'supabase/migrations/202610141920
 const merchantOrderMigration = read(join(repoRoot, 'supabase/migrations/20261014193000_merchant_order_creation_authority.sql'));
 const paidCancellationGuard = read(join(repoRoot, 'supabase/migrations/20260914095500_restore_paid_order_cancellation_guard.sql'));
 const posDraftMigration = read(join(repoRoot, 'supabase/migrations/20261014091000_pos_draft_item_editing.sql'));
+const receiptAuthorityMigration = read(join(repoRoot, 'supabase/migrations/20261021173000_receipt_order_history_authority.sql'));
 const ordersRepository = read(join(mobileRoot, 'src/data/ordersRepository.ts'));
+const orderDomain = read(join(mobileRoot, 'src/domain/order.ts'));
+const orderPaymentPanel = read(join(mobileRoot, 'src/components/OrderPaymentPanel.tsx'));
+const receiptFormatter = read(join(mobileRoot, 'src/printing/escPosReceipt.ts'));
 const useOrders = read(join(mobileRoot, 'src/hooks/useOrders.ts'));
 const fulfillmentEdge = read(join(repoRoot, 'supabase/functions/order-fulfillment/index.ts'));
 const merchantOrderEdge = read(join(repoRoot, 'supabase/functions/merchant-order/index.ts'));
@@ -95,6 +99,28 @@ requireValue(
     !ordersRepository.includes(".from('order_items').insert(") &&
     !ordersRepository.includes(".from('order_items').delete("),
   'Mobile order repository must use governed commands instead of raw table mutations',
+);
+requireValue(
+  ordersRepository.includes('total_amount') &&
+    ordersRepository.includes('totalAmount: toNumber(row.total_amount)') &&
+    orderDomain.includes('if (order.totalAmount !== null)') &&
+    orderDomain.includes('return order.totalAmount;'),
+  'Mobile order history must prefer the persisted authoritative order total over reconstructed line subtotals',
+);
+requireValue(
+  orderPaymentPanel.includes('order.posOperatorName') &&
+    orderPaymentPanel.includes('label="Cashier"') &&
+    ordersRepository.includes('pos_operator_name'),
+  'Per-order invoice/financial history must render the immutable POS cashier snapshot',
+);
+requireValue(
+  receiptAuthorityMigration.includes("'subtotalAmount'") &&
+    receiptAuthorityMigration.includes("'taxAmount'") &&
+    receiptAuthorityMigration.includes("'showTaxBreakdown'") &&
+    !receiptAuthorityMigration.includes('sellertray_tax_configurations') &&
+    receiptFormatter.includes("'TAX'") &&
+    receiptFormatter.includes('snapshot.showTaxBreakdown === true'),
+  'Receipt and reprint tax presentation must consume the persisted sale-time tax snapshot instead of current tax settings',
 );
 requireValue(
   useOrders.includes('updateOrderStatus(tenantId, orderId, status, normalizedReason)') &&
