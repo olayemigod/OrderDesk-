@@ -10,7 +10,7 @@ const runtimeGuardName = '20261020175970_tax_backfill_runtime_guard_compatibilit
 const runtimeRestoreName = '20261020180025_tax_backfill_runtime_guard_restore.sql';
 const generatedLine = readFileSync(join(migrationsDir, generatedLineName), 'utf8');
 const runtimeGuard = readFileSync(join(migrationsDir, runtimeGuardName), 'utf8');
-const runtimeRestore = readFileSync(join(migrationsDir, runtimeRestoreName), 'utf8');
+const runtimeRestoreText = readFileSync(join(migrationsDir, runtimeRestoreName), 'utf8');
 
 for (const [label, migration] of [
   ['generated-line compatibility', generatedLine],
@@ -73,13 +73,13 @@ assert.doesNotMatch(runtimeGuard, /tg_table_name='payment_refunds'/i);
 
 // The immediate restore must contain only strict runtime behavior, not the
 // migration-only table/field exceptions.
-assert.match(runtimeRestore, /create or replace function public\.guard_orderdesk_subscription_write\(\)/i);
-assert.match(runtimeRestore, /if not public\.orderdesk_subscription_can_write\(v_tenant_id\) then/i);
-assert.match(runtimeRestore, /SellerTray subscription is read-only\. Renew or reactivate the business to make changes\./i);
-assert.match(runtimeRestore, /create or replace function public\.prevent_sellertray_return_mutation\(\)/i);
-assert.match(runtimeRestore, /SellerTray return and refund records are immutable/i);
-assert.doesNotMatch(runtimeRestore, /tg_table_name/i);
-assert.doesNotMatch(runtimeRestore, /tax_basis_amount/i);
+assert.match(runtimeRestoreText, /create or replace function public\.guard_orderdesk_subscription_write\(\)/i);
+assert.match(runtimeRestoreText, /if not public\.orderdesk_subscription_can_write\(v_tenant_id\) then/i);
+assert.match(runtimeRestoreText, /SellerTray subscription is read-only\. Renew or reactivate the business to make changes\./i);
+assert.match(runtimeRestoreText, /create or replace function public\.prevent_sellertray_return_mutation\(\)/i);
+assert.match(runtimeRestoreText, /SellerTray return and refund records are immutable/i);
+assert.doesNotMatch(runtimeRestoreText, /tg_table_name/i);
+assert.doesNotMatch(runtimeRestoreText, /tax_basis_amount/i);
 
 const ordered = readdirSync(migrationsDir)
   .filter((name) => /^2026102017|^2026102018/.test(name))
@@ -88,15 +88,15 @@ const tempGuard = ordered.indexOf('20261020175900_tax_historical_item_backfill_g
 const generatedCompatibility = ordered.indexOf(generatedLineName);
 const runtimeCompatibility = ordered.indexOf(runtimeGuardName);
 const taxFoundation = ordered.indexOf('20261020180000_tax_authority_foundation.sql');
-const runtimeRestore = ordered.indexOf(runtimeRestoreName);
+const runtimeRestoreIndex = ordered.indexOf(runtimeRestoreName);
 const invoiceGuardRestore = ordered.indexOf('20261020180050_tax_historical_item_backfill_guard_restore.sql');
 assert.ok(
   tempGuard >= 0
     && tempGuard < generatedCompatibility
     && generatedCompatibility < runtimeCompatibility
     && runtimeCompatibility < taxFoundation
-    && taxFoundation < runtimeRestore
-    && runtimeRestore < invoiceGuardRestore,
+    && taxFoundation < runtimeRestoreIndex
+    && runtimeRestoreIndex < invoiceGuardRestore,
   'all temporary tax-backfill guards must be installed and restored in canonical order',
 );
 
