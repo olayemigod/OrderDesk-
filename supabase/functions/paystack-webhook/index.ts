@@ -296,7 +296,11 @@ async function applyInstallmentPaymentSuccess(
     throw new Error('Installment charge does not match the governed amount/currency');
   }
 
-  const paidAt = asString(data.paid_at) ?? new Date().toISOString();
+  const paidAt = providerPaidAt(data);
+  if (!paidAt) {
+    throw new Error('Verified provider payment time is required for installment confirmation');
+  }
+
   await rpc<string>('confirm_sellertray_installment_payment_from_checkout', {
     p_checkout_session_id: resolution.checkoutSessionId,
     p_provider_reference: reference,
@@ -308,21 +312,13 @@ async function applyInstallmentPaymentSuccess(
   });
 
   // Payment confirmation is already committed in its own database transaction.
-  // Reconciliation is deliberately best-effort so a runtime compatibility
-  // conflict cannot erase or cause duplicate provider-payment truth.
-  try {
-    await rpc<JsonRecord>('reconcile_sellertray_installment_entitlement', {
-      p_tenant_id: tenantId,
-      p_installment_obligation_id: resolution.installmentObligationId,
-    });
-  } catch (error) {
-    console.error('SellerTray installment entitlement reconciliation requires review', {
-      tenantId,
-      installmentObligationId: resolution.installmentObligationId,
-      installmentScheduleId: resolution.installmentScheduleId,
-      error: error instanceof Error ? error.message.slice(0, 300) : 'Unknown reconciliation error',
-    });
-  }
+  // Do not mark the provider event processed until reconciliation succeeds. If
+  // reconciliation fails, the webhook returns 500 so Paystack can retry the
+  // same immutable payment confirmation and reconciliation idempotently.
+  await rpc<JsonRecord>('reconcile_sellertray_installment_entitlement', {
+    p_tenant_id: tenantId,
+    p_installment_obligation_id: resolution.installmentObligationId,
+  });
 
   await captureReusableAuthorization(tenantId, data, resolution.billingEmail ?? null);
 }
@@ -449,6 +445,16 @@ function providerTransactionRef(data: JsonRecord): string | null {
   const id = data.id;
   if (typeof id === 'number' && Number.isFinite(id)) return String(id);
   return asString(id) ?? asString(data.reference);
+}
+
+function providerPaidAt(data: JsonRecord): string | null {
+  const value = asString(data.paid_at)
+    ?? asString(data.paidAt)
+    ?? asString(data.transaction_date)
+    ?? asString(data.created_at);
+  if (!value) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
 }
 
 function toNumber(value: unknown): number | null {
