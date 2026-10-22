@@ -61,8 +61,8 @@ requireValue(
 );
 requireValue(
   redesignWorkspace.includes('get_sellertray_pos_return_authority')
-    && redesignWorkspace.includes('canReturnCompletedSale={canRefundSale && Boolean(activeCashShift)}'),
-  'Mobile return visibility must use governed refund capability plus the active cashier shift',
+    && redesignWorkspace.includes('canReturnCompletedSale={canRefundSale && Boolean(activeCashShift) && (!focusedOrder || focusedOrder.branchId === activeBranch?.id)}'),
+  'Mobile return visibility must use governed refund capability plus an active same-Branch cashier shift for notification-focused orders',
 );
 requireValue(
   mobileShell.includes('RefreshControl')
