@@ -61,6 +61,13 @@ select tenant_id,manager_user_id,'manager' from sellertray_cash_shift_fixture
 union all
 select tenant_id,staff_user_id,'staff' from sellertray_cash_shift_fixture;
 
+insert into public.sellertray_expense_categories(
+  tenant_id,name,is_active,created_by_user_id,updated_by_user_id
+)
+select f.tenant_id,v.name,true,f.owner_user_id,f.owner_user_id
+from sellertray_cash_shift_fixture f
+cross join (values ('Delivery'),('General')) v(name);
+
 update sellertray_cash_shift_fixture f
 set branch_id=b.id
 from public.branches b
