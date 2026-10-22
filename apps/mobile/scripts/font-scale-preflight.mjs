@@ -15,6 +15,7 @@ const babelConfig = readFileSync(join(mobileRoot, 'babel.config.js'), 'utf8');
 const textComponent = readFileSync(join(mobileRoot, 'src/components/SellerTrayText.tsx'), 'utf8');
 const inputComponent = readFileSync(join(mobileRoot, 'src/components/SellerTrayTextInput.tsx'), 'utf8');
 const appearance = readFileSync(join(mobileRoot, 'src/theme/AppearanceContext.tsx'), 'utf8');
+const typography = readFileSync(join(mobileRoot, 'src/theme/typography.ts'), 'utf8');
 const plugin = require(join(mobileRoot, 'scripts/babel-sellertray-text-scale.cjs'));
 
 requireValue(
@@ -23,16 +24,23 @@ requireValue(
   'Expo Babel must apply the SellerTray text-scale transform',
 );
 requireValue(
+  typography.includes('SELLERTRAY_MIN_READABLE_FONT_SIZE = 14')
+    && typography.includes('sellerTrayScaledFontSize')
+    && typography.includes('Math.max(')
+    && typography.includes('fontSize * fontScale'),
+  'SellerTray typography authority must enforce the shared 14sp readable floor while preserving user scaling',
+);
+requireValue(
   textComponent.includes('const { fontScale } = useSellerTrayAppearance()')
-    && textComponent.includes('flatStyle.fontSize * fontScale')
-    && textComponent.includes('flatStyle.lineHeight * fontScale'),
-  'SellerTrayText must scale explicit font size and line height from appearance preferences',
+    && textComponent.includes('sellerTrayScaledFontSize(flatStyle.fontSize, fontScale)')
+    && textComponent.includes('sellerTrayScaledLineHeight(flatStyle.lineHeight, fontScale, scaledFontSize ?? 0)'),
+  'SellerTrayText must use shared readable font-size and line-height scaling',
 );
 requireValue(
   inputComponent.includes('const { fontScale } = useSellerTrayAppearance()')
-    && inputComponent.includes('flatStyle.fontSize * fontScale')
-    && inputComponent.includes('flatStyle.lineHeight * fontScale'),
-  'SellerTrayTextInput must scale typed form text from appearance preferences',
+    && inputComponent.includes('sellerTrayScaledFontSize(flatStyle.fontSize, fontScale)')
+    && inputComponent.includes('sellerTrayScaledLineHeight(flatStyle.lineHeight, fontScale, scaledFontSize ?? 0)'),
+  'SellerTrayTextInput must use the same shared readable floor and line-height scaling as text',
 );
 requireValue(
   appearance.includes('fontScale') && appearance.includes('setFontScale'),
