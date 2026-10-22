@@ -71,6 +71,7 @@ export function OfflinePosPaymentAllocator({
       for (const candidate of methods) next[methodKey(candidate)] = candidate === method ? clean : '';
       return next;
     });
+    setPayLater(false);
     onError(null);
   }
 
@@ -80,6 +81,14 @@ export function OfflinePosPaymentAllocator({
       ? parsedAllocations.filter((row) => methodKey(row.method) !== key).reduce((sum, row) => sum + row.amount, 0)
       : 0;
     setMethodAmount(method, editableMoney(Math.max(0, amountDue - others)));
+  }
+
+  function choosePayLater() {
+    if (!policy.allowPayLater) return;
+    setAmounts({});
+    setReferences({});
+    setPayLater(true);
+    onError(null);
   }
 
   async function queue() {
@@ -93,6 +102,10 @@ export function OfflinePosPaymentAllocator({
       onError('Split payment is disabled in SellerTray settings.');
       return;
     }
+    if (payLater && parsedAllocations.length > 0) {
+      onError('Pay later records the full balance as outstanding. Use Partial payment when money is received now.');
+      return;
+    }
     if (allocated < amountDue - 0.005) {
       if (allocated <= 0.005) {
         if (!payLater || !policy.allowPayLater) {
@@ -101,9 +114,6 @@ export function OfflinePosPaymentAllocator({
         }
       } else if (!policy.allowPartialPayments) {
         onError('Partial payment is disabled in SellerTray settings.');
-        return;
-      } else if (payLater && !policy.allowPayLater) {
-        onError('Pay later is disabled in SellerTray settings.');
         return;
       }
     }
@@ -170,13 +180,13 @@ export function OfflinePosPaymentAllocator({
         const active = Number(amounts[key] ?? 0) > 0;
         const nonCash = method.methodType !== 'cash';
         return (
-          <View key={key} style={[styles.methodCard, dark && darkStyles.methodCard, active && (dark ? darkStyles.methodActive : styles.methodActive)]}>
+          <View key={key} style={[styles.methodCard, dark && darkStyles.methodCard, active && (dark ? darkStyles.methodActive : styles.methodActive), payLater && styles.disabled]}>
             <View style={styles.headerRow}>
               <View style={styles.flex}>
                 <Text style={[styles.methodName, dark && darkStyles.title]}>{method.displayName}</Text>
                 <Text style={[styles.body, dark && darkStyles.body]}>{methodLabel(method)}</Text>
               </View>
-              <Pressable onPress={() => useBalance(method)} style={[styles.balanceButton, dark && darkStyles.balanceButton]}>
+              <Pressable disabled={payLater || busy} onPress={() => useBalance(method)} style={[styles.balanceButton, dark && darkStyles.balanceButton]}>
                 <Text style={[styles.balanceText, dark && darkStyles.accentText]}>Use balance</Text>
               </Pressable>
             </View>
@@ -190,6 +200,7 @@ export function OfflinePosPaymentAllocator({
             <View>
               <Text style={[styles.label, dark && darkStyles.body]}>Amount</Text>
               <TextInput
+                editable={!payLater && !busy}
                 keyboardType="decimal-pad"
                 value={amounts[key] ?? ''}
                 onChangeText={(value) => setMethodAmount(method, value)}
@@ -202,6 +213,7 @@ export function OfflinePosPaymentAllocator({
               <View>
                 <Text style={[styles.label, dark && darkStyles.body]}>{method.methodType === 'bank_transfer' ? 'Transfer reference' : 'Terminal / approval reference'}</Text>
                 <TextInput
+                  editable={!payLater && !busy}
                   autoCapitalize="characters"
                   autoCorrect={false}
                   value={references[key] ?? ''}
@@ -230,11 +242,11 @@ export function OfflinePosPaymentAllocator({
       </View>
 
       {policy.allowPayLater ? (
-        <Pressable onPress={() => setPayLater((value) => !value)} style={[styles.payLater, dark && darkStyles.methodCard, payLater && (dark ? darkStyles.methodActive : styles.methodActive)]}>
+        <Pressable disabled={busy} onPress={choosePayLater} style={[styles.payLater, dark && darkStyles.methodCard, payLater && (dark ? darkStyles.methodActive : styles.methodActive)]}>
           <Ionicons name={payLater ? 'checkbox' : 'square-outline'} size={22} color={dark ? theme.dark.accentText : theme.colors.greenDark} />
           <View style={styles.flex}>
             <Text style={[styles.methodName, dark && darkStyles.title]}>Pay later</Text>
-            <Text style={[styles.body, dark && darkStyles.body]}>Keep the remaining balance outstanding when this sale syncs.</Text>
+            <Text style={[styles.body, dark && darkStyles.body]}>Complete this sale with the full balance outstanding.</Text>
           </View>
         </Pressable>
       ) : null}
