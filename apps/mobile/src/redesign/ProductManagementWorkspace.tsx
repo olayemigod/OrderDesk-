@@ -241,10 +241,10 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
             <Text style={[styles.body, dark && darkStyles.body]}>Barcode {editor.barcode} will be linked to the Stock UOM.</Text>
           </View>
         ) : null}
-        <Field label="Product name">
+        <Field label="Product name" dark={dark}>
           <SellerTrayTextInput value={draft.name} onChangeText={(name) => setDraft((current) => ({ ...current, name }))} placeholder="Product name" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
         </Field>
-        <Field label="SKU (optional)">
+        <Field label="SKU (optional)" dark={dark}>
           <SellerTrayTextInput value={draft.sku ?? ''} onChangeText={(sku) => setDraft((current) => ({ ...current, sku }))} placeholder="SKU" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
         </Field>
         <SellerTraySelectField
@@ -272,7 +272,7 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
             SellerTray will reject a Stock UOM change when transaction history makes that change unsafe.
           </Text>
         ) : null}
-        <Field label={priceLabel}>
+        <Field label={priceLabel} dark={dark}>
           <SellerTrayTextInput value={price} onChangeText={setPrice} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
         </Field>
         <Text style={[styles.help, dark && darkStyles.body]}>
@@ -339,8 +339,8 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return <View style={styles.field}><Text style={styles.label}>{label}</Text>{children}</View>;
+function Field({ label, children, dark }: { label: string; children: ReactNode; dark: boolean }) {
+  return <View style={styles.field}><Text style={[styles.label, dark && darkStyles.title]}>{label}</Text>{children}</View>;
 }
 
 const styles = StyleSheet.create({
