@@ -31,7 +31,7 @@ export type PosSaleActionResult = {
   idempotentReplay: boolean;
   status?: 'cancelled';
   returnId?: string;
-  refundId?: string;
+  refundId?: string | null;
   returnStatus?: PosReturnStatus;
   refundedAmount?: number;
   returnedAmount?: number;
@@ -261,7 +261,8 @@ async function invokeSaleAction(input: {
     input.action === 'return'
     && ((row.returnStatus !== 'partial' && row.returnStatus !== 'returned')
       || typeof row.returnId !== 'string'
-      || typeof row.refundId !== 'string')
+      || (row.refundId !== null && row.refundId !== undefined && typeof row.refundId !== 'string')
+      || numberOrUndefined(row.refundedAmount) === undefined)
   ) {
     throw new Error('SellerTray did not confirm the sale return.');
   }
@@ -272,7 +273,7 @@ async function invokeSaleAction(input: {
     idempotentReplay: row.idempotentReplay as boolean,
     status: row.status === 'cancelled' ? 'cancelled' : undefined,
     returnId: typeof row.returnId === 'string' ? row.returnId : undefined,
-    refundId: typeof row.refundId === 'string' ? row.refundId : undefined,
+    refundId: typeof row.refundId === 'string' ? row.refundId : null,
     returnStatus: row.returnStatus === 'partial' || row.returnStatus === 'returned' ? row.returnStatus : undefined,
     refundedAmount: numberOrUndefined(row.refundedAmount),
     returnedAmount: numberOrUndefined(row.returnedAmount),
