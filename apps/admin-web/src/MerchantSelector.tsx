@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import AgreementLifecycleManagement from './AgreementLifecycleManagement';
 import CommercialPortfolio from './CommercialPortfolio';
 import {
   loadMerchantPortfolio,
@@ -34,6 +35,7 @@ export default function MerchantSelector({
   const [error, setError] = useState<string | null>(null);
   const requestSequence = useRef(0);
   const shouldShowCommercialPortfolio = showCommercialPortfolio ?? mode === 'single';
+  const selectedTenantId = mode === 'single' ? [...selectedIds][0] ?? null : null;
 
   useEffect(() => {
     const timer = window.setTimeout(() => setQuery(search.trim()), 250);
@@ -136,6 +138,7 @@ export default function MerchantSelector({
           </div>
         </div>
       </div>
+      {selectedTenantId ? <AgreementLifecycleManagement session={session} tenantId={selectedTenantId} /> : null}
     </>
   );
 }
