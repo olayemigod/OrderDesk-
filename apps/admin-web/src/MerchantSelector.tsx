@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import CommercialPortfolio from './CommercialPortfolio';
 import {
   loadMerchantPortfolio,
   type MerchantCursor,
@@ -12,6 +13,7 @@ type MerchantSelectorProps = {
   onChange: (next: Set<string>, changedMerchant?: MerchantRow) => void;
   mode?: 'single' | 'multiple';
   pageSize?: number;
+  showCommercialPortfolio?: boolean;
 };
 
 export default function MerchantSelector({
@@ -20,6 +22,7 @@ export default function MerchantSelector({
   onChange,
   mode = 'multiple',
   pageSize = 20,
+  showCommercialPortfolio,
 }: MerchantSelectorProps) {
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
@@ -30,6 +33,7 @@ export default function MerchantSelector({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const requestSequence = useRef(0);
+  const shouldShowCommercialPortfolio = showCommercialPortfolio ?? mode === 'single';
 
   useEffect(() => {
     const timer = window.setTimeout(() => setQuery(search.trim()), 250);
@@ -85,46 +89,54 @@ export default function MerchantSelector({
   }
 
   return (
-    <div className="workspace-tenant-selector">
-      <div className="workspace-toolbar">
-        <div className="workspace-search">
-          <input
-            aria-label="Search businesses"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search business, email, phone or status"
-          />
-        </div>
-        {mode === 'multiple' ? (
-          <div className="workspace-filter-row">
-            <button className="workspace-button subtle compact" type="button" disabled={!items.length} onClick={() => onChange(new Set([...selectedIds, ...items.map((item) => item.id)]))}>Select page</button>
-            <button className="workspace-button subtle compact" type="button" disabled={!selectedIds.size} onClick={() => onChange(new Set())}>Clear</button>
+    <>
+      {shouldShowCommercialPortfolio ? (
+        <CommercialPortfolio
+          session={session}
+          onOpenMerchant={(merchant) => onChange(new Set([merchant.id]), merchant)}
+        />
+      ) : null}
+      <div className="workspace-tenant-selector">
+        <div className="workspace-toolbar">
+          <div className="workspace-search">
+            <input
+              aria-label="Search businesses"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search business, email, phone or status"
+            />
           </div>
-        ) : null}
-      </div>
-      {error ? <div className="workspace-banner error">{error}</div> : null}
-      <div className="workspace-tenant-list" aria-busy={loading}>
-        {items.map((merchant) => {
-          const selected = selectedIds.has(merchant.id);
-          return (
-            <button key={merchant.id} type="button" className={selected ? 'workspace-tenant-row selected' : 'workspace-tenant-row'} onClick={() => toggle(merchant)} aria-pressed={selected}>
-              <span className="workspace-tenant-check" aria-hidden="true">{selected ? '✓' : ''}</span>
-              <span><strong>{merchant.name}</strong><small>{merchant.businessEmail ?? merchant.businessPhone ?? merchant.slug}</small></span>
-              <StatusPill value={merchant.subscriptionStatus} />
-              <StatusPill value={merchant.whatsappStatus} />
-            </button>
-          );
-        })}
-        {!loading && !items.length ? <div className="workspace-empty"><strong>No businesses found</strong><p>Adjust the search.</p></div> : null}
-      </div>
-      <div className="workspace-pagination">
-        <span>{loading ? 'Loading businesses…' : `Page ${cursorHistory.length + 1} · ${items.length} shown`}</span>
-        <div>
-          <button className="workspace-button subtle compact" type="button" disabled={loading || !cursorHistory.length} onClick={previousPage}>Previous</button>
-          <button className="workspace-button subtle compact" type="button" disabled={loading || !nextCursor} onClick={nextPage}>Next</button>
+          {mode === 'multiple' ? (
+            <div className="workspace-filter-row">
+              <button className="workspace-button subtle compact" type="button" disabled={!items.length} onClick={() => onChange(new Set([...selectedIds, ...items.map((item) => item.id)]))}>Select page</button>
+              <button className="workspace-button subtle compact" type="button" disabled={!selectedIds.size} onClick={() => onChange(new Set())}>Clear</button>
+            </div>
+          ) : null}
+        </div>
+        {error ? <div className="workspace-banner error">{error}</div> : null}
+        <div className="workspace-tenant-list" aria-busy={loading}>
+          {items.map((merchant) => {
+            const selected = selectedIds.has(merchant.id);
+            return (
+              <button key={merchant.id} type="button" className={selected ? 'workspace-tenant-row selected' : 'workspace-tenant-row'} onClick={() => toggle(merchant)} aria-pressed={selected}>
+                <span className="workspace-tenant-check" aria-hidden="true">{selected ? '✓' : ''}</span>
+                <span><strong>{merchant.name}</strong><small>{merchant.businessEmail ?? merchant.businessPhone ?? merchant.slug}</small></span>
+                <StatusPill value={merchant.subscriptionStatus} />
+                <StatusPill value={merchant.whatsappStatus} />
+              </button>
+            );
+          })}
+          {!loading && !items.length ? <div className="workspace-empty"><strong>No businesses found</strong><p>Adjust the search.</p></div> : null}
+        </div>
+        <div className="workspace-pagination">
+          <span>{loading ? 'Loading businesses…' : `Page ${cursorHistory.length + 1} · ${items.length} shown`}</span>
+          <div>
+            <button className="workspace-button subtle compact" type="button" disabled={loading || !cursorHistory.length} onClick={previousPage}>Previous</button>
+            <button className="workspace-button subtle compact" type="button" disabled={loading || !nextCursor} onClick={nextPage}>Next</button>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
