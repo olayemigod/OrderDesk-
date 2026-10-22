@@ -96,13 +96,13 @@ Deno.serve(async (request) => {
       : null;
     const paymentMethodId = body.paymentMethodId == null ? null : cleanUuid(body.paymentMethodId);
     const cashShiftId = body.cashShiftId == null ? null : cleanUuid(body.cashShiftId);
-    const expenseCategory = cleanText(body.expenseCategory, 120);
+    const expenseCategoryId = cleanUuid(body.expenseCategoryId);
     const amount = cleanPositiveNumber(body.amount);
     const reference = cleanText(body.reference, 160);
     const reason = cleanText(body.reason, 500);
     const commandId = cleanCommandId(body.commandId);
-    if (!branchId || !fundingSource || !expenseCategory || amount === null || !reference || !reason || !commandId) {
-      return json({ error: 'Branch, funding source, category, amount, reference, reason and retry identity are required' }, 400);
+    if (!branchId || !fundingSource || !expenseCategoryId || amount === null || !reference || !reason || !commandId) {
+      return json({ error: 'Branch, funding source, Expense Category, amount, reference, reason and retry identity are required' }, 400);
     }
     if (fundingSource === 'bank' && (!paymentMethodId || cashShiftId)) {
       return json({ error: 'Bank-funded Business Expense requires a Business bank account' }, 400);
@@ -117,7 +117,7 @@ Deno.serve(async (request) => {
       p_funding_source: fundingSource,
       p_payment_method_id: paymentMethodId,
       p_cash_shift_id: cashShiftId,
-      p_expense_category: expenseCategory,
+      p_expense_category_id: expenseCategoryId,
       p_amount: amount,
       p_reference: reference,
       p_reason: reason,

@@ -83,13 +83,16 @@ Deno.serve(async (request) => {
     const amount = cleanPositiveNumber(body.amount);
     const reference = cleanText(body.reference, 160);
     const reason = cleanText(body.reason, 500);
-    const expenseCategory = cleanText(body.expenseCategory, 120);
+    const expenseCategoryId = body.expenseCategoryId == null ? null : cleanUuid(body.expenseCategoryId);
     const commandId = cleanCommandId(body.commandId);
     if (!shiftId || !movementType || amount === null || !reference || !reason || !commandId) {
       return json({ error: 'Shift, cash activity, amount, reference and reason are required' }, 400);
     }
-    if (movementType === 'expense' && !expenseCategory) {
-      return json({ error: 'Expense category is required' }, 400);
+    if (movementType === 'expense' && !expenseCategoryId) {
+      return json({ error: 'Expense Category is required' }, 400);
+    }
+    if (movementType !== 'expense' && expenseCategoryId) {
+      return json({ error: 'Expense Category applies only to Expense cash activity' }, 400);
     }
     rpcName = 'record_sellertray_shift_cash_movement';
     rpcArgs = {
@@ -99,7 +102,7 @@ Deno.serve(async (request) => {
       p_amount: amount,
       p_reference: reference,
       p_reason: reason,
-      p_expense_category: movementType === 'expense' ? expenseCategory : null,
+      p_expense_category_id: movementType === 'expense' ? expenseCategoryId : null,
       p_command_id: commandId,
       p_actor_user_id: userId,
     };
@@ -119,13 +122,18 @@ Deno.serve(async (request) => {
     const replacementAmount = correctionKind === 'replace' ? cleanPositiveNumber(body.replacementAmount) : null;
     const replacementReference = correctionKind === 'replace' ? cleanText(body.replacementReference, 160) : null;
     const replacementReason = correctionKind === 'replace' ? cleanText(body.replacementReason, 500) : null;
-    const replacementExpenseCategory = correctionKind === 'replace' ? cleanText(body.replacementExpenseCategory, 120) : null;
+    const replacementExpenseCategoryId = correctionKind === 'replace' && body.replacementExpenseCategoryId != null
+      ? cleanUuid(body.replacementExpenseCategoryId)
+      : null;
     if (correctionKind === 'replace'
       && (!replacementType || replacementAmount === null || !replacementReference || !replacementReason)) {
       return json({ error: 'Replacement cash activity, amount, reference and reason are required' }, 400);
     }
-    if (replacementType === 'expense' && !replacementExpenseCategory) {
-      return json({ error: 'Expense category is required' }, 400);
+    if (replacementType === 'expense' && !replacementExpenseCategoryId) {
+      return json({ error: 'Expense Category is required' }, 400);
+    }
+    if (replacementType !== 'expense' && replacementExpenseCategoryId) {
+      return json({ error: 'Replacement Expense Category applies only to an Expense replacement' }, 400);
     }
 
     responseShiftId = shiftId;
@@ -141,7 +149,7 @@ Deno.serve(async (request) => {
       p_replacement_amount: replacementAmount,
       p_replacement_reference: replacementReference,
       p_replacement_reason: replacementReason,
-      p_replacement_expense_category: replacementType === 'expense' ? replacementExpenseCategory : null,
+      p_replacement_expense_category_id: replacementType === 'expense' ? replacementExpenseCategoryId : null,
       p_actor_user_id: userId,
     };
   } else if (action === 'close') {
@@ -188,7 +196,7 @@ Deno.serve(async (request) => {
       ? 403
       : /not found/i.test(message)
         ? 404
-        : /already|open shift|cannot|close|variance|different facts|unavailable|invalid|corrected/i.test(message)
+        : /already|open shift|cannot|close|variance|different facts|unavailable|invalid|corrected|choose/i.test(message)
           ? 409
           : 400;
     return json({ error: message }, status);

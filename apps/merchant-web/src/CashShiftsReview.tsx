@@ -4,6 +4,7 @@ import { errorMessage, numberValue, supabase } from './supabase';
 
 type Branch = { id: string; name: string; isDefault: boolean };
 type Cashier = { userId: string; name: string };
+type ExpenseCategory = { id: string; name: string };
 type ShiftRow = {
   shiftId: string;
   branchId: string;
@@ -36,6 +37,7 @@ type Movement = {
   reference: string;
   reason: string;
   expenseCategory: string | null;
+  expenseCategoryId: string | null;
   actorUserId: string;
   actorName: string;
   createdAt: string;
@@ -102,6 +104,7 @@ type ListResponse = {
   currency?: unknown;
   cashiers?: unknown;
 };
+type CategoryResponse = { items?: unknown };
 
 type CorrectionDraft = {
   movementId: string;
@@ -111,7 +114,7 @@ type CorrectionDraft = {
   replacementAmount: string;
   replacementReference: string;
   replacementReason: string;
-  replacementExpenseCategory: string;
+  replacementExpenseCategoryId: string;
 };
 
 const PAGE_SIZE = 40;
@@ -129,6 +132,7 @@ export default function CashShiftsManagement({
 }) {
   const [rows, setRows] = useState<ShiftRow[]>([]);
   const [cashiers, setCashiers] = useState<Cashier[]>([]);
+  const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
   const [branchId, setBranchId] = useState(initialBranchId || 'all');
   const [cashierId, setCashierId] = useState('all');
   const [status, setStatus] = useState('all');
@@ -167,6 +171,8 @@ export default function CashShiftsManagement({
     setPage(0);
     setSelectedId(null);
     setDetail(null);
+    setExpenseCategories([]);
+    setCorrection(null);
   }, [tenantId]);
 
   useEffect(() => {
@@ -177,10 +183,29 @@ export default function CashShiftsManagement({
 
   useEffect(() => { setPage(0); }, [branchId, cashierId, status, varianceState, dateFrom, dateTo]);
   useEffect(() => { void load(); }, [tenantId, branchId, cashierId, status, varianceState, dateFrom, dateTo, page]);
+  useEffect(() => { void loadExpenseCategories(); }, [tenantId]);
   useEffect(() => {
     if (selectedId) void loadDetail(selectedId);
     else setDetail(null);
   }, [selectedId]);
+
+  async function loadExpenseCategories() {
+    try {
+      const { data, error: rpcError } = await supabase.rpc('get_sellertray_expense_categories', {
+        p_tenant_id: tenantId,
+        p_include_inactive: false,
+      });
+      if (rpcError) throw rpcError;
+      const result = (data ?? {}) as CategoryResponse;
+      setExpenseCategories((Array.isArray(result.items) ? result.items : []).map((raw) => {
+        const row = raw as Record<string, unknown>;
+        return { id: String(row.id ?? ''), name: String(row.name ?? 'Expense Category') };
+      }).filter((row) => row.id));
+    } catch (cause) {
+      setExpenseCategories([]);
+      setError(errorMessage(cause, 'Unable to load Expense Categories.'));
+    }
+  }
 
   async function load(preferredId?: string | null) {
     const requestId = ++listRequestRef.current;
@@ -240,7 +265,7 @@ export default function CashShiftsManagement({
     setDetailLoading(true);
     setCorrection(null);
     try {
-      const { data, error: rpcError } = await supabase.rpc('get_sellertray_cash_shift_management_detail', {
+      const { data, error: rpcError } = await supabase.rpc('get_sellertray_cash_shift_management_detail_with_categories', {
         p_tenant_id: tenantId,
         p_shift_id: shiftId,
       });
@@ -300,8 +325,8 @@ export default function CashShiftsManagement({
         setError('Enter the replacement amount, reference and reason.');
         return;
       }
-      if (correction.replacementType === 'expense' && !correction.replacementExpenseCategory.trim()) {
-        setError('Expense category is required for the replacement expense.');
+      if (correction.replacementType === 'expense' && !correction.replacementExpenseCategoryId) {
+        setError('Choose an Expense Category for the replacement expense.');
         return;
       }
     }
@@ -322,8 +347,8 @@ export default function CashShiftsManagement({
           replacementAmount: correction.correctionKind === 'replace' ? amount : null,
           replacementReference: correction.correctionKind === 'replace' ? correction.replacementReference.trim() : null,
           replacementReason: correction.correctionKind === 'replace' ? correction.replacementReason.trim() : null,
-          replacementExpenseCategory: correction.correctionKind === 'replace' && correction.replacementType === 'expense'
-            ? correction.replacementExpenseCategory.trim()
+          replacementExpenseCategoryId: correction.correctionKind === 'replace' && correction.replacementType === 'expense'
+            ? correction.replacementExpenseCategoryId
             : null,
         },
       });
@@ -333,7 +358,7 @@ export default function CashShiftsManagement({
       setNotice(correction.correctionKind === 'remove' ? 'Cash activity removed through an audited correction.' : 'Cash activity replaced through an audited correction.');
       setCorrection(null);
       await load(detail.shiftId);
-      await loadDetail(detail.shiftId);
+      await Promise.all([loadDetail(detail.shiftId), loadExpenseCategories()]);
     } catch (cause) {
       setError(errorMessage(cause, 'Unable to correct this cash activity.'));
     } finally {
@@ -342,6 +367,9 @@ export default function CashShiftsManagement({
   }
 
   function beginCorrection(movement: Movement) {
+    const existingActive = movement.expenseCategoryId
+      ? expenseCategories.find((category) => category.id === movement.expenseCategoryId)?.id ?? ''
+      : '';
     setCorrection({
       movementId: movement.movementId,
       correctionKind: 'replace',
@@ -350,8 +378,22 @@ export default function CashShiftsManagement({
       replacementAmount: String(movement.amount),
       replacementReference: movement.reference,
       replacementReason: movement.reason,
-      replacementExpenseCategory: movement.expenseCategory ?? '',
+      replacementExpenseCategoryId: movement.movementType === 'expense'
+        ? existingActive || expenseCategories[0]?.id || ''
+        : '',
     });
+  }
+
+  function setReplacementType(replacementType: CorrectionDraft['replacementType']) {
+    setCorrection((current) => current ? {
+      ...current,
+      replacementType,
+      replacementExpenseCategoryId: replacementType === 'expense'
+        ? (expenseCategories.some((category) => category.id === current.replacementExpenseCategoryId)
+          ? current.replacementExpenseCategoryId
+          : expenseCategories[0]?.id ?? '')
+        : '',
+    } : current);
   }
 
   const selectedMovement = useMemo(
@@ -432,14 +474,15 @@ export default function CashShiftsManagement({
             <label className="select-field"><span>Correction</span><SellerTraySelect value={correction.correctionKind} onChange={(event) => setCorrection((current) => current ? { ...current, correctionKind: event.target.value as 'remove' | 'replace' } : current)}><option value="replace">Replace with correct entry</option><option value="remove">Remove from effective cash</option></SellerTraySelect></label>
             <label className="field"><span>Why is this being corrected?</span><SellerTrayInput value={correction.correctionReason} onChange={(event) => setCorrection((current) => current ? { ...current, correctionReason: event.target.value } : current)} placeholder="Required audit reason" /></label>
             {correction.correctionKind === 'replace' ? <>
-              <label className="select-field"><span>Activity</span><SellerTraySelect value={correction.replacementType} onChange={(event) => setCorrection((current) => current ? { ...current, replacementType: event.target.value as CorrectionDraft['replacementType'] } : current)}><option value="cash_in">Cash in</option><option value="cash_out">Cash out</option><option value="expense">Expense</option></SellerTraySelect></label>
+              <label className="select-field"><span>Activity</span><SellerTraySelect value={correction.replacementType} onChange={(event) => setReplacementType(event.target.value as CorrectionDraft['replacementType'])}><option value="cash_in">Cash in</option><option value="cash_out">Cash out</option><option value="expense">Expense</option></SellerTraySelect></label>
               <label className="field"><span>Amount</span><SellerTrayInput type="number" min="0.01" step="0.01" value={correction.replacementAmount} onChange={(event) => setCorrection((current) => current ? { ...current, replacementAmount: event.target.value } : current)} /></label>
               <label className="field"><span>Reference</span><SellerTrayInput value={correction.replacementReference} onChange={(event) => setCorrection((current) => current ? { ...current, replacementReference: event.target.value } : current)} /></label>
               <label className="field"><span>Reason</span><SellerTrayInput value={correction.replacementReason} onChange={(event) => setCorrection((current) => current ? { ...current, replacementReason: event.target.value } : current)} /></label>
-              {correction.replacementType === 'expense' ? <label className="field"><span>Expense category</span><SellerTrayInput value={correction.replacementExpenseCategory} onChange={(event) => setCorrection((current) => current ? { ...current, replacementExpenseCategory: event.target.value } : current)} /></label> : null}
+              {correction.replacementType === 'expense' ? <label className="select-field"><span>Expense Category</span><SellerTraySelect value={correction.replacementExpenseCategoryId} onChange={(event) => setCorrection((current) => current ? { ...current, replacementExpenseCategoryId: event.target.value } : current)}><option value="">Choose Expense Category</option>{expenseCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</SellerTraySelect></label> : null}
             </> : null}
           </div>
-          <div className="toolbar-row"><span className="muted-copy">Corrections are immutable after posting.</span><button className="primary-button" disabled={busy} onClick={() => void correctMovement()}>{busy ? 'Saving correction' : 'Apply audited correction'}</button></div>
+          {correction.correctionKind === 'replace' && correction.replacementType === 'expense' && expenseCategories.length === 0 ? <div className="empty-state compact"><strong>No active Expense Category</strong><p>Create or reactivate an Expense Category under Business Expenses before posting this replacement.</p></div> : null}
+          <div className="toolbar-row"><span className="muted-copy">Corrections are immutable after posting.</span><button className="primary-button" disabled={busy || (correction.correctionKind === 'replace' && correction.replacementType === 'expense' && !correction.replacementExpenseCategoryId)} onClick={() => void correctMovement()}>{busy ? 'Saving correction' : 'Apply audited correction'}</button></div>
         </div> : null}
 
         {detail.corrections.length ? <div>
@@ -483,6 +526,7 @@ function mapDetail(row: Record<string, unknown>): ShiftDetail {
       return {
         movementId: String(item.movementId ?? ''), movementType: movementType(item.movementType), amount: numberValue(item.amount), currency: String(item.currency ?? base.currency),
         reference: String(item.reference ?? ''), reason: String(item.reason ?? ''), expenseCategory: typeof item.expenseCategory === 'string' ? item.expenseCategory : null,
+        expenseCategoryId: typeof item.expenseCategoryId === 'string' ? item.expenseCategoryId : null,
         actorUserId: String(item.actorUserId ?? ''), actorName: String(item.actorName ?? 'Team member'), createdAt: String(item.createdAt ?? ''),
         replacementForCorrectionId: typeof item.replacementForCorrectionId === 'string' ? item.replacementForCorrectionId : null,
         correctionReason: typeof item.correctionReason === 'string' ? item.correctionReason : null,

@@ -9,6 +9,7 @@ import {
   recordBusinessExpense,
   type BusinessBankAccount,
   type BusinessExpenseFundingSource,
+  type ExpenseCategoryOption,
   type OpenCashDrawer,
 } from '../data/moneyRepository';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
@@ -25,13 +26,14 @@ export function BusinessExpenseWorkspace({ tenantId, branch, onClose }: Props) {
   const appearance = useSellerTrayAppearance();
   const dark = appearance.dark;
   const [fundingSource, setFundingSource] = useState<BusinessExpenseFundingSource>('cash');
+  const [expenseCategories, setExpenseCategories] = useState<ExpenseCategoryOption[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BusinessBankAccount[]>([]);
   const [cashDrawers, setCashDrawers] = useState<OpenCashDrawer[]>([]);
   const [currency, setCurrency] = useState('NGN');
   const [bankPaymentMethodId, setBankPaymentMethodId] = useState('');
   const [cashShiftId, setCashShiftId] = useState('');
   const [canRecord, setCanRecord] = useState(false);
-  const [expenseCategory, setExpenseCategory] = useState('');
+  const [expenseCategoryId, setExpenseCategoryId] = useState('');
   const [amount, setAmount] = useState('');
   const [reference, setReference] = useState(() => createOperationalReference('expense'));
   const [reason, setReason] = useState('');
@@ -48,8 +50,12 @@ export function BusinessExpenseWorkspace({ tenantId, branch, onClose }: Props) {
       const options = await loadMoneyOperationOptions(tenantId, branch.id);
       setCurrency(options.currency);
       setCanRecord(options.canRecordBusinessExpense);
+      setExpenseCategories(options.expenseCategories);
       setBankAccounts(options.bankAccounts);
       setCashDrawers(options.openCashDrawers);
+      setExpenseCategoryId((current) => options.expenseCategories.some((entry) => entry.id === current)
+        ? current
+        : options.expenseCategories[0]?.id ?? '');
       setBankPaymentMethodId((current) => options.bankAccounts.some((entry) => entry.id === current)
         ? current
         : options.bankAccounts[0]?.id ?? '');
@@ -58,8 +64,10 @@ export function BusinessExpenseWorkspace({ tenantId, branch, onClose }: Props) {
         : options.openCashDrawers[0]?.shiftId ?? '');
     } catch (cause) {
       setCanRecord(false);
+      setExpenseCategories([]);
       setBankAccounts([]);
       setCashDrawers([]);
+      setExpenseCategoryId('');
       setError(errorMessage(cause, 'Unable to load Business Expense options.'));
     } finally {
       setLoading(false);
@@ -71,7 +79,7 @@ export function BusinessExpenseWorkspace({ tenantId, branch, onClose }: Props) {
   }, [tenantId, branch.id]);
 
   function resetForm() {
-    setExpenseCategory('');
+    setExpenseCategoryId('');
     setAmount('');
     setReference(createOperationalReference('expense'));
     setReason('');
@@ -82,7 +90,7 @@ export function BusinessExpenseWorkspace({ tenantId, branch, onClose }: Props) {
     if (saving) return;
     if (!canRecord) return setError('Only an authorised Owner or Manager can record Business Expenses.');
     const parsed = Number(amount.replace(/,/g, '').trim());
-    if (!expenseCategory.trim()) return setError('Enter an expense category.');
+    if (!expenseCategoryId) return setError('Choose an Expense Category.');
     if (!Number.isFinite(parsed) || parsed <= 0) return setError('Enter an amount greater than zero.');
     if (!reference.trim()) return setError('Enter a reference for this Business Expense.');
     if (!reason.trim()) return setError('Enter a reason for this Business Expense.');
@@ -100,7 +108,7 @@ export function BusinessExpenseWorkspace({ tenantId, branch, onClose }: Props) {
         fundingSource,
         paymentMethodId: fundingSource === 'bank' ? bankPaymentMethodId : null,
         cashShiftId: fundingSource === 'cash' ? cashShiftId : null,
-        expenseCategory,
+        expenseCategoryId,
         amount: parsed,
         reference,
         reason,
@@ -121,7 +129,7 @@ export function BusinessExpenseWorkspace({ tenantId, branch, onClose }: Props) {
   }
 
   const selectedDrawer = cashDrawers.find((entry) => entry.shiftId === cashShiftId) ?? null;
-  const submitDisabled = saving || (fundingSource === 'cash' ? !cashShiftId : !bankPaymentMethodId);
+  const submitDisabled = saving || !expenseCategoryId || (fundingSource === 'cash' ? !cashShiftId : !bankPaymentMethodId);
 
   return <View style={styles.stack}>
     <Pressable onPress={onClose} style={styles.backButton}>
@@ -142,6 +150,27 @@ export function BusinessExpenseWorkspace({ tenantId, branch, onClose }: Props) {
     {!loading && !canRecord ? <Card dark={dark}><Text style={[styles.sectionTitle, dark && darkStyles.titleText]}>Management authority required</Text><Text style={[styles.helper, dark && darkStyles.bodyText]}>Business Expenses are available only to an authorised Owner or Manager for this Branch.</Text></Card> : null}
 
     {!loading && canRecord ? <>
+      <Card dark={dark}>
+        <Text style={[styles.sectionTitle, dark && darkStyles.titleText]}>Expense Category</Text>
+        {expenseCategories.length === 0 ? <Text style={[styles.helper, dark && darkStyles.bodyText]}>No active Expense Category is available. Create one in Merchant Web first.</Text>
+          : <View style={styles.optionList}>{expenseCategories.map((category) => {
+            const selected = expenseCategoryId === category.id;
+            return <Pressable
+              key={category.id}
+              onPress={() => setExpenseCategoryId(category.id)}
+              style={[
+                styles.optionChoice,
+                dark && darkStyles.optionChoice,
+                selected && (dark ? darkStyles.optionChoiceActive : styles.optionChoiceActive),
+              ]}
+            >
+              <Text style={[styles.optionTitle, styles.flexOne, dark && darkStyles.titleText]}>{category.name}</Text>
+              <Ionicons name={selected ? 'radio-button-on' : 'radio-button-off'} size={20} color={selected ? (dark ? theme.dark.accentText : theme.colors.greenDark) : (dark ? theme.dark.textSubtle : theme.colors.muted)} />
+            </Pressable>;
+          })}</View>}
+        <Text style={[styles.helper, dark && darkStyles.bodyText]}>Expense Categories are managed centrally in Merchant Web so Mobile, reporting and corrections use the same Business classification.</Text>
+      </Card>
+
       <Card dark={dark}>
         <Text style={[styles.sectionTitle, dark && darkStyles.titleText]}>Funding source</Text>
         <View style={styles.choiceRow}>
@@ -193,7 +222,6 @@ export function BusinessExpenseWorkspace({ tenantId, branch, onClose }: Props) {
       </Card>}
 
       <Card dark={dark}>
-        <Field label="Expense category" dark={dark}><TextInput value={expenseCategory} onChangeText={setExpenseCategory} placeholder="e.g. Utilities" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} /></Field>
         <Field label="Amount" dark={dark}><TextInput value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} /></Field>
         <Field label="Reference" dark={dark}><TextInput value={reference} onChangeText={setReference} style={[styles.input, dark && darkStyles.input]} /></Field>
         <Field label="Reason" dark={dark}><TextInput value={reason} onChangeText={setReason} multiline placeholder="What was this expense for?" placeholderTextColor={theme.colors.subtle} style={[styles.input, styles.multiline, dark && darkStyles.input]} /></Field>

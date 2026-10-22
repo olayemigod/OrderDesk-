@@ -3,6 +3,11 @@ import { supabase } from '../lib/supabase';
 export type CashOutType = 'bank_deposit' | 'owner_withdrawal';
 export type BusinessExpenseFundingSource = 'cash' | 'bank';
 
+export type ExpenseCategoryOption = {
+  id: string;
+  name: string;
+};
+
 export type BusinessBankAccount = {
   id: string;
   displayName: string;
@@ -23,6 +28,7 @@ export type OpenCashDrawer = {
 export type MoneyOperationOptions = {
   currency: string;
   canRecordBusinessExpense: boolean;
+  expenseCategories: ExpenseCategoryOption[];
   bankAccounts: BusinessBankAccount[];
   openCashDrawers: OpenCashDrawer[];
 };
@@ -53,7 +59,15 @@ export async function loadMoneyOperationOptions(
   tenantId: string,
   branchId: string,
 ): Promise<MoneyOperationOptions> {
-  if (!tenantId || !branchId) return { currency: 'NGN', canRecordBusinessExpense: false, bankAccounts: [], openCashDrawers: [] };
+  if (!tenantId || !branchId) {
+    return {
+      currency: 'NGN',
+      canRecordBusinessExpense: false,
+      expenseCategories: [],
+      bankAccounts: [],
+      openCashDrawers: [],
+    };
+  }
   const { data, error } = await supabase.rpc('get_sellertray_money_operation_options', {
     p_tenant_id: tenantId,
     p_branch_id: branchId,
@@ -64,6 +78,7 @@ export async function loadMoneyOperationOptions(
   return {
     currency: typeof row.currency === 'string' && /^[A-Z]{3}$/.test(row.currency) ? row.currency : 'NGN',
     canRecordBusinessExpense: row.canRecordBusinessExpense === true,
+    expenseCategories: Array.isArray(row.expenseCategories) ? row.expenseCategories.map(parseExpenseCategory) : [],
     bankAccounts: Array.isArray(row.bankAccounts) ? row.bankAccounts.map(parseBankAccount) : [],
     openCashDrawers: Array.isArray(row.openCashDrawers) ? row.openCashDrawers.map(parseCashDrawer) : [],
   };
@@ -121,7 +136,7 @@ export async function recordBusinessExpense(input: {
   fundingSource: BusinessExpenseFundingSource;
   paymentMethodId?: string | null;
   cashShiftId?: string | null;
-  expenseCategory: string;
+  expenseCategoryId: string;
   amount: number;
   reference: string;
   reason: string;
@@ -129,7 +144,7 @@ export async function recordBusinessExpense(input: {
 }): Promise<BusinessExpenseResult> {
   if (!input.tenantId || !input.branchId) throw new Error('Business and Branch are required.');
   if (!input.commandId.trim()) throw new Error('Restart this Business Expense and try again.');
-  if (!input.expenseCategory.trim()) throw new Error('Expense category is required.');
+  if (!input.expenseCategoryId.trim()) throw new Error('Choose an Expense Category.');
   if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error('Amount must be greater than zero.');
   if (!input.reference.trim()) throw new Error('Reference is required.');
   if (!input.reason.trim()) throw new Error('Reason is required.');
@@ -143,7 +158,7 @@ export async function recordBusinessExpense(input: {
     fundingSource: input.fundingSource,
     paymentMethodId: input.fundingSource === 'bank' ? input.paymentMethodId : null,
     cashShiftId: input.fundingSource === 'cash' ? input.cashShiftId : null,
-    expenseCategory: input.expenseCategory.trim(),
+    expenseCategoryId: input.expenseCategoryId.trim(),
     amount: input.amount,
     reference: input.reference.trim(),
     reason: input.reason.trim(),
@@ -160,6 +175,14 @@ export async function recordBusinessExpense(input: {
     cashMovementId: typeof data.cashMovementId === 'string' ? data.cashMovementId : null,
     expectedCash: data.expectedCash == null ? undefined : numberValue(data.expectedCash),
     idempotentReplay: data.idempotentReplay === true,
+  };
+}
+
+function parseExpenseCategory(value: unknown): ExpenseCategoryOption {
+  const row = value as Record<string, unknown>;
+  return {
+    id: String(row.id ?? ''),
+    name: String(row.name ?? 'Expense Category'),
   };
 }
 

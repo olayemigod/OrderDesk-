@@ -19,6 +19,13 @@ type CashDrawer = {
   openedAt: string;
   expectedCash: number;
 };
+type ExpenseCategory = {
+  id: string;
+  name: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
 type ExpenseRow = {
   expenseId: string;
   branchId: string;
@@ -49,6 +56,10 @@ type OptionsResponse = {
   bankAccounts?: unknown;
   openCashDrawers?: unknown;
 };
+type CategoryResponse = {
+  canManage?: unknown;
+  items?: unknown;
+};
 
 const PAGE_SIZE = 40;
 
@@ -74,6 +85,7 @@ export default function BusinessExpensesManagement({
   const [aggregateCurrency, setAggregateCurrency] = useState(businessCurrency);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [categoryBusy, setCategoryBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -81,16 +93,24 @@ export default function BusinessExpensesManagement({
   const [canCreate, setCanCreate] = useState(false);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [cashDrawers, setCashDrawers] = useState<CashDrawer[]>([]);
+  const [categories, setCategories] = useState<ExpenseCategory[]>([]);
+  const [canManageCategories, setCanManageCategories] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingCategoryName, setEditingCategoryName] = useState('');
   const [fundingSource, setFundingSource] = useState<FundingSource>('cash');
   const [bankAccountId, setBankAccountId] = useState('');
   const [cashShiftId, setCashShiftId] = useState('');
-  const [expenseCategory, setExpenseCategory] = useState('');
+  const [expenseCategoryId, setExpenseCategoryId] = useState('');
   const [amount, setAmount] = useState('');
   const [reference, setReference] = useState(newReference());
   const [reason, setReason] = useState('');
   const [commandId, setCommandId] = useState(newCommandId());
   const listRequestRef = useRef(0);
   const optionsRequestRef = useRef(0);
+  const categoryRequestRef = useRef(0);
+
+  const activeCategories = useMemo(() => categories.filter((category) => category.isActive), [categories]);
 
   useEffect(() => {
     setBranchId(initialBranchId || 'all');
@@ -100,6 +120,11 @@ export default function BusinessExpensesManagement({
     setSearchDraft('');
     setPage(0);
     setShowCreate(false);
+    setCategories([]);
+    setCanManageCategories(false);
+    setNewCategoryName('');
+    setEditingCategoryId(null);
+    setEditingCategoryName('');
     resetDraft();
   }, [tenantId]);
 
@@ -112,6 +137,7 @@ export default function BusinessExpensesManagement({
 
   useEffect(() => { setPage(0); }, [branchId, fundingFilter, search]);
   useEffect(() => { void load(); }, [tenantId, branchId, fundingFilter, search, page]);
+  useEffect(() => { void loadCategories(); }, [tenantId]);
   useEffect(() => {
     if (createBranchId) void loadOptions(createBranchId);
     else {
@@ -155,6 +181,45 @@ export default function BusinessExpensesManagement({
     }
   }
 
+  async function loadCategories() {
+    const requestId = ++categoryRequestRef.current;
+    try {
+      const { data, error: rpcError } = await supabase.rpc('get_sellertray_expense_categories', {
+        p_tenant_id: tenantId,
+        p_include_inactive: false,
+      });
+      if (rpcError) throw rpcError;
+      if (requestId !== categoryRequestRef.current) return;
+      const activeResult = (data ?? {}) as CategoryResponse;
+      const canManage = activeResult.canManage === true;
+      let nextCategories = mapCategories(activeResult.items);
+
+      if (canManage) {
+        const { data: allData, error: allError } = await supabase.rpc('get_sellertray_expense_categories', {
+          p_tenant_id: tenantId,
+          p_include_inactive: true,
+        });
+        if (allError) throw allError;
+        if (requestId !== categoryRequestRef.current) return;
+        const allResult = (allData ?? {}) as CategoryResponse;
+        nextCategories = mapCategories(allResult.items);
+      }
+
+      setCanManageCategories(canManage);
+      setCategories(nextCategories);
+      const nextActive = nextCategories.filter((category) => category.isActive);
+      setExpenseCategoryId((current) => nextActive.some((category) => category.id === current)
+        ? current
+        : nextActive[0]?.id ?? '');
+    } catch (cause) {
+      if (requestId !== categoryRequestRef.current) return;
+      setCategories([]);
+      setCanManageCategories(false);
+      setExpenseCategoryId('');
+      setError(errorMessage(cause, 'Unable to load Expense Categories.'));
+    }
+  }
+
   async function loadOptions(selectedBranchId: string) {
     const requestId = ++optionsRequestRef.current;
     try {
@@ -189,18 +254,54 @@ export default function BusinessExpensesManagement({
     setFundingSource('cash');
     setBankAccountId('');
     setCashShiftId('');
-    setExpenseCategory('');
+    setExpenseCategoryId('');
     setAmount('');
     setReference(newReference());
     setReason('');
     setCommandId(newCommandId());
   }
 
+  async function manageCategory(action: 'create' | 'rename' | 'archive' | 'reactivate', categoryId?: string, categoryName?: string) {
+    if (!canManageCategories) return setError('Only an authorised Owner or Manager can manage Expense Categories.');
+    const name = categoryName?.trim() ?? '';
+    if ((action === 'create' || action === 'rename') && !name) return setError('Enter an Expense Category name.');
+
+    setCategoryBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const { data, error: rpcError } = await supabase.rpc('manage_sellertray_expense_category', {
+        p_tenant_id: tenantId,
+        p_action: action,
+        p_category_id: categoryId ?? null,
+        p_name: action === 'create' || action === 'rename' ? name : null,
+      });
+      if (rpcError) throw rpcError;
+      const result = asObject(data);
+      if (typeof result.id !== 'string') throw new Error('SellerTray returned an invalid Expense Category result.');
+      setNotice(action === 'create'
+        ? 'Expense Category created.'
+        : action === 'rename'
+          ? 'Expense Category renamed. Historical expenses keep their original category snapshot.'
+          : action === 'archive'
+            ? 'Expense Category archived. Historical expenses are unchanged.'
+            : 'Expense Category reactivated.');
+      setNewCategoryName('');
+      setEditingCategoryId(null);
+      setEditingCategoryName('');
+      await loadCategories();
+    } catch (cause) {
+      setError(errorMessage(cause, 'Unable to update this Expense Category.'));
+    } finally {
+      setCategoryBusy(false);
+    }
+  }
+
   async function createExpense() {
     const parsedAmount = Number(amount);
     if (!createBranchId) return setError('Choose a Branch for this Business Expense.');
     if (!canCreate) return setError('Only an authorised Owner or Manager can record Business Expenses.');
-    if (!expenseCategory.trim()) return setError('Enter an expense category.');
+    if (!expenseCategoryId) return setError('Choose an Expense Category.');
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) return setError('Enter an amount greater than zero.');
     if (!reference.trim()) return setError('Enter a reference.');
     if (!reason.trim()) return setError('Enter a reason.');
@@ -220,7 +321,7 @@ export default function BusinessExpensesManagement({
           fundingSource,
           paymentMethodId: fundingSource === 'bank' ? bankAccountId : null,
           cashShiftId: fundingSource === 'cash' ? cashShiftId : null,
-          expenseCategory: expenseCategory.trim(),
+          expenseCategoryId,
           amount: parsedAmount,
           reference: reference.trim(),
           reason: reason.trim(),
@@ -236,8 +337,7 @@ export default function BusinessExpensesManagement({
       setNotice(replay ? 'This Business Expense was already recorded.' : 'Business Expense recorded.');
       setShowCreate(false);
       resetDraft();
-      await load();
-      await loadOptions(createBranchId);
+      await Promise.all([load(), loadOptions(createBranchId), loadCategories()]);
     } catch (cause) {
       setError(errorMessage(cause, 'Unable to record this Business Expense.'));
     } finally {
@@ -264,8 +364,38 @@ export default function BusinessExpensesManagement({
 
     <article className="panel">
       <div className="panel-head">
+        <div><p className="eyebrow">Business master</p><h3>Expense Categories</h3><p className="muted">Manage the Business-wide categories used by Merchant Web and Mobile. Renaming or archiving never rewrites historical expense labels.</p></div>
+        <button className="secondary-button" disabled={categoryBusy} onClick={() => void loadCategories()}>{categoryBusy ? 'Updating' : 'Refresh categories'}</button>
+      </div>
+
+      {canManageCategories ? <div className="settings-card">
+        <div className="settings-grid two">
+          <label><span>New Expense Category</span><SellerTrayInput value={newCategoryName} onChange={(event) => setNewCategoryName(event.target.value)} placeholder="e.g. Utilities" maxLength={120} /></label>
+          <div className="panel-actions"><button className="primary-button" disabled={categoryBusy || !newCategoryName.trim()} onClick={() => void manageCategory('create', undefined, newCategoryName)}>{categoryBusy ? 'Saving' : 'Add category'}</button></div>
+        </div>
+      </div> : <p className="muted">Expense Categories are managed by an authorised Owner or Manager.</p>}
+
+      <div className="table-wrap">
+        <table className="data-table">
+          <thead><tr><th>Category</th><th>Status</th><th>Last updated</th>{canManageCategories ? <th>Action</th> : null}</tr></thead>
+          <tbody>{categories.length === 0 ? <tr><td colSpan={canManageCategories ? 4 : 3}><div className="empty-state compact"><strong>No Expense Categories yet</strong><p>Create the first category before recording a new expense.</p></div></td></tr> : categories.map((category) => <tr key={category.id}>
+            <td>{editingCategoryId === category.id
+              ? <SellerTrayInput value={editingCategoryName} onChange={(event) => setEditingCategoryName(event.target.value)} maxLength={120} />
+              : <strong>{category.name}</strong>}</td>
+            <td><span className={category.isActive ? 'status-badge success' : 'status-badge muted'}>{category.isActive ? 'Active' : 'Archived'}</span></td>
+            <td>{dateTime(category.updatedAt)}</td>
+            {canManageCategories ? <td><div className="panel-actions">{editingCategoryId === category.id
+              ? <><button className="secondary-button" disabled={categoryBusy} onClick={() => { setEditingCategoryId(null); setEditingCategoryName(''); }}>Cancel</button><button className="primary-button" disabled={categoryBusy || !editingCategoryName.trim()} onClick={() => void manageCategory('rename', category.id, editingCategoryName)}>Save name</button></>
+              : <><button className="secondary-button" disabled={categoryBusy} onClick={() => { setEditingCategoryId(category.id); setEditingCategoryName(category.name); }}>Rename</button><button className="secondary-button" disabled={categoryBusy} onClick={() => void manageCategory(category.isActive ? 'archive' : 'reactivate', category.id)}>{category.isActive ? 'Archive' : 'Reactivate'}</button></>}</div></td> : null}
+          </tr>)}</tbody>
+        </table>
+      </div>
+    </article>
+
+    <article className="panel">
+      <div className="panel-head">
         <div><p className="eyebrow">Money</p><h3>Business Expenses</h3><p className="muted">Record management-level operating expenses without mixing transfers or owner withdrawals into expense reporting.</p></div>
-        <div className="panel-actions"><button className="secondary-button" disabled={loading} onClick={() => void load()}>{loading ? 'Refreshing' : 'Refresh'}</button><button className="primary-button" onClick={() => { setShowCreate((value) => !value); setError(null); }}>{showCreate ? 'Close form' : 'New Business Expense'}</button></div>
+        <div className="panel-actions"><button className="secondary-button" disabled={loading} onClick={() => void load()}>{loading ? 'Refreshing' : 'Refresh'}</button><button className="primary-button" onClick={() => { setShowCreate((value) => !value); setError(null); if (!expenseCategoryId) setExpenseCategoryId(activeCategories[0]?.id ?? ''); }}>{showCreate ? 'Close form' : 'New Business Expense'}</button></div>
       </div>
 
       {showCreate ? <div className="settings-card">
@@ -275,15 +405,16 @@ export default function BusinessExpensesManagement({
           <label className="select-field"><span>Funding source</span><SellerTraySelect value={fundingSource} onChange={(event) => setFundingSource(event.target.value as FundingSource)}><option value="cash">Cash</option><option value="bank">Bank</option></SellerTraySelect></label>
           {fundingSource === 'bank' ? <label className="select-field"><span>Business bank account</span><SellerTraySelect value={bankAccountId} onChange={(event) => setBankAccountId(event.target.value)}><option value="">Choose bank account</option>{bankAccounts.map((bank) => <option key={bank.id} value={bank.id}>{bankLabel(bank)}</option>)}</SellerTraySelect></label> : null}
           {fundingSource === 'cash' ? <label className="select-field"><span>Open cash drawer</span><SellerTraySelect value={cashShiftId} onChange={(event) => setCashShiftId(event.target.value)}><option value="">Choose cash drawer</option>{cashDrawers.map((drawer) => <option key={drawer.shiftId} value={drawer.shiftId}>{drawer.registerName} · {money(drawer.expectedCash, businessCurrency)}</option>)}</SellerTraySelect></label> : null}
-          <label><span>Expense category</span><SellerTrayInput value={expenseCategory} onChange={(event) => setExpenseCategory(event.target.value)} placeholder="e.g. Utilities" maxLength={120} /></label>
+          <label className="select-field"><span>Expense Category</span><SellerTraySelect value={expenseCategoryId} onChange={(event) => setExpenseCategoryId(event.target.value)}><option value="">Choose Expense Category</option>{activeCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</SellerTraySelect></label>
           <label><span>Amount</span><SellerTrayInput value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" placeholder="0.00" /></label>
           <label><span>Reference</span><SellerTrayInput value={reference} onChange={(event) => setReference(event.target.value)} maxLength={160} /></label>
           <label className="settings-span-two"><span>Reason</span><SellerTrayTextarea value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} placeholder="What was this expense for?" /></label>
         </div>
+        {activeCategories.length === 0 ? <div className="empty-state compact"><strong>No active Expense Category</strong><p>Create or reactivate an Expense Category before recording a Business Expense.</p></div> : null}
         {fundingSource === 'cash' && selectedDrawer ? <p className="muted">Selected drawer currently expects {money(selectedDrawer.expectedCash, businessCurrency)}. SellerTray records the expense and its drawer effect atomically.</p> : null}
         {fundingSource === 'cash' && cashDrawers.length === 0 ? <div className="empty-state compact"><strong>No open cash drawer</strong><p>Use Bank funding or open a cashier shift in the selected Branch before recording a cash-funded Business Expense.</p></div> : null}
         {fundingSource === 'bank' && bankAccounts.length === 0 ? <div className="empty-state compact"><strong>No enabled Business bank account</strong><p>Configure and enable a Bank Transfer payment method before recording a bank-funded Business Expense.</p></div> : null}
-        <div className="panel-actions"><button className="secondary-button" disabled={busy} onClick={() => { setShowCreate(false); resetDraft(); }}>Cancel</button><button className="primary-button" disabled={busy || !canCreate || (fundingSource === 'cash' ? !cashShiftId : !bankAccountId)} onClick={() => void createExpense()}>{busy ? 'Recording' : 'Record Business Expense'}</button></div>
+        <div className="panel-actions"><button className="secondary-button" disabled={busy} onClick={() => { setShowCreate(false); resetDraft(); }}>Cancel</button><button className="primary-button" disabled={busy || !canCreate || !expenseCategoryId || (fundingSource === 'cash' ? !cashShiftId : !bankAccountId)} onClick={() => void createExpense()}>{busy ? 'Recording' : 'Record Business Expense'}</button></div>
       </div> : null}
 
       <div className="settings-grid three">
@@ -332,6 +463,19 @@ function mapExpense(row: Record<string, unknown>): ExpenseRow {
     cashMovementId: typeof row.cashMovementId === 'string' ? row.cashMovementId : null,
     createdAt: String(row.createdAt ?? ''),
   };
+}
+
+function mapCategories(value: unknown): ExpenseCategory[] {
+  return (Array.isArray(value) ? value : []).map((raw) => {
+    const row = raw as Record<string, unknown>;
+    return {
+      id: String(row.id ?? ''),
+      name: String(row.name ?? 'Expense Category'),
+      isActive: row.isActive === true,
+      createdAt: String(row.createdAt ?? ''),
+      updatedAt: String(row.updatedAt ?? ''),
+    };
+  }).filter((category) => category.id);
 }
 
 function mapBank(row: Record<string, unknown>): BankAccount {
