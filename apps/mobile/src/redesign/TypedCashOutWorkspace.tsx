@@ -116,9 +116,11 @@ export function TypedCashOutWorkspace({ tenantId, branch, activeShift, onClose, 
     }
   }
 
+  const submitDisabled = saving || !activeShift || (cashOutType === 'bank_deposit' && !bankPaymentMethodId);
+
   return <View style={styles.stack}>
     <Pressable onPress={onClose} style={styles.backButton}>
-      <Ionicons name="chevron-back" size={19} color={dark ? theme.colors.white : theme.colors.navy} />
+      <Ionicons name="chevron-back" size={19} color={dark ? theme.dark.text : theme.colors.navy} />
       <Text style={[styles.backText, dark && darkStyles.titleText]}>More</Text>
     </Pressable>
 
@@ -151,19 +153,45 @@ export function TypedCashOutWorkspace({ tenantId, branch, activeShift, onClose, 
       <Text style={[styles.sectionTitle, dark && darkStyles.titleText]}>Destination Business bank account</Text>
       {loading ? <View style={styles.loadingRow}><ActivityIndicator /><Text style={[styles.helper, dark && darkStyles.bodyText]}>Loading bank accounts…</Text></View>
         : bankAccounts.length === 0 ? <Text style={[styles.helper, dark && darkStyles.bodyText]}>No enabled Business bank account is available. An Owner or Manager must configure one in Merchant Web before recording a Bank Deposit.</Text>
-          : <View style={styles.bankList}>{bankAccounts.map((bank) => <Pressable key={bank.id} onPress={() => setBankPaymentMethodId(bank.id)} style={[styles.bankChoice, dark && darkStyles.bankChoice, bankPaymentMethodId === bank.id && styles.bankChoiceActive]}>
-            <View style={styles.flexOne}><Text style={[styles.bankTitle, dark && darkStyles.titleText]}>{bank.displayName}</Text><Text style={[styles.helper, dark && darkStyles.bodyText]}>{[bank.bankName, bank.accountNumber].filter(Boolean).join(' · ')}</Text></View>
-            <Ionicons name={bankPaymentMethodId === bank.id ? 'radio-button-on' : 'radio-button-off'} size={20} color={bankPaymentMethodId === bank.id ? theme.colors.greenDark : theme.colors.muted} />
-          </Pressable>)}</View>}
+          : <View style={styles.bankList}>{bankAccounts.map((bank) => {
+            const selected = bankPaymentMethodId === bank.id;
+            return <Pressable
+              key={bank.id}
+              onPress={() => setBankPaymentMethodId(bank.id)}
+              style={[
+                styles.bankChoice,
+                dark && darkStyles.bankChoice,
+                selected && (dark ? darkStyles.bankChoiceActive : styles.bankChoiceActive),
+              ]}
+            >
+              <View style={styles.flexOne}>
+                <Text style={[styles.bankTitle, dark && darkStyles.titleText]}>{bank.displayName}</Text>
+                <Text style={[styles.helper, dark && darkStyles.bodyText]}>{[bank.bankName, bank.accountNumber].filter(Boolean).join(' · ')}</Text>
+              </View>
+              <Ionicons
+                name={selected ? 'radio-button-on' : 'radio-button-off'}
+                size={20}
+                color={selected
+                  ? (dark ? theme.dark.accentText : theme.colors.greenDark)
+                  : (dark ? theme.dark.textSubtle : theme.colors.muted)}
+              />
+            </Pressable>;
+          })}</View>}
     </Card> : null}
 
     <Card dark={dark}>
       <Field label="Amount" dark={dark}><TextInput value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} /></Field>
       <Field label="Reference" dark={dark}><TextInput value={reference} onChangeText={setReference} style={[styles.input, dark && darkStyles.input]} /></Field>
       <Field label="Reason" dark={dark}><TextInput value={reason} onChangeText={setReason} multiline placeholder={cashOutType === 'bank_deposit' ? 'e.g. Deposit daily takings' : 'e.g. Owner cash withdrawal'} placeholderTextColor={theme.colors.subtle} style={[styles.input, styles.multiline, dark && darkStyles.input]} /></Field>
-      <Pressable disabled={saving || !activeShift || (cashOutType === 'bank_deposit' && !bankPaymentMethodId)} onPress={() => void submit()} style={[styles.primaryButton, (saving || !activeShift || (cashOutType === 'bank_deposit' && !bankPaymentMethodId)) && styles.disabled]}>
+      <Pressable
+        disabled={submitDisabled}
+        onPress={() => void submit()}
+        style={[styles.primaryButton, submitDisabled && styles.disabled, dark && submitDisabled && darkStyles.disabled]}
+      >
         {saving ? <ActivityIndicator color={theme.colors.white} /> : null}
-        <Text style={styles.primaryText}>{saving ? 'Recording…' : cashOutType === 'bank_deposit' ? 'Record Bank Deposit' : 'Record Owner Withdrawal'}</Text>
+        <Text style={[styles.primaryText, submitDisabled && styles.disabledText, dark && submitDisabled && darkStyles.disabledText]}>
+          {saving ? 'Recording…' : cashOutType === 'bank_deposit' ? 'Record Bank Deposit' : 'Record Owner Withdrawal'}
+        </Text>
       </Pressable>
     </Card>
   </View>;
@@ -173,13 +201,23 @@ function Card({ children, dark }: { children: React.ReactNode; dark: boolean }) 
   return <View style={[styles.card, dark && darkStyles.card]}>{children}</View>;
 }
 function Choice({ label, active, onPress, dark }: { label: string; active: boolean; onPress: () => void; dark: boolean }) {
-  return <Pressable onPress={onPress} style={[styles.choice, dark && darkStyles.choice, active && styles.choiceActive]}><Text style={[styles.choiceText, dark && darkStyles.bodyText, active && styles.choiceTextActive]}>{label}</Text></Pressable>;
+  return <Pressable
+    onPress={onPress}
+    style={[styles.choice, dark && darkStyles.choice, active && (dark ? darkStyles.choiceActive : styles.choiceActive)]}
+  >
+    <Text style={[
+      styles.choiceText,
+      dark && darkStyles.bodyText,
+      active && styles.choiceTextActive,
+      dark && active && darkStyles.choiceTextActive,
+    ]}>{label}</Text>
+  </Pressable>;
 }
 function Field({ label, dark, children }: { label: string; dark: boolean; children: React.ReactNode }) {
   return <View style={styles.field}><Text style={[styles.fieldLabel, dark && darkStyles.bodyText]}>{label}</Text>{children}</View>;
 }
 function Message({ text, error = false, dark }: { text: string; error?: boolean; dark: boolean }) {
-  return <View style={[styles.message, error ? styles.errorMessage : styles.noticeMessage, dark && darkStyles.subtleCard]}><Ionicons name={error ? 'alert-circle-outline' : 'checkmark-circle-outline'} size={19} color={error ? theme.colors.danger : theme.colors.greenDark} /><Text style={[styles.messageText, dark && darkStyles.bodyText]}>{text}</Text></View>;
+  return <View style={[styles.message, error ? styles.errorMessage : styles.noticeMessage, dark && darkStyles.subtleCard]}><Ionicons name={error ? 'alert-circle-outline' : 'checkmark-circle-outline'} size={19} color={error ? theme.colors.danger : theme.colors.green} /><Text style={[styles.messageText, dark && darkStyles.bodyText]}>{text}</Text></View>;
 }
 function errorMessage(error: unknown, fallback: string) { return error instanceof Error ? error.message : fallback; }
 
@@ -211,7 +249,8 @@ const styles = StyleSheet.create({
   multiline: { minHeight: 74, textAlignVertical: 'top' },
   primaryButton: { alignItems: 'center', backgroundColor: theme.colors.green, borderRadius: 12, flexDirection: 'row', gap: 7, justifyContent: 'center', minHeight: 44, paddingHorizontal: 14, paddingVertical: 10 },
   primaryText: { color: theme.colors.white, fontSize: 12, fontWeight: '900' },
-  disabled: { opacity: 0.5 },
+  disabled: { backgroundColor: '#D0D5DD' },
+  disabledText: { color: theme.colors.muted },
   message: { alignItems: 'flex-start', borderRadius: 12, flexDirection: 'row', gap: 8, padding: 11 },
   errorMessage: { backgroundColor: theme.colors.dangerSoft },
   noticeMessage: { backgroundColor: theme.colors.mintSoft },
@@ -219,11 +258,16 @@ const styles = StyleSheet.create({
 });
 
 const darkStyles = StyleSheet.create({
-  card: { backgroundColor: theme.colors.navy, borderColor: '#344054' },
-  subtleCard: { backgroundColor: '#162F46' },
-  input: { backgroundColor: '#162F46', borderColor: '#344054', color: theme.colors.white },
-  choice: { borderColor: '#344054' },
-  bankChoice: { backgroundColor: theme.colors.navy, borderColor: '#344054' },
-  titleText: { color: theme.colors.white },
-  bodyText: { color: '#D0D5DD' },
+  card: { backgroundColor: theme.dark.surface, borderColor: theme.dark.border },
+  subtleCard: { backgroundColor: theme.dark.surfaceSubtle },
+  input: { backgroundColor: theme.dark.surfaceSubtle, borderColor: theme.dark.border, color: theme.dark.text },
+  choice: { borderColor: theme.dark.border },
+  choiceActive: { backgroundColor: theme.dark.accentSoft, borderColor: theme.colors.green },
+  choiceTextActive: { color: theme.dark.accentText },
+  bankChoice: { backgroundColor: theme.dark.surface, borderColor: theme.dark.border },
+  bankChoiceActive: { backgroundColor: theme.dark.accentSoft, borderColor: theme.colors.green },
+  disabled: { backgroundColor: theme.dark.disabledSurface },
+  disabledText: { color: theme.dark.disabledText },
+  titleText: { color: theme.dark.text },
+  bodyText: { color: theme.dark.textMuted },
 });
