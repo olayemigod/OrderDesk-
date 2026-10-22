@@ -20,6 +20,7 @@ select extensions.throws_ok(
 
 create temp table commercial_portfolio_fixture(
   actor_id uuid,
+  admin_id uuid,
   tenant_id uuid,
   order_id uuid,
   obligation_id uuid,
@@ -28,14 +29,19 @@ create temp table commercial_portfolio_fixture(
   template_id uuid,
   agreement_id uuid
 );
-insert into commercial_portfolio_fixture(actor_id,tenant_id,order_id,obligation_id,template_id,agreement_id)
-values(gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid());
+insert into commercial_portfolio_fixture(actor_id,admin_id,tenant_id,order_id,obligation_id)
+values(gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid());
 
 insert into auth.users(id,email,aud,role)
-select actor_id,'commercial-portfolio-'||actor_id||'@example.com','authenticated','authenticated'
+select actor_id,'commercial-portfolio-support-'||actor_id||'@example.com','authenticated','authenticated'
+from commercial_portfolio_fixture
+union all
+select admin_id,'commercial-portfolio-admin-'||admin_id||'@example.com','authenticated','authenticated'
 from commercial_portfolio_fixture;
 insert into public.platform_admins(user_id,role)
-select actor_id,'support' from commercial_portfolio_fixture;
+select actor_id,'support' from commercial_portfolio_fixture
+union all
+select admin_id,'admin' from commercial_portfolio_fixture;
 insert into public.tenants(id,name,slug,merchant_code,subscription_status,whatsapp_connection_status)
 select tenant_id,'Commercial Portfolio Fixture','commercial-portfolio-'||left(tenant_id::text,8),'CPF','active','connected'
 from commercial_portfolio_fixture;
@@ -46,7 +52,7 @@ with inserted as (
     change_reason,created_by_user_id,approved_by_user_id,approved_at
   )
   select 'subscription','business','monthly','NGN',10000,now()-interval '2 days',
-         'Commercial portfolio monthly anchor',actor_id,actor_id,now()
+         'Commercial portfolio monthly anchor',admin_id,admin_id,now()
   from commercial_portfolio_fixture
   returning id
 )
@@ -58,7 +64,7 @@ with inserted as (
     change_reason,created_by_user_id,approved_by_user_id,approved_at
   )
   select 'subscription','business','yearly','NGN',100000,now()-interval '1 day',
-         'Commercial portfolio annual subscription',actor_id,actor_id,now()
+         'Commercial portfolio annual subscription',admin_id,admin_id,now()
   from commercial_portfolio_fixture
   returning id
 )
@@ -67,7 +73,7 @@ update commercial_portfolio_fixture set annual_price_id=(select id from inserted
 insert into public.sellertray_commercial_orders(
   id,tenant_id,order_reference,currency,total_gross_amount,ordered_at,created_by_user_id,created_at
 )
-select order_id,tenant_id,'CPF-'||left(order_id::text,8),'NGN',100000,now(),actor_id,now()
+select order_id,tenant_id,'CPF-'||left(order_id::text,8),'NGN',100000,now(),admin_id,now()
 from commercial_portfolio_fixture;
 
 insert into public.sellertray_commercial_order_price_snapshots(
@@ -85,7 +91,7 @@ set constraints validate_sellertray_commercial_installment_schedule_line deferre
 insert into public.sellertray_commercial_installment_obligations(
   id,tenant_id,commercial_order_id,structure_code,currency,obligated_amount,created_by_user_id,created_at
 )
-select obligation_id,tenant_id,order_id,'two_installment_70_30','NGN',100000,actor_id,now()
+select obligation_id,tenant_id,order_id,'two_installment_70_30','NGN',100000,admin_id,now()
 from commercial_portfolio_fixture;
 
 insert into public.sellertray_commercial_installment_schedule(
@@ -96,23 +102,18 @@ union all
 select tenant_id,obligation_id,2,30,30000,now() from commercial_portfolio_fixture;
 set constraints all immediate;
 
-insert into public.sellertray_commercial_agreement_template_versions(
-  id,agreement_family,version_code,title,content_body,content_sha256,effective_from,published_by_user_id,published_at,created_at
-)
-select template_id,'subscription_order','cpf-v1','Commercial Portfolio Agreement','Fixture agreement body',repeat('0',64),now(),actor_id,now(),now()
-from commercial_portfolio_fixture;
+update commercial_portfolio_fixture f
+set template_id=public.publish_sellertray_commercial_agreement_template_version(
+  'subscription_order','cpf-v1','Commercial Portfolio Agreement',
+  'Approved commercial portfolio fixture agreement',now()-interval '1 minute',f.admin_id
+);
 
-insert into public.sellertray_commercial_agreements(
-  id,tenant_id,commercial_order_id,installment_obligation_id,template_version_id,
-  agreement_family,template_version_code,template_content_sha256,agreement_reference,
-  rendered_content,content_sha256,commercial_snapshot,supersedes_agreement_id,
-  issued_by_user_id,issued_at,created_at
-)
-select agreement_id,tenant_id,order_id,null,template_id,
-  'subscription_order','cpf-v1',repeat('0',64),'CPF-AGR-'||left(agreement_id::text,8),
-  'Commercial Portfolio rendered agreement',repeat('0',64),'{}'::jsonb,null,
-  actor_id,now(),now()
-from commercial_portfolio_fixture;
+update commercial_portfolio_fixture f
+set agreement_id=public.issue_sellertray_commercial_agreement(
+  f.tenant_id,f.order_id,null,f.template_id,
+  'CPF-AGR-'||upper(left(f.agreement_id::text,8)),
+  'Merchant-specific commercial portfolio subscription agreement',null,f.admin_id
+);
 
 select extensions.lives_ok(
   format('select public.platform_admin_commercial_installment_portfolio(%L,%L,%L,null,null,20)',actor_id,'Commercial Portfolio Fixture','all'),
