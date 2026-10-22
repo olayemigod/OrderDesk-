@@ -14,6 +14,18 @@ For **every SellerTray task**, also read and follow:
 
 `CROSS_SURFACE.md` is a universal normative extension of the governing skill. It requires agents to implement one coherent business capability across every necessarily affected SellerTray surface in the same implementation sweep. A request that names only Merchant Web, Mobile, Admin Web, WhatsApp, AI, reporting, or another single surface does not remove the obligation to inspect and complete dependent process flows elsewhere.
 
+For any task touching SellerTray Mobile UI/UX, responsive layout, phones, foldables, mini tablets, tablets, large screens, orientation, resizing, navigation layout, split panes, master-detail views, or device-form-factor QA, also read and follow:
+
+`.agents/skills/sellertray-project-implementation/ADAPTIVE.md`
+
+`ADAPTIVE.md` governs one adaptive SellerTray Mobile product across Compact, Medium, Expanded and Large application windows. It forbids separate tablet business truth and requires layout decisions from the live application window rather than a permanent hardware `isTablet` assumption.
+
+For any task touching Admin Web, ProcessEdge internal roles, Platform Admin/Platform Support behavior, privileged platform/commercial actions, Admin read/mutation permissions, Admin MFA/AAL2, internal capability assignment, Admin audit/export authority or platform-operations access, also read and follow:
+
+`.agents/skills/sellertray-project-implementation/ADMIN_CAPABILITIES.md`
+
+`ADMIN_CAPABILITIES.md` preserves Platform Admin and Platform Support as broad responsibility bundles while making explicit server-governed capabilities, scope and immutable audit the long-term authorization authority. Merchant Owner/Manager/Cashier permissions remain a separate merchant-domain model.
+
 For any task touching inventory valuation, stock history, purchasing cost, COGS, profitability, inventory reports, transfers, returns, or offline/backdated stock events, also read and follow:
 
 `.agents/skills/sellertray-project-implementation/VALUATION.md`
@@ -32,9 +44,9 @@ For any task touching offline POS selling, cached payment methods, offline payme
 
 `.agents/skills/sellertray-project-implementation/OFFLINE.md`
 
-`CROSS_SURFACE.md`, `VALUATION.md`, `COMMERCIAL.md`, `COMMERCIAL_C1.md` and `OFFLINE.md` are normative extensions of the governing SellerTray skill for their applicable boundaries. `CROSS_SURFACE.md` applies universally; the others apply when their domains are touched. They do not replace or weaken any rule in `SKILL.md`.
+`CROSS_SURFACE.md`, `ADAPTIVE.md`, `ADMIN_CAPABILITIES.md`, `VALUATION.md`, `COMMERCIAL.md`, `COMMERCIAL_C1.md` and `OFFLINE.md` are normative extensions of the governing SellerTray skill for their applicable boundaries. `CROSS_SURFACE.md` applies universally; the others apply when their domains are touched. They do not replace or weaken any rule in `SKILL.md`.
 
-That governing skill and its applicable normative extensions are the repository-level implementation contract for the SellerTray redesign. They govern cross-surface flow closure, mobile UX, merchant web boundaries, Admin Web platform/commercial operations, shared commerce architecture, POS, inventory, branch awareness, UOM, WhatsApp commerce, payments, subscriptions, setup, installments, agreements, guarantees, promotions, Bluetooth printing, reporting, AI, permissions, offline behaviour, implementation phases, QA gates, and anti-divergence rules.
+That governing skill and its applicable normative extensions are the repository-level implementation contract for the SellerTray redesign. They govern cross-surface flow closure, adaptive Mobile UX and device-form-factor behavior, Admin capability/RBAC boundaries, mobile UX, merchant web boundaries, Admin Web platform/commercial operations, shared commerce architecture, POS, inventory, branch awareness, UOM, WhatsApp commerce, payments, subscriptions, setup, installments, agreements, guarantees, promotions, Bluetooth printing, reporting, AI, permissions, offline behaviour, implementation phases, QA gates, and anti-divergence rules.
 
 The originating SellerTray redesign conversation is the primary decision record when it is available to the agent. The repository skill is the durable fallback and must be used when that thread is unavailable.
 
@@ -53,6 +65,8 @@ When one surface creates or changes configuration, master data, validation, life
 Confirm the applicable QA gates from the governing skill and normative extensions, including the universal cross-surface impact gate. Report the tests actually run, preserve existing WhatsApp behaviour unless explicitly changed, and state any migration/build/deployment requirement. Do not describe planned work as completed.
 
 Every completion report must state the cross-surface impact for Shared Core, Merchant Web, Mobile, Admin Web, WhatsApp, AI, reporting/audit, and offline/sync, with either the implemented/verified effect or a concrete no-impact reason.
+
+For Mobile UI/UX work, report the adaptive window classes and device/window sizes actually verified when `ADAPTIVE.md` applies. For Admin work, report the ProcessEdge persona, required capability, scope, MFA/AAL2 boundary, server enforcement point and audit behavior when `ADMIN_CAPABILITIES.md` applies.
 
 ## Standing SellerTray progress conclusion
 
