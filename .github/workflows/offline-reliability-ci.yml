@@ -10,6 +10,7 @@ on:
       - 'supabase/migrations/20261010101500_pos_draft_client_idempotency.sql'
       - 'supabase/migrations/20261010101600_offline_pos_replay_validation.sql'
       - 'supabase/migrations/20261022102500_offline_pos_payment_parity.sql'
+      - 'supabase/migrations/20261022103000_offline_payment_evidence_event_key_compatibility.sql'
       - 'apps/mobile/src/data/offlineSalesRepository.ts'
       - 'apps/mobile/src/data/commerceRepository.ts'
       - 'apps/mobile/src/data/posPaymentRepository.ts'
@@ -29,6 +30,7 @@ on:
       - 'supabase/migrations/20261010101500_pos_draft_client_idempotency.sql'
       - 'supabase/migrations/20261010101600_offline_pos_replay_validation.sql'
       - 'supabase/migrations/20261022102500_offline_pos_payment_parity.sql'
+      - 'supabase/migrations/20261022103000_offline_payment_evidence_event_key_compatibility.sql'
       - 'apps/mobile/src/data/offlineSalesRepository.ts'
       - 'apps/mobile/src/data/commerceRepository.ts'
       - 'apps/mobile/src/data/posPaymentRepository.ts'
@@ -86,7 +88,7 @@ jobs:
           test "$actual" = "$expected"
       - uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: 22
           cache: npm
           cache-dependency-path: apps/mobile/package-lock.json
       - name: Install mobile dependencies
