@@ -18,6 +18,7 @@ const TAX_KEY_PREFIX = 'sellertray.offline.tax-context.v1:';
 const MAX_OPEN_INTENTS = 50;
 const SYNCED_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const PAYMENT_REFERENCE_PATTERN = /^[A-Za-z0-9._:-]+$/;
+const PAYMENT_EPSILON = 0.005;
 
 export type OfflineSaleStatus = 'pending' | 'syncing' | 'needs_review' | 'failed' | 'synced';
 export type OfflineCompletionIntent = 'draft' | 'cash' | 'bank' | 'payment';
@@ -292,9 +293,19 @@ export function isLikelyConnectivityError(error: unknown): boolean {
 
 function shouldReserveCachedStock(sale: OfflinePosSale): boolean {
   if (sale.completionIntent === 'cash') return true;
-  if (sale.completionIntent !== 'payment' || !sale.paymentPlan || sale.paymentPlan.payLater) return false;
-  const allocated = roundMoney(sale.paymentPlan.allocations.reduce((sum, allocation) => sum + allocation.amount, 0));
-  return allocated >= sale.total - 0.005 && sale.paymentPlan.allocations.every((allocation) => allocation.confirmNow);
+  if (sale.completionIntent !== 'payment' || !sale.paymentPlan) return false;
+
+  const plan = sale.paymentPlan;
+  if (plan.payLater) return true;
+
+  const allocated = roundMoney(plan.allocations.reduce((sum, allocation) => sum + allocation.amount, 0));
+  const confirmedAllocated = roundMoney(plan.allocations.reduce(
+    (sum, allocation) => sum + (allocation.confirmNow ? allocation.amount : 0),
+    0,
+  ));
+  const isPartial = allocated > PAYMENT_EPSILON && allocated < sale.total - PAYMENT_EPSILON;
+  if (isPartial) return confirmedAllocated > PAYMENT_EPSILON;
+  return allocated >= sale.total - PAYMENT_EPSILON && confirmedAllocated >= sale.total - PAYMENT_EPSILON;
 }
 
 async function reserveCachedStock(sale: OfflinePosSale): Promise<void> {
@@ -447,10 +458,11 @@ function parseMethodSnapshot(value: unknown): OfflinePaymentMethodSnapshot | nul
 }
 
 function isValidPaymentPlan(plan: OfflinePaymentPlan, total: number): boolean {
-  if (!isUuid(plan.checkoutCommandId) || plan.allocations.length > 10 || (!plan.payLater && plan.allocations.length === 0)) return false;
+  if (!isUuid(plan.checkoutCommandId) || plan.allocations.length > 10) return false;
+  if (plan.payLater ? plan.allocations.length !== 0 : plan.allocations.length === 0) return false;
   if (!plan.allocations.every(isValidPaymentAllocation)) return false;
   const allocated = roundMoney(plan.allocations.reduce((sum, allocation) => sum + allocation.amount, 0));
-  return allocated <= roundMoney(total) + 0.005 && !(plan.payLater && allocated >= roundMoney(total) - 0.005);
+  return allocated <= roundMoney(total) + PAYMENT_EPSILON;
 }
 
 function isValidPaymentAllocation(value: OfflinePaymentAllocation): boolean {
