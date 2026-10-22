@@ -24,7 +24,8 @@ export function useMerchantNotifications(tenantId: string | null) {
 
     setLoading(true);
     try {
-      setNotifications(await loadMerchantNotifications(tenantId));
+      const next = await loadMerchantNotifications(tenantId);
+      setNotifications(next.filter((notification) => !notification.isRead));
       setError(null);
     } catch (err) {
       if (isLikelyConnectivityError(err)) {
@@ -50,24 +51,17 @@ export function useMerchantNotifications(tenantId: string | null) {
     };
   }, [refresh, tenantId]);
 
-  const unreadCount = useMemo(
-    () => notifications.filter((notification) => !notification.isRead).length,
-    [notifications],
-  );
+  const unreadCount = useMemo(() => notifications.length, [notifications]);
 
   const markRead = useCallback(async (id: string) => {
     await markMerchantNotificationRead(id);
-    setNotifications((current) =>
-      current.map((notification) =>
-        notification.id === id ? { ...notification, isRead: true } : notification,
-      ),
-    );
+    setNotifications((current) => current.filter((notification) => notification.id !== id));
   }, []);
 
   const markAllRead = useCallback(async () => {
     if (!tenantId) return;
     await markAllMerchantNotificationsRead(tenantId);
-    setNotifications((current) => current.map((notification) => ({ ...notification, isRead: true })));
+    setNotifications([]);
   }, [tenantId]);
 
   return { notifications, unreadCount, loading, error, refresh, markRead, markAllRead };
