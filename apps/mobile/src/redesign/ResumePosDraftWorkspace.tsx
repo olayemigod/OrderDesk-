@@ -12,6 +12,7 @@ import {
 import { loadBranchStock, type BranchStockRow } from '../data/inventoryRepository';
 import { updatePosDraftItems } from '../data/posSaleRepository';
 import { loadPosPaymentPolicy, type PosAllocationCheckoutResult, type PosPaymentPolicy } from '../data/posPaymentRepository';
+import { loadSellerTrayTaxQuote, type SellerTrayTaxQuote } from '../data/taxRepository';
 import { SellerTrayLoadingScreen } from '../components/SellerTrayLoadingScreen';
 import type { MerchantOrder, OrderItem } from '../domain/order';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
@@ -35,6 +36,7 @@ type Props = {
 };
 
 const STOCK_EPSILON = 0.000001;
+const MONEY_EPSILON = 0.005;
 
 export function ResumePosDraftWorkspace({ tenantId, branch, currency, order, onCancel, onCompleted }: Props) {
   const dark = useSellerTrayAppearance().dark;
@@ -48,6 +50,7 @@ export function ResumePosDraftWorkspace({ tenantId, branch, currency, order, onC
   const [selectedPaymentKey, setSelectedPaymentKey] = useState('cash');
   const [stage, setStage] = useState<ResumeStage>('cart');
   const [serverTotal, setServerTotal] = useState<number | null>(null);
+  const [taxQuote, setTaxQuote] = useState<SellerTrayTaxQuote | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [completing, setCompleting] = useState(false);
@@ -60,6 +63,7 @@ export function ResumePosDraftWorkspace({ tenantId, branch, currency, order, onC
     setWorkingOrder(order);
     setStage('cart');
     setServerTotal(null);
+    setTaxQuote(null);
     setLoading(true);
     setError(null);
     setNotice(null);
@@ -90,6 +94,11 @@ export function ResumePosDraftWorkspace({ tenantId, branch, currency, order, onC
       const preferred = methods.find((method) => method.isDefault) ?? methods[0] ?? null;
       setSelectedPaymentKey(preferred ? paymentKey(preferred) : 'cash');
       setNotice(`Resuming ${order.publicOrderId}. Changes stay on this saved sale.`);
+
+      const currentSubtotal = resumed.lines.reduce((sum, line) => sum + line.quantity * (line.uom.sellingPrice ?? 0), 0);
+      void loadSellerTrayTaxQuote(tenantId, currentSubtotal)
+        .then((quote) => { if (active) setTaxQuote(quote); })
+        .catch(() => { if (active) setTaxQuote(null); });
     }).catch((err) => {
       if (!active) return;
       setLines([]);
@@ -103,16 +112,23 @@ export function ResumePosDraftWorkspace({ tenantId, branch, currency, order, onC
   }, [branch.id, order, tenantId]);
 
   const calculatedTotal = lines.reduce((sum, line) => sum + line.quantity * effectiveLinePrice(line, priceDrafts, priceEdited), 0);
-  const total = serverTotal ?? calculatedTotal;
+  const subtotal = serverTotal ?? calculatedTotal;
+  const quotedSubtotalMatches = taxQuote !== null && Math.abs(taxQuote.subtotalAmount - subtotal) <= MONEY_EPSILON;
+  const total = quotedSubtotalMatches ? taxQuote.grossAmount : subtotal;
   const unitCount = lines.reduce((sum, line) => sum + line.quantity, 0);
   const selectedPayment = paymentMethods.find((method) => paymentKey(method) === selectedPaymentKey) ?? paymentMethods[0] ?? null;
   const shortage = useMemo(() => findStockShortage(lines, stockRows), [lines, stockRows]);
+
+  function clearFinancialQuote() {
+    setServerTotal(null);
+    setTaxQuote(null);
+  }
 
   function setLinePrice(line: ResumedPosDraftLine, value: string) {
     const clean = value.replace(/[^0-9.]/g, '');
     setPriceDrafts((current) => ({ ...current, [line.orderItemId]: clean }));
     setPriceEdited((current) => ({ ...current, [line.orderItemId]: true }));
-    setServerTotal(null);
+    clearFinancialQuote();
     setError(null);
   }
 
@@ -137,7 +153,7 @@ export function ResumePosDraftWorkspace({ tenantId, branch, currency, order, onC
         delete next[line.orderItemId];
         return next;
       });
-      setServerTotal(null);
+      clearFinancialQuote();
       setError(null);
       setNotice(`${line.product.name} will be removed when you save the sale.`);
       return true;
@@ -158,7 +174,7 @@ export function ResumePosDraftWorkspace({ tenantId, branch, currency, order, onC
 
     setLines((current) => current.map((candidate) => candidate.orderItemId === line.orderItemId ? { ...candidate, quantity } : candidate));
     setQuantityDrafts((current) => ({ ...current, [line.orderItemId]: formatQuantity(quantity) }));
-    setServerTotal(null);
+    clearFinancialQuote();
     setError(null);
     return true;
   }
@@ -204,6 +220,7 @@ export function ResumePosDraftWorkspace({ tenantId, branch, currency, order, onC
         return { ...edit, unitPrice };
       });
       const editResult = await updatePosDraftItems({ tenantId, orderId: workingOrder.id, items: edits });
+      const refreshedTaxQuote = await loadSellerTrayTaxQuote(tenantId, editResult.totalAmount);
       const expectedTotal = nextLines.reduce((sum, line) => sum + line.quantity * effectiveLinePrice(line, priceDrafts, priceEdited), 0);
 
       const nextOrder: MerchantOrder = {
@@ -215,10 +232,11 @@ export function ResumePosDraftWorkspace({ tenantId, branch, currency, order, onC
       setQuantityDrafts(Object.fromEntries(nextLines.map((line) => [line.orderItemId, formatQuantity(line.quantity)])));
       setStockRows(latestStock);
       setServerTotal(editResult.totalAmount);
+      setTaxQuote(refreshedTaxQuote);
       setStage('payment');
-      setNotice(Math.abs(editResult.totalAmount - expectedTotal) > 0.005
-        ? 'Saved sale updated. A current selling price changed during recheck, so the payment amount has been refreshed from SellerTray.'
-        : 'Saved sale updated. Current price, unit conversion and Branch stock were rechecked before payment.');
+      setNotice(Math.abs(editResult.totalAmount - expectedTotal) > MONEY_EPSILON
+        ? 'Saved sale updated. A current selling price changed during recheck, so the payment amount and tax have been refreshed from SellerTray.'
+        : 'Saved sale updated. Current price, unit conversion, Branch stock and tax were rechecked before payment.');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unable to update this saved sale.';
       setError(isLikelyConnectivityError(err)
@@ -274,13 +292,15 @@ export function ResumePosDraftWorkspace({ tenantId, branch, currency, order, onC
   function handleAllocatedCheckout(result: PosAllocationCheckoutResult) {
     if (result.status === 'awaiting_payment_confirmation') {
       Alert.alert('Payment awaiting confirmation', 'SellerTray recorded the payment allocation. Stock and collection remain unchanged until the required payment confirmation is completed.');
-    } else if (result.outstandingAmount > 0.005) {
+    } else if (result.outstandingAmount > MONEY_EPSILON) {
       Alert.alert('Sale completed with balance', `${formatMoney(result.outstandingAmount, currency)} remains outstanding on this sale.`);
     }
     onCompleted(result.orderId);
   }
 
   if (loading) return <SellerTrayLoadingScreen message="Opening saved sale…" />;
+
+  const showTax = quotedSubtotalMatches && taxQuote.displayTaxBreakdown && taxQuote.taxAmount > MONEY_EPSILON;
 
   return (
     <View style={styles.stack}>
@@ -335,6 +355,14 @@ export function ResumePosDraftWorkspace({ tenantId, branch, currency, order, onC
               </View>
             ))}
 
+            <View style={[styles.financialSummary, dark && darkStyles.subtle]}>
+              <FinancialRow label="Subtotal" value={formatMoney(subtotal, currency)} dark={dark} />
+              {showTax && taxQuote ? <FinancialRow label={`Tax (${formatTaxRate(taxQuote.ratePercent)})`} value={formatMoney(taxQuote.taxAmount, currency)} dark={dark} /> : null}
+              <View style={styles.summaryDivider} />
+              <FinancialRow label="Total" value={formatMoney(total, currency)} dark={dark} strong />
+              {!quotedSubtotalMatches ? <Text style={[styles.small, dark && darkStyles.bodyText]}>Tax will be refreshed from SellerTray before payment.</Text> : null}
+            </View>
+
             <View style={[styles.customerCard, dark && darkStyles.subtle]}>
               <Text style={[styles.smallStrong, dark && darkStyles.bodyText]}>Customer</Text>
               <Text style={[styles.productName, dark && darkStyles.titleText]}>{workingOrder.customerId ? workingOrder.customerName : 'Walk-in Customer'}</Text>
@@ -342,7 +370,7 @@ export function ResumePosDraftWorkspace({ tenantId, branch, currency, order, onC
             </View>
 
             {shortage ? <ErrorCard text={`${shortage.productName} exceeds current Branch stock. Reduce the quantity before payment.`} dark={dark} /> : null}
-            <Notice text={posPolicy?.canOverridePrice ? 'Quantities and authorised selling prices can be changed on this untouched draft. SellerTray rechecks unit conversion and Branch stock before payment.' : 'Current product quantities can be changed or removed. Selling price follows the current catalogue and your SellerTray permissions.'} dark={dark} />
+            <Notice text={posPolicy?.canOverridePrice ? 'Quantities and authorised selling prices can be changed on this untouched draft. SellerTray rechecks unit conversion, Branch stock and tax before payment.' : 'Current product quantities can be changed or removed. Selling price follows the current catalogue. SellerTray rechecks Branch stock and tax before payment.'} dark={dark} />
             <Pressable disabled={saving || Boolean(shortage) || !lines.length} onPress={() => void saveAndContinue()} style={[styles.primaryButton, (saving || Boolean(shortage) || !lines.length) && styles.disabled]}>
               {saving ? <ActivityIndicator color={theme.colors.white} /> : <Ionicons name="arrow-forward" size={19} color={theme.colors.white} />}
               <Text style={styles.primaryText}>{saving ? 'Rechecking saved sale…' : 'Save changes · Continue to payment'}</Text>
@@ -356,6 +384,7 @@ export function ResumePosDraftWorkspace({ tenantId, branch, currency, order, onC
             <View style={styles.center}>
               <Text style={[styles.eyebrow, dark && darkStyles.bodyText]}>AMOUNT DUE</Text>
               <Text style={[styles.paymentAmount, dark && darkStyles.titleText]}>{formatMoney(total, currency)}</Text>
+              {showTax && taxQuote ? <Text style={[styles.small, dark && darkStyles.bodyText]}>Subtotal {formatMoney(subtotal, currency)} · Tax {formatTaxRate(taxQuote.ratePercent)} {formatMoney(taxQuote.taxAmount, currency)}</Text> : null}
               <Text style={[styles.small, dark && darkStyles.bodyText]}>{lines.length} products · {formatQuantity(unitCount)} units</Text>
               <Text style={[styles.smallStrong, dark && darkStyles.bodyText]}>{workingOrder.customerId ? workingOrder.customerName : 'Walk-in Customer'}</Text>
             </View>
@@ -415,17 +444,19 @@ function effectiveLinePrice(line: ResumedPosDraftLine, drafts: Record<string, st
 function formatEditablePrice(value: number): string { return Number(value.toFixed(2)).toString(); }
 function formatMoney(value: number, currency: string): string { return new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 2 }).format(value); }
 function formatQuantity(value: number): string { return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(3))); }
+function formatTaxRate(value: number): string { return `${Number(value.toFixed(2))}%`; }
 
 function Step({ number, label, active = false, complete = false }: { number: number; label: string; active?: boolean; complete?: boolean }) {
   return <View style={styles.stepItem}><View style={[styles.stepDot, (active || complete) && styles.stepDotActive]}>{complete && !active ? <Ionicons name="checkmark" size={14} color={theme.colors.white} /> : <Text style={[styles.stepNumber, active && styles.stepNumberActive]}>{number}</Text>}</View><Text style={[styles.stepText, (active || complete) && styles.stepTextActive]}>{label}</Text></View>;
 }
+function FinancialRow({ label, value, dark, strong = false }: { label: string; value: string; dark: boolean; strong?: boolean }) { return <View style={styles.summaryRow}><Text style={[strong ? styles.summaryStrong : styles.small, dark && (strong ? darkStyles.titleText : darkStyles.bodyText)]}>{label}</Text><Text style={[strong ? styles.summaryStrong : styles.smallStrong, dark && (strong ? darkStyles.titleText : darkStyles.bodyText)]}>{value}</Text></View>; }
 function Notice({ text, dark }: { text: string; dark: boolean }) { return <View style={[styles.notice, dark && darkStyles.subtle]}><Ionicons name="information-circle-outline" size={20} color={theme.colors.info} /><Text style={[styles.noticeText, dark && darkStyles.bodyText]}>{text}</Text></View>; }
 function ErrorCard({ text, dark }: { text: string; dark: boolean }) { return <View style={[styles.errorCard, dark && darkStyles.error]}><Ionicons name="alert-circle-outline" size={20} color={theme.colors.danger} /><Text style={[styles.errorText, dark && darkStyles.bodyText]}>{text}</Text></View>; }
 
 const styles = StyleSheet.create({
   stack:{gap:14},stageStack:{gap:12},loadingRow:{flexDirection:'row',alignItems:'center',gap:8},heading:{gap:3},priceEditor:{marginTop:8,gap:5},priceInputRow:{flexDirection:'row',alignItems:'center',gap:8},priceInput:{minWidth:105,minHeight:42,borderWidth:1,borderColor:theme.colors.border,borderRadius:theme.radius.sm,paddingHorizontal:10,color:theme.colors.navy,fontSize:15,fontWeight:'800',backgroundColor:theme.colors.cloud},eyebrow:{color:theme.colors.muted,fontSize:11,fontWeight:'900',letterSpacing:1.05},title:{color:theme.colors.navy,fontSize:28,lineHeight:34,fontWeight:'900'},subtitle:{color:theme.colors.slate,fontSize:14,lineHeight:20},centerCard:{minHeight:150,borderRadius:theme.radius.lg,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.white,alignItems:'center',justifyContent:'center',gap:8},small:{color:theme.colors.muted,fontSize:11,lineHeight:16},smallStrong:{color:theme.colors.slate,fontSize:11,fontWeight:'800'},flex:{flex:1,minWidth:0},row:{flexDirection:'row',alignItems:'flex-start',gap:8},center:{alignItems:'center',gap:4},sectionTitle:{color:theme.colors.navy,fontSize:14,fontWeight:'900'},
   stepRow:{flexDirection:'row',gap:8},stepItem:{flex:1,flexDirection:'row',alignItems:'center',gap:6},stepDot:{width:24,height:24,borderRadius:12,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.white,alignItems:'center',justifyContent:'center'},stepDotActive:{backgroundColor:theme.colors.green,borderColor:theme.colors.green},stepNumber:{color:theme.colors.muted,fontSize:11,fontWeight:'900'},stepNumberActive:{color:theme.colors.white},stepText:{color:theme.colors.slate,fontSize:11,fontWeight:'800'},stepTextActive:{color:theme.colors.greenDark},
-  backLink:{alignSelf:'flex-start',flexDirection:'row',gap:6,alignItems:'center',minHeight:36},backLinkText:{color:theme.colors.greenDark,fontWeight:'900',fontSize:12},card:{borderRadius:theme.radius.lg,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.white,padding:14,gap:12},total:{color:theme.colors.navy,fontSize:18,fontWeight:'900'},cartLine:{borderRadius:theme.radius.md,backgroundColor:theme.colors.cloud,padding:12,flexDirection:'row',gap:8,alignItems:'center'},productName:{color:theme.colors.navy,fontSize:13,fontWeight:'900'},productPrice:{color:theme.colors.navy,fontSize:12,fontWeight:'900',marginTop:2},qty:{flexDirection:'row',alignItems:'center',gap:5},qtyButton:{width:36,height:36,borderRadius:10,backgroundColor:theme.colors.mintSoft,alignItems:'center',justifyContent:'center'},qtyInput:{width:58,minHeight:38,borderWidth:1,borderColor:theme.colors.border,borderRadius:10,textAlign:'center',color:theme.colors.navy,backgroundColor:theme.colors.white},customerCard:{borderRadius:theme.radius.md,backgroundColor:theme.colors.cloud,padding:12,gap:4},
+  backLink:{alignSelf:'flex-start',flexDirection:'row',gap:6,alignItems:'center',minHeight:36},backLinkText:{color:theme.colors.greenDark,fontWeight:'900',fontSize:12},card:{borderRadius:theme.radius.lg,borderWidth:1,borderColor:theme.colors.border,backgroundColor:theme.colors.white,padding:14,gap:12},total:{color:theme.colors.navy,fontSize:18,fontWeight:'900'},cartLine:{borderRadius:theme.radius.md,backgroundColor:theme.colors.cloud,padding:12,flexDirection:'row',gap:8,alignItems:'center'},productName:{color:theme.colors.navy,fontSize:13,fontWeight:'900'},productPrice:{color:theme.colors.navy,fontSize:12,fontWeight:'900',marginTop:2},qty:{flexDirection:'row',alignItems:'center',gap:5},qtyButton:{width:36,height:36,borderRadius:10,backgroundColor:theme.colors.mintSoft,alignItems:'center',justifyContent:'center'},qtyInput:{width:58,minHeight:38,borderWidth:1,borderColor:theme.colors.border,borderRadius:10,textAlign:'center',color:theme.colors.navy,backgroundColor:theme.colors.white},customerCard:{borderRadius:theme.radius.md,backgroundColor:theme.colors.cloud,padding:12,gap:4},financialSummary:{borderRadius:theme.radius.md,backgroundColor:theme.colors.cloud,padding:12,gap:7},summaryRow:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:12},summaryDivider:{height:1,backgroundColor:theme.colors.border},summaryStrong:{color:theme.colors.navy,fontSize:13,fontWeight:'900'},
   primaryButton:{minHeight:50,borderRadius:theme.radius.md,backgroundColor:theme.colors.green,flexDirection:'row',justifyContent:'center',alignItems:'center',gap:7,paddingHorizontal:12},primaryText:{color:theme.colors.white,fontSize:12,fontWeight:'900'},paymentAmount:{color:theme.colors.navy,fontSize:32,fontWeight:'900'},paymentList:{gap:8},paymentMethod:{minHeight:68,borderRadius:theme.radius.md,borderWidth:1,borderColor:theme.colors.border,padding:11,flexDirection:'row',alignItems:'center',gap:9},paymentMethodActive:{borderColor:theme.colors.green,backgroundColor:theme.colors.mintSoft},accountNumber:{color:theme.colors.navy,fontSize:20,fontWeight:'900',letterSpacing:1},notice:{borderRadius:theme.radius.md,backgroundColor:'#EFF8FF',padding:11,flexDirection:'row',gap:8,alignItems:'flex-start'},noticeText:{flex:1,color:theme.colors.slate,fontSize:11,lineHeight:17},errorCard:{borderRadius:theme.radius.md,borderWidth:1,borderColor:'#FDA29B',backgroundColor:theme.colors.dangerSoft,padding:11,flexDirection:'row',gap:8},errorText:{flex:1,color:'#B42318',fontSize:11,lineHeight:17},disabled:{opacity:0.45},
 });
 
