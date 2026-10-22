@@ -45,8 +45,8 @@ select extensions.is(
     where n.nspname='public'
       and p.proname='record_sellertray_shift_cash_movement'
   ),
-  2,
-  'cash movement runtime exposes explicit-command and compatibility overloads'
+  3,
+  'cash movement runtime exposes explicit-command, governed category and compatibility overloads'
 );
 
 select extensions.is(
@@ -58,8 +58,8 @@ select extensions.is(
       and p.proname='record_sellertray_shift_cash_movement'
       and p.prosecdef=true
   ),
-  2,
-  'cash movement runtime overloads are security definer functions'
+  3,
+  'all cash movement runtime overloads are security definer functions'
 );
 
 select extensions.is(
@@ -71,21 +71,25 @@ select extensions.is(
       and p.proname='record_sellertray_shift_cash_movement'
       and coalesce(p.proconfig,'{}'::text[]) @> array['search_path=""']::text[]
   ),
-  2,
-  'cash movement runtime overloads pin an empty search path'
+  3,
+  'all cash movement runtime overloads pin an empty search path'
 );
 
 select extensions.ok(
   has_function_privilege('service_role','public.record_sellertray_shift_cash_movement(uuid,uuid,text,numeric,text,text,text,text,uuid)','EXECUTE')
+  and has_function_privilege('service_role','public.record_sellertray_shift_cash_movement(uuid,uuid,text,numeric,text,text,uuid,text,uuid)','EXECUTE')
   and has_function_privilege('service_role','public.record_sellertray_shift_cash_movement(uuid,uuid,text,numeric,text,text,text,uuid)','EXECUTE'),
-  'service role can execute cash movement runtime overloads'
+  'service role can execute all cash movement runtime overloads'
 );
 
 select extensions.ok(
   not has_function_privilege('anon','public.record_sellertray_shift_cash_movement(uuid,uuid,text,numeric,text,text,text,text,uuid)','EXECUTE')
   and not has_function_privilege('authenticated','public.record_sellertray_shift_cash_movement(uuid,uuid,text,numeric,text,text,text,text,uuid)','EXECUTE')
-  and not has_function_privilege('public','public.record_sellertray_shift_cash_movement(uuid,uuid,text,numeric,text,text,text,text,uuid)','EXECUTE'),
-  'explicit cash movement command is not directly client executable'
+  and not has_function_privilege('public','public.record_sellertray_shift_cash_movement(uuid,uuid,text,numeric,text,text,text,text,uuid)','EXECUTE')
+  and not has_function_privilege('anon','public.record_sellertray_shift_cash_movement(uuid,uuid,text,numeric,text,text,uuid,text,uuid)','EXECUTE')
+  and not has_function_privilege('authenticated','public.record_sellertray_shift_cash_movement(uuid,uuid,text,numeric,text,text,uuid,text,uuid)','EXECUTE')
+  and not has_function_privilege('public','public.record_sellertray_shift_cash_movement(uuid,uuid,text,numeric,text,text,uuid,text,uuid)','EXECUTE'),
+  'explicit and governed-category cash movement commands are not directly client executable'
 );
 
 select extensions.ok(
