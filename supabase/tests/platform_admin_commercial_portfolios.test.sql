@@ -35,7 +35,7 @@ from commercial_portfolio_fixture;
 insert into public.platform_admins(user_id,role)
 select actor_id,'support' from commercial_portfolio_fixture;
 insert into public.tenants(id,name,slug,merchant_code,subscription_status,whatsapp_connection_status)
-select tenant_id,'Commercial Portfolio Fixture','commercial-portfolio-'||left(tenant_id::text,8),'CPF1','active','connected'
+select tenant_id,'Commercial Portfolio Fixture','commercial-portfolio-'||left(tenant_id::text,8),'CPF','active','connected'
 from commercial_portfolio_fixture;
 
 insert into public.sellertray_commercial_orders(
