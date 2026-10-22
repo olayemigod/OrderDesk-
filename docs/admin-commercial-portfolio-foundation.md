@@ -17,6 +17,8 @@ Installment portfolio facts come from the existing immutable commercial order, i
 
 Agreement portfolio facts come from immutable merchant-specific agreements, versioned templates, immutable acceptance evidence and explicit supersession history.
 
+The exact C1B definition of an accepted current installment agreement is centralized as the service-only `sellertray_installment_agreement_is_accepted` domain fact. It requires immutable acceptance evidence for the matching Business, order and installment obligation and excludes agreements that have been superseded.
+
 The Admin read projections are service-only RPCs. Browser access goes through `platform-admin-commercial`, which verifies the authenticated user and requires AAL2 before invoking the service-authority projection.
 
 ## Product behaviour
@@ -75,13 +77,14 @@ Those require their own governed authority or later approved roadmap slice.
 - `apps/admin-web/src/MerchantSelector.tsx`
 - `apps/admin-web/scripts/commercial-portfolio-contract.test.mjs`
 - `supabase/functions/platform-admin-commercial/index.ts`
+- `supabase/migrations/20261022092900_sellertray_installment_agreement_acceptance_fact.sql`
 - `supabase/migrations/20261022093000_platform_admin_commercial_portfolios.sql`
 - `supabase/tests/platform_admin_commercial_portfolios.test.sql`
 - `docs/admin-commercial-portfolio-foundation.md`
 
 ## Release order
 
-1. Apply the additive database migration.
+1. Apply the additive database migrations in repository order.
 2. Deploy `platform-admin-commercial`.
 3. Deploy the Admin Web build.
 4. Run browser QA using a Platform Admin and Platform Support account.
