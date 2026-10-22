@@ -43,6 +43,12 @@ insert into public.tenant_members(tenant_id,user_id,role)
 select tenant_id,owner_user_id,'owner'
 from sellertray_cash_balance_fixture;
 
+insert into public.sellertray_expense_categories(
+  tenant_id,name,is_active,created_by_user_id,updated_by_user_id
+)
+select tenant_id,'General',true,owner_user_id,owner_user_id
+from sellertray_cash_balance_fixture;
+
 update sellertray_cash_balance_fixture f
 set branch_id=b.id
 from public.branches b
