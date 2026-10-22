@@ -315,7 +315,7 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
     setQuery(clean); setScannerOpen(false);
   }
 
-  if (loading) return <View style={styles.empty}><ActivityIndicator /><Text style={styles.muted}>Loading selling workspace…</Text></View>;
+  if (loading) return <View style={styles.empty}><ActivityIndicator /><Text style={[styles.muted, dark && darkStyles.body]}>Loading selling workspace…</Text></View>;
 
   return <View style={styles.stack}>
     <BarcodeScannerSheet visible={scannerOpen} onClose={() => setScannerOpen(false)} onBarcode={handleBarcode} />
@@ -325,17 +325,57 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
     {error ? <ErrorCard text={error} /> : null}
 
     {stage === 'products' ? <>
-      <View style={styles.catalogueToolbar}><View style={[styles.search, styles.searchGrow, dark && darkStyles.card]}><Ionicons name="search-outline" size={20} color={theme.colors.muted} /><TextInput value={query} onChangeText={setQuery} placeholder="Search product, SKU or barcode" placeholderTextColor={theme.colors.subtle} style={[styles.searchInput, dark && darkStyles.title]} /><Pressable onPress={() => setScannerOpen(true)} style={styles.iconButton}><Ionicons name="barcode-outline" size={22} color={theme.colors.greenDark} /></Pressable></View><View style={[styles.viewToggle, dark && darkStyles.card]}><Pressable accessibilityLabel="Tile view" onPress={() => setCatalogueView('grid')} style={[styles.viewButton, catalogueView === 'grid' && styles.viewButtonActive]}><Ionicons name="grid-outline" size={18} color={catalogueView === 'grid' ? theme.colors.greenDark : theme.colors.muted} /></Pressable><Pressable accessibilityLabel="List view" onPress={() => setCatalogueView('list')} style={[styles.viewButton, catalogueView === 'list' && styles.viewButtonActive]}><Ionicons name="list-outline" size={20} color={catalogueView === 'list' ? theme.colors.greenDark : theme.colors.muted} /></Pressable></View></View>
+      <View style={styles.catalogueToolbar}>
+        <View style={[styles.search, styles.searchGrow, dark && darkStyles.card]}>
+          <Ionicons name="search-outline" size={20} color={dark ? theme.dark.textSubtle : theme.colors.muted} />
+          <TextInput value={query} onChangeText={setQuery} placeholder="Search product, SKU or barcode" placeholderTextColor={theme.colors.subtle} style={[styles.searchInput, dark && darkStyles.title]} />
+          <Pressable onPress={() => setScannerOpen(true)} style={styles.iconButton}><Ionicons name="barcode-outline" size={22} color={dark ? theme.dark.accentText : theme.colors.greenDark} /></Pressable>
+        </View>
+        <View style={[styles.viewToggle, dark && darkStyles.card]}>
+          <Pressable accessibilityLabel="Tile view" onPress={() => setCatalogueView('grid')} style={[styles.viewButton, catalogueView === 'grid' && (dark ? darkStyles.viewButtonActive : styles.viewButtonActive)]}><Ionicons name="grid-outline" size={18} color={catalogueView === 'grid' ? (dark ? theme.dark.accentText : theme.colors.greenDark) : (dark ? theme.dark.textSubtle : theme.colors.muted)} /></Pressable>
+          <Pressable accessibilityLabel="List view" onPress={() => setCatalogueView('list')} style={[styles.viewButton, catalogueView === 'list' && (dark ? darkStyles.viewButtonActive : styles.viewButtonActive)]}><Ionicons name="list-outline" size={20} color={catalogueView === 'list' ? (dark ? theme.dark.accentText : theme.colors.greenDark) : (dark ? theme.dark.textSubtle : theme.colors.muted)} /></Pressable>
+        </View>
+      </View>
       <View style={catalogueView === 'grid' ? styles.productGrid : styles.productList}>{visibleProducts.map((product) => {
         const uom = selectedUom(product);
         const available = stockByProduct.get(product.id)?.quantityOnHand ?? 0;
         const remaining = Math.max(0, available - stockInCart(product.id));
         const outOfStock = remaining <= STOCK_EPSILON;
         const addDisabled = outOfStock || !uom || uom.sellingPrice == null;
-        return <View key={product.id} style={[styles.card, catalogueView === 'grid' && styles.productTile, outOfStock && styles.productUnavailable, dark && darkStyles.card]}>
-          <View style={styles.row}><View style={styles.flex}><Text numberOfLines={2} style={[styles.productName, outOfStock && styles.unavailableText, dark && darkStyles.title]}>{product.name}</Text><Text style={[styles.muted, outOfStock && styles.unavailableText, dark && darkStyles.body]}>{outOfStock ? 'Out of stock' : `${formatQuantity(remaining)} ${product.stockUom} available`}</Text></View>{catalogueView === 'list' ? <Text style={[styles.price, outOfStock && styles.unavailableText, dark && darkStyles.title]}>{uom?.sellingPrice == null ? 'No price' : formatMoney(uom.sellingPrice, currency)}</Text> : null}</View>
-          {catalogueView === 'grid' ? <Text style={[styles.tilePrice, outOfStock && styles.unavailableText, dark && darkStyles.title]}>{uom?.sellingPrice == null ? 'No price' : formatMoney(uom.sellingPrice, currency)}</Text> : null}
-          <View style={styles.chips}>{product.uoms.map((candidate) => <Pressable key={candidate.id} onPress={() => setSelectedUomByProduct((current) => ({ ...current, [product.id]: candidate.id }))} style={[styles.chip, candidate.id === uom?.id && styles.chipActive, outOfStock && styles.chipUnavailable]}><Text numberOfLines={1} style={[styles.chipText, outOfStock && styles.unavailableText]}>{candidate.name}</Text></Pressable>)}</View>
+        return <View key={product.id} style={[
+          styles.card,
+          catalogueView === 'grid' && styles.productTile,
+          dark && darkStyles.card,
+          outOfStock && (dark ? darkStyles.unavailableCard : styles.productUnavailable),
+        ]}>
+          <View style={styles.row}>
+            <View style={styles.flex}>
+              <Text numberOfLines={2} style={[styles.productName, dark && darkStyles.title, outOfStock && (dark ? darkStyles.unavailableText : styles.unavailableText)]}>{product.name}</Text>
+              <Text style={[styles.muted, dark && darkStyles.body, outOfStock && (dark ? darkStyles.unavailableText : styles.unavailableText)]}>{outOfStock ? 'Out of stock' : `${formatQuantity(remaining)} ${product.stockUom} available`}</Text>
+            </View>
+            {catalogueView === 'list' ? <Text style={[styles.price, dark && darkStyles.title, outOfStock && (dark ? darkStyles.unavailableText : styles.unavailableText)]}>{uom?.sellingPrice == null ? 'No price' : formatMoney(uom.sellingPrice, currency)}</Text> : null}
+          </View>
+          {catalogueView === 'grid' ? <Text style={[styles.tilePrice, dark && darkStyles.title, outOfStock && (dark ? darkStyles.unavailableText : styles.unavailableText)]}>{uom?.sellingPrice == null ? 'No price' : formatMoney(uom.sellingPrice, currency)}</Text> : null}
+          <View style={styles.chips}>{product.uoms.map((candidate) => {
+            const selected = candidate.id === uom?.id;
+            return <Pressable
+              key={candidate.id}
+              onPress={() => setSelectedUomByProduct((current) => ({ ...current, [product.id]: candidate.id }))}
+              style={[
+                styles.chip,
+                dark && darkStyles.chip,
+                selected && (dark ? darkStyles.chipActive : styles.chipActive),
+                outOfStock && (dark ? darkStyles.chipUnavailable : styles.chipUnavailable),
+              ]}
+            >
+              <Text numberOfLines={1} style={[
+                styles.chipText,
+                dark && darkStyles.chipText,
+                selected && dark && darkStyles.chipTextActive,
+                outOfStock && (dark ? darkStyles.unavailableText : styles.unavailableText),
+              ]}>{candidate.name}</Text>
+            </Pressable>;
+          })}</View>
           <Pressable disabled={addDisabled} onPress={() => addToCart(product)} style={[styles.primary, styles.addButton, addDisabled && styles.disabled]}><Ionicons name={outOfStock ? 'ban-outline' : 'add'} size={18} color={theme.colors.white} /><Text style={styles.primaryText}>{outOfStock ? 'Out of stock' : 'Add'}</Text></Pressable>
         </View>;
       })}</View>
@@ -343,18 +383,58 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
     </> : null}
 
     {stage === 'cart' ? <>
-      <Pressable onPress={() => setStage('products')} style={styles.back}><Ionicons name="arrow-back" size={18} color={theme.colors.greenDark} /><Text style={styles.backText}>Products</Text></Pressable>
-      <View style={[styles.card, dark && darkStyles.card]}>{cartLines.map((line) => <View key={line.key} style={styles.cartLine}><View style={styles.flex}><Text style={[styles.productName, dark && darkStyles.title]}>{line.product.name}</Text><Text style={[styles.muted, dark && darkStyles.body]}>{line.uom.name} · configured {formatMoney(line.uom.sellingPrice ?? 0, currency)}</Text><View style={styles.editRow}><View><Text style={styles.fieldLabel}>Quantity</Text><TextInput keyboardType="decimal-pad" value={quantityDrafts[line.key] ?? formatQuantity(line.quantity)} onChangeText={(value) => setQuantityDrafts((current) => ({ ...current, [line.key]: value.replace(/[^0-9.]/g, '') }))} onEndEditing={() => { const value = Number(quantityDrafts[line.key] ?? line.quantity); if (!setQuantity(line, value)) setQuantityDrafts((current) => ({ ...current, [line.key]: formatQuantity(line.quantity) })); }} style={styles.editInput} /></View><View><Text style={styles.fieldLabel}>Unit price</Text><TextInput editable={canOverridePrice && !draftOrderId} keyboardType="decimal-pad" value={priceDrafts[line.key] ?? formatEditablePrice(line.sellingPrice)} onChangeText={(value) => setPrice(line, value)} onEndEditing={() => commitPrice(line)} style={[styles.priceInput, !canOverridePrice && styles.readOnly]} /></View></View>{canOverridePrice ? <Text style={styles.permissionText}>Price can be changed for this sale.</Text> : <Text style={styles.permissionText}>Configured price applies. Price changes require authorised access.</Text>}</View><View style={styles.lineTotal}><Text style={[styles.price, dark && darkStyles.title]}>{formatMoney(line.quantity * line.sellingPrice, currency)}</Text><Pressable onPress={() => setQuantity(line, 0)}><Ionicons name="trash-outline" size={20} color={theme.colors.danger} /></Pressable></View></View>)}</View>
+      <Pressable onPress={() => setStage('products')} style={styles.back}><Ionicons name="arrow-back" size={18} color={dark ? theme.dark.accentText : theme.colors.greenDark} /><Text style={[styles.backText, dark && darkStyles.backText]}>Products</Text></Pressable>
+      <View style={[styles.card, dark && darkStyles.card]}>{cartLines.map((line) => <View key={line.key} style={[styles.cartLine, dark && darkStyles.subtleCard]}>
+        <View style={styles.flex}>
+          <Text style={[styles.productName, dark && darkStyles.title]}>{line.product.name}</Text>
+          <Text style={[styles.muted, dark && darkStyles.body]}>{line.uom.name} · configured {formatMoney(line.uom.sellingPrice ?? 0, currency)}</Text>
+          <View style={styles.editRow}>
+            <View>
+              <Text style={[styles.fieldLabel, dark && darkStyles.fieldLabel]}>Quantity</Text>
+              <TextInput
+                keyboardType="decimal-pad"
+                value={quantityDrafts[line.key] ?? formatQuantity(line.quantity)}
+                onChangeText={(value) => setQuantityDrafts((current) => ({ ...current, [line.key]: value.replace(/[^0-9.]/g, '') }))}
+                onEndEditing={() => { const value = Number(quantityDrafts[line.key] ?? line.quantity); if (!setQuantity(line, value)) setQuantityDrafts((current) => ({ ...current, [line.key]: formatQuantity(line.quantity) })); }}
+                style={[styles.editInput, dark && darkStyles.input]}
+              />
+            </View>
+            <View>
+              <Text style={[styles.fieldLabel, dark && darkStyles.fieldLabel]}>Unit price</Text>
+              <TextInput
+                editable={canOverridePrice && !draftOrderId}
+                keyboardType="decimal-pad"
+                value={priceDrafts[line.key] ?? formatEditablePrice(line.sellingPrice)}
+                onChangeText={(value) => setPrice(line, value)}
+                onEndEditing={() => commitPrice(line)}
+                style={[
+                  styles.priceInput,
+                  dark && darkStyles.input,
+                  !canOverridePrice && styles.readOnly,
+                  dark && !canOverridePrice && darkStyles.readOnly,
+                ]}
+              />
+            </View>
+          </View>
+          {canOverridePrice
+            ? <Text style={[styles.permissionText, dark && darkStyles.body]}>Price can be changed for this sale.</Text>
+            : <Text style={[styles.permissionText, dark && darkStyles.body]}>Configured price applies. Price changes require authorised access.</Text>}
+        </View>
+        <View style={styles.lineTotal}><Text style={[styles.price, dark && darkStyles.title]}>{formatMoney(line.quantity * line.sellingPrice, currency)}</Text><Pressable onPress={() => setQuantity(line, 0)}><Ionicons name="trash-outline" size={20} color={theme.colors.danger} /></Pressable></View>
+      </View>)}</View>
       <PosCustomerSelector tenantId={tenantId} value={customer} disabled={saving} onChange={setCustomer} />
       <View style={[styles.summary, dark && darkStyles.card]}><View><Text style={[styles.productName, dark && darkStyles.title]}>Sale total</Text>{taxQuote.taxApplied ? <Text style={[styles.muted, dark && darkStyles.body]}>Subtotal {formatMoney(subtotal, currency)} · Tax {formatMoney(taxQuote.taxAmount, currency)} ({formatRate(taxQuote.ratePercent)}%)</Text> : null}</View><Text style={[styles.summaryTotal, dark && darkStyles.title]}>{formatMoney(total, currency)}</Text></View>
       {offlineBankOpen ? <View style={[styles.card, dark && darkStyles.card]}>
         <View><Text style={[styles.productName, dark && darkStyles.title]}>Record Bank transfer offline</Text><Text style={[styles.muted, dark && darkStyles.body]}>Use the Bank account the customer paid. SellerTray will submit this payment for verification when the device reconnects.</Text></View>
-        <View style={styles.chips}>{offlineBankMethods.map((method) => <Pressable key={method.paymentMethodId!} onPress={() => setOfflineBankMethodId(method.paymentMethodId!)} style={[styles.chip, method.paymentMethodId === offlineBankMethodId && styles.chipActive]}><Text style={styles.chipText}>{method.displayName}</Text></Pressable>)}</View>
-        {selectedOfflineBankMethod ? <View style={styles.bankDetails}><Text style={[styles.productName, dark && darkStyles.title]}>{selectedOfflineBankMethod.bankName ?? selectedOfflineBankMethod.displayName}</Text>{selectedOfflineBankMethod.bankAccountName ? <Text style={[styles.muted, dark && darkStyles.body]}>{selectedOfflineBankMethod.bankAccountName}</Text> : null}{selectedOfflineBankMethod.bankAccountNumber ? <Text selectable style={[styles.bankAccount, dark && darkStyles.title]}>{selectedOfflineBankMethod.bankAccountNumber}</Text> : null}{selectedOfflineBankMethod.instructions ? <Text style={[styles.muted, dark && darkStyles.body]}>{selectedOfflineBankMethod.instructions}</Text> : null}</View> : null}
-        <View><Text style={styles.fieldLabel}>Transfer reference</Text><TextInput autoCapitalize="characters" autoCorrect={false} value={offlineBankReference} onChangeText={(value) => setOfflineBankReference(value.replace(/\s/g, ''))} placeholder="e.g. NIP123456789" placeholderTextColor={theme.colors.subtle} maxLength={128} style={[styles.bankReferenceInput, dark && darkStyles.title]} /></View>
+        <View style={styles.chips}>{offlineBankMethods.map((method) => {
+          const selected = method.paymentMethodId === offlineBankMethodId;
+          return <Pressable key={method.paymentMethodId!} onPress={() => setOfflineBankMethodId(method.paymentMethodId!)} style={[styles.chip, dark && darkStyles.chip, selected && (dark ? darkStyles.chipActive : styles.chipActive)]}><Text style={[styles.chipText, dark && darkStyles.chipText, selected && dark && darkStyles.chipTextActive]}>{method.displayName}</Text></Pressable>;
+        })}</View>
+        {selectedOfflineBankMethod ? <View style={[styles.bankDetails, dark && darkStyles.subtleCard]}><Text style={[styles.productName, dark && darkStyles.title]}>{selectedOfflineBankMethod.bankName ?? selectedOfflineBankMethod.displayName}</Text>{selectedOfflineBankMethod.bankAccountName ? <Text style={[styles.muted, dark && darkStyles.body]}>{selectedOfflineBankMethod.bankAccountName}</Text> : null}{selectedOfflineBankMethod.bankAccountNumber ? <Text selectable style={[styles.bankAccount, dark && darkStyles.title]}>{selectedOfflineBankMethod.bankAccountNumber}</Text> : null}{selectedOfflineBankMethod.instructions ? <Text style={[styles.muted, dark && darkStyles.body]}>{selectedOfflineBankMethod.instructions}</Text> : null}</View> : null}
+        <View><Text style={[styles.fieldLabel, dark && darkStyles.fieldLabel]}>Transfer reference</Text><TextInput autoCapitalize="characters" autoCorrect={false} value={offlineBankReference} onChangeText={(value) => setOfflineBankReference(value.replace(/\s/g, ''))} placeholder="e.g. NIP123456789" placeholderTextColor={theme.colors.subtle} maxLength={128} style={[styles.bankReferenceInput, dark && darkStyles.input]} /></View>
         <Text style={[styles.muted, dark && darkStyles.body]}>The reference is stored with the original capture time and cannot be replaced during sync.</Text>
         <Pressable disabled={!selectedOfflineBankMethod || !offlineBankReference.trim()} onPress={() => void queueOfflineBankSale(saleClientReference ?? createPosClientReference()).catch((cause) => setError(sellerTrayUserMessage(cause, 'This Bank transfer could not be saved offline.')))} style={[styles.primary, (!selectedOfflineBankMethod || !offlineBankReference.trim()) && styles.disabled]}><Ionicons name="business-outline" size={18} color={theme.colors.white} /><Text style={styles.primaryText}>Record Bank transfer</Text></Pressable>
-        <Pressable onPress={() => { setOfflineBankOpen(false); setOfflineBankReference(''); }} style={styles.secondary}><Text style={styles.backText}>Keep cart</Text></Pressable>
+        <Pressable onPress={() => { setOfflineBankOpen(false); setOfflineBankReference(''); }} style={[styles.secondary, dark && darkStyles.secondary]}><Text style={[styles.backText, dark && darkStyles.backText]}>Keep cart</Text></Pressable>
       </View> : null}
       <Pressable disabled={saving || !cartLines.length} onPress={() => void continueToPayment()} style={[styles.primary, (saving || !cartLines.length) && styles.disabled]}>{saving ? <ActivityIndicator color={theme.colors.white} /> : <Ionicons name="card-outline" size={19} color={theme.colors.white} />}<Text style={styles.primaryText}>{saving ? 'Preparing sale…' : 'Continue to payment'}</Text></Pressable>
     </> : null}
@@ -362,13 +442,13 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
     {stage === 'payment' && draftOrderId ? <>
       <View style={[styles.summary, dark && darkStyles.card]}><View><Text style={[styles.productName, dark && darkStyles.title]}>Amount due</Text>{taxQuote.taxApplied ? <Text style={[styles.muted, dark && darkStyles.body]}>Subtotal {formatMoney(subtotal, currency)} · Tax {formatMoney(taxQuote.taxAmount, currency)}</Text> : null}</View><Text style={[styles.summaryTotal, dark && darkStyles.title]}>{formatMoney(total, currency)}</Text></View>
       {posPolicy ? <PosPaymentAllocator tenantId={tenantId} orderId={draftOrderId} amountDue={total} currency={currency} paymentMethods={paymentMethods} policy={posPolicy} disabled={completing} onResult={(result) => void handleAllocatedCheckout(result)} onError={(message) => setError(message || null)} /> : <Pressable disabled={completing} onPress={() => Alert.alert('Confirm cash payment', `Confirm ${formatMoney(total, currency)} cash has been received.`, [{ text: 'Not yet', style: 'cancel' }, { text: 'Payment confirmed', onPress: () => void completeCash() }])} style={styles.primary}><Text style={styles.primaryText}>Complete cash sale</Text></Pressable>}
-      <Pressable onPress={() => onDraftCreated?.(draftOrderId)} style={styles.secondary}><Text style={styles.backText}>Save and open sale</Text></Pressable>
+      <Pressable onPress={() => onDraftCreated?.(draftOrderId)} style={[styles.secondary, dark && darkStyles.secondary]}><Text style={[styles.backText, dark && darkStyles.backText]}>Save and open sale</Text></Pressable>
     </> : null}
   </View>;
 }
 
 async function loadProductsWithCache(tenantId: string) { try { const data = await loadCommerceProducts(tenantId); await saveCommerceProductCache(tenantId, data).catch(() => undefined); return { data, cached: false }; } catch (error) { if (!isLikelyConnectivityError(error)) throw error; const cached = await loadCommerceProductCache(tenantId); if (!cached) throw error; return { data: cached.data, cached: true }; } }
-async function loadStockWithCache(tenantId: string, branchId: string) { try { const data = await loadBranchStock(tenantId, branchId); await saveBranchStockCache(tenantId, branchId, data).catch(() => undefined); return { data, cached: false }; } catch (error) { if (!isLikelyConnectivityError(error)) throw error; const cached = await loadBranchStockCache(tenantId, branchId); if (!cached) throw error; return { data: cached.data, cached: true }; } }
+async function loadStockWithCache(tenantId: string, branchId: string) { try { const data = await loadBranchStock(tenantId, branch.id); await saveBranchStockCache(tenantId, branch.id, data).catch(() => undefined); return { data, cached: false }; } catch (error) { if (!isLikelyConnectivityError(error)) throw error; const cached = await loadBranchStockCache(tenantId, branchId); if (!cached) throw error; return { data: cached.data, cached: true }; } }
 async function loadPaymentsWithCache(tenantId: string, branchId: string) { try { const data = await loadBranchPosPaymentMethods(tenantId, branchId); await savePosPaymentMethodsCache(tenantId, branchId, data).catch(() => undefined); return { data, cached: false }; } catch (error) { if (!isLikelyConnectivityError(error)) throw error; const cached = await loadPosPaymentMethodsCache(tenantId, branchId); return { data: cached?.data ?? [cashFallback()], cached: true }; } }
 async function loadPolicyWithCache(tenantId: string) { try { const data = await loadPosPaymentPolicy(tenantId); await savePosPolicyCache(tenantId, data).catch(() => undefined); return { data, cached: false }; } catch (error) { if (!isLikelyConnectivityError(error)) throw error; const cached = await loadPosPolicyCache(tenantId); if (!cached) throw new Error('Reconnect once to establish POS permissions before selling offline.'); return { data: cached.data, cached: true }; } }
 async function loadTaxWithCache(tenantId: string) { try { const quote = await loadSellerTrayTaxQuote(tenantId, 0); const data = taxContextFromQuote(quote); await saveTaxContextCache(tenantId, data).catch(() => undefined); return { data, cached: false }; } catch (error) { if (!isLikelyConnectivityError(error)) throw error; const cached = await loadTaxContextCache(tenantId); if (!cached) throw new Error('Reconnect once to establish tax settings before selling offline.'); return { data: cached.data, cached: true }; } }
@@ -384,6 +464,80 @@ function Notice({ text, warning = false }: { text: string; warning?: boolean }) 
 function ErrorCard({ text }: { text: string }) { return <View style={styles.errorCard}><Ionicons name="alert-circle-outline" size={20} color={theme.colors.danger} /><Text style={styles.errorText}>{text}</Text></View>; }
 
 const styles = StyleSheet.create({
-  stack: { gap: 14 }, catalogueToolbar: { flexDirection: 'row', gap: 8, alignItems: 'center' }, searchGrow: { flex: 1 }, viewToggle: { flexDirection: 'row', borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, backgroundColor: theme.colors.white, padding: 3 }, viewButton: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }, viewButtonActive: { backgroundColor: theme.colors.mintSoft }, productGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 }, productList: { gap: 10 }, productTile: { width: '48%', minWidth: 0, justifyContent: 'space-between' }, tilePrice: { color: theme.colors.navy, fontSize: 16, fontWeight: '900' }, addButton: { minHeight: 42 }, productUnavailable: { backgroundColor: '#F2F4F7', borderColor: '#D0D5DD' }, unavailableText: { color: '#98A2B3' }, chipUnavailable: { backgroundColor: '#EAECF0', borderColor: '#D0D5DD' }, eyebrow: { color: theme.colors.muted, fontSize: 11, fontWeight: '900', letterSpacing: 1 }, title: { color: theme.colors.navy, fontSize: 28, lineHeight: 34, fontWeight: '900' }, muted: { color: theme.colors.muted, fontSize: 12, lineHeight: 18 }, row: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' }, flex: { flex: 1, minWidth: 0 }, search: { minHeight: 52, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, backgroundColor: theme.colors.white, paddingLeft: 12, flexDirection: 'row', alignItems: 'center', gap: 8 }, searchInput: { flex: 1, minHeight: 50, color: theme.colors.navy }, iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, card: { borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 13, gap: 10 }, productName: { color: theme.colors.navy, fontSize: 14, fontWeight: '900' }, price: { color: theme.colors.navy, fontSize: 13, fontWeight: '900' }, chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 }, chip: { minHeight: 30, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.pill, paddingHorizontal: 9, justifyContent: 'center' }, chipActive: { borderColor: theme.colors.green, backgroundColor: theme.colors.mintSoft }, chipText: { color: theme.colors.slate, fontSize: 11, fontWeight: '800' }, primary: { minHeight: 48, borderRadius: theme.radius.md, backgroundColor: theme.colors.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: 12 }, primaryText: { color: theme.colors.white, fontSize: 12, fontWeight: '900' }, checkout: { minHeight: 66, borderRadius: theme.radius.lg, backgroundColor: theme.colors.green, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, checkoutTotal: { color: theme.colors.white, fontSize: 20, fontWeight: '900' }, back: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', minHeight: 36 }, backText: { color: theme.colors.greenDark, fontWeight: '900', fontSize: 12 }, cartLine: { backgroundColor: theme.colors.cloud, borderRadius: theme.radius.md, padding: 11, flexDirection: 'row', gap: 8 }, editRow: { flexDirection: 'row', gap: 10, marginTop: 8 }, fieldLabel: { color: theme.colors.muted, fontSize: 10, fontWeight: '800', marginBottom: 3 }, editInput: { width: 72, minHeight: 40, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 10, backgroundColor: theme.colors.white, color: theme.colors.navy, textAlign: 'center' }, priceInput: { width: 112, minHeight: 40, borderWidth: 1, borderColor: theme.colors.green, borderRadius: 10, backgroundColor: theme.colors.white, color: theme.colors.navy, textAlign: 'right', paddingHorizontal: 9 }, readOnly: { borderColor: theme.colors.border, backgroundColor: theme.colors.cloud }, permissionText: { color: theme.colors.muted, fontSize: 10, marginTop: 5 }, lineTotal: { alignItems: 'flex-end', gap: 10 }, summary: { borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }, summaryTotal: { color: theme.colors.navy, fontSize: 24, fontWeight: '900' }, secondary: { minHeight: 44, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, alignItems: 'center', justifyContent: 'center' }, notice: { borderRadius: theme.radius.md, backgroundColor: '#EFF8FF', padding: 11, flexDirection: 'row', gap: 8, alignItems: 'flex-start' }, warning: { backgroundColor: '#FFFAEB' }, noticeText: { flex: 1, color: theme.colors.slate, fontSize: 11, lineHeight: 17 }, errorCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#FDA29B', backgroundColor: theme.colors.dangerSoft, padding: 11, flexDirection: 'row', gap: 8 }, errorText: { flex: 1, color: '#B42318', fontSize: 11, lineHeight: 17 }, empty: { minHeight: 150, justifyContent: 'center', alignItems: 'center', gap: 8 }, disabled: { opacity: 0.45 }, bankDetails: { borderRadius: theme.radius.md, backgroundColor: theme.colors.cloud, padding: 10, gap: 3 }, bankAccount: { color: theme.colors.navy, fontSize: 16, fontWeight: '900', letterSpacing: 0.5 }, bankReferenceInput: { minHeight: 44, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 10, backgroundColor: theme.colors.white, color: theme.colors.navy, paddingHorizontal: 11 },
+  stack: { gap: 14 },
+  catalogueToolbar: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  searchGrow: { flex: 1 },
+  viewToggle: { flexDirection: 'row', borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, backgroundColor: theme.colors.white, padding: 3 },
+  viewButton: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  viewButtonActive: { backgroundColor: theme.colors.mintSoft },
+  productGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  productList: { gap: 10 },
+  productTile: { width: '48%', minWidth: 0, justifyContent: 'space-between' },
+  tilePrice: { color: theme.colors.navy, fontSize: 16, fontWeight: '900' },
+  addButton: { minHeight: 42 },
+  productUnavailable: { backgroundColor: '#F2F4F7', borderColor: '#D0D5DD' },
+  unavailableText: { color: '#98A2B3' },
+  chipUnavailable: { backgroundColor: '#EAECF0', borderColor: '#D0D5DD' },
+  eyebrow: { color: theme.colors.muted, fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+  title: { color: theme.colors.navy, fontSize: 28, lineHeight: 34, fontWeight: '900' },
+  muted: { color: theme.colors.muted, fontSize: 12, lineHeight: 18 },
+  row: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  flex: { flex: 1, minWidth: 0 },
+  search: { minHeight: 52, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, backgroundColor: theme.colors.white, paddingLeft: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  searchInput: { flex: 1, minHeight: 50, color: theme.colors.navy },
+  iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  card: { borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 13, gap: 10 },
+  productName: { color: theme.colors.navy, fontSize: 14, fontWeight: '900' },
+  price: { color: theme.colors.navy, fontSize: 13, fontWeight: '900' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  chip: { minHeight: 30, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.pill, paddingHorizontal: 9, justifyContent: 'center' },
+  chipActive: { borderColor: theme.colors.green, backgroundColor: theme.colors.mintSoft },
+  chipText: { color: theme.colors.slate, fontSize: 11, fontWeight: '800' },
+  primary: { minHeight: 48, borderRadius: theme.radius.md, backgroundColor: theme.colors.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: 12 },
+  primaryText: { color: theme.colors.white, fontSize: 12, fontWeight: '900' },
+  checkout: { minHeight: 66, borderRadius: theme.radius.lg, backgroundColor: theme.colors.green, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  checkoutTotal: { color: theme.colors.white, fontSize: 20, fontWeight: '900' },
+  back: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', minHeight: 36 },
+  backText: { color: theme.colors.greenDark, fontWeight: '900', fontSize: 12 },
+  cartLine: { backgroundColor: theme.colors.cloud, borderRadius: theme.radius.md, padding: 11, flexDirection: 'row', gap: 8 },
+  editRow: { flexDirection: 'row', gap: 10, marginTop: 8 },
+  fieldLabel: { color: theme.colors.muted, fontSize: 10, fontWeight: '800', marginBottom: 3 },
+  editInput: { width: 72, minHeight: 40, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 10, backgroundColor: theme.colors.white, color: theme.colors.navy, textAlign: 'center' },
+  priceInput: { width: 112, minHeight: 40, borderWidth: 1, borderColor: theme.colors.green, borderRadius: 10, backgroundColor: theme.colors.white, color: theme.colors.navy, textAlign: 'right', paddingHorizontal: 9 },
+  readOnly: { borderColor: theme.colors.border, backgroundColor: theme.colors.cloud },
+  permissionText: { color: theme.colors.muted, fontSize: 10, marginTop: 5 },
+  lineTotal: { alignItems: 'flex-end', gap: 10 },
+  summary: { borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  summaryTotal: { color: theme.colors.navy, fontSize: 24, fontWeight: '900' },
+  secondary: { minHeight: 44, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, alignItems: 'center', justifyContent: 'center' },
+  notice: { borderRadius: theme.radius.md, backgroundColor: '#EFF8FF', padding: 11, flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
+  warning: { backgroundColor: '#FFFAEB' },
+  noticeText: { flex: 1, color: theme.colors.slate, fontSize: 11, lineHeight: 17 },
+  errorCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#FDA29B', backgroundColor: theme.colors.dangerSoft, padding: 11, flexDirection: 'row', gap: 8 },
+  errorText: { flex: 1, color: '#B42318', fontSize: 11, lineHeight: 17 },
+  empty: { minHeight: 150, justifyContent: 'center', alignItems: 'center', gap: 8 },
+  disabled: { opacity: 0.45 },
+  bankDetails: { borderRadius: theme.radius.md, backgroundColor: theme.colors.cloud, padding: 10, gap: 3 },
+  bankAccount: { color: theme.colors.navy, fontSize: 16, fontWeight: '900', letterSpacing: 0.5 },
+  bankReferenceInput: { minHeight: 44, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 10, backgroundColor: theme.colors.white, color: theme.colors.navy, paddingHorizontal: 11 },
 });
-const darkStyles = StyleSheet.create({ card: { backgroundColor: theme.colors.navy, borderColor: '#344054' }, title: { color: theme.colors.cloud }, body: { color: '#D0D5DD' } });
+
+const darkStyles = StyleSheet.create({
+  card: { backgroundColor: theme.dark.surface, borderColor: theme.dark.border },
+  subtleCard: { backgroundColor: theme.dark.surfaceSubtle, borderColor: theme.dark.border },
+  title: { color: theme.dark.text },
+  body: { color: theme.dark.textMuted },
+  fieldLabel: { color: theme.dark.textMuted },
+  input: { backgroundColor: theme.dark.surfaceRaised, borderColor: theme.dark.borderStrong, color: theme.dark.text },
+  readOnly: { backgroundColor: theme.dark.surfaceSubtle, borderColor: theme.dark.border },
+  secondary: { borderColor: theme.dark.borderStrong },
+  backText: { color: theme.dark.accentText },
+  viewButtonActive: { backgroundColor: theme.dark.accentSoft },
+  chip: { borderColor: theme.dark.borderStrong },
+  chipActive: { backgroundColor: theme.dark.accentSoft, borderColor: theme.colors.green },
+  chipText: { color: theme.dark.textMuted },
+  chipTextActive: { color: theme.dark.accentText },
+  unavailableCard: { backgroundColor: theme.dark.surfaceRaised, borderColor: theme.dark.border },
+  unavailableText: { color: theme.dark.textSubtle },
+  chipUnavailable: { backgroundColor: theme.dark.surfaceRaised, borderColor: theme.dark.border },
+});
