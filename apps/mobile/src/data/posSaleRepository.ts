@@ -2,6 +2,8 @@ import { supabase } from '../lib/supabase';
 
 export type PosSaleAction = 'void' | 'return';
 export type PosReturnStatus = 'partial' | 'returned';
+export type PosRefundMethod = 'cash' | 'bank';
+export type PosReturnRole = 'owner' | 'manager' | 'staff';
 
 export type PosReturnableItem = {
   orderItemId: string;
@@ -22,6 +24,13 @@ export type PosReturnableSale = {
   returnStatus: 'none' | PosReturnStatus;
   returnedAmount: number;
   remainingAmount: number;
+  confirmedPaid: number;
+  priorRefundedAmount: number;
+  netCollectedAmount: number;
+  outstandingAmount: number;
+  canCompleteReturn: boolean;
+  canCompleteRefund: boolean;
+  role: PosReturnRole;
   items: PosReturnableItem[];
 };
 
@@ -33,7 +42,12 @@ export type PosSaleActionResult = {
   returnId?: string;
   refundId?: string;
   returnStatus?: PosReturnStatus;
+  returnedValue?: number;
+  receivableReduction?: number;
   refundedAmount?: number;
+  refundMethod?: PosRefundMethod;
+  outstandingBefore?: number;
+  outstandingAfter?: number;
   returnedAmount?: number;
   currency?: string;
 };
@@ -132,6 +146,11 @@ export async function loadPosReturnableItems(
   const returnStatus = row.returnStatus;
   const returnedAmount = numberOrUndefined(row.returnedAmount);
   const remainingAmount = numberOrUndefined(row.remainingAmount);
+  const confirmedPaid = numberOrUndefined(row.confirmedPaid);
+  const priorRefundedAmount = numberOrUndefined(row.priorRefundedAmount);
+  const netCollectedAmount = numberOrUndefined(row.netCollectedAmount);
+  const outstandingAmount = numberOrUndefined(row.outstandingAmount);
+  const role = row.role;
   if (
     typeof row.orderId !== 'string'
     || typeof row.publicOrderId !== 'string'
@@ -139,6 +158,13 @@ export async function loadPosReturnableItems(
     || (returnStatus !== 'none' && returnStatus !== 'partial' && returnStatus !== 'returned')
     || returnedAmount === undefined
     || remainingAmount === undefined
+    || confirmedPaid === undefined
+    || priorRefundedAmount === undefined
+    || netCollectedAmount === undefined
+    || outstandingAmount === undefined
+    || typeof row.canCompleteReturn !== 'boolean'
+    || typeof row.canCompleteRefund !== 'boolean'
+    || (role !== 'owner' && role !== 'manager' && role !== 'staff')
     || !Array.isArray(row.items)
   ) {
     throw new Error('SellerTray returned invalid returnable sale details.');
@@ -152,6 +178,13 @@ export async function loadPosReturnableItems(
     returnStatus,
     returnedAmount,
     remainingAmount,
+    confirmedPaid,
+    priorRefundedAmount,
+    netCollectedAmount,
+    outstandingAmount,
+    canCompleteReturn: row.canCompleteReturn,
+    canCompleteRefund: row.canCompleteRefund,
+    role,
     items,
   };
 }
@@ -162,6 +195,7 @@ export async function returnPosSaleItems(input: {
   reason: string;
   items: PosReturnItemInput[];
   commandId: string;
+  refundMethod?: PosRefundMethod | null;
 }): Promise<PosSaleActionResult> {
   const reason = input.reason.trim();
   if (!reason) throw new Error('Enter a reason before continuing.');
@@ -177,6 +211,7 @@ export async function returnPosSaleItems(input: {
     reason,
     items: input.items,
     commandId: input.commandId,
+    refundMethod: input.refundMethod ?? null,
   });
 }
 
@@ -224,11 +259,17 @@ export async function applyPosSaleAction(input: {
 
   if (input.action === 'return') {
     const returnable = await loadPosReturnableItems(input.tenantId, input.orderId);
+    const fullReturnValue = returnable.items.reduce((sum, item) => sum + item.remainingValue, 0);
+    const refundDue = Math.max(fullReturnValue - Math.min(fullReturnValue, returnable.outstandingAmount), 0);
+    if (refundDue > 0) {
+      throw new Error('Choose the return items and Cash or Bank refund method before completing this return.');
+    }
     return returnPosSaleItems({
       tenantId: input.tenantId,
       orderId: input.orderId,
       reason,
       commandId: createPosCommandId('return', input.orderId),
+      refundMethod: null,
       items: returnable.items.map((item) => ({
         orderItemId: item.orderItemId,
         quantity: item.remainingQuantity,
@@ -251,19 +292,30 @@ async function invokeSaleAction(input: {
   reason: string;
   items?: PosReturnItemInput[];
   commandId?: string;
+  refundMethod?: PosRefundMethod | null;
 }): Promise<PosSaleActionResult> {
   const row = await invokeRawAction(input);
 
   if (input.action === 'void' && row.status !== 'cancelled') {
     throw new Error('SellerTray did not confirm the sale was voided.');
   }
-  if (
-    input.action === 'return'
-    && ((row.returnStatus !== 'partial' && row.returnStatus !== 'returned')
+  if (input.action === 'return') {
+    const returnedValue = numberOrUndefined(row.returnedValue);
+    const receivableReduction = numberOrUndefined(row.receivableReduction);
+    const refundedAmount = numberOrUndefined(row.refundedAmount);
+    const refundIdValid = row.refundId === null || typeof row.refundId === 'string';
+    const refundMethodValid = row.refundMethod === null || row.refundMethod === 'cash' || row.refundMethod === 'bank';
+    if (
+      (row.returnStatus !== 'partial' && row.returnStatus !== 'returned')
       || typeof row.returnId !== 'string'
-      || typeof row.refundId !== 'string')
-  ) {
-    throw new Error('SellerTray did not confirm the sale return.');
+      || !refundIdValid
+      || !refundMethodValid
+      || returnedValue === undefined
+      || receivableReduction === undefined
+      || refundedAmount === undefined
+    ) {
+      throw new Error('SellerTray did not confirm the sale return.');
+    }
   }
 
   return {
@@ -274,7 +326,12 @@ async function invokeSaleAction(input: {
     returnId: typeof row.returnId === 'string' ? row.returnId : undefined,
     refundId: typeof row.refundId === 'string' ? row.refundId : undefined,
     returnStatus: row.returnStatus === 'partial' || row.returnStatus === 'returned' ? row.returnStatus : undefined,
+    returnedValue: numberOrUndefined(row.returnedValue),
+    receivableReduction: numberOrUndefined(row.receivableReduction),
     refundedAmount: numberOrUndefined(row.refundedAmount),
+    refundMethod: row.refundMethod === 'cash' || row.refundMethod === 'bank' ? row.refundMethod : undefined,
+    outstandingBefore: numberOrUndefined(row.outstandingBefore),
+    outstandingAfter: numberOrUndefined(row.outstandingAfter),
     returnedAmount: numberOrUndefined(row.returnedAmount),
     currency: typeof row.currency === 'string' ? row.currency : undefined,
   };
@@ -287,6 +344,7 @@ async function invokeRawAction(input: {
   reason: string;
   items?: PosReturnItemInput[];
   commandId?: string;
+  refundMethod?: PosRefundMethod | null;
 }): Promise<Record<string, unknown>> {
   const { data, error } = await supabase.functions.invoke('pos-return', {
     body: {
@@ -296,6 +354,7 @@ async function invokeRawAction(input: {
       reason: input.reason,
       ...(input.items ? { items: input.items } : {}),
       ...(input.commandId ? { commandId: input.commandId } : {}),
+      ...(input.action === 'return' ? { refundMethod: input.refundMethod ?? null } : {}),
     },
   });
 
