@@ -67,6 +67,12 @@ type OrderRow = {
   amount_paid: number | string;
   currency: string;
   payment_confirmed_at: string | null;
+  subtotal_amount: number | string | null;
+  tax_applied: boolean | null;
+  tax_rate_percent: number | string | null;
+  tax_amount: number | string | null;
+  tax_display_breakdown: boolean | null;
+  gross_amount: number | string | null;
   return_status: ReturnStatus;
   returned_amount: number | string;
   returned_at: string | null;
@@ -174,6 +180,12 @@ function mapOrder(
     paymentStatus: row.payment_status,
     amountPaid,
     paymentConfirmedAt: row.payment_confirmed_at,
+    subtotalAmount: toNumber(row.subtotal_amount),
+    taxApplied: row.tax_applied,
+    taxRatePercent: toNumber(row.tax_rate_percent),
+    taxAmount: toNumber(row.tax_amount),
+    taxDisplayBreakdown: row.tax_display_breakdown,
+    grossAmount: toNumber(row.gross_amount),
     cashReturnSupported,
     returnStatus: row.return_status,
     returnedAmount: toNumber(row.returned_amount) ?? 0,
@@ -242,6 +254,12 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
         amount_paid,
         currency,
         payment_confirmed_at,
+        subtotal_amount,
+        tax_applied,
+        tax_rate_percent,
+        tax_amount,
+        tax_display_breakdown,
+        gross_amount,
         return_status,
         returned_amount,
         returned_at,
