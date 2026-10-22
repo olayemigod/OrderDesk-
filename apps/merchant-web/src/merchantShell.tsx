@@ -1,10 +1,10 @@
 export type ShellIconName = 'menu' | 'close' | 'sun' | 'moon' | 'refresh' | 'chevron';
 
-const SELLERTRAY_APP_ICON = '/brand/sellertray-app-icon.png';
+const SELLERTRAY_LOGO = '/brand/sellertray-admin-logo.webp';
 
 export function SellerTrayMark({ large = false }: { large?: boolean }) {
   return <span className={large ? 'sellertray-mark large' : 'sellertray-mark'} aria-hidden="true">
-    <img src={SELLERTRAY_APP_ICON} alt="" />
+    <img src={SELLERTRAY_LOGO} alt="" />
   </span>;
 }
 

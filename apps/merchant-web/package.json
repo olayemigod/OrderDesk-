@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "typecheck": "tsc --noEmit --pretty false",
-    "preflight": "node scripts/security-preflight.mjs && node scripts/ai-security-preflight.mjs && node scripts/commercial-agreements-preflight.mjs && node scripts/sellertray-elements-preflight.mjs && node scripts/mobile-layout-preflight.mjs",
+    "preflight": "node scripts/security-preflight.mjs && node scripts/ai-security-preflight.mjs && node scripts/commercial-agreements-preflight.mjs && node scripts/sellertray-elements-preflight.mjs && node scripts/mobile-layout-preflight.mjs && node scripts/brand-preflight.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview"
   },
