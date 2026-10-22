@@ -190,7 +190,8 @@ Sell is the main POS surface. Support:
 
 - search by product name, SKU or barcode;
 - barcode scanning;
-- UOM selection during transactions;
+- availability;
+- UOM selection;
 - quantity;
 - customer;
 - controlled discounts/price overrides;
