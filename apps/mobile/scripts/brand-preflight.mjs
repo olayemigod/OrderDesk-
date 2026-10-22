@@ -4,6 +4,7 @@ import { join } from 'node:path';
 const root = process.cwd();
 const failures = [];
 const V2_ICON_URL = 'https://sellertray.vercel.app/brand/sellertray-app-icon-v2.png';
+const MOBILE_MARK = 'assets/sellertray-v2-mark-128.png';
 
 function read(path) {
   return readFileSync(join(root, path), 'utf8');
@@ -18,12 +19,16 @@ const appConfig = JSON.parse(read('app.json'));
 const expo = appConfig.expo ?? {};
 
 requireValue(
-  existsSync(join(root, 'assets/sellertray-admin-logo.webp')),
-  'Mobile must bundle the exact Admin Portal SellerTray logo asset',
+  existsSync(join(root, MOBILE_MARK)),
+  'Mobile must bundle the Android-safe SellerTray v2 mark derived from the approved brand artwork',
 );
 requireValue(
-  brand.includes("require('../../assets/sellertray-admin-logo.webp')"),
-  'Mobile SellerTrayBrand must render the Admin Portal logo asset instead of a redrawn local mark',
+  brand.includes("require('../../assets/sellertray-v2-mark-128.png')"),
+  'Mobile SellerTrayBrand must render the bundled SellerTray v2 mark instead of the unsupported in-app WebP path',
+);
+requireValue(
+  !brand.includes("require('../../assets/sellertray-admin-logo.webp')"),
+  'Mobile SellerTrayBrand must not depend on the Admin WebP runtime decoder path that failed on Android QA',
 );
 requireValue(
   expo.icon === V2_ICON_URL,
