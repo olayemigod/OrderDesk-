@@ -107,12 +107,11 @@ Deno.serve(async(request)=>{
 
       const hasProviderReference=row.providerReference!==undefined&&row.providerReference!==null&&row.providerReference!=='';
       const hasCapturedAt=row.offlineCapturedAt!==undefined&&row.offlineCapturedAt!==null&&row.offlineCapturedAt!=='';
-      if(hasProviderReference!==hasCapturedAt)return json({error:'Offline Bank evidence requires both transfer reference and captured time'},400);
+      if(hasProviderReference!==hasCapturedAt)return json({error:'Offline non-cash evidence requires both payment reference and captured time'},400);
       const providerReference=hasProviderReference?cleanProviderReference(row.providerReference):null;
       const offlineCapturedAt=hasCapturedAt?cleanIsoTimestamp(row.offlineCapturedAt):null;
-      if(hasProviderReference&&!providerReference)return json({error:'Enter a valid Bank transfer reference'},400);
-      if(hasCapturedAt&&!offlineCapturedAt)return json({error:'Offline Bank evidence has an invalid captured time'},400);
-      if(providerReference&&row.confirmNow===true)return json({error:'Offline Bank payments must be verified before confirmation'},400);
+      if(hasProviderReference&&!providerReference)return json({error:'Enter a valid non-cash payment reference'},400);
+      if(hasCapturedAt&&!offlineCapturedAt)return json({error:'Offline payment evidence has an invalid captured time'},400);
 
       allocations.push({
         paymentMethodId,
