@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(30);
+select extensions.plan(33);
 
 create temp table sellertray_return_settlement_fixture (
   tenant_id uuid not null,
