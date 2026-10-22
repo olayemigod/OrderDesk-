@@ -153,7 +153,7 @@ function isResult(action: PosAction, value: unknown): value is JsonRecord {
   if (action === 'delete_draft') return row.deleted === true && typeof row.deletedAt === 'string';
   return (row.returnStatus === 'partial' || row.returnStatus === 'returned')
     && typeof row.returnId === 'string'
-    && typeof row.refundId === 'string'
+    && (row.refundId === null || row.refundId === undefined || typeof row.refundId === 'string')
     && typeof row.refundedAmount === 'number';
 }
 
