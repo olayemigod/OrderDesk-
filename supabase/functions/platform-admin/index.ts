@@ -1,3 +1,4 @@
+import { auditCsv, auditParameters } from './audit-explorer.ts';
 type JsonRecord = Record<string, unknown>;
 type AdminAction =
   | 'bootstrap'
@@ -7,6 +8,8 @@ type AdminAction =
   | 'merchant_detail'
   | 'overview'
   | 'audit'
+  | 'audit_explorer'
+  | 'audit_export'
   | 'ai_parser_readiness'
   | 'ai_parser_probe'
   | 'set_subscription_status'
@@ -135,6 +138,17 @@ Deno.serve(withObservability('platform-admin', async (request) => {
       return json({ probe: await runAiParserProbe() });
     }
 
+    if (action === 'audit_explorer' || action === 'audit_export') {
+      let parameters: JsonRecord;
+      try { parameters = auditParameters(body, userId, action === 'audit_export'); }
+      catch (error) { return json({ error: error instanceof Error ? error.message : 'Invalid audit request' }, 400); }
+      const page = await rpc<JsonRecord>('platform_admin_audit_explorer', parameters);
+      if (action === 'audit_export') {
+        const items = Array.isArray(page.items) ? page.items as JsonRecord[] : [];
+        return json({ csv: auditCsv(items), count: Math.min(items.length, 1000), truncated: page.hasMore === true });
+      }
+      return json({ page });
+    }
     if (action === 'audit') {
       const tenantId = body.tenantId === null || body.tenantId === undefined
         ? null
@@ -268,6 +282,8 @@ function cleanAction(value: unknown): AdminAction | null {
     'merchant_detail',
     'overview',
     'audit',
+    'audit_explorer',
+    'audit_export',
     'ai_parser_readiness',
     'ai_parser_probe',
     'set_subscription_status',
@@ -650,4 +666,3 @@ async function readRequestTextLimited(
     }
   }
 }
-

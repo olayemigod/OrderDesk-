@@ -1,3 +1,4 @@
+import AuditExplorer from './AuditExplorer';
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import BusinessDashboard from './BusinessDashboard';
@@ -385,7 +386,7 @@ function WorkspaceShell({ session, bootstrap, audit, onReload, onAuditRefresh, o
       case 'billing': return <BillingPage session={session} bootstrap={bootstrap} />;
       case 'communications': return <CommunicationsPage session={session} bootstrap={bootstrap} audit={audit} onAuditRefresh={onAuditRefresh} />;
       case 'operations': return <OperationsPage session={session} actorRole={bootstrap.actorRole} />;
-      case 'audit': return <AuditPage audit={audit} onRefresh={onAuditRefresh} />;
+      case 'audit': return <AuditExplorer session={session} />;
       case 'settings': return <SettingsPage />;
     }
   })();
@@ -594,18 +595,6 @@ function OperationsPage({ session, actorRole }: { session: Session; actorRole: A
   );
 }
 
-function AuditPage({ audit, onRefresh }: { audit: AuditEvent[]; onRefresh: () => Promise<void> }) {
-  const [search, setSearch] = useState('');
-  const [refreshing, setRefreshing] = useState(false);
-  const filtered = useMemo(() => { const needle = search.trim().toLowerCase(); if (!needle) return audit; return audit.filter((event) => [event.action, event.actorEmail, JSON.stringify(event.detail)].some((value) => value.toLowerCase().includes(needle))); }, [audit, search]);
-  async function refresh() { setRefreshing(true); try { await onRefresh(); } finally { setRefreshing(false); } }
-  return (
-    <PageFrame eyebrow="Audit" title="Privileged activity" description="Recent ProcessEdge administrator actions from the governed platform audit log.">
-      <section className="workspace-panel"><div className="workspace-toolbar"><div className="workspace-search"><Icon name="search" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search action, actor or detail" /></div><button className="workspace-button subtle compact" onClick={() => void refresh()} disabled={refreshing}><Icon name="refresh" />{refreshing ? 'Refreshing…' : 'Refresh'}</button></div><div className="workspace-table-wrap"><table className="workspace-table"><thead><tr><th>Time</th><th>Action</th><th>Actor</th><th>Merchant / reference</th></tr></thead><tbody>{filtered.map((event) => <tr key={event.id}><td>{formatDate(event.createdAt)}</td><td><strong>{friendlyLabel(event.action)}</strong></td><td>{event.actorEmail || 'Platform administrator'}</td><td><code>{auditReference(event.detail)}</code></td></tr>)}{!filtered.length ? <tr><td colSpan={4}><EmptyState title="No audit events found" body="Adjust the search or refresh the audit log." /></td></tr> : null}</tbody></table></div></section>
-    </PageFrame>
-  );
-}
-
 function SettingsPage() {
   return <PageFrame eyebrow="Settings" title="Platform settings" description="Only true SellerTray platform configuration belongs here."><section className="workspace-panel"><EmptyState title="No platform settings exposed in A1" body="Configuration will be added only when a governed platform-level setting exists. Merchant business configuration remains in Merchant Web." /></section></PageFrame>;
 }
@@ -708,10 +697,6 @@ function normalizeAiReadiness(value: unknown): AiReadiness {
 function normalizeAiProbe(value: unknown): AiProbe {
   if (!isRecord(value)) throw new Error('AI parser probe returned an invalid response.');
   return { ok: Boolean(value.ok), status: stringValue(value.status) || 'unknown', durationMs: nullableNumber(value.durationMs), httpStatus: nullableNumber(value.httpStatus), configuredModel: optionalString(value.configuredModel), structuredOutputValid: typeof value.structuredOutputValid === 'boolean' ? value.structuredOutputValid : null };
-}
-
-function auditReference(detail: Record<string, unknown>): string {
-  return shortId(stringValue(detail.tenant_id) || stringValue(detail.tenantId) || stringValue(detail.campaign_id) || stringValue(detail.campaignId) || stringValue(detail.request_id) || stringValue(detail.requestId));
 }
 
 function friendlyAccess(value: string): string {

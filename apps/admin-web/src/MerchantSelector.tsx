@@ -15,6 +15,7 @@ type MerchantSelectorProps = {
   mode?: 'single' | 'multiple';
   pageSize?: number;
   showCommercialPortfolio?: boolean;
+  showAgreementLifecycle?: boolean;
 };
 
 export default function MerchantSelector({
@@ -24,6 +25,7 @@ export default function MerchantSelector({
   mode = 'multiple',
   pageSize = 20,
   showCommercialPortfolio,
+  showAgreementLifecycle = true,
 }: MerchantSelectorProps) {
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
@@ -138,7 +140,7 @@ export default function MerchantSelector({
           </div>
         </div>
       </div>
-      {selectedTenantId ? <AgreementLifecycleManagement session={session} tenantId={selectedTenantId} /> : null}
+      {showAgreementLifecycle && selectedTenantId ? <AgreementLifecycleManagement session={session} tenantId={selectedTenantId} /> : null}
     </>
   );
 }
