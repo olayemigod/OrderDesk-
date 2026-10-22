@@ -118,10 +118,10 @@ requireValue(
   'Shared return authority must reduce receivable first and restrict actual Cash/Bank payout completion to Owner/Manager',
 );
 requireValue(
-  returnSettlementMigration.includes("when v_refund_method='cash' then 'cash' else 'bank_transfer'")
-    && returnSettlementMigration.includes("when v_refund_method='cash' then 'pos_cash' else 'sellertray_bank_refund'")
-    && returnSettlementMigration.includes('sellertray_shift_cash_refunds'),
-  'Return settlement must record explicit payout method while preserving governed Cash drawer attribution and non-cash Bank evidence',
+  returnSettlementMigration.includes('insert into public.payment_refunds')
+    && returnSettlementMigration.includes("when v_refund_method='cash' then 'cash' else 'bank_transfer'")
+    && returnSettlementMigration.includes("when v_refund_method='cash' then 'pos_cash' else 'sellertray_bank_refund'"),
+  'Return settlement must create immutable payout evidence with the explicitly selected Cash or Bank provider mapping',
 );
 requireValue(
   draftDeletionMigration.includes('create or replace function public.delete_sellertray_pos_draft')
