@@ -9,6 +9,7 @@ import {
   loadPosReturnableItems,
   returnPosSaleItems,
   updatePosDraftItems,
+  type PosRefundSource,
   type PosReturnableSale,
 } from '../data/posSaleRepository';
 import {
@@ -44,7 +45,6 @@ export function OrdersWorkspace({
   businessCurrency,
   orders,
   loading,
-  canReturnCompletedSale,
   onChanged,
   onResumeDraft,
 }: Props) {
@@ -57,6 +57,8 @@ export function OrdersWorkspace({
   const [returnLoadingOrderId, setReturnLoadingOrderId] = useState<string | null>(null);
   const [returnableSale, setReturnableSale] = useState<PosReturnableSale | null>(null);
   const [returnQuantities, setReturnQuantities] = useState<Record<string, string>>({});
+  const [refundSource, setRefundSource] = useState<PosRefundSource>('cash');
+  const [refundPaymentMethodId, setRefundPaymentMethodId] = useState('');
   const [printingOrderId, setPrintingOrderId] = useState<string | null>(null);
   const [printError, setPrintError] = useState<string | null>(null);
   const [printNotice, setPrintNotice] = useState<string | null>(null);
@@ -73,6 +75,8 @@ export function OrdersWorkspace({
     setReason('');
     setReturnableSale(null);
     setReturnQuantities({});
+    setRefundSource('cash');
+    setRefundPaymentMethodId('');
     setError(null);
   }
 
@@ -84,6 +88,8 @@ export function OrdersWorkspace({
       const details = await loadPosReturnableItems(tenantId, order.id);
       setReturnableSale(details);
       setReturnQuantities(Object.fromEntries(details.items.map((item) => [item.orderItemId, '0'])));
+      setRefundSource('cash');
+      setRefundPaymentMethodId(details.bankAccounts[0]?.id ?? '');
       setPending({
         orderId: order.id,
         action: 'return',
@@ -103,6 +109,8 @@ export function OrdersWorkspace({
     setReason('');
     setReturnableSale(null);
     setReturnQuantities({});
+    setRefundSource('cash');
+    setRefundPaymentMethodId('');
     setError(null);
   }
 
@@ -178,12 +186,28 @@ export function OrdersWorkspace({
         if (items.some((item) => item.quantity > item.remainingQuantity)) {
           throw new Error('A return quantity cannot be greater than the quantity still available to return.');
         }
+
+        const settlement = selectedReturnSettlement(returnableSale, returnQuantities);
+        if (settlement.refundDue > 0) {
+          if (!returnableSale.canCompleteMonetaryRefund) {
+            throw new Error('Only a Manager or Owner can complete a monetary refund.');
+          }
+          if (refundSource === 'cash' && returnableSale.cashRefundAvailableAmount + 0.005 < settlement.refundDue) {
+            throw new Error('The available cash drawer cannot cover this refund. Choose Bank or reduce the return.');
+          }
+          if (refundSource === 'bank' && !refundPaymentMethodId) {
+            throw new Error('Choose the Business bank account for this refund.');
+          }
+        }
+
         await returnPosSaleItems({
           tenantId,
           orderId: order.id,
           reason: cleanReason,
           commandId: pending.commandId,
           items: items.map(({ orderItemId, quantity }) => ({ orderItemId, quantity })),
+          refundSource: settlement.refundDue > 0 ? refundSource : null,
+          refundPaymentMethodId: settlement.refundDue > 0 && refundSource === 'bank' ? refundPaymentMethodId : null,
         });
       } else {
         await deletePosDraft({
@@ -197,6 +221,8 @@ export function OrdersWorkspace({
       setReason('');
       setReturnableSale(null);
       setReturnQuantities({});
+      setRefundSource('cash');
+      setRefundPaymentMethodId('');
       await onChanged();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to apply this order action.');
@@ -258,17 +284,26 @@ export function OrdersWorkspace({
         const canManageDraft = order.source === 'pos' && order.status === 'draft' && order.paymentStatus === 'unpaid' && order.amountPaid === 0;
         const isReturnablePosSale = order.source === 'pos'
           && order.status === 'completed'
-          && order.paymentStatus === 'paid'
           && order.fulfillmentStatus === 'collected'
           && (order.returnStatus === 'none' || order.returnStatus === 'partial');
-        const canReturn = canReturnCompletedSale && isReturnablePosSale && order.cashReturnSupported === true;
-        const paymentNeedsRefundReview = canReturnCompletedSale && isReturnablePosSale && order.cashReturnSupported !== true;
+        const canReturn = isReturnablePosSale;
         const canPrintReceipt = order.paymentStatus === 'paid';
         const action = pending?.orderId === order.id ? pending.action : null;
         const printing = printingOrderId === order.id;
         const loadingReturn = returnLoadingOrderId === order.id;
         const expanded = expandedOrderIds[order.id] === true;
         const editing = editingOrderId === order.id;
+        const settlement = action === 'return' && returnableSale?.orderId === order.id
+          ? selectedReturnSettlement(returnableSale, returnQuantities)
+          : null;
+        const cashAvailable = Boolean(settlement && settlement.refundDue > 0 && returnableSale
+          && returnableSale.cashRefundAvailableAmount + 0.005 >= settlement.refundDue);
+        const bankAvailable = Boolean(returnableSale?.bankAccounts.length);
+        const monetaryRefundBlocked = Boolean(settlement && settlement.refundDue > 0 && returnableSale && !returnableSale.canCompleteMonetaryRefund);
+        const refundSelectionInvalid = Boolean(settlement && settlement.refundDue > 0 && (
+          (refundSource === 'cash' && !cashAvailable)
+          || (refundSource === 'bank' && (!bankAvailable || !refundPaymentMethodId))
+        ));
 
         return (
           <View key={order.id} style={[styles.orderCard, dark && darkStyles.card]}>
@@ -349,13 +384,9 @@ export function OrdersWorkspace({
               <View style={[styles.returnedNotice, dark && darkStyles.subtleCard]}>
                 <Ionicons name="return-down-back-outline" size={18} color={theme.colors.greenDark} />
                 <Text style={[styles.returnedText, dark && darkStyles.bodyText]}>
-                  {formatMoney(order.returnedAmount, businessCurrency)} returned{order.returnStatus === 'partial' ? '; remaining quantities can still be returned.' : '.'} The original sale and payment remain in history.
+                  {formatMoney(order.returnedAmount, businessCurrency)} returned{order.returnStatus === 'partial' ? '; remaining quantities can still be returned.' : '.'} Historical sale, payment and return settlement remain in audit history.
                 </Text>
               </View>
-            ) : null}
-
-            {paymentNeedsRefundReview ? (
-              <View style={[styles.returnedNotice, dark && darkStyles.subtleCard]}><Ionicons name="card-outline" size={18} color={theme.colors.muted} /><Text style={[styles.returnedText, dark && darkStyles.bodyText]}>This sale was paid outside the cash drawer. Review the payment before processing a refund.</Text></View>
             ) : null}
 
             {!action && !editing && (canManageDraft || canReturn || canPrintReceipt) ? (
@@ -375,13 +406,13 @@ export function OrdersWorkspace({
                     <Text style={[styles.actionPanelTitle, dark && darkStyles.titleText]}>{action === 'return' ? 'Return items' : 'Delete this draft'}</Text>
                     <Text style={[styles.actionPanelText, dark && darkStyles.bodyText]}>
                       {action === 'return'
-                        ? 'Enter only the quantity the customer is returning. SellerTray restores exactly those quantities and records the matching cash refund.'
+                        ? 'Returned value reduces outstanding receivable first. SellerTray refunds only any excess already paid, while stock is restored from the original sale history.'
                         : 'This removes the unwanted unpaid draft from normal work and reports while keeping its deletion audit record.'}
                     </Text>
                   </View>
                 </View>
 
-                {action === 'return' && returnableSale ? (
+                {action === 'return' && returnableSale && settlement ? (
                   <View style={styles.returnItems}>
                     {returnableSale.items.map((item) => (
                       <View key={item.orderItemId} style={[styles.returnItemRow, dark && darkStyles.card]}>
@@ -401,10 +432,39 @@ export function OrdersWorkspace({
                         />
                       </View>
                     ))}
-                    <View style={styles.returnSummaryRow}>
-                      <Text style={[styles.returnSummaryLabel, dark && darkStyles.bodyText]}>Estimated refund</Text>
-                      <Text style={[styles.returnSummaryValue, dark && darkStyles.titleText]}>{formatMoney(selectedReturnValue(returnableSale, returnQuantities), returnableSale.currency)}</Text>
-                    </View>
+
+                    <SettlementRow label="Returned value" value={formatMoney(settlement.returnedValue, returnableSale.currency)} dark={dark} />
+                    <SettlementRow label="Receivable reduction" value={formatMoney(settlement.receivableReduction, returnableSale.currency)} dark={dark} />
+                    <SettlementRow label="Refund due" value={formatMoney(settlement.refundDue, returnableSale.currency)} dark={dark} />
+                    <SettlementRow label="Outstanding after" value={formatMoney(settlement.outstandingAfter, returnableSale.currency)} dark={dark} />
+
+                    {settlement.refundDue > 0 ? <View style={styles.refundPanel}>
+                      <Text style={[styles.fieldLabel, dark && darkStyles.bodyText]}>Refund source</Text>
+                      <View style={styles.actionRow}>
+                        <Pressable onPress={() => setRefundSource('cash')} style={[styles.refundSourceButton, dark && darkStyles.outlineButton, refundSource === 'cash' && styles.refundSourceActive]}>
+                          <Ionicons name="cash-outline" size={16} color={theme.colors.greenDark} />
+                          <Text style={styles.refundSourceText}>Cash</Text>
+                        </Pressable>
+                        <Pressable onPress={() => setRefundSource('bank')} style={[styles.refundSourceButton, dark && darkStyles.outlineButton, refundSource === 'bank' && styles.refundSourceActive]}>
+                          <Ionicons name="business-outline" size={16} color={theme.colors.greenDark} />
+                          <Text style={styles.refundSourceText}>Bank</Text>
+                        </Pressable>
+                      </View>
+
+                      {refundSource === 'cash' ? <Text style={[styles.actionPanelText, dark && darkStyles.bodyText]}>
+                        {cashAvailable
+                          ? `Cash available in your open drawer: ${formatMoney(returnableSale.cashRefundAvailableAmount, returnableSale.currency)}.`
+                          : `Cash is not currently sufficient in your open drawer for ${formatMoney(settlement.refundDue, returnableSale.currency)}. Choose Bank or reduce the return.`}
+                      </Text> : null}
+
+                      {refundSource === 'bank' ? <>
+                        {returnableSale.bankAccounts.length === 0
+                          ? <Text style={[styles.actionPanelText, dark && darkStyles.bodyText]}>No enabled Business bank account is available for this refund.</Text>
+                          : <View style={styles.bankList}>{returnableSale.bankAccounts.map((bank) => <Pressable key={bank.id} onPress={() => setRefundPaymentMethodId(bank.id)} style={[styles.bankOption, dark && darkStyles.outlineButton, refundPaymentMethodId === bank.id && styles.refundSourceActive]}><View style={styles.flexCopy}><Text style={[styles.itemName, dark && darkStyles.titleText]}>{bank.displayName}</Text><Text style={[styles.itemMeta, dark && darkStyles.bodyText]}>{[bank.bankName, bank.accountNumber].filter(Boolean).join(' · ')}</Text></View><Ionicons name={refundPaymentMethodId === bank.id ? 'radio-button-on' : 'radio-button-off'} size={18} color={theme.colors.greenDark} /></Pressable>)}</View>}
+                      </> : null}
+
+                      {!returnableSale.canCompleteMonetaryRefund ? <View style={[styles.returnedNotice, dark && darkStyles.card]}><Ionicons name="shield-checkmark-outline" size={18} color={theme.colors.muted} /><Text style={[styles.returnedText, dark && darkStyles.bodyText]}>You can prepare this return and choose the available refund source, but only a Manager or Owner can complete a monetary refund.</Text></View> : null}
+                    </View> : <Text style={[styles.actionPanelText, dark && darkStyles.bodyText]}>No money is refunded for this selection. The returned value only reduces the customer’s outstanding balance.</Text>}
                   </View>
                 ) : null}
 
@@ -422,7 +482,7 @@ export function OrdersWorkspace({
                 {error ? <Banner text={error} error dark={dark} onDismiss={() => setError(null)} /> : null}
                 <View style={styles.confirmRow}>
                   <Pressable disabled={saving} onPress={cancelAction} style={[styles.cancelButton, dark && darkStyles.outlineButton]}><Text style={[styles.cancelText, dark && darkStyles.bodyText]}>Cancel</Text></Pressable>
-                  <Pressable disabled={saving || !reason.trim()} onPress={() => void confirmAction(order)} style={[styles.confirmButton, (saving || !reason.trim()) && styles.disabled]}>{saving ? <ActivityIndicator color={theme.colors.white} /> : null}<Text style={styles.confirmText}>{saving ? 'Applying…' : action === 'return' ? 'Confirm return' : 'Delete draft'}</Text></Pressable>
+                  <Pressable disabled={saving || !reason.trim() || monetaryRefundBlocked || refundSelectionInvalid} onPress={() => void confirmAction(order)} style={[styles.confirmButton, (saving || !reason.trim() || monetaryRefundBlocked || refundSelectionInvalid) && styles.disabled]}>{saving ? <ActivityIndicator color={theme.colors.white} /> : null}<Text style={styles.confirmText}>{saving ? 'Applying…' : action === 'return' ? 'Confirm return' : 'Delete draft'}</Text></Pressable>
                 </View>
               </View>
             ) : null}
@@ -433,12 +493,27 @@ export function OrdersWorkspace({
   );
 }
 
-function selectedReturnValue(sale: PosReturnableSale, quantities: Record<string, string>): number {
-  return sale.items.reduce((sum, item) => {
+function selectedReturnSettlement(sale: PosReturnableSale, quantities: Record<string, string>) {
+  const returnedValue = sale.items.reduce((sum, item) => {
     const quantity = Number(quantities[item.orderItemId] ?? 0);
-    if (!Number.isFinite(quantity) || quantity <= 0) return sum;
-    return sum + Math.min(quantity, item.remainingQuantity) * item.unitPrice;
+    if (!Number.isFinite(quantity) || quantity <= 0 || item.remainingQuantity <= 0) return sum;
+    const boundedQuantity = Math.min(quantity, item.remainingQuantity);
+    return sum + (item.remainingValue * boundedQuantity / item.remainingQuantity);
   }, 0);
+  const normalizedValue = Math.round(returnedValue * 100) / 100;
+  const receivableReduction = Math.min(normalizedValue, sale.outstandingAmount);
+  const refundDue = Math.max(normalizedValue - receivableReduction, 0);
+  const outstandingAfter = Math.max(sale.outstandingAmount - receivableReduction, 0);
+  return {
+    returnedValue: normalizedValue,
+    receivableReduction: Math.round(receivableReduction * 100) / 100,
+    refundDue: Math.round(refundDue * 100) / 100,
+    outstandingAfter: Math.round(outstandingAfter * 100) / 100,
+  };
+}
+
+function SettlementRow({ label, value, dark }: { label: string; value: string; dark: boolean }) {
+  return <View style={styles.returnSummaryRow}><Text style={[styles.returnSummaryLabel, dark && darkStyles.bodyText]}>{label}</Text><Text style={[styles.returnSummaryValue, dark && darkStyles.titleText]}>{value}</Text></View>;
 }
 
 function cleanDecimalInput(value: string): string {
@@ -564,6 +639,12 @@ const styles = StyleSheet.create({
   returnSummaryRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4 },
   returnSummaryLabel: { color: theme.colors.slate, fontSize: 12, fontWeight: '800' },
   returnSummaryValue: { color: theme.colors.navy, fontSize: 14, fontWeight: '900' },
+  refundPanel: { borderTopColor: theme.colors.border, borderTopWidth: StyleSheet.hairlineWidth, gap: 9, paddingTop: 10 },
+  refundSourceButton: { alignItems: 'center', borderColor: theme.colors.border, borderRadius: 12, borderWidth: 1, flexDirection: 'row', gap: 6, paddingHorizontal: 11, paddingVertical: 9 },
+  refundSourceActive: { backgroundColor: theme.colors.mintSoft, borderColor: theme.colors.green },
+  refundSourceText: { color: theme.colors.greenDark, fontSize: 12, fontWeight: '900' },
+  bankList: { gap: 7 },
+  bankOption: { alignItems: 'center', borderColor: theme.colors.border, borderRadius: 12, borderWidth: 1, flexDirection: 'row', gap: 8, padding: 10 },
   fieldLabel: { color: theme.colors.slate, fontSize: 12, fontWeight: '900' },
   reasonInput: { backgroundColor: theme.colors.white, borderColor: theme.colors.border, borderRadius: 12, borderWidth: 1, color: theme.colors.navy, fontSize: 14, minHeight: 78, padding: 11, textAlignVertical: 'top' },
   confirmRow: { flexDirection: 'row', gap: 8, justifyContent: 'flex-end' },
