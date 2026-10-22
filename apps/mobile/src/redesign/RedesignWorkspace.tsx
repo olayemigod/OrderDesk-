@@ -32,6 +32,7 @@ export default function RedesignWorkspace() {
   const offline = useOfflineSalesSync();
   const [tab, setTab] = useState<SellerTrayPrimaryTab>('home');
   const [showNotifications, setShowNotifications] = useState(false);
+  const [focusedOrderId, setFocusedOrderId] = useState<string | null>(null);
   const [merchantName, setMerchantName] = useState('there');
   const [branches, setBranches] = useState<CommerceBranch[]>([]);
   const [activeBranchId, setActiveBranchId] = useState('');
@@ -115,6 +116,7 @@ export default function RedesignWorkspace() {
 
   useEffect(() => {
     setResumeDraftOrder(null);
+    setFocusedOrderId(null);
   }, [activeBranchId]);
 
   const activeBranch = useMemo(
@@ -124,6 +126,18 @@ export default function RedesignWorkspace() {
   const branchOrders = useMemo(
     () => activeBranch ? orders.filter((order) => order.branchId === activeBranch.id) : orders,
     [activeBranch, orders],
+  );
+  const focusedOrder = useMemo(
+    () => focusedOrderId ? orders.find((order) => order.id === focusedOrderId) ?? null : null,
+    [focusedOrderId, orders],
+  );
+  const ordersForWorkspace = useMemo(
+    () => focusedOrder ? [focusedOrder] : branchOrders,
+    [branchOrders, focusedOrder],
+  );
+  const unreadNotifications = useMemo(
+    () => notifications.notifications.filter((notification) => !notification.isRead),
+    [notifications.notifications],
   );
   const home = useMemo(() => buildHomeSnapshot(branchOrders), [branchOrders]);
 
@@ -259,18 +273,21 @@ export default function RedesignWorkspace() {
 
   function openCashWorkspace() {
     setShowNotifications(false);
+    setFocusedOrderId(null);
     setTab('more');
     setCashRouteKey((value) => value + 1);
   }
 
   function openWhatsAppWorkspace() {
     setShowNotifications(false);
+    setFocusedOrderId(null);
     setTab('more');
     setWhatsappRouteKey((value) => value + 1);
   }
 
   function openSyncWorkspace() {
     setShowNotifications(false);
+    setFocusedOrderId(null);
     setTab('more');
     setSyncRouteKey((value) => value + 1);
   }
@@ -376,7 +393,10 @@ export default function RedesignWorkspace() {
       detail: 'Confirm pending transfers or resolve payment issues.',
       count: home.paymentIssues,
       tone: 'warning',
-      onPress: () => setTab('orders'),
+      onPress: () => {
+        setFocusedOrderId(null);
+        setTab('orders');
+      },
     });
   }
   if (lowStockCount > 0) {
@@ -424,10 +444,12 @@ export default function RedesignWorkspace() {
       onTabChange={(nextTab) => {
         setShowNotifications(false);
         if (nextTab !== 'sell') setResumeDraftOrder(null);
+        if (nextTab === 'orders') setFocusedOrderId(null);
         setTab(nextTab);
       }}
       onOpenNotifications={() => {
         setResumeDraftOrder(null);
+        setFocusedOrderId(null);
         setShowBranchSwitcher(false);
         setShowNotifications(true);
       }}
@@ -439,6 +461,7 @@ export default function RedesignWorkspace() {
           activeBranchId={activeBranch?.id ?? ''}
           onSelect={(branchId) => {
             setResumeDraftOrder(null);
+            setFocusedOrderId(null);
             setActiveBranchId(branchId);
             setShowBranchSwitcher(false);
           }}
@@ -457,17 +480,19 @@ export default function RedesignWorkspace() {
 
       {showNotifications ? (
         <NotificationsWorkspace
-          notifications={notifications.notifications}
+          notifications={unreadNotifications}
           loading={notifications.loading}
           error={notifications.error}
           onBack={() => setShowNotifications(false)}
           onRefresh={notifications.refresh}
           onMarkRead={notifications.markRead}
           onMarkAllRead={notifications.markAllRead}
-          onOpenOrder={() => {
+          onOpenOrder={(orderId) => {
             setShowNotifications(false);
             setResumeDraftOrder(null);
+            setFocusedOrderId(orderId);
             setTab('orders');
+            void refreshOrders();
           }}
         />
       ) : null}
@@ -487,14 +512,17 @@ export default function RedesignWorkspace() {
           attentionItems={attentionItems}
           onNewSale={() => {
             setResumeDraftOrder(null);
+            setFocusedOrderId(null);
             setTab('sell');
           }}
           onOpenOrders={() => {
             setResumeDraftOrder(null);
+            setFocusedOrderId(null);
             setTab('orders');
           }}
           onOpenInventory={() => {
             setResumeDraftOrder(null);
+            setFocusedOrderId(null);
             setTab('inventory');
           }}
           onOpenWhatsapp={openWhatsAppWorkspace}
@@ -514,10 +542,12 @@ export default function RedesignWorkspace() {
                 order={resumeDraftOrder}
                 onCancel={() => {
                   setResumeDraftOrder(null);
+                  setFocusedOrderId(null);
                   setTab('orders');
                 }}
                 onCompleted={(orderId) => {
                   setResumeDraftOrder(null);
+                  setFocusedOrderId(null);
                   void Promise.all([
                     refreshOrders(),
                     refreshActiveCashShift(activeBusiness.id, activeBranch.id, { quiet: true }),
@@ -533,6 +563,7 @@ export default function RedesignWorkspace() {
                 currency={activeBusiness.currency}
                 onOfflineSaleQueued={() => void offline.refresh()}
                 onDraftCreated={() => {
+                  setFocusedOrderId(null);
                   void Promise.all([
                     refreshOrders(),
                     refreshActiveCashShift(activeBusiness.id, activeBranch.id, { quiet: true }),
@@ -549,24 +580,39 @@ export default function RedesignWorkspace() {
       ) : null}
 
       {!showNotifications && tab === 'orders' ? (
-        <OrdersWorkspace
-          tenantId={activeBusiness.id}
-          businessCurrency={activeBusiness.currency}
-          orders={branchOrders}
-          loading={ordersLoading}
-          canReturnCompletedSale={canRefundSale && Boolean(activeCashShift)}
-          onResumeDraft={(order) => {
-            if (order.branchId !== activeBranch?.id) return;
-            setResumeDraftOrder(order);
-            setTab('sell');
-          }}
-          onChanged={async () => {
-            await Promise.all([
-              refreshOrders(),
-              refreshActiveCashShift(activeBusiness.id, activeBranch?.id ?? '', { quiet: true }),
-            ]);
-          }}
-        />
+        <>
+          {focusedOrder ? (
+            <View style={[styles.focusedOrderCard, appearance.dark && darkStyles.card]}>
+              <View style={styles.focusedOrderCopy}>
+                <Text style={[styles.focusedOrderEyebrow, appearance.dark && darkStyles.bodyText]}>OPENED FROM NOTIFICATION</Text>
+                <Text style={[styles.focusedOrderTitle, appearance.dark && darkStyles.titleText]}>{focusedOrder.publicOrderId}</Text>
+                <Text style={[styles.focusedOrderMeta, appearance.dark && darkStyles.bodyText]}>{focusedOrder.customerName} · {focusedOrder.branchName}</Text>
+              </View>
+              <Pressable onPress={() => setFocusedOrderId(null)} style={styles.focusedOrderAction}>
+                <Text style={styles.focusedOrderActionText}>Show all orders</Text>
+              </Pressable>
+            </View>
+          ) : null}
+          <OrdersWorkspace
+            tenantId={activeBusiness.id}
+            businessCurrency={activeBusiness.currency}
+            orders={ordersForWorkspace}
+            loading={ordersLoading}
+            canReturnCompletedSale={canRefundSale && Boolean(activeCashShift) && (!focusedOrder || focusedOrder.branchId === activeBranch?.id)}
+            onResumeDraft={(order) => {
+              if (order.branchId !== activeBranch?.id) return;
+              setResumeDraftOrder(order);
+              setFocusedOrderId(null);
+              setTab('sell');
+            }}
+            onChanged={async () => {
+              await Promise.all([
+                refreshOrders(),
+                refreshActiveCashShift(activeBusiness.id, activeBranch?.id ?? '', { quiet: true }),
+              ]);
+            }}
+          />
+        </>
       ) : null}
 
       {!showNotifications && tab === 'inventory' ? (
@@ -595,6 +641,7 @@ export default function RedesignWorkspace() {
             }}
             onOpenOrders={() => {
               setResumeDraftOrder(null);
+              setFocusedOrderId(null);
               setTab('orders');
             }}
             onSyncOfflineSales={() => offline.syncNow()}
@@ -700,6 +747,13 @@ const styles = StyleSheet.create({
   branchCopy: { flex: 1 },
   branchName: { color: theme.colors.navy, fontSize: 13, fontWeight: '900' },
   branchCode: { color: theme.colors.muted, fontSize: 11, marginTop: 2 },
+  focusedOrderCard: { borderRadius: theme.radius.md, borderWidth: 1, borderColor: '#ABEFC6', backgroundColor: theme.colors.mintSoft, padding: 12, marginBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  focusedOrderCopy: { flex: 1, minWidth: 0 },
+  focusedOrderEyebrow: { color: theme.colors.greenDark, fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
+  focusedOrderTitle: { color: theme.colors.navy, fontSize: 15, fontWeight: '900', marginTop: 2 },
+  focusedOrderMeta: { color: theme.colors.slate, fontSize: 11, marginTop: 2 },
+  focusedOrderAction: { minHeight: 36, borderRadius: 10, backgroundColor: theme.colors.white, borderWidth: 1, borderColor: '#ABEFC6', paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center' },
+  focusedOrderActionText: { color: theme.colors.greenDark, fontSize: 10.5, fontWeight: '900' },
   emptyCard: { minHeight: 120, borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 18, alignItems: 'center', justifyContent: 'center', gap: 7 },
   emptyTitle: { color: theme.colors.navy, fontSize: 15, fontWeight: '900' },
   emptyText: { color: theme.colors.muted, fontSize: 12, lineHeight: 18, textAlign: 'center' },

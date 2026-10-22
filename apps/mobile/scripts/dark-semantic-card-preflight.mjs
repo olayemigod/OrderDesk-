@@ -14,6 +14,7 @@ function requireValue(condition, message) {
 
 const theme = read('src/theme/sellerTrayTheme.ts');
 const inventory = read('src/redesign/InventoryTabWorkspace.tsx');
+const stockCount = read('src/redesign/StockCountWorkspace.tsx');
 
 for (const token of ['dangerSurface', 'dangerBorder', 'dangerText']) {
   requireValue(theme.includes(`${token}:`), `Dark theme must define ${token} for semantic danger surfaces`);
@@ -34,6 +35,14 @@ requireValue(
 requireValue(
   inventory.includes('backgroundColor:theme.dark.dangerSurface'),
   'Inventory dark-mode alert card must use the shared dark danger surface token',
+);
+requireValue(
+  stockCount.includes('style={[styles.metric, dark && darkStyles.metric]}'),
+  'Stock Count Counted, Variances and +/- metric cards must apply an explicit dark surface',
+);
+requireValue(
+  stockCount.includes("metric: { backgroundColor: '#172033', borderColor: '#334155' }"),
+  'Stock Count dark metric cards must use a readable dark surface and border',
 );
 
 if (failures.length) {

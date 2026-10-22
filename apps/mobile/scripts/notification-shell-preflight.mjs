@@ -44,6 +44,22 @@ requireValue(
     notificationsWorkspace.includes('Open order'),
   'Notifications must support governed read state and explicit record navigation',
 );
+requireValue(
+  redesignWorkspace.includes('notifications.notifications.filter((notification) => !notification.isRead)') &&
+    redesignWorkspace.includes('notifications={unreadNotifications}'),
+  'The Mobile notification tray must render unread notifications only so read items leave the tray',
+);
+requireValue(
+  redesignWorkspace.includes('setFocusedOrderId(orderId)') &&
+    redesignWorkspace.includes('orders={ordersForWorkspace}') &&
+    redesignWorkspace.includes('focusedOrder ? [focusedOrder] : branchOrders'),
+  'Opening an order notification must focus the referenced order instead of opening the generic order list',
+);
+requireValue(
+  notificationsWorkspace.includes('await onMarkRead(notification.id)') &&
+    notificationsWorkspace.includes('if (notification.orderId) onOpenOrder(notification.orderId);'),
+  'Opening an order notification must mark it read before routing to the referenced order',
+);
 
 if (failures.length > 0) {
   console.error('SellerTray notification shell preflight failed:');
