@@ -83,14 +83,18 @@ Deno.serve(async (request) => {
     const amount = cleanPositiveNumber(body.amount);
     const reference = cleanText(body.reference, 160);
     const reason = cleanText(body.reason, 500);
-    const expenseCategory = cleanText(body.expenseCategory, 120);
     const commandId = cleanCommandId(body.commandId);
     if (!shiftId || !movementType || amount === null || !reference || !reason || !commandId) {
       return json({ error: 'Shift, cash activity, amount, reference and reason are required' }, 400);
     }
-    if (movementType === 'expense' && !expenseCategory) {
-      return json({ error: 'Expense category is required' }, 400);
+
+    let expenseCategory: string | null = null;
+    if (movementType === 'expense') {
+      const resolved = await resolveExpenseCategory(tenantId, body.expenseCategoryId, body.expenseCategory);
+      if (!resolved.ok) return json({ error: resolved.error }, resolved.status);
+      expenseCategory = resolved.name;
     }
+
     rpcName = 'record_sellertray_shift_cash_movement';
     rpcArgs = {
       p_tenant_id: tenantId,
@@ -99,7 +103,7 @@ Deno.serve(async (request) => {
       p_amount: amount,
       p_reference: reference,
       p_reason: reason,
-      p_expense_category: movementType === 'expense' ? expenseCategory : null,
+      p_expense_category: expenseCategory,
       p_command_id: commandId,
       p_actor_user_id: userId,
     };
@@ -119,13 +123,20 @@ Deno.serve(async (request) => {
     const replacementAmount = correctionKind === 'replace' ? cleanPositiveNumber(body.replacementAmount) : null;
     const replacementReference = correctionKind === 'replace' ? cleanText(body.replacementReference, 160) : null;
     const replacementReason = correctionKind === 'replace' ? cleanText(body.replacementReason, 500) : null;
-    const replacementExpenseCategory = correctionKind === 'replace' ? cleanText(body.replacementExpenseCategory, 120) : null;
     if (correctionKind === 'replace'
       && (!replacementType || replacementAmount === null || !replacementReference || !replacementReason)) {
       return json({ error: 'Replacement cash activity, amount, reference and reason are required' }, 400);
     }
-    if (replacementType === 'expense' && !replacementExpenseCategory) {
-      return json({ error: 'Expense category is required' }, 400);
+
+    let replacementExpenseCategory: string | null = null;
+    if (replacementType === 'expense') {
+      const resolved = await resolveExpenseCategory(
+        tenantId,
+        body.replacementExpenseCategoryId,
+        body.replacementExpenseCategory,
+      );
+      if (!resolved.ok) return json({ error: resolved.error }, resolved.status);
+      replacementExpenseCategory = resolved.name;
     }
 
     responseShiftId = shiftId;
@@ -141,7 +152,7 @@ Deno.serve(async (request) => {
       p_replacement_amount: replacementAmount,
       p_replacement_reference: replacementReference,
       p_replacement_reason: replacementReason,
-      p_replacement_expense_category: replacementType === 'expense' ? replacementExpenseCategory : null,
+      p_replacement_expense_category: replacementExpenseCategory,
       p_actor_user_id: userId,
     };
   } else if (action === 'close') {
@@ -184,11 +195,11 @@ Deno.serve(async (request) => {
   const { data: result, error } = await admin.rpc(rpcName, rpcArgs);
   if (error || !isResult(action, result)) {
     const message = error?.message ?? 'SellerTray could not complete this cashier action';
-    const status = /permission|access|role|read-only|authentication/i.test(message)
+    const status = /permission|access|role|read-only|authentication|does not belong/i.test(message)
       ? 403
       : /not found/i.test(message)
         ? 404
-        : /already|open shift|cannot|close|variance|different facts|unavailable|invalid|corrected/i.test(message)
+        : /already|open shift|cannot|close|variance|different facts|unavailable|invalid|corrected|choose an active business expense category/i.test(message)
           ? 409
           : 400;
     return json({ error: message }, status);
@@ -196,6 +207,37 @@ Deno.serve(async (request) => {
 
   return json({ ok: true, action, ...(responseShiftId ? { shiftId: responseShiftId } : {}), ...result });
 });
+
+async function resolveExpenseCategory(
+  tenantId: string,
+  categoryIdValue: unknown,
+  legacyNameValue: unknown,
+): Promise<{ ok: true; name: string } | { ok: false; error: string; status: number }> {
+  const categoryId = categoryIdValue == null ? null : cleanUuid(categoryIdValue);
+  if (categoryIdValue != null && !categoryId) {
+    return { ok: false, error: 'Choose a valid Business Expense Category', status: 400 };
+  }
+  if (categoryId && admin) {
+    const { data, error } = await admin
+      .from('sellertray_expense_categories')
+      .select('name,is_active')
+      .eq('tenant_id', tenantId)
+      .eq('id', categoryId)
+      .maybeSingle();
+    if (error) return { ok: false, error: error.message, status: 400 };
+    if (!data) return { ok: false, error: 'Selected Expense Category does not belong to this Business', status: 403 };
+    if (!data.is_active) return { ok: false, error: 'Choose an active Business Expense Category', status: 409 };
+    const name = cleanText(data.name, 120);
+    if (!name) return { ok: false, error: 'Expense Category is invalid', status: 409 };
+    return { ok: true, name };
+  }
+
+  // Compatibility fallback for older clients. The database trigger still resolves
+  // the name against the active Business master, so free text can never create a new truth.
+  const legacyName = cleanText(legacyNameValue, 120);
+  if (!legacyName) return { ok: false, error: 'Expense Category is required', status: 400 };
+  return { ok: true, name: legacyName };
+}
 
 function cleanAction(value: unknown): CashShiftAction | null {
   return value === 'open' || value === 'movement' || value === 'correct' || value === 'close' || value === 'review'
