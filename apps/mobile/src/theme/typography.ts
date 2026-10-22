@@ -13,6 +13,7 @@ export function sellerTrayScaledLineHeight(
   scaledFontSize: number,
 ): number {
   return Math.max(
+    SELLERTRAY_MIN_READABLE_FONT_SIZE,
     scaledFontSize,
     Number((lineHeight * fontScale).toFixed(2)),
   );
