@@ -33,10 +33,10 @@ test('commercial portfolio gateway requires AAL2 and only dispatches service-aut
   assert.doesNotMatch(gateway, /from\(['"]sellertray_commercial_/);
 });
 
-test('portfolio projections are service-only and do not infer installment timing policy', () => {
+test('portfolio projections are service-only and do not implement ungoverned financial or timing fields', () => {
   assert.match(migration, /revoke all on function public\.platform_admin_commercial_installment_portfolio[\s\S]*from public,anon,authenticated/);
   assert.match(migration, /revoke all on function public\.platform_admin_commercial_agreement_portfolio[\s\S]*from public,anon,authenticated/);
   assert.match(migration, /grant execute on function public\.platform_admin_commercial_installment_portfolio[\s\S]*to service_role/);
   assert.match(migration, /grant execute on function public\.platform_admin_commercial_agreement_portfolio[\s\S]*to service_role/);
-  assert.doesNotMatch(migration, /sch\.due_at|past_due|grace_ends_at|exchange_rate|recognised_revenue|recognized_revenue|profit/);
+  assert.doesNotMatch(migration, /sch\.due_at|grace_ends_at|exchange_rate|fx_rate|recognized_revenue|recognised_revenue|gross_profit|net_profit/);
 });
