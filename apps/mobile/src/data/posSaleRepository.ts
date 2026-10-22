@@ -2,6 +2,15 @@ import { supabase } from '../lib/supabase';
 
 export type PosSaleAction = 'void' | 'return';
 export type PosReturnStatus = 'partial' | 'returned';
+export type PosRefundSource = 'cash' | 'bank';
+
+export type PosRefundBankAccount = {
+  id: string;
+  displayName: string;
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+};
 
 export type PosReturnableItem = {
   orderItemId: string;
@@ -22,6 +31,13 @@ export type PosReturnableSale = {
   returnStatus: 'none' | PosReturnStatus;
   returnedAmount: number;
   remainingAmount: number;
+  confirmedPaymentAmount: number;
+  priorRefundAmount: number;
+  netMoneyRetained: number;
+  outstandingAmount: number;
+  canCompleteMonetaryRefund: boolean;
+  cashRefundAvailableAmount: number;
+  bankAccounts: PosRefundBankAccount[];
   items: PosReturnableItem[];
 };
 
@@ -31,10 +47,18 @@ export type PosSaleActionResult = {
   idempotentReplay: boolean;
   status?: 'cancelled';
   returnId?: string;
-  refundId?: string;
+  refundId?: string | null;
   returnStatus?: PosReturnStatus;
+  returnSubtotal?: number;
+  returnTax?: number;
+  returnedValue?: number;
+  receivableReductionAmount?: number;
   refundedAmount?: number;
+  outstandingBefore?: number;
+  outstandingAfter?: number;
   returnedAmount?: number;
+  refundSource?: PosRefundSource | null;
+  refundPaymentMethodId?: string | null;
   currency?: string;
 };
 
@@ -132,6 +156,11 @@ export async function loadPosReturnableItems(
   const returnStatus = row.returnStatus;
   const returnedAmount = numberOrUndefined(row.returnedAmount);
   const remainingAmount = numberOrUndefined(row.remainingAmount);
+  const confirmedPaymentAmount = numberOrUndefined(row.confirmedPaymentAmount);
+  const priorRefundAmount = numberOrUndefined(row.priorRefundAmount);
+  const netMoneyRetained = numberOrUndefined(row.netMoneyRetained);
+  const outstandingAmount = numberOrUndefined(row.outstandingAmount);
+  const cashRefundAvailableAmount = numberOrUndefined(row.cashRefundAvailableAmount);
   if (
     typeof row.orderId !== 'string'
     || typeof row.publicOrderId !== 'string'
@@ -139,6 +168,12 @@ export async function loadPosReturnableItems(
     || (returnStatus !== 'none' && returnStatus !== 'partial' && returnStatus !== 'returned')
     || returnedAmount === undefined
     || remainingAmount === undefined
+    || confirmedPaymentAmount === undefined
+    || priorRefundAmount === undefined
+    || netMoneyRetained === undefined
+    || outstandingAmount === undefined
+    || cashRefundAvailableAmount === undefined
+    || !Array.isArray(row.bankAccounts)
     || !Array.isArray(row.items)
   ) {
     throw new Error('SellerTray returned invalid returnable sale details.');
@@ -152,6 +187,13 @@ export async function loadPosReturnableItems(
     returnStatus,
     returnedAmount,
     remainingAmount,
+    confirmedPaymentAmount,
+    priorRefundAmount,
+    netMoneyRetained,
+    outstandingAmount,
+    canCompleteMonetaryRefund: row.canCompleteMonetaryRefund === true,
+    cashRefundAvailableAmount,
+    bankAccounts: row.bankAccounts.map(mapRefundBankAccount),
     items,
   };
 }
@@ -162,12 +204,17 @@ export async function returnPosSaleItems(input: {
   reason: string;
   items: PosReturnItemInput[];
   commandId: string;
+  refundSource?: PosRefundSource | null;
+  refundPaymentMethodId?: string | null;
 }): Promise<PosSaleActionResult> {
   const reason = input.reason.trim();
   if (!reason) throw new Error('Enter a reason before continuing.');
   if (!input.commandId.trim()) throw new Error('Restart this return and try again.');
   if (!input.items.length || input.items.some((item) => !item.orderItemId || !Number.isFinite(item.quantity) || item.quantity <= 0)) {
     throw new Error('Choose at least one item quantity to return.');
+  }
+  if (input.refundSource === 'bank' && !input.refundPaymentMethodId) {
+    throw new Error('Choose the Business bank account for this refund.');
   }
 
   return invokeSaleAction({
@@ -177,6 +224,8 @@ export async function returnPosSaleItems(input: {
     reason,
     items: input.items,
     commandId: input.commandId,
+    refundSource: input.refundSource ?? null,
+    refundPaymentMethodId: input.refundSource === 'bank' ? input.refundPaymentMethodId ?? null : null,
   });
 }
 
@@ -229,6 +278,7 @@ export async function applyPosSaleAction(input: {
       orderId: input.orderId,
       reason,
       commandId: createPosCommandId('return', input.orderId),
+      refundSource: 'cash',
       items: returnable.items.map((item) => ({
         orderItemId: item.orderItemId,
         quantity: item.remainingQuantity,
@@ -251,6 +301,8 @@ async function invokeSaleAction(input: {
   reason: string;
   items?: PosReturnItemInput[];
   commandId?: string;
+  refundSource?: PosRefundSource | null;
+  refundPaymentMethodId?: string | null;
 }): Promise<PosSaleActionResult> {
   const row = await invokeRawAction(input);
 
@@ -261,7 +313,11 @@ async function invokeSaleAction(input: {
     input.action === 'return'
     && ((row.returnStatus !== 'partial' && row.returnStatus !== 'returned')
       || typeof row.returnId !== 'string'
-      || typeof row.refundId !== 'string')
+      || (row.refundId !== null && row.refundId !== undefined && typeof row.refundId !== 'string')
+      || numberOrUndefined(row.returnedValue) === undefined
+      || numberOrUndefined(row.receivableReductionAmount) === undefined
+      || numberOrUndefined(row.refundedAmount) === undefined
+      || numberOrUndefined(row.outstandingAfter) === undefined)
   ) {
     throw new Error('SellerTray did not confirm the sale return.');
   }
@@ -272,10 +328,18 @@ async function invokeSaleAction(input: {
     idempotentReplay: row.idempotentReplay as boolean,
     status: row.status === 'cancelled' ? 'cancelled' : undefined,
     returnId: typeof row.returnId === 'string' ? row.returnId : undefined,
-    refundId: typeof row.refundId === 'string' ? row.refundId : undefined,
+    refundId: typeof row.refundId === 'string' ? row.refundId : row.refundId === null ? null : undefined,
     returnStatus: row.returnStatus === 'partial' || row.returnStatus === 'returned' ? row.returnStatus : undefined,
+    returnSubtotal: numberOrUndefined(row.returnSubtotal),
+    returnTax: numberOrUndefined(row.returnTax),
+    returnedValue: numberOrUndefined(row.returnedValue),
+    receivableReductionAmount: numberOrUndefined(row.receivableReductionAmount),
     refundedAmount: numberOrUndefined(row.refundedAmount),
+    outstandingBefore: numberOrUndefined(row.outstandingBefore),
+    outstandingAfter: numberOrUndefined(row.outstandingAfter),
     returnedAmount: numberOrUndefined(row.returnedAmount),
+    refundSource: row.refundSource === 'cash' || row.refundSource === 'bank' ? row.refundSource : null,
+    refundPaymentMethodId: typeof row.refundPaymentMethodId === 'string' ? row.refundPaymentMethodId : null,
     currency: typeof row.currency === 'string' ? row.currency : undefined,
   };
 }
@@ -287,6 +351,8 @@ async function invokeRawAction(input: {
   reason: string;
   items?: PosReturnItemInput[];
   commandId?: string;
+  refundSource?: PosRefundSource | null;
+  refundPaymentMethodId?: string | null;
 }): Promise<Record<string, unknown>> {
   const { data, error } = await supabase.functions.invoke('pos-return', {
     body: {
@@ -296,6 +362,8 @@ async function invokeRawAction(input: {
       reason: input.reason,
       ...(input.items ? { items: input.items } : {}),
       ...(input.commandId ? { commandId: input.commandId } : {}),
+      ...(input.refundSource ? { refundSource: input.refundSource } : {}),
+      ...(input.refundPaymentMethodId ? { refundPaymentMethodId: input.refundPaymentMethodId } : {}),
     },
   });
 
@@ -321,6 +389,18 @@ async function invokeRawAction(input: {
     throw new Error('SellerTray returned an invalid sale action result.');
   }
   return row;
+}
+
+function mapRefundBankAccount(value: unknown): PosRefundBankAccount {
+  const row = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  if (typeof row.id !== 'string') throw new Error('SellerTray returned an invalid refund bank account.');
+  return {
+    id: row.id,
+    displayName: String(row.displayName ?? 'Business bank'),
+    bankName: String(row.bankName ?? ''),
+    accountName: String(row.accountName ?? ''),
+    accountNumber: String(row.accountNumber ?? ''),
+  };
 }
 
 function mapReturnableItem(value: unknown): PosReturnableItem {
