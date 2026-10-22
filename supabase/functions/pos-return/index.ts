@@ -3,6 +3,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.115.0';
 type JsonRecord = Record<string, unknown>;
 type PosAction = 'void' | 'return' | 'delete_draft';
 type ReturnItem = { orderItemId: string; quantity: number };
+type RefundMethod = 'cash' | 'bank';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -90,7 +91,10 @@ Deno.serve(async (request) => {
   } else {
     const items = cleanReturnItems(body.items);
     if (!items) return json({ error: 'Choose at least one valid item quantity to return' }, 400);
-    rpc = 'return_sellertray_pos_cash_sale';
+    const refundMethodRead = cleanRefundMethod(body.refundMethod);
+    if (!refundMethodRead.ok) return json({ error: 'Refund method must be Cash or Bank' }, 400);
+
+    rpc = 'return_sellertray_pos_sale';
     rpcArgs = {
       p_tenant_id: tenantId,
       p_order_id: orderId,
@@ -98,6 +102,7 @@ Deno.serve(async (request) => {
       p_reason: reason,
       p_items: items,
       p_command_id: commandId,
+      p_refund_method: refundMethodRead.value,
     };
   }
 
@@ -109,7 +114,7 @@ Deno.serve(async (request) => {
       ? 403
       : /not found/i.test(message)
         ? 404
-        : /cannot|only|already|incomplete|does not match|open a cashier shift|drawer|exceeds|remaining/i.test(message)
+        : /cannot|only|already|incomplete|does not match|open a cashier shift|drawer|exceeds|remaining|choose cash or bank|no monetary refund/i.test(message)
           ? 409
           : 400;
     return json({ error: message }, status);
@@ -138,6 +143,12 @@ function cleanReturnItems(value: unknown): ReturnItem[] | null {
   return items;
 }
 
+function cleanRefundMethod(value: unknown): { ok: true; value: RefundMethod | null } | { ok: false } {
+  if (value === null || value === undefined || value === '') return { ok: true, value: null };
+  if (value === 'cash' || value === 'bank') return { ok: true, value };
+  return { ok: false };
+}
+
 function cleanCommandId(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const clean = value.trim();
@@ -151,10 +162,18 @@ function isResult(action: PosAction, value: unknown): value is JsonRecord {
   if (typeof row.orderId !== 'string' || typeof row.idempotentReplay !== 'boolean') return false;
   if (action === 'void') return row.status === 'cancelled';
   if (action === 'delete_draft') return row.deleted === true && typeof row.deletedAt === 'string';
+
+  const refundIdValid = row.refundId === null || typeof row.refundId === 'string';
+  const refundMethodValid = row.refundMethod === null || row.refundMethod === 'cash' || row.refundMethod === 'bank';
   return (row.returnStatus === 'partial' || row.returnStatus === 'returned')
     && typeof row.returnId === 'string'
-    && typeof row.refundId === 'string'
-    && typeof row.refundedAmount === 'number';
+    && refundIdValid
+    && refundMethodValid
+    && typeof row.returnedValue === 'number'
+    && typeof row.receivableReduction === 'number'
+    && typeof row.refundedAmount === 'number'
+    && typeof row.outstandingBefore === 'number'
+    && typeof row.outstandingAfter === 'number';
 }
 
 function actionLabel(action: PosAction): string {
