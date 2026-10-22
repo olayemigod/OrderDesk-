@@ -40,4 +40,9 @@ test('Audit alone switches reads while Communications keeps the legacy bounded f
   assert.match(workspace, /audit.filter\(\(event\) => event.action === 'merchant_message_published'/);
   assert.ok(gateway.indexOf("identity.aal !== 'aal2'") < gateway.indexOf("if (action === 'audit_explorer'"));
   assert.match(gateway, /platform_admin_audit_log/);
+  const explorer = read('../src/AuditExplorer.tsx');
+  const selector = read('../src/MerchantSelector.tsx');
+  assert.match(explorer, /showCommercialPortfolio=\{false\} showAgreementLifecycle=\{false\}/);
+  assert.match(selector, /showAgreementLifecycle = true/);
+  assert.match(selector, /showAgreementLifecycle && selectedTenantId/);
 });

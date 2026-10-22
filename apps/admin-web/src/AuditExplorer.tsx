@@ -61,7 +61,7 @@ export default function AuditExplorer({ session }: { session: Session }) {
   }
 
   return <div className="workspace-page">
-    <header className="workspace-page-header"><div><p className="workspace-eyebrow">Audit</p><h1>Privileged activity</h1><p>Search administrator activity across businesses. Dates use your local time; To is exclusive. Export includes the newest 1,000 matching records.</p></div></header>
+    <header className="workspace-page-header"><div><p className="workspace-eyebrow">Audit</p><h1>Privileged activity</h1><p>Search administrator activity across businesses. Dates use your local time; To is exclusive. Apply filters before exporting. Export includes the newest 1,000 matching records.</p></div></header>
     <section className="workspace-panel">
       <h2>Business</h2>
       <MerchantSelector session={session} selectedIds={new Set(draft.tenantId ? [draft.tenantId] : [])} onChange={ids => setDraft(value => ({ ...value, tenantId: [...ids][0] ?? null }))} mode="single" showCommercialPortfolio={false} showAgreementLifecycle={false} />

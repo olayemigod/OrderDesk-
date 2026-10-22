@@ -517,6 +517,9 @@ Keep ProcessEdge collections, commercial order value, recognised revenue, mercha
 
 The bounded dashboard foundation may precede trial-compatibility retirement as an additive read-only slice. Preserve the controlled real commercial lifecycle acceptance gate before retiring compatibility. Keep legacy trial UI unreachable and remove internal phase terminology from active Admin copy. Drill-down should lead to Merchants and governed Billing & Commercial, without creating a second commercial or access engine.
 
+## Admin Audit Explorer (approved 2026-10-22)
+
+The Admin Audit menu uses a separate server-backed read model with Business, Event, Actor, Search, From and To filters. Preserve the legacy `action: 'audit'` bounded feed for Communications. Default Audit page size is 50, server maximum 100; use deterministic descending timestamp/ID keyset pagination. CSV export starts at the newest matching record, is server-capped at 1,000 records and discloses truncation. Read RPC execution is service-role-only; preserve verified platform Admin/Support membership and AAL2 gateway authority. Audit records remain immutable history. Business selection on Audit must not expose commercial portfolios or agreement-management actions. This additive read slice does not change shared commerce authority or authorize production deployments.
 # 12. AI governance
 
 AI is an operational assistant, not an unrestricted database writer.
