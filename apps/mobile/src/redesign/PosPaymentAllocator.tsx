@@ -169,7 +169,7 @@ export function PosPaymentAllocator({
         </View>
         <View style={styles.summaryRight}>
           <Text style={[styles.label, dark && styles.darkMuted]}>Outstanding</Text>
-          <Text style={[styles.summaryValue, outstanding > 0.005 && styles.warningText, dark && styles.darkText]}>{formatMoney(outstanding, currency)}</Text>
+          <Text style={[styles.summaryValue, outstanding > 0.005 && styles.warningText, dark && styles.darkText, dark && outstanding > 0.005 && styles.darkWarningText]}>{formatMoney(outstanding, currency)}</Text>
         </View>
       </View>
 
@@ -178,11 +178,11 @@ export function PosPaymentAllocator({
         return (
           <View key={key} style={[styles.methodCard, dark && styles.darkCard]}>
             <View style={styles.methodHeading}>
-              <View style={styles.methodIcon}>
+              <View style={[styles.methodIcon, dark && styles.darkMethodIcon]}>
                 <Ionicons
                   name={method.methodType === 'cash' ? 'cash-outline' : method.methodType === 'card_terminal' ? 'card-outline' : 'business-outline'}
                   size={21}
-                  color={theme.colors.greenDark}
+                  color={dark ? theme.colors.green : theme.colors.greenDark}
                 />
               </View>
               <View style={styles.flex}>
@@ -206,7 +206,7 @@ export function PosPaymentAllocator({
                 onPress={() => useRemaining(method)}
                 style={styles.remainingButton}
               >
-                <Text style={styles.remainingText}>Use remaining</Text>
+                <Text style={[styles.remainingText, dark && styles.darkAccentText]}>Use remaining</Text>
               </Pressable>
             </View>
           </View>
@@ -217,9 +217,19 @@ export function PosPaymentAllocator({
         <Pressable
           disabled={disabled || submitting}
           onPress={choosePayLater}
-          style={[styles.payLater, payLater && styles.payLaterActive]}
+          style={[
+            styles.payLater,
+            dark && styles.darkPayLater,
+            payLater && (dark ? styles.darkPayLaterActive : styles.payLaterActive),
+          ]}
         >
-          <Ionicons name={payLater ? 'checkmark-circle' : 'time-outline'} size={21} color={payLater ? theme.colors.greenDark : theme.colors.navy} />
+          <Ionicons
+            name={payLater ? 'checkmark-circle' : 'time-outline'}
+            size={21}
+            color={payLater
+              ? (dark ? theme.dark.accentText : theme.colors.greenDark)
+              : (dark ? theme.dark.textMuted : theme.colors.navy)}
+          />
           <View style={styles.flex}>
             <Text style={[styles.methodName, dark && styles.darkText]}>Pay later</Text>
             <Text style={[styles.methodNote, dark && styles.darkMuted]}>Complete this sale with the full balance outstanding.</Text>
@@ -239,7 +249,7 @@ export function PosPaymentAllocator({
       <Pressable
         disabled={!canSubmit}
         onPress={confirmCheckout}
-        style={[styles.primaryButton, !canSubmit && styles.disabled]}
+        style={[styles.primaryButton, !canSubmit && styles.disabled, dark && !canSubmit && styles.darkDisabled]}
       >
         {submitting ? <ActivityIndicator color={theme.colors.white} /> : <Ionicons name="checkmark-circle-outline" size={20} color={theme.colors.white} />}
         <Text style={styles.primaryText}>{submitting ? 'Processing…' : buttonLabel({ allocated, outstanding, payLater, currency })}</Text>
@@ -309,8 +319,14 @@ const styles = StyleSheet.create({
   primaryButton: { minHeight: 50, borderRadius: theme.radius.md, backgroundColor: theme.colors.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 14 },
   primaryText: { color: theme.colors.white, fontSize: 15, fontWeight: '800' },
   disabled: { opacity: 0.45 },
-  darkCard: { backgroundColor: theme.colors.navyDeep, borderColor: theme.colors.slate },
-  darkInput: { backgroundColor: theme.colors.navy, borderColor: theme.colors.slate, color: theme.colors.white },
-  darkText: { color: theme.colors.white },
-  darkMuted: { color: theme.colors.subtle },
+  darkCard: { backgroundColor: theme.dark.surfaceRaised, borderColor: theme.dark.border },
+  darkInput: { backgroundColor: theme.dark.surface, borderColor: theme.dark.borderStrong, color: theme.dark.text },
+  darkMethodIcon: { backgroundColor: theme.dark.accentSoft },
+  darkPayLater: { borderColor: theme.dark.borderStrong },
+  darkPayLaterActive: { borderColor: theme.colors.green, backgroundColor: theme.dark.accentSoft },
+  darkDisabled: { backgroundColor: theme.dark.disabledSurface },
+  darkText: { color: theme.dark.text },
+  darkMuted: { color: theme.dark.textMuted },
+  darkAccentText: { color: theme.dark.accentText },
+  darkWarningText: { color: theme.dark.warningText },
 });
