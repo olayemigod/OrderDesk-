@@ -1,5 +1,12 @@
 begin;
 
+-- Historical Branch attribution is administrative migration truth, not a merchant write.
+-- Read-only subscriptions may still have pre-snapshot orders that must be backfilled.
+-- Disable only the subscription write guard for this bounded backfill; every other
+-- order integrity trigger remains active, and the subscription guard is restored
+-- before the transaction commits.
+alter table public.orders disable trigger guard_subscription_orders;
+
 alter table public.orders
   add column if not exists branch_name_snapshot text;
 
@@ -120,5 +127,7 @@ create trigger sellertray_print_jobs_snapshot_receipt_branch_name
 before insert on public.sellertray_print_jobs
 for each row
 execute function public.snapshot_sellertray_receipt_branch_name();
+
+alter table public.orders enable trigger guard_subscription_orders;
 
 commit;

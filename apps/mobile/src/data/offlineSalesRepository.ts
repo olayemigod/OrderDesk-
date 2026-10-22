@@ -1,9 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import type { CommerceProduct, PosPaymentMethod } from './commerceRepository';
+import type { CommerceProduct, PosPaymentMethod, PosPaymentMethodType } from './commerceRepository';
 import { PosDraftRequestError } from './commerceRepository';
-import type { BranchStockRow } from './inventoryRepository';
 import type { MerchantCustomer } from './customerRepository';
+import type { BranchStockRow } from './inventoryRepository';
 import type { PosPaymentPolicy } from './posPaymentRepository';
 import type { SellerTrayTaxContext } from './taxRepository';
 
@@ -17,10 +17,38 @@ const CUSTOMER_KEY_PREFIX = 'sellertray.offline.customers.v1:';
 const TAX_KEY_PREFIX = 'sellertray.offline.tax-context.v1:';
 const MAX_OPEN_INTENTS = 50;
 const SYNCED_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const PAYMENT_REFERENCE_PATTERN = /^[A-Za-z0-9._:-]+$/;
+const PAYMENT_EPSILON = 0.005;
 
 export type OfflineSaleStatus = 'pending' | 'syncing' | 'needs_review' | 'failed' | 'synced';
-export type OfflineCompletionIntent = 'draft' | 'cash' | 'bank';
+export type OfflineCompletionIntent = 'draft' | 'cash' | 'bank' | 'payment';
 
+export type OfflinePaymentMethodSnapshot = {
+  paymentMethodId: string | null;
+  methodType: PosPaymentMethodType;
+  displayName: string;
+  bankName: string | null;
+  bankAccountName: string | null;
+  bankAccountNumber: string | null;
+  instructions: string | null;
+};
+
+export type OfflinePaymentAllocation = {
+  paymentMethodId: string | null;
+  amount: number;
+  confirmNow: boolean;
+  providerReference: string | null;
+  capturedAt: string;
+  methodSnapshot: OfflinePaymentMethodSnapshot;
+};
+
+export type OfflinePaymentPlan = {
+  checkoutCommandId: string;
+  payLater: boolean;
+  allocations: OfflinePaymentAllocation[];
+};
+
+// Kept for schema-v5 outbox compatibility. New offline payment capture uses OfflinePaymentPlan.
 export type OfflineBankPaymentEvidence = {
   checkoutCommandId: string;
   paymentMethodId: string;
@@ -49,7 +77,7 @@ export type OfflineSaleLine = {
 };
 
 export type OfflinePosSale = {
-  schemaVersion: 5;
+  schemaVersion: 6;
   clientReference: string;
   actorUserId: string;
   tenantId: string;
@@ -71,6 +99,7 @@ export type OfflinePosSale = {
   total: number;
   completionIntent: OfflineCompletionIntent;
   bankPayment: OfflineBankPaymentEvidence | null;
+  paymentPlan: OfflinePaymentPlan | null;
   status: OfflineSaleStatus;
   attempts: number;
   createdAt: string;
@@ -101,6 +130,7 @@ export async function queueOfflinePosSale(input: {
   total: number;
   completionIntent?: OfflineCompletionIntent;
   bankPayment?: OfflineBankPaymentEvidence | null;
+  paymentPlan?: OfflinePaymentPlan | null;
 }): Promise<OfflinePosSale> {
   const rows = await readOutbox();
   const existing = rows.find((row) => row.clientReference === input.clientReference);
@@ -129,17 +159,22 @@ export async function queueOfflinePosSale(input: {
 
   const completionIntent = input.completionIntent ?? 'draft';
   const bankPayment = input.bankPayment ?? null;
+  const paymentPlan = input.paymentPlan ?? null;
   if (completionIntent === 'bank') {
-    if (!bankPayment || !isValidBankPaymentEvidence(bankPayment)) {
+    if (!bankPayment || !isValidBankPaymentEvidence(bankPayment) || paymentPlan) {
       throw new Error('A governed Bank method and valid transfer reference are required for an offline Bank sale.');
     }
-  } else if (bankPayment) {
-    throw new Error('Bank payment evidence can only be attached to a Bank sale.');
+  } else if (completionIntent === 'payment') {
+    if (!paymentPlan || !isValidPaymentPlan(paymentPlan, input.total) || bankPayment) {
+      throw new Error('The offline payment plan is invalid. Review the payment methods and amounts.');
+    }
+  } else if (bankPayment || paymentPlan) {
+    throw new Error('Payment evidence can only be attached to an offline payment sale.');
   }
 
   const now = new Date().toISOString();
   const next: OfflinePosSale = {
-    schemaVersion: 5,
+    schemaVersion: 6,
     clientReference: input.clientReference,
     actorUserId: input.actorUserId,
     tenantId: input.tenantId,
@@ -161,6 +196,7 @@ export async function queueOfflinePosSale(input: {
     total: input.total,
     completionIntent,
     bankPayment,
+    paymentPlan,
     status: 'pending',
     attempts: 0,
     createdAt: now,
@@ -171,7 +207,7 @@ export async function queueOfflinePosSale(input: {
   };
 
   await writeOutbox(pruneSynced([next, ...rows]));
-  if (next.completionIntent === 'cash') await reserveCachedStock(next);
+  if (shouldReserveCachedStock(next)) await reserveCachedStock(next);
   return next;
 }
 
@@ -228,8 +264,9 @@ export async function retryOfflinePosSale(clientReference: string, actorUserId: 
 export async function discardOfflinePosSale(clientReference: string, actorUserId: string): Promise<void> {
   const rows = await readOutbox();
   const row = rows.find((item) => item.clientReference === clientReference && item.actorUserId === actorUserId);
-  if (row?.completionIntent === 'cash') throw new Error('A completed offline cash sale cannot be discarded. Sync or review it instead.');
-  if (row?.completionIntent === 'bank') throw new Error('An offline Bank transfer sale cannot be discarded. Sync or review it instead.');
+  if (row && row.completionIntent !== 'draft') {
+    throw new Error('An offline sale with payment intent cannot be discarded. Sync or review it instead.');
+  }
   await writeOutbox(rows.filter((item) => item.clientReference !== clientReference || item.actorUserId !== actorUserId));
 }
 
@@ -254,6 +291,23 @@ export function isLikelyConnectivityError(error: unknown): boolean {
   return false;
 }
 
+function shouldReserveCachedStock(sale: OfflinePosSale): boolean {
+  if (sale.completionIntent === 'cash') return true;
+  if (sale.completionIntent !== 'payment' || !sale.paymentPlan) return false;
+
+  const plan = sale.paymentPlan;
+  if (plan.payLater) return true;
+
+  const allocated = roundMoney(plan.allocations.reduce((sum, allocation) => sum + allocation.amount, 0));
+  const confirmedAllocated = roundMoney(plan.allocations.reduce(
+    (sum, allocation) => sum + (allocation.confirmNow ? allocation.amount : 0),
+    0,
+  ));
+  const isPartial = allocated > PAYMENT_EPSILON && allocated < sale.total - PAYMENT_EPSILON;
+  if (isPartial) return confirmedAllocated > PAYMENT_EPSILON;
+  return allocated >= sale.total - PAYMENT_EPSILON && confirmedAllocated >= sale.total - PAYMENT_EPSILON;
+}
+
 async function reserveCachedStock(sale: OfflinePosSale): Promise<void> {
   const cached = await loadBranchStockCache(sale.tenantId, sale.branchId);
   if (!cached) return;
@@ -274,7 +328,7 @@ function classifySyncFailure(error: unknown): { status: 'pending' | 'needs_revie
   }
   if (isLikelyConnectivityError(error)) return { status: 'pending', message: 'Waiting for a connection.' };
   const message = error instanceof Error && error.message ? error.message : 'SellerTray could not sync this offline sale.';
-  if (/permission|access|stock|price|unit|uom|branch|shift|register|read-only|customer|override|tax|bank|payment|evidence|reference|verification/i.test(message)) return { status: 'needs_review', message };
+  if (/permission|access|stock|price|unit|uom|branch|shift|register|read-only|customer|override|tax|bank|card|terminal|payment|evidence|reference|verification/i.test(message)) return { status: 'needs_review', message };
   return { status: 'failed', message };
 }
 
@@ -292,8 +346,8 @@ async function writeOutbox(rows: OfflinePosSale[]): Promise<void> { await AsyncS
 function parseOfflineSale(value: unknown): OfflinePosSale[] {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
   const row = value as Record<string, unknown>;
-  if (![1, 2, 3, 4, 5].includes(Number(row.schemaVersion)) || typeof row.clientReference !== 'string' || typeof row.actorUserId !== 'string' || typeof row.tenantId !== 'string' || typeof row.branchId !== 'string' || typeof row.branchName !== 'string' || typeof row.currency !== 'string' || !Array.isArray(row.lines) || typeof row.total !== 'number' || !isOfflineStatus(row.status) || typeof row.attempts !== 'number' || typeof row.createdAt !== 'string' || typeof row.updatedAt !== 'string') return [];
   const schema = Number(row.schemaVersion);
+  if (![1, 2, 3, 4, 5, 6].includes(schema) || typeof row.clientReference !== 'string' || typeof row.actorUserId !== 'string' || typeof row.tenantId !== 'string' || typeof row.branchId !== 'string' || typeof row.branchName !== 'string' || typeof row.currency !== 'string' || !Array.isArray(row.lines) || typeof row.total !== 'number' || !isOfflineStatus(row.status) || typeof row.attempts !== 'number' || typeof row.createdAt !== 'string' || typeof row.updatedAt !== 'string') return [];
   const lines = (row.lines as Array<Record<string, unknown>>).flatMap((line) => {
     const expected = Number(line.expectedSellingPrice);
     const selling = schema >= 3 ? Number(line.sellingPrice) : expected;
@@ -304,28 +358,31 @@ function parseOfflineSale(value: unknown): OfflinePosSale[] {
   });
   if (!lines.length) return [];
 
-  const legacy = schema < 4 || row.taxContextLegacy === true;
-  const subtotal = legacy ? row.total : Number(row.subtotal);
-  const taxAmount = legacy ? 0 : Number(row.taxAmount);
-  const ratePercent = legacy ? 0 : Number(row.taxRatePercent);
-  const revision = legacy ? null : Number(row.taxConfigurationRevision);
-  const configurationId = legacy ? null : nullableString(row.taxConfigurationId);
+  const legacyTax = schema < 4 || row.taxContextLegacy === true;
+  const subtotal = legacyTax ? row.total : Number(row.subtotal);
+  const taxAmount = legacyTax ? 0 : Number(row.taxAmount);
+  const ratePercent = legacyTax ? 0 : Number(row.taxRatePercent);
+  const revision = legacyTax ? null : Number(row.taxConfigurationRevision);
+  const configurationId = legacyTax ? null : nullableString(row.taxConfigurationId);
   if (!Number.isFinite(subtotal) || !Number.isFinite(taxAmount) || !Number.isFinite(ratePercent)) return [];
-  if (!legacy && (
+  if (!legacyTax && (
     revision === null || !Number.isFinite(revision) || revision < 0
     || (revision === 0 && configurationId !== null)
     || (revision > 0 && configurationId === null)
   )) return [];
 
-  const completionIntent: OfflineCompletionIntent = schema >= 5 && row.completionIntent === 'bank'
-    ? 'bank'
-    : schema >= 3 && row.completionIntent === 'cash'
-      ? 'cash'
-      : 'draft';
+  let completionIntent: OfflineCompletionIntent = 'draft';
+  if (schema >= 6 && row.completionIntent === 'payment') completionIntent = 'payment';
+  else if (schema >= 5 && row.completionIntent === 'bank') completionIntent = 'bank';
+  else if (schema >= 3 && row.completionIntent === 'cash') completionIntent = 'cash';
+
   const bankPayment = completionIntent === 'bank' ? parseBankPaymentEvidence(row.bankPayment) : null;
+  const paymentPlan = completionIntent === 'payment' ? parsePaymentPlan(row.paymentPlan, Number(row.total)) : null;
+  if (completionIntent === 'bank' && !bankPayment) return [];
+  if (completionIntent === 'payment' && !paymentPlan) return [];
 
   return [{
-    schemaVersion: 5,
+    schemaVersion: 6,
     clientReference: row.clientReference,
     actorUserId: row.actorUserId,
     tenantId: row.tenantId,
@@ -339,14 +396,15 @@ function parseOfflineSale(value: unknown): OfflinePosSale[] {
     subtotal,
     taxConfigurationId: configurationId,
     taxConfigurationRevision: revision,
-    taxApplied: legacy ? false : row.taxApplied === true,
+    taxApplied: legacyTax ? false : row.taxApplied === true,
     taxRatePercent: ratePercent,
     taxAmount,
-    taxDisplayBreakdown: legacy ? false : row.taxDisplayBreakdown === true,
-    taxContextLegacy: legacy,
+    taxDisplayBreakdown: legacyTax ? false : row.taxDisplayBreakdown === true,
+    taxContextLegacy: legacyTax,
     total: row.total,
     completionIntent,
     bankPayment,
+    paymentPlan,
     status: row.status,
     attempts: row.attempts,
     createdAt: row.createdAt,
@@ -355,6 +413,69 @@ function parseOfflineSale(value: unknown): OfflinePosSale[] {
     lastError: nullableString(row.lastError),
     orderId: nullableString(row.orderId),
   }];
+}
+
+function parsePaymentPlan(value: unknown, total: number): OfflinePaymentPlan | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  if (typeof row.checkoutCommandId !== 'string' || typeof row.payLater !== 'boolean' || !Array.isArray(row.allocations)) return null;
+  const allocations = row.allocations.flatMap(parsePaymentAllocation);
+  if (allocations.length !== row.allocations.length) return null;
+  const plan: OfflinePaymentPlan = { checkoutCommandId: row.checkoutCommandId, payLater: row.payLater, allocations };
+  return isValidPaymentPlan(plan, total) ? plan : null;
+}
+
+function parsePaymentAllocation(value: unknown): OfflinePaymentAllocation[] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+  const row = value as Record<string, unknown>;
+  const snapshot = parseMethodSnapshot(row.methodSnapshot);
+  if (!snapshot) return [];
+  const allocation: OfflinePaymentAllocation = {
+    paymentMethodId: nullableString(row.paymentMethodId),
+    amount: Number(row.amount),
+    confirmNow: row.confirmNow === true,
+    providerReference: nullableString(row.providerReference),
+    capturedAt: typeof row.capturedAt === 'string' ? row.capturedAt : '',
+    methodSnapshot: snapshot,
+  };
+  return isValidPaymentAllocation(allocation) ? [allocation] : [];
+}
+
+function parseMethodSnapshot(value: unknown): OfflinePaymentMethodSnapshot | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  if (row.methodType !== 'cash' && row.methodType !== 'bank_transfer' && row.methodType !== 'card_terminal') return null;
+  if (typeof row.displayName !== 'string' || !row.displayName.trim()) return null;
+  return {
+    paymentMethodId: nullableString(row.paymentMethodId),
+    methodType: row.methodType,
+    displayName: row.displayName,
+    bankName: nullableString(row.bankName),
+    bankAccountName: nullableString(row.bankAccountName),
+    bankAccountNumber: nullableString(row.bankAccountNumber),
+    instructions: nullableString(row.instructions),
+  };
+}
+
+function isValidPaymentPlan(plan: OfflinePaymentPlan, total: number): boolean {
+  if (!isUuid(plan.checkoutCommandId) || plan.allocations.length > 10) return false;
+  if (plan.payLater ? plan.allocations.length !== 0 : plan.allocations.length === 0) return false;
+  if (!plan.allocations.every(isValidPaymentAllocation)) return false;
+  const allocated = roundMoney(plan.allocations.reduce((sum, allocation) => sum + allocation.amount, 0));
+  return allocated <= roundMoney(total) + PAYMENT_EPSILON;
+}
+
+function isValidPaymentAllocation(value: OfflinePaymentAllocation): boolean {
+  if (!Number.isFinite(value.amount) || value.amount <= 0 || !Number.isFinite(Date.parse(value.capturedAt))) return false;
+  const snapshot = value.methodSnapshot;
+  if (snapshot.paymentMethodId !== value.paymentMethodId || !snapshot.displayName.trim()) return false;
+  if (snapshot.methodType === 'cash') {
+    return value.paymentMethodId === null && value.providerReference === null && value.confirmNow;
+  }
+  if (!value.paymentMethodId || !isUuid(value.paymentMethodId)) return false;
+  if (!value.providerReference || value.providerReference.length > 128 || !PAYMENT_REFERENCE_PATTERN.test(value.providerReference)) return false;
+  if (snapshot.methodType === 'bank_transfer' && value.confirmNow) return false;
+  return snapshot.methodType === 'bank_transfer' || snapshot.methodType === 'card_terminal';
 }
 
 function parseBankPaymentEvidence(value: unknown): OfflineBankPaymentEvidence | null {
@@ -389,12 +510,13 @@ function isValidBankPaymentEvidence(value: OfflineBankPaymentEvidence): boolean 
     && value.methodSnapshot.methodType === 'bank_transfer'
     && Boolean(value.methodSnapshot.displayName.trim())
     && value.providerReference.length <= 128
-    && /^[A-Za-z0-9._:-]+$/.test(value.providerReference)
+    && PAYMENT_REFERENCE_PATTERN.test(value.providerReference)
     && Number.isFinite(Date.parse(value.capturedAt));
 }
 
 function isOfflineStatus(value: unknown): value is OfflineSaleStatus { return value === 'pending' || value === 'syncing' || value === 'needs_review' || value === 'failed' || value === 'synced'; }
 function isUuid(value: string): boolean { return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim()); }
+function roundMoney(value: number): number { return Math.round((value + Number.EPSILON) * 100) / 100; }
 function cleanNullable(value: string | null | undefined): string | null { const clean = value?.trim() ?? ''; return clean || null; }
 function nullableString(value: unknown): string | null { return typeof value === 'string' && value.trim() ? value : null; }
 async function writeCache<T>(key: string, data: T): Promise<void> { await AsyncStorage.setItem(key, JSON.stringify({ savedAt: new Date().toISOString(), data } satisfies OfflineCache<T>)); }

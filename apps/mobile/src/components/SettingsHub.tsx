@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { BackHandler, Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, BackHandler, Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import type { BusinessProfileInput, MerchantBusiness } from '../data/businessRepository';
 import { usePlatformAdmin } from '../hooks/usePlatformAdmin';
 import { useSubscriptionAccess } from '../hooks/useSubscriptionAccess';
+import { supabase } from '../lib/supabase';
 import {
   SELLERTRAY_FONT_SCALE_MAX,
   SELLERTRAY_FONT_SCALE_MIN,
@@ -60,6 +61,7 @@ export function SettingsHub({
   routeKey = 0,
 }: Props) {
   const [section, setSection] = useState<Section>('menu');
+  const [signingOut, setSigningOut] = useState(false);
   const subscription = useSubscriptionAccess(business.id);
   const platformAdmin = usePlatformAdmin();
   const appearance = useSellerTrayAppearance();
@@ -80,6 +82,32 @@ export function SettingsHub({
 
     return () => subscription.remove();
   }, [section]);
+
+  async function signOutCurrentDevice() {
+    if (signingOut) return;
+    setSigningOut(true);
+    const { error } = await supabase.auth.signOut({ scope: 'local' });
+    if (error) {
+      setSigningOut(false);
+      Alert.alert('Unable to sign out', error.message);
+    }
+  }
+
+  function confirmSignOut() {
+    if (signingOut) return;
+    if (Platform.OS === 'web') {
+      void signOutCurrentDevice();
+      return;
+    }
+    Alert.alert(
+      'Sign out of SellerTray?',
+      'This signs you out on this device only. Your business and order data remain safely stored.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign out', style: 'destructive', onPress: () => void signOutCurrentDevice() },
+      ],
+    );
+  }
 
   if (section !== 'menu') {
     return (
@@ -213,9 +241,10 @@ export function SettingsHub({
       <View style={styles.menuSection}>
         <Text style={[styles.groupLabel, appearance.dark && darkStyles.bodyText]}>ACCOUNT & SECURITY</Text>
         <View style={[styles.menuGroup, appearance.dark && darkStyles.card]}>
+          <MenuRow icon="log-out-outline" title={signingOut ? 'Signing out…' : 'Sign out'} text="Sign out of SellerTray on this device" onPress={confirmSignOut} />
           <MenuRow icon="moon-outline" title="Appearance" text={`Dark mode and adjustable text size · ${Math.round(appearance.fontScale * 100)}%`} onPress={() => setSection('appearance')} />
           <MenuRow icon="shield-checkmark-outline" title="Security & MFA" text="Authenticator enrollment and high-assurance session verification" onPress={() => setSection('security')} />
-          <MenuRow icon="lock-closed-outline" title="Account & privacy" text="Sign out, export data, legal information and account closure" onPress={() => setSection('account')} />
+          <MenuRow icon="lock-closed-outline" title="Account & privacy" text="Data export, legal information and account closure" onPress={() => setSection('account')} />
           <MenuRow icon="help-circle-outline" title="Help & support" text="Live chat, WhatsApp, phone and email support" onPress={() => setSection('support')} />
         </View>
       </View>

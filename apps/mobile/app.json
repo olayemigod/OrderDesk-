@@ -8,7 +8,7 @@
     "userInterfaceStyle": "automatic",
     "android": {
       "package": "ng.processedge.sellertray",
-      "versionCode": 34,
+      "versionCode": 39,
       "blockedPermissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
@@ -43,7 +43,7 @@
       ],
       "allowBackup": false,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "https://sellertray.vercel.app/brand/sellertray-app-icon-v2.png",
         "backgroundColor": "#F8FAFC"
       },
       "googleServicesFile": "./google-services.json"
@@ -83,9 +83,9 @@
         }
       ]
     ],
-    "icon": "./assets/icon.png",
+    "icon": "https://sellertray.vercel.app/brand/sellertray-app-icon-v2.png",
     "splash": {
-      "image": "./assets/icon.png",
+      "image": "https://sellertray.vercel.app/brand/sellertray-app-icon-v2.png",
       "resizeMode": "contain",
       "backgroundColor": "#102A43"
     },

@@ -4,6 +4,7 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from 'react';
+import './sellertray-elements.css';
 
 function classes(base: string, className?: string) {
   return className ? `${base} ${className}` : base;
@@ -29,3 +30,33 @@ export const SellerTrayTextarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAt
   ),
 );
 SellerTrayTextarea.displayName = 'SellerTrayTextarea';
+
+type SellerTrayTabOption<T extends string> = {
+  id: T;
+  label: string;
+};
+
+export function SellerTrayTabs<T extends string>({
+  value,
+  options,
+  onChange,
+  ariaLabel,
+  className,
+}: {
+  value: T;
+  options: readonly SellerTrayTabOption<T>[];
+  onChange: (value: T) => void;
+  ariaLabel: string;
+  className?: string;
+}) {
+  return <div className={classes('sellertray-tabs', className)} role="tablist" aria-label={ariaLabel}>
+    {options.map((option) => <button
+      key={option.id}
+      type="button"
+      role="tab"
+      aria-selected={value === option.id}
+      className={value === option.id ? 'active' : undefined}
+      onClick={() => onChange(option.id)}
+    >{option.label}</button>)}
+  </div>;
+}

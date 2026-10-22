@@ -15,6 +15,7 @@ import { loadSellerTrayTaxQuote } from '../data/taxRepository';
 import { supabase } from '../lib/supabase';
 
 const ACTIVE_REACHABILITY_INTERVAL_MS = 5_000;
+const PAYMENT_EPSILON = 0.005;
 
 export function useOfflineSalesSync() {
   const [actorUserId, setActorUserId] = useState('');
@@ -80,7 +81,7 @@ export function useOfflineSalesSync() {
     // active, human review is safer than silently charging tax after payment.
     if (expectedTaxConfigurationRevision === null || sale.taxContextLegacy) {
       const currentTax = await loadSellerTrayTaxQuote(sale.tenantId, sale.subtotal);
-      if (currentTax.taxApplied || currentTax.taxAmount > 0.005) {
+      if (currentTax.taxApplied || currentTax.taxAmount > PAYMENT_EPSILON) {
         throw new PosDraftRequestError(
           'Queued sale needs review because tax became active after this offline sale was recorded.',
           'conflict',
@@ -110,6 +111,7 @@ export function useOfflineSalesSync() {
         expectedConversionFactor: line.expectedConversionFactor,
       })),
     });
+
     if (sale.completionIntent === 'cash') {
       const result = await completePosSale(sale.tenantId, orderId, null);
       if (result.status !== 'completed' || result.paymentStatus !== 'paid') {
@@ -143,6 +145,61 @@ export function useOfflineSalesSync() {
         || result.inventoryMovementCount !== 0
       ) {
         throw new PosDraftRequestError('Offline Bank payment did not enter governed verification. Review this queued sale.', 'conflict', 409);
+      }
+    } else if (sale.completionIntent === 'payment') {
+      const plan = sale.paymentPlan;
+      if (!plan) {
+        throw new PosDraftRequestError('Offline payment plan is missing. Review this queued sale.', 'conflict', 409);
+      }
+      const result = await checkoutPosPaymentAllocations({
+        tenantId: sale.tenantId,
+        orderId,
+        commandId: plan.checkoutCommandId,
+        payLater: plan.payLater,
+        allocations: plan.allocations.map((allocation) => ({
+          paymentMethodId: allocation.paymentMethodId,
+          amount: allocation.amount,
+          confirmNow: allocation.confirmNow,
+          ...(allocation.providerReference ? {
+            providerReference: allocation.providerReference,
+            offlineCapturedAt: allocation.capturedAt,
+          } : {}),
+        })),
+      });
+
+      const allocated = roundMoney(plan.allocations.reduce((sum, allocation) => sum + allocation.amount, 0));
+      const confirmedAllocated = roundMoney(plan.allocations.reduce(
+        (sum, allocation) => sum + (allocation.confirmNow ? allocation.amount : 0),
+        0,
+      ));
+      const isPartial = allocated > PAYMENT_EPSILON && allocated < sale.total - PAYMENT_EPSILON;
+      const shouldFinalize = plan.payLater
+        || (isPartial && confirmedAllocated > PAYMENT_EPSILON)
+        || (allocated >= sale.total - PAYMENT_EPSILON && confirmedAllocated >= sale.total - PAYMENT_EPSILON);
+
+      if (shouldFinalize) {
+        if (result.status !== 'completed' || result.inventoryMovementCount < 1) {
+          throw new PosDraftRequestError('Offline payment replay did not follow the governed POS completion policy. Review this queued sale.', 'conflict', 409);
+        }
+      } else if (result.status !== 'awaiting_payment_confirmation' || result.inventoryMovementCount !== 0) {
+        throw new PosDraftRequestError('Offline payment replay finalized before the governed payment policy allowed it. Review this queued sale.', 'conflict', 409);
+      }
+
+      if (plan.payLater && result.paymentTerms !== 'pay_later') {
+        throw new PosDraftRequestError('Offline Pay later terms changed during replay. Review this queued sale.', 'conflict', 409);
+      }
+      if (isPartial && result.paymentTerms !== 'partial') {
+        throw new PosDraftRequestError('Offline Partial payment terms changed during replay. Review this queued sale.', 'conflict', 409);
+      }
+
+      for (const allocation of plan.allocations) {
+        const payment = result.payments.find((entry) => entry.paymentMethodId === allocation.paymentMethodId);
+        if (!payment || payment.methodType !== allocation.methodSnapshot.methodType) {
+          throw new PosDraftRequestError('Offline payment method changed during replay. Review this queued sale.', 'conflict', 409);
+        }
+        if (!allocation.confirmNow && payment.status !== 'pending_verification') {
+          throw new PosDraftRequestError('Offline non-cash payment did not enter governed verification. Review this queued sale.', 'conflict', 409);
+        }
       }
     }
     return orderId;
@@ -239,4 +296,8 @@ export function useOfflineSalesSync() {
   const openCount = useMemo(() => sales.filter((sale) => sale.status !== 'synced').length, [sales]);
 
   return { actorUserId, sales, syncing, lastSyncAt, connectionState, backendReachable, openCount, refresh, syncNow, discard, probeReachability };
+}
+
+function roundMoney(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
 }

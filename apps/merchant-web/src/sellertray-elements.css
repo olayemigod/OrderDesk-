@@ -1,0 +1,52 @@
+.sellertray-tabs,
+.tab-row {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  scrollbar-width: thin;
+}
+
+.sellertray-tabs button,
+.tab-row .tab {
+  min-height: 38px;
+  flex: 0 0 auto;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.sellertray-tabs button:hover,
+.tab-row .tab:hover {
+  color: var(--navy);
+  background: var(--surface-alt);
+}
+
+.sellertray-tabs button.active,
+.sellertray-tabs button[aria-selected='true'],
+.tab-row .tab.active {
+  color: #063b24;
+  background: var(--mint);
+}
+
+[data-theme='dark'] .sellertray-tabs button.active,
+[data-theme='dark'] .sellertray-tabs button[aria-selected='true'],
+[data-theme='dark'] .tab-row .tab.active {
+  color: var(--text);
+}
+
+.sellertray-tabs button:focus-visible,
+.tab-row .tab:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}

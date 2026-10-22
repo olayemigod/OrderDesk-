@@ -228,6 +228,7 @@ export function AccountDataControls({ business = null }: Props) {
           onPress={() => void signOut()}
           style={({ pressed }) => [
             styles.signOutButton,
+            appearance.dark && darkStyles.secondaryButton,
             pressed && styles.pressed,
             (signingOut || deleting || exporting) && styles.disabled,
           ]}
