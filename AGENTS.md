@@ -8,6 +8,12 @@ Before planning, editing, reviewing, refactoring, testing, or documenting any Se
 
 `.agents/skills/sellertray-project-implementation/SKILL.md`
 
+For **every SellerTray task**, also read and follow:
+
+`.agents/skills/sellertray-project-implementation/CROSS_SURFACE.md`
+
+`CROSS_SURFACE.md` is a universal normative extension of the governing skill. It requires agents to implement one coherent business capability across every necessarily affected SellerTray surface in the same implementation sweep. A request that names only Merchant Web, Mobile, Admin Web, WhatsApp, AI, reporting, or another single surface does not remove the obligation to inspect and complete dependent process flows elsewhere.
+
 For any task touching inventory valuation, stock history, purchasing cost, COGS, profitability, inventory reports, transfers, returns, or offline/backdated stock events, also read and follow:
 
 `.agents/skills/sellertray-project-implementation/VALUATION.md`
@@ -26,9 +32,9 @@ For any task touching offline POS selling, cached payment methods, offline payme
 
 `.agents/skills/sellertray-project-implementation/OFFLINE.md`
 
-`VALUATION.md`, `COMMERCIAL.md`, `COMMERCIAL_C1.md` and `OFFLINE.md` are normative extensions of the governing SellerTray skill for their applicable boundaries. They do not replace or weaken any rule in `SKILL.md`.
+`CROSS_SURFACE.md`, `VALUATION.md`, `COMMERCIAL.md`, `COMMERCIAL_C1.md` and `OFFLINE.md` are normative extensions of the governing SellerTray skill for their applicable boundaries. `CROSS_SURFACE.md` applies universally; the others apply when their domains are touched. They do not replace or weaken any rule in `SKILL.md`.
 
-That governing skill and its applicable normative extensions are the repository-level implementation contract for the SellerTray redesign. They govern mobile UX, merchant web boundaries, Admin Web platform/commercial operations, shared commerce architecture, POS, inventory, branch awareness, UOM, WhatsApp commerce, payments, subscriptions, setup, installments, agreements, guarantees, promotions, Bluetooth printing, reporting, AI, permissions, offline behaviour, implementation phases, QA gates, and anti-divergence rules.
+That governing skill and its applicable normative extensions are the repository-level implementation contract for the SellerTray redesign. They govern cross-surface flow closure, mobile UX, merchant web boundaries, Admin Web platform/commercial operations, shared commerce architecture, POS, inventory, branch awareness, UOM, WhatsApp commerce, payments, subscriptions, setup, installments, agreements, guarantees, promotions, Bluetooth printing, reporting, AI, permissions, offline behaviour, implementation phases, QA gates, and anti-divergence rules.
 
 The originating SellerTray redesign conversation is the primary decision record when it is available to the agent. The repository skill is the durable fallback and must be used when that thread is unavailable.
 
@@ -40,9 +46,13 @@ A later explicit user decision overrides older guidance. When product direction 
 
 Do not implement a change that creates conflicting business truth across mobile, web, WhatsApp, AI, or Admin operations.
 
+When one surface creates or changes configuration, master data, validation, lifecycle, permissions, state, reporting dimensions, or another process contract that necessarily affects another surface, treat the dependent flow as part of the same business implementation batch. Do not leave affected operational clients on stale free text, hard-coded options, duplicated enums, obsolete validation, or ungoverned behaviour.
+
 ## Before declaring work complete
 
-Confirm the applicable QA gates from the governing skill and normative extensions, report the tests actually run, preserve existing WhatsApp behaviour unless explicitly changed, and state any migration/build/deployment requirement. Do not describe planned work as completed.
+Confirm the applicable QA gates from the governing skill and normative extensions, including the universal cross-surface impact gate. Report the tests actually run, preserve existing WhatsApp behaviour unless explicitly changed, and state any migration/build/deployment requirement. Do not describe planned work as completed.
+
+Every completion report must state the cross-surface impact for Shared Core, Merchant Web, Mobile, Admin Web, WhatsApp, AI, reporting/audit, and offline/sync, with either the implemented/verified effect or a concrete no-impact reason.
 
 ## Standing SellerTray progress conclusion
 
