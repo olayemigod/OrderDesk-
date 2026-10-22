@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import BusinessDashboard from './BusinessDashboard';
-import CommercialBillingAdministration, { type CommercialAdminTenant } from './CommercialBillingAdministration';
+import CommercialBillingAdministration from './CommercialBillingAdministration';
 import MerchantPortfolio from './MerchantPortfolio';
+import MerchantSelector from './MerchantSelector';
 import { invokeJson, isRecord, supabase } from './supabase';
 
 type SecurityState = 'checking' | 'needs_mfa' | 'needs_enroll' | 'ready';
@@ -12,29 +13,19 @@ type MessageType = 'update' | 'service' | 'information' | 'promotion';
 type Severity = 'info' | 'attention' | 'urgent';
 type MerchantRole = 'owner' | 'manager' | 'staff';
 
-type TenantSummary = {
-  id: string;
-  name: string;
-  slug: string;
-  businessEmail: string | null;
-  businessPhone: string | null;
-  subscriptionStatus: string;
-  accessMode: string;
-  whatsappStatus: string;
-  planCode: string | null;
-  currentPeriodEnd: string | null;
-  graceEndsAt: string | null;
-  orders30d: number;
-  needsReview: number;
-  teamCount: number;
-  notificationExceptions: number;
-  supportNote: string | null;
-};
-
-type PlatformOverview = {
+type PlatformBootstrap = {
   actorRole: AdminRole;
   generatedAt: string;
-  tenants: TenantSummary[];
+  merchantCount: number;
+  legacyTrialRecords: number;
+};
+
+type OperationsSummary = {
+  merchantCount: number;
+  whatsappConnected: number;
+  whatsappErrors: number;
+  whatsappPending: number;
+  whatsappNotConnected: number;
 };
 
 type AuditEvent = {
@@ -113,7 +104,7 @@ export default function AdminWorkspace() {
   const [securityState, setSecurityState] = useState<SecurityState>('checking');
   const [verifiedFactorId, setVerifiedFactorId] = useState<string | null>(null);
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
-  const [overview, setOverview] = useState<PlatformOverview | null>(null);
+  const [bootstrap, setBootstrap] = useState<PlatformBootstrap | null>(null);
   const [audit, setAudit] = useState<AuditEvent[]>([]);
   const [portalError, setPortalError] = useState<string | null>(null);
 
@@ -128,7 +119,7 @@ export default function AdminWorkspace() {
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (!active) return;
       setSession(nextSession);
-      setOverview(null);
+      setBootstrap(null);
       setAudit([]);
     });
 
@@ -183,11 +174,11 @@ export default function AdminWorkspace() {
     if (!session) return;
     setPortalError(null);
     try {
-      const [overviewResult, auditResult] = await Promise.all([
-        invokeJson<{ overview?: unknown }>('platform-admin', { action: 'overview' }, session),
+      const [bootstrapResult, auditResult] = await Promise.all([
+        invokeJson<{ bootstrap?: unknown }>('platform-admin', { action: 'bootstrap' }, session),
         invokeJson<{ audit?: unknown }>('platform-admin', { action: 'audit', tenantId: null, limit: 100 }, session),
       ]);
-      setOverview(normalizeOverview(overviewResult.overview));
+      setBootstrap(normalizeBootstrap(bootstrapResult.bootstrap));
       setAudit(normalizeAudit(auditResult.audit));
     } catch (error) {
       setPortalError(messageFrom(error, 'Unable to load SellerTray platform administration.'));
@@ -213,12 +204,12 @@ export default function AdminWorkspace() {
   if (securityState === 'needs_enroll') {
     return <MfaEnrollment enrollment={enrollment} setEnrollment={setEnrollment} onVerified={assessSecurity} onSignOut={signOut} />;
   }
-  if (!overview) return <StatusScreen title="Loading SellerTray Admin" body="Retrieving businesses, platform health and recent administrator activity…" error={portalError} onRetry={loadPortal} />;
+  if (!bootstrap) return <StatusScreen title="Loading SellerTray Admin" body="Retrieving platform context and recent administrator activity…" error={portalError} onRetry={loadPortal} />;
 
   return (
     <WorkspaceShell
       session={session}
-      overview={overview}
+      bootstrap={bootstrap}
       audit={audit}
       onReload={loadPortal}
       onAuditRefresh={refreshAudit}
@@ -371,7 +362,7 @@ function MfaEnrollment({ enrollment, setEnrollment, onVerified, onSignOut }: { e
   );
 }
 
-function WorkspaceShell({ session, overview, audit, onReload, onAuditRefresh, onSignOut }: { session: Session; overview: PlatformOverview; audit: AuditEvent[]; onReload: () => Promise<void>; onAuditRefresh: () => Promise<void>; onSignOut: () => Promise<void> }) {
+function WorkspaceShell({ session, bootstrap, audit, onReload, onAuditRefresh, onSignOut }: { session: Session; bootstrap: PlatformBootstrap; audit: AuditEvent[]; onReload: () => Promise<void>; onAuditRefresh: () => Promise<void>; onSignOut: () => Promise<void> }) {
   const [section, setSection] = useState<AdminSection>(() => sectionFromHash());
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -389,11 +380,11 @@ function WorkspaceShell({ session, overview, audit, onReload, onAuditRefresh, on
 
   const page = (() => {
     switch (section) {
-      case 'overview': return <BusinessDashboard session={session} refreshKey={overview.generatedAt} />;
-      case 'merchants': return <MerchantPortfolio session={session} refreshKey={overview.generatedAt} />;
-      case 'billing': return <BillingPage session={session} overview={overview} />;
-      case 'communications': return <CommunicationsPage session={session} overview={overview} audit={audit} onAuditRefresh={onAuditRefresh} />;
-      case 'operations': return <OperationsPage session={session} overview={overview} />;
+      case 'overview': return <BusinessDashboard session={session} refreshKey={bootstrap.generatedAt} />;
+      case 'merchants': return <MerchantPortfolio session={session} refreshKey={bootstrap.generatedAt} />;
+      case 'billing': return <BillingPage session={session} bootstrap={bootstrap} />;
+      case 'communications': return <CommunicationsPage session={session} bootstrap={bootstrap} audit={audit} onAuditRefresh={onAuditRefresh} />;
+      case 'operations': return <OperationsPage session={session} actorRole={bootstrap.actorRole} />;
       case 'audit': return <AuditPage audit={audit} onRefresh={onAuditRefresh} />;
       case 'settings': return <SettingsPage />;
     }
@@ -422,7 +413,7 @@ function WorkspaceShell({ session, overview, audit, onReload, onAuditRefresh, on
           ))}
         </nav>
         <div className="workspace-sidebar-footer">
-          <span className="workspace-role-badge">{overview.actorRole === 'admin' ? 'Platform Admin' : 'Platform Support'}</span>
+          <span className="workspace-role-badge">{bootstrap.actorRole === 'admin' ? 'Platform Admin' : 'Platform Support'}</span>
           <strong>{session.user.email ?? 'Administrator'}</strong>
           <button className="workspace-button subtle" onClick={() => void onSignOut()}>Sign out</button>
         </div>
@@ -434,7 +425,7 @@ function WorkspaceShell({ session, overview, audit, onReload, onAuditRefresh, on
           <button className="workspace-icon-button mobile-only" aria-label="Open navigation" onClick={() => setMobileNavOpen(true)}><Icon name="menu" /></button>
           <div className="workspace-topbar-title"><strong>{NAV_ITEMS.find((item) => item.id === section)?.label}</strong><span>ProcessEdge platform operations</span></div>
           <div className="workspace-topbar-actions">
-            <span className="workspace-generated">Updated {formatDate(overview.generatedAt)}</span>
+            <span className="workspace-generated">Updated {formatDate(bootstrap.generatedAt)}</span>
             <button className="workspace-button subtle compact" onClick={() => void refreshAll()} disabled={refreshing}><Icon name="refresh" />{refreshing ? 'Refreshing…' : 'Refresh'}</button>
           </div>
         </header>
@@ -444,28 +435,17 @@ function WorkspaceShell({ session, overview, audit, onReload, onAuditRefresh, on
   );
 }
 
-function BillingPage({ session, overview }: { session: Session; overview: PlatformOverview }) {
-  const legacyTrialCount = overview.tenants.filter((tenant) => tenant.subscriptionStatus === 'trial').length;
-  const tenants: CommercialAdminTenant[] = overview.tenants.map((tenant) => ({
-    id: tenant.id,
-    name: tenant.name,
-    businessEmail: tenant.businessEmail,
-    businessPhone: tenant.businessPhone,
-    slug: tenant.slug,
-    planCode: tenant.planCode,
-    subscriptionStatus: tenant.subscriptionStatus,
-  }));
-
+function BillingPage({ session, bootstrap }: { session: Session; bootstrap: PlatformBootstrap }) {
   return (
     <PageFrame eyebrow="Billing & Commercial" title="Commercial administration" description="Governed SellerTray commercial operations for agreements, Branch setup readiness, installment payment state and entitlement release.">
       <div className="workspace-banner info"><strong>No free trial.</strong> Paid access uses governed commercial records. Payment confirmation, agreement acceptance, Branch setup readiness and subscription entitlement remain separate authorities.</div>
-      {legacyTrialCount ? <div className="workspace-banner warning"><strong>{legacyTrialCount} legacy record{legacyTrialCount === 1 ? '' : 's'} still report trial status.</strong> These are compatibility data awaiting migration and are not a current SellerTray offer.</div> : null}
-      <CommercialBillingAdministration session={session} actorRole={overview.actorRole} tenants={tenants} initialTenantId={merchantFromHash()} />
+      {bootstrap.legacyTrialRecords ? <div className="workspace-banner warning"><strong>{bootstrap.legacyTrialRecords} legacy record{bootstrap.legacyTrialRecords === 1 ? '' : 's'} still report trial status.</strong> These are compatibility data awaiting migration and are not a current SellerTray offer.</div> : null}
+      <CommercialBillingAdministration session={session} actorRole={bootstrap.actorRole} initialTenantId={merchantFromHash()} />
     </PageFrame>
   );
 }
 
-function CommunicationsPage({ session, overview, audit, onAuditRefresh }: { session: Session; overview: PlatformOverview; audit: AuditEvent[]; onAuditRefresh: () => Promise<void> }) {
+function CommunicationsPage({ session, bootstrap, audit, onAuditRefresh }: { session: Session; bootstrap: PlatformBootstrap; audit: AuditEvent[]; onAuditRefresh: () => Promise<void> }) {
   const [messageType, setMessageType] = useState<MessageType>('update');
   const [severity, setSeverity] = useState<Severity>('info');
   const [title, setTitle] = useState('');
@@ -476,29 +456,15 @@ function CommunicationsPage({ session, overview, audit, onAuditRefresh }: { sess
   const [allBusinesses, setAllBusinesses] = useState(true);
   const [selectedTenantIds, setSelectedTenantIds] = useState<Set<string>>(new Set());
   const [audienceRoles, setAudienceRoles] = useState<Set<MerchantRole>>(new Set(DEFAULT_ROLES));
-  const [search, setSearch] = useState('');
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const canPublish = overview.actorRole === 'admin';
-  const filteredTenants = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    if (!needle) return overview.tenants;
-    return overview.tenants.filter((tenant) => [tenant.name, tenant.slug, tenant.businessEmail ?? '', tenant.businessPhone ?? '', tenant.subscriptionStatus, tenant.whatsappStatus].some((value) => value.toLowerCase().includes(needle)));
-  }, [overview.tenants, search]);
+  const canPublish = bootstrap.actorRole === 'admin';
   const notificationAudit = useMemo(() => audit.filter((event) => event.action === 'merchant_message_published'), [audit]);
-  const selectedCount = allBusinesses ? overview.tenants.length : selectedTenantIds.size;
+  const selectedCount = allBusinesses ? bootstrap.merchantCount : selectedTenantIds.size;
   const roleList = Array.from(audienceRoles);
-
-  function toggleTenant(id: string) {
-    setSelectedTenantIds((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }
 
   function toggleRole(role: MerchantRole) {
     setAudienceRoles((current) => {
@@ -577,7 +543,7 @@ function CommunicationsPage({ session, overview, audit, onAuditRefresh }: { sess
         <PanelHeading title="Audience" description="Choose businesses and merchant roles." />
         <div className="workspace-filter-row"><button className={allBusinesses ? 'workspace-filter active' : 'workspace-filter'} onClick={() => setAllBusinesses(true)}>All businesses</button><button className={!allBusinesses ? 'workspace-filter active' : 'workspace-filter'} onClick={() => setAllBusinesses(false)}>Selected businesses</button></div>
         <div className="workspace-role-row">{DEFAULT_ROLES.map((role) => <label className="workspace-check-pill" key={role}><input type="checkbox" checked={audienceRoles.has(role)} onChange={() => toggleRole(role)} />{ROLE_LABELS[role]}</label>)}</div>
-        {!allBusinesses ? <div className="workspace-tenant-selector"><div className="workspace-toolbar"><div className="workspace-search"><Icon name="search" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search business, email, phone or status" /></div><div className="workspace-filter-row"><button className="workspace-button subtle compact" onClick={() => setSelectedTenantIds(new Set(filteredTenants.map((tenant) => tenant.id)))}>Select visible</button><button className="workspace-button subtle compact" onClick={() => setSelectedTenantIds(new Set())}>Clear</button></div></div><div className="workspace-tenant-list">{filteredTenants.map((tenant) => { const selected = selectedTenantIds.has(tenant.id); return <button key={tenant.id} type="button" className={selected ? 'workspace-tenant-row selected' : 'workspace-tenant-row'} onClick={() => toggleTenant(tenant.id)}><span className="workspace-tenant-check">{selected ? '✓' : ''}</span><span><strong>{tenant.name}</strong><small>{tenant.businessEmail ?? tenant.businessPhone ?? tenant.slug}</small></span><StatusPill value={tenant.subscriptionStatus} /><StatusPill value={tenant.whatsappStatus} /></button>; })}{!filteredTenants.length ? <EmptyState title="No businesses found" body="Adjust the search." /> : null}</div></div> : null}
+        {!allBusinesses ? <MerchantSelector session={session} selectedIds={selectedTenantIds} onChange={setSelectedTenantIds} /> : null}
         <div className="workspace-publish-bar"><div><strong>{selectedCount.toLocaleString()} business{selectedCount === 1 ? '' : 'es'}</strong><span>{roleList.length} selected role{roleList.length === 1 ? '' : 's'}</span></div><button className="workspace-button primary" disabled={!canPublish || publishing} onClick={requestPublish}>Review & publish</button></div>
       </section>
       <section className="workspace-panel">
@@ -589,7 +555,8 @@ function CommunicationsPage({ session, overview, audit, onAuditRefresh }: { sess
   );
 }
 
-function OperationsPage({ session, overview }: { session: Session; overview: PlatformOverview }) {
+function OperationsPage({ session, actorRole }: { session: Session; actorRole: AdminRole }) {
+  const [summary, setSummary] = useState<OperationsSummary | null>(null);
   const [readiness, setReadiness] = useState<AiReadiness | null>(null);
   const [probe, setProbe] = useState<AiProbe | null>(null);
   const [loading, setLoading] = useState(false);
@@ -600,7 +567,11 @@ function OperationsPage({ session, overview }: { session: Session; overview: Pla
 
   async function loadReadiness() {
     setLoading(true); setError(null);
-    try { const result = await invokeJson<{ readiness?: unknown }>('platform-admin', { action: 'ai_parser_readiness' }, session); setReadiness(normalizeAiReadiness(result.readiness)); }
+    try {
+      const result = await invokeJson<{ summary?: unknown; readiness?: unknown }>('platform-admin', { action: 'operations_summary' }, session);
+      setSummary(normalizeOperationsSummary(result.summary));
+      setReadiness(normalizeAiReadiness(result.readiness));
+    }
     catch (err) { setError(messageFrom(err, 'Unable to load AI parser readiness.')); }
     finally { setLoading(false); }
   }
@@ -612,15 +583,12 @@ function OperationsPage({ session, overview }: { session: Session; overview: Pla
     finally { setProbing(false); }
   }
 
-  const connected = overview.tenants.filter((tenant) => tenant.whatsappStatus === 'connected').length;
-  const waErrors = overview.tenants.filter((tenant) => tenant.whatsappStatus === 'error').length;
-
   return (
     <PageFrame eyebrow="Platform Operations" title="Service health" description="Governed operational visibility and controlled diagnostics for SellerTray platform services.">
       {error ? <div className="workspace-banner error">{error}</div> : null}
       <div className="workspace-grid two">
-        <section className="workspace-panel"><PanelHeading title="WhatsApp estate" description="Cross-merchant connection state from the governed platform overview." /><div className="workspace-stat-grid mini"><StatCard label="Connected" value={connected} detail="Merchant connections" /><StatCard label="Errors" value={waErrors} detail="Need ProcessEdge attention" /></div><div className="workspace-banner info">Connection configuration remains merchant-owned where appropriate. Admin Web supervises platform health; it is not a substitute for Merchant Web setup.</div></section>
-        <section className="workspace-panel"><PanelHeading title="AI parser health" description="Server-side readiness and controlled parser diagnostics." action={<button className="workspace-button subtle compact" onClick={() => void loadReadiness()} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</button>} />{readiness ? <div className="workspace-detail-grid"><Detail label="Configured" value={readiness.configured ? 'Yes' : 'No'} /><Detail label="Model" value={readiness.configuredModel || '—'} /><Detail label="Attempts" value={readiness.attempts.toLocaleString()} /><Detail label="Successful parses" value={readiness.successes.toLocaleString()} /><Detail label="Metered orders" value={readiness.meteredExternalOrderUnits.toLocaleString()} /><Detail label="Acceptance ready" value={readiness.productionAcceptanceReady ? 'Yes' : 'No'} /></div> : <EmptyState title="AI readiness unavailable" body="Refresh to retrieve current parser readiness." />}{overview.actorRole === 'admin' ? <div className="workspace-operation-action"><button className="workspace-button primary" onClick={() => void runProbe()} disabled={probing}>{probing ? 'Running probe…' : 'Run controlled parser probe'}</button>{probe ? <span className={probe.ok ? 'workspace-inline-status success' : 'workspace-inline-status warning'}>{friendlyLabel(probe.status)}{probe.durationMs !== null ? ` · ${probe.durationMs}ms` : ''}</span> : null}</div> : <div className="workspace-banner warning">Platform Support can view readiness. Controlled probes require Platform Admin.</div>}</section>
+        <section className="workspace-panel"><PanelHeading title="WhatsApp estate" description="Cross-merchant connection state from the governed platform summary." /><div className="workspace-stat-grid mini"><StatCard label="Connected" value={summary?.whatsappConnected ?? 0} detail="Merchant connections" /><StatCard label="Errors" value={summary?.whatsappErrors ?? 0} detail="Need ProcessEdge attention" /><StatCard label="Pending" value={summary?.whatsappPending ?? 0} detail="Connections in progress" /><StatCard label="Not connected" value={summary?.whatsappNotConnected ?? 0} detail="Merchant configuration" /></div><div className="workspace-banner info">Connection configuration remains merchant-owned where appropriate. Admin Web supervises platform health; it is not a substitute for Merchant Web setup.</div></section>
+        <section className="workspace-panel"><PanelHeading title="AI parser health" description="Server-side readiness and controlled parser diagnostics." action={<button className="workspace-button subtle compact" onClick={() => void loadReadiness()} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</button>} />{readiness ? <div className="workspace-detail-grid"><Detail label="Configured" value={readiness.configured ? 'Yes' : 'No'} /><Detail label="Model" value={readiness.configuredModel || '—'} /><Detail label="Attempts" value={readiness.attempts.toLocaleString()} /><Detail label="Successful parses" value={readiness.successes.toLocaleString()} /><Detail label="Metered orders" value={readiness.meteredExternalOrderUnits.toLocaleString()} /><Detail label="Acceptance ready" value={readiness.productionAcceptanceReady ? 'Yes' : 'No'} /></div> : <EmptyState title="AI readiness unavailable" body="Refresh to retrieve current parser readiness." />}{actorRole === 'admin' ? <div className="workspace-operation-action"><button className="workspace-button primary" onClick={() => void runProbe()} disabled={probing}>{probing ? 'Running probe…' : 'Run controlled parser probe'}</button>{probe ? <span className={probe.ok ? 'workspace-inline-status success' : 'workspace-inline-status warning'}>{friendlyLabel(probe.status)}{probe.durationMs !== null ? ` · ${probe.durationMs}ms` : ''}</span> : null}</div> : <div className="workspace-banner warning">Platform Support can view readiness. Controlled probes require Platform Admin.</div>}</section>
       </div>
     </PageFrame>
   );
@@ -700,29 +668,28 @@ function sectionFromHash(): AdminSection {
   return NAV_ITEMS.some((item) => item.id === raw) ? raw : 'overview';
 }
 
-function normalizeOverview(value: unknown): PlatformOverview {
-  if (!isRecord(value)) throw new Error('Platform admin returned an invalid overview.');
+function normalizeBootstrap(value: unknown): PlatformBootstrap {
+  if (!isRecord(value)) throw new Error('Platform admin returned an invalid bootstrap response.');
   const actorRole = value.actorRole === 'support' ? 'support' : value.actorRole === 'admin' ? 'admin' : null;
   if (!actorRole) throw new Error('This account is not configured for ProcessEdge platform administration.');
-  const tenants = Array.isArray(value.tenants) ? value.tenants.filter(isRecord).map((tenant) => ({
-    id: stringValue(tenant.id),
-    name: stringValue(tenant.name) || 'Unnamed business',
-    slug: stringValue(tenant.slug),
-    businessEmail: optionalString(tenant.businessEmail),
-    businessPhone: optionalString(tenant.businessPhone),
-    subscriptionStatus: stringValue(tenant.subscriptionStatus) || 'unknown',
-    accessMode: stringValue(tenant.accessMode) || 'unknown',
-    whatsappStatus: stringValue(tenant.whatsappStatus) || 'not_connected',
-    planCode: optionalString(tenant.planCode),
-    currentPeriodEnd: optionalString(tenant.currentPeriodEnd),
-    graceEndsAt: optionalString(tenant.graceEndsAt),
-    orders30d: numberValue(tenant.orders30d),
-    needsReview: numberValue(tenant.needsReview),
-    teamCount: numberValue(tenant.teamCount),
-    notificationExceptions: numberValue(tenant.notificationExceptions),
-    supportNote: optionalString(tenant.supportNote),
-  })).filter((tenant) => tenant.id) : [];
-  return { actorRole, generatedAt: stringValue(value.generatedAt), tenants };
+  return {
+    actorRole,
+    generatedAt: stringValue(value.generatedAt),
+    merchantCount: numberValue(value.merchantCount),
+    legacyTrialRecords: numberValue(value.legacyTrialRecords),
+  };
+}
+
+function normalizeOperationsSummary(value: unknown): OperationsSummary {
+  if (!isRecord(value)) throw new Error('Platform operations returned an invalid summary.');
+  const whatsapp = isRecord(value.whatsapp) ? value.whatsapp : {};
+  return {
+    merchantCount: numberValue(value.merchantCount),
+    whatsappConnected: numberValue(whatsapp.connected),
+    whatsappErrors: numberValue(whatsapp.errors),
+    whatsappPending: numberValue(whatsapp.pending),
+    whatsappNotConnected: numberValue(whatsapp.notConnected),
+  };
 }
 
 function normalizeAudit(value: unknown): AuditEvent[] {

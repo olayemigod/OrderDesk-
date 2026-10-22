@@ -1,16 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import MerchantSelector from './MerchantSelector';
+import { loadMerchantDetail, type MerchantRow } from './merchant-read-model';
 import { invokeJson } from './supabase';
-
-export type CommercialAdminTenant = {
-  id: string;
-  name: string;
-  businessEmail: string | null;
-  businessPhone: string | null;
-  slug: string;
-  planCode: string | null;
-  subscriptionStatus: string;
-};
 
 type BranchSetupState = {
   commercialOrderId: string;
@@ -112,16 +104,14 @@ const AGREEMENT_FAMILIES = [
 export default function CommercialBillingAdministration({
   session,
   actorRole,
-  tenants,
   initialTenantId,
 }: {
   session: Session;
   actorRole: 'admin' | 'support';
-  tenants: CommercialAdminTenant[];
   initialTenantId?: string | null;
 }) {
   const [selectedTenantId, setSelectedTenantId] = useState(() => initialTenantId ?? '');
-  const [search, setSearch] = useState('');
+  const [selectedTenant, setSelectedTenant] = useState<MerchantRow | null>(null);
   const [overview, setOverview] = useState<CommercialOverview | null>(null);
   const [onboarding, setOnboarding] = useState<CommercialOnboarding | null>(null);
   const [loading, setLoading] = useState(false);
@@ -138,22 +128,18 @@ export default function CommercialBillingAdministration({
   const [templateForm, setTemplateForm] = useState({ family: 'installment_agreement', versionCode: '', title: '', contentBody: '', effectiveFrom: nowLocal(), reason: '' });
   const [agreementForm, setAgreementForm] = useState({ commercialOrderId: '', templateVersionId: '', reference: '', renderedContent: '', reason: '' });
 
-  const filteredTenants = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    if (!needle) return tenants;
-    return tenants.filter((tenant) => [tenant.name, tenant.businessEmail ?? '', tenant.businessPhone ?? '', tenant.slug, tenant.planCode ?? '', tenant.subscriptionStatus]
-      .some((value) => value.toLowerCase().includes(needle)));
-  }, [search, tenants]);
-  const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId) ?? null;
   const selectedOrder = onboarding?.orders.find((order) => order.id === agreementForm.commercialOrderId) ?? null;
   const canManage = actorRole === 'admin' && onboarding?.canManage === true;
-  const initialTenantAvailable = Boolean(initialTenantId && tenants.some((tenant) => tenant.id === initialTenantId));
 
   useEffect(() => {
-    if (initialTenantId && initialTenantAvailable) {
-      setSelectedTenantId(initialTenantId);
-    }
-  }, [initialTenantId, initialTenantAvailable]);
+    if (!initialTenantId) return;
+    let active = true;
+    setSelectedTenantId(initialTenantId);
+    void loadMerchantDetail(session, initialTenantId)
+      .then((detail) => { if (active) setSelectedTenant(detail.merchant); })
+      .catch(() => { if (active) setSelectedTenant(null); });
+    return () => { active = false; };
+  }, [initialTenantId, session]);
 
   useEffect(() => {
     setSetupForm(null);
@@ -335,13 +321,19 @@ export default function CommercialBillingAdministration({
   return <div className="workspace-grid two">
     <section className="workspace-panel">
       <div className="workspace-panel-heading"><div><h2>Merchant commercial state</h2><p>Select a Business to review and prepare the initial merchant activation.</p></div></div>
-      <div className="workspace-form-stack">
-        <label>Search businesses<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Business, email, phone, plan or status" /></label>
-        <label>Business<select value={selectedTenantId} onChange={(event) => { setSelectedTenantId(event.target.value); setSetupForm(null); setMessage(null); setError(null); }}>
-          <option value="">Select a SellerTray Business</option>
-          {filteredTenants.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.name}{tenant.planCode ? ` · ${tenant.planCode}` : ''}</option>)}
-        </select></label>
-      </div>
+      <MerchantSelector
+        session={session}
+        mode="single"
+        selectedIds={selectedTenantId ? new Set([selectedTenantId]) : new Set()}
+        onChange={(next, merchant) => {
+          const tenantId = [...next][0] ?? '';
+          setSelectedTenantId(tenantId);
+          setSelectedTenant(tenantId ? merchant ?? null : null);
+          setSetupForm(null);
+          setMessage(null);
+          setError(null);
+        }}
+      />
       {selectedTenant ? <div className="workspace-detail-grid">
         <Detail label="Business" value={selectedTenant.name} />
         <Detail label="Plan" value={selectedTenant.planCode ?? 'Not assigned'} />

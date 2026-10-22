@@ -107,9 +107,10 @@ requireValue(
 );
 
 requireValue(
-  workspace.includes("action: 'ai_parser_readiness'") &&
+  workspace.includes("action: 'operations_summary'") &&
     workspace.includes("action: 'ai_parser_probe'") &&
-    platformAdminFunction.includes("overview.actorRole !== 'admin'") &&
+    platformAdminFunction.includes("bootstrap.actorRole !== 'admin'") &&
+    platformAdminFunction.includes('platform_admin_operations_summary') &&
     platformAdminFunction.includes('ProcessEdge platform Admin role required for AI smoke test'),
   'Platform Operations AI diagnostics must remain governed and Admin-only for active probes.',
 );
