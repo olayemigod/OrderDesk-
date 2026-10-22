@@ -52,6 +52,13 @@ union all select tenant_id,manager_user_id,'manager' from sellertray_money_fixtu
 union all select tenant_id,staff_user_id,'staff' from sellertray_money_fixture
 union all select other_tenant_id,other_owner_user_id,'owner' from sellertray_money_fixture;
 
+insert into public.sellertray_expense_categories(
+  tenant_id,name,is_active,created_by_user_id,updated_by_user_id
+)
+select f.tenant_id,v.name,true,f.owner_user_id,f.owner_user_id
+from sellertray_money_fixture f
+cross join (values ('Delivery'),('General'),('Operations'),('Utilities')) v(name);
+
 update sellertray_money_fixture f
 set branch_id=b.id
 from public.branches b
