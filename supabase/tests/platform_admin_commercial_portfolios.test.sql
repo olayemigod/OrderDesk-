@@ -111,7 +111,7 @@ set template_id=public.publish_sellertray_commercial_agreement_template_version(
 update commercial_portfolio_fixture f
 set agreement_id=public.issue_sellertray_commercial_agreement(
   f.tenant_id,f.order_id,null,f.template_id,
-  'CPF-AGR-'||upper(left(f.agreement_id::text,8)),
+  'CPF-AGR-'||upper(left(f.tenant_id::text,8)),
   'Merchant-specific commercial portfolio subscription agreement',null,f.admin_id
 );
 
