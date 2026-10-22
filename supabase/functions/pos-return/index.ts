@@ -3,6 +3,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.115.0';
 type JsonRecord = Record<string, unknown>;
 type PosAction = 'void' | 'return' | 'delete_draft';
 type ReturnItem = { orderItemId: string; quantity: number };
+type RefundSource = 'cash' | 'bank';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -54,7 +55,7 @@ Deno.serve(async (request) => {
 
   const { data: membership, error: membershipError } = await admin
     .from('tenant_members')
-    .select('user_id')
+    .select('role')
     .eq('tenant_id', tenantId)
     .eq('user_id', userId)
     .maybeSingle();
@@ -90,7 +91,20 @@ Deno.serve(async (request) => {
   } else {
     const items = cleanReturnItems(body.items);
     if (!items) return json({ error: 'Choose at least one valid item quantity to return' }, 400);
-    rpc = 'return_sellertray_pos_cash_sale';
+    const refundSource = cleanRefundSource(body.refundSource);
+    const refundPaymentMethodId = body.refundPaymentMethodId == null
+      ? null
+      : cleanUuid(body.refundPaymentMethodId);
+    if (body.refundPaymentMethodId != null && !refundPaymentMethodId) {
+      return json({ error: 'Choose a valid Business bank account for this refund' }, 400);
+    }
+    if (refundSource === 'cash' && refundPaymentMethodId) {
+      return json({ error: 'Cash refund does not use a Business bank account' }, 400);
+    }
+    if (refundSource === 'bank' && !refundPaymentMethodId) {
+      return json({ error: 'Choose a Business bank account for this refund' }, 400);
+    }
+    rpc = 'return_sellertray_pos_sale';
     rpcArgs = {
       p_tenant_id: tenantId,
       p_order_id: orderId,
@@ -98,6 +112,8 @@ Deno.serve(async (request) => {
       p_reason: reason,
       p_items: items,
       p_command_id: commandId,
+      p_refund_source: refundSource,
+      p_refund_payment_method_id: refundPaymentMethodId,
     };
   }
 
@@ -105,11 +121,11 @@ Deno.serve(async (request) => {
 
   if (error || !isResult(action, result)) {
     const message = error?.message ?? `Unable to ${actionLabel(action)} this sale`;
-    const status = /membership|access|role|read-only|permission|refund/i.test(message)
+    const status = /membership|access|role|read-only|permission|only the business owner or manager/i.test(message)
       ? 403
       : /not found/i.test(message)
         ? 404
-        : /cannot|only|already|incomplete|does not match|open a cashier shift|drawer|exceeds|remaining/i.test(message)
+        : /cannot|only|already|incomplete|does not match|open a cashier shift|drawer|exceeds|remaining|choose cash|choose a business bank/i.test(message)
           ? 409
           : 400;
     return json({ error: message }, status);
@@ -120,6 +136,10 @@ Deno.serve(async (request) => {
 
 function cleanAction(value: unknown): PosAction | null {
   return value === 'void' || value === 'return' || value === 'delete_draft' ? value : null;
+}
+
+function cleanRefundSource(value: unknown): RefundSource | null {
+  return value === 'cash' || value === 'bank' ? value : null;
 }
 
 function cleanReturnItems(value: unknown): ReturnItem[] | null {
@@ -151,10 +171,19 @@ function isResult(action: PosAction, value: unknown): value is JsonRecord {
   if (typeof row.orderId !== 'string' || typeof row.idempotentReplay !== 'boolean') return false;
   if (action === 'void') return row.status === 'cancelled';
   if (action === 'delete_draft') return row.deleted === true && typeof row.deletedAt === 'string';
+  const refundedAmount = numberOrNull(row.refundedAmount);
   return (row.returnStatus === 'partial' || row.returnStatus === 'returned')
     && typeof row.returnId === 'string'
-    && typeof row.refundId === 'string'
-    && typeof row.refundedAmount === 'number';
+    && (row.refundId === null || typeof row.refundId === 'string')
+    && refundedAmount !== null
+    && typeof numberOrNull(row.returnedValue) === 'number'
+    && typeof numberOrNull(row.receivableReductionAmount) === 'number'
+    && typeof numberOrNull(row.outstandingAfter) === 'number';
+}
+
+function numberOrNull(value: unknown): number | null {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function actionLabel(action: PosAction): string {
