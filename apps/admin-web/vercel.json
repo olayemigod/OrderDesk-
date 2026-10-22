@@ -7,7 +7,7 @@
   "redirects": [
     {
       "source": "/brand/sellertray-admin-logo.webp",
-      "destination": "/brand/sellertray-logo-v2.svg",
+      "destination": "/brand/sellertray-admin-icon.png",
       "permanent": false
     }
   ],
