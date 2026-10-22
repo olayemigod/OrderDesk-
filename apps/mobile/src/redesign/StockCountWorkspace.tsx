@@ -432,7 +432,7 @@ function CountEditor({
 }
 
 function Metric({ label, value, dark }: { label: string; value: string; dark: boolean }) {
-  return <View style={styles.metric}><Text style={[styles.metricValue, dark && darkStyles.titleText]}>{value}</Text><Text style={[styles.metricLabel, dark && darkStyles.bodyText]}>{label}</Text></View>;
+  return <View style={[styles.metric, dark && darkStyles.metric]}><Text style={[styles.metricValue, dark && darkStyles.titleText]}>{value}</Text><Text style={[styles.metricLabel, dark && darkStyles.bodyText]}>{label}</Text></View>;
 }
 
 function StatusPill({ status }: { status: StockCountDetail['status'] }) {
@@ -482,7 +482,7 @@ const styles = StyleSheet.create({
   statusPill: { borderRadius: theme.radius.pill, backgroundColor: theme.colors.mintSoft, paddingHorizontal: 9, paddingVertical: 5 },
   statusText: { color: theme.colors.greenDark, fontSize: 10.5, fontWeight: '900' },
   metricsRow: { flexDirection: 'row', gap: 8 },
-  metric: { flex: 1, borderRadius: 11, backgroundColor: '#F9FAFB', padding: 9 },
+  metric: { flex: 1, borderRadius: 11, borderWidth: 1, borderColor: 'transparent', backgroundColor: '#F9FAFB', padding: 9 },
   metricValue: { color: theme.colors.navy, fontSize: 16, fontWeight: '900' },
   metricLabel: { color: theme.colors.muted, fontSize: 10, marginTop: 1 },
   searchBox: { minHeight: 48, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 12, backgroundColor: theme.colors.white, paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center', gap: 7 },
@@ -520,6 +520,7 @@ const darkStyles = StyleSheet.create({
   bodyText: { color: '#CBD5E1' },
   card: { backgroundColor: '#111827', borderColor: '#334155' },
   subtleCard: { backgroundColor: '#172033', borderColor: '#334155' },
+  metric: { backgroundColor: '#172033', borderColor: '#334155' },
   outlineButton: { backgroundColor: '#111827', borderColor: '#334155' },
   input: { backgroundColor: '#111827', borderColor: '#334155', color: '#F8FAFC' },
   inputText: { color: '#F8FAFC' },
