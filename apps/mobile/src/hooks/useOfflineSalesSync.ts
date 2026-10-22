@@ -15,6 +15,7 @@ import { loadSellerTrayTaxQuote } from '../data/taxRepository';
 import { supabase } from '../lib/supabase';
 
 const ACTIVE_REACHABILITY_INTERVAL_MS = 5_000;
+const PAYMENT_EPSILON = 0.005;
 
 export function useOfflineSalesSync() {
   const [actorUserId, setActorUserId] = useState('');
@@ -80,7 +81,7 @@ export function useOfflineSalesSync() {
     // active, human review is safer than silently charging tax after payment.
     if (expectedTaxConfigurationRevision === null || sale.taxContextLegacy) {
       const currentTax = await loadSellerTrayTaxQuote(sale.tenantId, sale.subtotal);
-      if (currentTax.taxApplied || currentTax.taxAmount > 0.005) {
+      if (currentTax.taxApplied || currentTax.taxAmount > PAYMENT_EPSILON) {
         throw new PosDraftRequestError(
           'Queued sale needs review because tax became active after this offline sale was recorded.',
           'conflict',
@@ -166,14 +167,29 @@ export function useOfflineSalesSync() {
         })),
       });
 
-      const allocated = plan.allocations.reduce((sum, allocation) => sum + allocation.amount, 0);
-      const hasPendingAllocation = plan.allocations.some((allocation) => !allocation.confirmNow);
-      const mustRemainOpen = plan.payLater || allocated < sale.total - 0.005 || hasPendingAllocation;
-      if (mustRemainOpen && result.inventoryMovementCount !== 0) {
-        throw new PosDraftRequestError('Offline payment replay moved stock before the sale was fully settled. Review this queued sale.', 'conflict', 409);
+      const allocated = roundMoney(plan.allocations.reduce((sum, allocation) => sum + allocation.amount, 0));
+      const confirmedAllocated = roundMoney(plan.allocations.reduce(
+        (sum, allocation) => sum + (allocation.confirmNow ? allocation.amount : 0),
+        0,
+      ));
+      const isPartial = allocated > PAYMENT_EPSILON && allocated < sale.total - PAYMENT_EPSILON;
+      const shouldFinalize = plan.payLater
+        || (isPartial && confirmedAllocated > PAYMENT_EPSILON)
+        || (allocated >= sale.total - PAYMENT_EPSILON && confirmedAllocated >= sale.total - PAYMENT_EPSILON);
+
+      if (shouldFinalize) {
+        if (result.status !== 'completed' || result.inventoryMovementCount < 1) {
+          throw new PosDraftRequestError('Offline payment replay did not follow the governed POS completion policy. Review this queued sale.', 'conflict', 409);
+        }
+      } else if (result.status !== 'awaiting_payment_confirmation' || result.inventoryMovementCount !== 0) {
+        throw new PosDraftRequestError('Offline payment replay finalized before the governed payment policy allowed it. Review this queued sale.', 'conflict', 409);
       }
-      if (!mustRemainOpen && (result.status !== 'completed' || result.paymentStatus !== 'paid')) {
-        throw new PosDraftRequestError('Offline payment replay did not complete a fully confirmed sale. Review this queued sale.', 'conflict', 409);
+
+      if (plan.payLater && result.paymentTerms !== 'pay_later') {
+        throw new PosDraftRequestError('Offline Pay later terms changed during replay. Review this queued sale.', 'conflict', 409);
+      }
+      if (isPartial && result.paymentTerms !== 'partial') {
+        throw new PosDraftRequestError('Offline Partial payment terms changed during replay. Review this queued sale.', 'conflict', 409);
       }
 
       for (const allocation of plan.allocations) {
@@ -280,4 +296,8 @@ export function useOfflineSalesSync() {
   const openCount = useMemo(() => sales.filter((sale) => sale.status !== 'synced').length, [sales]);
 
   return { actorUserId, sales, syncing, lastSyncAt, connectionState, backendReachable, openCount, refresh, syncNow, discard, probeReachability };
+}
+
+function roundMoney(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
 }
