@@ -201,7 +201,8 @@ export default function BusinessExpensesManagement({
         });
         if (allError) throw allError;
         if (requestId !== categoryRequestRef.current) return;
-        nextCategories = mapCategories((allData ?? {}) as CategoryResponse extends never ? never : (allData as CategoryResponse).items);
+        const allResult = (allData ?? {}) as CategoryResponse;
+        nextCategories = mapCategories(allResult.items);
       }
 
       setCanManageCategories(canManage);
@@ -370,7 +371,7 @@ export default function BusinessExpensesManagement({
       {canManageCategories ? <div className="settings-card">
         <div className="settings-grid two">
           <label><span>New Expense Category</span><SellerTrayInput value={newCategoryName} onChange={(event) => setNewCategoryName(event.target.value)} placeholder="e.g. Utilities" maxLength={120} /></label>
-          <div className="panel-actions align-end"><button className="primary-button" disabled={categoryBusy || !newCategoryName.trim()} onClick={() => void manageCategory('create', undefined, newCategoryName)}>{categoryBusy ? 'Saving' : 'Add category'}</button></div>
+          <div className="panel-actions"><button className="primary-button" disabled={categoryBusy || !newCategoryName.trim()} onClick={() => void manageCategory('create', undefined, newCategoryName)}>{categoryBusy ? 'Saving' : 'Add category'}</button></div>
         </div>
       </div> : <p className="muted">Expense Categories are managed by an authorised Owner or Manager.</p>}
 
