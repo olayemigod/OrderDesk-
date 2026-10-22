@@ -113,8 +113,8 @@ export function ResumePosDraftWorkspace({ tenantId, branch, currency, order, onC
 
   const calculatedTotal = lines.reduce((sum, line) => sum + line.quantity * effectiveLinePrice(line, priceDrafts, priceEdited), 0);
   const subtotal = serverTotal ?? calculatedTotal;
-  const quotedSubtotalMatches = taxQuote !== null && Math.abs(taxQuote.subtotalAmount - subtotal) <= MONEY_EPSILON;
-  const total = quotedSubtotalMatches ? taxQuote.grossAmount : subtotal;
+  const quotedSubtotalMatches = taxQuote !== null && Math.abs(taxQuote.subtotal - subtotal) <= MONEY_EPSILON;
+  const total = quotedSubtotalMatches && taxQuote ? taxQuote.grossAmount : subtotal;
   const unitCount = lines.reduce((sum, line) => sum + line.quantity, 0);
   const selectedPayment = paymentMethods.find((method) => paymentKey(method) === selectedPaymentKey) ?? paymentMethods[0] ?? null;
   const shortage = useMemo(() => findStockShortage(lines, stockRows), [lines, stockRows]);
@@ -300,7 +300,7 @@ export function ResumePosDraftWorkspace({ tenantId, branch, currency, order, onC
 
   if (loading) return <SellerTrayLoadingScreen message="Opening saved sale…" />;
 
-  const showTax = quotedSubtotalMatches && taxQuote.displayTaxBreakdown && taxQuote.taxAmount > MONEY_EPSILON;
+  const showTax = Boolean(taxQuote && quotedSubtotalMatches && taxQuote.displayTaxBreakdown && taxQuote.taxAmount > MONEY_EPSILON);
 
   return (
     <View style={styles.stack}>
