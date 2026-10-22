@@ -15,7 +15,7 @@ insert into public.platform_admins(user_id,role) select id,'support' from mercha
 create temp table merchant_portfolio_tenant(id uuid);
 insert into merchant_portfolio_tenant values(gen_random_uuid());
 insert into public.tenants(id,name,slug,merchant_code,subscription_status)
-select id,'Portfolio Test Merchant','portfolio-test-'||left(id::text,8),'PM-'||left(id::text,8),'active' from merchant_portfolio_tenant;
+select id,'Portfolio Test Merchant','portfolio-test-'||left(id::text,8),'PM1','active' from merchant_portfolio_tenant;
 
 select extensions.lives_ok(format('select public.platform_admin_merchant_portfolio(%L)',id),'Support may read merchant portfolio') from merchant_portfolio_actor;
 select extensions.throws_ok(format('select public.platform_admin_merchant_portfolio(%L,null,%L)',id,'unsupported'),'22023','Unsupported merchant filter','unknown filter rejected') from merchant_portfolio_actor;
