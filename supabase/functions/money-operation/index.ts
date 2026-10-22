@@ -96,11 +96,29 @@ Deno.serve(async (request) => {
       : null;
     const paymentMethodId = body.paymentMethodId == null ? null : cleanUuid(body.paymentMethodId);
     const cashShiftId = body.cashShiftId == null ? null : cleanUuid(body.cashShiftId);
-    const expenseCategory = cleanText(body.expenseCategory, 120);
+    const expenseCategoryId = body.expenseCategoryId == null ? null : cleanUuid(body.expenseCategoryId);
+    let expenseCategory = cleanText(body.expenseCategory, 120);
     const amount = cleanPositiveNumber(body.amount);
     const reference = cleanText(body.reference, 160);
     const reason = cleanText(body.reason, 500);
     const commandId = cleanCommandId(body.commandId);
+
+    if (body.expenseCategoryId != null && !expenseCategoryId) {
+      return json({ error: 'Choose a valid Business Expense Category' }, 400);
+    }
+    if (expenseCategoryId) {
+      const { data: category, error: categoryError } = await admin
+        .from('sellertray_expense_categories')
+        .select('name,is_active')
+        .eq('tenant_id', tenantId)
+        .eq('id', expenseCategoryId)
+        .maybeSingle();
+      if (categoryError) return json({ error: categoryError.message }, 400);
+      if (!category) return json({ error: 'Selected Expense Category does not belong to this Business' }, 403);
+      if (!category.is_active) return json({ error: 'Choose an active Business Expense Category' }, 409);
+      expenseCategory = cleanText(category.name, 120);
+    }
+
     if (!branchId || !fundingSource || !expenseCategory || amount === null || !reference || !reason || !commandId) {
       return json({ error: 'Branch, funding source, category, amount, reference, reason and retry identity are required' }, 400);
     }
@@ -133,7 +151,7 @@ Deno.serve(async (request) => {
       ? 403
       : /not found/i.test(message)
         ? 404
-        : /already|cannot|requires|different facts|choose|invalid|open cash drawer|open shift/i.test(message)
+        : /already|cannot|requires|different facts|choose|invalid|open cash drawer|open shift|inactive expense category/i.test(message)
           ? 409
           : 400;
     return json({ error: message }, status);
