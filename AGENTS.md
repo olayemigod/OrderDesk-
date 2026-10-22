@@ -30,6 +30,12 @@ For any task touching inventory valuation, stock history, purchasing cost, COGS,
 
 `.agents/skills/sellertray-project-implementation/VALUATION.md`
 
+For any task touching sale returns, returned merchandise, receivables, customer balances, payment refunds, refund methods, cash-drawer refund effects, return history, or return/refund reporting, also read and follow:
+
+`.agents/skills/sellertray-project-implementation/RETURNS.md`
+
+`RETURNS.md` records the later approved receivable-first return settlement doctrine: returned merchandise reduces receivable first, only excess previously collected money may be paid back, Cash and Bank payouts have different drawer effects, and Staff/Cashier may prepare a payout but only Owner/Manager may complete a monetary refund.
+
 For any task touching onboarding, subscriptions, setup fees, Branch commercial activation, Merchant Web billing, Admin Web commercial operations, installments, payment schedules, agreements/terms, money-back guarantees, supplied setup equipment, plans/pricing, VAT/tax presentation, promotions, merchant-specific commercial terms, referrals/rewards, or SellerTray editions, also read and follow:
 
 `.agents/skills/sellertray-project-implementation/COMMERCIAL.md`
@@ -44,9 +50,9 @@ For any task touching offline POS selling, cached payment methods, offline payme
 
 `.agents/skills/sellertray-project-implementation/OFFLINE.md`
 
-`CROSS_SURFACE.md`, `ADAPTIVE.md`, `ADMIN_CAPABILITIES.md`, `VALUATION.md`, `COMMERCIAL.md`, `COMMERCIAL_C1.md` and `OFFLINE.md` are normative extensions of the governing SellerTray skill for their applicable boundaries. `CROSS_SURFACE.md` applies universally; the others apply when their domains are touched. They do not replace or weaken any rule in `SKILL.md`.
+`CROSS_SURFACE.md`, `ADAPTIVE.md`, `ADMIN_CAPABILITIES.md`, `VALUATION.md`, `RETURNS.md`, `COMMERCIAL.md`, `COMMERCIAL_C1.md` and `OFFLINE.md` are normative extensions of the governing SellerTray skill for their applicable boundaries. `CROSS_SURFACE.md` applies universally; the others apply when their domains are touched. They do not replace or weaken any rule in `SKILL.md`.
 
-That governing skill and its applicable normative extensions are the repository-level implementation contract for the SellerTray redesign. They govern cross-surface flow closure, adaptive Mobile UX and device-form-factor behavior, Admin capability/RBAC boundaries, mobile UX, merchant web boundaries, Admin Web platform/commercial operations, shared commerce architecture, POS, inventory, branch awareness, UOM, WhatsApp commerce, payments, subscriptions, setup, installments, agreements, guarantees, promotions, Bluetooth printing, reporting, AI, permissions, offline behaviour, implementation phases, QA gates, and anti-divergence rules.
+That governing skill and its applicable normative extensions are the repository-level implementation contract for the SellerTray redesign. They govern cross-surface flow closure, adaptive Mobile UX and device-form-factor behavior, Admin capability/RBAC boundaries, mobile UX, merchant web boundaries, Admin Web platform/commercial operations, shared commerce architecture, POS, inventory, branch awareness, UOM, WhatsApp commerce, payments, returns/refunds/receivables, subscriptions, setup, installments, agreements, guarantees, promotions, Bluetooth printing, reporting, AI, permissions, offline behaviour, implementation phases, QA gates, and anti-divergence rules.
 
 The originating SellerTray redesign conversation is the primary decision record when it is available to the agent. The repository skill is the durable fallback and must be used when that thread is unavailable.
 
