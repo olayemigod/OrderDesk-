@@ -2,7 +2,7 @@ import { Image, StyleSheet, Text, View } from 'react-native';
 
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 
-const SELLERTRAY_ADMIN_LOGO = require('../../assets/sellertray-admin-logo.webp');
+const SELLERTRAY_V2_MARK = require('../../assets/sellertray-v2-mark-128.png');
 
 type BrandMarkProps = {
   size?: number;
@@ -42,8 +42,9 @@ export function SellerTrayBrand({
 export function SellerTrayMark({ size = 42 }: { size?: number; inverted?: boolean }) {
   return (
     <Image
-      source={SELLERTRAY_ADMIN_LOGO}
+      source={SELLERTRAY_V2_MARK}
       accessibilityIgnoresInvertColors
+      fadeDuration={0}
       resizeMode="contain"
       style={{ width: size, height: size }}
     />

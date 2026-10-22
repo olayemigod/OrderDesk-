@@ -9,7 +9,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "preflight": "node scripts/release-preflight-runner.mjs && node scripts/offline-preflight.mjs && node scripts/pos-settlement-preflight.mjs && node scripts/pos-allocation-preflight.mjs && node scripts/branch-payment-preflight.mjs && node scripts/order-authority-preflight.mjs && node scripts/branch-history-preflight.mjs && node scripts/inventory-operation-preflight.mjs && node scripts/cash-movement-preflight.mjs && node scripts/pos-return-preflight.mjs && node scripts/notification-shell-preflight.mjs && node scripts/font-scale-preflight.mjs && node scripts/camera-permission-preflight.mjs && node scripts/sale-history-consistency-preflight.mjs && node scripts/account-session-preflight.mjs && node scripts/brand-preflight.mjs",
+    "preflight": "node scripts/release-preflight-runner.mjs && node scripts/offline-preflight.mjs && node scripts/pos-settlement-preflight.mjs && node scripts/pos-allocation-preflight.mjs && node scripts/branch-payment-preflight.mjs && node scripts/order-authority-preflight.mjs && node scripts/branch-history-preflight.mjs && node scripts/inventory-operation-preflight.mjs && node scripts/cash-movement-preflight.mjs && node scripts/pos-return-preflight.mjs && node scripts/notification-shell-preflight.mjs && node scripts/font-scale-preflight.mjs && node scripts/camera-permission-preflight.mjs && node scripts/sale-history-consistency-preflight.mjs && node scripts/account-session-preflight.mjs && node scripts/brand-preflight.mjs && node scripts/dark-semantic-card-preflight.mjs",
     "audit:dependencies": "node scripts/dependency-audit-policy.mjs",
     "release:check": "node scripts/release-readiness.mjs"
   },
