@@ -258,12 +258,10 @@ export function OrdersWorkspace({
         const canManageDraft = order.source === 'pos' && order.status === 'draft' && order.paymentStatus === 'unpaid' && order.amountPaid === 0;
         const isReturnablePosSale = order.source === 'pos'
           && order.status === 'completed'
-          && order.paymentStatus === 'paid'
           && order.fulfillmentStatus === 'collected'
           && (order.returnStatus === 'none' || order.returnStatus === 'partial');
-        const canReturn = canReturnCompletedSale && isReturnablePosSale && order.cashReturnSupported === true;
-        const paymentNeedsRefundReview = canReturnCompletedSale && isReturnablePosSale && order.cashReturnSupported !== true;
-        const canPrintReceipt = order.paymentStatus === 'paid';
+        const canReturn = canReturnCompletedSale && isReturnablePosSale;
+        const canPrintReceipt = order.status === 'completed';
         const action = pending?.orderId === order.id ? pending.action : null;
         const printing = printingOrderId === order.id;
         const loadingReturn = returnLoadingOrderId === order.id;
@@ -354,10 +352,6 @@ export function OrdersWorkspace({
               </View>
             ) : null}
 
-            {paymentNeedsRefundReview ? (
-              <View style={[styles.returnedNotice, dark && darkStyles.subtleCard]}><Ionicons name="card-outline" size={18} color={theme.colors.muted} /><Text style={[styles.returnedText, dark && darkStyles.bodyText]}>This sale was paid outside the cash drawer. Review the payment before processing a refund.</Text></View>
-            ) : null}
-
             {!action && !editing && (canManageDraft || canReturn || canPrintReceipt) ? (
               <View style={styles.actionRow}>
                 {canManageDraft ? <Pressable disabled={saving || printingOrderId !== null} onPress={() => onResumeDraft(order)} style={[styles.outlineAction, styles.resumeAction, dark && darkStyles.outlineButton]}><Ionicons name="cart-outline" size={17} color={theme.colors.greenDark} /><Text style={styles.resumeActionText}>Resume sale</Text></Pressable> : null}
@@ -375,7 +369,7 @@ export function OrdersWorkspace({
                     <Text style={[styles.actionPanelTitle, dark && darkStyles.titleText]}>{action === 'return' ? 'Return items' : 'Delete this draft'}</Text>
                     <Text style={[styles.actionPanelText, dark && darkStyles.bodyText]}>
                       {action === 'return'
-                        ? 'Enter only the quantity the customer is returning. SellerTray restores exactly those quantities and records the matching cash refund.'
+                        ? 'SellerTray reduces any outstanding balance first. A monetary refund is recorded only when collected funds exceed the value still owed after this return.'
                         : 'This removes the unwanted unpaid draft from normal work and reports while keeping its deletion audit record.'}
                     </Text>
                   </View>
@@ -402,7 +396,7 @@ export function OrdersWorkspace({
                       </View>
                     ))}
                     <View style={styles.returnSummaryRow}>
-                      <Text style={[styles.returnSummaryLabel, dark && darkStyles.bodyText]}>Estimated refund</Text>
+                      <Text style={[styles.returnSummaryLabel, dark && darkStyles.bodyText]}>Selected return value</Text>
                       <Text style={[styles.returnSummaryValue, dark && darkStyles.titleText]}>{formatMoney(selectedReturnValue(returnableSale, returnQuantities), returnableSale.currency)}</Text>
                     </View>
                   </View>
@@ -436,8 +430,9 @@ export function OrdersWorkspace({
 function selectedReturnValue(sale: PosReturnableSale, quantities: Record<string, string>): number {
   return sale.items.reduce((sum, item) => {
     const quantity = Number(quantities[item.orderItemId] ?? 0);
-    if (!Number.isFinite(quantity) || quantity <= 0) return sum;
-    return sum + Math.min(quantity, item.remainingQuantity) * item.unitPrice;
+    if (!Number.isFinite(quantity) || quantity <= 0 || item.remainingQuantity <= 0) return sum;
+    const selected = Math.min(quantity, item.remainingQuantity);
+    return sum + (item.remainingValue * selected / item.remainingQuantity);
   }, 0);
 }
 
