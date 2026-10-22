@@ -1,6 +1,8 @@
 type JsonRecord = Record<string, unknown>;
 type AdminAction =
   | 'business_dashboard'
+  | 'merchant_portfolio'
+  | 'merchant_detail'
   | 'overview'
   | 'audit'
   | 'ai_parser_readiness'
@@ -59,6 +61,38 @@ Deno.serve(withObservability('platform-admin', async (request) => {
         rpc<JsonRecord>('platform_admin_business_attention', { p_actor_user_id: userId }),
       ]);
       return json({ summary, attention });
+    }
+
+    if (action === 'merchant_portfolio') {
+      const search = cleanOptionalText(body.search, 120);
+      if (search === undefined) return json({ error: 'Merchant search must be text up to 120 characters' }, 400);
+      const filter = cleanEnum(body.filter ?? 'all', ['all', 'attention', 'connected', 'restricted']);
+      if (!filter) return json({ error: 'Unsupported merchant filter' }, 400);
+      const afterName = cleanOptionalText(body.afterName, 200);
+      const afterId = body.afterId === null || body.afterId === undefined ? null : cleanUuid(body.afterId);
+      if (afterName === undefined || (body.afterId !== null && body.afterId !== undefined && !afterId)) return json({ error: 'Invalid merchant cursor' }, 400);
+      if ((afterName === null) !== (afterId === null)) return json({ error: 'Merchant cursor is incomplete' }, 400);
+      const requestedLimit = Number(body.limit ?? 25);
+      if (!Number.isInteger(requestedLimit) || requestedLimit < 1 || requestedLimit > 50) return json({ error: 'Merchant page size must be between 1 and 50' }, 400);
+      const portfolio = await rpc<JsonRecord>('platform_admin_merchant_portfolio', {
+        p_actor_user_id: userId,
+        p_search: search,
+        p_filter: filter,
+        p_after_name: afterName,
+        p_after_id: afterId,
+        p_limit: requestedLimit,
+      });
+      return json({ portfolio });
+    }
+
+    if (action === 'merchant_detail') {
+      const tenantId = cleanUuid(body.tenantId);
+      if (!tenantId) return json({ error: 'A valid merchant is required' }, 400);
+      const detail = await rpc<JsonRecord>('platform_admin_merchant_detail', {
+        p_actor_user_id: userId,
+        p_tenant_id: tenantId,
+      });
+      return json({ detail });
     }
 
     if (action === 'overview') {
@@ -212,6 +246,8 @@ function getJwtAal(token: string): 'aal1' | 'aal2' | null {
 function cleanAction(value: unknown): AdminAction | null {
   const supported: AdminAction[] = [
     'business_dashboard',
+    'merchant_portfolio',
+    'merchant_detail',
     'overview',
     'audit',
     'ai_parser_readiness',
@@ -461,6 +497,14 @@ function cleanUuid(value: unknown): string | null {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clean)
     ? clean
     : null;
+}
+
+function cleanOptionalText(value: unknown, maxLength: number): string | null | undefined {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value !== 'string') return undefined;
+  const clean = value.trim();
+  if (!clean) return null;
+  return clean.length <= maxLength ? clean : undefined;
 }
 
 function json(payload: JsonRecord, status = 200): Response {

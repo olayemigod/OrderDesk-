@@ -113,12 +113,14 @@ export default function CommercialBillingAdministration({
   session,
   actorRole,
   tenants,
+  initialTenantId,
 }: {
   session: Session;
   actorRole: 'admin' | 'support';
   tenants: CommercialAdminTenant[];
+  initialTenantId?: string | null;
 }) {
-  const [selectedTenantId, setSelectedTenantId] = useState('');
+  const [selectedTenantId, setSelectedTenantId] = useState(() => initialTenantId ?? '');
   const [search, setSearch] = useState('');
   const [overview, setOverview] = useState<CommercialOverview | null>(null);
   const [onboarding, setOnboarding] = useState<CommercialOnboarding | null>(null);
@@ -145,6 +147,13 @@ export default function CommercialBillingAdministration({
   const selectedTenant = tenants.find((tenant) => tenant.id === selectedTenantId) ?? null;
   const selectedOrder = onboarding?.orders.find((order) => order.id === agreementForm.commercialOrderId) ?? null;
   const canManage = actorRole === 'admin' && onboarding?.canManage === true;
+  const initialTenantAvailable = Boolean(initialTenantId && tenants.some((tenant) => tenant.id === initialTenantId));
+
+  useEffect(() => {
+    if (initialTenantId && initialTenantAvailable) {
+      setSelectedTenantId(initialTenantId);
+    }
+  }, [initialTenantId, initialTenantAvailable]);
 
   useEffect(() => {
     setSetupForm(null);
