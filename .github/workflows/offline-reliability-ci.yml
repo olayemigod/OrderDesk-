@@ -6,30 +6,40 @@ on:
       - feat/sellertray-offline-reliability-v1
     paths:
       - 'supabase/functions/merchant-order/**'
+      - 'supabase/functions/pos-checkout/**'
       - 'supabase/migrations/20261010101500_pos_draft_client_idempotency.sql'
       - 'supabase/migrations/20261010101600_offline_pos_replay_validation.sql'
+      - 'supabase/migrations/20261022102500_offline_pos_payment_parity.sql'
       - 'apps/mobile/src/data/offlineSalesRepository.ts'
       - 'apps/mobile/src/data/commerceRepository.ts'
+      - 'apps/mobile/src/data/posPaymentRepository.ts'
       - 'apps/mobile/src/hooks/useOfflineSalesSync.ts'
       - 'apps/mobile/src/redesign/SellWorkspace.tsx'
+      - 'apps/mobile/src/redesign/OfflinePosPaymentAllocator.tsx'
       - 'apps/mobile/src/redesign/SyncStatusWorkspace.tsx'
       - 'apps/mobile/src/redesign/MoreWorkspace.tsx'
       - 'apps/mobile/src/redesign/RedesignWorkspace.tsx'
       - 'apps/mobile/scripts/offline-preflight.mjs'
+      - '.agents/skills/sellertray-project-implementation/OFFLINE.md'
       - '.github/workflows/offline-reliability-ci.yml'
   pull_request:
     paths:
       - 'supabase/functions/merchant-order/**'
+      - 'supabase/functions/pos-checkout/**'
       - 'supabase/migrations/20261010101500_pos_draft_client_idempotency.sql'
       - 'supabase/migrations/20261010101600_offline_pos_replay_validation.sql'
+      - 'supabase/migrations/20261022102500_offline_pos_payment_parity.sql'
       - 'apps/mobile/src/data/offlineSalesRepository.ts'
       - 'apps/mobile/src/data/commerceRepository.ts'
+      - 'apps/mobile/src/data/posPaymentRepository.ts'
       - 'apps/mobile/src/hooks/useOfflineSalesSync.ts'
       - 'apps/mobile/src/redesign/SellWorkspace.tsx'
+      - 'apps/mobile/src/redesign/OfflinePosPaymentAllocator.tsx'
       - 'apps/mobile/src/redesign/SyncStatusWorkspace.tsx'
       - 'apps/mobile/src/redesign/MoreWorkspace.tsx'
       - 'apps/mobile/src/redesign/RedesignWorkspace.tsx'
       - 'apps/mobile/scripts/offline-preflight.mjs'
+      - '.agents/skills/sellertray-project-implementation/OFFLINE.md'
       - '.github/workflows/offline-reliability-ci.yml'
 
 permissions:
@@ -52,5 +62,36 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - name: Typecheck merchant-order Edge Function
-        run: deno check --node-modules-dir=auto supabase/functions/merchant-order/index.ts
+      - name: Typecheck offline payment Edge Functions
+        run: |
+          deno check --node-modules-dir=auto supabase/functions/merchant-order/index.ts
+          deno check --node-modules-dir=auto supabase/functions/pos-checkout/index.ts
+
+  mobile-offline-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Checkout exact candidate source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      - name: Verify exact candidate checkout
+        working-directory: .
+        run: |
+          expected="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - name: Install mobile dependencies
+        run: npm ci
+      - name: Typecheck mobile offline payment parity
+        run: npm run typecheck
+      - name: Verify SellerTray offline contracts
+        run: node scripts/offline-preflight.mjs
