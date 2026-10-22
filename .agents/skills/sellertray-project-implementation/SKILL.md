@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.14"
+  version: "0.1.15"
   status: governing
 ---
 
@@ -190,8 +190,7 @@ Sell is the main POS surface. Support:
 
 - search by product name, SKU or barcode;
 - barcode scanning;
-- availability;
-- UOM selection;
+- UOM selection during transactions;
 - quantity;
 - customer;
 - controlled discounts/price overrides;
@@ -321,6 +320,12 @@ Rules:
 7. Merchants should not need to understand ledger, conversion, sync or payment internals.
 8. Appearance uses a persisted font-size slider rather than only fixed Small/Large choices. The preference must apply consistently across appropriate SellerTray mobile text surfaces through a shared typography primitive or equivalent central mechanism; do not implement screen-specific font scaling that drifts between Home, Sell, Orders, Inventory and More.
 9. Font scaling must preserve usable layouts and touch targets; it changes readable text sizing, not business logic or transaction truth.
+
+### Brand identity authority
+
+1. The SellerTray logo version currently used by the Admin Portal is the approved brand authority. Admin Web, Merchant Web and Mobile must use that same approved logo asset/version rather than redraw, approximate, generate initials for, or independently fork the SellerTray mark.
+2. Browser favicons, Mobile launcher/adaptive icons and splash branding must use the same approved SellerTray v2 icon family used by the Admin Portal. A later approved brand update must be applied coherently across Admin Web, Merchant Web and Mobile rather than changed on only one surface.
+3. Brand asset differences required only by technical format, size or platform packaging may be derived from the approved source artwork, but must preserve the same visual identity and must not create a new logo variant.
 
 # 5. Branch invariants
 
