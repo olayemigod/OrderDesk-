@@ -93,8 +93,8 @@ export function PosCustomerSelector({ tenantId, value, onChange, disabled = fals
   return (
     <View style={styles.stack}>
       <View style={[styles.selectedCard, dark && darkStyles.card]}>
-        <View style={styles.iconWrap}>
-          <Ionicons name={value ? 'person-outline' : 'walk-outline'} size={20} color={theme.colors.greenDark} />
+        <View style={[styles.iconWrap, dark && darkStyles.iconWrap]}>
+          <Ionicons name={value ? 'person-outline' : 'walk-outline'} size={20} color={dark ? theme.colors.green : theme.colors.greenDark} />
         </View>
         <View style={styles.flex}>
           <Text style={[styles.name, dark && darkStyles.titleText]}>{label}</Text>
@@ -102,7 +102,7 @@ export function PosCustomerSelector({ tenantId, value, onChange, disabled = fals
         </View>
         {value ? (
           <Pressable disabled={disabled} onPress={() => onChange(null)} style={styles.walkInButton}>
-            <Text style={styles.walkInText}>Use walk-in</Text>
+            <Text style={[styles.walkInText, dark && darkStyles.accentText]}>Use walk-in</Text>
           </Pressable>
         ) : null}
       </View>
@@ -111,25 +111,25 @@ export function PosCustomerSelector({ tenantId, value, onChange, disabled = fals
         <Pressable
           disabled={disabled}
           onPress={() => { setShowSearch((current) => !current); setShowNew(false); setError(null); }}
-          style={[styles.secondaryButton, disabled && styles.disabled]}
+          style={[styles.secondaryButton, dark && darkStyles.secondaryButton, disabled && styles.disabled]}
         >
-          <Ionicons name="search-outline" size={17} color={theme.colors.navy} />
-          <Text style={styles.secondaryText}>Find customer</Text>
+          <Ionicons name="search-outline" size={17} color={dark ? theme.dark.text : theme.colors.navy} />
+          <Text style={[styles.secondaryText, dark && darkStyles.titleText]}>Find customer</Text>
         </Pressable>
         <Pressable
           disabled={disabled}
           onPress={() => { setShowNew((current) => !current); setShowSearch(false); setError(null); }}
-          style={[styles.secondaryButton, disabled && styles.disabled]}
+          style={[styles.secondaryButton, dark && darkStyles.secondaryButton, disabled && styles.disabled]}
         >
-          <Ionicons name="person-add-outline" size={17} color={theme.colors.navy} />
-          <Text style={styles.secondaryText}>New customer</Text>
+          <Ionicons name="person-add-outline" size={17} color={dark ? theme.dark.text : theme.colors.navy} />
+          <Text style={[styles.secondaryText, dark && darkStyles.titleText]}>New customer</Text>
         </Pressable>
       </View>
 
       {showSearch ? (
         <View style={[styles.panel, dark && darkStyles.card]}>
           <View style={[styles.searchBox, dark && darkStyles.input]}>
-            <Ionicons name="search-outline" size={18} color={theme.colors.muted} />
+            <Ionicons name="search-outline" size={18} color={dark ? theme.dark.textSubtle : theme.colors.muted} />
             <TextInput
               value={query}
               onChangeText={setQuery}
@@ -147,7 +147,7 @@ export function PosCustomerSelector({ tenantId, value, onChange, disabled = fals
                 <Text style={[styles.customerName, dark && darkStyles.titleText]}>{customer.displayName?.trim() || customer.phone || 'Customer'}</Text>
                 <Text style={[styles.customerMeta, dark && darkStyles.bodyText]}>{customer.phone || 'No phone saved'}{customer.orderCount ? ` · ${customer.orderCount} order${customer.orderCount === 1 ? '' : 's'}` : ''}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={theme.colors.muted} />
+              <Ionicons name="chevron-forward" size={18} color={dark ? theme.dark.textSubtle : theme.colors.muted} />
             </Pressable>
           ))}
         </View>
@@ -218,10 +218,13 @@ const styles = StyleSheet.create({
 });
 
 const darkStyles = StyleSheet.create({
-  card: { backgroundColor: theme.colors.navy, borderColor: '#344054' },
-  subtleCard: { backgroundColor: '#162F46' },
-  input: { backgroundColor: '#162F46', borderColor: '#475467' },
-  inputText: { color: theme.colors.cloud },
-  titleText: { color: theme.colors.cloud },
-  bodyText: { color: '#D0D5DD' },
+  card: { backgroundColor: theme.dark.surface, borderColor: theme.dark.border },
+  subtleCard: { backgroundColor: theme.dark.surfaceSubtle },
+  iconWrap: { backgroundColor: theme.dark.accentSoft },
+  secondaryButton: { backgroundColor: theme.dark.surface, borderColor: theme.dark.borderStrong },
+  input: { backgroundColor: theme.dark.surfaceSubtle, borderColor: theme.dark.borderStrong },
+  inputText: { color: theme.dark.text },
+  titleText: { color: theme.dark.text },
+  bodyText: { color: theme.dark.textMuted },
+  accentText: { color: theme.dark.accentText },
 });
