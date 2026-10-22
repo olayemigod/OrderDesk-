@@ -26,6 +26,7 @@ import {
   type ShiftReviewDecision,
 } from '../data/cashShiftRepository';
 import { loadCashShiftHistory, type CashShiftHistoryRow } from '../data/cashShiftHistoryRepository';
+import { loadExpenseCategories, type ExpenseCategoryOption } from '../data/moneyRepository';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import { createCashMovementCommandId, createOperationalReference } from './operationalReference';
@@ -49,6 +50,7 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
   const appearance = useSellerTrayAppearance();
   const dark = appearance.dark;
   const [registers, setRegisters] = useState<CashRegister[]>([]);
+  const [expenseCategories, setExpenseCategories] = useState<ExpenseCategoryOption[]>([]);
   const [capabilities, setCapabilities] = useState<CashShiftCapabilities>(NO_CAPABILITIES);
   const [capabilitiesLoaded, setCapabilitiesLoaded] = useState(false);
   const [canWrite, setCanWrite] = useState<boolean | null>(null);
@@ -67,7 +69,7 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
   const [movementAmount, setMovementAmount] = useState('');
   const [movementReference, setMovementReference] = useState('');
   const [movementReason, setMovementReason] = useState('');
-  const [expenseCategory, setExpenseCategory] = useState('');
+  const [expenseCategoryId, setExpenseCategoryId] = useState('');
   const [correctionMovement, setCorrectionMovement] = useState<CashShiftMovement | null>(null);
   const [correctionKind, setCorrectionKind] = useState<CashCorrectionKind>('replace');
   const [correctionCommandId, setCorrectionCommandId] = useState('');
@@ -75,7 +77,7 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
   const [correctionAmount, setCorrectionAmount] = useState('');
   const [correctionReference, setCorrectionReference] = useState('');
   const [correctionActivityReason, setCorrectionActivityReason] = useState('');
-  const [correctionExpenseCategory, setCorrectionExpenseCategory] = useState('');
+  const [correctionExpenseCategoryId, setCorrectionExpenseCategoryId] = useState('');
   const [correctionReason, setCorrectionReason] = useState('');
   const [closeMode, setCloseMode] = useState(false);
   const [declaredCash, setDeclaredCash] = useState('');
@@ -86,8 +88,9 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
   async function refresh(options?: { quiet?: boolean }) {
     if (!options?.quiet) setLoading(true);
     setError(null);
-    const [registerResult, capabilityResult, writeResult, correctionResult, shiftResult, historyResult] = await Promise.allSettled([
+    const [registerResult, categoryResult, capabilityResult, writeResult, correctionResult, shiftResult, historyResult] = await Promise.allSettled([
       loadCashRegisters(tenantId, branch.id),
+      loadExpenseCategories(tenantId),
       loadCashShiftCapabilities(tenantId, branch.id),
       loadCashWriteAccess(tenantId),
       loadCashCorrectionAuthority(tenantId, branch.id),
@@ -105,6 +108,21 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
       setRegisters([]);
       setSelectedRegisterId('');
       errors.push('Unable to refresh registers.');
+    }
+
+    if (categoryResult.status === 'fulfilled') {
+      setExpenseCategories(categoryResult.value);
+      setExpenseCategoryId((current) => categoryResult.value.some((entry) => entry.id === current)
+        ? current
+        : categoryResult.value[0]?.id ?? '');
+      setCorrectionExpenseCategoryId((current) => categoryResult.value.some((entry) => entry.id === current)
+        ? current
+        : categoryResult.value[0]?.id ?? '');
+    } else {
+      setExpenseCategories([]);
+      setExpenseCategoryId('');
+      setCorrectionExpenseCategoryId('');
+      errors.push('Unable to refresh Expense Categories.');
     }
 
     if (capabilityResult.status === 'fulfilled') {
@@ -149,6 +167,7 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
   useEffect(() => {
     setShift(null);
     setHistory([]);
+    setExpenseCategories([]);
     setCapabilities(NO_CAPABILITIES);
     setCapabilitiesLoaded(false);
     setCanWrite(null);
@@ -189,7 +208,7 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
     setMovementAmount('');
     setMovementReference(createOperationalReference(type));
     setMovementReason('');
-    setExpenseCategory('');
+    if (type === 'expense') setExpenseCategoryId((current) => current || expenseCategories[0]?.id || '');
     setCloseMode(false);
     setError(null);
     setNotice(null);
@@ -209,7 +228,7 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
     if (amount === null || amount <= 0) return setError('Enter an amount greater than zero.');
     if (!movementReference.trim()) return setError('Enter a reference for this cash activity.');
     if (!movementReason.trim()) return setError('Enter a reason for this cash activity.');
-    if (movementMode === 'expense' && !expenseCategory.trim()) return setError('Enter an expense category.');
+    if (movementMode === 'expense' && !expenseCategoryId) return setError('Choose an Expense Category.');
 
     setSaving(true);
     setError(null);
@@ -223,7 +242,7 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
         amount,
         reference: movementReference,
         reason: movementReason,
-        expenseCategory: movementMode === 'expense' ? expenseCategory : null,
+        expenseCategoryId: movementMode === 'expense' ? expenseCategoryId : null,
       });
       closeMovement();
       await refresh({ quiet: true });
@@ -244,7 +263,12 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
     setCorrectionAmount(formatQuantity(movement.amount));
     setCorrectionReference(movement.reference);
     setCorrectionActivityReason(movement.reason);
-    setCorrectionExpenseCategory(movement.expenseCategory ?? '');
+    const historicalCategory = movement.expenseCategory?.trim().toLowerCase() ?? '';
+    setCorrectionExpenseCategoryId(
+      expenseCategories.find((entry) => entry.name.trim().toLowerCase() === historicalCategory)?.id
+      ?? expenseCategories[0]?.id
+      ?? '',
+    );
     setCorrectionReason('');
     setCloseMode(false);
     setError(null);
@@ -271,7 +295,7 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
       if (replacementAmount === null || replacementAmount <= 0) return setError('Enter a corrected amount greater than zero.');
       if (!correctionReference.trim()) return setError('Enter the corrected reference.');
       if (!correctionActivityReason.trim()) return setError('Enter the corrected activity reason.');
-      if (correctionType === 'expense' && !correctionExpenseCategory.trim()) return setError('Enter an expense category.');
+      if (correctionType === 'expense' && !correctionExpenseCategoryId) return setError('Choose an Expense Category.');
     }
 
     setSaving(true);
@@ -289,8 +313,8 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
         replacementAmount,
         replacementReference: correctionKind === 'replace' ? correctionReference : null,
         replacementReason: correctionKind === 'replace' ? correctionActivityReason : null,
-        replacementExpenseCategory: correctionKind === 'replace' && correctionType === 'expense'
-          ? correctionExpenseCategory
+        replacementExpenseCategoryId: correctionKind === 'replace' && correctionType === 'expense'
+          ? correctionExpenseCategoryId
           : null,
       });
       closeCorrection();
@@ -455,7 +479,7 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
             {movementMode ? (
               <View style={styles.formStack}>
                 <Text style={[styles.formTitle, dark && darkStyles.titleText]}>{movementLabel(movementMode)}</Text>
-                {movementMode === 'expense' ? <><FieldLabel dark={dark}>Expense category</FieldLabel><TextInput value={expenseCategory} onChangeText={setExpenseCategory} style={[styles.input, dark && darkStyles.input]} /></> : null}
+                {movementMode === 'expense' ? <ExpenseCategoryChoices categories={expenseCategories} selectedId={expenseCategoryId} onSelect={setExpenseCategoryId} dark={dark} /> : null}
                 <FieldLabel dark={dark}>Amount</FieldLabel>
                 <TextInput value={movementAmount} onChangeText={setMovementAmount} keyboardType="decimal-pad" style={[styles.input, dark && darkStyles.input]} />
                 <FieldLabel dark={dark}>Reference</FieldLabel>
@@ -477,7 +501,7 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
                     <ChoiceButton label="Cash out" active={correctionType === 'cash_out'} onPress={() => setCorrectionType('cash_out')} dark={dark} />
                     <ChoiceButton label="Expense" active={correctionType === 'expense'} onPress={() => setCorrectionType('expense')} dark={dark} />
                   </View>
-                  {correctionType === 'expense' ? <><FieldLabel dark={dark}>Expense category</FieldLabel><TextInput value={correctionExpenseCategory} onChangeText={setCorrectionExpenseCategory} style={[styles.input, dark && darkStyles.input]} /></> : null}
+                  {correctionType === 'expense' ? <ExpenseCategoryChoices categories={expenseCategories} selectedId={correctionExpenseCategoryId} onSelect={setCorrectionExpenseCategoryId} dark={dark} /> : null}
                   <FieldLabel dark={dark}>Amount</FieldLabel>
                   <TextInput value={correctionAmount} onChangeText={setCorrectionAmount} keyboardType="decimal-pad" style={[styles.input, dark && darkStyles.input]} />
                   <FieldLabel dark={dark}>Reference</FieldLabel>
@@ -500,6 +524,7 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
                 <View style={styles.flexOne}>
                   <Text style={[styles.activityTitle, dark && darkStyles.titleText]}>{movementLabel(movement.movementType)}</Text>
                   <Text style={[styles.activityMeta, dark && darkStyles.bodyText]}>{movement.reference} · {movement.reason}</Text>
+                  {movement.expenseCategory ? <Text style={[styles.activityMeta, dark && darkStyles.bodyText]}>Category: {movement.expenseCategory}</Text> : null}
                   {canWrite === true && canCorrectCashMovement && shift.status === 'open' ? (
                     <View style={styles.inlineActions}>
                       <Pressable disabled={saving} onPress={() => beginCorrection(movement, 'replace')}><Text style={styles.editText}>Edit</Text></Pressable>
@@ -543,6 +568,15 @@ export function CashShiftWorkspace({ tenantId, branch, onClose, onShiftChanged }
       </Card>
     </View>
   );
+}
+
+function ExpenseCategoryChoices({ categories, selectedId, onSelect, dark }: { categories: ExpenseCategoryOption[]; selectedId: string; onSelect: (id: string) => void; dark: boolean }) {
+  return <View style={styles.formStack}>
+    <FieldLabel dark={dark}>Expense Category</FieldLabel>
+    {categories.length === 0
+      ? <Text style={[styles.helper, dark && darkStyles.bodyText]}>No active Expense Category is available. Ask a Manager or Owner to create one in Merchant Web.</Text>
+      : <View style={styles.choiceWrap}>{categories.map((category) => <ChoiceButton key={category.id} label={category.name} active={selectedId === category.id} onPress={() => onSelect(category.id)} dark={dark} />)}</View>}
+  </View>;
 }
 
 function Card({ children, dark }: { children: React.ReactNode; dark: boolean }) {
