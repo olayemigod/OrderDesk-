@@ -4,6 +4,13 @@
   "installCommand": "npm --prefix . install --no-audit --no-fund",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "redirects": [
+    {
+      "source": "/brand/sellertray-admin-logo.webp",
+      "destination": "/brand/sellertray-logo-v2.svg",
+      "permanent": false
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
