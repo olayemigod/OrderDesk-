@@ -110,6 +110,7 @@ export function useOfflineSalesSync() {
         expectedConversionFactor: line.expectedConversionFactor,
       })),
     });
+
     if (sale.completionIntent === 'cash') {
       const result = await completePosSale(sale.tenantId, orderId, null);
       if (result.status !== 'completed' || result.paymentStatus !== 'paid') {
@@ -143,6 +144,46 @@ export function useOfflineSalesSync() {
         || result.inventoryMovementCount !== 0
       ) {
         throw new PosDraftRequestError('Offline Bank payment did not enter governed verification. Review this queued sale.', 'conflict', 409);
+      }
+    } else if (sale.completionIntent === 'payment') {
+      const plan = sale.paymentPlan;
+      if (!plan) {
+        throw new PosDraftRequestError('Offline payment plan is missing. Review this queued sale.', 'conflict', 409);
+      }
+      const result = await checkoutPosPaymentAllocations({
+        tenantId: sale.tenantId,
+        orderId,
+        commandId: plan.checkoutCommandId,
+        payLater: plan.payLater,
+        allocations: plan.allocations.map((allocation) => ({
+          paymentMethodId: allocation.paymentMethodId,
+          amount: allocation.amount,
+          confirmNow: allocation.confirmNow,
+          ...(allocation.providerReference ? {
+            providerReference: allocation.providerReference,
+            offlineCapturedAt: allocation.capturedAt,
+          } : {}),
+        })),
+      });
+
+      const allocated = plan.allocations.reduce((sum, allocation) => sum + allocation.amount, 0);
+      const hasPendingAllocation = plan.allocations.some((allocation) => !allocation.confirmNow);
+      const mustRemainOpen = plan.payLater || allocated < sale.total - 0.005 || hasPendingAllocation;
+      if (mustRemainOpen && result.inventoryMovementCount !== 0) {
+        throw new PosDraftRequestError('Offline payment replay moved stock before the sale was fully settled. Review this queued sale.', 'conflict', 409);
+      }
+      if (!mustRemainOpen && (result.status !== 'completed' || result.paymentStatus !== 'paid')) {
+        throw new PosDraftRequestError('Offline payment replay did not complete a fully confirmed sale. Review this queued sale.', 'conflict', 409);
+      }
+
+      for (const allocation of plan.allocations) {
+        const payment = result.payments.find((entry) => entry.paymentMethodId === allocation.paymentMethodId);
+        if (!payment || payment.methodType !== allocation.methodSnapshot.methodType) {
+          throw new PosDraftRequestError('Offline payment method changed during replay. Review this queued sale.', 'conflict', 409);
+        }
+        if (!allocation.confirmNow && payment.status !== 'pending_verification') {
+          throw new PosDraftRequestError('Offline non-cash payment did not enter governed verification. Review this queued sale.', 'conflict', 409);
+        }
       }
     }
     return orderId;
