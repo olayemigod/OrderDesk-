@@ -10,8 +10,8 @@ insert into audit_fixture values(gen_random_uuid(),gen_random_uuid(),gen_random_
 insert into auth.users(id,email,aud,role) select actor,'audit-fixture-'||actor||'@example.com','authenticated','authenticated' from audit_fixture;
 insert into public.platform_admins(user_id,role) select actor,'support' from audit_fixture;
 insert into public.tenants(id,name,slug,merchant_code,subscription_status)
-select tenant,'Audit fixture','audit-'||tenant,'AUD1','active' from audit_fixture
-union all select other_tenant,'Other fixture','audit-'||other_tenant,'AUD2','active' from audit_fixture;
+select tenant,'Audit fixture','audit-'||tenant,'AU1','active' from audit_fixture
+union all select other_tenant,'Other fixture','audit-'||other_tenant,'AU2','active' from audit_fixture;
 insert into public.platform_admin_audit(id,actor_user_id,tenant_id,action,detail,created_at)
 select ('00000000-0000-4000-8000-'||lpad(i::text,12,'0'))::uuid,actor,tenant,'audit_fixture','{"needle":"literal%_"}', '2026-10-01T12:00:00.123456Z'::timestamptz
 from audit_fixture cross join generate_series(1,1005) i;
