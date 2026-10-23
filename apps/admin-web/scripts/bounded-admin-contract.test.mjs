@@ -7,6 +7,7 @@ const read = (path) => readFileSync(resolve(import.meta.dirname, '../..', path),
 const workspace = read('admin-web/src/AdminWorkspace.tsx');
 const selector = read('admin-web/src/MerchantSelector.tsx');
 const commercial = read('admin-web/src/CommercialBillingAdministration.tsx');
+const commercialLegacy = read('admin-web/src/CommercialBillingAdministrationLegacy.tsx');
 const edge = read('../supabase/functions/platform-admin/index.ts');
 const migration = read('../supabase/migrations/20261022064000_platform_admin_bounded_bootstrap.sql');
 
@@ -22,11 +23,13 @@ test('active Admin bootstrap is compact and does not load the merchant estate', 
 
 test('Billing and Communications share bounded merchant selection', () => {
   assert.match(workspace, /<MerchantSelector session=\{session\}/);
-  assert.match(commercial, /<MerchantSelector/);
+  assert.match(commercial, /<CommercialBillingAdministrationLegacy/);
+  assert.match(commercialLegacy, /<MerchantSelector/);
   assert.match(selector, /loadMerchantPortfolio/);
   assert.match(selector, /limit: pageSize/);
   assert.match(selector, /nextCursor/);
   assert.doesNotMatch(commercial, /tenants: CommercialAdminTenant\[\]/);
+  assert.doesNotMatch(commercialLegacy, /tenants: CommercialAdminTenant\[\]/);
 });
 
 test('Operations reads server aggregates and AI readiness avoids tenant iteration', () => {
