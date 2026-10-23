@@ -38,7 +38,7 @@ export default function AdminOnboardingStatusDrawer() {
       setSession(data.session);
       if (data.session) {
         const { data: assurance } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-        if (active) setAal2(assurance.currentLevel === 'aal2');
+        if (active) setAal2(assurance?.currentLevel === 'aal2');
       }
     });
     const { data } = supabase.auth.onAuthStateChange((_event, next) => {
@@ -47,7 +47,7 @@ export default function AdminOnboardingStatusDrawer() {
       if (!next) {
         setAal2(false); setOpen(false); setMerchants([]); setTenantId(''); setState(null);
       } else {
-        void supabase.auth.mfa.getAuthenticatorAssuranceLevel().then(({ data: assurance }) => { if (active) setAal2(assurance.currentLevel === 'aal2'); });
+        void supabase.auth.mfa.getAuthenticatorAssuranceLevel().then(({ data: assurance }) => { if (active) setAal2(assurance?.currentLevel === 'aal2'); });
       }
     });
     return () => { active = false; data.subscription.unsubscribe(); };
