@@ -19,10 +19,11 @@ import {
   type SellerTrayPrinter,
 } from '../data/printerRepository';
 import type { MerchantOrder, OrderSource } from '../domain/order';
-import { orderTotal } from '../domain/order';
+import { orderPaymentLabel, orderTotal } from '../domain/order';
 import { executePreparedPrintJob } from '../printing/printExecutor';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
+import { OrderBalanceCollection } from './OrderBalanceCollection';
 
 type Props = {
   tenantId: string;
@@ -233,6 +234,7 @@ export function OrdersWorkspace({
 
       {orders.map((order) => {
         const total = orderTotal(order);
+        const paymentLabel = orderPaymentLabel(order);
         const canManageDraft = order.source === 'pos' && order.status === 'draft' && order.paymentStatus === 'unpaid' && order.amountPaid === 0;
         const canPrepareReturn = order.source === 'pos' && order.status === 'completed' && order.fulfillmentStatus === 'collected' && (order.returnStatus === 'none' || order.returnStatus === 'partial');
         const canPrintReceipt = order.paymentStatus === 'paid';
@@ -257,9 +259,11 @@ export function OrdersWorkspace({
 
             <View style={styles.orderStateRow}>
               <StatePill label={order.returnStatus === 'returned' ? 'Returned' : order.returnStatus === 'partial' ? 'Partially returned' : titleCase(order.status)} positive={order.returnStatus !== 'none'} />
-              <StatePill label={titleCase(order.paymentStatus)} positive={order.paymentStatus === 'paid'} />
+              <StatePill label={paymentLabel} positive={order.paymentStatus === 'paid'} />
               <StatePill label={titleCase(order.fulfillmentStatus)} positive={order.fulfillmentStatus === 'delivered' || order.fulfillmentStatus === 'collected'} />
             </View>
+
+            <OrderBalanceCollection tenantId={tenantId} order={order} currency={businessCurrency} onChanged={onChanged} />
 
             {expanded ? <View style={[styles.itemsPanel, dark && darkStyles.subtleCard]}>
               <View style={styles.itemsHeading}><View style={styles.flexCopy}><Text style={[styles.itemsTitle, dark && darkStyles.titleText]}>Order items</Text><Text style={[styles.itemsHelper, dark && darkStyles.bodyText]}>{canManageDraft ? 'Draft quantities can be changed. Enter 0 to remove a line.' : 'Finalised order lines are historical snapshots and cannot be edited.'}</Text></View>{canManageDraft && !editing ? <Pressable disabled={saving} onPress={() => beginDraftEdit(order)} style={styles.editButton}><Ionicons name="create-outline" size={16} color={theme.colors.greenDark} /><Text style={styles.editButtonText}>Edit draft</Text></Pressable> : null}</View>
