@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit --pretty false",
-    "preflight": "node scripts/security-preflight.mjs",
+    "preflight": "node scripts/security-preflight.mjs && node scripts/onboarding-activation-preflight.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
