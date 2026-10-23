@@ -43,6 +43,6 @@ Release order after review is the additive migration, the updated `platform-admi
 
 ## Remaining scope
 
-Admin bootstrap and Billing, Communications, and Operations still consume the legacy unbounded `platform_admin_overview` tenant array. The Merchants page no longer derives discovery or Merchant 360 from it, but complete estate-read convergence requires bounded selectors for those remaining modules and a smaller shell bootstrap.
+The follow-on bounded estate convergence replaces the active Admin bootstrap and the Billing, Communications, and Operations consumers described here. See `docs/admin-bounded-estate-convergence.md`. The legacy overview remains only for unreachable compatibility code and older mutation responses pending controlled retirement.
 
 Portfolio search currently performs a bounded-result scan across merchant identity and status fields. Before the estate becomes large, validate production query plans and introduce governed indexed search if needed. Audit filtering/export, ongoing agreement administration, installment portfolio operations, guarantees/refunds, and controlled compatibility retirement remain later bounded phases.
