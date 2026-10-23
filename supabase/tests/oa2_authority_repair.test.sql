@@ -196,9 +196,15 @@ select public.accept_sellertray_commercial_agreement(f.tenant_id,f.agreement_id,
 select extensions.is((select (a.commercial_snapshot->'installment'->'schedule'->0->>'amount_due')::numeric from public.sellertray_commercial_agreements a join sellertray_c1b_fixture f on a.id=f.agreement_id),560::numeric,'replacement agreement snapshots adjusted server schedule');
 select extensions.ok((select public.sellertray_installment_agreement_is_accepted(f.tenant_id,f.commercial_order_id,f.installment_obligation_id) from sellertray_c1b_fixture f),'replacement acceptance satisfies current contractual authority');
 
+grant select,update on sellertray_c1b_fixture to service_role;
+revoke update on public.sellertray_commercial_orders from service_role;
+set local role service_role;
 update sellertray_c1b_fixture f set checkout_1_id=(public.reserve_sellertray_installment_checkout(f.tenant_id,f.schedule_1_id,gen_random_uuid(),f.owner_user_id,'owner@example.com')->>'sessionId')::uuid;
 select public.begin_sellertray_installment_checkout_initialization(checkout_1_id) from sellertray_c1b_fixture;
 select public.complete_sellertray_installment_checkout_initialization(f.checkout_1_id,s.reference,'https://checkout.example/oa2') from sellertray_c1b_fixture f join public.billing_checkout_sessions s on s.id=f.checkout_1_id;
+reset role;
+select extensions.ok((select checkout_1_id is not null from sellertray_c1b_fixture),'service-role checkout initializes without UPDATE permission on immutable orders');
+select extensions.ok(not has_function_privilege('authenticated','public.lock_sellertray_commercial_order(uuid,uuid)','EXECUTE'),'merchant clients cannot invoke internal commercial locks');
 select public.platform_admin_record_commercial_direct_payment(f.admin_user_id,f.tenant_id,f.commercial_order_id,gen_random_uuid(),'DIRECT-REMAINDER','bank_transfer',460,now(),'Confirmed remainder','{}') from sellertray_c1b_fixture f;
 select extensions.is((select s.status from public.billing_checkout_sessions s join sellertray_c1b_fixture f on s.id=f.checkout_1_id),'superseded','direct payment retires stale provider checkout');
 select extensions.throws_ok(format('select public.confirm_sellertray_installment_payment_from_checkout(%L,%L,%L,460,%L,now(),%L)',f.checkout_1_id,s.reference,'delayed-provider','NGN',repeat('a',64)),'23514',null::text,'delayed callback cannot revive superseded checkout') from sellertray_c1b_fixture f join public.billing_checkout_sessions s on s.id=f.checkout_1_id;

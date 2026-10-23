@@ -2,6 +2,18 @@ begin;
 -- Generated with Supabase CLI; version placed after the candidate's 18:00 migration.
 -- Forward convergence only: preserve commercial history and runtime compatibility.
 
+-- Locking is internal authority, not permission to update immutable orders.
+create or replace function public.lock_sellertray_commercial_order(p_tenant_id uuid,p_commercial_order_id uuid)
+returns void language plpgsql security definer set search_path='' as $$
+begin
+  perform 1 from public.sellertray_commercial_orders o
+  where o.tenant_id=p_tenant_id and o.id=p_commercial_order_id for update;
+  if not found then raise exception 'Commercial order not found for this Business' using errcode='P0002'; end if;
+end;
+$$;
+revoke all on function public.lock_sellertray_commercial_order(uuid,uuid) from public,anon,authenticated;
+grant execute on function public.lock_sellertray_commercial_order(uuid,uuid) to service_role;
+
 create or replace function public.get_sellertray_commercial_billing_center(
   p_tenant_id uuid,
   p_actor_user_id uuid
@@ -502,7 +514,7 @@ as $$
 declare
   v_row public.sellertray_commercial_adjustments%rowtype;
 begin
-  perform 1 from public.sellertray_commercial_orders o where o.tenant_id=p_tenant_id and o.id=p_commercial_order_id for update;
+  perform public.lock_sellertray_commercial_order(p_tenant_id,p_commercial_order_id);
   if p_amount is null or p_amount <= 0 then
     raise exception 'Commercial adjustment amount must be positive' using errcode='22023';
   end if;
@@ -557,7 +569,7 @@ as $$
 declare
   v_row public.sellertray_commercial_direct_payment_confirmations%rowtype;
 begin
-  perform 1 from public.sellertray_commercial_orders o where o.tenant_id=p_tenant_id and o.id=p_commercial_order_id for update;
+  perform public.lock_sellertray_commercial_order(p_tenant_id,p_commercial_order_id);
   if p_amount is null or p_amount <= 0 then
     raise exception 'Direct payment amount must be positive' using errcode='22023';
   end if;
@@ -779,7 +791,7 @@ begin
   from public.sellertray_commercial_agreements a
   where a.tenant_id=p_tenant_id and a.id=p_agreement_id;
 
-  perform 1 from public.sellertray_commercial_orders o where o.tenant_id=p_tenant_id and o.id=v_agreement.commercial_order_id for update;
+  perform public.lock_sellertray_commercial_order(p_tenant_id,v_agreement.commercial_order_id);
   if not coalesce(public.sellertray_commercial_agreement_terms_current(v_agreement.id),false) then
     raise exception 'Commercial terms changed. Ask ProcessEdge to issue a replacement agreement before accepting.' using errcode='23514';
   end if;
@@ -1205,9 +1217,8 @@ declare
   v_full_id uuid;
   v_runtime_owned boolean := false;
 begin
-  perform 1 from public.sellertray_commercial_orders o
-  join public.sellertray_commercial_installment_obligations io on io.commercial_order_id=o.id and io.tenant_id=o.tenant_id
-  where io.tenant_id=p_tenant_id and io.id=p_installment_obligation_id for update of o;
+  perform public.lock_sellertray_commercial_order(io.tenant_id,io.commercial_order_id)
+  from public.sellertray_commercial_installment_obligations io where io.tenant_id=p_tenant_id and io.id=p_installment_obligation_id;
   select o.* into strict v_obligation
   from public.sellertray_commercial_installment_obligations o
   where o.tenant_id=p_tenant_id and o.id=p_installment_obligation_id;
@@ -1972,7 +1983,7 @@ declare
   v_outstanding numeric(18,2);
   v_count integer;
 begin
-  perform 1 from public.sellertray_commercial_orders o where o.tenant_id=p_tenant_id and o.id=p_commercial_order_id for update;
+  perform public.lock_sellertray_commercial_order(p_tenant_id,p_commercial_order_id);
   v_state := public.get_sellertray_commercial_settlement_state(p_tenant_id,p_commercial_order_id);
   v_next_schedule_id := nullif(v_state->>'nextInstallmentScheduleId','')::uuid;
   v_next_amount := coalesce((v_state->>'nextPayableAmount')::numeric,0);
@@ -2051,7 +2062,7 @@ begin
   from public.sellertray_commercial_order_price_snapshots s
   where s.tenant_id=p_tenant_id and s.commercial_order_id=v_order.id and s.line_type='subscription';
 
-  perform 1 from public.sellertray_commercial_orders o where o.tenant_id=p_tenant_id and o.id=v_order.id for update;
+  perform public.lock_sellertray_commercial_order(p_tenant_id,v_order.id);
   v_contract := public.get_sellertray_installment_contract_checkout_policy(
     p_tenant_id,v_obligation.id,now()
   );
@@ -2152,8 +2163,7 @@ begin
     raise exception 'Installment checkout session is required' using errcode='22023';
   end if;
 
-  perform 1 from public.sellertray_commercial_orders o join public.billing_checkout_sessions b
-    on b.tenant_id=o.tenant_id and b.commercial_order_id=o.id where b.id=p_session_id for update of o;
+  perform public.lock_sellertray_commercial_order(b.tenant_id,b.commercial_order_id) from public.billing_checkout_sessions b where b.id=p_session_id;
   select s.* into strict v_session
   from public.billing_checkout_sessions s
   where s.id=p_session_id and s.checkout_kind='installment';
@@ -2210,8 +2220,7 @@ declare
   v_reference text := btrim(coalesce(p_provider_reference,''));
   v_url text := btrim(coalesce(p_authorization_url,''));
 begin
-  perform 1 from public.sellertray_commercial_orders o join public.billing_checkout_sessions b
-    on b.tenant_id=o.tenant_id and b.commercial_order_id=o.id where b.id=p_session_id for update of o;
+  perform public.lock_sellertray_commercial_order(b.tenant_id,b.commercial_order_id) from public.billing_checkout_sessions b where b.id=p_session_id;
   select s.* into strict v_session
   from public.billing_checkout_sessions s
   where s.id=p_session_id and s.checkout_kind='installment';
@@ -2287,8 +2296,7 @@ begin
     raise exception 'Installment checkout, amount and payment time are required' using errcode='22023';
   end if;
 
-  perform 1 from public.sellertray_commercial_orders o join public.billing_checkout_sessions b
-    on b.tenant_id=o.tenant_id and b.commercial_order_id=o.id where b.id=p_checkout_session_id for update of o;
+  perform public.lock_sellertray_commercial_order(b.tenant_id,b.commercial_order_id) from public.billing_checkout_sessions b where b.id=p_checkout_session_id;
   select s.* into strict v_session
   from public.billing_checkout_sessions s
   where s.id=p_checkout_session_id and s.checkout_kind='installment'
