@@ -347,7 +347,7 @@ It supervises merchant lifecycle, SellerTray commercial configuration, support, 
 
 Approved primary Admin direction:
 
-- **Overview** — platform health and attention queues;
+- **Overview** — ProcessEdge business performance, governed commercial/adoption KPIs and actionable merchant attention; see the approved Business Dashboard contract in `SKILL.md`;
 - **Merchants** — merchant directory and individual merchant platform/commercial workspace;
 - **Billing & Commercial** — plans/pricing, subscriptions, installments, payments, promotions, guarantees and agreements;
 - **Communications** — merchant notifications/campaigns;

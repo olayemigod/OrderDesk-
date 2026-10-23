@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import BusinessDashboard from './BusinessDashboard';
 import CommercialBillingAdministration, { type CommercialAdminTenant } from './CommercialBillingAdministration';
 import { invokeJson, isRecord, supabase } from './supabase';
 
@@ -94,7 +95,7 @@ const ACTION_URL_PATTERN = /^(https:\/\/[^\s]+|sellertray:\/\/[A-Za-z0-9/_?=&.%-
 const LOCAL_LOGO = '/brand/sellertray-admin-logo.webp';
 
 const NAV_ITEMS: Array<{ id: AdminSection; label: string; description: string; icon: IconName }> = [
-  { id: 'overview', label: 'Overview', description: 'Platform health', icon: 'overview' },
+  { id: 'overview', label: 'Overview', description: 'Business performance', icon: 'overview' },
   { id: 'merchants', label: 'Merchants', description: 'Businesses', icon: 'merchants' },
   { id: 'billing', label: 'Billing & Commercial', description: 'Plans and agreements', icon: 'billing' },
   { id: 'communications', label: 'Communications', description: 'Merchant messages', icon: 'communications' },
@@ -387,7 +388,7 @@ function WorkspaceShell({ session, overview, audit, onReload, onAuditRefresh, on
 
   const page = (() => {
     switch (section) {
-      case 'overview': return <OverviewPage overview={overview} onNavigate={navigateTo} />;
+      case 'overview': return <BusinessDashboard session={session} refreshKey={overview.generatedAt} />;
       case 'merchants': return <MerchantsPage overview={overview} />;
       case 'billing': return <BillingPage session={session} overview={overview} />;
       case 'communications': return <CommunicationsPage session={session} overview={overview} audit={audit} onAuditRefresh={onAuditRefresh} />;
@@ -442,42 +443,15 @@ function WorkspaceShell({ session, overview, audit, onReload, onAuditRefresh, on
   );
 }
 
-function OverviewPage({ overview, onNavigate }: { overview: PlatformOverview; onNavigate: (section: AdminSection) => void }) {
-  const connected = overview.tenants.filter((tenant) => tenant.whatsappStatus === 'connected').length;
-  const accessRestricted = overview.tenants.filter((tenant) => tenant.accessMode !== 'full' || ['past_due', 'grace', 'suspended', 'cancelled'].includes(tenant.subscriptionStatus)).length;
-  const needsReview = overview.tenants.reduce((total, tenant) => total + tenant.needsReview, 0);
-  const attention = overview.tenants.filter(needsPlatformAttention).slice(0, 8);
-
-  return (
-    <PageFrame eyebrow="Platform overview" title="SellerTray operations" description="Cross-merchant platform health and attention items for ProcessEdge administrators.">
-      <div className="workspace-stat-grid">
-        <StatCard label="Merchants" value={overview.tenants.length} detail="SellerTray businesses" />
-        <StatCard label="WhatsApp connected" value={connected} detail={`${overview.tenants.length - connected} not connected or needing attention`} />
-        <StatCard label="Access attention" value={accessRestricted} detail="Read-only, past due, suspended or cancelled" />
-        <StatCard label="Order review items" value={needsReview} detail="Across all merchants" />
-      </div>
-      <div className="workspace-grid two">
-        <section className="workspace-panel">
-          <PanelHeading title="Needs attention" description="Merchants with platform, access, WhatsApp or review signals." action={<button className="workspace-button subtle compact" onClick={() => onNavigate('merchants')}>Open merchants</button>} />
-          {attention.length ? <div className="workspace-attention-list">{attention.map((tenant) => <MerchantAttentionRow key={tenant.id} tenant={tenant} />)}</div> : <EmptyState title="No urgent merchant attention" body="Current governed overview signals do not show an immediate platform issue." />}
-        </section>
-        <section className="workspace-panel">
-          <PanelHeading title="Admin workstreams" description="Current SellerTray platform administration sequence." />
-          <div className="workspace-workstream-list">
-            <Workstream title="Admin foundation" status="In progress" body="Professional shell, navigation and governed existing capabilities." />
-            <Workstream title="Commercial core" status="In progress" body="Governed pricing, commercial orders, setup readiness and runtime entitlement compatibility." />
-            <Workstream title="Agreements & installments" status="In progress" body="Immutable agreement acceptance, installment schedules, provider payment confirmation and entitlement release." />
-          </div>
-        </section>
-      </div>
-    </PageFrame>
-  );
-}
-
 function MerchantsPage({ overview }: { overview: PlatformOverview }) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'attention' | 'connected' | 'restricted'>('all');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(() => merchantFromHash());
+  useEffect(() => {
+    const update = () => setSelectedId(merchantFromHash());
+    window.addEventListener('hashchange', update);
+    return () => window.removeEventListener('hashchange', update);
+  }, []);
 
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -561,8 +535,8 @@ function BillingPage({ session, overview }: { session: Session; overview: Platfo
 
   return (
     <PageFrame eyebrow="Billing & Commercial" title="Commercial administration" description="Governed SellerTray commercial operations for agreements, Branch setup readiness, installment payment state and entitlement release.">
-      <div className="workspace-banner info"><strong>No free trial.</strong> C1B uses governed paid commercial facts. Payment confirmation, agreement acceptance, Branch setup readiness and subscription entitlement remain separate authorities.</div>
-      {legacyTrialCount ? <div className="workspace-banner warning"><strong>{legacyTrialCount} legacy record{legacyTrialCount === 1 ? '' : 's'} still report trial status.</strong> These remain compatibility data until the deliberate C2 migration and are not a current SellerTray offer.</div> : null}
+      <div className="workspace-banner info"><strong>No free trial.</strong> Paid access uses governed commercial records. Payment confirmation, agreement acceptance, Branch setup readiness and subscription entitlement remain separate authorities.</div>
+      {legacyTrialCount ? <div className="workspace-banner warning"><strong>{legacyTrialCount} legacy record{legacyTrialCount === 1 ? '' : 's'} still report trial status.</strong> These are compatibility data awaiting migration and are not a current SellerTray offer.</div> : null}
       <CommercialBillingAdministration session={session} actorRole={overview.actorRole} tenants={tenants} />
     </PageFrame>
   );
@@ -757,20 +731,6 @@ function StatCard({ label, value, detail }: { label: string; value: string | num
   return <article className="workspace-stat-card"><span>{label}</span><strong>{typeof value === 'number' ? value.toLocaleString() : value}</strong><small>{detail}</small></article>;
 }
 
-function Workstream({ title, status, body }: { title: string; status: string; body: string }) {
-  return <div className="workspace-workstream"><div><strong>{title}</strong><p>{body}</p></div><span>{status}</span></div>;
-}
-
-function MerchantAttentionRow({ tenant }: { tenant: TenantSummary }) {
-  const reasons: string[] = [];
-  if (tenant.whatsappStatus === 'error') reasons.push('WhatsApp error');
-  if (tenant.accessMode !== 'full') reasons.push('Restricted access');
-  if (['past_due', 'grace', 'suspended', 'cancelled'].includes(tenant.subscriptionStatus)) reasons.push(friendlyLabel(tenant.subscriptionStatus));
-  if (tenant.needsReview) reasons.push(`${tenant.needsReview} order review`);
-  if (tenant.notificationExceptions) reasons.push(`${tenant.notificationExceptions} notification exception`);
-  return <div className="workspace-attention-row"><span className="workspace-attention-dot" /><div><strong>{tenant.name}</strong><small>{reasons.join(' · ') || 'Review platform status'}</small></div></div>;
-}
-
 function Detail({ label, value }: { label: string; value: string }) {
   return <div className="workspace-detail"><span>{label}</span><strong>{value}</strong></div>;
 }
@@ -813,7 +773,7 @@ function Icon({ name }: { name: IconName }) {
 }
 
 function sectionFromHash(): AdminSection {
-  const raw = window.location.hash.replace(/^#/, '') as AdminSection;
+  const raw = window.location.hash.replace(/^#/, '').split('?')[0] as AdminSection;
   return NAV_ITEMS.some((item) => item.id === raw) ? raw : 'overview';
 }
 
@@ -886,3 +846,8 @@ function numberValue(value: unknown): number { const parsed = typeof value === '
 function nullableNumber(value: unknown): number | null { const parsed = typeof value === 'number' ? value : Number(value); return Number.isFinite(parsed) ? parsed : null; }
 function shortId(value: string): string { return value ? `${value.slice(0, 8)}…` : '—'; }
 function formatDate(value: string | null): string { if (!value) return '—'; const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(date); }
+
+function merchantFromHash(): string | null {
+  const value = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('tenant');
+  return value && /^[0-9a-f-]{36}$/i.test(value) ? value : null;
+}
