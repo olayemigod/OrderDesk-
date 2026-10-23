@@ -24,6 +24,14 @@ type ManagementRole = 'owner' | 'manager';
 type Page = MerchantPortalPage;
 type Business = { id: string; name: string; merchantCode: string; role: MerchantRole; currency: string; subscriptionStatus: string; whatsappConnectionStatus: string };
 type Branch = { id: string; code: string; name: string; isDefault: boolean };
+type OnboardingState = {
+  stage: string;
+  enrolled: boolean;
+  operationsAllowed: boolean;
+  nextAction: { code: string; label: string; surface: string };
+  blockers: Array<{ code: string; message: string }>;
+  progress: { current: number; total: number };
+};
 
 const MANAGEMENT_ROLES: MerchantRole[] = ['owner', 'manager'];
 const NAV = AVAILABLE_MERCHANT_PORTAL_NAVIGATION;
@@ -36,6 +44,7 @@ export default function MerchantApp() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchId, setBranchId] = useState('');
   const [page, setPage] = useState<Page>('overview');
+  const [onboarding, setOnboarding] = useState<OnboardingState | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dark, setDark] = useState(() => localStorage.getItem('sellertray.merchant.theme') === 'dark');
@@ -45,7 +54,7 @@ export default function MerchantApp() {
   useEffect(() => {
     let mounted = true;
     void supabase.auth.getSession().then(({ data }) => { if (mounted) { setSession(data.session); setBooting(false); } });
-    const { data } = supabase.auth.onAuthStateChange((_event, next) => { setSession(next); if (!next) { setBusinesses([]); setBusinessId(''); setBranches([]); setBranchId(''); } });
+    const { data } = supabase.auth.onAuthStateChange((_event, next) => { setSession(next); if (!next) { setBusinesses([]); setBusinessId(''); setBranches([]); setBranchId(''); setOnboarding(null); } });
     return () => { mounted = false; data.subscription.unsubscribe(); };
   }, []);
   useEffect(() => { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; localStorage.setItem('sellertray.merchant.theme', dark ? 'dark' : 'light'); }, [dark]);
@@ -70,19 +79,33 @@ export default function MerchantApp() {
       const next = ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id ?? ''), name: String(row.name ?? 'SellerTray business'), merchantCode: String(row.merchant_code ?? ''), role: merchantRole(row.role), currency: String(row.currency ?? 'NGN'), subscriptionStatus: String(row.subscription_status ?? 'unknown'), whatsappConnectionStatus: String(row.whatsapp_connection_status ?? 'not_connected') } satisfies Business));
       setBusinesses(next);
       const manageable = next.filter((row) => MANAGEMENT_ROLES.includes(row.role));
-      setBusinessId((current) => manageable.some((row) => row.id === current) ? current : manageable[0]?.id ?? '');
+      const params = new URLSearchParams(window.location.search);
+      const requestedBusiness = params.get('business') ?? '';
+      const onboardingEntry = params.get('onboarding') === '1';
+      setBusinessId((current) => {
+        if (requestedBusiness && manageable.some((row) => row.id === requestedBusiness)) return requestedBusiness;
+        return manageable.some((row) => row.id === current) ? current : manageable[0]?.id ?? '';
+      });
+      if (onboardingEntry) setPage('settings');
+      if (requestedBusiness || onboardingEntry) {
+        window.history.replaceState(null, '', window.location.pathname || '/');
+      }
     } catch (cause) { setError(errorMessage(cause, 'Unable to load your SellerTray businesses.')); } finally { setLoading(false); }
   }
 
   async function loadWorkspace(tenantId: string) {
     setLoading(true); setError(null);
     try {
-      const branchResult = await supabase.rpc('get_sellertray_accessible_branches', { p_tenant_id: tenantId });
+      const [branchResult, onboardingResult] = await Promise.all([
+        supabase.rpc('get_sellertray_accessible_branches', { p_tenant_id: tenantId }),
+        supabase.rpc('get_sellertray_onboarding_state', { p_tenant_id: tenantId }),
+      ]);
       if (branchResult.error) throw branchResult.error;
+      if (onboardingResult.error) throw onboardingResult.error;
       const nextBranches = ((branchResult.data ?? []) as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id ?? ''), code: String(row.code ?? ''), name: String(row.name ?? 'Branch'), isDefault: row.is_default === true } satisfies Branch));
       const chosen = nextBranches.find((row) => row.id === branchId)?.id ?? nextBranches.find((row) => row.isDefault)?.id ?? nextBranches[0]?.id ?? '';
-      setBranches(nextBranches); setBranchId(chosen);
-    } catch (cause) { setError(errorMessage(cause, 'Unable to load SellerTray management data.')); } finally { setLoading(false); }
+      setBranches(nextBranches); setBranchId(chosen); setOnboarding(parseOnboarding(onboardingResult.data));
+    } catch (cause) { setOnboarding(null); setError(errorMessage(cause, 'Unable to load SellerTray management data.')); } finally { setLoading(false); }
   }
 
   async function refresh() { if (businessId) await loadWorkspace(businessId); }
@@ -149,7 +172,8 @@ export default function MerchantApp() {
       </header>
 
       {error ? <div className="error-banner">{error}<button onClick={() => setError(null)}>Dismiss</button></div> : null}
-      <section className="context-bar" aria-label="Current business context"><Context label="Business code" value={business.merchantCode || '—'} /><Context label="Subscription" value={statusText(business.subscriptionStatus)} /><Context label="Active Branch" value={branch?.name ?? 'No active Branch'} /></section>
+      {onboarding?.enrolled && !onboarding.operationsAllowed ? <OnboardingBanner state={onboarding} onContinue={() => navigate('settings')} /> : null}
+      <section className="context-bar" aria-label="Current business context"><Context label="Business code" value={business.merchantCode || '—'} /><Context label="Subscription" value={statusText(business.subscriptionStatus)} /><Context label="Setup" value={onboarding ? onboardingLabel(onboarding.stage) : 'Checking'} /><Context label="Active Branch" value={branch?.name ?? 'No active Branch'} /></section>
       {page === 'overview' && <DashboardOverview tenantId={business.id} currency={business.currency} go={navigate} openBranch={openBranchPage} />}
       {page === 'sales' && branch && <SalesManagement tenantId={business.id} branchId={branch.id} />}
       {page === 'sales' && !branch && <PageTable eyebrow="Sales" title="Choose a Branch" note="Select a Branch to review completed sales."><Empty title="No active Branch" body="Sales are reviewed within a Branch so transaction and stock context remain clear." /></PageTable>}
@@ -171,6 +195,11 @@ export default function MerchantApp() {
   </div>;
 }
 
+function OnboardingBanner({ state, onContinue }: { state: OnboardingState; onContinue: () => void }) {
+  const blocker = state.blockers[0]?.message ?? 'SellerTray setup is not complete yet.';
+  return <div className="warning-banner"><div><strong>{onboardingLabel(state.stage)}</strong><div>{blocker} Step {state.progress.current} of {state.progress.total}.</div></div><button type="button" className="secondary-button" onClick={onContinue}>{state.nextAction.label}</button></div>;
+}
+
 function Login() {
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [busy, setBusy] = useState(false); const [message, setMessage] = useState('');
   async function submit(event: FormEvent) { event.preventDefault(); setBusy(true); setMessage(''); try { const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password }); if (error) throw error; } catch (cause) { setMessage(errorMessage(cause, 'Unable to sign in.')); } finally { setBusy(false); } }
@@ -182,6 +211,30 @@ function Heading({ eyebrow, title: heading, note }: { eyebrow: string; title: st
 function PageTable({ eyebrow, title: heading, note, children }: { eyebrow: string; title: string; note: string; children: ReactNode }) { return <div className="page-stack"><Heading eyebrow={eyebrow} title={heading} note={note} /><article className="panel">{children}</article></div>; }
 function Empty({ title: heading, body }: { title: string; body: string }) { return <div className="empty-state"><strong>{heading}</strong><p>{body}</p></div>; }
 function Status({ title: heading, body, action }: { title: string; body: string; action?: ReactNode }) { return <div className="status-page"><div className="status-card"><SellerTrayMark large /><p className="eyebrow">SellerTray</p><h1>{heading}</h1><p>{body}</p>{action}</div></div>; }
+function parseOnboarding(value: unknown): OnboardingState {
+  const root = record(value); const action = record(root.nextAction); const progress = record(root.progress);
+  return {
+    stage: stringValue(root.stage, 'commercial_purchase'),
+    enrolled: root.enrolled === true,
+    operationsAllowed: root.operationsAllowed === true,
+    nextAction: { code: stringValue(action.code, 'complete_purchase'), label: stringValue(action.label, 'Continue setup'), surface: stringValue(action.surface, 'merchant_web') },
+    blockers: (Array.isArray(root.blockers) ? root.blockers : []).map((item) => { const row = record(item); return { code: stringValue(row.code, 'setup_pending'), message: stringValue(row.message, 'SellerTray setup is not complete yet.') }; }),
+    progress: { current: numberValue(progress.current, 1), total: numberValue(progress.total, 6) },
+  };
+}
+function onboardingLabel(value: string): string {
+  if (value === 'business_setup') return 'Business setup';
+  if (value === 'commercial_purchase') return 'Choose plan & pay';
+  if (value === 'agreement') return 'Agreement required';
+  if (value === 'payment') return 'Payment required';
+  if (value === 'setup') return 'Branch setup required';
+  if (value === 'activating') return 'Activating SellerTray';
+  if (value === 'active') return 'SellerTray active';
+  return statusText(value);
+}
+function record(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
+function stringValue(value: unknown, fallback: string): string { return typeof value === 'string' && value ? value : fallback; }
+function numberValue(value: unknown, fallback: number): number { const parsed = typeof value === 'number' ? value : Number(value); return Number.isFinite(parsed) ? parsed : fallback; }
 function merchantRole(value: unknown): MerchantRole { return value === 'owner' || value === 'manager' || value === 'staff' ? value : 'staff'; }
 function accountInitial(value: string | undefined): string { return value?.trim().charAt(0).toUpperCase() || 'S'; }
 function title(value: string): string { return value ? value[0].toUpperCase() + value.slice(1) : value; }
