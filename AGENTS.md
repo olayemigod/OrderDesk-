@@ -36,6 +36,12 @@ For any task touching sale returns, returned merchandise, receivables, customer 
 
 `RETURNS.md` records the later approved receivable-first return settlement doctrine: returned merchandise reduces receivable first, only excess previously collected money may be paid back, Cash and Bank payouts have different drawer effects, and Staff/Cashier may prepare a payout but only Owner/Manager may complete a monetary refund.
 
+For any task touching merchant registration, first Business/Branch preparation, first-purchase onboarding, app-to-web commercial handoff, setup-slot availability, setup appointments, setup scheduling/rescheduling, Admin direct/off-gateway payment confirmation, merchant-specific onboarding discounts, setup completion/readiness, first activation, onboarding status or activation recovery, also read and follow:
+
+`.agents/skills/sellertray-project-implementation/ONBOARDING_ACTIVATION.md`
+
+`ONBOARDING_ACTIVATION.md` records the later approved seamless registration -> Business -> web payment -> setup scheduling -> setup readiness -> automatic activation lifecycle. It also governs ProcessEdge Admin intervention at the payment stage: authorised direct-payment confirmation and merchant-specific order discounts feed the same commercial settlement authority and never become a shortcut for directly mutating entitlement.
+
 For any task touching onboarding, subscriptions, setup fees, Branch commercial activation, Merchant Web billing, Admin Web commercial operations, installments, payment schedules, agreements/terms, money-back guarantees, supplied setup equipment, plans/pricing, VAT/tax presentation, promotions, merchant-specific commercial terms, referrals/rewards, or SellerTray editions, also read and follow:
 
 `.agents/skills/sellertray-project-implementation/COMMERCIAL.md`
@@ -44,15 +50,15 @@ For C1 commercial-core work and any implementation that depends on the C1/C1A/C1
 
 `.agents/skills/sellertray-project-implementation/COMMERCIAL_C1.md`
 
-`COMMERCIAL_C1.md` records the later approved additive-C1 sequencing decision and overrides older C1/C1A/C1B sequence wording where they conflict.
+`COMMERCIAL_C1.md` records the later approved additive-C1 sequencing decision and overrides older C1/C1A/C1B sequence wording where they conflict, except where a still-later explicit decision is recorded in `ONBOARDING_ACTIVATION.md` for qualifying confirmed settlement and Admin commercial intervention.
 
 For any task touching offline POS selling, cached payment methods, offline payment capture/verification, outbox replay, sync conflicts, retry/idempotency, or degraded-connectivity payment behavior, also read and follow:
 
 `.agents/skills/sellertray-project-implementation/OFFLINE.md`
 
-`CROSS_SURFACE.md`, `ADAPTIVE.md`, `ADMIN_CAPABILITIES.md`, `VALUATION.md`, `RETURNS.md`, `COMMERCIAL.md`, `COMMERCIAL_C1.md` and `OFFLINE.md` are normative extensions of the governing SellerTray skill for their applicable boundaries. `CROSS_SURFACE.md` applies universally; the others apply when their domains are touched. They do not replace or weaken any rule in `SKILL.md`.
+`CROSS_SURFACE.md`, `ADAPTIVE.md`, `ADMIN_CAPABILITIES.md`, `VALUATION.md`, `RETURNS.md`, `ONBOARDING_ACTIVATION.md`, `COMMERCIAL.md`, `COMMERCIAL_C1.md` and `OFFLINE.md` are normative extensions of the governing SellerTray skill for their applicable boundaries. `CROSS_SURFACE.md` applies universally; the others apply when their domains are touched. They do not replace or weaken any rule in `SKILL.md`; later explicit product decisions documented in an applicable extension control only where an older extension conflicts.
 
-That governing skill and its applicable normative extensions are the repository-level implementation contract for the SellerTray redesign. They govern cross-surface flow closure, adaptive Mobile UX and device-form-factor behavior, Admin capability/RBAC boundaries, mobile UX, merchant web boundaries, Admin Web platform/commercial operations, shared commerce architecture, POS, inventory, branch awareness, UOM, WhatsApp commerce, payments, returns/refunds/receivables, subscriptions, setup, installments, agreements, guarantees, promotions, Bluetooth printing, reporting, AI, permissions, offline behaviour, implementation phases, QA gates, and anti-divergence rules.
+That governing skill and its applicable normative extensions are the repository-level implementation contract for the SellerTray redesign. They govern cross-surface flow closure, adaptive Mobile UX and device-form-factor behavior, Admin capability/RBAC boundaries, mobile UX, merchant web boundaries, Admin Web platform/commercial operations, shared commerce architecture, POS, inventory, branch awareness, UOM, WhatsApp commerce, payments, returns/refunds/receivables, subscriptions, onboarding/setup scheduling, Admin commercial intervention, setup, installments, agreements, guarantees, promotions, Bluetooth printing, reporting, AI, permissions, offline behaviour, implementation phases, QA gates, and anti-divergence rules.
 
 The originating SellerTray redesign conversation is the primary decision record when it is available to the agent. The repository skill is the durable fallback and must be used when that thread is unavailable.
 
