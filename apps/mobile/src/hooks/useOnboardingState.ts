@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useState } from 'react';
+import { AppState } from 'react-native';
 
 import type { MerchantRole } from '../data/businessRepository';
 import {
@@ -41,6 +42,7 @@ export function useOnboardingState(
   useEffect(() => {
     void refresh();
   }, [refresh]);
+  useRefreshOnForeground(refresh);
 
   return {
     state,
@@ -96,8 +98,18 @@ export function useCurrentBusinessOnboardingState() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+  useRefreshOnForeground(refresh);
 
   return { state, loading, error, refresh };
+}
+
+function useRefreshOnForeground(refresh: () => void | Promise<void>) {
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') void refresh();
+    });
+    return () => subscription.remove();
+  }, [refresh]);
 }
 
 function merchantRole(value: string | null): MerchantRole | null {
