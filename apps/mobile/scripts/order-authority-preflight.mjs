@@ -18,6 +18,7 @@ const merchantOrderMigration = read(join(repoRoot, 'supabase/migrations/20261014
 const paidCancellationGuard = read(join(repoRoot, 'supabase/migrations/20260914095500_restore_paid_order_cancellation_guard.sql'));
 const posDraftMigration = read(join(repoRoot, 'supabase/migrations/20261014091000_pos_draft_item_editing.sql'));
 const ordersRepository = read(join(mobileRoot, 'src/data/ordersRepository.ts'));
+const orderPaymentPanel = read(join(mobileRoot, 'src/components/OrderPaymentPanel.tsx'));
 const useOrders = read(join(mobileRoot, 'src/hooks/useOrders.ts'));
 const fulfillmentEdge = read(join(repoRoot, 'supabase/functions/order-fulfillment/index.ts'));
 const merchantOrderEdge = read(join(repoRoot, 'supabase/functions/merchant-order/index.ts'));
@@ -95,6 +96,12 @@ requireValue(
     !ordersRepository.includes(".from('order_items').insert(") &&
     !ordersRepository.includes(".from('order_items').delete("),
   'Mobile order repository must use governed commands instead of raw table mutations',
+);
+requireValue(
+  orderPaymentPanel.includes('order.posOperatorName') &&
+    orderPaymentPanel.includes('label="Cashier"') &&
+    ordersRepository.includes('pos_operator_name'),
+  'Per-order invoice/financial history must render the immutable POS cashier snapshot',
 );
 requireValue(
   useOrders.includes('updateOrderStatus(tenantId, orderId, status, normalizedReason)') &&

@@ -122,6 +122,7 @@ export function OrderPaymentPanel({ tenantId, order }: Props) {
       <View style={[styles.summary, appearance.dark && darkStyles.subtleCard]}>
         <SummaryRow dark={appearance.dark} label="Amount paid" value={formatMoney(displayedAmountPaid, invoice?.currency ?? 'NGN')} />
         {invoice ? <SummaryRow dark={appearance.dark} label="Invoice" value={invoice.documentReference} /> : null}
+        {order.posOperatorName ? <SummaryRow dark={appearance.dark} label="Cashier" value={order.posOperatorName} /> : null}
         {receipt ? <SummaryRow dark={appearance.dark} label="Financial receipt" value={receipt.documentReference} /> : null}
         {order.paymentConfirmedAt ? <SummaryRow dark={appearance.dark} label="Confirmed" value={formatDateTime(order.paymentConfirmedAt)} /> : null}
       </View>

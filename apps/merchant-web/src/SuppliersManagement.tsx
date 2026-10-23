@@ -1,5 +1,5 @@
 import { SellerTrayInput, SellerTraySelect, SellerTrayTextarea } from './SellerTrayElements';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { errorMessage, numberValue, supabase } from './supabase';
 
 type Supplier = {
@@ -54,14 +54,18 @@ export default function SuppliersManagement({ tenantId, currency }: { tenantId: 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const detailRequestRef = useRef(0);
 
   useEffect(() => {
+    detailRequestRef.current += 1;
     setQuery('');
     setStatusFilter('all');
     setPage(0);
     setSelectedSupplierId(null);
     setSelectedDetail(null);
     setIsNew(false);
+    setDraft(EMPTY_SUPPLIER);
+    setDetailLoading(false);
   }, [tenantId]);
 
   useEffect(() => { setPage(0); }, [query, statusFilter]);
@@ -109,18 +113,21 @@ export default function SuppliersManagement({ tenantId, currency }: { tenantId: 
   }
 
   async function loadSupplierDetail(supplierId: string) {
+    const requestId = ++detailRequestRef.current;
     setDetailLoading(true);
     try {
       const { data, error: rpcError } = await supabase.rpc('get_sellertray_supplier_management_detail', { p_tenant_id: tenantId, p_supplier_id: supplierId });
       if (rpcError) throw rpcError;
+      if (requestId !== detailRequestRef.current) return;
       const detail = mapSupplierDetail((data ?? {}) as Record<string, unknown>);
       setSelectedDetail(detail);
       setDraft({ name: detail.name, contactName: detail.contactName, phone: detail.phone, email: detail.email, address: detail.address, notes: detail.notes, isActive: detail.isActive });
       setIsNew(false);
     } catch (cause) {
+      if (requestId !== detailRequestRef.current) return;
       setError(errorMessage(cause, 'Unable to load this supplier.'));
     } finally {
-      setDetailLoading(false);
+      if (requestId === detailRequestRef.current) setDetailLoading(false);
     }
   }
 
@@ -132,16 +139,22 @@ export default function SuppliersManagement({ tenantId, currency }: { tenantId: 
   }
 
   function startNewSupplier() {
+    detailRequestRef.current += 1;
     setIsNew(true);
     setSelectedSupplierId(null);
     setSelectedDetail(null);
     setDraft(EMPTY_SUPPLIER);
+    setDetailLoading(false);
     setError(null);
     setMessage(null);
   }
 
   async function saveSupplier(event: FormEvent) {
     event.preventDefault();
+    if (!draft.name.trim()) {
+      setError('Enter the supplier name.');
+      return;
+    }
     setBusy(true);
     setError(null);
     setMessage(null);
@@ -149,7 +162,7 @@ export default function SuppliersManagement({ tenantId, currency }: { tenantId: 
       const { data, error: rpcError } = await supabase.rpc('save_sellertray_supplier', {
         p_tenant_id: tenantId,
         p_supplier_id: selectedSupplierId,
-        p_name: draft.name,
+        p_name: draft.name.trim(),
         p_contact_name: clean(draft.contactName),
         p_phone: clean(draft.phone),
         p_email: clean(draft.email),
@@ -216,7 +229,7 @@ export default function SuppliersManagement({ tenantId, currency }: { tenantId: 
         <label>Address<SellerTrayTextarea rows={2} value={draft.address} onChange={(event) => setDraft((current) => ({ ...current, address: event.target.value }))} /></label>
         <label>Notes<SellerTrayTextarea rows={3} value={draft.notes} onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))} /></label>
         <label className="settings-toggle"><SellerTrayInput type="checkbox" checked={draft.isActive} onChange={(event) => setDraft((current) => ({ ...current, isActive: event.target.checked }))} /><span>Active supplier</span></label>
-        <div className="purchase-actions"><button className="primary-button" disabled={busy || (!isNew && !selectedSupplierId)}>{busy ? 'Saving' : 'Save supplier'}</button></div>
+        <div className="purchase-actions"><button className="primary-button" disabled={busy || detailLoading || !draft.name.trim()}>{busy ? 'Saving' : selectedSupplierId ? 'Save supplier' : 'Create supplier'}</button></div>
 
         {selectedDetail && !detailLoading ? <section className="page-stack">
           <div className="section-heading"><div><p className="eyebrow">Purchasing history</p><h4>Recent Purchase Orders</h4></div><p className="muted">Latest 100 Purchase Orders. Draft and cancelled records remain visible without being treated as supplier obligations.</p></div>
