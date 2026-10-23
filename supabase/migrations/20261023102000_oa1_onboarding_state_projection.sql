@@ -18,6 +18,7 @@ declare
   v_order_id uuid;
   v_order_reference text;
   v_ordered_at timestamptz;
+  v_initial_order_count integer := 0;
   v_obligation_id uuid;
   v_installment_count integer := 0;
   v_paid_installment_count integer := 0;
@@ -47,15 +48,40 @@ begin
   select count(*)::integer into v_active_branch_count
   from public.branches b where b.tenant_id=p_tenant_id and b.is_active;
 
-  select o.id,o.order_reference,o.ordered_at into v_order_id,v_order_reference,v_ordered_at
+  -- C1B deliberately treats equal initial-purchase business timestamps as
+  -- ambiguous rather than inventing ordering by UUID. OA1 must preserve the
+  -- same identity rule when deriving the onboarding subject.
+  select min(o.ordered_at) into v_ordered_at
   from public.sellertray_commercial_orders o
   where o.tenant_id=p_tenant_id
     and exists (
       select 1 from public.sellertray_commercial_order_price_snapshots ps
       where ps.tenant_id=o.tenant_id and ps.commercial_order_id=o.id and ps.line_type='subscription'
-    )
-  order by o.ordered_at asc,o.created_at asc,o.id asc
-  limit 1;
+    );
+
+  if v_ordered_at is not null then
+    select count(*)::integer into v_initial_order_count
+    from public.sellertray_commercial_orders o
+    where o.tenant_id=p_tenant_id
+      and o.ordered_at=v_ordered_at
+      and exists (
+        select 1 from public.sellertray_commercial_order_price_snapshots ps
+        where ps.tenant_id=o.tenant_id and ps.commercial_order_id=o.id and ps.line_type='subscription'
+      );
+
+    if v_initial_order_count<>1 then
+      raise exception 'Initial SellerTray commercial purchase is ambiguous' using errcode='23514';
+    end if;
+
+    select o.id,o.order_reference into v_order_id,v_order_reference
+    from public.sellertray_commercial_orders o
+    where o.tenant_id=p_tenant_id
+      and o.ordered_at=v_ordered_at
+      and exists (
+        select 1 from public.sellertray_commercial_order_price_snapshots ps
+        where ps.tenant_id=o.tenant_id and ps.commercial_order_id=o.id and ps.line_type='subscription'
+      );
+  end if;
 
   if v_order_id is null then
     -- Preserve only historical operational compatibility. A legacy trial is not
