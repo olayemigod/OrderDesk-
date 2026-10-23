@@ -15,7 +15,7 @@ select extensions.ok(
 );
 
 select extensions.ok(
-  position('customer_id IS NOT NULL' in upper(pg_get_constraintdef((
+  position('CUSTOMER_ID IS NOT NULL' in upper(pg_get_constraintdef((
     select c.oid
     from pg_constraint c
     where c.conrelid='public.orders'::regclass
