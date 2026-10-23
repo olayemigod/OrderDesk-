@@ -68,9 +68,12 @@ select extensions.ok(
   exists (
     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where n.nspname='public' and p.proname='save_sellertray_business_profile'
-      and lower(pg_get_functiondef(p.oid)) like '%logo url must be a valid https url%'
+      and lower(pg_get_functiondef(p.oid)) like '%business-logos%'
+      and lower(pg_get_functiondef(p.oid)) like '%storage.objects%'
+      and lower(pg_get_functiondef(p.oid)) like '%business logo must use the governed sellertray logo store%'
+      and lower(pg_get_functiondef(p.oid)) like '%business logo is not a valid sellertray-managed image%'
   ),
-  'Business profile command requires HTTPS logo URLs when supplied'
+  'Business profile command accepts only existing tenant-scoped governed logo objects'
 );
 
 select extensions.ok(
