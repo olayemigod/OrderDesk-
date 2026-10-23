@@ -4,6 +4,7 @@ import CatalogueMasterManagement from './CatalogueMasterManagement';
 import CommercialAgreementsManagement from './CommercialAgreementsManagement';
 import DevicesPrintersManagement from './DevicesPrintersManagement';
 import FeedbackDashboard from './FeedbackDashboard';
+import OnboardingStatusCard from './OnboardingStatusCard';
 import ProductsManagement from './ProductsManagement';
 import { SellerTraySelect } from './SellerTrayElements';
 import SettingsManagement from './SettingsManagement';
@@ -33,7 +34,7 @@ export default function ManagementPage({
   if (page === 'team') return <TeamPermissionsManagement tenantId={tenantId} />;
   if (page === 'devices') return <DeviceManagement tenantId={tenantId} />;
   if (page === 'feedback') return <FeedbackDashboard tenantId={tenantId} />;
-  return <div className="page-stack"><CommercialAgreementsManagement tenantId={tenantId} /><SettingsManagement tenantId={tenantId} /></div>;
+  return <div className="page-stack"><OnboardingStatusCard tenantId={tenantId} /><CommercialAgreementsManagement tenantId={tenantId} /><SettingsManagement tenantId={tenantId} /></div>;
 }
 
 function DeviceManagement({ tenantId }: { tenantId: string }) {
