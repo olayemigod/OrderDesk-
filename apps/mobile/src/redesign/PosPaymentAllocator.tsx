@@ -19,7 +19,6 @@ type Props = {
   currency: string;
   paymentMethods: PosPaymentMethod[];
   policy: PosPaymentPolicy;
-  hasNamedCustomer: boolean;
   disabled?: boolean;
   onResult: (result: PosAllocationCheckoutResult) => void;
   onError: (message: string) => void;
@@ -32,7 +31,6 @@ export function PosPaymentAllocator({
   currency,
   paymentMethods,
   policy,
-  hasNamedCustomer,
   disabled = false,
   onResult,
   onError,
@@ -73,9 +71,8 @@ export function PosPaymentAllocator({
   const partialBlocked = allocated > 0 && outstanding > 0.005 && !policy.allowPartialPayments;
   const payLaterBlocked = payLater && !policy.allowPayLater;
   const emptyBlocked = allocated <= 0 && !payLater;
-  const customerBlocked = outstanding > 0.005 && !hasNamedCustomer;
   const canSubmit = !disabled && !submitting && !overAllocated && !splitBlocked
-    && !partialBlocked && !payLaterBlocked && !emptyBlocked && !customerBlocked;
+    && !partialBlocked && !payLaterBlocked && !emptyBlocked;
 
   function changeAmount(method: PosPaymentMethod, value: string) {
     const clean = value.replace(/[^0-9.]/g, '');
@@ -101,10 +98,6 @@ export function PosPaymentAllocator({
 
   function choosePayLater() {
     if (!policy.allowPayLater) return;
-    if (!hasNamedCustomer) {
-      onError('Choose or create a Customer before using Pay later.');
-      return;
-    }
     setAmounts({});
     setPayLater(true);
     setCommandId(createPosPaymentCommandId());
@@ -239,14 +232,13 @@ export function PosPaymentAllocator({
           />
           <View style={styles.flex}>
             <Text style={[styles.methodName, dark && styles.darkText]}>Pay later</Text>
-            <Text style={[styles.methodNote, dark && styles.darkMuted]}>Complete this sale with the full balance outstanding. A named Customer is required.</Text>
+            <Text style={[styles.methodNote, dark && styles.darkMuted]}>Complete this sale with the full balance outstanding.</Text>
           </View>
         </Pressable>
       ) : null}
 
       {splitBlocked ? <Text style={styles.errorText}>Split payment is disabled in SellerTray settings.</Text> : null}
       {partialBlocked ? <Text style={styles.errorText}>Partial payment is disabled in SellerTray settings.</Text> : null}
-      {customerBlocked ? <Text style={styles.errorText}>Choose or create a Customer before leaving any balance outstanding.</Text> : null}
       {overAllocated ? <Text style={styles.errorText}>Payment allocations are more than the amount due.</Text> : null}
       {policy.manualConfirmationMode === 'payment_manager' ? (
         <Text style={[styles.policyNote, dark && styles.darkMuted]}>Bank transfer and terminal payments are recorded for payment-manager confirmation. Cash remains a cashier-confirmed drawer payment.</Text>
