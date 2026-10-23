@@ -8,6 +8,7 @@ import {
 } from '../data/onboardingRepository';
 
 const ACTIVE_BUSINESS_KEY = 'orderdesk.activeBusinessId';
+const ACTIVE_BUSINESS_ROLE_HINT_KEY = 'orderdesk.activeBusinessRoleHint';
 
 export function useOnboardingState(
   tenantId: string | null,
@@ -50,38 +51,37 @@ export function useOnboardingState(
   };
 }
 
-// HomeDashboard is intentionally kept presentation-focused and does not own the
-// Business workspace state. The active Business identity is already persisted by
-// useBusinesses, so the Home preparation surface can resolve that same identity
-// without running a second Business/WhatsApp workspace load.
+// HomeDashboard does not own workspace membership state. useBusinesses caches a
+// non-authoritative active-role hint beside the active Business id so cashier/staff
+// sessions can avoid making a commercial-status request at all. The server still
+// verifies Owner/Manager membership on every onboarding read.
 export function useCurrentBusinessOnboardingState() {
-  const [tenantId, setTenantId] = useState<string | null>(null);
   const [state, setState] = useState<SellerTrayOnboardingState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const resolveTenant = useCallback(async () => {
-    const stored = await AsyncStorage.getItem(ACTIVE_BUSINESS_KEY);
-    const next = stored?.trim() || null;
-    setTenantId(next);
-    return next;
-  }, []);
-
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const currentTenantId = tenantId ?? await resolveTenant();
-      if (!currentTenantId) {
+      const [storedTenantId, storedRole] = await Promise.all([
+        AsyncStorage.getItem(ACTIVE_BUSINESS_KEY),
+        AsyncStorage.getItem(ACTIVE_BUSINESS_ROLE_HINT_KEY),
+      ]);
+      const tenantId = storedTenantId?.trim() || null;
+      const role = merchantRole(storedRole);
+      const canRead = role === 'owner' || role === 'manager';
+
+      if (!tenantId || !canRead) {
         setState(null);
         setError(null);
         return;
       }
-      setState(await loadSellerTrayOnboardingState(currentTenantId));
+
+      setState(await loadSellerTrayOnboardingState(tenantId));
       setError(null);
     } catch (cause) {
-      // The server permits commercial onboarding detail only to Owner/Manager.
-      // Cashiers/staff should simply retain their operational Home without a
-      // financial onboarding card or a false workspace error.
+      // A stale role hint can never authorize a read; the server remains the
+      // authority. If membership was downgraded, keep commercial detail hidden.
       if (isPermissionDenied(cause)) {
         setState(null);
         setError(null);
@@ -91,13 +91,17 @@ export function useCurrentBusinessOnboardingState() {
     } finally {
       setLoading(false);
     }
-  }, [resolveTenant, tenantId]);
+  }, []);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
   return { state, loading, error, refresh };
+}
+
+function merchantRole(value: string | null): MerchantRole | null {
+  return value === 'owner' || value === 'manager' || value === 'staff' ? value : null;
 }
 
 function isPermissionDenied(value: unknown): boolean {
