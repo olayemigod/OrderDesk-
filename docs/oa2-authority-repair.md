@@ -13,6 +13,7 @@ This repair continues PR #132 against integration `b7d10b54`. It preserves the e
 - Credit and checkout transitions lock the same commercial order before writing. Direct-payment facts survive recoverable reconciliation errors, which append a pending-reconciliation audit event.
 - Superseded checkout attempts tell Merchant Web to retire the old command and refresh the authoritative schedule before a new explicit attempt.
 - Merchant Agreements explains outdated terms; Admin can select the original agreement when issuing its replacement. Admin installment review distinguishes settled, partial and unpaid amounts.
+- Merchant preview builds reuse the existing Admin project's safe Git-baseline check: missing history attempts a bounded fetch, then builds rather than failing the preview before compilation.
 
 ## Verification
 

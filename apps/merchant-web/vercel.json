@@ -1,5 +1,6 @@
 {
   "framework": "vite",
+  "ignoreCommand": "b=$VERCEL_GIT_PREVIOUS_SHA; [ -n \"$b\" ]||exit 1; git cat-file -e \"$b\" 2>/dev/null||git fetch -q --depth=1 origin \"$b\" 2>/dev/null||exit 1; git diff --quiet \"$b\" HEAD -- ':(top)apps/merchant-web' ':(top)package.json' ':(top)package-lock.json'",
   "installCommand": "npm --prefix . install --no-audit --no-fund",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
