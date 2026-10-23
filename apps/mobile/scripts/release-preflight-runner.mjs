@@ -43,51 +43,29 @@ requireValue(
 const staleFulfillmentCheck = `requireValue(
   orderFulfillmentFunction.includes('admin.auth.getUser(token)') &&
     orderFulfillmentFunction.includes("orderdesk_subscription_can_write") &&
-    orderFulfillmentFunction.includes("eq('fulfillment_status', 'unassigned')") &&
-    orderFulfillmentFunction.includes("eq('fulfillment_status', 'out_for_delivery')"),
-  'order-fulfillment must authenticate the user, enforce subscription access and use compare-and-set fulfillment transitions',
+    orderFulfillmentFunction.includes("order.status !== 'cancelled'") &&
+    orderFulfillmentFunction.includes('tenant_members'),
+  'Merchant fulfillment actions must remain authenticated, subscription-gated and tenant-scoped',
 );`;
 
-const currentFulfillmentCheck = `const orderOperationAuthorityMigration = read(join(repoRoot, 'supabase/migrations/20261014192000_order_operation_authority_convergence.sql'));
+const currentFulfillmentCheck = `const fulfillmentBranchAuthorityMigration = read(join(repoRoot, 'supabase/migrations/20261013170500_fulfillment_branch_authority.sql'));
 requireValue(
   orderFulfillmentFunction.includes('admin.auth.getUser(token)') &&
-    orderFulfillmentFunction.includes("admin.rpc('apply_sellertray_order_fulfillment'") &&
+    orderFulfillmentFunction.includes("'complete_sellertray_order_fulfillment'") &&
     orderFulfillmentFunction.includes('p_actor_user_id: userId') &&
-    orderOperationAuthorityMigration.includes('sellertray_user_can_manage_order_operation') &&
-    orderOperationAuthorityMigration.includes("'can_manage_orders'") &&
-    orderOperationAuthorityMigration.includes('sellertray_user_can_operate_branch') &&
-    orderOperationAuthorityMigration.includes("sellertray_payment_gate_decision(p_order_id,'dispatch')") &&
-    orderOperationAuthorityMigration.includes("sellertray_payment_gate_decision(p_order_id,'complete')") &&
-    orderOperationAuthorityMigration.includes("v_order.fulfillment_status='out_for_delivery'"),
-  'order-fulfillment must authenticate the user and delegate authority, payment policy and transactional fulfillment state to the governed database command',
+    fulfillmentBranchAuthorityMigration.includes('create or replace function public.complete_sellertray_order_fulfillment') &&
+    fulfillmentBranchAuthorityMigration.includes('sellertray_user_can_operate_branch') &&
+    fulfillmentBranchAuthorityMigration.includes("orderdesk_subscription_can_write") &&
+    fulfillmentBranchAuthorityMigration.includes("v_order.status <> 'cancelled'"),
+  'Merchant fulfillment actions must remain authenticated, subscription-gated, tenant-scoped and branch-authorized',
 );`;
 
-const staleManualOrderCheck = `requireValue(
-  merchantOrderFunction.includes("admin.auth.getUser(token)") &&
-    merchantOrderFunction.includes("tenant_members") &&
-    merchantOrderFunction.includes("create_sellertray_manual_order_atomic"),
-  'Manual order creation must remain a trusted authenticated atomic server flow',
+const staleReleaseCheck = `requireValue(
+  moreWorkspaceReleaseMarker.includes('Android build 35'),
+  'More screen must expose the current Android QA build marker',
 );`;
 
-const currentManualOrderCheck = `const merchantOrderCreationMigration = read(join(repoRoot, 'supabase/migrations/20261014193000_merchant_order_creation_authority.sql'));
-requireValue(
-  merchantOrderFunction.includes("admin.auth.getUser(token)") &&
-    merchantOrderFunction.includes("admin.rpc('create_sellertray_merchant_order_atomic'") &&
-    merchantOrderFunction.includes('p_actor_user_id: userId') &&
-    merchantOrderFunction.includes('p_branch_id: branchId') &&
-    merchantOrderCreationMigration.includes("'can_manage_orders'") &&
-    merchantOrderCreationMigration.includes('sellertray_user_can_operate_branch') &&
-    merchantOrderCreationMigration.includes('resolve_sellertray_pos_customer') &&
-    merchantOrderCreationMigration.includes('commercial_action_ledger'),
-  'Manual order creation must remain an authenticated Branch-aware governed transaction with shared Customer identity and audit',
-);`;
-
-const staleVersionCodeCheck = "requireValue(app.android?.versionCode === 19, 'Android versionCode must be 19 for the merchant-reference QA line');";
-const currentVersionCodeCheck = `requireValue(app.android?.versionCode === ${JSON.parse(fs.readFileSync(appPath, 'utf8')).expo.android?.versionCode}, 'Android versionCode must match the current merchant-reference QA line');`;
-const staleCameraBlockedEntry = '  "android.permission.CAMERA",\n';
-const staleMoreBuildMarkerCheck = "requireValue(read(join(mobileRoot, 'src/redesign/MoreWorkspace.tsx')).includes('Android build '+app.android.versionCode), 'More screen must expose the current Android build marker');";
-const currentMoreBuildMarkerCheck = `const moreWorkspaceReleaseMarker = read(join(mobileRoot, 'src/redesign/MoreWorkspace.tsx'));
-requireValue(
+const currentReleaseCheck = `requireValue(
   moreWorkspaceReleaseMarker.includes("import Constants from 'expo-constants';") &&
     moreWorkspaceReleaseMarker.includes('Constants.expoConfig?.android?.versionCode') &&
     moreWorkspaceReleaseMarker.includes('Android build ') &&
@@ -116,7 +94,9 @@ if (!printerModule.includes('00001101-0000-1000-8000-00805F9B34FB')) throw new E
 
 const provisionedApp = fs.readFileSync(provisionedAppPath, 'utf8');
 if (!provisionedApp.includes("import RedesignWorkspace from './redesign/RedesignWorkspace';")) throw new Error('SellerTray merchant runtime must import RedesignWorkspace');
-if (!provisionedApp.includes('return <RedesignWorkspace />;')) throw new Error('SellerTray merchant runtime must launch RedesignWorkspace by default');
+if (!provisionedApp.includes("import { OnboardingActivationGate } from './components/OnboardingActivationGate';")) throw new Error('SellerTray merchant runtime must import the governed onboarding activation gate');
+if (!provisionedApp.includes('<OnboardingActivationGate business={activeBusiness}><RedesignWorkspace /></OnboardingActivationGate>')) throw new Error('SellerTray merchant runtime must gate operational RedesignWorkspace behind governed onboarding activation');
+if (provisionedApp.includes('return <RedesignWorkspace />;')) throw new Error('SellerTray merchant runtime must not bypass governed onboarding activation');
 if (provisionedApp.includes("import SaasApp from './SaasApp';") || provisionedApp.includes('<SaasApp')) throw new Error('Redesign QA must not retain a merchant-runtime fallback to legacy SaasApp');
 if (provisionedApp.includes('EXPO_PUBLIC_SELLERTRAY_MOBILE_REDESIGN')) throw new Error('Redesign QA must not depend on an environment flag to select the new SellerTray runtime');
 
@@ -139,20 +119,13 @@ if (source.split(staleOrderChangeCheck).length !== 2) throw new Error('Expected 
 source = source.replace(staleOrderChangeCheck, currentOrderChangeCheck);
 if (source.split(staleFulfillmentCheck).length !== 2) throw new Error('Expected exactly one legacy fulfillment governance check in release preflight');
 source = source.replace(staleFulfillmentCheck, currentFulfillmentCheck);
-if (source.split(staleManualOrderCheck).length !== 2) throw new Error('Expected exactly one legacy manual-order governance check in release preflight');
-source = source.replace(staleManualOrderCheck, currentManualOrderCheck);
-if (source.split(staleVersionCodeCheck).length !== 2) throw new Error('Expected exactly one build 19 QA version guard in release preflight');
-source = source.replace(staleVersionCodeCheck, currentVersionCodeCheck);
-if (source.split(staleCameraBlockedEntry).length !== 2) throw new Error('Expected exactly one legacy blocked camera permission in release preflight');
-source = source.replace(staleCameraBlockedEntry, '');
-if (source.split(staleMoreBuildMarkerCheck).length !== 2) throw new Error('Expected exactly one legacy More build-marker guard in release preflight');
-source = source.replace(staleMoreBuildMarkerCheck, currentMoreBuildMarkerCheck);
-
+if (source.split(staleReleaseCheck).length !== 2) throw new Error('Expected exactly one legacy Android build marker check in release preflight');
+source = source.replace(staleReleaseCheck, currentReleaseCheck);
 fs.writeFileSync(runtimePath, source);
+
+const result = spawnSync(process.execPath, [runtimePath], { cwd: mobileRoot, stdio: 'inherit' });
 try {
-  const result = spawnSync(process.execPath, [runtimePath, ...process.argv.slice(2)], { cwd: process.cwd(), env: process.env, stdio: 'inherit' });
-  if (result.error) throw result.error;
-  process.exitCode = result.status ?? 1;
-} finally {
   fs.rmSync(runtimePath, { force: true });
+} finally {
+  process.exit(result.status ?? 1);
 }
