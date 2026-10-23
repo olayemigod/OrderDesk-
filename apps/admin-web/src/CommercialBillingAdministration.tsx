@@ -85,6 +85,17 @@ type OnboardingOrder = {
 };
 type OnboardingTemplate = { id: string; family: string; versionCode: string; title: string; effectiveFrom: string; publishedAt: string };
 type OnboardingAgreement = { id: string; commercialOrderId: string; reference: string; accepted: boolean };
+type AdminOnboardingState = {
+  stage: string;
+  merchantMessage: string;
+  nextActionLabel: string;
+  operationalAccessAllowed: boolean;
+  activationComplete: boolean;
+  activeBranchCount: number;
+  setupRequiredCount: number;
+  setupReadyCount: number;
+  blockers: string[];
+};
 type CommercialOnboarding = {
   canManage: boolean;
   eligibleForInitialInstallment: boolean;
@@ -95,6 +106,7 @@ type CommercialOnboarding = {
   orders: OnboardingOrder[];
   templates: OnboardingTemplate[];
   agreements: OnboardingAgreement[];
+  onboardingState: AdminOnboardingState | null;
 };
 
 type AdminResponse = { ok?: boolean; overview?: unknown; onboarding?: unknown };
@@ -343,13 +355,25 @@ export default function CommercialBillingAdministration({
     </section>
 
     <section className="workspace-panel">
-      <div className="workspace-panel-heading"><div><h2>C1B status</h2><p>Payment obligation, payment confirmation, agreement acceptance and entitlement remain separate authorities.</p></div></div>
-      {!selectedTenantId ? <Empty title="Select a Business" body="Choose a SellerTray Business to load governed commercial state." /> : loading ? <Empty title="Loading" body="Reading governed C1/C1A/C1B records…" /> : overview && onboarding ? <div className="workspace-detail-grid">
-        <Detail label="Governed prices" value={String(onboarding.prices.length)} />
-        <Detail label="Commercial orders" value={String(onboarding.orders.length)} />
-        <Detail label="Agreements" value={String(onboarding.agreements.length)} />
-        <Detail label="Installment purchases" value={String(overview.installmentBilling.length)} />
-      </div> : <Empty title="No state loaded" body="Retry the selected Business if a temporary error occurred." />}
+      <div className="workspace-panel-heading"><div><h2>Onboarding & C1B status</h2><p>One derived status combines the existing agreement, payment, Branch setup and entitlement authorities without replacing them.</p></div></div>
+      {!selectedTenantId ? <Empty title="Select a Business" body="Choose a SellerTray Business to load governed commercial state." /> : loading ? <Empty title="Loading" body="Reading governed onboarding and C1/C1A/C1B records…" /> : overview && onboarding ? <>
+        {onboarding.onboardingState ? <>
+          <div className="workspace-detail-grid">
+            <Detail label="Onboarding stage" value={label(onboarding.onboardingState.stage)} />
+            <Detail label="Merchant next action" value={onboarding.onboardingState.nextActionLabel || 'No action'} />
+            <Detail label="Operational access" value={onboarding.onboardingState.operationalAccessAllowed ? 'Allowed' : 'Blocked until activation'} />
+            <Detail label="Branch setup" value={onboarding.onboardingState.setupRequiredCount > 0 ? `${onboarding.onboardingState.setupReadyCount} of ${onboarding.onboardingState.setupRequiredCount} ready` : `${onboarding.onboardingState.activeBranchCount} active Branches`} />
+          </div>
+          <div className={`workspace-banner ${onboarding.onboardingState.operationalAccessAllowed ? 'success' : 'info'}`} style={{ marginTop: 14 }}><strong>Merchant view:</strong> {onboarding.onboardingState.merchantMessage}</div>
+          {onboarding.onboardingState.blockers.length ? <div className="workspace-banner warning" style={{ marginTop: 10 }}><strong>Activation blockers:</strong> {onboarding.onboardingState.blockers.map(label).join(', ')}</div> : null}
+        </> : <div className="workspace-banner warning">Shared onboarding projection is unavailable for this Business.</div>}
+        <div className="workspace-detail-grid" style={{ marginTop: 14 }}>
+          <Detail label="Governed prices" value={String(onboarding.prices.length)} />
+          <Detail label="Commercial orders" value={String(onboarding.orders.length)} />
+          <Detail label="Agreements" value={String(onboarding.agreements.length)} />
+          <Detail label="Installment purchases" value={String(overview.installmentBilling.length)} />
+        </div>
+      </> : <Empty title="No state loaded" body="Retry the selected Business if a temporary error occurred." />}
     </section>
 
     {error ? <div className="workspace-banner error">{error}</div> : null}
@@ -451,6 +475,7 @@ function parseOverview(value: unknown): CommercialOverview {
 function parseOnboarding(value: unknown): CommercialOnboarding {
   const root = record(value);
   const runtime = record(root.runtimeCompatibility);
+  const state = record(root.onboardingState);
   return {
     canManage: root.canManage === true,
     eligibleForInitialInstallment: runtime.eligibleForInitialInstallment === true,
@@ -461,6 +486,17 @@ function parseOnboarding(value: unknown): CommercialOnboarding {
     orders: array(root.orders).map((value) => { const row=record(value); return { id:stringValue(row.id), reference:stringValue(row.reference), currency:stringValue(row.currency,'NGN'), totalGrossAmount:numberValue(row.totalGrossAmount), orderedAt:stringValue(row.orderedAt), installmentObligationId:nullableString(row.installmentObligationId), structureCode:nullableString(row.structureCode) }; }).filter((row) => row.id),
     templates: array(root.templates).map((value) => { const row=record(value); return { id:stringValue(row.id), family:stringValue(row.family), versionCode:stringValue(row.versionCode), title:stringValue(row.title), effectiveFrom:stringValue(row.effectiveFrom), publishedAt:stringValue(row.publishedAt) }; }).filter((row) => row.id),
     agreements: array(root.agreements).map((value) => { const row=record(value); return { id:stringValue(row.id), commercialOrderId:stringValue(row.commercialOrderId), reference:stringValue(row.reference), accepted:row.accepted===true }; }).filter((row) => row.id),
+    onboardingState: Object.keys(state).length ? {
+      stage: stringValue(state.stage,'commercial_review'),
+      merchantMessage: stringValue(state.merchantMessage,'SellerTray onboarding status is unavailable.'),
+      nextActionLabel: stringValue(state.nextActionLabel,'Review'),
+      operationalAccessAllowed: state.operationalAccessAllowed === true,
+      activationComplete: state.activationComplete === true,
+      activeBranchCount: numberValue(state.activeBranchCount),
+      setupRequiredCount: numberValue(state.setupRequiredCount),
+      setupReadyCount: numberValue(state.setupReadyCount),
+      blockers: array(state.blockers).filter((value): value is string => typeof value === 'string' && value.length > 0),
+    } : null,
   };
 }
 
