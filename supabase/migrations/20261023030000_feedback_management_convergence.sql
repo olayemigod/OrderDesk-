@@ -54,7 +54,7 @@ begin
   from public.tenant_members tm
   where tm.tenant_id=p_tenant_id and tm.user_id=v_user_id;
 
-  if v_role not in ('owner','manager') then
+  if v_role is null or v_role not in ('owner','manager') then
     raise exception 'Only an Owner or Manager can view feedback for this business' using errcode='42501';
   end if;
 
