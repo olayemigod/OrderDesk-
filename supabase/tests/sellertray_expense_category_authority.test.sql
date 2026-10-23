@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(28);
+select extensions.plan(29);
 
 create temp table sellertray_expense_category_fixture (
   tenant_id uuid not null,
@@ -168,6 +168,20 @@ select extensions.ok(
       and m.expense_category='Delivery'
   ),
   'Cashier Expense writes persist stable category identity plus immutable label snapshot'
+);
+
+select extensions.ok(
+  exists(
+    select 1
+    from sellertray_expense_category_fixture f,
+      jsonb_array_elements(
+        public.get_sellertray_cash_shift_management_detail_with_categories(f.tenant_id,f.shift_id)->'movements'
+      ) movement
+    where movement->>'movementId'=f.uuid_cash_result->>'movementId'
+      and movement->>'expenseCategoryId'=f.category_id::text
+      and movement->>'expenseCategory'='Delivery'
+  ),
+  'Shift detail exposes stable Expense Category identity alongside the historical label snapshot'
 );
 
 update sellertray_expense_category_fixture
