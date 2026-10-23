@@ -25,7 +25,7 @@ type InstallmentLine = {
   percentage: number;
   amountDue: number;
   dueAt: string | null;
-  paymentStatus: 'paid' | 'unpaid';
+  paymentStatus: 'settled' | 'partial' | 'unpaid';
   paidAt: string | null;
 };
 
@@ -126,7 +126,7 @@ export default function CommercialBillingAdministration({
   const [setupPriceForm, setSetupPriceForm] = useState({ currency: 'NGN', gross: '', taxRate: '', effectiveFrom: nowLocal(), reason: '' });
   const [purchaseForm, setPurchaseForm] = useState({ branchIds: [] as string[], structureCode: 'two_installment_70_30', orderReference: '', reason: '' });
   const [templateForm, setTemplateForm] = useState({ family: 'installment_agreement', versionCode: '', title: '', contentBody: '', effectiveFrom: nowLocal(), reason: '' });
-  const [agreementForm, setAgreementForm] = useState({ commercialOrderId: '', templateVersionId: '', reference: '', renderedContent: '', reason: '' });
+  const [agreementForm, setAgreementForm] = useState({ commercialOrderId: '', templateVersionId: '', supersedesAgreementId: '', reference: '', renderedContent: '', reason: '' });
 
   const selectedOrder = onboarding?.orders.find((order) => order.id === agreementForm.commercialOrderId) ?? null;
   const canManage = actorRole === 'admin' && onboarding?.canManage === true;
@@ -145,7 +145,7 @@ export default function CommercialBillingAdministration({
     setSetupForm(null);
     setupCommandIds.current.clear();
     setPurchaseForm((current) => ({ ...current, branchIds: [], orderReference: '', reason: '' }));
-    setAgreementForm((current) => ({ ...current, commercialOrderId: '', templateVersionId: '', reference: '', renderedContent: '', reason: '' }));
+    setAgreementForm((current) => ({ ...current, commercialOrderId: '', templateVersionId: '', supersedesAgreementId: '', reference: '', renderedContent: '', reason: '' }));
 
     if (!selectedTenantId) {
       tenantLoadSequence.current += 1;
@@ -282,6 +282,7 @@ export default function CommercialBillingAdministration({
       action: 'admin_issue', tenantId: selectedTenantId,
       commercialOrderId: selectedOrder.id, installmentObligationId: selectedOrder.installmentObligationId,
       templateVersionId: agreementForm.templateVersionId, reference: agreementForm.reference,
+      supersedesAgreementId: agreementForm.supersedesAgreementId || null,
       renderedContent: agreementForm.renderedContent, reason: agreementForm.reason,
     }, 'Merchant agreement issued from governed commercial facts.');
   }
@@ -409,7 +410,9 @@ export default function CommercialBillingAdministration({
         <article className="workspace-module-card" style={{ gridColumn: '1 / -1' }}>
           <h3>5. Issue merchant agreement</h3><p>Issue against the exact immutable order and installment obligation. Merchant acceptance remains separate.</p>
           <div className="workspace-form-stack">
-            <div className="workspace-field-grid two"><label>Commercial order<select value={agreementForm.commercialOrderId} onChange={(e) => setAgreementForm({ ...agreementForm, commercialOrderId: e.target.value })}><option value="">Select order</option>{onboarding.orders.map((order) => <option key={order.id} value={order.id}>{order.reference} · {money(order.totalGrossAmount, order.currency)}</option>)}</select></label><label>Template<select value={agreementForm.templateVersionId} onChange={(e) => setAgreementForm({ ...agreementForm, templateVersionId: e.target.value })}><option value="">Select template</option>{onboarding.templates.map((template) => <option key={template.id} value={template.id}>{template.title} · {template.versionCode}</option>)}</select></label></div>
+            <div className="workspace-field-grid two"><label>Commercial order<select value={agreementForm.commercialOrderId} onChange={(e) => setAgreementForm({ ...agreementForm, commercialOrderId: e.target.value, supersedesAgreementId: '' })}><option value="">Select order</option>{onboarding.orders.map((order) => <option key={order.id} value={order.id}>{order.reference} · {money(order.totalGrossAmount, order.currency)}</option>)}</select></label><label>Template<select value={agreementForm.templateVersionId} onChange={(e) => setAgreementForm({ ...agreementForm, templateVersionId: e.target.value })}><option value="">Select template</option>{onboarding.templates.map((template) => <option key={template.id} value={template.id}>{template.title} · {template.versionCode}</option>)}</select></label></div>
+            <label>Agreement to replace<select value={agreementForm.supersedesAgreementId} onChange={(e) => setAgreementForm({ ...agreementForm, supersedesAgreementId: e.target.value })}><option value="">New agreement</option>{onboarding.agreements.filter((agreement) => agreement.commercialOrderId === agreementForm.commercialOrderId).map((agreement) => <option key={agreement.id} value={agreement.id}>{agreement.reference}{agreement.accepted ? ' · Previously accepted' : ''}</option>)}</select></label>
+            <p className="workspace-muted">When commercial terms change, issue a replacement and obtain fresh merchant acceptance. The original agreement remains in history.</p>
             <label>Agreement reference<input maxLength={128} value={agreementForm.reference} onChange={(e) => setAgreementForm({ ...agreementForm, reference: e.target.value })} /></label>
             <label>Rendered agreement content<textarea rows={8} maxLength={300000} value={agreementForm.renderedContent} onChange={(e) => setAgreementForm({ ...agreementForm, renderedContent: e.target.value })} /></label>
             <label>Issuance reason<input maxLength={1000} value={agreementForm.reason} onChange={(e) => setAgreementForm({ ...agreementForm, reason: e.target.value })} /></label>
@@ -429,7 +432,7 @@ export default function CommercialBillingAdministration({
 
     {overview ? <section className="workspace-panel" style={{ gridColumn: '1 / -1' }}>
       <div className="workspace-panel-heading"><div><h2>Installment entitlement</h2><p>No due-date, grace or suspension semantics are inferred.</p></div></div>
-      {overview.installmentBilling.length ? <div className="workspace-form-stack">{overview.installmentBilling.map((item) => <article key={item.installmentObligationId} className="workspace-module-card"><div className="workspace-panel-heading"><div><h3>{structureLabel(item.structureCode)}</h3><p>{money(item.obligatedAmount,item.currency)} · {item.paidInstallmentCount} of {item.installmentCount} installments confirmed</p></div><span className="workspace-status info">{label(item.entitlementState)}</span></div><div className="workspace-detail-grid"><Detail label="Agreement" value={item.agreementAccepted ? 'Accepted' : 'Awaiting acceptance'} /><Detail label="Branch setup" value={item.setupReady ? 'Ready' : `${item.setupReadyCount} of ${item.setupRequiredCount} ready`} /><Detail label="Activation" value={item.activationAt ? formatDate(item.activationAt) : 'Not activated'} /><Detail label="Entitlement end" value={item.fullTermUntil ? formatDate(item.fullTermUntil) : item.provisionalUntil ? formatDate(item.provisionalUntil) : 'Pending prerequisites'} /></div><div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Installment</th><th>Share</th><th>Amount</th><th>Due</th><th>Payment</th></tr></thead><tbody>{item.schedule.map((line) => <tr key={line.id}><td>{line.sequenceNo}</td><td>{line.percentage}%</td><td>{money(line.amountDue,item.currency)}</td><td>{line.dueAt ? formatDate(line.dueAt) : 'Not scheduled'}</td><td>{line.paymentStatus === 'paid' ? `Paid${line.paidAt ? ` ${formatDate(line.paidAt)}` : ''}` : 'Unpaid'}</td></tr>)}</tbody></table></div></article>)}</div> : <Empty title="No installment purchase" body="This Business has no installment obligation." />}
+      {overview.installmentBilling.length ? <div className="workspace-form-stack">{overview.installmentBilling.map((item) => <article key={item.installmentObligationId} className="workspace-module-card"><div className="workspace-panel-heading"><div><h3>{structureLabel(item.structureCode)}</h3><p>{money(item.obligatedAmount,item.currency)} · {item.paidInstallmentCount} of {item.installmentCount} installments confirmed</p></div><span className="workspace-status info">{label(item.entitlementState)}</span></div><div className="workspace-detail-grid"><Detail label="Agreement" value={item.agreementAccepted ? 'Accepted' : 'Awaiting acceptance'} /><Detail label="Branch setup" value={item.setupReady ? 'Ready' : `${item.setupReadyCount} of ${item.setupRequiredCount} ready`} /><Detail label="Activation" value={item.activationAt ? formatDate(item.activationAt) : 'Not activated'} /><Detail label="Entitlement end" value={item.fullTermUntil ? formatDate(item.fullTermUntil) : item.provisionalUntil ? formatDate(item.provisionalUntil) : 'Pending prerequisites'} /></div><div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Installment</th><th>Share</th><th>Amount</th><th>Due</th><th>Payment</th></tr></thead><tbody>{item.schedule.map((line) => <tr key={line.id}><td>{line.sequenceNo}</td><td>{line.percentage}%</td><td>{money(line.amountDue,item.currency)}</td><td>{line.dueAt ? formatDate(line.dueAt) : 'Not scheduled'}</td><td>{line.paymentStatus === 'settled' ? 'Settled' : line.paymentStatus === 'partial' ? 'Partial' : 'Unpaid'}</td></tr>)}</tbody></table></div></article>)}</div> : <Empty title="No installment purchase" body="This Business has no installment obligation." />}
     </section> : null}
   </div>;
 }
@@ -442,7 +445,7 @@ function parseOverview(value: unknown): CommercialOverview {
       const row = record(value);
       return {
         commercialOrderId: stringValue(row.commercialOrderId), installmentObligationId: stringValue(row.installmentObligationId), structureCode: stringValue(row.structureCode), currency: stringValue(row.currency,'NGN'), obligatedAmount: numberValue(row.obligatedAmount), agreementAccepted: row.agreementAccepted === true, setupRequiredCount: numberValue(row.setupRequiredCount), setupReadyCount: numberValue(row.setupReadyCount), setupReady: row.setupReady === true, paidInstallmentCount: numberValue(row.paidInstallmentCount), installmentCount: numberValue(row.installmentCount), entitlementState: stringValue(row.entitlementState,'pending'), activationAt: nullableString(row.activationAt), provisionalUntil: nullableString(row.provisionalUntil), fullTermUntil: nullableString(row.fullTermUntil),
-        schedule: array(row.schedule).map((item) => { const line=record(item); return { id:stringValue(line.id), sequenceNo:numberValue(line.sequenceNo), percentage:numberValue(line.percentage), amountDue:numberValue(line.amountDue), dueAt:nullableString(line.dueAt), paymentStatus:line.paymentStatus==='paid'?'paid':'unpaid', paidAt:nullableString(line.paidAt) }; }),
+        schedule: array(row.schedule).map((item) => { const line=record(item); return { id:stringValue(line.id), sequenceNo:numberValue(line.sequenceNo), percentage:numberValue(line.percentage), amountDue:numberValue(line.amountDue), dueAt:nullableString(line.dueAt), paymentStatus:line.paymentStatus==='settled'||line.paymentStatus==='paid'?'settled':line.paymentStatus==='partial'?'partial':'unpaid', paidAt:nullableString(line.paidAt) }; }),
       } as InstallmentState;
     }).filter((row) => row.installmentObligationId),
     branchSetup: array(root.branchSetup).map((value) => { const row=record(value); return { commercialOrderId:stringValue(row.commercialOrderId), installmentObligationId:nullableString(row.installmentObligationId), lineNo:numberValue(row.lineNo), branchId:stringValue(row.branchId), branchCode:stringValue(row.branchCode), branchName:stringValue(row.branchName,'Branch'), description:stringValue(row.description,'Branch setup'), currency:stringValue(row.currency,'NGN'), grossAmount:numberValue(row.grossAmount), ready:row.ready===true, readinessId:nullableString(row.readinessId), readyAt:nullableString(row.readyAt) } as BranchSetupState; }).filter((row) => row.commercialOrderId && row.branchId),

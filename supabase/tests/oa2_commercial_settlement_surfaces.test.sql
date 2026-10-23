@@ -79,7 +79,7 @@ select extensions.ok(
 );
 
 select extensions.ok(
-  position('sellertray_commercial_payment_confirmations' in lower(pg_get_functiondef('public.get_sellertray_commercial_settlement_detail_internal(uuid,uuid)'::regprocedure))) > 0
+  position('sellertray_commercial_installment_payment_confirmations' in lower(pg_get_functiondef('public.get_sellertray_commercial_settlement_detail_internal(uuid,uuid)'::regprocedure))) > 0
   and position('sellertray_commercial_direct_payment_confirmations' in lower(pg_get_functiondef('public.get_sellertray_commercial_settlement_detail_internal(uuid,uuid)'::regprocedure))) > 0,
   'settlement detail keeps provider confirmations and direct ProcessEdge payments as separate histories'
 );

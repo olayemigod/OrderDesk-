@@ -211,7 +211,7 @@ select extensions.is(
   public.get_sellertray_installment_billing_state(
     (select tenant_id from sellertray_c1b_fixture),
     (select installment_obligation_id from sellertray_c1b_fixture)
-  )->>'entitlementState','awaiting_first_payment'::text,
+  )->>'entitlementState','awaiting_qualifying_settlement'::text,
   'agreement plus setup readiness still waits for confirmed payment'
 );
 

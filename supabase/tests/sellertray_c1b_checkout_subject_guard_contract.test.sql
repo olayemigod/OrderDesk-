@@ -23,7 +23,7 @@ select extensions.ok(
   and position('new.plan_codeisdistinctfromv_plan_code' in replace(pg_get_functiondef(
     'public.guard_sellertray_initial_purchase_installment_checkout()'::regprocedure
   ),' ',''))>0
-  and position('abs(new.amount-v_schedule.amount_due)' in replace(pg_get_functiondef(
+  and position('abs(new.amount-v_next_amount)' in replace(pg_get_functiondef(
     'public.guard_sellertray_initial_purchase_installment_checkout()'::regprocedure
   ),' ',''))>0,
   'C1B checkout guard binds order, obligation, schedule, plan and exact governed amount'

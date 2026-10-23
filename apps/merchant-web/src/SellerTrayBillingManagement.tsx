@@ -106,6 +106,7 @@ export default function SellerTrayBillingManagement({ tenantId }: { tenantId: st
       if (response.status === 'retry_required' && response.needsNewCommand === true) {
         safeSessionStorageRemove(storageKey);
         setMessage('The previous secure checkout could not start. Select Pay SellerTray again to create a new payment attempt.');
+        await load();
         return;
       }
       if (typeof response.authorizationUrl !== 'string' || !response.authorizationUrl) {

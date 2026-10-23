@@ -22,6 +22,7 @@ type Agreement = {
   installmentObligationId: string | null;
   supersedesAgreementId: string | null;
   isCurrent: boolean;
+  termsCurrent: boolean;
   issuedAt: string;
   acceptance: Acceptance | null;
 };
@@ -124,8 +125,9 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
         <div className="panel agreement-document"><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: 'inherit', margin: 0 }}>{selected.renderedContent}</pre></div>
         {selected.acceptance ? <div className="success-banner">Accepted {formatDate(selected.acceptance.acceptedAt)} by {selected.acceptance.acceptedLegalName} ({roleLabel(selected.acceptance.acceptedRole)}).</div> : null}
         {!selected.isCurrent ? <div className="warning-banner">This agreement has been replaced. Review and accept the current replacement where required.</div> : null}
+        {selected.isCurrent && !selected.termsCurrent ? <div className="warning-banner">Commercial terms have changed. Ask ProcessEdge for a replacement agreement before continuing payment or activation. Your previous acceptance remains in history.</div> : null}
         {selected.isCurrent && !selected.acceptance && !center?.canAccept ? <div className="warning-banner">Only the Business Owner or a Manager explicitly authorised by the Owner can accept SellerTray commercial agreements.</div> : null}
-        {selected.isCurrent && !selected.acceptance && center?.canAccept ? <form className="settings-form" onSubmit={accept}>
+        {selected.isCurrent && selected.termsCurrent && !selected.acceptance && center?.canAccept ? <form className="settings-form" onSubmit={accept}>
           <label className="field"><span>Authorised representative legal name</span><SellerTrayInput maxLength={200} required value={legalName} onChange={(event) => setLegalName(event.target.value)} placeholder="Full legal name" /></label>
           <label className="access-card"><SellerTrayInput type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span><strong>I confirm I am authorised to act for this business and accept this agreement.</strong><small>Your authenticated SellerTray identity, authority, agreement version and integrity evidence are recorded.</small></span></label>
           <div className="settings-actions"><button className="primary-button" disabled={busy || !confirmed || !legalName.trim()}>{busy ? 'Recording acceptance…' : 'Accept agreement'}</button></div>
@@ -175,6 +177,7 @@ function parseCenter(value: unknown): AgreementCenter {
       installmentObligationId: typeof row.installmentObligationId === 'string' ? row.installmentObligationId : null,
       supersedesAgreementId: typeof row.supersedesAgreementId === 'string' ? row.supersedesAgreementId : null,
       isCurrent: row.isCurrent === true,
+      termsCurrent: row.termsCurrent !== false,
       issuedAt: String(row.issuedAt ?? ''),
       acceptance,
     } satisfies Agreement];
