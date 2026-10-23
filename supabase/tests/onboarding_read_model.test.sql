@@ -42,10 +42,9 @@ with inserted as (
 insert into oa1_fixture(tenant_id)
 select id from inserted;
 
-insert into public.branches(tenant_id,code,name,is_default,is_active)
-select tenant_id,'MAI','Main Branch',true,true
-from oa1_fixture;
-
+-- Business creation already establishes the governed default active Branch and
+-- trial subscription. The OA1 fixture must consume those existing authorities
+-- rather than manufacture a second default Branch or a second runtime state.
 select extensions.is(
   (select public.get_sellertray_onboarding_state_core(tenant_id)->>'currentStage' from oa1_fixture),
   'commercial_order',
@@ -59,7 +58,7 @@ select extensions.is(
 select extensions.is(
   (select (public.get_sellertray_onboarding_state_core(tenant_id)#>>'{branchPreparation,activeBranchCount}')::integer from oa1_fixture),
   1,
-  'the onboarding projection derives active Branch preparation from shared Branch authority'
+  'the onboarding projection derives the governed default active Branch from shared Branch authority'
 );
 select extensions.is(
   (select public.get_sellertray_onboarding_state_core(tenant_id)->>'accessEnforcement' from oa1_fixture),
@@ -78,8 +77,8 @@ select extensions.is(
 );
 select extensions.is(
   (select (public.get_sellertray_onboarding_state_core(tenant_id)#>>'{legacyRuntime,compatibilityAccess}')::boolean from oa1_fixture),
-  false,
-  'the projection does not invent legacy runtime write access when no runtime subscription exists'
+  true,
+  'OA1 exposes existing governed trial compatibility access without converting it into onboarding activation'
 );
 
 select * from extensions.finish();
