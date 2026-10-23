@@ -2,16 +2,14 @@ begin;
 
 -- SellerTray OA2 Flexible Commercial Settlement Authority
 --
--- This migration is intentionally forward-only. Existing commercial orders,
--- agreements, installment obligations, schedules, provider confirmations and
--- entitlement history remain immutable. OA2 adds configurable installment
--- policy, versioned schedule templates, immutable order contract snapshots,
--- audited adjustments/direct payments and a single authoritative settlement
--- projection. Client surfaces must consume this authority rather than deriving
--- commercial truth locally.
+-- Forward-only convergence layer. Existing orders, accepted agreements,
+-- installment obligations/schedules, provider confirmations and entitlement
+-- history remain immutable. OA2 adds versioned installment policy/templates,
+-- immutable contract snapshots, audited commercial credits and one settlement
+-- projection shared by Admin, Merchant Web, Mobile status, WhatsApp and AI.
 
 -- ---------------------------------------------------------------------------
--- Versioned installment schedule templates
+-- 1. Versioned installment schedule templates
 -- ---------------------------------------------------------------------------
 
 create table public.sellertray_installment_schedule_templates (
@@ -30,8 +28,7 @@ create table public.sellertray_installment_schedule_templates (
   unique (template_code,version),
   constraint sellertray_installment_templates_code_check
     check (template_code ~ '^[a-z][a-z0-9_]{1,63}$'),
-  constraint sellertray_installment_templates_version_check
-    check (version > 0),
+  constraint sellertray_installment_templates_version_check check (version > 0),
   constraint sellertray_installment_templates_name_check
     check (char_length(btrim(display_name)) between 1 and 120),
   constraint sellertray_installment_templates_status_check
@@ -55,8 +52,7 @@ create table public.sellertray_installment_schedule_template_lines (
   due_offset_days integer,
   created_at timestamptz not null default now(),
   unique (template_id,sequence_no),
-  constraint sellertray_installment_template_lines_sequence_check
-    check (sequence_no > 0),
+  constraint sellertray_installment_template_lines_sequence_check check (sequence_no > 0),
   constraint sellertray_installment_template_lines_allocation_check
     check (
       (percentage is not null and percentage > 0 and percentage <= 100 and fixed_amount is null)
@@ -76,13 +72,19 @@ language plpgsql
 set search_path=''
 as $$
 declare
-  v_template_id uuid := coalesce(new.template_id,new.id);
+  v_template_id uuid;
+  v_count integer;
   v_percent_count integer;
   v_fixed_count integer;
-  v_count integer;
   v_percent numeric;
   v_qualifying integer;
 begin
+  if tg_table_name='sellertray_installment_schedule_templates' then
+    v_template_id := new.id;
+  else
+    v_template_id := new.template_id;
+  end if;
+
   select count(*)::integer,
          count(*) filter (where l.percentage is not null)::integer,
          count(*) filter (where l.fixed_amount is not null)::integer,
@@ -97,26 +99,21 @@ begin
   where t.id=v_template_id;
 
   if v_qualifying is null then
-    return coalesce(new,old);
+    return new;
   end if;
-
   if v_count=0 then
     raise exception 'SellerTray installment template requires at least one line' using errcode='23514';
   end if;
-
-  if v_percent_count>0 and v_fixed_count>0 then
+  if v_percent_count not in (0,v_count) or v_fixed_count not in (0,v_count) then
     raise exception 'SellerTray installment template cannot mix percentage and fixed allocation lines' using errcode='23514';
   end if;
-
   if v_percent_count=v_count and abs(v_percent-100) >= 0.000001 then
     raise exception 'SellerTray percentage installment template must total 100 percent' using errcode='23514';
   end if;
-
   if v_qualifying > v_count then
     raise exception 'SellerTray qualifying settlement sequence exceeds template line count' using errcode='23514';
   end if;
-
-  return coalesce(new,old);
+  return new;
 end;
 $$;
 
@@ -141,38 +138,35 @@ create trigger prevent_sellertray_installment_template_line_mutation
 before update or delete on public.sellertray_installment_schedule_template_lines
 for each row execute function public.prevent_sellertray_commercial_history_mutation();
 
--- Existing structures remain first-class governed templates, not hard-coded
--- client choices. The final line receives any rounding remainder when a future
--- obligation is materialized from a percentage template.
-with seeded as (
-  insert into public.sellertray_installment_schedule_templates (
-    template_code,version,display_name,status,provisional_entitlement_months,
-    qualifying_settlement_sequence,effective_from,change_reason
-  ) values
-    ('two_installment_70_30',1,'70 / 30', 'published',2,1,'2026-10-21 00:00:00+00','System seed from approved C1B 70:30 structure'),
-    ('three_installment_60_20_20',1,'60 / 20 / 20','published',3,1,'2026-10-21 00:00:00+00','System seed from approved C1B 60:20:20 structure')
-  returning id,template_code
-)
+insert into public.sellertray_installment_schedule_templates (
+  template_code,version,display_name,status,provisional_entitlement_months,
+  qualifying_settlement_sequence,effective_from,change_reason
+) values
+  ('two_installment_70_30',1,'70 / 30','published',2,1,'2026-10-21 00:00:00+00','System seed from approved C1B 70:30 structure'),
+  ('three_installment_60_20_20',1,'60 / 20 / 20','published',3,1,'2026-10-21 00:00:00+00','System seed from approved C1B 60:20:20 structure');
+
 insert into public.sellertray_installment_schedule_template_lines(template_id,sequence_no,percentage)
-select s.id,l.sequence_no,l.percentage
-from seeded s
+select t.id,x.sequence_no,x.percentage
+from public.sellertray_installment_schedule_templates t
 join lateral (
-  select 1 as sequence_no,70::numeric as percentage where s.template_code='two_installment_70_30'
-  union all select 2,30 where s.template_code='two_installment_70_30'
-  union all select 1,60 where s.template_code='three_installment_60_20_20'
-  union all select 2,20 where s.template_code='three_installment_60_20_20'
-  union all select 3,20 where s.template_code='three_installment_60_20_20'
-) l on true;
+  values
+    ('two_installment_70_30'::text,1,70::numeric),
+    ('two_installment_70_30',2,30),
+    ('three_installment_60_20_20',1,60),
+    ('three_installment_60_20_20',2,20),
+    ('three_installment_60_20_20',3,20)
+) x(template_code,sequence_no,percentage) on x.template_code=t.template_code
+where t.version=1;
 
 -- ---------------------------------------------------------------------------
--- Effective-dated installment availability policy
+-- 2. Effective-dated installment availability policy
 -- ---------------------------------------------------------------------------
 
 create table public.sellertray_installment_policy_versions (
   id uuid primary key default gen_random_uuid(),
   scope_kind text not null,
   tenant_id uuid references public.tenants(id) on delete restrict,
-  commercial_order_id uuid references public.sellertray_commercial_orders(id) on delete restrict,
+  commercial_order_id uuid,
   plan_code text references public.subscription_plans(code) on delete restrict,
   billing_cycle text,
   enabled boolean not null,
@@ -182,6 +176,10 @@ create table public.sellertray_installment_policy_versions (
   created_by_user_id uuid references auth.users(id) on delete restrict,
   change_reason text not null,
   created_at timestamptz not null default now(),
+  constraint sellertray_installment_policy_order_same_tenant
+    foreign key (tenant_id,commercial_order_id)
+    references public.sellertray_commercial_orders(tenant_id,id)
+    on delete restrict,
   constraint sellertray_installment_policy_scope_kind_check
     check (scope_kind in ('platform','plan_cycle','tenant','commercial_order')),
   constraint sellertray_installment_policy_cycle_check
@@ -217,9 +215,6 @@ create trigger prevent_sellertray_installment_policy_mutation
 before update or delete on public.sellertray_installment_policy_versions
 for each row execute function public.prevent_sellertray_commercial_history_mutation();
 
--- Preserve the current yearly availability as the initial governed default.
--- Monthly remains disabled by default, but this is data rather than code and can
--- be overridden by later policy versions without a client or database release.
 insert into public.sellertray_installment_policy_versions (
   scope_kind,billing_cycle,enabled,default_template_id,effective_from,change_reason
 )
@@ -230,7 +225,7 @@ where t.template_code='two_installment_70_30' and t.version=1;
 insert into public.sellertray_installment_policy_versions (
   scope_kind,billing_cycle,enabled,default_template_id,effective_from,change_reason
 ) values (
-  'platform','monthly',false,null,'2026-10-21 00:00:00+00','System seed: monthly installments are disabled unless explicitly governed on'
+  'platform','monthly',false,null,'2026-10-21 00:00:00+00','System seed: monthly installments disabled unless explicitly governed on'
 );
 
 create or replace function public.resolve_sellertray_installment_policy(
@@ -283,12 +278,11 @@ grant execute on function public.resolve_sellertray_installment_policy(uuid,uuid
   to service_role;
 
 -- ---------------------------------------------------------------------------
--- Immutable obligation contract snapshots
+-- 3. Immutable obligation contract snapshots
 -- ---------------------------------------------------------------------------
 
 alter table public.sellertray_commercial_installment_obligations
   drop constraint if exists sellertray_commercial_installment_obligations_structure_check;
-
 alter table public.sellertray_commercial_installment_obligations
   add constraint sellertray_commercial_installment_obligations_structure_check
   check (structure_code ~ '^[a-z][a-z0-9_]{1,63}$');
@@ -309,16 +303,13 @@ create table public.sellertray_installment_contract_snapshots (
   unique (installment_obligation_id),
   constraint sellertray_installment_contract_order_same_tenant
     foreign key (tenant_id,commercial_order_id)
-    references public.sellertray_commercial_orders(tenant_id,id)
-    on delete restrict,
+    references public.sellertray_commercial_orders(tenant_id,id) on delete restrict,
   constraint sellertray_installment_contract_obligation_same_tenant
     foreign key (tenant_id,installment_obligation_id)
-    references public.sellertray_commercial_installment_obligations(tenant_id,id)
-    on delete restrict,
+    references public.sellertray_commercial_installment_obligations(tenant_id,id) on delete restrict,
   constraint sellertray_installment_contract_template_code_check
     check (template_code ~ '^[a-z][a-z0-9_]{1,63}$'),
-  constraint sellertray_installment_contract_template_version_check
-    check (template_version > 0),
+  constraint sellertray_installment_contract_template_version_check check (template_version > 0),
   constraint sellertray_installment_contract_provisional_check
     check (provisional_entitlement_months between 0 and 120),
   constraint sellertray_installment_contract_qualifying_check
@@ -358,7 +349,7 @@ left join lateral (
 on conflict (installment_obligation_id) do nothing;
 
 -- ---------------------------------------------------------------------------
--- Immutable commercial adjustments and direct-payment confirmations
+-- 4. Immutable commercial adjustments and direct payments
 -- ---------------------------------------------------------------------------
 
 create table public.sellertray_commercial_adjustments (
@@ -378,18 +369,13 @@ create table public.sellertray_commercial_adjustments (
   unique (tenant_id,command_id),
   constraint sellertray_commercial_adjustments_order_same_tenant
     foreign key (tenant_id,commercial_order_id)
-    references public.sellertray_commercial_orders(tenant_id,id)
-    on delete restrict,
-  constraint sellertray_commercial_adjustments_type_check
-    check (adjustment_type in ('discount')),
-  constraint sellertray_commercial_adjustments_amount_check
-    check (amount > 0),
-  constraint sellertray_commercial_adjustments_currency_check
-    check (currency ~ '^[A-Z]{3}$'),
+    references public.sellertray_commercial_orders(tenant_id,id) on delete restrict,
+  constraint sellertray_commercial_adjustments_type_check check (adjustment_type='discount'),
+  constraint sellertray_commercial_adjustments_amount_check check (amount > 0),
+  constraint sellertray_commercial_adjustments_currency_check check (currency ~ '^[A-Z]{3}$'),
   constraint sellertray_commercial_adjustments_reason_check
     check (char_length(btrim(reason)) between 1 and 1000),
-  constraint sellertray_commercial_adjustments_evidence_check
-    check (jsonb_typeof(evidence)='object'),
+  constraint sellertray_commercial_adjustments_evidence_check check (jsonb_typeof(evidence)='object'),
   constraint sellertray_commercial_adjustments_time_check
     check (approved_at <= recorded_at + interval '5 minutes')
 );
@@ -413,20 +399,16 @@ create table public.sellertray_commercial_direct_payment_confirmations (
   unique (tenant_id,payment_reference),
   constraint sellertray_commercial_direct_payments_order_same_tenant
     foreign key (tenant_id,commercial_order_id)
-    references public.sellertray_commercial_orders(tenant_id,id)
-    on delete restrict,
+    references public.sellertray_commercial_orders(tenant_id,id) on delete restrict,
   constraint sellertray_commercial_direct_payments_reference_check
     check (char_length(btrim(payment_reference)) between 1 and 160),
   constraint sellertray_commercial_direct_payments_method_check
     check (payment_method ~ '^[a-z][a-z0-9_-]{0,31}$'),
-  constraint sellertray_commercial_direct_payments_amount_check
-    check (amount > 0),
-  constraint sellertray_commercial_direct_payments_currency_check
-    check (currency ~ '^[A-Z]{3}$'),
+  constraint sellertray_commercial_direct_payments_amount_check check (amount > 0),
+  constraint sellertray_commercial_direct_payments_currency_check check (currency ~ '^[A-Z]{3}$'),
   constraint sellertray_commercial_direct_payments_reason_check
     check (char_length(btrim(reason)) between 1 and 1000),
-  constraint sellertray_commercial_direct_payments_evidence_check
-    check (jsonb_typeof(evidence)='object'),
+  constraint sellertray_commercial_direct_payments_evidence_check check (jsonb_typeof(evidence)='object'),
   constraint sellertray_commercial_direct_payments_time_check
     check (paid_at <= recorded_at + interval '5 minutes')
 );
@@ -439,14 +421,10 @@ create index sellertray_commercial_direct_payments_order_idx
 create trigger prevent_sellertray_commercial_adjustment_mutation
 before update or delete on public.sellertray_commercial_adjustments
 for each row execute function public.prevent_sellertray_commercial_history_mutation();
-
 create trigger prevent_sellertray_commercial_direct_payment_mutation
 before update or delete on public.sellertray_commercial_direct_payment_confirmations
 for each row execute function public.prevent_sellertray_commercial_history_mutation();
 
--- Guard currency and prevent commercial credits exceeding the immutable gross
--- at insertion time. Separate append-only reversal facts can be introduced by a
--- later governed phase if commercial reversal semantics are approved.
 create or replace function public.prepare_sellertray_commercial_credit_fact()
 returns trigger
 language plpgsql
@@ -465,48 +443,36 @@ begin
   new.currency := v_order.currency;
   new.reason := btrim(new.reason);
 
-  select coalesce(sum(a.amount),0)::numeric(18,2)
-    into v_adjustments
+  select coalesce(sum(a.amount),0)::numeric(18,2) into v_adjustments
   from public.sellertray_commercial_adjustments a
   where a.tenant_id=new.tenant_id and a.commercial_order_id=new.commercial_order_id;
 
-  select coalesce(sum(p.amount),0)::numeric(18,2)
-    into v_gateway
+  select coalesce(sum(p.amount),0)::numeric(18,2) into v_gateway
   from public.sellertray_commercial_installment_payment_confirmations p
   where p.tenant_id=new.tenant_id and p.commercial_order_id=new.commercial_order_id;
 
-  select coalesce(sum(p.amount),0)::numeric(18,2)
-    into v_direct
+  select coalesce(sum(p.amount),0)::numeric(18,2) into v_direct
   from public.sellertray_commercial_direct_payment_confirmations p
   where p.tenant_id=new.tenant_id and p.commercial_order_id=new.commercial_order_id;
 
-  if tg_table_name='sellertray_commercial_adjustments' then
-    if v_adjustments + new.amount > v_order.total_gross_amount + 0.004 then
-      raise exception 'Commercial adjustments cannot exceed immutable order gross' using errcode='23514';
-    end if;
-  else
-    if v_gateway + v_direct + new.amount > greatest(v_order.total_gross_amount-v_adjustments,0) + 0.004 then
-      raise exception 'Confirmed commercial payments cannot exceed adjusted amount due' using errcode='23514';
-    end if;
+  if v_adjustments+v_gateway+v_direct+new.amount > v_order.total_gross_amount + 0.004 then
+    raise exception 'Commercial credits cannot exceed immutable order gross' using errcode='23514';
   end if;
-
   return new;
 end;
 $$;
 
 revoke all on function public.prepare_sellertray_commercial_credit_fact()
   from public,anon,authenticated;
-
 create trigger prepare_sellertray_commercial_adjustment
 before insert on public.sellertray_commercial_adjustments
 for each row execute function public.prepare_sellertray_commercial_credit_fact();
-
 create trigger prepare_sellertray_commercial_direct_payment
 before insert on public.sellertray_commercial_direct_payment_confirmations
 for each row execute function public.prepare_sellertray_commercial_credit_fact();
 
 -- ---------------------------------------------------------------------------
--- Authoritative settlement projection and deterministic schedule allocation
+-- 5. Authoritative settlement projection and deterministic allocation
 -- ---------------------------------------------------------------------------
 
 create or replace function public.get_sellertray_commercial_settlement_state(
@@ -528,7 +494,6 @@ declare
   v_net_due numeric(18,2) := 0;
   v_total_paid numeric(18,2) := 0;
   v_outstanding numeric(18,2) := 0;
-  v_overpayment numeric(18,2) := 0;
   v_credit numeric(18,2) := 0;
   v_schedule jsonb := '[]'::jsonb;
   v_next_schedule_id uuid;
@@ -539,25 +504,21 @@ begin
   from public.sellertray_commercial_orders o
   where o.tenant_id=p_tenant_id and o.id=p_commercial_order_id;
 
-  select coalesce(sum(a.amount),0)::numeric(18,2)
-    into v_adjustments
+  select coalesce(sum(a.amount),0)::numeric(18,2) into v_adjustments
   from public.sellertray_commercial_adjustments a
   where a.tenant_id=p_tenant_id and a.commercial_order_id=p_commercial_order_id;
 
-  select coalesce(sum(p.amount),0)::numeric(18,2)
-    into v_gateway
+  select coalesce(sum(p.amount),0)::numeric(18,2) into v_gateway
   from public.sellertray_commercial_installment_payment_confirmations p
   where p.tenant_id=p_tenant_id and p.commercial_order_id=p_commercial_order_id;
 
-  select coalesce(sum(p.amount),0)::numeric(18,2)
-    into v_direct
+  select coalesce(sum(p.amount),0)::numeric(18,2) into v_direct
   from public.sellertray_commercial_direct_payment_confirmations p
   where p.tenant_id=p_tenant_id and p.commercial_order_id=p_commercial_order_id;
 
   v_net_due := greatest(v_order.total_gross_amount-v_adjustments,0)::numeric(18,2);
   v_total_paid := (v_gateway+v_direct)::numeric(18,2);
   v_outstanding := greatest(v_net_due-v_total_paid,0)::numeric(18,2);
-  v_overpayment := greatest(v_total_paid-v_net_due,0)::numeric(18,2);
   v_credit := least(v_adjustments+v_total_paid,v_order.total_gross_amount)::numeric(18,2);
 
   select o.* into v_obligation
@@ -567,7 +528,7 @@ begin
   if found then
     with lines as (
       select s.id,s.sequence_no,s.percentage,s.amount_due,s.due_at,
-             coalesce(sum(prev.amount_due) over (
+             coalesce(sum(s.amount_due) over (
                order by s.sequence_no
                rows between unbounded preceding and 1 preceding
              ),0)::numeric(18,2) as prior_due
@@ -591,7 +552,8 @@ begin
              'settled',a.remaining_amount < 0.005
            ) order by a.sequence_no),'[]'::jsonb),
            (array_agg(a.id order by a.sequence_no) filter (where a.remaining_amount >= 0.005))[1],
-           (array_agg(least(a.remaining_amount,v_outstanding)::numeric(18,2) order by a.sequence_no) filter (where a.remaining_amount >= 0.005))[1]
+           (array_agg(least(a.remaining_amount,v_outstanding)::numeric(18,2) order by a.sequence_no)
+              filter (where a.remaining_amount >= 0.005))[1]
       into v_schedule,v_next_schedule_id,v_next_payable
     from allocated a;
   end if;
@@ -617,7 +579,7 @@ begin
     'totalConfirmedPaymentAmount',v_total_paid,
     'netAmountDue',v_net_due,
     'outstandingAmount',v_outstanding,
-    'overpaymentAmount',v_overpayment,
+    'overpaymentAmount',greatest(v_total_paid-v_net_due,0)::numeric(18,2),
     'settlementStatus',v_status,
     'installmentObligationId',v_obligation.id,
     'schedule',v_schedule,
@@ -633,18 +595,15 @@ grant execute on function public.get_sellertray_commercial_settlement_state(uuid
   to service_role;
 
 -- ---------------------------------------------------------------------------
--- Stale checkout retirement
+-- 6. Stale checkout retirement
 -- ---------------------------------------------------------------------------
 
 alter table public.billing_checkout_sessions
   drop constraint if exists billing_checkout_sessions_status_check;
-
 alter table public.billing_checkout_sessions
   add constraint billing_checkout_sessions_status_check
     check (status in ('preparing','initialized','paid','failed','expired','superseded'));
 
--- Superseded sessions are deliberately terminal and excluded from this active
--- uniqueness rule. Paid remains authoritative historical settlement for its line.
 drop index if exists public.billing_checkout_sessions_installment_active_key;
 create unique index billing_checkout_sessions_installment_active_key
   on public.billing_checkout_sessions(tenant_id,installment_schedule_id)
@@ -672,7 +631,7 @@ begin
   v_outstanding := coalesce((v_state->>'outstandingAmount')::numeric,0);
 
   update public.billing_checkout_sessions s
-  set status='superseded',updated_at=now()
+  set status='superseded'
   where s.tenant_id=p_tenant_id
     and s.commercial_order_id=p_commercial_order_id
     and s.checkout_kind='installment'
@@ -694,8 +653,8 @@ revoke all on function public.supersede_sellertray_stale_installment_checkouts(u
 grant execute on function public.supersede_sellertray_stale_installment_checkouts(uuid,uuid)
   to service_role;
 
--- Internal append functions keep financial facts server-owned for this slice.
--- Capability-aware Admin wrappers are added in the following OA2 surface slice.
+-- Service-role-only append functions. Capability-aware Admin wrappers are wired
+-- in the next OA2 surface slice; direct client mutation is intentionally absent.
 create or replace function public.record_sellertray_commercial_adjustment_internal(
   p_tenant_id uuid,
   p_commercial_order_id uuid,
@@ -713,12 +672,19 @@ as $$
 declare
   v_row public.sellertray_commercial_adjustments%rowtype;
 begin
+  if p_amount is null or p_amount <= 0 then
+    raise exception 'Commercial adjustment amount must be positive' using errcode='22023';
+  end if;
+  if nullif(btrim(p_reason),'') is null then
+    raise exception 'Commercial adjustment reason is required' using errcode='22023';
+  end if;
+
   select a.* into v_row
   from public.sellertray_commercial_adjustments a
   where a.tenant_id=p_tenant_id and a.command_id=p_command_id;
 
   if found then
-    if v_row.commercial_order_id<>p_commercial_order_id or abs(v_row.amount-p_amount)>=0.005 then
+    if v_row.commercial_order_id<>p_commercial_order_id or abs(v_row.amount-round(p_amount::numeric,2))>=0.005 then
       raise exception 'Commercial adjustment command id was already used with different input' using errcode='23505';
     end if;
   else
@@ -757,14 +723,24 @@ as $$
 declare
   v_row public.sellertray_commercial_direct_payment_confirmations%rowtype;
 begin
-  select p.* into v_row
-  from public.sellertray_commercial_direct_payment_confirmations p
-  where p.tenant_id=p_tenant_id and p.command_id=p_command_id;
+  if p_amount is null or p_amount <= 0 then
+    raise exception 'Direct payment amount must be positive' using errcode='22023';
+  end if;
+  if nullif(btrim(p_payment_reference),'') is null or nullif(btrim(p_payment_method),'') is null then
+    raise exception 'Direct payment reference and method are required' using errcode='22023';
+  end if;
+  if nullif(btrim(p_reason),'') is null then
+    raise exception 'Direct payment reason is required' using errcode='22023';
+  end if;
+
+  select d.* into v_row
+  from public.sellertray_commercial_direct_payment_confirmations d
+  where d.tenant_id=p_tenant_id and d.command_id=p_command_id;
 
   if found then
     if v_row.commercial_order_id<>p_commercial_order_id
        or v_row.payment_reference<>btrim(p_payment_reference)
-       or abs(v_row.amount-p_amount)>=0.005 then
+       or abs(v_row.amount-round(p_amount::numeric,2))>=0.005 then
       raise exception 'Direct payment command id was already used with different input' using errcode='23505';
     end if;
   else
@@ -793,5 +769,28 @@ grant execute on function public.record_sellertray_commercial_adjustment_interna
   to service_role;
 grant execute on function public.record_sellertray_commercial_direct_payment_internal(uuid,uuid,uuid,text,text,numeric,timestamptz,text,jsonb,uuid)
   to service_role;
+
+-- New OA2 tables are not client-readable/writable by default. Read projections
+-- and capability-gated mutation RPCs expose only governed data.
+alter table public.sellertray_installment_schedule_templates enable row level security;
+alter table public.sellertray_installment_schedule_template_lines enable row level security;
+alter table public.sellertray_installment_policy_versions enable row level security;
+alter table public.sellertray_installment_contract_snapshots enable row level security;
+alter table public.sellertray_commercial_adjustments enable row level security;
+alter table public.sellertray_commercial_direct_payment_confirmations enable row level security;
+
+revoke all on public.sellertray_installment_schedule_templates from public,anon,authenticated;
+revoke all on public.sellertray_installment_schedule_template_lines from public,anon,authenticated;
+revoke all on public.sellertray_installment_policy_versions from public,anon,authenticated;
+revoke all on public.sellertray_installment_contract_snapshots from public,anon,authenticated;
+revoke all on public.sellertray_commercial_adjustments from public,anon,authenticated;
+revoke all on public.sellertray_commercial_direct_payment_confirmations from public,anon,authenticated;
+
+grant select,insert on public.sellertray_installment_schedule_templates to service_role;
+grant select,insert on public.sellertray_installment_schedule_template_lines to service_role;
+grant select,insert on public.sellertray_installment_policy_versions to service_role;
+grant select,insert on public.sellertray_installment_contract_snapshots to service_role;
+grant select,insert on public.sellertray_commercial_adjustments to service_role;
+grant select,insert on public.sellertray_commercial_direct_payment_confirmations to service_role;
 
 commit;
