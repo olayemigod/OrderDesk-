@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 import type { Session } from '@supabase/supabase-js';
 import BusinessDashboard from './BusinessDashboard';
 import CommercialBillingAdministration, { type CommercialAdminTenant } from './CommercialBillingAdministration';
+import MerchantPortfolio from './MerchantPortfolio';
 import { invokeJson, isRecord, supabase } from './supabase';
 
 type SecurityState = 'checking' | 'needs_mfa' | 'needs_enroll' | 'ready';
@@ -389,7 +390,7 @@ function WorkspaceShell({ session, overview, audit, onReload, onAuditRefresh, on
   const page = (() => {
     switch (section) {
       case 'overview': return <BusinessDashboard session={session} refreshKey={overview.generatedAt} />;
-      case 'merchants': return <MerchantsPage overview={overview} />;
+      case 'merchants': return <MerchantPortfolio session={session} refreshKey={overview.generatedAt} />;
       case 'billing': return <BillingPage session={session} overview={overview} />;
       case 'communications': return <CommunicationsPage session={session} overview={overview} audit={audit} onAuditRefresh={onAuditRefresh} />;
       case 'operations': return <OperationsPage session={session} overview={overview} />;
@@ -443,84 +444,6 @@ function WorkspaceShell({ session, overview, audit, onReload, onAuditRefresh, on
   );
 }
 
-function MerchantsPage({ overview }: { overview: PlatformOverview }) {
-  const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<'all' | 'attention' | 'connected' | 'restricted'>('all');
-  const [selectedId, setSelectedId] = useState<string | null>(() => merchantFromHash());
-  useEffect(() => {
-    const update = () => setSelectedId(merchantFromHash());
-    window.addEventListener('hashchange', update);
-    return () => window.removeEventListener('hashchange', update);
-  }, []);
-
-  const filtered = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    return overview.tenants.filter((tenant) => {
-      const matchesSearch = !needle || [tenant.name, tenant.slug, tenant.businessEmail ?? '', tenant.businessPhone ?? '', tenant.subscriptionStatus, tenant.whatsappStatus, tenant.planCode ?? ''].some((value) => value.toLowerCase().includes(needle));
-      if (!matchesSearch) return false;
-      if (filter === 'attention') return needsPlatformAttention(tenant);
-      if (filter === 'connected') return tenant.whatsappStatus === 'connected';
-      if (filter === 'restricted') return tenant.accessMode !== 'full';
-      return true;
-    });
-  }, [overview.tenants, search, filter]);
-
-  const selected = overview.tenants.find((tenant) => tenant.id === selectedId) ?? null;
-
-  return (
-    <PageFrame eyebrow="Merchants" title="SellerTray businesses" description="Cross-tenant merchant discovery and platform-level status. Business operations remain in Merchant Web.">
-      <section className="workspace-panel">
-        <div className="workspace-toolbar">
-          <div className="workspace-search"><Icon name="search" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search business, email, phone, plan or status" /></div>
-          <div className="workspace-filter-row">
-            {([['all', 'All'], ['attention', 'Needs attention'], ['connected', 'WhatsApp connected'], ['restricted', 'Restricted access']] as const).map(([value, label]) => <button key={value} className={filter === value ? 'workspace-filter active' : 'workspace-filter'} onClick={() => setFilter(value)}>{label}</button>)}
-          </div>
-        </div>
-        <div className="workspace-table-wrap">
-          <table className="workspace-table">
-            <thead><tr><th>Business</th><th>Plan</th><th>Access state</th><th>WhatsApp</th><th>Orders 30d</th><th>Attention</th></tr></thead>
-            <tbody>
-              {filtered.map((tenant) => (
-                <tr key={tenant.id} className="workspace-clickable-row" onClick={() => setSelectedId(tenant.id)}>
-                  <td><strong>{tenant.name}</strong><small>{tenant.businessEmail ?? tenant.businessPhone ?? tenant.slug}</small></td>
-                  <td>{tenant.planCode ?? '—'}</td>
-                  <td><StatusPill value={tenant.subscriptionStatus} /> <small>{friendlyAccess(tenant.accessMode)}</small></td>
-                  <td><StatusPill value={tenant.whatsappStatus} /></td>
-                  <td>{tenant.orders30d.toLocaleString()}</td>
-                  <td>{tenant.needsReview ? `${tenant.needsReview} review` : needsPlatformAttention(tenant) ? 'Check' : 'Clear'}</td>
-                </tr>
-              ))}
-              {!filtered.length ? <tr><td colSpan={6}><EmptyState title="No merchants found" body="Adjust the search or filters." /></td></tr> : null}
-            </tbody>
-          </table>
-        </div>
-      </section>
-      {selected ? <MerchantSummaryDrawer tenant={selected} onClose={() => setSelectedId(null)} /> : null}
-    </PageFrame>
-  );
-}
-
-function MerchantSummaryDrawer({ tenant, onClose }: { tenant: TenantSummary; onClose: () => void }) {
-  return (
-    <div className="workspace-drawer-backdrop" role="presentation" onClick={onClose}>
-      <aside className="workspace-drawer" role="dialog" aria-modal="true" aria-labelledby="merchant-summary-title" onClick={(event) => event.stopPropagation()}>
-        <div className="workspace-drawer-header"><div><p className="workspace-eyebrow">Merchant summary</p><h2 id="merchant-summary-title">{tenant.name}</h2><p>{tenant.businessEmail ?? tenant.businessPhone ?? tenant.slug}</p></div><button className="workspace-icon-button" aria-label="Close merchant summary" onClick={onClose}><Icon name="close" /></button></div>
-        <div className="workspace-detail-grid">
-          <Detail label="Plan" value={tenant.planCode ?? 'Not assigned'} />
-          <Detail label="Subscription state" value={friendlyLabel(tenant.subscriptionStatus)} />
-          <Detail label="Access" value={friendlyAccess(tenant.accessMode)} />
-          <Detail label="WhatsApp" value={friendlyLabel(tenant.whatsappStatus)} />
-          <Detail label="Orders (30 days)" value={tenant.orders30d.toLocaleString()} />
-          <Detail label="Review items" value={tenant.needsReview.toLocaleString()} />
-          <Detail label="Team" value={tenant.teamCount ? tenant.teamCount.toLocaleString() : '—'} />
-          <Detail label="Current period end" value={formatDate(tenant.currentPeriodEnd)} />
-        </div>
-        <div className="workspace-banner info">Commercial setup, agreements and installment entitlement are managed through governed commands in Billing & Commercial. This merchant summary remains read-only.</div>
-      </aside>
-    </div>
-  );
-}
-
 function BillingPage({ session, overview }: { session: Session; overview: PlatformOverview }) {
   const legacyTrialCount = overview.tenants.filter((tenant) => tenant.subscriptionStatus === 'trial').length;
   const tenants: CommercialAdminTenant[] = overview.tenants.map((tenant) => ({
@@ -537,7 +460,7 @@ function BillingPage({ session, overview }: { session: Session; overview: Platfo
     <PageFrame eyebrow="Billing & Commercial" title="Commercial administration" description="Governed SellerTray commercial operations for agreements, Branch setup readiness, installment payment state and entitlement release.">
       <div className="workspace-banner info"><strong>No free trial.</strong> Paid access uses governed commercial records. Payment confirmation, agreement acceptance, Branch setup readiness and subscription entitlement remain separate authorities.</div>
       {legacyTrialCount ? <div className="workspace-banner warning"><strong>{legacyTrialCount} legacy record{legacyTrialCount === 1 ? '' : 's'} still report trial status.</strong> These are compatibility data awaiting migration and are not a current SellerTray offer.</div> : null}
-      <CommercialBillingAdministration session={session} actorRole={overview.actorRole} tenants={tenants} />
+      <CommercialBillingAdministration session={session} actorRole={overview.actorRole} tenants={tenants} initialTenantId={merchantFromHash()} />
     </PageFrame>
   );
 }
@@ -775,10 +698,6 @@ function Icon({ name }: { name: IconName }) {
 function sectionFromHash(): AdminSection {
   const raw = window.location.hash.replace(/^#/, '').split('?')[0] as AdminSection;
   return NAV_ITEMS.some((item) => item.id === raw) ? raw : 'overview';
-}
-
-function needsPlatformAttention(tenant: TenantSummary): boolean {
-  return tenant.whatsappStatus === 'error' || tenant.accessMode !== 'full' || ['past_due', 'grace', 'suspended', 'cancelled'].includes(tenant.subscriptionStatus) || tenant.needsReview > 0 || tenant.notificationExceptions > 0;
 }
 
 function normalizeOverview(value: unknown): PlatformOverview {
