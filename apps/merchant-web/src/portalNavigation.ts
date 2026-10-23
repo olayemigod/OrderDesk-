@@ -11,6 +11,7 @@ export type MerchantPortalPage =
   | 'purchasing'
   | 'suppliers'
   | 'payments'
+  | 'sellertray_billing'
   | 'cash'
   | 'expenses'
   | 'whatsapp'
@@ -19,6 +20,7 @@ export type MerchantPortalPage =
   | 'ai'
   | 'branches'
   | 'team'
+  | 'agreements'
   | 'feedback'
   | 'settings';
 
@@ -52,6 +54,7 @@ export const MERCHANT_PORTAL_NAVIGATION: MerchantPortalNavigationItem[] = [
   { id: 'purchasing', label: 'Purchase Orders & Receiving', section: 'Purchasing', available: true },
   { id: 'suppliers', label: 'Suppliers', section: 'Purchasing', available: true },
   { id: 'payments', label: 'Payments & Receivables', section: 'Money', available: true },
+  { id: 'sellertray_billing', label: 'SellerTray Billing', section: 'Money', available: true },
   { id: 'cash', label: 'Cash & Shifts', section: 'Money', available: true },
   { id: 'expenses', label: 'Business Expenses', section: 'Money', available: true },
   { id: 'whatsapp', label: 'WhatsApp', section: 'Channels', available: true },
@@ -60,6 +63,7 @@ export const MERCHANT_PORTAL_NAVIGATION: MerchantPortalNavigationItem[] = [
   { id: 'ai', label: 'Ask SellerTray', section: 'Insights', available: true },
   { id: 'branches', label: 'Branches', section: 'Business', available: true },
   { id: 'team', label: 'Team & Permissions', section: 'Business', available: true },
+  { id: 'agreements', label: 'Agreements', section: 'Business', available: true },
   { id: 'feedback', label: 'Feedback', section: 'Business', available: true },
   { id: 'settings', label: 'Settings', section: 'Business', available: true },
 ];
