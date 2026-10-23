@@ -1,5 +1,5 @@
 type JsonRecord = Record<string, unknown>;
-type PortfolioAction = 'installments' | 'agreements';
+type PortfolioAction = 'installments' | 'agreements' | 'onboarding_state';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -33,19 +33,29 @@ Deno.serve(async (request) => {
   const action = cleanAction(body.action);
   if (!action) return json({ error: 'Unsupported commercial portfolio action' }, 400);
 
-  const search = cleanOptionalText(body.search, 120);
-  if (search === undefined) return json({ error: 'Commercial portfolio search must be text up to 120 characters' }, 400);
-  const requestedLimit = Number(body.limit ?? 20);
-  if (!Number.isInteger(requestedLimit) || requestedLimit < 1 || requestedLimit > 50) {
-    return json({ error: 'Commercial portfolio page size must be between 1 and 50' }, 400);
-  }
-
-  const beforeId = body.beforeId === null || body.beforeId === undefined ? null : cleanUuid(body.beforeId);
-  if (body.beforeId !== null && body.beforeId !== undefined && !beforeId) {
-    return json({ error: 'Invalid commercial portfolio cursor' }, 400);
-  }
-
   try {
+    if (action === 'onboarding_state') {
+      const tenantId = cleanUuid(body.tenantId);
+      if (!tenantId) return json({ error: 'Business is required' }, 400);
+      const onboardingState = await rpc<JsonRecord>('get_sellertray_onboarding_state_admin', {
+        p_tenant_id: tenantId,
+        p_actor_user_id: identity.userId,
+      });
+      return json({ onboardingState });
+    }
+
+    const search = cleanOptionalText(body.search, 120);
+    if (search === undefined) return json({ error: 'Commercial portfolio search must be text up to 120 characters' }, 400);
+    const requestedLimit = Number(body.limit ?? 20);
+    if (!Number.isInteger(requestedLimit) || requestedLimit < 1 || requestedLimit > 50) {
+      return json({ error: 'Commercial portfolio page size must be between 1 and 50' }, 400);
+    }
+
+    const beforeId = body.beforeId === null || body.beforeId === undefined ? null : cleanUuid(body.beforeId);
+    if (body.beforeId !== null && body.beforeId !== undefined && !beforeId) {
+      return json({ error: 'Invalid commercial portfolio cursor' }, 400);
+    }
+
     if (action === 'installments') {
       const filter = cleanEnum(body.filter ?? 'open', ['all', 'open', 'awaiting_first_payment', 'in_progress', 'settled']);
       if (!filter) return json({ error: 'Unsupported installment portfolio filter' }, 400);
@@ -146,7 +156,9 @@ function getJwtAal(token: string): 'aal1' | 'aal2' | null {
 }
 
 function cleanAction(value: unknown): PortfolioAction | null {
-  return value === 'installments' || value === 'agreements' ? value : null;
+  return value === 'installments' || value === 'agreements' || value === 'onboarding_state'
+    ? value
+    : null;
 }
 
 function cleanUuid(value: unknown): string | null {
