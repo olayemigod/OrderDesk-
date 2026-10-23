@@ -15,6 +15,7 @@ function requireValue(condition, message) {
 
 const migration = read(join(repoRoot, 'supabase/migrations/20261023124500_merchant_onboarding_read_model.sql'));
 const repository = read(join(mobileRoot, 'src/data/onboardingRepository.ts'));
+const businessesHook = read(join(mobileRoot, 'src/hooks/useBusinesses.ts'));
 const hook = read(join(mobileRoot, 'src/hooks/useOnboardingState.ts'));
 const card = read(join(mobileRoot, 'src/redesign/OnboardingPreparationCard.tsx'));
 const home = read(join(mobileRoot, 'src/redesign/HomeDashboard.tsx'));
@@ -43,9 +44,12 @@ requireValue(
   'Mobile must consume only the merchant-facing onboarding read wrapper',
 );
 requireValue(
-  hook.includes("role === 'owner' || role === 'manager'") &&
+  businessesHook.includes('orderdesk.activeBusinessRoleHint') &&
+    businessesHook.includes('nextActiveBusiness.role') &&
+    hook.includes('orderdesk.activeBusinessRoleHint') &&
+    hook.includes("role === 'owner' || role === 'manager'") &&
     hook.includes('isPermissionDenied'),
-  'Mobile onboarding commercial detail must remain Owner/Manager-only and stay hidden from cashier/staff sessions',
+  'Mobile onboarding commercial detail must suppress staff reads locally while retaining the server Owner/Manager authority check',
 );
 requireValue(
   card.includes('Preparation') &&
