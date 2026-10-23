@@ -225,9 +225,9 @@ const styles = StyleSheet.create({
 });
 
 const darkStyles = StyleSheet.create({
-  card: { backgroundColor: theme.dark.surface, borderColor: theme.dark.accentBorder },
+  card: { backgroundColor: theme.dark.surface, borderColor: theme.dark.borderStrong },
   errorCard: { backgroundColor: '#3A1717', borderColor: '#7A271A' },
-  iconWrap: { backgroundColor: theme.dark.surfaceSubtle, borderColor: theme.dark.accentBorder },
+  iconWrap: { backgroundColor: theme.dark.surfaceSubtle, borderColor: theme.dark.borderStrong },
   titleText: { color: theme.dark.text },
   bodyText: { color: theme.dark.textMuted },
   modePill: { backgroundColor: theme.dark.accentSoft },
