@@ -1,4 +1,4 @@
-﻿export type OrderStatus =
+export type OrderStatus =
   | 'draft'
   | 'needs_review'
   | 'accepted'
@@ -27,6 +27,8 @@ export type PaymentStatus =
   | 'verification_required'
   | 'paid'
   | 'payment_issue';
+
+export type PosPaymentTerms = 'immediate' | 'partial' | 'pay_later';
 
 export type ReturnStatus = 'none' | 'partial' | 'returned';
 
@@ -123,6 +125,7 @@ export type MerchantOrder = {
   fulfillmentConfirmedBy: 'merchant' | 'customer_whatsapp' | null;
   customerConfirmedAt: string | null;
   paymentStatus: PaymentStatus;
+  paymentTerms: PosPaymentTerms | null;
   amountPaid: number;
   paymentConfirmedAt: string | null;
   subtotalAmount?: number | null;
@@ -151,9 +154,9 @@ export function orderTotal(order: MerchantOrder): number | null {
     return order.grossAmount;
   }
 
-  // A completed paid sale has already passed the governed payment/finalisation
-  // authority. Its committed paid amount is a safer historical total than
-  // rebuilding the invoice from line snapshots (which exclude posted tax).
+  // Compatibility fallback for older records that were loaded without the
+  // authoritative transaction total. New order reads populate grossAmount from
+  // orders.total_amount for every lifecycle state, including Partial/Pay later.
   if (order.status === 'completed' && order.paymentStatus === 'paid' && Number.isFinite(order.amountPaid)) {
     return order.amountPaid;
   }
@@ -166,4 +169,20 @@ export function orderTotal(order: MerchantOrder): number | null {
     (sum, item) => sum + item.quantity * (item.unitPrice ?? 0),
     0,
   );
+}
+
+export function orderOutstanding(order: MerchantOrder): number | null {
+  const total = orderTotal(order);
+  if (total === null) return null;
+  return Math.max(0, Number((total - order.returnedAmount - order.amountPaid).toFixed(2)));
+}
+
+export function orderPaymentLabel(order: MerchantOrder): string {
+  if (order.paymentStatus === 'paid') return 'Paid';
+  if (order.paymentStatus === 'payment_issue') return 'Payment issue';
+  if (order.amountPaid > 0.005 && (orderOutstanding(order) ?? 0) > 0.005) return 'Partial';
+  if (order.paymentStatus === 'verification_required') return 'Verification required';
+  if (order.paymentStatus === 'pending') return 'Pending';
+  if (order.paymentTerms === 'pay_later' && (orderOutstanding(order) ?? 0) > 0.005) return 'Pay later';
+  return 'Unpaid';
 }
