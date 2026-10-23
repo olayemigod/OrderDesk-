@@ -158,6 +158,11 @@ join lateral (
 ) x(template_code,sequence_no,percentage) on x.template_code=t.template_code
 where t.version=1;
 
+-- Flush the deferred seed validation before later ALTER TABLE statements.
+-- PostgreSQL rejects ALTER TABLE while deferred trigger events are pending.
+set constraints validate_sellertray_installment_template_header,
+                validate_sellertray_installment_template_line immediate;
+
 -- ---------------------------------------------------------------------------
 -- 2. Effective-dated installment availability policy
 -- ---------------------------------------------------------------------------
