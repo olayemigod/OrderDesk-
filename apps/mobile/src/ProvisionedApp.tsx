@@ -3,9 +3,11 @@ import { Platform, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, T
 import { AuthGate } from './components/AuthGate';
 import { CreateBusinessView } from './components/CreateBusinessView';
 import { LegalAcceptanceGate } from './components/LegalAcceptanceGate';
+import { OnboardingActivationView } from './components/OnboardingActivationView';
 import { PlatformAdminView } from './components/PlatformAdminView';
 import { SellerTrayLoadingScreen } from './components/SellerTrayLoadingScreen';
 import { useBusinesses } from './hooks/useBusinesses';
+import { useOnboardingState } from './hooks/useOnboardingState';
 import { usePlatformAdmin } from './hooks/usePlatformAdmin';
 import { supabase } from './lib/supabase';
 import RedesignWorkspace from './redesign/RedesignWorkspace';
@@ -29,6 +31,7 @@ function ProvisioningGate() {
     createBusiness,
   } = useBusinesses();
   const platformAdmin = usePlatformAdmin();
+  const onboarding = useOnboardingState(activeBusiness?.id ?? null);
 
   if ((loading || platformAdmin.loading) && !activeBusiness && !platformAdmin.overview) {
     return <SellerTrayLoadingScreen message="Preparing your SellerTray account…" />;
@@ -86,6 +89,23 @@ function ProvisioningGate() {
     );
   }
 
+  if (onboarding.loading && !onboarding.state) {
+    return <SellerTrayLoadingScreen message="Checking SellerTray activation…" />;
+  }
+
+  if (!onboarding.state?.operationalAccessAllowed) {
+    return (
+      <OnboardingActivationView
+        business={activeBusiness}
+        state={onboarding.state}
+        loading={onboarding.loading}
+        error={onboarding.error}
+        onRefresh={onboarding.refresh}
+        onSignOut={() => supabase.auth.signOut({ scope: 'local' }).then(() => undefined)}
+      />
+    );
+  }
+
   return <RedesignWorkspace />;
 }
 
@@ -101,10 +121,10 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 5,
   },
-  errorTitle: { color: '#B42318', fontWeight: '900', fontSize: 12 },
-  errorText: { color: '#912018', fontSize: 11, lineHeight: 17 },
-  errorHelp: { color: '#7A271A', fontSize: 10.5, lineHeight: 16 },
-  retryText: { color: '#B42318', fontWeight: '900', fontSize: 11 },
+  errorTitle: { color: '#B42318', fontWeight: '900', fontSize: 15 },
+  errorText: { color: '#912018', fontSize: 14, lineHeight: 20 },
+  errorHelp: { color: '#7A271A', fontSize: 14, lineHeight: 20 },
+  retryText: { color: '#B42318', fontWeight: '900', fontSize: 14 },
   signOutButton: { alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 14 },
-  signOutText: { color: '#667085', fontSize: 12, fontWeight: '800' },
+  signOutText: { color: '#667085', fontSize: 14, fontWeight: '800' },
 });
