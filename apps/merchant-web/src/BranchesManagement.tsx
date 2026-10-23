@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import BranchRegistersManagement from './BranchRegistersManagement';
 import { SellerTrayInput } from './SellerTrayElements';
 import { errorMessage, supabase } from './supabase';
 
 type Branch = { id: string; code: string; name: string; isDefault: boolean; isActive: boolean; createdAt: string };
 type BranchDraft = { code: string; name: string; isDefault: boolean; isActive: boolean };
+type BranchTab = 'overview' | 'registers';
 const EMPTY_BRANCH: BranchDraft = { code: '', name: '', isDefault: false, isActive: true };
 
 export default function BranchesManagement({ tenantId, onBranchesChanged }: { tenantId: string; onBranchesChanged?: () => void | Promise<void> }) {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<BranchDraft>(EMPTY_BRANCH);
+  const [activeTab, setActiveTab] = useState<BranchTab>('overview');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +44,20 @@ export default function BranchesManagement({ tenantId, onBranchesChanged }: { te
     finally { setLoading(false); }
   }
 
-  function startNew() { setSelectedId(null); setDraft(EMPTY_BRANCH); setError(null); setMessage(null); }
+  function manageBranch(branchId: string) {
+    setSelectedId(branchId);
+    setActiveTab('overview');
+    setError(null);
+    setMessage(null);
+  }
+
+  function startNew() {
+    setSelectedId(null);
+    setDraft(EMPTY_BRANCH);
+    setActiveTab('overview');
+    setError(null);
+    setMessage(null);
+  }
 
   async function save(event: FormEvent) {
     event.preventDefault();
@@ -67,19 +83,32 @@ export default function BranchesManagement({ tenantId, onBranchesChanged }: { te
     <div className="section-heading"><div><p className="eyebrow">Business structure</p><h2>Branches</h2></div><div className="topbar-actions"><span className="muted">{activeCount} active</span><button className="primary-button" onClick={startNew}>Add Branch</button></div></div>
     {error ? <div className="error-banner">{error}<button onClick={() => setError(null)}>Dismiss</button></div> : null}
     {message ? <div className="success-banner">{message}<button onClick={() => setMessage(null)}>Dismiss</button></div> : null}
-    <div className="two-column">
-      <article className="panel">
-        <div className="section-heading"><div><p className="eyebrow">Locations</p><h3>Business Branches</h3></div></div>
-        {branches.length ? <div className="table-wrap"><table><thead><tr><th>Branch</th><th>Code</th><th>Status</th><th></th></tr></thead><tbody>{branches.map((branch) => <tr key={branch.id}><td><strong>{branch.name}</strong>{branch.isDefault ? <div className="muted">Default Branch</div> : null}</td><td>{branch.code}</td><td>{branch.isActive ? 'Active' : 'Inactive'}</td><td><button className="text-button" onClick={() => setSelectedId(branch.id)}>Manage</button></td></tr>)}</tbody></table></div> : <div className="empty-state"><strong>No Branches yet</strong><p>Add the first Branch before assigning staff or running Branch operations.</p></div>}
-      </article>
-      <form className="panel form-stack" onSubmit={save}>
-        <div><p className="eyebrow">{selected ? 'Branch details' : 'New Branch'}</p><h3>{selected ? selected.name : 'Add Branch'}</h3><p className="muted">Branch identity is shared by sales, inventory, purchasing, cash, permissions and reporting.</p></div>
+
+    <article className="panel">
+      <div className="section-heading"><div><p className="eyebrow">Locations</p><h3>Business Branches</h3></div></div>
+      {branches.length ? <div className="table-wrap"><table><thead><tr><th>Branch</th><th>Code</th><th>Status</th><th></th></tr></thead><tbody>{branches.map((branch) => <tr key={branch.id}><td><strong>{branch.name}</strong>{branch.isDefault ? <div className="muted">Default Branch</div> : null}</td><td>{branch.code}</td><td>{branch.isActive ? 'Active' : 'Inactive'}</td><td><button className="text-button" onClick={() => manageBranch(branch.id)}>Manage</button></td></tr>)}</tbody></table></div> : <div className="empty-state"><strong>No Branches yet</strong><p>Add the first Branch before assigning staff or running Branch operations.</p></div>}
+    </article>
+
+    {selected ? <div className="branch-detail-shell">
+      <div className="management-tabs" role="tablist" aria-label={`${selected.name} management`}>
+        <button type="button" role="tab" aria-selected={activeTab === 'overview'} className={activeTab === 'overview' ? 'active' : ''} onClick={() => setActiveTab('overview')}>Branch Overview</button>
+        <button type="button" role="tab" aria-selected={activeTab === 'registers'} className={activeTab === 'registers' ? 'active' : ''} onClick={() => setActiveTab('registers')}>Registers</button>
+      </div>
+      {activeTab === 'overview' ? <form className="panel form-stack" onSubmit={save}>
+        <div><p className="eyebrow">Branch details</p><h3>{selected.name}</h3><p className="muted">Branch identity is shared by sales, inventory, purchasing, cash, permissions and reporting.</p></div>
         <label>Branch name<SellerTrayInput value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} maxLength={120} required /></label>
         <label>Branch code<SellerTrayInput value={draft.code} onChange={(event) => setDraft((current) => ({ ...current, code: event.target.value }))} maxLength={40} required /></label>
         <label className="check-row"><SellerTrayInput type="checkbox" checked={draft.isDefault} onChange={(event) => setDraft((current) => ({ ...current, isDefault: event.target.checked }))} /><span>Default Branch</span></label>
         <label className="check-row"><SellerTrayInput type="checkbox" checked={draft.isActive} onChange={(event) => setDraft((current) => ({ ...current, isActive: event.target.checked }))} /><span>Active</span></label>
-        <div className="topbar-actions"><button className="primary-button" disabled={saving}>{saving ? 'Saving' : 'Save Branch'}</button>{selected ? <button type="button" className="secondary-button" onClick={startNew}>Add another</button> : null}</div>
-      </form>
-    </div>
+        <div className="topbar-actions"><button className="primary-button" disabled={saving}>{saving ? 'Saving' : 'Save Branch'}</button><button type="button" className="secondary-button" onClick={startNew}>Add another</button></div>
+      </form> : <BranchRegistersManagement tenantId={tenantId} branchId={selected.id} branchName={selected.name} />}
+    </div> : <form className="panel form-stack" onSubmit={save}>
+      <div><p className="eyebrow">New Branch</p><h3>Add Branch</h3><p className="muted">Create the Branch first, then manage its sales registers from Branch detail.</p></div>
+      <label>Branch name<SellerTrayInput value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} maxLength={120} required /></label>
+      <label>Branch code<SellerTrayInput value={draft.code} onChange={(event) => setDraft((current) => ({ ...current, code: event.target.value }))} maxLength={40} required /></label>
+      <label className="check-row"><SellerTrayInput type="checkbox" checked={draft.isDefault} onChange={(event) => setDraft((current) => ({ ...current, isDefault: event.target.checked }))} /><span>Default Branch</span></label>
+      <label className="check-row"><SellerTrayInput type="checkbox" checked={draft.isActive} onChange={(event) => setDraft((current) => ({ ...current, isActive: event.target.checked }))} /><span>Active</span></label>
+      <button className="primary-button" disabled={saving}>{saving ? 'Saving' : 'Save Branch'}</button>
+    </form>}
   </div>;
 }

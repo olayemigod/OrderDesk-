@@ -1,0 +1,80 @@
+/* SellerTray Merchant/Mobile QA convergence overrides.
+ * This file is intentionally loaded last so the cross-surface ownership and
+ * adaptive contracts win over legacy feature-local styling without creating a
+ * second business authority.
+ */
+
+.management-tabs {
+  display: flex;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 5px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-alt);
+  overscroll-behavior-inline: contain;
+}
+
+.management-tabs button {
+  min-height: 42px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 9px;
+  white-space: nowrap;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.management-tabs button:hover {
+  color: var(--navy);
+  background: var(--surface);
+}
+
+.management-tabs button.active,
+.management-tabs button[aria-selected="true"] {
+  color: #063b24;
+  background: var(--mint);
+}
+
+:root[data-theme="dark"] .management-tabs button.active,
+:root[data-theme="dark"] .management-tabs button[aria-selected="true"] {
+  color: #dff9eb;
+  background: #164531;
+}
+
+.branch-detail-shell {
+  display: grid;
+  gap: 14px;
+}
+
+/* Register lifecycle belongs to Business -> Branches -> Branch detail.
+ * Devices & Printers still consumes the same register authority for printer
+ * assignment, but its legacy create/edit surface is no longer exposed. */
+.devices-page > .device-summary-grid + .device-two-column {
+  display: none;
+}
+
+.settings-payment-availability {
+  margin-top: 4px;
+}
+
+@media (max-width: 760px) {
+  .management-tabs {
+    width: 100%;
+  }
+
+  .management-tabs button {
+    flex: 1 0 auto;
+    min-height: 48px;
+    font-size: .95rem;
+  }
+
+  .branch-registers .table-wrap table {
+    min-width: 560px;
+  }
+}
