@@ -12,7 +12,11 @@ For **every SellerTray task**, also read and follow:
 
 `.agents/skills/sellertray-project-implementation/CROSS_SURFACE.md`
 
+`.agents/skills/sellertray-project-implementation/INTELLIGENT_IMPLEMENTATION.md`
+
 `CROSS_SURFACE.md` is a universal normative extension of the governing skill. It requires agents to implement one coherent business capability across every necessarily affected SellerTray surface in the same implementation sweep. A request that names only Merchant Web, Mobile, Admin Web, WhatsApp, AI, reporting, or another single surface does not remove the obligation to inspect and complete dependent process flows elsewhere.
+
+`INTELLIGENT_IMPLEMENTATION.md` is also universal and mandatory. It requires a 360-degree implementation review of the applicable lifecycle: source of truth, create/update, validation, list/detail, state transitions, payment/receivable, history, print/export, reporting, returns/refunds/reversals, reconciliation, permissions/audit, offline/replay and dependent surfaces. A screen-level fix is not complete while a necessarily affected lifecycle step remains inconsistent or unusable.
 
 For any task touching SellerTray Mobile UI/UX, responsive layout, phones, foldables, mini tablets, tablets, large screens, orientation, resizing, navigation layout, split panes, master-detail views, or device-form-factor QA, also read and follow:
 
@@ -50,9 +54,9 @@ For any task touching offline POS selling, cached payment methods, offline payme
 
 `.agents/skills/sellertray-project-implementation/OFFLINE.md`
 
-`CROSS_SURFACE.md`, `ADAPTIVE.md`, `ADMIN_CAPABILITIES.md`, `VALUATION.md`, `RETURNS.md`, `COMMERCIAL.md`, `COMMERCIAL_C1.md` and `OFFLINE.md` are normative extensions of the governing SellerTray skill for their applicable boundaries. `CROSS_SURFACE.md` applies universally; the others apply when their domains are touched. They do not replace or weaken any rule in `SKILL.md`.
+`CROSS_SURFACE.md`, `INTELLIGENT_IMPLEMENTATION.md`, `ADAPTIVE.md`, `ADMIN_CAPABILITIES.md`, `VALUATION.md`, `RETURNS.md`, `COMMERCIAL.md`, `COMMERCIAL_C1.md` and `OFFLINE.md` are normative extensions of the governing SellerTray skill for their applicable boundaries. `CROSS_SURFACE.md` and `INTELLIGENT_IMPLEMENTATION.md` apply universally; the others apply when their domains are touched. They do not replace or weaken any rule in `SKILL.md`.
 
-That governing skill and its applicable normative extensions are the repository-level implementation contract for the SellerTray redesign. They govern cross-surface flow closure, adaptive Mobile UX and device-form-factor behavior, Admin capability/RBAC boundaries, mobile UX, merchant web boundaries, Admin Web platform/commercial operations, shared commerce architecture, POS, inventory, branch awareness, UOM, WhatsApp commerce, payments, returns/refunds/receivables, subscriptions, setup, installments, agreements, guarantees, promotions, Bluetooth printing, reporting, AI, permissions, offline behaviour, implementation phases, QA gates, and anti-divergence rules.
+That governing skill and its applicable normative extensions are the repository-level implementation contract for the SellerTray redesign. They govern cross-surface flow closure, 360-degree lifecycle completeness, adaptive Mobile UX and device-form-factor behavior, Admin capability/RBAC boundaries, mobile UX, merchant web boundaries, Admin Web platform/commercial operations, shared commerce architecture, POS, inventory, branch awareness, UOM, WhatsApp commerce, payments, returns/refunds/receivables, subscriptions, setup, installments, agreements, guarantees, promotions, Bluetooth printing, reporting, AI, permissions, offline behaviour, implementation phases, QA gates, and anti-divergence rules.
 
 The originating SellerTray redesign conversation is the primary decision record when it is available to the agent. The repository skill is the durable fallback and must be used when that thread is unavailable.
 
@@ -68,7 +72,7 @@ When one surface creates or changes configuration, master data, validation, life
 
 ## Before declaring work complete
 
-Confirm the applicable QA gates from the governing skill and normative extensions, including the universal cross-surface impact gate. Report the tests actually run, preserve existing WhatsApp behaviour unless explicitly changed, and state any migration/build/deployment requirement. Do not describe planned work as completed.
+Confirm the applicable QA gates from the governing skill and normative extensions, including the universal cross-surface impact gate and intelligent 360-degree lifecycle gate. Report the tests actually run, preserve existing WhatsApp behaviour unless explicitly changed, and state any migration/build/deployment requirement. Do not describe planned work as completed.
 
 Every completion report must state the cross-surface impact for Shared Core, Merchant Web, Mobile, Admin Web, WhatsApp, AI, reporting/audit, and offline/sync, with either the implemented/verified effect or a concrete no-impact reason.
 
