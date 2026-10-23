@@ -7,7 +7,7 @@ const read = (path) => readFileSync(resolve(import.meta.dirname, '../..', path),
 const selector = read('admin-web/src/MerchantSelector.tsx');
 const portfolio = read('admin-web/src/CommercialPortfolio.tsx');
 const gateway = read('../supabase/functions/platform-admin-commercial/index.ts');
-const migration = read('../supabase/migrations/20261022093000_platform_admin_commercial_portfolios.sql');
+const migration = read('../supabase/migrations/20261023063450_platform_admin_commercial_portfolio_convergence.sql');
 
 test('Billing single-merchant selection exposes the commercial portfolio without changing multi-select communications', () => {
   assert.match(selector, /import CommercialPortfolio/);
