@@ -3,10 +3,12 @@ import { Platform, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, T
 import { AuthGate } from './components/AuthGate';
 import { CreateBusinessView } from './components/CreateBusinessView';
 import { LegalAcceptanceGate } from './components/LegalAcceptanceGate';
+import { OnboardingActivationView } from './components/OnboardingActivationView';
 import { PlatformAdminView } from './components/PlatformAdminView';
 import { SellerTrayLoadingScreen } from './components/SellerTrayLoadingScreen';
 import { useBusinesses } from './hooks/useBusinesses';
 import { usePlatformAdmin } from './hooks/usePlatformAdmin';
+import { useSellerTrayOnboarding } from './hooks/useSellerTrayOnboarding';
 import { supabase } from './lib/supabase';
 import RedesignWorkspace from './redesign/RedesignWorkspace';
 
@@ -29,6 +31,7 @@ function ProvisioningGate() {
     createBusiness,
   } = useBusinesses();
   const platformAdmin = usePlatformAdmin();
+  const onboarding = useSellerTrayOnboarding(activeBusiness?.id ?? null);
 
   if ((loading || platformAdmin.loading) && !activeBusiness && !platformAdmin.overview) {
     return <SellerTrayLoadingScreen message="Preparing your SellerTray account…" />;
@@ -86,6 +89,24 @@ function ProvisioningGate() {
     );
   }
 
+  if (onboarding.loading && !onboarding.state) {
+    return <SellerTrayLoadingScreen message="Checking SellerTray setup & activation…" />;
+  }
+
+  // Fail closed: if the onboarding authority cannot be read, do not fall through
+  // into live POS merely because a Business record exists.
+  if (!onboarding.state || !onboarding.state.operationsAllowed) {
+    return (
+      <OnboardingActivationView
+        business={activeBusiness}
+        state={onboarding.state}
+        error={onboarding.error}
+        refreshing={onboarding.loading}
+        onRefresh={onboarding.refresh}
+      />
+    );
+  }
+
   return <RedesignWorkspace />;
 }
 
@@ -101,10 +122,10 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 5,
   },
-  errorTitle: { color: '#B42318', fontWeight: '900', fontSize: 12 },
-  errorText: { color: '#912018', fontSize: 11, lineHeight: 17 },
-  errorHelp: { color: '#7A271A', fontSize: 10.5, lineHeight: 16 },
-  retryText: { color: '#B42318', fontWeight: '900', fontSize: 11 },
+  errorTitle: { color: '#B42318', fontWeight: '900', fontSize: 14 },
+  errorText: { color: '#912018', fontSize: 14, lineHeight: 20 },
+  errorHelp: { color: '#7A271A', fontSize: 14, lineHeight: 20 },
+  retryText: { color: '#B42318', fontWeight: '900', fontSize: 14 },
   signOutButton: { alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 14 },
-  signOutText: { color: '#667085', fontSize: 12, fontWeight: '800' },
+  signOutText: { color: '#667085', fontSize: 14, fontWeight: '800' },
 });
