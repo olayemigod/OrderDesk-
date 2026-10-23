@@ -28,8 +28,10 @@ requireValue(
 );
 requireValue(
   migration.includes("grant execute on function public.get_sellertray_onboarding_state(uuid)\n  to authenticated") &&
-    migration.includes('revoke all on function public.get_sellertray_onboarding_state_core(uuid)\n  from public,anon,authenticated'),
-  'Merchant clients must use the governed Owner/Manager wrapper and must not execute the internal onboarding core directly',
+    migration.includes('revoke all on function public.get_sellertray_onboarding_state_core(uuid)\n  from public,anon,authenticated') &&
+    migration.includes("if v_role is null or v_role not in ('owner','manager')") &&
+    migration.includes("if v_role is null or v_role not in ('admin','support')"),
+  'Onboarding wrappers must reject missing identities explicitly and clients must not execute the internal core directly',
 );
 requireValue(
   migration.includes("'approvedAdjustmentAmount',v_approved_adjustment_amount") &&
@@ -50,6 +52,12 @@ requireValue(
     hook.includes("role === 'owner' || role === 'manager'") &&
     hook.includes('isPermissionDenied'),
   'Mobile onboarding commercial detail must suppress staff reads locally while retaining the server Owner/Manager authority check',
+);
+requireValue(
+  hook.includes("AppState.addEventListener('change'") &&
+    hook.includes("nextState === 'active'") &&
+    hook.includes('void refresh()'),
+  'Mobile onboarding status must refresh when the app returns to the foreground so external Merchant Web progress is reflected',
 );
 requireValue(
   card.includes('Preparation') &&
