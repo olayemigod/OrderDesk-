@@ -52,19 +52,25 @@ For any task touching onboarding, subscriptions, setup fees, Branch commercial a
 
 `.agents/skills/sellertray-project-implementation/COMMERCIAL.md`
 
+For any task touching installment availability, installment enable/disable behavior, installment eligibility, schedule templates, schedule customization, merchant/order-specific installment overrides, or safe treatment of active installment contracts after policy changes, also read and follow:
+
+`.agents/skills/sellertray-project-implementation/COMMERCIAL_FLEXIBILITY.md`
+
+`COMMERCIAL_FLEXIBILITY.md` records the later approved rule that installments are governed configurable commercial policy rather than hard-coded product truth. It allows installments to be enabled or disabled safely without a code deployment, treats 70:30 and 60:20:20 as approved presets rather than the only representable schedules, and requires accepted agreements/payment history to remain immutable unless changed through a governed replacement/amendment path.
+
 For C1 commercial-core work and any implementation that depends on the C1/C1A/C1B/C2 transition boundary, also read and follow:
 
 `.agents/skills/sellertray-project-implementation/COMMERCIAL_C1.md`
 
-`COMMERCIAL_C1.md` records the later approved additive-C1 sequencing decision and overrides older C1/C1A/C1B sequence wording where they conflict, except where a still-later explicit decision is recorded in `ONBOARDING_ACTIVATION.md` for qualifying confirmed settlement and Admin commercial intervention.
+`COMMERCIAL_C1.md` records the later approved additive-C1 sequencing decision and overrides older C1/C1A/C1B sequence wording where they conflict, except where a still-later explicit decision is recorded in `ONBOARDING_ACTIVATION.md` for qualifying confirmed settlement and Admin commercial intervention, or in `COMMERCIAL_FLEXIBILITY.md` for configurable installment availability and schedule behavior.
 
 For any task touching offline POS selling, cached payment methods, offline payment capture/verification, outbox replay, sync conflicts, retry/idempotency, or degraded-connectivity payment behavior, also read and follow:
 
 `.agents/skills/sellertray-project-implementation/OFFLINE.md`
 
-`CROSS_SURFACE.md`, `INTELLIGENT_IMPLEMENTATION.md`, `ADAPTIVE.md`, `ADMIN_CAPABILITIES.md`, `VALUATION.md`, `RETURNS.md`, `ONBOARDING_ACTIVATION.md`, `COMMERCIAL.md`, `COMMERCIAL_C1.md` and `OFFLINE.md` are normative extensions of the governing SellerTray skill for their applicable boundaries. `CROSS_SURFACE.md` and `INTELLIGENT_IMPLEMENTATION.md` apply universally; the others apply when their domains are touched. They do not replace or weaken any rule in `SKILL.md`; later explicit product decisions documented in an applicable extension control only where an older extension conflicts.
+`CROSS_SURFACE.md`, `INTELLIGENT_IMPLEMENTATION.md`, `ADAPTIVE.md`, `ADMIN_CAPABILITIES.md`, `VALUATION.md`, `RETURNS.md`, `ONBOARDING_ACTIVATION.md`, `COMMERCIAL.md`, `COMMERCIAL_FLEXIBILITY.md`, `COMMERCIAL_C1.md` and `OFFLINE.md` are normative extensions of the governing SellerTray skill for their applicable boundaries. `CROSS_SURFACE.md` and `INTELLIGENT_IMPLEMENTATION.md` apply universally; the others apply when their domains are touched. They do not replace or weaken any rule in `SKILL.md`; later explicit product decisions documented in an applicable extension control only where an older extension conflicts.
 
-That governing skill and its applicable normative extensions are the repository-level implementation contract for the SellerTray redesign. They govern intelligent lifecycle completion, cross-surface flow closure, adaptive Mobile UX and device-form-factor behavior, Admin capability/RBAC boundaries, mobile UX, merchant web boundaries, Admin Web platform/commercial operations, shared commerce architecture, POS, inventory, branch awareness, UOM, WhatsApp commerce, payments, returns/refunds/receivables, subscriptions, onboarding/setup scheduling, Admin commercial intervention, setup, installments, agreements, guarantees, promotions, Bluetooth printing, reporting, AI, permissions, offline behaviour, implementation phases, QA gates, and anti-divergence rules.
+That governing skill and its applicable normative extensions are the repository-level implementation contract for the SellerTray redesign. They govern intelligent lifecycle completion, cross-surface flow closure, adaptive Mobile UX and device-form-factor behavior, Admin capability/RBAC boundaries, mobile UX, merchant web boundaries, Admin Web platform/commercial operations, shared commerce architecture, POS, inventory, branch awareness, UOM, WhatsApp commerce, payments, returns/refunds/receivables, subscriptions, onboarding/setup scheduling, Admin commercial intervention, setup, configurable installments, agreements, guarantees, promotions, Bluetooth printing, reporting, AI, permissions, offline behaviour, implementation phases, QA gates, and anti-divergence rules.
 
 The originating SellerTray redesign conversation is the primary decision record when it is available to the agent. The repository skill is the durable fallback and must be used when that thread is unavailable.
 
