@@ -423,7 +423,7 @@ begin
   from public.tenant_members tm
   where tm.tenant_id=p_tenant_id and tm.user_id=v_user_id;
 
-  if v_role not in ('owner','manager') then
+  if v_role is null or v_role not in ('owner','manager') then
     raise exception 'Onboarding commercial status requires an Owner or Manager' using errcode='42501';
   end if;
 
@@ -461,7 +461,7 @@ begin
   from public.platform_admins pa
   where pa.user_id=p_actor_user_id;
 
-  if v_role not in ('admin','support') then
+  if v_role is null or v_role not in ('admin','support') then
     raise exception 'Platform administrator access required' using errcode='42501';
   end if;
 
