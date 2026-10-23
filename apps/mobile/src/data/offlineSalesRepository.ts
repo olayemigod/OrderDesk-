@@ -160,6 +160,7 @@ export async function queueOfflinePosSale(input: {
   const completionIntent = input.completionIntent ?? 'draft';
   const bankPayment = input.bankPayment ?? null;
   const paymentPlan = input.paymentPlan ?? null;
+  const customerId = cleanNullable(input.customerId);
   if (completionIntent === 'bank') {
     if (!bankPayment || !isValidBankPaymentEvidence(bankPayment) || paymentPlan) {
       throw new Error('A governed Bank method and valid transfer reference are required for an offline Bank sale.');
@@ -167,6 +168,11 @@ export async function queueOfflinePosSale(input: {
   } else if (completionIntent === 'payment') {
     if (!paymentPlan || !isValidPaymentPlan(paymentPlan, input.total) || bankPayment) {
       throw new Error('The offline payment plan is invalid. Review the payment methods and amounts.');
+    }
+    const allocated = roundMoney(paymentPlan.allocations.reduce((sum, allocation) => sum + allocation.amount, 0));
+    const outstanding = roundMoney(Math.max(0, input.total - allocated));
+    if (outstanding > PAYMENT_EPSILON && !customerId) {
+      throw new Error('Choose or create a Customer before using Partial payment or Pay later offline.');
     }
   } else if (bankPayment || paymentPlan) {
     throw new Error('Payment evidence can only be attached to an offline payment sale.');
@@ -180,7 +186,7 @@ export async function queueOfflinePosSale(input: {
     tenantId: input.tenantId,
     branchId: input.branchId,
     branchName: input.branchName,
-    customerId: cleanNullable(input.customerId),
+    customerId,
     customerName: cleanNullable(input.customerName),
     customerPhone: cleanNullable(input.customerPhone),
     currency: input.currency,
