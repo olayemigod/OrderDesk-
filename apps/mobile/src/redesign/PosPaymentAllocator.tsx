@@ -9,6 +9,7 @@ import {
   type PosAllocationCheckoutResult,
   type PosPaymentPolicy,
 } from '../data/posPaymentRepository';
+import { supabase } from '../lib/supabase';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
@@ -40,11 +41,32 @@ export function PosPaymentAllocator({
   const [payLater, setPayLater] = useState(false);
   const [commandId, setCommandId] = useState(() => createPosPaymentCommandId());
   const [submitting, setSubmitting] = useState(false);
+  const [hasNamedCustomer, setHasNamedCustomer] = useState<boolean | null>(null);
 
   const methods = useMemo(() => {
     const hasCash = paymentMethods.some((method) => method.methodType === 'cash');
     return hasCash ? paymentMethods : [cashFallback(), ...paymentMethods];
   }, [paymentMethods]);
+
+  useEffect(() => {
+    let active = true;
+    setHasNamedCustomer(null);
+    void supabase
+      .from('orders')
+      .select('customer_id')
+      .eq('tenant_id', tenantId)
+      .eq('id', orderId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) {
+          setHasNamedCustomer(false);
+          return;
+        }
+        setHasNamedCustomer(typeof data?.customer_id === 'string' && data.customer_id.length > 0);
+      });
+    return () => { active = false; };
+  }, [orderId, tenantId]);
 
   useEffect(() => {
     const defaultMethod = methods.find((method) => method.isDefault) ?? methods[0];
@@ -71,8 +93,9 @@ export function PosPaymentAllocator({
   const partialBlocked = allocated > 0 && outstanding > 0.005 && !policy.allowPartialPayments;
   const payLaterBlocked = payLater && !policy.allowPayLater;
   const emptyBlocked = allocated <= 0 && !payLater;
+  const customerBlocked = outstanding > 0.005 && hasNamedCustomer !== true;
   const canSubmit = !disabled && !submitting && !overAllocated && !splitBlocked
-    && !partialBlocked && !payLaterBlocked && !emptyBlocked;
+    && !partialBlocked && !payLaterBlocked && !emptyBlocked && !customerBlocked;
 
   function changeAmount(method: PosPaymentMethod, value: string) {
     const clean = value.replace(/[^0-9.]/g, '');
@@ -98,6 +121,12 @@ export function PosPaymentAllocator({
 
   function choosePayLater() {
     if (!policy.allowPayLater) return;
+    if (hasNamedCustomer !== true) {
+      onError(hasNamedCustomer === null
+        ? 'SellerTray is confirming the Customer for this sale. Try again in a moment.'
+        : 'Choose or create a Customer before using Pay later.');
+      return;
+    }
     setAmounts({});
     setPayLater(true);
     setCommandId(createPosPaymentCommandId());
@@ -232,13 +261,14 @@ export function PosPaymentAllocator({
           />
           <View style={styles.flex}>
             <Text style={[styles.methodName, dark && styles.darkText]}>Pay later</Text>
-            <Text style={[styles.methodNote, dark && styles.darkMuted]}>Complete this sale with the full balance outstanding.</Text>
+            <Text style={[styles.methodNote, dark && styles.darkMuted]}>Complete this sale with the full balance outstanding. A named Customer is required.</Text>
           </View>
         </Pressable>
       ) : null}
 
       {splitBlocked ? <Text style={styles.errorText}>Split payment is disabled in SellerTray settings.</Text> : null}
       {partialBlocked ? <Text style={styles.errorText}>Partial payment is disabled in SellerTray settings.</Text> : null}
+      {customerBlocked ? <Text style={styles.errorText}>{hasNamedCustomer === null ? 'Confirming Customer identity for this sale…' : 'Choose or create a Customer before leaving any balance outstanding.'}</Text> : null}
       {overAllocated ? <Text style={styles.errorText}>Payment allocations are more than the amount due.</Text> : null}
       {policy.manualConfirmationMode === 'payment_manager' ? (
         <Text style={[styles.policyNote, dark && styles.darkMuted]}>Bank transfer and terminal payments are recorded for payment-manager confirmation. Cash remains a cashier-confirmed drawer payment.</Text>
