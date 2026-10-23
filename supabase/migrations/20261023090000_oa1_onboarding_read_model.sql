@@ -127,8 +127,8 @@ begin
       v_next_action_label := 'Continue setup';
       v_blockers := jsonb_build_array('commercial_purchase_required');
     else
-      select count(*)::integer,min(o.id)
-        into v_first_order_tie_count,v_first_order_id
+      select count(*)::integer
+        into v_first_order_tie_count
       from public.sellertray_commercial_orders o
       where o.tenant_id=p_tenant_id
         and o.ordered_at=v_first_order_time
@@ -147,8 +147,22 @@ begin
         v_next_action_label := 'Contact ProcessEdge';
         v_blockers := jsonb_build_array('ambiguous_initial_purchase');
       else
-        select count(*)::integer,min(io.id)
-          into v_obligation_count,v_obligation_id
+        select o.id
+          into v_first_order_id
+        from public.sellertray_commercial_orders o
+        where o.tenant_id=p_tenant_id
+          and o.ordered_at=v_first_order_time
+          and exists (
+            select 1
+            from public.sellertray_commercial_order_price_snapshots ps
+            where ps.tenant_id=o.tenant_id
+              and ps.commercial_order_id=o.id
+              and ps.line_type='subscription'
+          )
+        limit 1;
+
+        select count(*)::integer
+          into v_obligation_count
         from public.sellertray_commercial_installment_obligations io
         where io.tenant_id=p_tenant_id
           and io.commercial_order_id=v_first_order_id;
@@ -160,6 +174,13 @@ begin
           v_next_action_label := 'Contact ProcessEdge';
           v_blockers := jsonb_build_array('initial_payment_obligation_review_required');
         else
+          select io.id
+            into v_obligation_id
+          from public.sellertray_commercial_installment_obligations io
+          where io.tenant_id=p_tenant_id
+            and io.commercial_order_id=v_first_order_id
+          limit 1;
+
           v_billing := public.get_sellertray_installment_billing_state(
             p_tenant_id,
             v_first_order_id,
