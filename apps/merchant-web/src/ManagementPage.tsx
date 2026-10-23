@@ -4,6 +4,7 @@ import CatalogueMasterManagement from './CatalogueMasterManagement';
 import CommercialAgreementsManagement from './CommercialAgreementsManagement';
 import DevicesPrintersManagement from './DevicesPrintersManagement';
 import FeedbackDashboard from './FeedbackDashboard';
+import OnboardingStatusPanel from './OnboardingStatusPanel';
 import ProductsManagement from './ProductsManagement';
 import { SellerTraySelect } from './SellerTrayElements';
 import SettingsManagement from './SettingsManagement';
@@ -14,17 +15,7 @@ import { errorMessage, supabase } from './supabase';
 type ManagementPageId = 'products' | 'categories' | 'units' | 'suppliers' | 'branches' | 'team' | 'devices' | 'feedback' | 'settings';
 type Branch = { id: string; name: string; isDefault: boolean };
 
-export default function ManagementPage({
-  page,
-  tenantId,
-  currency,
-  onBranchesChanged,
-}: {
-  page: ManagementPageId;
-  tenantId: string;
-  currency: string;
-  onBranchesChanged?: () => void | Promise<void>;
-}) {
+export default function ManagementPage({ page, tenantId, currency, onBranchesChanged }: { page: ManagementPageId; tenantId: string; currency: string; onBranchesChanged?: () => void | Promise<void> }) {
   if (page === 'products') return <ProductsManagement tenantId={tenantId} currency={currency} />;
   if (page === 'categories') return <CatalogueMasterManagement tenantId={tenantId} kind="category" />;
   if (page === 'units') return <CatalogueMasterManagement tenantId={tenantId} kind="unit" />;
@@ -33,7 +24,7 @@ export default function ManagementPage({
   if (page === 'team') return <TeamPermissionsManagement tenantId={tenantId} />;
   if (page === 'devices') return <DeviceManagement tenantId={tenantId} />;
   if (page === 'feedback') return <FeedbackDashboard tenantId={tenantId} />;
-  return <div className="page-stack"><CommercialAgreementsManagement tenantId={tenantId} /><SettingsManagement tenantId={tenantId} /></div>;
+  return <div className="page-stack"><OnboardingStatusPanel tenantId={tenantId} /><CommercialAgreementsManagement tenantId={tenantId} /><SettingsManagement tenantId={tenantId} /></div>;
 }
 
 function DeviceManagement({ tenantId }: { tenantId: string }) {
