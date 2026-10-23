@@ -123,7 +123,7 @@ begin
 
       select
         count(*)::integer,
-        count(pc.id)::integer,
+        count(distinct pc.installment_schedule_id)::integer,
         coalesce(sum(pc.amount),0)::numeric(18,2),
         max(sch.amount_due) filter (where sch.sequence_no=1),
         max(pc.paid_at) filter (where sch.sequence_no=1)
@@ -206,6 +206,12 @@ begin
       case e.event_type when 'installment.full_entitlement_released' then 0 else 1 end,
       e.recorded_at desc
     limit 1;
+
+    if not found then
+      v_entitlement_state := 'not_active';
+      v_entitlement_effective_from := null;
+      v_entitlement_effective_until := null;
+    end if;
   end if;
 
   select s.* into v_subscription
