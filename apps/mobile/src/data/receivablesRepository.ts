@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { createPosClientReference } from './commerceRepository';
 
 export type CustomerBalanceCollectionResult = {
   orderId: string;
@@ -22,7 +23,7 @@ export async function collectCustomerBalance(input: {
     p_order_id: input.orderId,
     p_payment_method_id: input.paymentMethodId,
     p_amount: Number(input.amount.toFixed(2)),
-    p_command_id: input.commandId ?? createReceivableCommandId(),
+    p_command_id: input.commandId ?? createPosClientReference(),
   });
   if (error) throw error;
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
@@ -46,13 +47,4 @@ export async function collectCustomerBalance(input: {
     methodType: methodType as CustomerBalanceCollectionResult['methodType'],
     status: status as CustomerBalanceCollectionResult['status'],
   };
-}
-
-export function createReceivableCommandId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
-    const random = Math.floor(Math.random() * 16);
-    const value = character === 'x' ? random : (random & 0x3) | 0x8;
-    return value.toString(16);
-  });
 }
