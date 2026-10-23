@@ -81,6 +81,7 @@ export function OnboardingPreparationCard({ state, loading, error = null, onRefr
   }
 
   const stageIndex = Math.max(0, STAGE_ORDER.indexOf(state.currentStage));
+  const progressWidth = `${Math.round(((stageIndex + 1) / STAGE_ORDER.length) * 100)}%` as `${number}%`;
   const blocker = state.blockers[0] ?? null;
   const merchantWebNext = state.nextAction.surface === 'merchant_web';
   const adminNext = state.nextAction.surface === 'admin_web';
@@ -103,7 +104,7 @@ export function OnboardingPreparationCard({ state, loading, error = null, onRefr
 
       <View style={styles.progressRow}>
         <View style={[styles.progressTrack, dark && darkStyles.progressTrack]}>
-          <View style={[styles.progressFill, { width: `${((stageIndex + 1) / STAGE_ORDER.length) * 100}%` }]} />
+          <View style={[styles.progressFill, { width: progressWidth }]} />
         </View>
         <Text style={[styles.progressText, dark && darkStyles.bodyText]}>{stageIndex + 1}/{STAGE_ORDER.length}</Text>
       </View>
@@ -183,7 +184,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F6FEF9',
     padding: 14,
     gap: 12,
-    marginBottom: 14,
   },
   errorCard: { borderColor: '#FDA29B', backgroundColor: '#FEF3F2' },
   headingRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
