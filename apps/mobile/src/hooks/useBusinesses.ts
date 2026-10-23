@@ -12,6 +12,7 @@ import {
 import { claimTeamInvitations } from '../data/teamRepository';
 
 const ACTIVE_BUSINESS_KEY = 'orderdesk.activeBusinessId';
+const ACTIVE_BUSINESS_ROLE_HINT_KEY = 'orderdesk.activeBusinessRoleHint';
 
 export function useBusinesses() {
   const [businesses, setBusinesses] = useState<MerchantBusiness[]>([]);
@@ -36,10 +37,20 @@ export function useBusinesses() {
       const storedBusinessId = await AsyncStorage.getItem(ACTIVE_BUSINESS_KEY);
       const storedIsValid = nextBusinesses.some((business) => business.id === storedBusinessId);
       const nextActiveId = storedIsValid ? storedBusinessId! : nextBusinesses[0]?.id ?? '';
+      const nextActiveBusiness = nextBusinesses.find((business) => business.id === nextActiveId) ?? null;
 
       setBusinesses(nextBusinesses);
       setActiveBusinessId(nextActiveId);
-      if (nextActiveId) await AsyncStorage.setItem(ACTIVE_BUSINESS_KEY, nextActiveId);
+      if (nextActiveId) {
+        await AsyncStorage.setItem(ACTIVE_BUSINESS_KEY, nextActiveId);
+      }
+      if (nextActiveBusiness) {
+        // This is only a UI request-suppression hint. Server-side membership and
+        // capability checks remain authoritative for every protected action/read.
+        await AsyncStorage.setItem(ACTIVE_BUSINESS_ROLE_HINT_KEY, nextActiveBusiness.role);
+      } else {
+        await AsyncStorage.removeItem(ACTIVE_BUSINESS_ROLE_HINT_KEY);
+      }
       setError(null);
     } catch (err) {
       setError(errorMessage(err, 'Unable to load your SellerTray businesses.'));
@@ -58,9 +69,15 @@ export function useBusinesses() {
   );
 
   const selectBusiness = useCallback(async (businessId: string) => {
+    const selectedBusiness = businesses.find((business) => business.id === businessId) ?? null;
     setActiveBusinessId(businessId);
     await AsyncStorage.setItem(ACTIVE_BUSINESS_KEY, businessId);
-  }, []);
+    if (selectedBusiness) {
+      await AsyncStorage.setItem(ACTIVE_BUSINESS_ROLE_HINT_KEY, selectedBusiness.role);
+    } else {
+      await AsyncStorage.removeItem(ACTIVE_BUSINESS_ROLE_HINT_KEY);
+    }
+  }, [businesses]);
 
   const createBusiness = useCallback(
     async (input: InitialBusinessInput) => {
