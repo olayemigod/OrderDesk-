@@ -1,8 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { useCurrentBusinessOnboardingState } from '../hooks/useOnboardingState';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
+import { OnboardingPreparationCard } from './OnboardingPreparationCard';
 
 export type HomeAttentionItem = {
   key: string;
@@ -52,6 +54,7 @@ export function HomeDashboard({
   onOpenWhatsapp,
 }: Props) {
   const appearance = useSellerTrayAppearance();
+  const onboarding = useCurrentBusinessOnboardingState();
   const dark = appearance.dark;
   const visibleAttention = attentionItems.slice(0, 4);
 
@@ -71,6 +74,13 @@ export function HomeDashboard({
           {branchName?.trim() ? `${branchName} at a glance` : 'Your business at a glance'}
         </Text>
       </View>
+
+      <OnboardingPreparationCard
+        state={onboarding.state}
+        loading={onboarding.loading}
+        error={onboarding.error}
+        onRefresh={onboarding.refresh}
+      />
 
       <Pressable
         accessibilityRole="button"
