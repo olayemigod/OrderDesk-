@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { SellerTrayText as Text } from '../components/SellerTrayText';
 import type { SellerTrayOnboardingState } from '../data/onboardingRepository';
@@ -9,6 +9,8 @@ import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 type Props = {
   state: SellerTrayOnboardingState | null;
   loading: boolean;
+  error?: string | null;
+  onRefresh?: () => void | Promise<void>;
 };
 
 const STAGE_LABELS: Record<SellerTrayOnboardingState['currentStage'], string> = {
@@ -31,7 +33,7 @@ const STAGE_ORDER: SellerTrayOnboardingState['currentStage'][] = [
   'active',
 ];
 
-export function OnboardingPreparationCard({ state, loading }: Props) {
+export function OnboardingPreparationCard({ state, loading, error = null, onRefresh }: Props) {
   const appearance = useSellerTrayAppearance();
   const dark = appearance.dark;
 
@@ -47,6 +49,29 @@ export function OnboardingPreparationCard({ state, loading }: Props) {
             <Text style={[styles.title, dark && darkStyles.titleText]}>Checking onboarding status</Text>
           </View>
         </View>
+      </View>
+    );
+  }
+
+  if (!state && error) {
+    return (
+      <View style={[styles.card, styles.errorCard, dark && darkStyles.card, dark && darkStyles.errorCard]}>
+        <View style={styles.headingRow}>
+          <View style={[styles.iconWrap, dark && darkStyles.iconWrap]}>
+            <Ionicons name="alert-circle-outline" size={20} color={theme.colors.danger} />
+          </View>
+          <View style={styles.copy}>
+            <Text style={[styles.eyebrow, dark && darkStyles.bodyText]}>SETUP & ACTIVATION</Text>
+            <Text style={[styles.title, dark && darkStyles.titleText]}>Setup status could not refresh</Text>
+            <Text style={[styles.errorText, dark && darkStyles.bodyText]}>Your selling workspace has not been changed. Retry the onboarding status check.</Text>
+          </View>
+        </View>
+        {onRefresh ? (
+          <Pressable disabled={loading} onPress={() => void onRefresh()} style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}>
+            <Ionicons name="refresh-outline" size={16} color={theme.colors.white} />
+            <Text style={styles.retryText}>{loading ? 'Refreshing' : 'Retry status'}</Text>
+          </Pressable>
+        ) : null}
       </View>
     );
   }
@@ -160,6 +185,7 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 14,
   },
+  errorCard: { borderColor: '#FDA29B', backgroundColor: '#FEF3F2' },
   headingRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   iconWrap: {
     width: 40,
@@ -174,6 +200,9 @@ const styles = StyleSheet.create({
   copy: { flex: 1, minWidth: 0 },
   eyebrow: { color: theme.colors.greenDark, fontSize: 11, fontWeight: '900', letterSpacing: 0.9 },
   title: { color: theme.colors.navy, fontSize: 17, lineHeight: 22, fontWeight: '900', marginTop: 2 },
+  errorText: { color: theme.colors.slate, fontSize: 12, lineHeight: 18, marginTop: 4 },
+  retryButton: { alignSelf: 'flex-start', minHeight: 40, borderRadius: 11, backgroundColor: theme.colors.green, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  retryText: { color: theme.colors.white, fontSize: 12, fontWeight: '900' },
   modePill: { borderRadius: theme.radius.pill, backgroundColor: theme.colors.mintSoft, paddingHorizontal: 9, paddingVertical: 6 },
   modeText: { color: theme.colors.greenDark, fontSize: 11, fontWeight: '900' },
   progressRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -192,10 +221,12 @@ const styles = StyleSheet.create({
   summaryValue: { color: theme.colors.navy, fontSize: 13, fontWeight: '900' },
   compatibilityNote: { flexDirection: 'row', alignItems: 'flex-start', gap: 7, borderRadius: theme.radius.md, backgroundColor: theme.colors.mintSoft, padding: 10 },
   compatibilityText: { flex: 1, color: theme.colors.slate, fontSize: 12, lineHeight: 18, fontWeight: '700' },
+  pressed: { opacity: 0.72 },
 });
 
 const darkStyles = StyleSheet.create({
   card: { backgroundColor: theme.dark.surface, borderColor: theme.dark.accentBorder },
+  errorCard: { backgroundColor: '#3A1717', borderColor: '#7A271A' },
   iconWrap: { backgroundColor: theme.dark.surfaceSubtle, borderColor: theme.dark.accentBorder },
   titleText: { color: theme.dark.text },
   bodyText: { color: theme.dark.textMuted },
