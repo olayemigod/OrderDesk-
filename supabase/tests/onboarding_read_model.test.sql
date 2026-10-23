@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(13);
+select extensions.plan(15);
 
 select extensions.ok(
   has_function_privilege('authenticated','public.get_sellertray_onboarding_state(uuid)','EXECUTE'),
@@ -25,6 +25,20 @@ select extensions.ok(
 select extensions.ok(
   not has_function_privilege('authenticated','public.get_sellertray_onboarding_state_admin(uuid,uuid)','EXECUTE'),
   'merchant clients cannot call the ProcessEdge Admin onboarding wrapper'
+);
+select extensions.ok(
+  position(
+    'if v_role is null or v_role not in' in
+    lower(pg_get_functiondef('public.get_sellertray_onboarding_state(uuid)'::regprocedure))
+  ) > 0,
+  'merchant onboarding wrapper explicitly rejects missing membership instead of relying on NULL NOT IN semantics'
+);
+select extensions.ok(
+  position(
+    'if v_role is null or v_role not in' in
+    lower(pg_get_functiondef('public.get_sellertray_onboarding_state_admin(uuid,uuid)'::regprocedure))
+  ) > 0,
+  'Admin onboarding wrapper explicitly rejects missing platform-admin identity'
 );
 
 create temporary table oa1_fixture(tenant_id uuid primary key) on commit drop;
