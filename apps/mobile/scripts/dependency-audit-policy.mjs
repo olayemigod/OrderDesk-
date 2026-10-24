@@ -22,6 +22,16 @@ const exceptions = new Map([
         'Expo CLI/code-signing tooling uses node-forge. The published 1.4.0 release has no patched successor yet, and this package is not part of the SellerTray Android runtime bundle.',
     },
   ],
+  [
+    'GHSA-MRHX-C7XC-M3W5',
+    {
+      packageName: 'zod',
+      version: '3.25.76',
+      expiresOn: '2026-11-07',
+      reason:
+        'Expo SDK 57 CLI currently requires zod ^3.25.76 while the published fix is on the incompatible Zod 4 line. This transitive CLI dependency is build tooling, not part of SellerTray merchant-input validation in the Android runtime; review as soon as Expo publishes a compatible patched dependency.',
+    },
+  ],
 ]);
 
 const lock = JSON.parse(readFileSync(new URL('../package-lock.json', import.meta.url), 'utf8'));
