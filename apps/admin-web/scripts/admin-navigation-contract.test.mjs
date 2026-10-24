@@ -56,6 +56,10 @@ test('Active Admin entrypoint and governance contract are wired', () => {
   assert.match(governance, /One Admin page represents one primary administrative job/);
   assert.match(governance, /group -> destination/);
   assert.match(governance, /OA4 Admin work must land in this group/);
+  assert.match(governance, /Commercial Orders/);
+  assert.match(governance, /Plans & Pricing/);
+  assert.match(governance, /must not expose the legacy generic `Record ready` shortcut/);
+  assert.match(governance, /must not mount them once their jobs have focused destinations/);
 });
 
 test('Legacy hashes remain recoverable after navigation convergence', () => {
