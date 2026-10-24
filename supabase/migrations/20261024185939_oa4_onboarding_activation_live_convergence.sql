@@ -3602,6 +3602,7 @@ begin
 end;
 $$;
 revoke all on function public.snapshot_sellertray_inserted_installment_contract() from public,anon,authenticated;
+drop trigger if exists snapshot_sellertray_inserted_installment_contract on public.sellertray_commercial_installment_obligations;
 create trigger snapshot_sellertray_inserted_installment_contract after insert on public.sellertray_commercial_installment_obligations
 for each row execute function public.snapshot_sellertray_inserted_installment_contract();
 
