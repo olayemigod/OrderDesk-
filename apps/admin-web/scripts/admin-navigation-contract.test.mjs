@@ -7,12 +7,13 @@ const selector = readFileSync(new URL('../src/MerchantSelector.tsx', import.meta
 const commercial = readFileSync(new URL('../src/CommercialAdminWorkspaces.tsx', import.meta.url), 'utf8');
 const communications = readFileSync(new URL('../src/AdminCommunicationsWorkspaces.tsx', import.meta.url), 'utf8');
 const operations = readFileSync(new URL('../src/AdminOperationsWorkspaces.tsx', import.meta.url), 'utf8');
+const revenue = readFileSync(new URL('../src/RevenueDashboard.tsx', import.meta.url), 'utf8');
 const setup = readFileSync(new URL('../src/SetupSchedulingAdministration.tsx', import.meta.url), 'utf8');
 const entry = readFileSync(new URL('../src/main.tsx', import.meta.url), 'utf8');
 const governance = readFileSync(new URL('../../../.agents/skills/sellertray-project-implementation/ADMIN_NAVIGATION.md', import.meta.url), 'utf8');
 
 test('Admin shell uses grouped two-level navigation instead of one flat task pile', () => {
-  for (const group of ['Overview', 'Merchants', 'Commercial', 'Onboarding & Setup', 'Communications', 'Platform Operations', 'Governance']) {
+  for (const group of ['Overview', 'Merchants', 'Commercial', 'Onboarding & Setup', 'Communications', 'Platform Operations', 'Insights & Reports', 'Governance']) {
     assert.match(workspace, new RegExp(`label: '${group.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}'`));
   }
   assert.match(workspace, /admin-nav-group-button/);
@@ -56,6 +57,17 @@ test('Communications and platform operations are split into task-specific destin
   assert.match(operations, /ai_parser_probe/);
 });
 
+test('Revenue Dashboard is a governed first-class Insights & Reports destination', () => {
+  assert.match(workspace, /'reports\/revenue'/);
+  assert.match(workspace, /label: 'Revenue Dashboard'/);
+  assert.match(workspace, /<RevenueDashboard session=\{session\}/);
+  assert.match(revenue, /action: 'business_dashboard'/);
+  assert.match(revenue, /recognised revenue is not calculated or displayed here/i);
+  assert.match(revenue, /Amounts are never combined across currencies/);
+  assert.match(governance, /Revenue Dashboard/);
+  assert.match(governance, /recognised revenue must not be calculated or displayed until an approved SellerTray revenue-recognition\/accounting authority exists/i);
+});
+
 test('Branch readiness review cannot expose the legacy generic readiness shortcut', () => {
   assert.match(commercial, /governed setup-completion path/);
   assert.match(commercial, /does not expose the legacy generic/);
@@ -90,7 +102,7 @@ test('Canonical Admin entrypoint is wired and retired shells stay retired', () =
 });
 
 test('Legacy hashes remain recoverable after navigation convergence', () => {
-  for (const legacy of ['overview', 'merchants', 'billing', 'commercial/core', 'communications', 'communications/messages', 'operations', 'operations/health', 'audit', 'settings']) {
+  for (const legacy of ['overview', 'merchants', 'billing', 'commercial/core', 'communications', 'communications/messages', 'operations', 'operations/health', 'revenue', 'reports', 'audit', 'settings']) {
     assert.match(workspace, new RegExp(`['\"]?${legacy.replace('/', '\\/')}['\"]?:`));
   }
 });
