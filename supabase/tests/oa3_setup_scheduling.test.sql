@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(24);
+select extensions.plan(25);
 
 select extensions.ok((select relrowsecurity from pg_class where oid='public.sellertray_commercial_setup_appointments'::regclass),'setup appointments are RLS protected');
 select extensions.ok((select relrowsecurity from pg_class where oid='public.sellertray_commercial_setup_appointment_events'::regclass),'setup appointment events are RLS protected');
@@ -29,6 +29,7 @@ select extensions.ok(exists(select 1 from pg_trigger where tgrelid='public.selle
 select extensions.ok(position('owner' in lower(pg_get_functiondef('public.request_sellertray_setup_reschedule(uuid,uuid,timestamptz,timestamptz,text,uuid)'::regprocedure)))>0 and position('manager' in lower(pg_get_functiondef('public.request_sellertray_setup_reschedule(uuid,uuid,timestamptz,timestamptz,text,uuid)'::regprocedure)))>0,'merchant change requests enforce Owner/Manager authority');
 select extensions.ok(position('null::uuid' in lower(pg_get_functiondef('public.platform_admin_upsert_setup_service_area(uuid,uuid,uuid,text,text,boolean,text)'::regprocedure)))>0 and position('null::uuid' in lower(pg_get_functiondef('public.platform_admin_upsert_setup_worker(uuid,uuid,uuid,text,text,boolean,integer,integer,uuid[],text)'::regprocedure)))>0,'ProcessEdge-global service-area and workforce master mutations require platform-scoped capability resolution');
 select extensions.ok(position('cannot start in the past' in lower(pg_get_functiondef('public.request_sellertray_setup_reschedule(uuid,uuid,timestamptz,timestamptz,text,uuid)'::regprocedure)))>0,'merchant preferred setup windows reject past starts');
+select extensions.ok(position('canmanageplatformmasters' in lower(pg_get_functiondef('public.platform_admin_setup_scheduling_center(uuid,uuid)'::regprocedure)))>0 and position('null::uuid' in lower(pg_get_functiondef('public.platform_admin_setup_scheduling_center(uuid,uuid)'::regprocedure)))>0,'Admin scheduling projection exposes platform-master authority separately from tenant scheduling authority');
 
 select * from extensions.finish();
 rollback;
