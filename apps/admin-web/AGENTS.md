@@ -13,6 +13,14 @@ Before planning, editing, reviewing, refactoring, testing or documenting SellerT
 
 `ADMIN_NAVIGATION.md` is the normative Admin information-architecture contract. Preserve grouped two-level navigation, one-primary-job-per-page, persistent Merchant context for merchant-scoped work, stable deep links, server-authoritative capability checks, and the rule that navigation refactors must not create or duplicate business truth.
 
-The active commercial navigation must keep **Commercial Orders**, **Plans & Pricing**, **Payments & Settlement**, **Installments** and **Agreements** as focused destinations. **Setup Appointments** and **Branch Readiness** belong under **Onboarding & Setup**. Do not remount the retired all-in-one commercial workspace or restore generic direct-readiness UI while OA4 structured completion/recovery is the governed direction.
+The active navigation must preserve these focused jobs:
+
+- **Commercial:** Commercial Orders; Plans & Pricing; Payments & Settlement; Installments; Agreements.
+- **Onboarding & Setup:** Setup Appointments; Setup Resources; Branch Readiness. OA4 adds Setup Completion, activation blockers and reconciliation/recovery here.
+- **Communications:** Compose Message; Campaign History.
+- **Platform Operations:** WhatsApp Operations; AI Operations.
+- **Governance:** Audit Log, with Admin Access / Platform Settings only when governed implementations exist.
+
+Do not remount the retired all-in-one commercial workspace, stack setup resources back into appointment work, place campaign history under the composer, recombine WhatsApp and AI operational work, or restore generic direct-readiness UI while OA4 structured completion/recovery is the governed direction.
 
 Browser acceptance is part of the Admin navigation QA gate. When a preview/deployment provider is unavailable or rate-limited, do not claim desktop/narrow/Back-Forward visual acceptance from static CI alone; report that environmental blocker explicitly while preserving the green typecheck, security, regression and production-build evidence.
