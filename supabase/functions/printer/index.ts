@@ -60,7 +60,7 @@ Deno.serve(async (request) => {
   if (!membership) return json({ error: 'You do not have access to this business' }, 403);
 
   if (action === 'request_business_document_print') {
-    return requestBusinessDocumentPrint(admin, token, body, tenantId, userId);
+    return requestBusinessDocumentPrint(admin, body, tenantId, userId);
   }
 
   let rpcName: string;
@@ -144,7 +144,6 @@ Deno.serve(async (request) => {
 
 async function requestBusinessDocumentPrint(
   adminClient: SupabaseClient,
-  token: string,
   body: JsonRecord,
   tenantId: string,
   userId: string,
@@ -171,20 +170,21 @@ async function requestBusinessDocumentPrint(
     return json({ error: 'Selected printer is unavailable' }, 409);
   }
 
-  // Preserve the same branch/capability authority as the existing SQL print command.
-  // The service key remains the apikey while the caller JWT is the Authorization
-  // credential, so auth.uid() and RLS/capability checks resolve to the signed-in user.
-  const userClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-    auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
-  });
-  const { data: capabilities, error: capabilityError } = await userClient.rpc(
-    'get_sellertray_printing_capabilities',
-    { p_tenant_id: tenantId, p_branch_id: printer.branch_id },
-  );
-  if (capabilityError) return json({ error: capabilityError.message }, 403);
-  const capability = Array.isArray(capabilities) ? capabilities[0] : null;
-  if (!capability || capability.can_print_receipt !== true) {
+  const [branchAuthority, printAuthority] = await Promise.all([
+    adminClient.rpc('sellertray_user_can_operate_branch', {
+      p_tenant_id: tenantId,
+      p_branch_id: printer.branch_id,
+      p_user_id: userId,
+    }),
+    adminClient.rpc('sellertray_user_has_capability', {
+      p_tenant_id: tenantId,
+      p_user_id: userId,
+      p_capability: 'can_print_receipt',
+    }),
+  ]);
+  if (branchAuthority.error) return json({ error: branchAuthority.error.message }, 403);
+  if (printAuthority.error) return json({ error: printAuthority.error.message }, 403);
+  if (branchAuthority.data !== true || printAuthority.data !== true) {
     return json({ error: 'You do not have permission to print in this branch' }, 403);
   }
 
@@ -203,7 +203,7 @@ async function requestBusinessDocumentPrint(
 
   const { data: order, error: orderError } = await adminClient
     .from('orders')
-    .select('id,branch_id,branch_name_snapshot,pos_operator_name,public_order_id,status,fulfillment_status,payment_status,pos_payment_terms,amount_paid,total_amount,currency,customer_id,source')
+    .select('id,branch_id,branch_name_snapshot,pos_operator_name,public_order_id,status,fulfillment_status,payment_status,pos_payment_terms,amount_paid,total_amount,subtotal_amount,tax_applied,tax_rate_percent,tax_amount,tax_display_breakdown,gross_amount,currency,customer_id,source')
     .eq('tenant_id', tenantId)
     .eq('id', orderId)
     .maybeSingle();
@@ -241,8 +241,8 @@ async function requestBusinessDocumentPrint(
   if (!itemRows?.length) return json({ error: 'This Sales Invoice has no historical sale lines' }, 409);
 
   const invoiceAmount = money(invoice.amount);
-  const governedOrderTotal = money(order.total_amount);
-  if (Math.abs(invoiceAmount - governedOrderTotal) > 0.01) {
+  const governedGrossAmount = money(order.gross_amount ?? order.total_amount);
+  if (Math.abs(invoiceAmount - governedGrossAmount) > 0.01) {
     return json({ error: 'The issued Sales Invoice total does not match the governed sale total' }, 409);
   }
 
@@ -272,11 +272,26 @@ async function requestBusinessDocumentPrint(
     unitPrice: money(item.unit_price),
     lineTotal: money(item.line_total),
   }));
-  const subtotalAmount = roundMoney(items.reduce((sum, item) => sum + item.lineTotal, 0));
-  const taxAmount = roundMoney(Math.max(invoiceAmount - subtotalAmount, 0));
-  const taxRatePercent = subtotalAmount > MONEY_EPSILON
-    ? roundNumber((taxAmount / subtotalAmount) * 100, 4)
-    : 0;
+  const itemSubtotal = roundMoney(items.reduce((sum, item) => sum + item.lineTotal, 0));
+  const subtotalAmount = order.subtotal_amount === null || order.subtotal_amount === undefined
+    ? itemSubtotal
+    : money(order.subtotal_amount);
+  const taxAmount = order.tax_amount === null || order.tax_amount === undefined
+    ? roundMoney(Math.max(governedGrossAmount - subtotalAmount, 0))
+    : money(order.tax_amount);
+  const taxApplied = typeof order.tax_applied === 'boolean'
+    ? order.tax_applied
+    : taxAmount > MONEY_EPSILON;
+  const taxRatePercent = order.tax_rate_percent === null || order.tax_rate_percent === undefined
+    ? (subtotalAmount > MONEY_EPSILON ? roundNumber((taxAmount / subtotalAmount) * 100, 4) : 0)
+    : numberValue(order.tax_rate_percent);
+  const taxDisplayBreakdown = typeof order.tax_display_breakdown === 'boolean'
+    ? order.tax_display_breakdown
+    : taxApplied;
+  if (Math.abs(subtotalAmount + taxAmount - governedGrossAmount) > 0.01) {
+    return json({ error: 'The stored tax snapshot does not reconcile to the governed sale total' }, 409);
+  }
+
   const branchName = cleanText(order.branch_name_snapshot, 160) ?? 'Branch';
   const cashierName = cleanText(order.pos_operator_name, 160);
   const fulfillmentLabel = titleCase(String(order.fulfillment_status ?? 'pending'));
@@ -298,11 +313,11 @@ async function requestBusinessDocumentPrint(
       customerPhone,
       currency: String(invoice.currency ?? order.currency ?? 'NGN'),
       subtotalAmount,
-      taxApplied: taxAmount > MONEY_EPSILON,
+      taxApplied,
       taxRatePercent,
       taxAmount,
-      taxDisplayBreakdown: taxAmount > MONEY_EPSILON,
-      grossAmount: invoiceAmount,
+      taxDisplayBreakdown,
+      grossAmount: governedGrossAmount,
       paymentLabel: originalInvoicePaymentLabel(String(order.pos_payment_terms ?? ''), String(order.payment_status ?? 'unpaid')),
       fulfillmentLabel,
       items,
@@ -351,8 +366,8 @@ async function requestBusinessDocumentPrint(
       branch_id: printer.branch_id,
       register_id: printer.register_id,
       printer_id: printer.id,
-      // The current live schema has the legacy receipt/test transport class only.
-      // Business meaning is governed by content_snapshot.documentType.
+      // The live schema retains the legacy receipt/test audit class. The immutable
+      // content snapshot carries the real business identity: Sales Invoice or Payment Receipt.
       job_type: 'receipt',
       order_id: orderId,
       financial_document_id: invoice.id,
