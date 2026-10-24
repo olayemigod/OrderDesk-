@@ -37,31 +37,26 @@ Rules:
 5. Changing or clearing Merchant context must not mutate merchant data.
 6. Platform-wide destinations may preserve the selected context visually but must clearly indicate when the current page is platform-scoped rather than merchant-scoped.
 
-## 3. Approved Admin navigation direction
-
-The approved destination families are:
+## 3. Approved Admin navigation
 
 ### Overview
 
-- Dashboard
-- Work Queue when a governed cross-domain action queue/read model exists
+- **Dashboard**
+- **Work Queue** when a governed cross-domain action queue/read model exists
 
-Dashboard answers **How is SellerTray / the ProcessEdge SellerTray business doing?**
-Work Queue answers **What requires ProcessEdge action now?**
-
-Do not turn Dashboard into the action form for every attention item. Drill into the owning workspace.
+Dashboard answers **How is SellerTray / the ProcessEdge SellerTray business doing?** Work Queue answers **What requires ProcessEdge action now?** Do not turn Dashboard into the action form for every attention item. Drill into the owning workspace.
 
 ### Merchants
 
-- All Merchants
-- Onboarding & Activation when a dedicated governed portfolio exists
-- Merchant Attention when a dedicated governed portfolio exists
+- **All Merchants**
+- **Onboarding & Activation** when a dedicated governed portfolio exists
+- **Merchant Attention** when a dedicated governed portfolio exists
 
 Merchant 360 is a contextual summary and launch point. It may show summary, onboarding, commercial, operational/support and Admin-history views, but mutations should deep-link to the owning task workspace where practical.
 
 ### Commercial
 
-The currently converged first-class destinations are:
+The converged first-class destinations are:
 
 - **Commercial Orders** — initial commercial purchase creation and immutable order review;
 - **Plans & Pricing** — effective-dated subscription and Branch setup pricing;
@@ -69,28 +64,25 @@ The currently converged first-class destinations are:
 - **Installments** — installment progress and entitlement review;
 - **Agreements** — template publication, issuance, immutable acceptance history and replacement.
 
-Future commercial destinations include:
-
-- Guarantees & Refunds when the governed decision/inspection workflow is implemented;
-- Promotions when implemented.
+Future commercial destinations include **Guarantees & Refunds** and **Promotions** when their governed decision/read models exist.
 
 Commercial grouping does not collapse these into one page. Pricing, commercial orders, payment/settlement, agreements, installment policy, guarantees and entitlement remain distinct governed authorities even though they participate in one commercial lifecycle.
 
 ### Onboarding & Setup
 
-The currently converged first-class destinations are:
+The converged first-class destinations are:
 
-- **Setup Appointments** — scheduling, rescheduling, capacity and setup-resource assignment;
+- **Setup Appointments** — Branch setup scheduling and rescheduling;
+- **Setup Resources** — ProcessEdge service areas, setup workforce, coverage, capacity and travel-buffer administration;
 - **Branch Readiness** — review of immutable readiness against exact commercial order + Branch + Branch setup obligations.
 
-OA4 extends this group with the governed capabilities when implemented:
+Appointment operations and ProcessEdge setup-resource administration are related but separate jobs and therefore remain separate pages. The current setup authority may still require a merchant context to load its governed center projection; that implementation detail must not cause the two jobs to be stacked back onto one page.
 
-- Activation Queue;
-- Setup Completion;
-- activation reconciliation/recovery integrated with Branch Readiness where appropriate;
-- Setup Resources may be separated from appointment operations when its dedicated platform-level management surface is extracted.
+OA4 extends this group with:
 
-Setup scheduling, equipment/completion evidence, Branch readiness and entitlement reconciliation are related lifecycle stages but distinct ProcessEdge jobs. Do not append setup-resource management, appointment scheduling, completion evidence and activation recovery below unrelated pricing/payment forms.
+- **Setup Completion** — structured checklist, equipment, handover and acknowledgement evidence;
+- **Activation Queue** — named Branch-level activation blockers;
+- entitlement reconciliation/recovery integrated with Branch Readiness where appropriate.
 
 Branch Readiness must not expose the legacy generic `Record ready` shortcut as the primary completion path. Readiness comes from the governed setup-completion authority; OA4 must enrich that completion evidence and recovery path rather than create another readiness or activation state machine.
 
@@ -98,19 +90,21 @@ OA4 Admin work must land in this group rather than extending a catch-all Billing
 
 ### Communications
 
-- Merchant Messages / Compose
-- Campaign History when separately surfaced
+The converged first-class destinations are:
 
-Publishing authority and read/review authority remain capability-separated.
+- **Compose Message** — create, target, preview and publish governed merchant communications;
+- **Campaign History** — review audited prior publications.
+
+Publishing authority and read/review authority remain capability-separated. Do not stack campaign history beneath the message composer simply because both use the same communications authority.
 
 ### Platform Operations
 
-- Service Health
-- WhatsApp Operations when independently surfaced
-- AI Operations when independently surfaced
-- Integrations when governed operational tooling exists
+The converged first-class destinations are:
 
-Platform Operations owns technical/service health, not ProcessEdge commercial performance.
+- **WhatsApp Operations** — cross-merchant WhatsApp connection/service health;
+- **AI Operations** — parser readiness and controlled diagnostics.
+
+Future **Integrations** or additional service-health destinations should be exposed only when governed operational tooling exists. Platform Operations owns technical/service health, not ProcessEdge commercial performance.
 
 ### Insights & Reports
 
@@ -118,9 +112,9 @@ Expose report destinations only when governed report/read models exist. Dashboar
 
 ### Governance
 
-- Audit Log
-- Admin Access when governed internal capability administration exists
-- Platform Settings when actual platform settings are exposed
+- **Audit Log**
+- **Admin Access** when governed internal capability administration exists
+- **Platform Settings** when actual platform settings are exposed
 
 Do not occupy prime navigation with an empty Settings page.
 
@@ -145,24 +139,26 @@ Task pages should expose one clear primary job, its supporting context, prerequi
 
 ## 6. Deep-link and routing contract
 
-1. Every first-class Admin destination should have a stable route/hash path.
-2. Merchant-scoped deep links should preserve the intended Merchant/Business context.
+1. Every first-class Admin destination has a stable route/hash path.
+2. Merchant-scoped deep links preserve the intended Merchant/Business context.
 3. Legacy route aliases may redirect to the new destination during migration so existing links do not become dead ends.
 4. Browser Back/Forward navigation must restore both destination and merchant scope without mutating business state.
-5. The legacy `billing` and `commercial/core` destinations resolve to **Commercial Orders** after the focused commercial convergence; they must not resurrect the retired catch-all page.
+5. The legacy `billing` and `commercial/core` destinations resolve to **Commercial Orders**; they must not resurrect the retired commercial catch-all page.
+6. Legacy `communications` / `communications/messages` resolve to **Compose Message**.
+7. Legacy `operations` / `operations/health` resolve to **WhatsApp Operations** as the primary service-health landing page.
 
 ## 7. Migration discipline
 
 The Admin IA may be converged incrementally when existing catch-all components are too coupled to separate safely in one patch.
 
-During that migration:
+During migration:
 
 1. separate already-independent components first;
-2. keep the existing governed RPC/command/service boundaries unchanged unless the business requirement itself changes;
+2. keep existing governed RPC/command/service boundaries unchanged unless the business requirement itself changes;
 3. remove hidden component side effects such as a selector automatically rendering unrelated management modules;
 4. do not declare the full Admin IA complete while a major catch-all page remains active;
-5. each intermediate branch/PR must state the residual bundled work explicitly;
-6. retired legacy components may remain temporarily in source for comparison/rollback, but the active Admin entry point must not mount them once their jobs have focused destinations.
+5. each intermediate branch/PR must state residual bundled work explicitly;
+6. once focused destinations replace a catch-all, retire the old active shell/component rather than leaving multiple competing implementations for future agents to accidentally reactivate.
 
 ## 8. QA gate
 
@@ -180,9 +176,18 @@ For Admin navigation/process work verify at minimum:
 10. merchant selectors no longer inject unrelated management modules unless explicitly requested;
 11. browser Back/Forward restores route/context;
 12. no Merchant Web, Mobile, WhatsApp, AI or offline business behavior changes unless a shared business rule was intentionally changed;
-13. active Commercial navigation does not mount the legacy all-in-one commercial workspace;
-14. Branch Readiness review does not expose a generic direct-readiness mutation that bypasses governed setup completion.
+13. active Commercial navigation does not mount the retired all-in-one commercial workspace;
+14. Branch Readiness review does not expose a generic direct-readiness mutation that bypasses governed setup completion;
+15. Setup Resources is not stacked into Setup Appointments;
+16. Campaign History is not stacked into Compose Message;
+17. WhatsApp Operations and AI Operations remain independent task pages even though they reuse the same governed platform summary authority.
 
-## 9. Cross-surface impact rule
+## 9. Browser acceptance requirement
+
+Static typecheck/build/contracts are necessary but do not replace browser acceptance for navigation UX. Verify desktop sidebar behavior, narrow-screen drawer behavior, persistent Merchant context and browser Back/Forward when an executable preview is available.
+
+When the preview provider is unavailable or rate-limited, do not claim visual/browser acceptance. Report the provider blocker explicitly while preserving the exact green static-CI evidence.
+
+## 10. Cross-surface impact rule
 
 Admin information-architecture-only work normally has no business-behavior impact outside Admin Web because shared authority is unchanged. Still report Shared Core, Merchant Web, Mobile, WhatsApp, AI, reporting/audit and offline/sync effects explicitly under `CROSS_SURFACE.md`.
