@@ -1,0 +1,40 @@
+name: SellerTray POS Policy UI Apply
+
+on:
+  push:
+    branches:
+      - feat/sellertray-brand-ui-v1
+    paths:
+      - 'scripts/apply-sellertray-pos-policy-ui.mjs'
+      - '.github/workflows/sellertray-pos-policy-ui.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/sellertray-brand-ui-v1
+          fetch-depth: 0
+      - name: Apply governed POS policy UI patch
+        run: node scripts/apply-sellertray-pos-policy-ui.mjs
+      - name: Commit patch
+        run: |
+          if git diff --quiet; then
+            echo "No patch changes produced" >&2
+            exit 1
+          fi
+          git config user.name "sellertray-qa-bot"
+          git config user.email "sellertray-qa-bot@users.noreply.github.com"
+          git add \
+            apps/mobile/src/redesign/ResumePosDraftWorkspace.tsx \
+            apps/mobile/src/redesign/SellWorkspace.tsx \
+            apps/merchant-web/src/SettingsManagement.tsx \
+            .agents/skills/sellertray-project-implementation/SKILL.md
+          git commit -m "Wire governed POS price and payment controls"
+          git push origin HEAD:feat/sellertray-brand-ui-v1

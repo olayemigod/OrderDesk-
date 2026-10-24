@@ -18,7 +18,7 @@ The Android application ID is release identity. Do not change it after the Googl
 
 ## Auth redirect contract
 
-Use `https://processedge.com.ng/sellertray` as the SellerTray production **Site URL** in Supabase Auth.
+Use `https://sellertray.vercel.app` as the SellerTray production **Site URL** in Supabase Auth.
 
 Before native release acceptance, Supabase Auth Additional Redirect URLs must include:
 
@@ -29,7 +29,7 @@ Before native release acceptance, Supabase Auth Additional Redirect URLs must in
 
 SellerTray generates new native Auth links with `sellertray://`. The legacy `orderdesk://` scheme remains registered temporarily so beta confirmation/recovery links do not break.
 
-The current Supabase connector used by the governed build does not expose Auth URL configuration. Verify the production Site URL is `https://processedge.com.ng/sellertray` and the four redirects are configured in Supabase Dashboard before native acceptance; do not mark the redirect gate passed from repository code alone.
+The current Supabase connector used by the governed build does not expose Auth URL configuration. Verify the production Site URL is `https://sellertray.vercel.app` and the four redirects are configured in Supabase Dashboard before native acceptance; do not mark the redirect gate passed from repository code alone.
 
 ## Auth email delivery contract
 
@@ -69,7 +69,7 @@ All of these must pass before creating a release candidate:
 4. SellerTray Send Email Hook/Auth email transport is accepted.
 5. Approved SellerTray launcher icon, Android adaptive icon and splash/launch branding are committed and referenced from Expo config.
 6. No production secrets exist in the mobile repository or client bundle.
-7. Account deletion resource is live at `https://processedge.com.ng/sellertray/account-deletion`.
+7. Account deletion resource is live at `https://sellertray.vercel.app/account-deletion`.
 8. Privacy Policy and Terms have SellerTray-specific data/service coverage and legal approval.
 9. Relevant external-service gates are accepted for the intended release scope.
 10. Google Play billing boundary is verified: the Play-distributed Android build contains no external SellerTray SaaS subscription checkout link or Paystack subscription CTA. Merchant-customer payments for physical goods/orders remain a separate commerce feature.

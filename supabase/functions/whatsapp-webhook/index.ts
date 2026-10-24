@@ -1,5 +1,14 @@
 import { PDFDocument, StandardFonts, rgb } from 'npm:pdf-lib@1.17.1';
 import { handleCustomerPaymentSelfService } from './payment.ts';
+import {
+  normalizeIntentText,
+  resolveConversationIntent,
+  type ConversationIntent,
+  type IntentDecision,
+  type IntentEnquiryContext,
+  type IntentOrderContext,
+  type VocabularyEntry,
+} from './intent.ts';
 
 type ParsedItem = {
   name: string;
@@ -121,6 +130,7 @@ const META_APP_SECRET = Deno.env.get('META_APP_SECRET') ?? '';
 const configuredParserUrl = Deno.env.get('ORDER_PARSER_URL')?.trim() ?? '';
 const ORDER_PARSER_URL = configuredParserUrl || (SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/order-parser` : '');
 const ORDER_PARSER_TOKEN = Deno.env.get('ORDER_PARSER_TOKEN') ?? '';
+const ORDER_PARSER_AUTH_TOKEN = ORDER_PARSER_TOKEN || SERVICE_ROLE_KEY;
 const AI_CATALOGUE_CONTEXT_LIMIT = 160;
 const AI_ALIAS_CONTEXT_LIMIT = 6;
 const AI_CUSTOMER_MINUTE_LIMIT = boundedEnvInt('AI_CUSTOMER_MINUTE_LIMIT', 6, 1, 60);
@@ -159,12 +169,20 @@ Deno.serve(withObservability('whatsapp-webhook', async (request) => {
     return new Response('Invalid JSON', { status: 400 });
   }
 
+  let webhookReceiptId: string | null = null;
+  try {
+    webhookReceiptId = await recordWebhookReceipt(payload);
+  } catch (error) {
+    console.warn('Unable to record WhatsApp webhook receipt diagnostic', error);
+  }
+
   try {
     // Privacy-by-design boundary: inspect only webhook routing metadata first.
     // Message content/media/order fields are not interpreted until the mapped
     // business has an active consent for the current SellerTray legal versions.
     const consentedPhoneNumberIds = await resolveConsentedWebhookPhoneNumbers(payload);
     if (consentedPhoneNumberIds.size === 0) {
+      await updateWebhookReceipt(webhookReceiptId, 'ignored', 'no_consented_route');
       return new Response('OK', { status: 200 });
     }
 
@@ -172,7 +190,9 @@ Deno.serve(withObservability('whatsapp-webhook', async (request) => {
     for (const event of events) {
       await ingestMessage(event);
     }
+    await updateWebhookReceipt(webhookReceiptId, 'accepted', null);
   } catch (error) {
+    await updateWebhookReceipt(webhookReceiptId, 'failed', diagnosticError(error));
     console.error('WhatsApp ingestion failed', error);
     return new Response('Webhook processing failed', { status: 500 });
   }
@@ -227,6 +247,65 @@ function constantTimeEqual(left: string, right: string): boolean {
     result |= left.charCodeAt(index) ^ right.charCodeAt(index);
   }
   return result === 0;
+}
+
+
+async function recordWebhookReceipt(payload: JsonRecord): Promise<string | null> {
+  const entries = Array.isArray(payload.entry) ? payload.entry : [];
+  let changeCount = 0;
+  let messageCount = 0;
+  let statusCount = 0;
+
+  for (const entry of entries) {
+    if (!isRecord(entry) || !Array.isArray(entry.changes)) continue;
+    changeCount += entry.changes.length;
+    for (const change of entry.changes) {
+      if (!isRecord(change) || !isRecord(change.value)) continue;
+      const value = change.value;
+      if (Array.isArray(value.messages)) messageCount += value.messages.length;
+      if (Array.isArray(value.statuses)) statusCount += value.statuses.length;
+    }
+  }
+
+  const rows = await rest<Array<{ id: string }>>('/rest/v1/whatsapp_webhook_receipts?select=id', {
+    method: 'POST',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify({
+      signature_valid: true,
+      phone_number_ids: extractWebhookPhoneNumberIds(payload),
+      entry_count: entries.length,
+      change_count: changeCount,
+      message_count: messageCount,
+      status_count: statusCount,
+      processing_result: 'received',
+    }),
+  });
+  return rows[0]?.id ?? null;
+}
+
+async function updateWebhookReceipt(
+  id: string | null,
+  result: 'accepted' | 'ignored' | 'failed',
+  errorCode: string | null,
+): Promise<void> {
+  if (!id) return;
+  try {
+    await rest('/rest/v1/whatsapp_webhook_receipts?id=eq.' + encodeURIComponent(id), {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        processing_result: result,
+        error_code: errorCode,
+      }),
+    });
+  } catch (error) {
+    console.warn('Unable to update WhatsApp webhook receipt diagnostic', error);
+  }
+}
+
+function diagnosticError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.slice(0, 500);
 }
 
 function extractWebhookPhoneNumberIds(payload: JsonRecord): string[] {
@@ -414,23 +493,15 @@ async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[nu
     return;
   }
 
-  const customerPayload: JsonRecord = {
-    tenant_id: tenantId,
-    wa_id: event.waId,
-    phone: event.waId,
-  };
-  if (event.customerName) customerPayload.display_name = event.customerName;
-
-  const customers = await rest<Array<{ id: string }>>(
-    '/rest/v1/customers?on_conflict=tenant_id,wa_id&select=id',
-    {
-      method: 'POST',
-      headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
-      body: JSON.stringify(customerPayload),
-    },
-  );
-  const customerId = customers[0]?.id;
-  if (!customerId) throw new Error('Customer upsert returned no row.');
+  const customerId = await rest<string>('/rest/v1/rpc/resolve_sellertray_whatsapp_customer', {
+  method: 'POST',
+  body: JSON.stringify({
+    p_tenant_id: tenantId,
+    p_wa_id: event.waId,
+    p_display_name: event.customerName,
+  }),
+});
+if (!customerId) throw new Error('Unable to resolve WhatsApp customer.');
 
   const storedMessages = await rest<Array<{ id: string }>>(
     '/rest/v1/inbound_messages?on_conflict=provider_message_id&select=id',
@@ -538,6 +609,20 @@ async function processClaimedInboundMessage({
     return;
   }
 
+  const intentRoute = await maybeHandleUnifiedConversationIntent({
+    tenantId,
+    businessName: tenant.name,
+    currency: tenant.currency || 'NGN',
+    customerId,
+    customerWaId: event.waId,
+    sourceMessageId,
+    fromPhoneNumberId: event.phoneNumberId,
+    text: event.text,
+  });
+  if (intentRoute.handled) {
+    return;
+  }
+
   if (await maybeConfirmCustomerReceipt({
     tenantId,
     customerId,
@@ -594,7 +679,8 @@ async function processClaimedInboundMessage({
   }
 
   const catalogue = await loadCatalogue(tenantId);
-  const parsed = await parseOrder(event.text, catalogue, tenantId, customerId, sourceMessageId);
+  const orderText = intentRoute.orderTextOverride || event.text;
+  const parsed = await parseOrder(orderText, catalogue, tenantId, customerId, sourceMessageId);
   const enrichedItems = enrichFromCatalogue(parsed.items, catalogue);
 
   // A normal WhatsApp conversation must never become an empty SellerTray order.
@@ -638,6 +724,1364 @@ async function processClaimedInboundMessage({
   });
 
   if (!orderId) throw new Error('Atomic order creation returned no order id.');
+
+  if (intentRoute.enquiryId) {
+    await markEnquiryConverted({
+      tenantId,
+      enquiryId: intentRoute.enquiryId,
+      orderId,
+    });
+  }
+
+  const createdOrderState = await reloadConversationOrder(tenantId, orderId);
+  await recordCommercialAction({
+    tenantId,
+    customerId,
+    sourceMessageId,
+    decision: intentRoute.decision,
+    targetOrderId: orderId,
+    actionType: intentRoute.enquiryId ? 'enquiry_converted_to_order' : 'order_created',
+    riskClass: 'medium',
+    policyResult: 'allowed',
+    actionStatus: 'applied',
+    beforeState: {},
+    afterState: conversationOrderState(createdOrderState),
+    currency: createdOrderState?.currency ?? tenant.currency ?? 'NGN',
+    interpretationSource: parsed.source === 'ai' ? 'ai' : intentRoute.decision?.source ?? null,
+    interpretationConfidence: parsed.source === 'ai' ? parsed.confidence : intentRoute.decision?.confidence ?? null,
+    metadata: {
+      intent_source: intentRoute.decision?.source ?? null,
+      parser_source: parsed.source,
+      parser_confidence: parsed.confidence,
+      enquiry_id: intentRoute.enquiryId,
+    },
+  });
+}
+
+
+type ConversationOrderRow = {
+  id: string;
+  public_order_id: string;
+  status: string;
+  payment_status: string;
+  amount_paid: number | string;
+  total_amount: number | string | null;
+  currency: string;
+  fulfillment_status: string;
+  fulfillment_method: string | null;
+  delivery_provider: string | null;
+  delivery_reference: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type ConversationEnquiryRow = {
+  id: string;
+  source_inbound_message_id: string | null;
+  enquiry_type: 'price' | 'availability' | 'product' | 'general';
+  status: 'open' | 'replied' | 'converted' | 'dismissed';
+  product_query: string | null;
+  matched_catalog_item_id: string | null;
+  matched_item_name: string | null;
+  quoted_price: number | string | null;
+  currency: string;
+  created_at: string;
+};
+
+type ConversationTarget = ConversationOrderRow | null;
+
+type IntentRouteResult = {
+  handled: boolean;
+  orderTextOverride: string | null;
+  enquiryId: string | null;
+  decision: IntentDecision | null;
+};
+
+async function maybeHandleUnifiedConversationIntent({
+  tenantId,
+  businessName,
+  currency,
+  customerId,
+  customerWaId,
+  sourceMessageId,
+  fromPhoneNumberId,
+  text,
+}: {
+  tenantId: string;
+  businessName: string;
+  currency: string;
+  customerId: string;
+  customerWaId: string;
+  sourceMessageId: string;
+  fromPhoneNumberId: string;
+  text: string;
+}): Promise<IntentRouteResult> {
+  const [vocabulary, customerIds] = await Promise.all([
+    loadIntentVocabulary(),
+    resolveCustomerIdsForWhatsApp(tenantId, customerId, customerWaId),
+  ]);
+
+  const [orders, lastOutboundRows, lastInboundRows, lastEnquiry] = await Promise.all([
+    loadRecentConversationOrders(tenantId, customerIds),
+    rest<Array<{ event_key: string; message_body: string; created_at: string; source_inbound_message_id: string | null }>>(
+      '/rest/v1/outbound_notifications?select=event_key,message_body,created_at,source_inbound_message_id' +
+        '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+        '&customer_id=eq.' + encodeURIComponent(customerId) +
+        '&order=created_at.desc&limit=1',
+    ),
+    rest<Array<{ id: string; text_body: string | null; received_at: string }>>(
+      '/rest/v1/inbound_messages?select=id,text_body,received_at' +
+        '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+        '&customer_id=eq.' + encodeURIComponent(customerId) +
+        '&id=neq.' + encodeURIComponent(sourceMessageId) +
+        '&order=received_at.desc&limit=1',
+    ),
+    loadRecentCustomerEnquiry(tenantId, customerId),
+  ]);
+
+  const lastOutbound = lastOutboundRows[0] ?? null;
+  const pendingClarificationIntent =
+    lastOutbound?.event_key === 'workflow_clarification' &&
+    lastOutbound.source_inbound_message_id
+      ? await loadIntentForSourceMessage(tenantId, lastOutbound.source_inbound_message_id)
+      : null;
+  const pendingClarificationOrderRefs =
+    lastOutbound?.event_key === 'workflow_clarification'
+      ? extractOrderRefs(lastOutbound.message_body)
+      : [];
+
+  if (
+    pendingClarificationIntent &&
+    pendingClarificationOrderRefs.length > 1 &&
+    isAllClarificationReply(text)
+  ) {
+    const handledAll = await handleAllReadOnlyClarificationReply({
+      tenantId,
+      businessName,
+      customerId,
+      customerWaId,
+      sourceMessageId,
+      fromPhoneNumberId,
+      intent: pendingClarificationIntent,
+      orderRefs: pendingClarificationOrderRefs,
+    });
+    if (handledAll) {
+      const decision: IntentDecision = {
+        intent: pendingClarificationIntent,
+        source: 'context',
+        confidence: 0.99,
+        explicitOrderRef: null,
+        targetOrderRef: null,
+        paymentMethod: null,
+        itemText: null,
+        deliveryText: null,
+        aiModel: null,
+        aiInputTokens: null,
+        aiOutputTokens: null,
+        aiTotalTokens: null,
+      };
+      await recordConversationIntent({
+        tenantId,
+        customerId,
+        sourceMessageId,
+        decision,
+        target: null,
+        text,
+      });
+      return {
+        handled: true,
+        orderTextOverride: null,
+        enquiryId: null,
+        decision,
+      };
+    }
+  }
+
+  const decision = await resolveConversationIntent({
+    text,
+    vocabulary,
+    context: {
+      orders: orders.map(toIntentOrderContext),
+      lastOutboundEventKey: lastOutbound?.event_key ?? null,
+      lastOutboundMessage: lastOutbound?.message_body ?? null,
+      lastInboundMessageId: lastInboundRows[0]?.id ?? null,
+      lastInboundMessage: lastInboundRows[0]?.text_body ?? null,
+      lastInboundReceivedAt: lastInboundRows[0]?.received_at ?? null,
+      pendingClarificationIntent,
+      pendingClarificationOrderRefs,
+      pendingClarificationCreatedAt: lastOutbound?.event_key === 'workflow_clarification'
+        ? lastOutbound.created_at
+        : null,
+      lastEnquiry: toIntentEnquiryContext(lastEnquiry),
+    },
+  });
+
+  let target = resolveConversationTarget(decision, orders);
+  await recordConversationIntent({
+    tenantId,
+    customerId,
+    sourceMessageId,
+    decision,
+    target,
+    text,
+  });
+
+  if (decision.source === 'ai' && decision.confidence >= 0.88) {
+    await recordIntentVocabularyCandidate(decision, sourceMessageId, text);
+  }
+
+  if (decision.intent === 'new_order') {
+    const contextualEnquiry =
+      decision.source === 'context' &&
+      lastEnquiry &&
+      ['open', 'replied'].includes(lastEnquiry.status)
+        ? lastEnquiry
+        : null;
+
+    return {
+      handled: false,
+      orderTextOverride: decision.itemText || null,
+      enquiryId: contextualEnquiry?.id ?? null,
+      decision,
+    };
+  }
+
+  if (decision.intent === 'unknown') {
+    if (looksLikeUnresolvedCommercialMessage(text)) {
+      await handleCustomerProductEnquiry({
+        tenantId,
+        businessName,
+        currency,
+        customerId,
+        customerWaId,
+        sourceMessageId,
+        fromPhoneNumberId,
+        decision,
+        text,
+      });
+      await recordCommercialAction({
+        tenantId,
+        customerId,
+        sourceMessageId,
+        decision,
+        targetOrderId: null,
+        actionType: 'customer_enquiry_recorded',
+        riskClass: 'low',
+        policyResult: 'clarification_required',
+        actionStatus: 'requested',
+        metadata: { unresolved_commercial_message: true },
+      });
+      return {
+        handled: true,
+        orderTextOverride: null,
+        enquiryId: null,
+        decision,
+      };
+    }
+
+    console.info(JSON.stringify({
+      event: 'sellertray_message_no_safe_commercial_intent',
+      tenantId,
+      customerId,
+      sourceMessageId,
+    }));
+    return {
+      handled: true,
+      orderTextOverride: null,
+      enquiryId: null,
+      decision,
+    };
+  }
+
+  if (decision.intent === 'general_chatter') {
+    return { handled: true, orderTextOverride: null, enquiryId: null, decision };
+  }
+
+  if (
+    decision.intent === 'product_price_enquiry' ||
+    decision.intent === 'product_availability_enquiry' ||
+    decision.intent === 'product_enquiry' ||
+    decision.intent === 'catalogue_query'
+  ) {
+    await handleCustomerProductEnquiry({
+      tenantId,
+      businessName,
+      currency,
+      customerId,
+      customerWaId,
+      sourceMessageId,
+      fromPhoneNumberId,
+      decision,
+      text,
+    });
+    await recordCommercialAction({
+      tenantId,
+      customerId,
+      sourceMessageId,
+      decision,
+      targetOrderId: null,
+      actionType: 'customer_enquiry_recorded',
+      riskClass: 'low',
+      policyResult: 'not_applicable',
+      actionStatus: 'applied',
+      metadata: { enquiry_intent: decision.intent },
+    });
+    return { handled: true, orderTextOverride: null, enquiryId: null, decision };
+  }
+
+  if (decision.intent === 'delivery_confirm') {
+    target = target ?? chooseSingleOrder(
+      orders.filter((order) =>
+        order.status === 'ready' && order.fulfillment_status === 'out_for_delivery'
+      ),
+    );
+    const beforeState = conversationOrderState(target);
+    await maybeConfirmCustomerReceipt({
+      tenantId,
+      customerId,
+      customerWaId,
+      sourceMessageId,
+      text: 'received',
+    });
+    const afterTarget = target ? await reloadConversationOrder(tenantId, target.id) : null;
+    const applied = Boolean(
+      afterTarget &&
+      afterTarget.status === 'completed' &&
+      afterTarget.fulfillment_status === 'delivered',
+    );
+    await recordCommercialAction({
+      tenantId,
+      customerId,
+      sourceMessageId,
+      decision,
+      targetOrderId: target?.id ?? null,
+      actionType: 'delivery_confirmation',
+      riskClass: 'medium',
+      policyResult: applied ? 'allowed' : 'clarification_required',
+      actionStatus: applied ? 'applied' : 'clarification_required',
+      beforeState,
+      afterState: conversationOrderState(afterTarget),
+      currency: afterTarget?.currency ?? target?.currency ?? null,
+      metadata: {
+        confirmation_channel: 'whatsapp',
+      },
+    });
+    return { handled: true, orderTextOverride: null, enquiryId: null, decision };
+  }
+
+  if (
+    decision.intent === 'payment_claim' ||
+    decision.intent === 'payment_options' ||
+    decision.intent === 'payment_method_select' ||
+    decision.intent === 'payment_status' ||
+    decision.intent === 'invoice_request' ||
+    decision.intent === 'financial_receipt_request'
+  ) {
+    target = target ?? resolvePaymentTarget(decision.intent, orders);
+    if (target) {
+      await recordConversationIntent({
+        tenantId,
+        customerId,
+        sourceMessageId,
+        decision,
+        target,
+        text,
+      });
+    }
+    if (!target) {
+      await queueWorkflowClarification({
+        tenantId,
+        customerId,
+        customerWaId,
+        sourceMessageId,
+        fromPhoneNumberId,
+        businessName,
+        intent: decision.intent,
+        orders: paymentCandidatesForIntent(decision.intent, orders),
+      });
+      await recordCommercialAction({
+        tenantId,
+        customerId,
+        sourceMessageId,
+        decision,
+        targetOrderId: null,
+        actionType: actionTypeForIntent(decision.intent),
+        riskClass: riskClassForIntent(decision.intent),
+        policyResult: 'clarification_required',
+        actionStatus: 'clarification_required',
+      });
+      return { handled: true, orderTextOverride: null, enquiryId: null, decision };
+    }
+
+    const beforeState = conversationOrderState(target);
+    const routedText = paymentIntentText(decision, target.public_order_id);
+    const handled = await handleCustomerPaymentSelfService({
+      tenantId,
+      businessName,
+      customerId,
+      customerWaId,
+      sourceMessageId,
+      fromPhoneNumberId,
+      text: routedText,
+    });
+    const afterTarget = await reloadConversationOrder(tenantId, target.id);
+    await recordCommercialAction({
+      tenantId,
+      customerId,
+      sourceMessageId,
+      decision,
+      targetOrderId: target.id,
+      actionType: actionTypeForIntent(decision.intent),
+      riskClass: riskClassForIntent(decision.intent),
+      policyResult: handled ? 'allowed' : 'blocked',
+      actionStatus: handled ? 'applied' : 'failed',
+      beforeState,
+      afterState: conversationOrderState(afterTarget),
+      currency: afterTarget?.currency ?? target.currency,
+      metadata: {
+        routed_action: decision.intent,
+      },
+    });
+    return { handled: true, orderTextOverride: null, enquiryId: null, decision };
+  }
+
+  if (decision.intent === 'order_status' || decision.intent === 'delivery_status') {
+    target = target ?? chooseSingleOrder(
+      orders.filter((order) => !['cancelled', 'rejected'].includes(order.status)),
+    );
+    if (!target && orders.length === 1) target = orders[0];
+    if (target) {
+      await recordConversationIntent({
+        tenantId,
+        customerId,
+        sourceMessageId,
+        decision,
+        target,
+        text,
+      });
+    }
+    if (!target && orders.length > 1) {
+      await queueWorkflowClarification({
+        tenantId,
+        customerId,
+        customerWaId,
+        sourceMessageId,
+        fromPhoneNumberId,
+        businessName,
+        intent: decision.intent,
+        orders,
+      });
+      await recordCommercialAction({
+        tenantId,
+        customerId,
+        sourceMessageId,
+        decision,
+        targetOrderId: null,
+        actionType: actionTypeForIntent(decision.intent),
+        riskClass: 'low',
+        policyResult: 'clarification_required',
+        actionStatus: 'clarification_required',
+      });
+      return { handled: true, orderTextOverride: null, enquiryId: null, decision };
+    }
+    if (!target) {
+      return { handled: true, orderTextOverride: null, enquiryId: null, decision };
+    }
+
+    const handled = await maybeHandleCustomerSelfService({
+      tenantId,
+      businessName,
+      customerName: null,
+      customerId,
+      customerWaId,
+      sourceMessageId,
+      fromPhoneNumberId,
+      text: 'STATUS ' + target.public_order_id,
+    });
+    await recordCommercialAction({
+      tenantId,
+      customerId,
+      sourceMessageId,
+      decision,
+      targetOrderId: target.id,
+      actionType: actionTypeForIntent(decision.intent),
+      riskClass: 'low',
+      policyResult: handled ? 'allowed' : 'blocked',
+      actionStatus: handled ? 'applied' : 'failed',
+      beforeState: conversationOrderState(target),
+      afterState: conversationOrderState(target),
+      currency: target.currency,
+    });
+    return { handled: true, orderTextOverride: null, enquiryId: null, decision };
+  }
+
+  if (
+    decision.intent === 'order_add_items' ||
+    decision.intent === 'order_remove_items' ||
+    decision.intent === 'order_change_items' ||
+    decision.intent === 'order_cancel' ||
+    decision.intent === 'pickup_request' ||
+    decision.intent === 'delivery_instruction'
+  ) {
+    target = target ?? chooseSingleOrder(
+      orders.filter((order) => ['needs_review', 'accepted', 'processing', 'ready'].includes(order.status)),
+    );
+
+    if (target) {
+      await recordConversationIntent({
+        tenantId,
+        customerId,
+        sourceMessageId,
+        decision,
+        target,
+        text,
+      });
+    }
+
+    if (!target) {
+      await queueWorkflowClarification({
+        tenantId,
+        customerId,
+        customerWaId,
+        sourceMessageId,
+        fromPhoneNumberId,
+        businessName,
+        intent: decision.intent,
+        orders: orders.filter((order) => ['needs_review', 'accepted', 'processing', 'ready'].includes(order.status)),
+      });
+      await recordCommercialAction({
+        tenantId,
+        customerId,
+        sourceMessageId,
+        decision,
+        targetOrderId: null,
+        actionType: actionTypeForIntent(decision.intent),
+        riskClass: riskClassForIntent(decision.intent),
+        policyResult: 'clarification_required',
+        actionStatus: 'clarification_required',
+      });
+      return { handled: true, orderTextOverride: null, enquiryId: null, decision };
+    }
+
+    await createCustomerWorkflowChangeRequest({
+      tenantId,
+      customerId,
+      sourceMessageId,
+      target,
+      decision,
+      text,
+    });
+    await recordCommercialAction({
+      tenantId,
+      customerId,
+      sourceMessageId,
+      decision,
+      targetOrderId: target.id,
+      actionType: actionTypeForIntent(decision.intent),
+      riskClass: riskClassForIntent(decision.intent),
+      policyResult: 'pending',
+      actionStatus: 'requested',
+      beforeState: conversationOrderState(target),
+      currency: target.currency,
+      metadata: {
+        requested_change: decision.intent,
+      },
+    });
+    return { handled: true, orderTextOverride: null, enquiryId: null, decision };
+  }
+
+  if (decision.intent === 'complaint' || decision.intent === 'refund_request') {
+    if (decision.intent === 'refund_request') {
+      target = target ?? chooseSingleOrder(
+        orders.filter((order) => order.payment_status === 'paid' || order.status === 'completed'),
+      );
+      const eligible = orders.filter((order) => order.payment_status === 'paid' || order.status === 'completed');
+      if (!target && eligible.length > 1) {
+        await queueWorkflowClarification({
+          tenantId,
+          customerId,
+          customerWaId,
+          sourceMessageId,
+          fromPhoneNumberId,
+          businessName,
+          intent: decision.intent,
+          orders: eligible,
+        });
+        await recordCommercialAction({
+          tenantId,
+          customerId,
+          sourceMessageId,
+          decision,
+          targetOrderId: null,
+          actionType: 'refund_requested',
+          riskClass: 'high',
+          policyResult: 'clarification_required',
+          actionStatus: 'clarification_required',
+        });
+        return { handled: true, orderTextOverride: null, enquiryId: null, decision };
+      }
+    } else {
+      target = target ?? orders[0] ?? null;
+    }
+
+    await queueMerchantWorkflowAttention({
+      tenantId,
+      customerId,
+      sourceMessageId,
+      target,
+      intent: decision.intent,
+      text,
+    });
+    await recordCommercialAction({
+      tenantId,
+      customerId,
+      sourceMessageId,
+      decision,
+      targetOrderId: target?.id ?? null,
+      actionType: actionTypeForIntent(decision.intent),
+      riskClass: riskClassForIntent(decision.intent),
+      policyResult: decision.intent === 'refund_request' ? 'pending' : 'not_applicable',
+      actionStatus: 'requested',
+      beforeState: conversationOrderState(target),
+      currency: target?.currency ?? null,
+      metadata: {
+        customer_text: text.slice(0, 1000),
+        amount_paid: target ? toNumber(target.amount_paid) ?? 0 : null,
+        total_amount: target ? toNumber(target.total_amount) : null,
+      },
+    });
+    return { handled: true, orderTextOverride: null, enquiryId: null, decision };
+  }
+
+  return { handled: false, orderTextOverride: null, enquiryId: null, decision };
+}
+
+async function loadIntentVocabulary(): Promise<VocabularyEntry[]> {
+  try {
+    return await rest<VocabularyEntry[]>(
+      '/rest/v1/sellertray_intent_vocab?select=intent,phrase,match_mode,confidence,priority' +
+        '&active=eq.true&order=priority.asc,id.asc&limit=500',
+    );
+  } catch (error) {
+    console.warn('SellerTray intent vocabulary unavailable; continuing with built-in rules', error);
+    return [];
+  }
+}
+
+async function loadRecentConversationOrders(
+  tenantId: string,
+  customerIds: string[],
+): Promise<ConversationOrderRow[]> {
+  if (customerIds.length === 0) return [];
+  return rest<ConversationOrderRow[]>(
+    '/rest/v1/orders?select=id,public_order_id,status,payment_status,amount_paid,total_amount,currency,fulfillment_status,fulfillment_method,delivery_provider,delivery_reference,created_at,updated_at' +
+      '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+      '&customer_id=in.(' + customerIds.join(',') + ')' +
+      '&order=updated_at.desc&limit=6',
+  );
+}
+
+async function reloadConversationOrder(
+  tenantId: string,
+  orderId: string,
+): Promise<ConversationOrderRow | null> {
+  const rows = await rest<ConversationOrderRow[]>(
+    '/rest/v1/orders?select=id,public_order_id,status,payment_status,amount_paid,total_amount,currency,fulfillment_status,fulfillment_method,delivery_provider,delivery_reference,created_at,updated_at' +
+      '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+      '&id=eq.' + encodeURIComponent(orderId) +
+      '&limit=1',
+  );
+  return rows[0] ?? null;
+}
+
+function conversationOrderState(order: ConversationOrderRow | null): Record<string, unknown> {
+  if (!order) return {};
+  return {
+    public_order_id: order.public_order_id,
+    status: order.status,
+    payment_status: order.payment_status,
+    amount_paid: toNumber(order.amount_paid) ?? 0,
+    total_amount: toNumber(order.total_amount),
+    currency: order.currency,
+    fulfillment_status: order.fulfillment_status,
+    fulfillment_method: order.fulfillment_method,
+    delivery_provider: order.delivery_provider,
+    delivery_reference: order.delivery_reference,
+  };
+}
+
+async function loadRecentCustomerEnquiry(
+  tenantId: string,
+  customerId: string,
+): Promise<ConversationEnquiryRow | null> {
+  const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+  const rows = await rest<ConversationEnquiryRow[]>(
+    '/rest/v1/customer_enquiries?select=id,source_inbound_message_id,enquiry_type,status,product_query,matched_catalog_item_id,matched_item_name,quoted_price,currency,created_at' +
+      '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+      '&customer_id=eq.' + encodeURIComponent(customerId) +
+      '&status=in.(open,replied)' +
+      '&converted_order_id=is.null' +
+      '&created_at=gte.' + encodeURIComponent(since) +
+      '&order=created_at.desc&limit=1',
+  );
+  return rows[0] ?? null;
+}
+
+function toIntentOrderContext(order: ConversationOrderRow): IntentOrderContext {
+  return {
+    id: order.id,
+    publicOrderId: order.public_order_id,
+    status: order.status,
+    paymentStatus: order.payment_status,
+    fulfillmentStatus: order.fulfillment_status,
+    createdAt: order.created_at,
+  };
+}
+
+function toIntentEnquiryContext(enquiry: ConversationEnquiryRow | null): IntentEnquiryContext | null {
+  if (!enquiry) return null;
+  return {
+    id: enquiry.id,
+    sourceInboundMessageId: enquiry.source_inbound_message_id,
+    enquiryType: enquiry.enquiry_type,
+    productQuery: enquiry.product_query,
+    matchedCatalogItemId: enquiry.matched_catalog_item_id,
+    matchedItemName: enquiry.matched_item_name,
+    quotedPrice: toNumber(enquiry.quoted_price),
+    currency: enquiry.currency,
+    status: enquiry.status,
+    createdAt: enquiry.created_at,
+  };
+}
+
+function looksLikeUnresolvedCommercialMessage(value: string): boolean {
+  const normalized = normalizeIntentText(value);
+  if (!normalized || normalized.length < 4) return false;
+
+  return /\b(?:buy|want|need|price|cost|how much|sell|stock|available|availability|product|item|bag|bags|piece|pieces|pcs|pack|packs|bottle|bottles|carton|cartons|crate|crates|box|boxes|unit|units|kg|litre|liter)\b/i.test(normalized);
+}
+
+async function loadIntentForSourceMessage(
+  tenantId: string,
+  sourceMessageId: string,
+): Promise<ConversationIntent | null> {
+  const rows = await rest<Array<{ intent: string }>>(
+    '/rest/v1/sellertray_intent_events?select=intent' +
+      '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+      '&source_inbound_message_id=eq.' + encodeURIComponent(sourceMessageId) +
+      '&order=created_at.desc&limit=1',
+  );
+  const intent = rows[0]?.intent ?? null;
+  return isConversationIntent(intent) ? intent : null;
+}
+
+function extractOrderRefs(value: string | null | undefined): string[] {
+  if (!value) return [];
+  const matches = value.match(/\b[A-Z0-9]{3}\/\d{6,}\b/gi) ?? [];
+  return [...new Set(matches.map((ref) => ref.toUpperCase()))];
+}
+
+function isAllClarificationReply(value: string): boolean {
+  const normalized = normalizeIntentText(value);
+  return /^(?:both|all|both of them|all of them|send both|send all|both receipts|all receipts)$/i.test(normalized);
+}
+
+function isConversationIntent(value: string | null): value is ConversationIntent {
+  return value === 'new_order' ||
+    value === 'order_add_items' ||
+    value === 'order_remove_items' ||
+    value === 'order_change_items' ||
+    value === 'order_cancel' ||
+    value === 'payment_options' ||
+    value === 'payment_method_select' ||
+    value === 'payment_claim' ||
+    value === 'payment_status' ||
+    value === 'invoice_request' ||
+    value === 'financial_receipt_request' ||
+    value === 'order_status' ||
+    value === 'delivery_status' ||
+    value === 'delivery_confirm' ||
+    value === 'pickup_request' ||
+    value === 'delivery_instruction' ||
+    value === 'product_price_enquiry' ||
+    value === 'product_availability_enquiry' ||
+    value === 'product_enquiry' ||
+    value === 'catalogue_query' ||
+    value === 'complaint' ||
+    value === 'refund_request' ||
+    value === 'general_chatter' ||
+    value === 'unknown';
+}
+
+async function handleAllReadOnlyClarificationReply(input: {
+  tenantId: string;
+  businessName: string;
+  customerId: string;
+  customerWaId: string;
+  sourceMessageId: string;
+  fromPhoneNumberId: string;
+  intent: ConversationIntent;
+  orderRefs: string[];
+}): Promise<boolean> {
+  if (![
+    'financial_receipt_request',
+    'invoice_request',
+    'order_status',
+    'payment_status',
+    'delivery_status',
+  ].includes(input.intent)) {
+    return false;
+  }
+
+  for (const ref of input.orderRefs.slice(0, 4)) {
+    if (input.intent === 'order_status' || input.intent === 'delivery_status') {
+      await maybeHandleCustomerSelfService({
+        tenantId: input.tenantId,
+        businessName: input.businessName,
+        customerName: null,
+        customerId: input.customerId,
+        customerWaId: input.customerWaId,
+        sourceMessageId: input.sourceMessageId,
+        fromPhoneNumberId: input.fromPhoneNumberId,
+        text: 'status ' + ref,
+      });
+      continue;
+    }
+
+    const routedText =
+      input.intent === 'financial_receipt_request' ? 'PAYMENT RECEIPT ' + ref :
+      input.intent === 'invoice_request' ? 'INVOICE ' + ref :
+      'PAYMENT STATUS ' + ref;
+
+    await handleCustomerPaymentSelfService({
+      tenantId: input.tenantId,
+      businessName: input.businessName,
+      customerId: input.customerId,
+      customerWaId: input.customerWaId,
+      sourceMessageId: input.sourceMessageId,
+      fromPhoneNumberId: input.fromPhoneNumberId,
+      text: routedText,
+    });
+  }
+
+  return true;
+}
+
+function resolveConversationTarget(
+  decision: IntentDecision,
+  orders: ConversationOrderRow[],
+): ConversationTarget {
+  const targetRef = decision.explicitOrderRef ?? decision.targetOrderRef;
+  if (!targetRef) return null;
+  return orders.find((order) => order.public_order_id.toUpperCase() === targetRef.toUpperCase()) ?? null;
+}
+
+function resolvePaymentTarget(
+  intent: IntentDecision['intent'],
+  orders: ConversationOrderRow[],
+): ConversationTarget {
+  return chooseSingleOrder(paymentCandidatesForIntent(intent, orders));
+}
+
+function paymentCandidatesForIntent(
+  intent: IntentDecision['intent'],
+  orders: ConversationOrderRow[],
+): ConversationOrderRow[] {
+  if (intent === 'financial_receipt_request') {
+    return orders.filter((order) => order.payment_status === 'paid');
+  }
+  if (intent === 'invoice_request') {
+    return orders.filter((order) => ['accepted', 'processing', 'ready', 'completed'].includes(order.status));
+  }
+  if (intent === 'payment_status') {
+    const unpaid = orders.filter((order) => !['cancelled', 'rejected'].includes(order.status) && order.payment_status !== 'paid');
+    return unpaid.length > 0 ? unpaid : orders.filter((order) => !['cancelled', 'rejected'].includes(order.status));
+  }
+  return orders.filter((order) =>
+    ['accepted', 'processing', 'ready'].includes(order.status) &&
+    order.payment_status !== 'paid'
+  );
+}
+
+function chooseSingleOrder(orders: ConversationOrderRow[]): ConversationTarget {
+  return orders.length === 1 ? orders[0] : null;
+}
+
+function paymentIntentText(decision: IntentDecision, orderRef: string): string {
+  if (decision.intent === 'payment_claim') return 'PAID ' + orderRef;
+  if (decision.intent === 'payment_status') return 'PAYMENT STATUS ' + orderRef;
+  if (decision.intent === 'invoice_request') return 'INVOICE ' + orderRef;
+  if (decision.intent === 'financial_receipt_request') return 'PAYMENT RECEIPT ' + orderRef;
+  if (decision.intent === 'payment_method_select' && decision.paymentMethod) {
+    return 'PAY ' + orderRef + ' ' + decision.paymentMethod;
+  }
+  return 'PAY ' + orderRef;
+}
+
+async function handleCustomerProductEnquiry(input: {
+  tenantId: string;
+  businessName: string;
+  currency: string;
+  customerId: string;
+  customerWaId: string;
+  sourceMessageId: string;
+  fromPhoneNumberId: string;
+  decision: IntentDecision;
+  text: string;
+}): Promise<void> {
+  const catalogue = await loadCatalogue(input.tenantId);
+  const enquiryText = input.decision.itemText?.trim() || input.text;
+  const match = findEnquiryCatalogueMatch(enquiryText, catalogue);
+  const enquiryType =
+    input.decision.intent === 'product_price_enquiry' ? 'price' :
+    input.decision.intent === 'product_availability_enquiry' ? 'availability' :
+    input.decision.intent === 'product_enquiry' ? 'product' :
+    'general';
+  const productQuery = match?.item.name ?? extractEnquiryProductQuery(enquiryText);
+
+  let responseText: string;
+  if (match) {
+    const price = toNumber(match.item.price_ngn);
+    if (enquiryType === 'price' && price !== null) {
+      responseText =
+        match.item.name + ' is ' + formatCurrencyAmount(price, input.currency) +
+        '. If you want to order, just tell me the quantity you need.';
+    } else if (enquiryType === 'availability') {
+      responseText =
+        'I found ' + match.item.name + ' in ' + input.businessName + '\'s catalogue' +
+        (price !== null ? ' at ' + formatCurrencyAmount(price, input.currency) : '') +
+        '. The merchant will confirm current stock availability. If you want to order it, tell me the quantity.';
+    } else {
+      responseText =
+        match.item.name +
+        (price !== null ? ' is listed at ' + formatCurrencyAmount(price, input.currency) : ' is in the catalogue') +
+        '. Ask for a quantity whenever you are ready to order.';
+    }
+  } else {
+    responseText =
+      'Thanks. Please give me a minute — I’ll respond to your enquiry shortly.';
+  }
+
+  const rows = await rest<Array<{ id: string }>>(
+    '/rest/v1/customer_enquiries?on_conflict=tenant_id,source_inbound_message_id&select=id',
+    {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+      body: JSON.stringify({
+        tenant_id: input.tenantId,
+        customer_id: input.customerId,
+        source_inbound_message_id: input.sourceMessageId,
+        channel: 'whatsapp',
+        enquiry_type: enquiryType,
+        status: 'open',
+        original_text: input.text.slice(0, 2000),
+        normalized_text: normalizeIntentText(input.text).slice(0, 1000),
+        product_query: productQuery?.slice(0, 500) ?? null,
+        matched_catalog_item_id: match?.item.id ?? null,
+        matched_item_name: match?.item.name ?? null,
+        quoted_price: match ? toNumber(match.item.price_ngn) : null,
+        currency: input.currency,
+        response_text: responseText.slice(0, 2000),
+        replied_at: null,
+        updated_at: new Date().toISOString(),
+      }),
+    },
+  );
+
+  await rest('/rest/v1/outbound_notifications', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
+    body: JSON.stringify({
+      tenant_id: input.tenantId,
+      customer_id: input.customerId,
+      source_inbound_message_id: input.sourceMessageId,
+      event_key: 'customer_enquiry_reply',
+      delivery_status: 'pending',
+      from_phone_number_id: input.fromPhoneNumberId,
+      to_wa_id: input.customerWaId,
+      message_body: responseText.slice(0, 2000),
+      conversation_window_expires_at: new Date(Date.now() + 86400000).toISOString(),
+    }),
+  });
+
+  await kickNotificationWorker();
+
+  await rest('/rest/v1/merchant_notifications', {
+    method: 'POST',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      tenant_id: input.tenantId,
+      event_key: 'customer_enquiry',
+      severity: match ? 'info' : 'attention',
+      title: match ? 'Customer product enquiry' : 'Customer enquiry needs review',
+      body: (
+        input.text +
+        (match
+          ? ' · Matched: ' + match.item.name
+          : merchantCandidateHint(input.text, catalogue))
+      ).slice(0, 1000),
+      source_inbound_message_id: input.sourceMessageId,
+    }),
+  });
+
+  console.info(JSON.stringify({
+    event: 'sellertray_customer_enquiry_recorded',
+    tenantId: input.tenantId,
+    customerId: input.customerId,
+    enquiryId: rows[0]?.id ?? null,
+    enquiryType,
+    matchedItemId: match?.item.id ?? null,
+  }));
+}
+
+function findEnquiryCatalogueMatch(
+  text: string,
+  catalogue: CatalogueRow[],
+): CatalogueMatch | null {
+  const productQuery = extractEnquiryProductQuery(text);
+  const direct = findCatalogueMatch(productQuery, catalogue);
+  if (direct) return direct;
+
+  const normalizedText = normalizePhrase(productQuery || text);
+  const messageTokens = new Set(normalizedText.split(' ').filter((token) => token.length >= 2));
+  const ranked = catalogue
+    .map((item) => ({
+      item,
+      score: catalogueContextScore(normalizedText, messageTokens, item),
+    }))
+    .sort((left, right) => right.score - left.score);
+
+  const best = ranked[0];
+  const second = ranked[1];
+  if (!best || best.score < 35) return null;
+  if (best.score < 100 && second && best.score - second.score < 10) return null;
+
+  const exact = findCatalogueMatch(best.item.name, [best.item]);
+  return exact ?? { item: best.item, source: 'normalized_name', confidence: Math.min(0.92, best.score / 100) };
+}
+
+function merchantCandidateHint(text: string, catalogue: CatalogueRow[]): string {
+  const candidates = fuzzyCatalogueCandidates(extractEnquiryProductQuery(text), catalogue)
+    .filter((candidate) => candidate.score >= 55)
+    .slice(0, 4)
+    .map((candidate) => candidate.item.name);
+
+  return candidates.length > 0
+    ? ' · Needs merchant review. Possible catalogue matches: ' + candidates.join(', ')
+    : ' · No confident catalogue match';
+}
+
+function extractEnquiryProductQuery(text: string): string {
+  return normalizeIntentText(text)
+    .replace(/^(?:hi|hello|hey|good morning|good afternoon|good evening)\s+/i, '')
+    .replace(/^(?:please\s+)?(?:how much (?:is|are|be)|what(?:s| is) the price of|price of|cost of|wetin be the price(?: of)?|do you have|do you sell|do you stock|is|are|you get|una get|tell me about|show me)\s+/i, '')
+    .replace(/\b(?:available|in stock)\b/gi, '')
+    .replace(/^(?:a|an|the)\s+/i, '')
+    .trim()
+    .slice(0, 500);
+}
+
+function formatCurrencyAmount(value: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat('en-NG', {
+      style: 'currency',
+      currency: /^[A-Z]{3}$/.test(currency) ? currency : 'NGN',
+      maximumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    return (currency || 'NGN') + ' ' + value.toFixed(2);
+  }
+}
+
+async function markEnquiryConverted(input: {
+  tenantId: string;
+  enquiryId: string;
+  orderId: string;
+}): Promise<void> {
+  await rest(
+    '/rest/v1/customer_enquiries?id=eq.' + encodeURIComponent(input.enquiryId) +
+      '&tenant_id=eq.' + encodeURIComponent(input.tenantId) +
+      '&converted_order_id=is.null' +
+      '&status=in.(open,replied)',
+    {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        status: 'converted',
+        converted_order_id: input.orderId,
+        converted_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }),
+    },
+  );
+}
+
+async function createCustomerWorkflowChangeRequest(input: {
+  tenantId: string;
+  customerId: string;
+  sourceMessageId: string;
+  target: ConversationOrderRow;
+  decision: IntentDecision;
+  text: string;
+}): Promise<void> {
+  const kind =
+    input.decision.intent === 'order_add_items' ? 'add_items' :
+    input.decision.intent === 'order_remove_items' ? 'remove_items' :
+    input.decision.intent === 'order_change_items' ? 'change_items' :
+    input.decision.intent === 'order_cancel' ? 'cancel_order' :
+    'other';
+
+  await rest('/rest/v1/customer_order_change_requests?on_conflict=tenant_id,source_inbound_message_id', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
+    body: JSON.stringify({
+      tenant_id: input.tenantId,
+      order_id: input.target.id,
+      customer_id: input.customerId,
+      source_inbound_message_id: input.sourceMessageId,
+      request_kind: kind,
+      request_text: input.text.slice(0, 2000),
+      parsed_items: [],
+      status: 'pending',
+    }),
+  });
+}
+
+async function queueMerchantWorkflowAttention(input: {
+  tenantId: string;
+  customerId: string;
+  sourceMessageId: string;
+  target: ConversationTarget;
+  intent: 'complaint' | 'refund_request';
+  text: string;
+}): Promise<void> {
+  const eventKey = input.intent === 'complaint' ? 'customer_complaint' : 'refund_request';
+  const severity = input.intent === 'refund_request' ? 'urgent' : 'attention';
+  const title = input.intent === 'complaint'
+    ? 'Customer needs attention'
+    : 'Customer requested a refund';
+
+  await rest('/rest/v1/merchant_notifications', {
+    method: 'POST',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      tenant_id: input.tenantId,
+      event_key: eventKey,
+      severity,
+      title,
+      body: input.text.slice(0, 1000),
+      order_id: input.target?.id ?? null,
+      source_inbound_message_id: input.sourceMessageId,
+    }),
+  });
+}
+
+async function queueWorkflowClarification(input: {
+  tenantId: string;
+  customerId: string;
+  customerWaId: string;
+  sourceMessageId: string;
+  fromPhoneNumberId: string;
+  businessName: string;
+  intent: IntentDecision['intent'];
+  orders: ConversationOrderRow[];
+}): Promise<void> {
+  const options = input.orders.slice(0, 4);
+  let message: string;
+
+  if (options.length === 0) {
+    message = 'I understood your request, but I could not find an order it can safely be applied to. Please tell us which order you mean.';
+  } else {
+    message =
+      'I found more than one order that may match your request. Please reply with the order reference you mean:\n' +
+      options.map((order) =>
+        '• ' + order.public_order_id + ' — ' + humanCompactOrderState(order)
+      ).join('\n');
+  }
+
+  await rest('/rest/v1/outbound_notifications', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
+    body: JSON.stringify({
+      tenant_id: input.tenantId,
+      customer_id: input.customerId,
+      source_inbound_message_id: input.sourceMessageId,
+      event_key: 'workflow_clarification',
+      delivery_status: 'pending',
+      from_phone_number_id: input.fromPhoneNumberId,
+      to_wa_id: input.customerWaId,
+      message_body: message.slice(0, 2000),
+      conversation_window_expires_at: new Date(Date.now() + 86400000).toISOString(),
+    }),
+  });
+
+  await kickNotificationWorker();
+
+  await rest('/rest/v1/merchant_notifications', {
+    method: 'POST',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      tenant_id: input.tenantId,
+      event_key: 'workflow_clarification',
+      severity: 'info',
+      title: 'SellerTray asked the customer to clarify',
+      body: (input.intent + ': ' + message).slice(0, 1000),
+      source_inbound_message_id: input.sourceMessageId,
+    }),
+  });
+}
+
+function humanCompactOrderState(order: ConversationOrderRow): string {
+  if (order.fulfillment_status === 'out_for_delivery') return 'Out for delivery';
+  if (order.payment_status === 'paid') return order.status.replace(/_/g, ' ') + ' · paid';
+  return order.status.replace(/_/g, ' ') + ' · ' + order.payment_status.replace(/_/g, ' ');
+}
+
+async function recordConversationIntent(input: {
+  tenantId: string;
+  customerId: string;
+  sourceMessageId: string;
+  decision: IntentDecision;
+  target: ConversationTarget;
+  text: string;
+}): Promise<void> {
+  try {
+    await rest('/rest/v1/sellertray_intent_events?on_conflict=tenant_id,source_inbound_message_id', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({
+        tenant_id: input.tenantId,
+        customer_id: input.customerId,
+        source_inbound_message_id: input.sourceMessageId,
+        channel: 'whatsapp',
+        intent: input.decision.intent,
+        source: input.decision.source,
+        confidence: input.decision.confidence,
+        target_order_id: input.target?.id ?? null,
+        target_order_ref: input.target?.public_order_id ?? input.decision.targetOrderRef,
+        ai_model: input.decision.aiModel,
+        ai_input_tokens: input.decision.aiInputTokens,
+        ai_output_tokens: input.decision.aiOutputTokens,
+        ai_total_tokens: input.decision.aiTotalTokens,
+        metadata: {
+          normalized_text: normalizeIntentText(input.text).slice(0, 500),
+          payment_method: input.decision.paymentMethod,
+          item_text: input.decision.itemText,
+          delivery_text: input.decision.deliveryText,
+        },
+      }),
+    });
+  } catch (error) {
+    console.warn('SellerTray intent telemetry write failed', error);
+  }
+}
+
+async function recordIntentVocabularyCandidate(
+  decision: IntentDecision,
+  sourceMessageId: string,
+  text: string,
+): Promise<void> {
+  if (decision.intent === 'unknown' || decision.intent === 'general_chatter' || decision.intent === 'new_order') return;
+  try {
+    await rest('/rest/v1/rpc/sellertray_record_intent_vocab_candidate', {
+      method: 'POST',
+      body: JSON.stringify({
+        p_normalized_phrase: normalizeIntentText(text).slice(0, 500),
+        p_intent: decision.intent,
+        p_confidence: decision.confidence,
+        p_source_message_id: sourceMessageId,
+      }),
+    });
+  } catch (error) {
+    console.warn('SellerTray intent vocabulary candidate write failed', error);
+  }
+}
+
+async function recordCommercialAction(input: {
+  tenantId: string;
+  customerId: string;
+  sourceMessageId: string;
+  decision: IntentDecision | null;
+  targetOrderId: string | null;
+  actionType: string;
+  riskClass: 'low' | 'medium' | 'high';
+  policyResult: 'pending' | 'allowed' | 'blocked' | 'clarification_required' | 'not_applicable';
+  actionStatus: 'requested' | 'applied' | 'rejected' | 'clarification_required' | 'failed';
+  financialImpact?: number | null;
+  currency?: string | null;
+  beforeState?: Record<string, unknown>;
+  afterState?: Record<string, unknown>;
+  actorUserId?: string | null;
+  requestedBy?: 'customer' | 'merchant' | 'staff' | 'ai' | 'system';
+  interpretationSource?: 'vocabulary' | 'rules' | 'context' | 'ai' | 'none' | null;
+  interpretationConfidence?: number | null;
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    await rest('/rest/v1/commercial_action_ledger?on_conflict=tenant_id,action_key', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({
+        tenant_id: input.tenantId,
+        action_key: input.sourceMessageId + ':' + input.actionType,
+        channel: 'whatsapp',
+        source_inbound_message_id: input.sourceMessageId,
+        customer_id: input.customerId,
+        target_order_id: input.targetOrderId,
+        action_type: input.actionType,
+        risk_class: input.riskClass,
+        requested_by: input.requestedBy ?? 'customer',
+        actor_user_id: input.actorUserId ?? null,
+        interpretation_source: input.interpretationSource ?? input.decision?.source ?? null,
+        interpretation_confidence: input.interpretationConfidence ?? input.decision?.confidence ?? null,
+        policy_result: input.policyResult,
+        action_status: input.actionStatus,
+        financial_impact: input.financialImpact ?? null,
+        currency: input.currency ?? null,
+        before_state: input.beforeState ?? {},
+        after_state: input.afterState ?? {},
+        metadata: input.metadata ?? {},
+        applied_at: input.actionStatus === 'applied' ? new Date().toISOString() : null,
+      }),
+    });
+  } catch (error) {
+    console.warn('SellerTray commercial action ledger write failed', error);
+  }
+}
+
+function actionTypeForIntent(intent: IntentDecision['intent']): string {
+  const map: Partial<Record<IntentDecision['intent'], string>> = {
+    payment_claim: 'payment_claimed',
+    payment_options: 'payment_options_requested',
+    payment_method_select: 'payment_method_selected',
+    payment_status: 'payment_status_requested',
+    invoice_request: 'invoice_requested',
+    financial_receipt_request: 'payment_receipt_requested',
+    order_status: 'order_status_requested',
+    delivery_status: 'delivery_status_requested',
+    order_add_items: 'order_add_items_requested',
+    order_remove_items: 'order_remove_items_requested',
+    order_change_items: 'order_change_requested',
+    order_cancel: 'order_cancel_requested',
+    pickup_request: 'pickup_requested',
+    delivery_instruction: 'delivery_instruction_requested',
+    complaint: 'complaint_reported',
+    refund_request: 'refund_requested',
+  };
+  return map[intent] ?? intent;
+}
+
+function riskClassForIntent(intent: IntentDecision['intent']): 'low' | 'medium' | 'high' {
+  if (['payment_claim', 'refund_request', 'order_cancel'].includes(intent)) return 'high';
+  if ([
+    'payment_method_select',
+    'order_add_items',
+    'order_remove_items',
+    'order_change_items',
+    'pickup_request',
+    'delivery_instruction',
+  ].includes(intent)) return 'medium';
+  return 'low';
 }
 
 async function createNativeWhatsAppCatalogueOrder({
@@ -868,60 +2312,336 @@ function enrichFromCatalogue(parsedItems: ParsedItem[], catalogue: CatalogueRow[
 }
 
 function findCatalogueMatch(parsedName: string, catalogue: CatalogueRow[]): CatalogueMatch | null {
-  const normalizedParsed = normalizePhrase(parsedName);
+  const normalizedParsed = normalizeProductPhrase(parsedName);
 
   for (const item of catalogue) {
-    if (normalizedParsed === normalizePhrase(item.name)) {
+    if (normalizedParsed === normalizeProductPhrase(item.name)) {
       return { item, source: 'catalogue_name', confidence: 1 };
     }
   }
 
   for (const item of catalogue) {
     for (const alias of item.catalog_item_aliases ?? []) {
-      if (normalizedParsed === normalizePhrase(alias.alias)) {
+      if (normalizedParsed === normalizeProductPhrase(alias.alias)) {
         return { item, source: 'catalogue_alias', confidence: 0.99 };
       }
     }
   }
 
-  const variants = phraseVariants(parsedName);
-  variants.delete(normalizedParsed);
+  const parsedKey = productTokenKey(parsedName);
+  const parsedBaseKey = productBaseKey(parsedName);
+  const candidates: Array<{
+    item: CatalogueRow;
+    source: Exclude<MatchSource, 'unmatched'>;
+    confidence: number;
+    score: number;
+  }> = [];
 
   for (const item of catalogue) {
-    if (variants.has(normalizePhrase(item.name))) {
-      return { item, source: 'normalized_name', confidence: 0.95 };
+    const nameKey = productTokenKey(item.name);
+    const nameBaseKey = productBaseKey(item.name);
+
+    if (parsedKey && parsedKey === nameKey) {
+      candidates.push({
+        item,
+        source: 'normalized_name',
+        confidence: 0.97,
+        score: 97,
+      });
+    } else if (parsedBaseKey && parsedBaseKey === nameBaseKey) {
+      candidates.push({
+        item,
+        source: 'normalized_name',
+        confidence: 0.95,
+        score: 95,
+      });
+    }
+
+    for (const alias of item.catalog_item_aliases ?? []) {
+      const aliasKey = productTokenKey(alias.alias);
+      const aliasBaseKey = productBaseKey(alias.alias);
+      if (parsedKey && parsedKey === aliasKey) {
+        candidates.push({
+          item,
+          source: 'normalized_alias',
+          confidence: 0.96,
+          score: 96,
+        });
+      } else if (parsedBaseKey && parsedBaseKey === aliasBaseKey) {
+        candidates.push({
+          item,
+          source: 'normalized_alias',
+          confidence: 0.94,
+          score: 94,
+        });
+      }
     }
   }
 
-  for (const item of catalogue) {
-    for (const alias of item.catalog_item_aliases ?? []) {
-      if (variants.has(normalizePhrase(alias.alias))) {
-        return { item, source: 'normalized_alias', confidence: 0.94 };
-      }
+  const deduped = new Map<string, typeof candidates[number]>();
+  for (const candidate of candidates) {
+    const existing = deduped.get(candidate.item.id);
+    if (!existing || candidate.score > existing.score) {
+      deduped.set(candidate.item.id, candidate);
     }
+  }
+  const ranked = [...deduped.values()].sort((left, right) => right.score - left.score);
+
+  if (ranked.length === 1) {
+    const best = ranked[0];
+    return { item: best.item, source: best.source, confidence: best.confidence };
+  }
+
+  if (ranked.length > 1 && ranked[0].score - ranked[1].score >= 3) {
+    const best = ranked[0];
+    return { item: best.item, source: best.source, confidence: best.confidence };
+  }
+
+  // Conservative fuzzy discovery: a generic customer term may resolve to one
+  // unique catalogue product, but never choose silently between variants.
+  const fuzzy = fuzzyCatalogueCandidates(parsedName, catalogue);
+  if (fuzzy.length === 1 && fuzzy[0].score >= 72) {
+    return {
+      item: fuzzy[0].item,
+      source: fuzzy[0].source,
+      confidence: Math.min(0.92, fuzzy[0].score / 100),
+    };
+  }
+
+  if (
+    fuzzy.length > 1 &&
+    fuzzy[0].score >= 82 &&
+    fuzzy[0].score - fuzzy[1].score >= 14
+  ) {
+    return {
+      item: fuzzy[0].item,
+      source: fuzzy[0].source,
+      confidence: Math.min(0.92, fuzzy[0].score / 100),
+    };
   }
 
   return null;
 }
 
-function phraseVariants(value: string): Set<string> {
-  const normalized = normalizePhrase(value);
-  const variants = new Set<string>([normalized]);
-  const words = normalized.split(' ');
+function fuzzyCatalogueCandidates(
+  value: string,
+  catalogue: CatalogueRow[],
+): Array<{
+  item: CatalogueRow;
+  source: 'normalized_name' | 'normalized_alias';
+  score: number;
+}> {
+  const query = productDiscoveryShape(value);
+  if (query.coreTokens.length === 0) return [];
 
-  if (words.length >= 3 && words[1] === 'of' && words[0].endsWith('s') && words[0].length > 2) {
-    variants.add([words[0].slice(0, -1), ...words.slice(1)].join(' '));
+  const candidates: Array<{
+    item: CatalogueRow;
+    source: 'normalized_name' | 'normalized_alias';
+    score: number;
+  }> = [];
+
+  for (const item of catalogue) {
+    const phrases = [
+      { value: item.name, source: 'normalized_name' as const },
+      ...(item.catalog_item_aliases ?? []).map((alias) => ({
+        value: alias.alias,
+        source: 'normalized_alias' as const,
+      })),
+    ];
+
+    let best: typeof candidates[number] | null = null;
+    for (const phrase of phrases) {
+      const candidate = productDiscoveryShape(phrase.value);
+      if (candidate.coreTokens.length === 0) continue;
+
+      // If the customer stated a size/weight/volume, a candidate with a
+      // conflicting variant must never be selected.
+      if (
+        query.variantTokens.length > 0 &&
+        !query.variantTokens.every((token) => candidate.variantTokens.includes(token))
+      ) {
+        continue;
+      }
+
+      const querySet = new Set(query.coreTokens);
+      const candidateSet = new Set(candidate.coreTokens);
+      const matched = query.coreTokens.filter((token) => candidateSet.has(token)).length;
+      const coverage = matched / query.coreTokens.length;
+      if (coverage < 0.67) continue;
+
+      const precision = matched / candidate.coreTokens.length;
+      const phraseDice = diceCoefficient(
+        query.coreTokens.join(' '),
+        candidate.coreTokens.join(' '),
+      );
+
+      let score = coverage * 58 + precision * 22 + phraseDice * 20;
+      if (query.coreTokens.every((token) => candidateSet.has(token))) score += 8;
+      if (
+        query.variantTokens.length > 0 &&
+        query.variantTokens.every((token) => candidate.variantTokens.includes(token))
+      ) {
+        score += 8;
+      }
+
+      const current = {
+        item,
+        source: phrase.source,
+        score: Math.min(100, score),
+      };
+      if (!best || current.score > best.score) best = current;
+    }
+
+    if (best) candidates.push(best);
   }
 
+  return candidates.sort((left, right) =>
+    right.score - left.score ||
+    left.item.name.localeCompare(right.item.name)
+  );
+}
+
+function productDiscoveryShape(value: string): {
+  coreTokens: string[];
+  variantTokens: string[];
+} {
+  const tokens = normalizeProductPhrase(value).split(' ').filter(Boolean);
+  const variantTokens = tokens.filter(isVariantToken);
+  const coreTokens = tokens.filter((token) =>
+    token !== 'of' &&
+    !isPackagingToken(token) &&
+    !isVariantToken(token) &&
+    !/^\d+(?:\.\d+)?$/.test(token) &&
+    !PRODUCT_DISCOVERY_STOPWORDS.has(token)
+  );
+  return {
+    coreTokens: [...new Set(coreTokens)],
+    variantTokens: [...new Set(variantTokens)],
+  };
+}
+
+function isVariantToken(token: string): boolean {
+  return /^\d+(?:\.\d+)?(?:kg|g|l|ml)$/.test(token);
+}
+
+const PRODUCT_DISCOVERY_STOPWORDS = new Set([
+  'a','an','the','please','pls','need','want','buy','give','send','bring',
+  'tomorrow','today','now','me','my','i','we','you','some',
+]);
+
+function normalizeProductPhrase(value: string): string {
+  const normalized = value
+    .toLocaleLowerCase()
+    .replace(/(\d+(?:\.\d+)?)\s*(kilograms?|kilogrammes?|kgs?)\b/g, '$1kg')
+    .replace(/(\d+(?:\.\d+)?)\s*(grams?|gms?)\b/g, '$1g')
+    .replace(/(\d+(?:\.\d+)?)\s*(litres?|liters?|ltrs?)\b/g, '$1l')
+    .replace(/(\d+(?:\.\d+)?)\s*(millilitres?|milliliters?|mls?)\b/g, '$1ml')
+    .replace(/\bsemo\b/g, 'semolina')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return normalized
+    .split(' ')
+    .map((token) => normalizeProductToken(normalizePackagingToken(token)))
+    .filter(Boolean)
+    .join(' ');
+}
+
+function normalizeProductToken(token: string): string {
+  if (!token) return token;
+  if (/^\d+(?:\.\d+)?(?:kg|g|l|ml)$/.test(token)) return token;
+  if (/^\d+(?:\.\d+)?$/.test(token)) return token;
+  if (isPackagingToken(token)) return token;
+
+  const irregular: Record<string,string> = {
+    batteries: 'battery',
+    knives: 'knife',
+    loaves: 'loaf',
+    leaves: 'leaf',
+    potatoes: 'potato',
+    tomatoes: 'tomato',
+  };
+  if (irregular[token]) return irregular[token];
+
+  if (token.length > 4 && token.endsWith('ies')) {
+    return token.slice(0, -3) + 'y';
+  }
+  if (
+    token.length > 4 &&
+    (token.endsWith('ches') || token.endsWith('shes') || token.endsWith('xes') || token.endsWith('zes'))
+  ) {
+    return token.slice(0, -2);
+  }
+  if (
+    token.length > 3 &&
+    token.endsWith('s') &&
+    !token.endsWith('ss') &&
+    !token.endsWith('us') &&
+    !token.endsWith('is')
+  ) {
+    return token.slice(0, -1);
+  }
+  return token;
+}
+
+function productTokenKey(value: string): string {
+  return normalizeProductPhrase(value)
+    .split(' ')
+    .filter((token) => token && token !== 'of')
+    .sort()
+    .join(' ');
+}
+
+function productBaseKey(value: string): string {
+  const tokens = normalizeProductPhrase(value)
+    .split(' ')
+    .filter(Boolean);
+
+  const withoutLeadingQuantity =
+    tokens.length >= 2 &&
+    /^\d+(?:\.\d+)?$/.test(tokens[0]) &&
+    isPackagingToken(tokens[1])
+      ? tokens.slice(2)
+      : tokens;
+
+  return withoutLeadingQuantity
+    .filter((token) => token !== 'of' && !isPackagingToken(token))
+    .sort()
+    .join(' ');
+}
+
+function normalizePackagingToken(token: string): string {
+  const map: Record<string,string> = {
+    bags: 'bag',
+    cartons: 'carton',
+    packs: 'pack',
+    packets: 'packet',
+    bottles: 'bottle',
+    crates: 'crate',
+    boxes: 'box',
+    pieces: 'piece',
+    pcs: 'piece',
+    units: 'unit',
+  };
+  return map[token] ?? token;
+}
+
+function isPackagingToken(token: string): boolean {
+  return new Set([
+    'bag','carton','pack','packet','bottle','crate','box','piece','unit',
+  ]).has(normalizePackagingToken(token));
+}
+
+function phraseVariants(value: string): Set<string> {
+  const normalized = normalizeProductPhrase(value);
+  const variants = new Set<string>([normalized, productTokenKey(value), productBaseKey(value)]);
+  variants.delete('');
   return variants;
 }
 
 function normalizePhrase(value: string): string {
-  return value
-    .toLocaleLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return normalizeProductPhrase(value);
 }
 
 function buildReviewReasons(parsed: ParsedOrder, items: EnrichedItem[]): string[] {
@@ -1033,7 +2753,7 @@ async function parseOrder(
   customerId: string,
   sourceMessageId: string,
 ): Promise<ParsedOrder> {
-  if (ORDER_PARSER_URL && ORDER_PARSER_TOKEN) {
+  if (ORDER_PARSER_URL && ORDER_PARSER_AUTH_TOKEN) {
     if (!(await consumeAiRequestBudget(tenantId, customerId))) {
       console.warn(JSON.stringify({
         event: 'ai_order_parser_rate_limited',
@@ -1049,7 +2769,7 @@ async function parseOrder(
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          authorization: `Bearer ${ORDER_PARSER_TOKEN}`,
+          authorization: `Bearer ${ORDER_PARSER_AUTH_TOKEN}`,
         },
         signal: AbortSignal.timeout(8000),
         body: JSON.stringify({
@@ -1614,6 +3334,8 @@ async function queueCustomerSupportReply({
       conversation_window_expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     }),
   });
+
+  await kickNotificationWorker();
 }
 
 async function ensureReceiptPdf({
@@ -2168,6 +3890,17 @@ async function maybeConfirmCustomerReceipt({
   }
 
   return true;
+}
+
+async function kickNotificationWorker(): Promise<void> {
+  try {
+    await rest('/rest/v1/rpc/sellertray_kick_notification_worker', {
+      method: 'POST',
+      body: '{}',
+    });
+  } catch (error) {
+    console.warn('SellerTray notification worker kick failed; cron retry remains available.', error);
+  }
 }
 
 async function rest<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {

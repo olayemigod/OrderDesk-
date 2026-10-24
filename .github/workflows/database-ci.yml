@@ -12,7 +12,10 @@ on:
     paths:
       - 'supabase/migrations/**'
       - 'supabase/tests/**'
+      - 'supabase/functions/**'
       - 'supabase/config.toml'
+      - 'apps/mobile/src/data/**'
+      - 'apps/merchant-web/src/CommercialAgreementsManagement.tsx'
       - '.github/workflows/database-ci.yml'
   push:
     branches:
@@ -20,7 +23,10 @@ on:
     paths:
       - 'supabase/migrations/**'
       - 'supabase/tests/**'
+      - 'supabase/functions/**'
       - 'supabase/config.toml'
+      - 'apps/mobile/src/data/**'
+      - 'apps/merchant-web/src/CommercialAgreementsManagement.tsx'
       - '.github/workflows/database-ci.yml'
 
 jobs:
@@ -28,8 +34,39 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout exact candidate source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact candidate checkout
+        run: |
+          expected="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
+
+      - name: Setup Node for checkout recovery tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Verify financial document tax rendering contract
+        run: node supabase/functions/financial-document/tax-contract.mjs
+
+      - name: Verify tax historical backfill guard contract
+        run: node supabase/tests/tax-backfill-generated-line-contract.mjs
+
+      - name: Verify C1B installment webhook retry contract
+        run: node supabase/functions/paystack-webhook/c1b-contract.mjs
+
+      - name: Verify C1B installment checkout retry contract
+        run: node supabase/functions/billing-checkout/c1b-contract.mjs
+
+      - name: Verify OA2 stale checkout recovery
+        run: node --test supabase/functions/billing-checkout/oa2-retry.test.mjs
+
+      - name: Verify C1B reconciliation recovery contract
+        run: node supabase/functions/commercial-agreements/c1b-contract.mjs
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1

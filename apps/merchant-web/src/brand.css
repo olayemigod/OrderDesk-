@@ -1,0 +1,41 @@
+/* SellerTray brand rendering.
+ * The approved Admin Portal logo binary is shared across SellerTray surfaces.
+ * Merchant Web must preserve the logo artwork instead of cropping it into a
+ * green square or recolouring it through its container.
+ */
+
+.sellertray-mark {
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(16, 42, 67, .08), 0 5px 14px rgba(0, 0, 0, .16);
+}
+
+.sellertray-mark img {
+  width: 100%;
+  height: 100%;
+  padding: 2px;
+  object-fit: contain;
+  object-position: center;
+}
+
+.login-brand .sellertray-mark.large {
+  width: min(260px, 70%);
+  height: 82px;
+  flex-basis: auto;
+  overflow: visible;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.login-brand .sellertray-mark.large img {
+  padding: 0;
+  object-fit: contain;
+  object-position: left center;
+}
+
+@media (max-width: 560px) {
+  .login-brand .sellertray-mark.large {
+    width: min(240px, 82vw);
+    height: 68px;
+  }
+}

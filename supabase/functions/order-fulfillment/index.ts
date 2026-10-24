@@ -54,154 +54,46 @@ Deno.serve(withObservability('order-fulfillment', async (request) => {
     return json({ error: 'action, orderId and method are required' }, 400);
   }
 
+  // Resolve only the immutable tenant key here. The database command below is
+  // the single authority for membership, capability, Branch, payment policy,
+  // state transition, audit and idempotent fulfillment behavior.
   const { data: order, error: orderError } = await admin
     .from('orders')
-    .select('id,tenant_id,status,fulfillment_method,fulfillment_status,delivery_provider,delivery_reference,delivery_note')
+    .select('tenant_id')
     .eq('id', orderId)
     .maybeSingle();
 
   if (orderError) return json({ error: 'Unable to load order' }, 400);
-  if (!order) return json({ error: 'Order not found' }, 404);
+  if (!order?.tenant_id) return json({ error: 'Order not found' }, 404);
 
-  const tenantId = String(order.tenant_id);
-
-  const { data: membership, error: membershipError } = await admin
-    .from('tenant_members')
-    .select('role')
-    .eq('tenant_id', tenantId)
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  if (membershipError) return json({ error: 'Unable to verify business access' }, 400);
-  if (!membership) return json({ error: 'You do not have access to this business' }, 403);
-
-  const { data: canWrite, error: accessError } = await admin.rpc('orderdesk_subscription_can_write', {
-    p_tenant_id: tenantId,
+  const { data, error } = await admin.rpc('apply_sellertray_order_fulfillment', {
+    p_tenant_id: String(order.tenant_id),
+    p_order_id: orderId,
+    p_actor_user_id: userId,
+    p_action: action,
+    p_method: method,
+    p_provider: provider,
+    p_reference: reference,
+    p_note: note,
   });
-  if (accessError) return json({ error: 'Unable to verify subscription access' }, 400);
-  if (canWrite !== true) {
-    return json({ error: 'SellerTray subscription is read-only. Renew or reactivate the business to make changes.' }, 403);
+
+  if (error) {
+    const message = error.message || 'SellerTray could not update fulfillment.';
+    const status = error.code === '42501'
+      ? 403
+      : error.code === 'P0002'
+        ? 404
+        : error.code === '23514'
+          ? 409
+          : 400;
+    return json({ error: message }, status);
   }
 
-  if (action === 'start_delivery') {
-    if (method === 'customer_pickup') {
-      return json({ error: 'Customer pickup does not require a delivery start' }, 400);
-    }
-    if (order.status !== 'ready') {
-      return json({ error: 'Only a ready order can start delivery' }, 409);
-    }
-
-    if (order.fulfillment_status === 'out_for_delivery') {
-      if (order.fulfillment_method !== method) {
-        return json({ error: 'Delivery has already started with a different fulfillment method' }, 409);
-      }
-      return json({ orderId, status: 'ready', fulfillmentStatus: 'out_for_delivery', alreadyStarted: true }, 200);
-    }
-
-    if (order.fulfillment_status !== 'unassigned') {
-      return json({ error: 'This order fulfillment state cannot start delivery' }, 409);
-    }
-
-    const now = new Date().toISOString();
-    const { data: updated, error: updateError } = await admin
-      .from('orders')
-      .update({
-        fulfillment_method: method,
-        fulfillment_status: 'out_for_delivery',
-        delivery_provider: provider,
-        delivery_reference: reference,
-        delivery_note: note,
-        dispatched_at: now,
-        fulfilled_at: null,
-        updated_at: now,
-      })
-      .eq('id', orderId)
-      .eq('tenant_id', tenantId)
-      .eq('status', 'ready')
-      .eq('fulfillment_status', 'unassigned')
-      .select('id,status,fulfillment_status')
-      .maybeSingle();
-
-    if (updateError) return json({ error: updateError.message }, 400);
-    if (!updated) return json({ error: 'Order fulfillment changed before delivery could start. Refresh and try again.' }, 409);
-
-    return json({ orderId, status: updated.status, fulfillmentStatus: updated.fulfillment_status }, 200);
+  if (!data || typeof data !== 'object') {
+    return json({ error: 'SellerTray returned an invalid fulfillment result.' }, 500);
   }
 
-  if (order.status === 'completed') {
-    return json({ orderId, status: 'completed', fulfillmentStatus: order.fulfillment_status, alreadyCompleted: true }, 200);
-  }
-  if (order.status !== 'ready') {
-    return json({ error: 'Only a ready order can be completed' }, 409);
-  }
-
-  const now = new Date().toISOString();
-
-  if (method === 'customer_pickup') {
-    if (order.fulfillment_status !== 'unassigned') {
-      return json({ error: 'An order already in delivery cannot be completed as customer pickup' }, 409);
-    }
-
-    const { data: updated, error: updateError } = await admin
-      .from('orders')
-      .update({
-        status: 'completed',
-        status_reason: null,
-        fulfillment_method: 'customer_pickup',
-        fulfillment_status: 'collected',
-        fulfillment_confirmed_by: 'merchant',
-        customer_confirmed_at: null,
-        customer_confirmation_message_id: null,
-        delivery_provider: null,
-        delivery_reference: null,
-        delivery_note: note,
-        fulfilled_at: now,
-        updated_at: now,
-      })
-      .eq('id', orderId)
-      .eq('tenant_id', tenantId)
-      .eq('status', 'ready')
-      .eq('fulfillment_status', 'unassigned')
-      .select('id,status,fulfillment_status')
-      .maybeSingle();
-
-    if (updateError) return json({ error: updateError.message }, 400);
-    if (!updated) return json({ error: 'Order fulfillment changed before pickup could be completed. Refresh and try again.' }, 409);
-
-    return json({ orderId, status: updated.status, fulfillmentStatus: updated.fulfillment_status }, 200);
-  }
-
-  if (order.fulfillment_status !== 'out_for_delivery') {
-    return json({ error: 'Start delivery before marking this order delivered' }, 409);
-  }
-  if (order.fulfillment_method !== method) {
-    return json({ error: 'Fulfillment method does not match the active delivery' }, 409);
-  }
-
-  const { data: updated, error: updateError } = await admin
-    .from('orders')
-    .update({
-      status: 'completed',
-      status_reason: null,
-      fulfillment_status: 'delivered',
-      fulfillment_confirmed_by: 'merchant',
-      customer_confirmed_at: null,
-      customer_confirmation_message_id: null,
-      fulfilled_at: now,
-      updated_at: now,
-    })
-    .eq('id', orderId)
-    .eq('tenant_id', tenantId)
-    .eq('status', 'ready')
-    .eq('fulfillment_status', 'out_for_delivery')
-    .eq('fulfillment_method', method)
-    .select('id,status,fulfillment_status')
-    .maybeSingle();
-
-  if (updateError) return json({ error: updateError.message }, 400);
-  if (!updated) return json({ error: 'Order fulfillment changed before delivery could be completed. Refresh and try again.' }, 409);
-
-  return json({ orderId, status: updated.status, fulfillmentStatus: updated.fulfillment_status }, 200);
+  return json(data as JsonRecord, 200);
 }));
 
 function cleanAction(value: unknown): Action | null {

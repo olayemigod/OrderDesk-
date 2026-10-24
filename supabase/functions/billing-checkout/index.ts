@@ -1,5 +1,25 @@
 type JsonRecord = Record<string, unknown>;
 
+type InstallmentReservation = {
+  sessionId?: string;
+  status: string;
+  reference?: string | null;
+  authorizationUrl?: string | null;
+  installmentScheduleId: string;
+  amount: number | string;
+  currency: string;
+  planCode: string;
+  needsProviderInitialization: boolean;
+};
+
+type InstallmentInitializationLease = {
+  started: boolean;
+  status: string;
+  reference?: string | null;
+  authorizationUrl?: string | null;
+  startedAt?: string | null;
+};
+
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const PAYSTACK_SECRET_KEY = Deno.env.get('PAYSTACK_SECRET_KEY') ?? '';
@@ -47,6 +67,27 @@ Deno.serve(withObservability('billing-checkout', async (request) => {
   );
   if (members[0]?.role !== 'owner') {
     return json({ error: 'Only the business Owner can start or change billing' }, 403);
+  }
+
+  const installmentScheduleId = body.installmentScheduleId === undefined || body.installmentScheduleId === null || body.installmentScheduleId === ''
+    ? null
+    : cleanUuid(body.installmentScheduleId);
+  const commandId = body.commandId === undefined || body.commandId === null || body.commandId === ''
+    ? null
+    : cleanUuid(body.commandId);
+  const requestedInstallmentCheckout = body.installmentScheduleId !== undefined || body.commandId !== undefined;
+
+  if (requestedInstallmentCheckout) {
+    if (!installmentScheduleId || !commandId) {
+      return json({ error: 'A valid installment and checkout command are required' }, 400);
+    }
+    return await startInstallmentCheckout({
+      tenantId,
+      installmentScheduleId,
+      commandId,
+      userId: identity.userId,
+      email: identity.email,
+    });
   }
 
   const subscriptions = await rest<Array<{ plan_code: string }>>(
@@ -127,6 +168,206 @@ Deno.serve(withObservability('billing-checkout', async (request) => {
   return json({ authorizationUrl, reference: providerReference }, 201);
 }));
 
+async function startInstallmentCheckout(input: {
+  tenantId: string;
+  installmentScheduleId: string;
+  commandId: string;
+  userId: string;
+  email: string;
+}): Promise<Response> {
+  let reservation: InstallmentReservation;
+  try {
+    reservation = await rpc<InstallmentReservation>('reserve_sellertray_installment_checkout', {
+      p_tenant_id: input.tenantId,
+      p_installment_schedule_id: input.installmentScheduleId,
+      p_command_id: input.commandId,
+      p_actor_user_id: input.userId,
+      p_billing_email: input.email,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to prepare installment checkout';
+    return json({ error: message }, statusForGovernedError(message));
+  }
+
+  if (reservation.status === 'paid') {
+    return json({
+      status: 'paid',
+      installmentScheduleId: reservation.installmentScheduleId,
+      amount: reservation.amount,
+      currency: reservation.currency,
+      planCode: reservation.planCode,
+    });
+  }
+
+  // A provider initialization that was explicitly marked failed is a completed
+  // provider attempt. Paystack references are unique, so do not retry the same
+  // failed reference. Tell Merchant Web to retire this command and create a new
+  // command/reference on the next explicit payment attempt.
+  if (reservation.status === 'failed' || reservation.status === 'superseded' || reservation.status === 'expired') {
+    return json({
+      status: 'retry_required',
+      needsNewCommand: true,
+      installmentScheduleId: reservation.installmentScheduleId,
+      amount: reservation.amount,
+      currency: reservation.currency,
+      planCode: reservation.planCode,
+    });
+  }
+
+  if (
+    reservation.status === 'initialized'
+    && reservation.authorizationUrl
+    && reservation.reference
+  ) {
+    return json({
+      authorizationUrl: reservation.authorizationUrl,
+      reference: reservation.reference,
+      installmentScheduleId: reservation.installmentScheduleId,
+      amount: reservation.amount,
+      currency: reservation.currency,
+    });
+  }
+
+  if (
+    !reservation.needsProviderInitialization
+    || !reservation.sessionId
+    || !reservation.reference
+  ) {
+    return json({ error: 'Installment checkout is already being prepared. Retry with the same checkout command.' }, 409);
+  }
+
+  const amount = toNumber(reservation.amount);
+  if (amount === null || amount <= 0 || !/^[A-Z]{3}$/.test(reservation.currency)) {
+    return json({ error: 'Governed installment amount is invalid' }, 409);
+  }
+
+  // Acquire the shared initialization lease before any outbound provider call.
+  // If the process crashes or the network becomes ambiguous after this point,
+  // replay keeps the same command/reference and does not re-initialize Paystack.
+  let initialization: InstallmentInitializationLease;
+  try {
+    initialization = await rpc<InstallmentInitializationLease>('begin_sellertray_installment_checkout_initialization', {
+      p_session_id: reservation.sessionId,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to begin installment checkout initialization';
+    return json({ error: message }, statusForGovernedError(message));
+  }
+
+  if (
+    initialization.status === 'initialized'
+    && initialization.authorizationUrl
+    && initialization.reference
+  ) {
+    return json({
+      authorizationUrl: initialization.authorizationUrl,
+      reference: initialization.reference,
+      installmentScheduleId: reservation.installmentScheduleId,
+      amount,
+      currency: reservation.currency,
+    });
+  }
+
+  if (initialization.status === 'failed' || initialization.status === 'superseded' || initialization.status === 'expired') {
+    return json({
+      status: 'retry_required',
+      needsNewCommand: true,
+      installmentScheduleId: reservation.installmentScheduleId,
+      amount,
+      currency: reservation.currency,
+      planCode: reservation.planCode,
+    });
+  }
+
+  if (!initialization.started) {
+    return json({
+      status: 'preparing',
+      error: 'Installment checkout provider initialization is already in progress. Retry with the same checkout command.',
+      installmentScheduleId: reservation.installmentScheduleId,
+      amount,
+      currency: reservation.currency,
+      planCode: reservation.planCode,
+    }, 409);
+  }
+
+  const paystackResponse = await fetch('https://api.paystack.co/transaction/initialize', {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      email: input.email,
+      amount: String(Math.round(amount * 100)),
+      currency: reservation.currency,
+      reference: reservation.reference,
+      metadata: JSON.stringify({
+        sellertrayTenantId: input.tenantId,
+        sellertrayPlanCode: reservation.planCode,
+        sellertrayCheckoutKind: 'installment',
+        sellertrayInstallmentScheduleId: reservation.installmentScheduleId,
+        sellertrayCheckoutCommandId: input.commandId,
+        requestedByUserId: input.userId,
+      }),
+    }),
+  });
+
+  let providerPayload: JsonRecord | null = null;
+  try {
+    providerPayload = await paystackResponse.json() as JsonRecord;
+  } catch {
+    providerPayload = null;
+  }
+
+  if (!paystackResponse.ok || providerPayload?.status !== true || !isRecord(providerPayload.data)) {
+    console.error('Paystack installment initialization failed', paystackResponse.status);
+    await rpc<void>('fail_sellertray_installment_checkout_initialization', {
+      p_session_id: reservation.sessionId,
+    }).catch((error) => console.error('Unable to mark installment checkout initialization failed', error));
+    return json({ error: 'Unable to start secure installment checkout' }, 502);
+  }
+
+  const authorizationUrl = asString(providerPayload.data.authorization_url);
+  const providerReference = asString(providerPayload.data.reference) ?? reservation.reference;
+  if (!authorizationUrl) {
+    await rpc<void>('fail_sellertray_installment_checkout_initialization', {
+      p_session_id: reservation.sessionId,
+    }).catch((error) => console.error('Unable to mark installment checkout initialization failed', error));
+    return json({ error: 'Billing provider returned no checkout URL' }, 502);
+  }
+
+  try {
+    const completed = await rpc<{
+      authorizationUrl: string;
+      reference: string;
+      status: string;
+      sessionId: string;
+    }>('complete_sellertray_installment_checkout_initialization', {
+      p_session_id: reservation.sessionId,
+      p_provider_reference: providerReference,
+      p_authorization_url: authorizationUrl,
+    });
+    return json({
+      authorizationUrl: completed.authorizationUrl,
+      reference: completed.reference,
+      installmentScheduleId: reservation.installmentScheduleId,
+      amount,
+      currency: reservation.currency,
+    }, 201);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to finalize installment checkout';
+    return json({ error: message }, statusForGovernedError(message));
+  }
+}
+
+async function rpc<T>(name: string, args: JsonRecord): Promise<T> {
+  return await rest<T>(`/rest/v1/rpc/${encodeURIComponent(name)}`, {
+    method: 'POST',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify(args),
+  });
+}
+
 async function rest<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${SUPABASE_URL}${path}`, {
     ...init,
@@ -191,6 +432,13 @@ function isRecord(value: unknown): value is JsonRecord {
 
 function asString(value: unknown): string | null {
   return typeof value === 'string' && value ? value : null;
+}
+
+function statusForGovernedError(message: string): number {
+  if (/only the business owner|authentication|not authorised|not authorized|access/i.test(message)) return 403;
+  if (/not found/i.test(message)) return 404;
+  if (/already|different facts|earlier|current state|conflict/i.test(message)) return 409;
+  return 400;
 }
 
 function json(payload: JsonRecord, status = 200): Response {
@@ -358,4 +606,3 @@ async function readRequestTextLimited(
     }
   }
 }
-

@@ -9,22 +9,25 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "preflight": "node scripts/release-preflight.mjs",
+    "preflight": "node scripts/release-preflight-runner.mjs && node scripts/offline-preflight.mjs && node scripts/pos-settlement-preflight.mjs && node scripts/pos-allocation-preflight.mjs && node scripts/branch-payment-preflight.mjs && node scripts/order-authority-preflight.mjs && node scripts/branch-history-preflight.mjs && node scripts/inventory-operation-preflight.mjs && node scripts/cash-movement-preflight.mjs && node scripts/pos-return-preflight.mjs && node scripts/notification-shell-preflight.mjs && node scripts/font-scale-preflight.mjs && node scripts/camera-permission-preflight.mjs && node scripts/sale-history-consistency-preflight.mjs && node scripts/account-session-preflight.mjs && node scripts/brand-preflight.mjs && node scripts/dark-semantic-card-preflight.mjs && node scripts/onboarding-preflight.mjs",
+    "audit:dependencies": "node scripts/dependency-audit-policy.mjs",
     "release:check": "node scripts/release-readiness.mjs"
   },
   "dependencies": {
     "@expo/metro-runtime": "57.0.15",
+    "@expo/vector-icons": "15.1.1",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@supabase/supabase-js": "2.115.0",
     "expo": "~57.0.9",
+    "expo-camera": "~57.0.6",
+    "expo-constants": "57.0.17",
+    "expo-image-picker": "57.0.16",
+    "expo-notifications": "57.0.18",
     "expo-secure-store": "57.0.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.2",
-    "react-native-url-polyfill": "4.0.0",
-    "react-native-web": "~0.21.0",
-    "expo-constants": "57.0.17",
-    "expo-notifications": "57.0.18"
+    "react-native-url-polyfill": "4.0.0"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",

@@ -1,5 +1,7 @@
 -- SellerTray: customer order-change requests, merchant in-app notifications,
 -- and durable automatic dispatch of queued WhatsApp notifications.
+-- Restored from the applied production migration history so fresh repository
+-- replays match the production schema before later notification migrations.
 
 begin;
 
@@ -44,10 +46,7 @@ create table public.customer_order_change_requests (
   constraint customer_order_change_requests_items_check
     check (jsonb_typeof(parsed_items)='array'),
   constraint customer_order_change_requests_resolution_check
-    check (
-      (status='pending' and resolved_at is null)
-      or status<>'pending'
-    )
+    check ((status='pending' and resolved_at is null) or status<>'pending')
 );
 
 create index customer_order_change_requests_tenant_status_idx
@@ -331,8 +330,6 @@ after insert on public.customer_order_change_requests
 for each row
 execute function public.queue_sellertray_order_change_customer_ack();
 
--- Server-only, single-use invocation tickets let Postgres trigger/schedule the
--- notification Edge Function without exposing a reusable worker token.
 create table sellertray_private.notification_worker_invocations (
   nonce uuid primary key default gen_random_uuid(),
   expires_at timestamptz not null default (now()+interval '5 minutes'),
