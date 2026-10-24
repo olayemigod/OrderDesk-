@@ -7,6 +7,8 @@ const collection = readFileSync(resolve(root, 'src/redesign/OrderBalanceCollecti
 const documentsPanel = readFileSync(resolve(root, 'src/redesign/OrderDocumentsPanel.tsx'), 'utf8');
 const sellWorkspace = readFileSync(resolve(root, 'src/redesign/SellWorkspace.tsx'), 'utf8');
 const resumeWorkspace = readFileSync(resolve(root, 'src/redesign/ResumePosDraftWorkspace.tsx'), 'utf8');
+const posAllocator = readFileSync(resolve(root, 'src/redesign/PosPaymentAllocator.tsx'), 'utf8');
+const offlineAllocator = readFileSync(resolve(root, 'src/redesign/OfflinePosPaymentAllocator.tsx'), 'utf8');
 const orderDomain = readFileSync(resolve(root, 'src/domain/order.ts'), 'utf8');
 const printerRepository = readFileSync(resolve(root, 'src/data/printerRepository.ts'), 'utf8');
 const printExecutor = readFileSync(resolve(root, 'src/printing/printExecutor.ts'), 'utf8');
@@ -30,6 +32,9 @@ requireValue(orders.includes('adjustsFontSizeToFit') && orders.includes('minimum
 requireValue(verificationIndex >= 0 && pendingIndex >= 0 && partialIndex >= 0 && verificationIndex < partialIndex && pendingIndex < partialIndex, 'Authoritative Verification required/Pending payment states must take precedence over the derived Partial balance label.');
 requireValue(!sellWorkspace.includes('requestPrintJob') && !sellWorkspace.includes('Payment Receipt') && sellWorkspace.includes('onDraftCreated?.(orderId)'), 'New-sale checkout must hand the completed order to the governed Orders document surface and must not auto-print a generic Payment Receipt.');
 requireValue(!resumeWorkspace.includes('requestPrintJob') && !resumeWorkspace.includes('Payment Receipt') && resumeWorkspace.includes('onCompleted(result.orderId)'), 'Resumed-sale checkout must hand the completed order to the governed Orders document surface and must not auto-print a generic Payment Receipt.');
+requireValue(posAllocator.includes('adjustsFontSizeToFit') && posAllocator.includes('minimumFontScale={0.62}') && posAllocator.includes('summaryCell: { flex: 1, minWidth: 0 }') && posAllocator.includes("maxWidth: '100%'"), 'Online POS Allocated/Outstanding totals must shrink inside bounded cells rather than overflow.');
+requireValue(posAllocator.includes('minimumFontScale={0.68}') && posAllocator.includes('buttonLabel({ allocated, outstanding, payLater, currency })'), 'Long online checkout confirmation labels must adapt when large monetary values are included.');
+requireValue(offlineAllocator.includes('adjustsFontSizeToFit') && offlineAllocator.includes('minimumFontScale={0.62}') && offlineAllocator.includes('summaryCellRight') && offlineAllocator.includes("maxWidth: '100%'"), 'Offline POS Allocated/Outstanding totals must adapt before replay is queued.');
 requireValue(collection.includes('adjustsFontSizeToFit') && collection.includes('Payment Receipt is available only after confirmation') && collection.includes('await onChanged()'), 'Balance collection must adapt large values, distinguish pending verification from confirmed receipt availability, and refresh authoritative order/payment state after collection.');
 requireValue(collection.includes('collectCustomerBalance') && receivablesRepository.includes('collect_sellertray_customer_receivable') && receivablesRepository.includes('commandId'), 'Later customer collections must use the governed idempotent receivable command.');
 requireValue(documentsPanel.includes('loadOrderFinancials') && documentsPanel.includes("payment.status === 'confirmed'") && documentsPanel.includes("payment.exceptionState === 'none'"), 'Payment receipt reprints must come from authoritative persisted payment history and only confirmed money.');
