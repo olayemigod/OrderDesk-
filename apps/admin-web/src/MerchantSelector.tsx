@@ -34,7 +34,7 @@ export default function MerchantSelector({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const requestSequence = useRef(0);
-  const shouldShowCommercialPortfolio = showCommercialPortfolio ?? mode === 'single';
+  const shouldShowCommercialPortfolio = showCommercialPortfolio === true;
   const selectedTenantId = mode === 'single' ? [...selectedIds][0] ?? null : null;
 
   useEffect(() => {
@@ -138,7 +138,7 @@ export default function MerchantSelector({
           </div>
         </div>
       </div>
-      {selectedTenantId ? <AgreementLifecycleManagement session={session} tenantId={selectedTenantId} /> : null}
+      {shouldShowCommercialPortfolio && selectedTenantId ? <AgreementLifecycleManagement session={session} tenantId={selectedTenantId} /> : null}
     </>
   );
 }
