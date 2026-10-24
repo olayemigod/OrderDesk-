@@ -73,8 +73,8 @@ export function OrderBalanceCollection({ tenantId, order, currency, onChanged }:
         amount: value,
       });
       setNotice(result.status === 'pending_verification'
-        ? 'Bank payment recorded for verification.'
-        : 'Customer payment collected.');
+        ? 'Bank payment recorded for verification. A Payment Receipt is available only after confirmation.'
+        : 'Customer payment collected. Its Payment Receipt is available under Sale documents.');
       setOpen(false);
       await onChanged();
     } catch (cause) {
@@ -86,8 +86,8 @@ export function OrderBalanceCollection({ tenantId, order, currency, onChanged }:
 
   return <View style={[styles.panel, dark && darkStyles.panel]}>
     <View style={styles.summaryRow}>
-      <View style={styles.summaryItem}><Text style={[styles.label, dark && darkStyles.muted]}>Paid</Text><Text style={[styles.value, dark && darkStyles.text]}>{formatMoney(order.amountPaid, currency)}</Text></View>
-      <View style={[styles.summaryItem, styles.summaryRight]}><Text style={[styles.label, dark && darkStyles.muted]}>Outstanding</Text><Text style={[styles.value, outstanding > 0.005 && styles.warning, dark && darkStyles.text]}>{formatMoney(outstanding, currency)}</Text></View>
+      <View style={styles.summaryItem}><Text style={[styles.label, dark && darkStyles.muted]}>Paid</Text><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.68} style={[styles.value, dark && darkStyles.text]}>{formatMoney(order.amountPaid, currency)}</Text></View>
+      <View style={[styles.summaryItem, styles.summaryRight]}><Text style={[styles.label, dark && darkStyles.muted]}>Outstanding</Text><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.68} style={[styles.value, outstanding > 0.005 && styles.warning, dark && darkStyles.text]}>{formatMoney(outstanding, currency)}</Text></View>
     </View>
 
     {!order.customerId && outstanding > 0.005 ? <Text style={[styles.helper, dark && darkStyles.muted]}>This legacy balance has no named Customer. Use Merchant Web review before collecting money.</Text> : null}
@@ -125,8 +125,8 @@ function formatMoney(value: number, currency: string): string { try { return new
 
 const styles = StyleSheet.create({
   panel: { backgroundColor: theme.colors.mint, borderRadius: 14, gap: 10, padding: 11 },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 }, summaryItem: { gap: 2 }, summaryRight: { alignItems: 'flex-end' },
-  label: { color: theme.colors.muted, fontSize: 11, fontWeight: '800', textTransform: 'uppercase' }, value: { color: theme.colors.navy, fontSize: 14, fontWeight: '900' }, warning: { color: theme.colors.warning }, helper: { color: theme.colors.muted, fontSize: 12, lineHeight: 18 },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 }, summaryItem: { flex: 1, gap: 2, minWidth: 0 }, summaryRight: { alignItems: 'flex-end' },
+  label: { color: theme.colors.muted, fontSize: 11, fontWeight: '800', textTransform: 'uppercase' }, value: { color: theme.colors.navy, flexShrink: 1, fontSize: 14, fontWeight: '900', maxWidth: '100%' }, warning: { color: theme.colors.warning }, helper: { color: theme.colors.muted, fontSize: 12, lineHeight: 18 },
   collectButton: { alignItems: 'center', alignSelf: 'flex-start', borderColor: theme.colors.greenDark, borderRadius: 11, borderWidth: 1, flexDirection: 'row', gap: 6, paddingHorizontal: 11, paddingVertical: 9 }, collectText: { color: theme.colors.greenDark, fontSize: 12, fontWeight: '900' }, notice: { color: theme.colors.greenDark, fontSize: 12, fontWeight: '800' },
   form: { gap: 8 }, input: { backgroundColor: theme.colors.white, borderColor: theme.colors.border, borderRadius: 10, borderWidth: 1, color: theme.colors.navy, fontSize: 15, fontWeight: '800', minHeight: 44, paddingHorizontal: 11 }, methodRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 }, methodButton: { borderColor: theme.colors.border, borderRadius: 10, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 9 }, methodSelected: { backgroundColor: theme.colors.mintSoft, borderColor: theme.colors.greenDark }, methodText: { color: theme.colors.slate, fontSize: 12, fontWeight: '800' }, methodSelectedText: { color: theme.colors.greenDark },
   error: { color: theme.colors.danger, fontSize: 12, fontWeight: '700', lineHeight: 17 }, actions: { flexDirection: 'row', gap: 8, justifyContent: 'flex-end' }, cancelButton: { borderColor: theme.colors.border, borderRadius: 11, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 9 }, cancelText: { color: theme.colors.slate, fontSize: 12, fontWeight: '900' }, primaryButton: { alignItems: 'center', backgroundColor: theme.colors.green, borderRadius: 11, flexDirection: 'row', gap: 6, paddingHorizontal: 13, paddingVertical: 9 }, primaryText: { color: theme.colors.white, fontSize: 12, fontWeight: '900' }, disabled: { opacity: 0.55 },
