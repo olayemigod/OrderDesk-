@@ -19,6 +19,7 @@ const failures = [];
 const requireValue = (condition, message) => { if (!condition) failures.push(message); };
 
 requireValue(orders.includes('OrderDocumentsPanel') && orders.includes('Payment: ${paymentLabel}') && orders.includes('Fulfilment: ${titleCase(order.fulfillmentStatus)}'), 'Orders must show explicit Payment and Fulfilment labels and expose the governed sale-document panel.');
+requireValue(!orders.includes('requestPrintJob') && !orders.includes('Print payment receipt'), 'Orders must not retain the old paid-only receipt shortcut; sale documents belong to the governed Sale documents panel.');
 requireValue(orders.includes('adjustsFontSizeToFit') && orders.includes('minimumFontScale={0.66}') && orders.includes("maxWidth: '48%'"), 'Order totals must adapt rather than overflow when monetary values are large.');
 requireValue(collection.includes('adjustsFontSizeToFit') && collection.includes('Payment Receipt is available only after confirmation') && collection.includes('await onChanged()'), 'Balance collection must adapt large values, distinguish pending verification from confirmed receipt availability, and refresh authoritative order/payment state after collection.');
 requireValue(collection.includes('collectCustomerBalance') && receivablesRepository.includes('collect_sellertray_customer_receivable') && receivablesRepository.includes('commandId'), 'Later customer collections must use the governed idempotent receivable command.');
