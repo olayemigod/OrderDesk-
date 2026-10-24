@@ -6,7 +6,6 @@ const appRoot = process.cwd();
 const supabaseClient = readFileSync(resolve(appRoot, 'src/supabase.ts'), 'utf8');
 const main = readFileSync(resolve(appRoot, 'src/main.tsx'), 'utf8');
 const activeWorkspace = readFileSync(resolve(appRoot, 'src/AdminWorkspaceV3.tsx'), 'utf8');
-const legacyWorkspace = readFileSync(resolve(appRoot, 'src/AdminWorkspace.tsx'), 'utf8');
 const legacyApp = readFileSync(resolve(appRoot, 'src/App.tsx'), 'utf8');
 const legacySubscriptionAccess = readFileSync(resolve(appRoot, 'src/SubscriptionAccess.tsx'), 'utf8');
 const vercel = readFileSync(resolve(appRoot, 'vercel.json'), 'utf8');
@@ -23,13 +22,11 @@ function requireValue(condition, message) {
 requireValue(
   !supabaseClient.includes('SERVICE_ROLE') &&
     !activeWorkspace.includes('SERVICE_ROLE') &&
-    !legacyWorkspace.includes('SERVICE_ROLE') &&
     !main.includes('SERVICE_ROLE') &&
     !legacyApp.includes('SERVICE_ROLE') &&
     !legacySubscriptionAccess.includes('SERVICE_ROLE') &&
     !supabaseClient.includes('SUPABASE_SECRET') &&
     !activeWorkspace.includes('SUPABASE_SECRET') &&
-    !legacyWorkspace.includes('SUPABASE_SECRET') &&
     !main.includes('SUPABASE_SECRET'),
   'Admin browser bundle must never reference a Supabase service-role or secret key.',
 );
