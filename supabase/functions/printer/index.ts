@@ -4,6 +4,25 @@ type JsonRecord = Record<string, unknown>;
 type PrinterAction = 'save_printer' | 'request_print' | 'request_business_document_print' | 'update_print';
 type BusinessDocumentType = 'sales_invoice' | 'payment_receipt';
 type SupabaseClient = ReturnType<typeof createClient>;
+type PrintJobRow = {
+  id: string;
+  printer_id: string;
+  job_type: 'receipt' | 'test';
+  order_id: string | null;
+  financial_document_id: string | null;
+  status: 'requested' | 'printing' | 'printed' | 'failed';
+  transport: 'bluetooth';
+  printer_name: string;
+  hardware_identifier: string;
+  paper_width_mm: 58 | 80;
+  content_snapshot: unknown;
+  requested_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  failed_at: string | null;
+  failure_code: string | null;
+  failure_message: string | null;
+};
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -55,7 +74,6 @@ Deno.serve(async (request) => {
     .eq('tenant_id', tenantId)
     .eq('user_id', userId)
     .maybeSingle();
-
   if (membershipError) return json({ error: membershipError.message }, 400);
   if (!membership) return json({ error: 'You do not have access to this business' }, 403);
 
@@ -138,7 +156,6 @@ Deno.serve(async (request) => {
     const message = error?.message ?? 'SellerTray could not complete this printer action';
     return json({ error: message }, printerErrorStatus(message));
   }
-
   return json({ ok: true, action, ...result });
 });
 
@@ -203,7 +220,7 @@ async function requestBusinessDocumentPrint(
 
   const { data: order, error: orderError } = await adminClient
     .from('orders')
-    .select('id,branch_id,branch_name_snapshot,pos_operator_name,public_order_id,status,fulfillment_status,payment_status,pos_payment_terms,amount_paid,total_amount,subtotal_amount,tax_applied,tax_rate_percent,tax_amount,tax_display_breakdown,gross_amount,currency,customer_id,source')
+    .select('id,branch_id,branch_name_snapshot,pos_operator_name,public_order_id,status,fulfillment_status,payment_status,pos_payment_terms,total_amount,subtotal_amount,tax_applied,tax_rate_percent,tax_amount,tax_display_breakdown,gross_amount,currency,customer_id,source')
     .eq('tenant_id', tenantId)
     .eq('id', orderId)
     .maybeSingle();
@@ -213,7 +230,7 @@ async function requestBusinessDocumentPrint(
   if (order.source !== 'pos') return json({ error: 'This Mobile print path is only available for POS sales' }, 409);
   if (order.status !== 'completed') return json({ error: 'Only a completed POS sale can produce this sale document' }, 409);
 
-  const [{ data: invoice, error: invoiceError }, { data: business, error: businessError }, { data: itemRows, error: itemsError }] = await Promise.all([
+  const [invoiceResult, businessResult, itemsResult] = await Promise.all([
     adminClient
       .from('order_financial_documents')
       .select('id,document_reference,currency,amount,status,issued_at')
@@ -233,9 +250,12 @@ async function requestBusinessDocumentPrint(
       .order('created_at', { ascending: true })
       .order('id', { ascending: true }),
   ]);
-  if (invoiceError) return json({ error: invoiceError.message }, 400);
-  if (businessError) return json({ error: businessError.message }, 400);
-  if (itemsError) return json({ error: itemsError.message }, 400);
+  if (invoiceResult.error) return json({ error: invoiceResult.error.message }, 400);
+  if (businessResult.error) return json({ error: businessResult.error.message }, 400);
+  if (itemsResult.error) return json({ error: itemsResult.error.message }, 400);
+  const invoice = invoiceResult.data;
+  const business = businessResult.data;
+  const itemRows = itemsResult.data;
   if (!invoice) return json({ error: 'This sale does not have an issued Sales Invoice' }, 409);
   if (!business) return json({ error: 'Business print identity is unavailable' }, 409);
   if (!itemRows?.length) return json({ error: 'This Sales Invoice has no historical sale lines' }, 409);
@@ -279,9 +299,7 @@ async function requestBusinessDocumentPrint(
   const taxAmount = order.tax_amount === null || order.tax_amount === undefined
     ? roundMoney(Math.max(governedGrossAmount - subtotalAmount, 0))
     : money(order.tax_amount);
-  const taxApplied = typeof order.tax_applied === 'boolean'
-    ? order.tax_applied
-    : taxAmount > MONEY_EPSILON;
+  const taxApplied = typeof order.tax_applied === 'boolean' ? order.tax_applied : taxAmount > MONEY_EPSILON;
   const taxRatePercent = order.tax_rate_percent === null || order.tax_rate_percent === undefined
     ? (subtotalAmount > MONEY_EPSILON ? roundNumber((taxAmount / subtotalAmount) * 100, 4) : 0)
     : numberValue(order.tax_rate_percent);
@@ -381,60 +399,74 @@ async function requestBusinessDocumentPrint(
       requested_by_user_id: userId,
       requested_at: new Date().toISOString(),
     })
-    .select('id,tenant_id,branch_id,register_id,printer_id,job_type,order_id,financial_document_id,status,transport,printer_name,hardware_identifier,paper_width_mm,content_snapshot,requested_at,started_at,completed_at,failed_at,failure_code,failure_message')
+    .select('id,printer_id,job_type,order_id,financial_document_id,status,transport,printer_name,hardware_identifier,paper_width_mm,content_snapshot,requested_at,started_at,completed_at,failed_at,failure_code,failure_message')
     .single();
 
   if (insertError || !inserted) {
     if (insertError?.code === '23505') {
       const raced = await loadPrintJobByRequestKey(adminClient, tenantId, requestKey);
-      if (!raced.error && raced.job) {
-        const racedSnapshot = objectOrNull(raced.job.content_snapshot);
-        const matches = raced.job.printer_id === printerId
-          && raced.job.order_id === orderId
-          && racedSnapshot?.documentType === documentType
-          && (documentType !== 'payment_receipt' || racedSnapshot?.paymentId === paymentId);
-        if (matches) return json({ ok: true, action: 'request_business_document_print', ...printJobState(raced.job, true) });
+      if (!raced.error && raced.job && printRequestMatches(raced.job, printerId, orderId, documentType, paymentId)) {
+        return json({ ok: true, action: 'request_business_document_print', ...printJobState(raced.job, true) });
       }
     }
     return json({ error: insertError?.message ?? 'SellerTray could not create this print attempt' }, 400);
   }
 
-  return json({ ok: true, action: 'request_business_document_print', ...printJobState(inserted, false) });
+  return json({
+    ok: true,
+    action: 'request_business_document_print',
+    ...printJobState(inserted as unknown as PrintJobRow, false),
+  });
+}
+
+function printRequestMatches(
+  job: PrintJobRow,
+  printerId: string,
+  orderId: string,
+  documentType: BusinessDocumentType,
+  paymentId: string | null,
+): boolean {
+  const snapshot = objectOrNull(job.content_snapshot);
+  return job.printer_id === printerId
+    && job.order_id === orderId
+    && job.job_type === 'receipt'
+    && snapshot?.documentType === documentType
+    && (documentType !== 'payment_receipt' || snapshot?.paymentId === paymentId);
 }
 
 async function loadPrintJobByRequestKey(
   adminClient: SupabaseClient,
   tenantId: string,
   requestKey: string,
-): Promise<{ job: Record<string, any> | null; error: string | null }> {
+): Promise<{ job: PrintJobRow | null; error: string | null }> {
   const { data, error } = await adminClient
     .from('sellertray_print_jobs')
-    .select('id,tenant_id,branch_id,register_id,printer_id,job_type,order_id,financial_document_id,status,transport,printer_name,hardware_identifier,paper_width_mm,content_snapshot,requested_at,started_at,completed_at,failed_at,failure_code,failure_message')
+    .select('id,printer_id,job_type,order_id,financial_document_id,status,transport,printer_name,hardware_identifier,paper_width_mm,content_snapshot,requested_at,started_at,completed_at,failed_at,failure_code,failure_message')
     .eq('tenant_id', tenantId)
     .eq('request_key', requestKey)
     .maybeSingle();
-  return { job: data as Record<string, any> | null, error: error?.message ?? null };
+  return { job: data as unknown as PrintJobRow | null, error: error?.message ?? null };
 }
 
-function printJobState(row: Record<string, any>, idempotentReplay: boolean): JsonRecord {
+function printJobState(row: PrintJobRow, idempotentReplay: boolean): JsonRecord {
   return {
     jobId: row.id,
     status: row.status,
     jobType: row.job_type,
-    orderId: row.order_id ?? null,
-    financialDocumentId: row.financial_document_id ?? null,
+    orderId: row.order_id,
+    financialDocumentId: row.financial_document_id,
     printerId: row.printer_id,
     printerName: row.printer_name,
     transport: row.transport,
     hardwareIdentifier: row.hardware_identifier,
     paperWidthMm: row.paper_width_mm,
     contentSnapshot: row.content_snapshot,
-    requestedAt: row.requested_at ?? null,
-    startedAt: row.started_at ?? null,
-    completedAt: row.completed_at ?? null,
-    failedAt: row.failed_at ?? null,
-    failureCode: row.failure_code ?? null,
-    failureMessage: row.failure_message ?? null,
+    requestedAt: row.requested_at,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    failedAt: row.failed_at,
+    failureCode: row.failure_code,
+    failureMessage: row.failure_message,
     idempotentReplay,
   };
 }
@@ -467,7 +499,9 @@ function cleanText(value: unknown, max: number): string | null {
 }
 
 function objectOrNull(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
 }
 
 function money(value: unknown): number {
