@@ -14,6 +14,7 @@ import './mobile.css';
 import './mobile-features.css';
 import './brand.css';
 import './qa-convergence.css';
+import './shell-layout.css';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('SellerTray could not start.');
