@@ -3,8 +3,7 @@ import { join } from 'node:path';
 
 const root = process.cwd();
 const failures = [];
-const ADMIN_LOGO_PATH = '/brand/sellertray-admin-logo.webp';
-const ADMIN_FAVICON_URL = 'https://sellertray.vercel.app/brand/sellertray-app-icon-v2.png';
+const MERCHANT_ICON_PATH = '/brand/sellertray-app-icon.png';
 
 function read(path) {
   return readFileSync(join(root, path), 'utf8');
@@ -18,16 +17,18 @@ const shell = read('src/merchantShell.tsx');
 const html = read('index.html');
 
 requireValue(
-  existsSync(join(root, 'public/brand/sellertray-admin-logo.webp')),
-  'Merchant Web must bundle the exact Admin Portal SellerTray logo asset',
+  existsSync(join(root, 'public/brand/sellertray-app-icon.png')),
+  'Merchant Web must bundle its canonical SellerTray app icon',
 );
 requireValue(
-  shell.includes(`const SELLERTRAY_LOGO = '${ADMIN_LOGO_PATH}'`) && !shell.includes('sellertray-app-icon.png'),
-  'Merchant Web shell and login must use the Admin Portal SellerTray logo instead of a local variant',
+  shell.includes(`const SELLERTRAY_APP_ICON = '${MERCHANT_ICON_PATH}'`)
+    && !shell.includes('/brand/sellertray-admin-logo.webp')
+    && !shell.includes('/brand/sellertray-logo-v2.svg'),
+  'Merchant Web shell and sign-in must use the canonical Merchant Web app icon and must not reuse an Admin Portal wordmark',
 );
 requireValue(
-  html.includes(`href="${ADMIN_FAVICON_URL}"`),
-  'Merchant Web favicon must use the same SellerTray v2 icon source as Admin Portal',
+  html.includes(`href="${MERCHANT_ICON_PATH}"`),
+  'Merchant Web favicon must use the local canonical SellerTray app icon',
 );
 
 if (failures.length) {
