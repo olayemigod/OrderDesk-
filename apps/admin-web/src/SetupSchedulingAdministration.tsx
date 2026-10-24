@@ -9,7 +9,7 @@ type BranchArea = { branchId: string; branchCode: string; branchName: string; se
 type SetupSubject = { commercialOrderId: string; branchId: string; branchCode: string; branchName: string; ready: boolean; readyAt: string | null; serviceAreaId: string | null };
 type Appointment = { id: string; commercialOrderId: string; branchId: string; branchName: string; workerId: string; workerName: string; serviceAreaId: string; serviceAreaName: string; scheduledStartAt: string; scheduledEndAt: string; status: string; merchantNote: string | null; internalNote: string | null; createdAt: string; completedAt: string | null };
 type PendingRequest = { id: string; appointmentId: string; branchId: string; requestedStartAt: string | null; requestedEndAt: string | null; merchantNote: string; requestedAt: string; requestedByUserId: string };
-type Center = { canManage: boolean; serviceAreas: ServiceArea[]; workers: Worker[]; branchAreas: BranchArea[]; setupSubjects: SetupSubject[]; appointments: Appointment[]; pendingRequests: PendingRequest[] };
+type Center = { canManage: boolean; canManagePlatformMasters: boolean; serviceAreas: ServiceArea[]; workers: Worker[]; branchAreas: BranchArea[]; setupSubjects: SetupSubject[]; appointments: Appointment[]; pendingRequests: PendingRequest[] };
 type Response = { ok?: boolean; id?: string; center?: unknown };
 
 type ScheduleDraft = {
@@ -68,12 +68,14 @@ export default function SetupSchedulingAdministration({ session, initialTenantId
   }
 
   function saveArea() {
+    if (!center?.canManagePlatformMasters) return setError('Platform-level setup master authority is required to edit service areas.');
     if (!areaForm.code.trim() || !areaForm.name.trim() || areaForm.reason.trim().length < 6) return setError('Enter a service area code, name and reason of at least 6 characters.');
     void mutate('area', { action: 'save_service_area', code: areaForm.code, name: areaForm.name, active: true, reason: areaForm.reason }, 'Setup service area saved.');
     setAreaForm({ code: '', name: '', reason: '' });
   }
 
   function saveWorker() {
+    if (!center?.canManagePlatformMasters) return setError('Platform-level setup master authority is required to edit the ProcessEdge workforce.');
     const capacity = Number(workerForm.maxConcurrentSetups); const buffer = Number(workerForm.travelBufferMinutes);
     if (!workerForm.workerCode.trim() || !workerForm.displayName.trim() || !Number.isInteger(capacity) || capacity < 1 || !Number.isInteger(buffer) || buffer < 0 || workerForm.reason.trim().length < 6) return setError('Enter valid worker identity, capacity, travel buffer and reason.');
     void mutate('worker', { action: 'save_worker', workerCode: workerForm.workerCode, displayName: workerForm.displayName, active: true, maxConcurrentSetups: capacity, travelBufferMinutes: buffer, serviceAreaIds: workerForm.serviceAreaIds, reason: workerForm.reason }, 'Setup worker saved.');
@@ -133,15 +135,22 @@ export default function SetupSchedulingAdministration({ session, initialTenantId
 
     {center ? <>
       <section className="workspace-panel">
-        <div className="workspace-panel-heading"><div><h3>Coverage & capacity</h3><p>Service-area coverage and worker capacity are enforced by the shared scheduling authority, including travel buffers.</p></div></div>
-        <div className="workspace-field-grid two"><label>Service area code<input value={areaForm.code} onChange={(e) => setAreaForm({ ...areaForm, code: e.target.value })} /></label><label>Service area name<input value={areaForm.name} onChange={(e) => setAreaForm({ ...areaForm, name: e.target.value })} /></label></div>
-        <label>Reason<input value={areaForm.reason} onChange={(e) => setAreaForm({ ...areaForm, reason: e.target.value })} /></label>
-        <button type="button" className="workspace-button subtle" disabled={saving !== null} onClick={saveArea}>Add service area</button>
+        <div className="workspace-panel-heading"><div><h3>Coverage & capacity</h3><p>Service-area coverage and worker capacity are ProcessEdge-wide and enforced by the shared scheduling authority, including travel buffers.</p></div></div>
+        {center.canManagePlatformMasters ? <>
+          <div className="workspace-field-grid two"><label>Service area code<input value={areaForm.code} onChange={(e) => setAreaForm({ ...areaForm, code: e.target.value })} /></label><label>Service area name<input value={areaForm.name} onChange={(e) => setAreaForm({ ...areaForm, name: e.target.value })} /></label></div>
+          <label>Reason<input value={areaForm.reason} onChange={(e) => setAreaForm({ ...areaForm, reason: e.target.value })} /></label>
+          <button type="button" className="workspace-button subtle" disabled={saving !== null} onClick={saveArea}>Add service area</button>
+          <div className="workspace-divider" />
+          <div className="workspace-field-grid two"><label>Worker code<input value={workerForm.workerCode} onChange={(e) => setWorkerForm({ ...workerForm, workerCode: e.target.value })} /></label><label>Worker name<input value={workerForm.displayName} onChange={(e) => setWorkerForm({ ...workerForm, displayName: e.target.value })} /></label><label>Concurrent setups<input type="number" min={1} max={20} value={workerForm.maxConcurrentSetups} onChange={(e) => setWorkerForm({ ...workerForm, maxConcurrentSetups: e.target.value })} /></label><label>Travel buffer (minutes)<input type="number" min={0} max={480} value={workerForm.travelBufferMinutes} onChange={(e) => setWorkerForm({ ...workerForm, travelBufferMinutes: e.target.value })} /></label></div>
+          <div className="workspace-filter-row">{activeAreas.map((area) => <label key={area.id} className="workspace-check-pill"><input type="checkbox" checked={workerForm.serviceAreaIds.includes(area.id)} onChange={() => setWorkerForm((current) => ({ ...current, serviceAreaIds: current.serviceAreaIds.includes(area.id) ? current.serviceAreaIds.filter((id) => id !== area.id) : [...current.serviceAreaIds, area.id] }))} />{area.name}</label>)}</div>
+          <label>Reason<input value={workerForm.reason} onChange={(e) => setWorkerForm({ ...workerForm, reason: e.target.value })} /></label>
+          <button type="button" className="workspace-button subtle" disabled={saving !== null} onClick={saveWorker}>Add setup worker</button>
+        </> : <div className="workspace-banner info">You can schedule and manage setup work for this Business, but ProcessEdge-wide service areas and workforce capacity are review-only for your current scope.</div>}
         <div className="workspace-divider" />
-        <div className="workspace-field-grid two"><label>Worker code<input value={workerForm.workerCode} onChange={(e) => setWorkerForm({ ...workerForm, workerCode: e.target.value })} /></label><label>Worker name<input value={workerForm.displayName} onChange={(e) => setWorkerForm({ ...workerForm, displayName: e.target.value })} /></label><label>Concurrent setups<input type="number" min={1} max={20} value={workerForm.maxConcurrentSetups} onChange={(e) => setWorkerForm({ ...workerForm, maxConcurrentSetups: e.target.value })} /></label><label>Travel buffer (minutes)<input type="number" min={0} max={480} value={workerForm.travelBufferMinutes} onChange={(e) => setWorkerForm({ ...workerForm, travelBufferMinutes: e.target.value })} /></label></div>
-        <div className="workspace-filter-row">{activeAreas.map((area) => <label key={area.id} className="workspace-check-pill"><input type="checkbox" checked={workerForm.serviceAreaIds.includes(area.id)} onChange={() => setWorkerForm((current) => ({ ...current, serviceAreaIds: current.serviceAreaIds.includes(area.id) ? current.serviceAreaIds.filter((id) => id !== area.id) : [...current.serviceAreaIds, area.id] }))} />{area.name}</label>)}</div>
-        <label>Reason<input value={workerForm.reason} onChange={(e) => setWorkerForm({ ...workerForm, reason: e.target.value })} /></label>
-        <button type="button" className="workspace-button subtle" disabled={saving !== null} onClick={saveWorker}>Add setup worker</button>
+        <div className="workspace-filter-row">
+          {activeAreas.map((area) => <span key={area.id} className="workspace-check-pill">{area.name}</span>)}
+          {activeWorkers.map((worker) => <span key={worker.id} className="workspace-check-pill">{worker.name} · capacity {worker.maxConcurrentSetups} · buffer {worker.travelBufferMinutes}m</span>)}
+        </div>
       </section>
 
       <section className="workspace-panel">
@@ -164,6 +173,7 @@ function parseCenter(value: unknown): Center {
   const row = record(value);
   return {
     canManage: row.canManage === true,
+    canManagePlatformMasters: row.canManagePlatformMasters === true,
     serviceAreas: array(row.serviceAreas).map((item) => { const v = record(item); return { id: text(v.id), code: text(v.code), name: text(v.name), active: v.active !== false }; }).filter((item) => item.id),
     workers: array(row.workers).map((item) => { const v = record(item); return { id: text(v.id), code: text(v.code), name: text(v.name), active: v.active !== false, maxConcurrentSetups: number(v.maxConcurrentSetups,1), travelBufferMinutes: number(v.travelBufferMinutes,0), serviceAreaIds: array(v.serviceAreaIds).map(text).filter(Boolean) }; }).filter((item) => item.id),
     branchAreas: array(row.branchAreas).map((item) => { const v = record(item); return { branchId: text(v.branchId), branchCode: text(v.branchCode), branchName: text(v.branchName), serviceAreaId: nullableText(v.serviceAreaId) }; }),
