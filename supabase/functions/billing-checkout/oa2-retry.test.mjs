@@ -61,3 +61,33 @@ test('already paid reservation never starts another provider initialization', as
   assert.equal(body.status, 'paid');
   assert.equal(fixture.calls.length, 1);
 });
+
+for (const status of [401, 403, 500]) {
+  test(`unverified identity (${status}) fails closed before tenant or provider access`, async () => {
+    let handler;
+    const calls = [];
+    const context = vm.createContext({
+      Response, Request, Headers, URL, TextEncoder, TextDecoder, crypto, console, performance,
+      Deno: { env: { get: () => 'fixture-only' }, serve: (value) => { handler = value; } },
+      fetch: async (url) => { calls.push(url); return new Response('{}', { status }); },
+    });
+    vm.runInContext(source, context);
+    const response = await handler(new Request('https://fixture/checkout', {
+      method: 'POST', headers: { authorization: 'Bearer forged.claims.signature' }, body: '{}',
+    }));
+    assert.equal(response.status, 401);
+    assert.deepEqual(calls, ['fixture-only/auth/v1/user']);
+  });
+}
+
+test('identity comes only from the authenticated user response', async () => {
+  const context = vm.createContext({
+    Response, Request, Headers, URL, TextEncoder, TextDecoder, crypto, console, performance,
+    Deno: { env: { get: () => 'fixture-only' }, serve: () => {} },
+    fetch: async () => Response.json({ id: '11111111-1111-4111-8111-111111111111', email: 'Owner@Example.com' }),
+  });
+  vm.runInContext(source, context);
+  const identity = await vm.runInContext('getVerifiedIdentity', context)('Bearer verified-token');
+  assert.equal(identity.userId, '11111111-1111-4111-8111-111111111111');
+  assert.equal(identity.email, 'owner@example.com');
+});
