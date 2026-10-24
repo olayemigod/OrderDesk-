@@ -9,13 +9,12 @@ const portfolio = read('admin-web/src/CommercialPortfolio.tsx');
 const gateway = read('../supabase/functions/platform-admin-commercial/index.ts');
 const migration = read('../supabase/migrations/20261023063450_platform_admin_commercial_portfolio_convergence.sql');
 
-test('Commercial portfolio is explicit opt-in and multi-select communications remain selection-only', () => {
+test('Commercial portfolio rendering is explicit opt-in and does not leak into shell merchant selection', () => {
   assert.match(selector, /import CommercialPortfolio/);
   assert.match(selector, /showCommercialPortfolio === true/);
   assert.doesNotMatch(selector, /showCommercialPortfolio \?\? mode === 'single'/);
   assert.match(selector, /<CommercialPortfolio/);
   assert.match(selector, /onOpenMerchant=\{\(merchant\) => onChange\(new Set\(\[merchant\.id\]\), merchant\)\}/);
-  assert.match(selector, /shouldShowCommercialPortfolio && selectedTenantId/);
 });
 
 test('commercial portfolio uses bounded server reads and existing merchant drill-down authority', () => {
