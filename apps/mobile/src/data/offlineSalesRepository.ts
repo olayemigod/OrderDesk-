@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { assertCachedOperationalAccess } from './operationalAccessCache';
 
 import type { CommerceProduct, PosPaymentMethod, PosPaymentMethodType } from './commerceRepository';
 import { PosDraftRequestError } from './commerceRepository';
@@ -135,6 +136,7 @@ export async function queueOfflinePosSale(input: {
   const rows = await readOutbox();
   const existing = rows.find((row) => row.clientReference === input.clientReference);
   if (existing) return existing;
+  await assertCachedOperationalAccess(input.tenantId, input.actorUserId);
   if (rows.filter((row) => row.status !== 'synced').length >= MAX_OPEN_INTENTS) {
     throw new Error('Sync older offline sales before recording another one.');
   }

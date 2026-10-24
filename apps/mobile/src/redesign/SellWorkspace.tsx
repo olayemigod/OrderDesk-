@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { loadSubscriptionAccess } from '../data/subscriptionRepository';
+import { assertCachedOperationalAccess } from '../data/operationalAccessCache';
 
 import {
   completePosSale,
@@ -80,18 +82,27 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
   const [scannerOpen, setScannerOpen] = useState(false);
   const [catalogueView, setCatalogueView] = useState<'grid' | 'list'>('grid');
   const [offlinePaymentOpen, setOfflinePaymentOpen] = useState(false);
+  const [accessSubject, setAccessSubject] = useState<string | null>(null);
+  const [accessRevision, setAccessRevision] = useState(0);
+
+  useEffect(() => {
+    const listener = AppState.addEventListener('change', (state) => { if (state === 'active') setAccessRevision((n) => n + 1); });
+    return () => listener.remove();
+  }, []);
 
   useEffect(() => {
     let active = true;
-    setLoading(true); setError(null);
+    setLoading(true); setError(null); setAccessSubject(null);
     void Promise.all([
       loadProductsWithCache(tenantId),
       loadStockWithCache(tenantId, branch.id),
       loadPaymentsWithCache(tenantId, branch.id),
       loadPolicyWithCache(tenantId),
       loadTaxWithCache(tenantId),
+      confirmOperationalAccess(tenantId, actorUserId),
     ]).then(([catalog, stock, payments, policy, tax]) => {
       if (!active) return;
+      setAccessSubject(`${tenantId}:${branch.id}:${actorUserId}`);
       setProducts(catalog.data); setUsingCachedProducts(catalog.cached);
       setStockRows(stock.data); setUsingCachedStock(stock.cached);
       setPaymentMethods(payments.data); setUsingCachedPayments(payments.cached);
@@ -101,7 +112,7 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
       if (active) setError(sellerTrayUserMessage(cause, 'Selling data is unavailable right now.'));
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [tenantId, branch.id]);
+  }, [tenantId, branch.id, actorUserId, accessRevision]);
 
   useEffect(() => {
     setCart({}); setQuantityDrafts({}); setPriceDrafts({}); setCustomer(null); setDraftOrderId(null);
@@ -289,6 +300,7 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
   }
 
   if (loading) return <View style={styles.empty}><ActivityIndicator /><Text style={[styles.muted, dark && darkStyles.body]}>Loading selling workspace…</Text></View>;
+  if (accessSubject !== `${tenantId}:${branch.id}:${actorUserId}`) return <View style={styles.stack}><Notice text="Preparation mode — selling becomes available after SellerTray confirms your Business is ready." /><ErrorCard text={error ?? 'Connect to refresh setup and plan access.'} /><Pressable accessibilityRole="button" onPress={() => setAccessRevision((n) => n + 1)} style={styles.iconButton}><Text style={[styles.muted, dark && darkStyles.body]}>Check selling access</Text></Pressable></View>;
 
   return <View style={styles.stack}>
     <BarcodeScannerSheet visible={scannerOpen} onClose={() => setScannerOpen(false)} onBarcode={handleBarcode} />
@@ -418,6 +430,15 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
   </View>;
 }
 
+async function confirmOperationalAccess(tenantId: string, actorUserId: string): Promise<void> {
+  try {
+    const access = await loadSubscriptionAccess(tenantId);
+    if (access.accessMode !== 'full') throw new Error('Complete Business setup and payment before starting live sales.');
+  } catch (error) {
+    if (!isLikelyConnectivityError(error)) throw error;
+    await assertCachedOperationalAccess(tenantId, actorUserId);
+  }
+}
 async function loadProductsWithCache(tenantId: string) { try { const data = await loadCommerceProducts(tenantId); await saveCommerceProductCache(tenantId, data).catch(() => undefined); return { data, cached: false }; } catch (error) { if (!isLikelyConnectivityError(error)) throw error; const cached = await loadCommerceProductCache(tenantId); if (!cached) throw error; return { data: cached.data, cached: true }; } }
 async function loadStockWithCache(tenantId: string, branchId: string) { try { const data = await loadBranchStock(tenantId, branchId); await saveBranchStockCache(tenantId, branchId, data).catch(() => undefined); return { data, cached: false }; } catch (error) { if (!isLikelyConnectivityError(error)) throw error; const cached = await loadBranchStockCache(tenantId, branchId); if (!cached) throw error; return { data: cached.data, cached: true }; } }
 async function loadPaymentsWithCache(tenantId: string, branchId: string) { try { const data = await loadBranchPosPaymentMethods(tenantId, branchId); await savePosPaymentMethodsCache(tenantId, branchId, data).catch(() => undefined); return { data, cached: false }; } catch (error) { if (!isLikelyConnectivityError(error)) throw error; const cached = await loadPosPaymentMethodsCache(tenantId, branchId); return { data: cached?.data ?? [cashFallback()], cached: true }; } }

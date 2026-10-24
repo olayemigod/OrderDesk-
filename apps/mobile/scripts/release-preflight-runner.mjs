@@ -134,7 +134,8 @@ if (
   throw new Error('Redesigned More screen must derive its Android build marker from the current Expo config without a hard-coded build number');
 }
 
-let source = fs.readFileSync(sourcePath, 'utf8');
+// Match source snippets consistently in Windows CRLF and Linux LF checkouts.
+let source = fs.readFileSync(sourcePath, 'utf8').replaceAll('\r\n', '\n');
 if (source.split(staleOrderChangeCheck).length !== 2) throw new Error('Expected exactly one legacy order-change governance check in release preflight');
 source = source.replace(staleOrderChangeCheck, currentOrderChangeCheck);
 if (source.split(staleFulfillmentCheck).length !== 2) throw new Error('Expected exactly one legacy fulfillment governance check in release preflight');

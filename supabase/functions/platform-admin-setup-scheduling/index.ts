@@ -1,5 +1,5 @@
 type JsonRecord = Record<string, unknown>;
-type Action = 'center' | 'save_service_area' | 'save_worker' | 'assign_branch_area' | 'schedule' | 'reschedule' | 'transition' | 'resolve_request';
+type Action = 'center' | 'save_service_area' | 'save_worker' | 'assign_branch_area' | 'schedule' | 'reschedule' | 'transition' | 'resolve_request' | 'retry_activation';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -24,6 +24,7 @@ Deno.serve(async (request) => {
   let body: JsonRecord;
   try { body = JSON.parse(bodyRead.text) as JsonRecord; }
   catch { return json({ error: 'Invalid JSON' }, 400); }
+  if (!isRecord(body)) return json({ error: 'A setup request object is required' }, 400);
 
   const action = cleanAction(body.action);
   const tenantId = cleanUuid(body.tenantId);
@@ -123,6 +124,16 @@ Deno.serve(async (request) => {
       return json({ ok: true, id, center: await center(identity.userId, tenantId) });
     }
 
+    if (action === 'retry_activation') {
+      const obligationId = cleanUuid(body.installmentObligationId);
+      const reason = cleanReason(body.reason);
+      if (!obligationId || !reason) return json({ error: 'Purchase obligation and recovery reason are required' }, 400);
+      const result = await rpc<JsonRecord>('platform_admin_retry_setup_activation', {
+        p_actor_user_id: identity.userId, p_tenant_id: tenantId, p_installment_obligation_id: obligationId, p_reason: reason,
+      });
+      return json({ ok: true, result, center: await center(identity.userId, tenantId) });
+    }
+
     if (action === 'transition') {
       const appointmentId = cleanUuid(body.appointmentId);
       const status = cleanEnum(body.status, ['in_progress', 'completed', 'cancelled', 'no_show']);
@@ -201,7 +212,7 @@ function getJwtAal(token: string): 'aal1' | 'aal2' | null {
 }
 
 function cleanAction(value: unknown): Action | null {
-  const allowed: Action[] = ['center','save_service_area','save_worker','assign_branch_area','schedule','reschedule','transition','resolve_request'];
+  const allowed: Action[] = ['center','save_service_area','save_worker','assign_branch_area','schedule','reschedule','transition','resolve_request','retry_activation'];
   return typeof value === 'string' && allowed.includes(value as Action) ? value as Action : null;
 }
 function cleanUuid(value: unknown): string | null {

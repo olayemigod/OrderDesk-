@@ -27,6 +27,10 @@ select tenant_id,owner_user_id,'owner' from sellertray_c1a_role_fixture
 union all
 select tenant_id,manager_user_id,'manager' from sellertray_c1a_role_fixture;
 
+-- Role lifecycle regression exercises an already operational legacy Business.
+update public.tenant_subscriptions s set status='active'
+from sellertray_c1a_role_fixture f where f.tenant_id=s.tenant_id;
+
 select public.set_sellertray_member_capability(
   tenant_id,manager_user_id,'can_accept_commercial_agreements',true,owner_user_id
 ) from sellertray_c1a_role_fixture;

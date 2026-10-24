@@ -18,6 +18,11 @@
   --workspace-shadow: 0 12px 36px rgba(16, 24, 40, .08);
 }
 
+.setup-completion-form .workspace-filter-row { flex-wrap: wrap; overflow: visible; }
+.setup-completion-form .workspace-check-pill { display: inline-flex; flex-direction: row; max-width: 100%; }
+.setup-completion-form .workspace-check-pill input { width: auto; flex-shrink: 0; }
+.setup-completion-form label { min-width: 0; overflow-wrap: anywhere; }
+
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--workspace-bg); color: var(--workspace-text); }
 button, input, select, textarea { font: inherit; }

@@ -19,7 +19,7 @@ const STAGE_LABELS: Record<SellerTrayOnboardingState['currentStage'], string> = 
   agreement: 'Review your agreement',
   settlement: 'Complete the required payment',
   setup: 'Complete Branch setup',
-  activation: 'Activation is being reconciled',
+  activation: 'Setup complete — preparing SellerTray',
   active: 'SellerTray is activated',
 };
 
@@ -116,6 +116,8 @@ export function OnboardingPreparationCard({ state, loading, error = null, onRefr
         </View>
       ) : null}
 
+      {state.branchSetup.branches.map((branch) => <Text key={branch.branchId} style={[styles.blockerText, dark && darkStyles.bodyText]}>{branch.branchName} — {branch.setupStatus}</Text>)}
+      {onRefresh ? <Pressable accessibilityRole="button" onPress={() => void onRefresh()} disabled={loading} style={styles.retryButton}><Text style={styles.retryText}>{loading ? 'Refreshing…' : 'Refresh setup status'}</Text></Pressable> : null}
       <View style={[styles.nextBox, dark && darkStyles.nextBox]}>
         <Text style={[styles.nextLabel, dark && darkStyles.bodyText]}>NEXT</Text>
         <Text style={[styles.nextTitle, dark && darkStyles.titleText]}>{state.nextAction.label}</Text>
@@ -125,7 +127,7 @@ export function OnboardingPreparationCard({ state, loading, error = null, onRefr
             : adminNext
               ? 'ProcessEdge Admin needs to resolve this setup exception.'
               : sharedNext
-                ? 'No manual activation is needed. SellerTray will use the governed reconciliation path.'
+                ? 'SellerTray will check setup, agreement and payment automatically. Contact ProcessEdge if this status does not change.'
                 : 'Continue preparing the Business and Branch details in SellerTray mobile.'}
         </Text>
       </View>

@@ -90,7 +90,6 @@ type CommercialOnboarding = {
 };
 
 type AdminResponse = { ok?: boolean; overview?: unknown; onboarding?: unknown };
-type SetupForm = { key: string; reason: string; readyAtLocal: string; confirmed: boolean };
 
 const AGREEMENT_FAMILIES = [
   ['installment_agreement', 'Installment agreement'],
@@ -105,10 +104,12 @@ export default function CommercialBillingAdministration({
   session,
   actorRole,
   initialTenantId,
+  onOpenSetup,
 }: {
   session: Session;
   actorRole: 'admin' | 'support';
   initialTenantId?: string | null;
+  onOpenSetup?: (tenantId: string) => void;
 }) {
   const [selectedTenantId, setSelectedTenantId] = useState(() => initialTenantId ?? '');
   const [selectedTenant, setSelectedTenant] = useState<MerchantRow | null>(null);
@@ -118,8 +119,6 @@ export default function CommercialBillingAdministration({
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [setupForm, setSetupForm] = useState<SetupForm | null>(null);
-  const setupCommandIds = useRef(new Map<string, string>());
   const tenantLoadSequence = useRef(0);
 
   const [subscriptionForm, setSubscriptionForm] = useState({ planCode: 'business', currency: 'NGN', monthlyGross: '', taxRate: '', effectiveFrom: nowLocal(), reason: '' });
@@ -142,8 +141,6 @@ export default function CommercialBillingAdministration({
   }, [initialTenantId, session]);
 
   useEffect(() => {
-    setSetupForm(null);
-    setupCommandIds.current.clear();
     setPurchaseForm((current) => ({ ...current, branchIds: [], orderReference: '', reason: '' }));
     setAgreementForm((current) => ({ ...current, commercialOrderId: '', templateVersionId: '', supersedesAgreementId: '', reference: '', renderedContent: '', reason: '' }));
 
@@ -291,34 +288,6 @@ export default function CommercialBillingAdministration({
     setPurchaseForm((current) => ({ ...current, branchIds: current.branchIds.includes(branchId) ? current.branchIds.filter((id) => id !== branchId) : [...current.branchIds, branchId] }));
   }
 
-  function openSetupForm(row: BranchSetupState) {
-    if (!canManage || row.ready) return;
-    setSetupForm({ key: setupKey(row), reason: '', readyAtLocal: nowLocal(), confirmed: false });
-  }
-
-  async function markSetupReady(row: BranchSetupState) {
-    if (!canManage || row.ready || saving || setupForm?.key !== setupKey(row)) return;
-    const reason = setupForm.reason.trim().replace(/\s+/g, ' ');
-    const readyAt = isoFromLocal(setupForm.readyAtLocal);
-    if (reason.length < 6 || !readyAt || !setupForm.confirmed) return setError('Confirm completed Branch setup and enter a valid time and reason.');
-    const key = setupKey(row);
-    const commandId = setupCommandIds.current.get(key) ?? crypto.randomUUID();
-    setupCommandIds.current.set(key, commandId);
-    setSaving('setup-ready');
-    setError(null);
-    try {
-      await invoke({ action: 'admin_mark_setup_ready', tenantId: selectedTenantId, commercialOrderId: row.commercialOrderId, branchId: row.branchId, commandId, reason, readyAt, evidence: { source: 'sellertray_admin_web' } });
-      setupCommandIds.current.delete(key);
-      setSetupForm(null);
-      await loadTenant(selectedTenantId);
-      setMessage(`${row.branchName} setup readiness recorded.`);
-    } catch (cause) {
-      setError(messageFrom(cause, 'Unable to record Branch setup readiness. Retry keeps the same command identity.'));
-    } finally {
-      setSaving(null);
-    }
-  }
-
   return <div className="workspace-grid two">
     <section className="workspace-panel">
       <div className="workspace-panel-heading"><div><h2>Merchant commercial state</h2><p>Select a Business to review and prepare the initial merchant activation.</p></div></div>
@@ -330,8 +299,7 @@ export default function CommercialBillingAdministration({
           const tenantId = [...next][0] ?? '';
           setSelectedTenantId(tenantId);
           setSelectedTenant(tenantId ? merchant ?? null : null);
-          setSetupForm(null);
-          setMessage(null);
+                setMessage(null);
           setError(null);
         }}
       />
@@ -426,8 +394,7 @@ export default function CommercialBillingAdministration({
 
     {overview ? <section className="workspace-panel" style={{ gridColumn: '1 / -1' }}>
       <div className="workspace-panel-heading"><div><h2>Branch setup readiness</h2><p>Readiness is immutable and tied to the exact Branch setup purchase line.</p></div></div>
-      <div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Branch</th><th>Order</th><th>Setup line</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead><tbody>{overview.branchSetup.map((row) => <tr key={setupKey(row)}><td><strong>{row.branchName}</strong><small>{row.branchCode}</small></td><td>{shortId(row.commercialOrderId)}</td><td>{row.description}</td><td>{money(row.grossAmount,row.currency)}</td><td><span className={`workspace-status ${row.ready ? 'success' : 'attention'}`}>{row.ready ? 'Ready' : 'Pending'}</span></td><td>{row.ready ? 'Immutable' : canManage ? <button type="button" className="workspace-button subtle compact" onClick={() => openSetupForm(row)}>Record ready</button> : 'Review only'}</td></tr>)}{!overview.branchSetup.length ? <tr><td colSpan={6}>No Branch setup purchase lines.</td></tr> : null}</tbody></table></div>
-      {setupForm ? (() => { const row = overview.branchSetup.find((item) => setupKey(item) === setupForm.key); return row ? <div className="workspace-form-stack" style={{ marginTop: 16 }}><div className="workspace-banner warning"><strong>Immutable fact.</strong> Record readiness only after {row.branchName} setup is actually complete.</div><div className="workspace-field-grid two"><label>Completion time<input type="datetime-local" value={setupForm.readyAtLocal} onChange={(e) => setSetupForm({ ...setupForm, readyAtLocal: e.target.value })} /></label><label>Reason<input maxLength={1000} value={setupForm.reason} onChange={(e) => setSetupForm({ ...setupForm, reason: e.target.value })} /></label></div><label className="workspace-check-pill"><input type="checkbox" checked={setupForm.confirmed} onChange={(e) => setSetupForm({ ...setupForm, confirmed: e.target.checked })} />I confirm this Branch setup is complete.</label><div className="workspace-filter-row"><button type="button" className="workspace-button primary" disabled={saving !== null || !setupForm.confirmed} onClick={() => void markSetupReady(row)}>{saving === 'setup-ready' ? 'Recording…' : 'Record setup ready'}</button><button type="button" className="workspace-button subtle" disabled={saving !== null} onClick={() => setSetupForm(null)}>Cancel</button></div></div> : null; })() : null}
+      <div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Branch</th><th>Order</th><th>Setup line</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead><tbody>{overview.branchSetup.map((row) => <tr key={setupKey(row)}><td><strong>{row.branchName}</strong><small>{row.branchCode}</small></td><td>{shortId(row.commercialOrderId)}</td><td>{row.description}</td><td>{money(row.grossAmount,row.currency)}</td><td><span className={`workspace-status ${row.ready ? 'success' : 'attention'}`}>{row.ready ? 'Ready' : 'Pending'}</span></td><td>{row.ready ? 'Immutable' : onOpenSetup ? <button type="button" className="workspace-button subtle compact" onClick={() => onOpenSetup(selectedTenantId)}>Open setup checklist</button> : 'Review only'}</td></tr>)}{!overview.branchSetup.length ? <tr><td colSpan={6}>No Branch setup purchase lines.</td></tr> : null}</tbody></table></div>
     </section> : null}
 
     {overview ? <section className="workspace-panel" style={{ gridColumn: '1 / -1' }}>

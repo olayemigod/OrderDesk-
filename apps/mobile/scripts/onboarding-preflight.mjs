@@ -14,6 +14,10 @@ function requireValue(condition, message) {
 }
 
 const migration = read(join(repoRoot, 'supabase/migrations/20261023124500_merchant_onboarding_read_model.sql'));
+const oa4 = read(join(repoRoot, 'supabase/migrations/20261024174609_oa4_setup_readiness_activation.sql'));
+const sell = read(join(mobileRoot, 'src/redesign/SellWorkspace.tsx'));
+const offline = read(join(mobileRoot, 'src/data/offlineSalesRepository.ts'));
+requireValue(oa4.includes("'governed_runtime'") && oa4.includes('assert_sellertray_setup_completion_evidence') && oa4.includes('sellertray_business_is_preparing') && sell.includes('confirmOperationalAccess') && offline.includes('assertCachedOperationalAccess'), 'OA4 must enforce one server runtime authority and fail closed for uncached offline selling while permitting bounded preparation');
 const repository = read(join(mobileRoot, 'src/data/onboardingRepository.ts'));
 const businessesHook = read(join(mobileRoot, 'src/hooks/useBusinesses.ts'));
 const hook = read(join(mobileRoot, 'src/hooks/useOnboardingState.ts'));

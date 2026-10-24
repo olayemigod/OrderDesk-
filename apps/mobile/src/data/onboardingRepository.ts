@@ -30,7 +30,7 @@ export type SellerTrayOnboardingState = {
   currentStage: SellerTrayOnboardingStage;
   blockers: SellerTrayOnboardingBlocker[];
   nextAction: SellerTrayOnboardingAction;
-  accessEnforcement: 'informational_only_until_oa4';
+  accessEnforcement: 'governed_runtime';
   branchPreparation: {
     activeBranchCount: number;
     readyForCommercialOrder: boolean;
@@ -67,12 +67,15 @@ export type SellerTrayOnboardingState = {
     firstPaidAt: string | null;
   };
   branchSetup: {
+    branches: { branchId: string; branchName: string; setupStatus: string; ready: boolean }[];
     requiredCount: number;
     readyCount: number;
     ready: boolean;
   };
   activation: {
     entitlementState: 'not_active' | 'provisional' | 'full';
+    guaranteeStart: string | null;
+    guaranteeEnd: string | null;
     effectiveFrom: string | null;
     effectiveUntil: string | null;
     operationallyActive: boolean;
@@ -128,7 +131,7 @@ export async function loadSellerTrayOnboardingState(
       label: stringValue(nextAction.label, 'Review onboarding'),
       surface: onboardingSurface(nextAction.surface),
     },
-    accessEnforcement: 'informational_only_until_oa4',
+    accessEnforcement: 'governed_runtime',
     branchPreparation: {
       activeBranchCount: integerValue(branchPreparation.activeBranchCount),
       readyForCommercialOrder: branchPreparation.readyForCommercialOrder === true,
@@ -165,12 +168,15 @@ export async function loadSellerTrayOnboardingState(
       firstPaidAt: optionalString(settlement.firstPaidAt),
     },
     branchSetup: {
+      branches: arrayValue(branchSetup.branches).map((entry) => { const b = objectValue(entry); return { branchId: stringValue(b.branchId, ''), branchName: stringValue(b.branchName, 'Branch'), setupStatus: stringValue(b.setupStatus, 'Setup pending'), ready: b.ready === true }; }),
       requiredCount: integerValue(branchSetup.requiredCount),
       readyCount: integerValue(branchSetup.readyCount),
       ready: branchSetup.ready === true,
     },
     activation: {
       entitlementState: entitlementState(activation.entitlementState),
+      guaranteeStart: optionalString(activation.guaranteeStart),
+      guaranteeEnd: optionalString(activation.guaranteeEnd),
       effectiveFrom: optionalString(activation.effectiveFrom),
       effectiveUntil: optionalString(activation.effectiveUntil),
       operationallyActive: activation.operationallyActive === true,

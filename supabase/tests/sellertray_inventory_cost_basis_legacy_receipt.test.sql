@@ -17,6 +17,10 @@ insert into public.tenants(id,name,slug,merchant_code,subscription_status)
 select tenant_id,'SellerTray Legacy Receipt Cost Test','sellertray-legacy-cost-'||substr(tenant_id::text,1,8),'LGC','active'
 from sellertray_legacy_receipt_cost_fixture;
 
+-- Historical receiving requires an operational legacy subscription fixture.
+update public.tenant_subscriptions s set status='active'
+from sellertray_legacy_receipt_cost_fixture f where f.tenant_id=s.tenant_id;
+
 update sellertray_legacy_receipt_cost_fixture f set branch_id=b.id
 from public.branches b where b.tenant_id=f.tenant_id and b.is_default=true;
 update sellertray_legacy_receipt_cost_fixture f set location_id=sl.id

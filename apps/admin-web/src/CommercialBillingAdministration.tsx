@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import CommercialBillingAdministrationLegacy from './CommercialBillingAdministrationLegacy';
 import CommercialSettlementAdministration from './CommercialSettlementAdministration';
@@ -12,11 +13,13 @@ export default function CommercialBillingAdministration({
   actorRole: 'admin' | 'support';
   initialTenantId?: string | null;
 }) {
+  const [setupTenantId, setSetupTenantId] = useState(initialTenantId ?? null);
   return (
     <div className="workspace-stack">
       <CommercialBillingAdministrationLegacy
         session={session}
         actorRole={actorRole}
+        onOpenSetup={(tenantId) => { setSetupTenantId(tenantId); document.getElementById('sellertray-setup-activation')?.scrollIntoView({ behavior: 'smooth' }); }}
         initialTenantId={initialTenantId}
       />
       <section className="workspace-panel">
@@ -28,7 +31,7 @@ export default function CommercialBillingAdministration({
         </div>
         <CommercialSettlementAdministration session={session} initialTenantId={initialTenantId} />
       </section>
-      <SetupSchedulingAdministration session={session} initialTenantId={initialTenantId} />
+      <div id="sellertray-setup-activation"><SetupSchedulingAdministration session={session} initialTenantId={setupTenantId ?? initialTenantId} /></div>
     </div>
   );
 }
