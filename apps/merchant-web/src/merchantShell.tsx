@@ -1,17 +1,17 @@
 export type ShellIconName = 'menu' | 'close' | 'sun' | 'moon' | 'refresh' | 'chevron';
 
-const SELLERTRAY_LOGO = '/brand/sellertray-logo-v2.svg';
+const SELLERTRAY_APP_ICON = '/brand/sellertray-app-icon.png';
 
 export function SellerTrayMark({ large = false }: { large?: boolean }) {
   return <span className={large ? 'sellertray-mark large' : 'sellertray-mark'} aria-hidden="true">
-    <img src={SELLERTRAY_LOGO} alt="" />
+    <img src={SELLERTRAY_APP_ICON} alt="" />
   </span>;
 }
 
 export function SellerTrayBrand({ subtitle = 'Merchant Web' }: { subtitle?: string }) {
   return <div className="sellertray-brand">
     <SellerTrayMark />
-    <span className="sellertray-brand-surface">{subtitle}</span>
+    <div className="sellertray-brand-copy"><strong>SellerTray</strong><span>{subtitle}</span></div>
   </div>;
 }
 
