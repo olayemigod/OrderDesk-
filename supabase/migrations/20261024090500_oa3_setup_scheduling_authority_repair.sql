@@ -57,7 +57,7 @@ declare
   v_reason text := btrim(coalesce(p_reason,''));
   v_existing public.sellertray_commercial_branch_setup_readiness%rowtype;
   v_id uuid;
-  v_superuser boolean := false;
+  v_superuser_session boolean := false;
 begin
   if p_tenant_id is null or p_commercial_order_id is null or p_branch_id is null
      or p_command_id is null or p_ready_at is null or p_actor_user_id is null then
@@ -104,11 +104,11 @@ begin
     return v_existing.id;
   end if;
 
-  select coalesce(r.rolsuper,false) into v_superuser
+  select coalesce(r.rolsuper,false) into v_superuser_session
   from pg_catalog.pg_roles r
-  where r.rolname=current_user;
+  where r.rolname=session_user;
 
-  if not v_superuser and not exists (
+  if not v_superuser_session and not exists (
     select 1
     from public.sellertray_commercial_setup_appointment_events e
     join public.sellertray_commercial_setup_appointments a
@@ -165,6 +165,6 @@ revoke all on function public.mark_sellertray_commercial_branch_setup_ready(uuid
 grant execute on function public.mark_sellertray_commercial_branch_setup_ready(uuid,uuid,uuid,uuid,jsonb,text,timestamptz,uuid) to service_role;
 
 comment on function public.mark_sellertray_commercial_branch_setup_ready(uuid,uuid,uuid,uuid,jsonb,text,timestamptz,uuid)
-  is 'OA3 readiness fact writer. Existing facts replay idempotently; every new SellerTray runtime fact must be backed by the matching immutable completed setup appointment event. Database superusers retain migration/test-fixture authority only.';
+  is 'OA3 readiness fact writer. Existing facts replay idempotently; every new SellerTray runtime fact must be backed by the matching immutable completed setup appointment event. Only an actual database-superuser session retains migration/test-fixture authority.';
 
 commit;
