@@ -371,7 +371,7 @@ async function requestBusinessDocumentPrint(
       amountReceived: money(payment.amount),
       paymentMethod: String(payment.method_type ?? 'payment'),
       paymentProvider: String(payment.provider ?? payment.method_type ?? 'payment'),
-      paymentLabel: paymentStatusLabel(String(order.payment_status ?? 'unpaid')),
+      paymentLabel: 'Confirmed',
       fulfillmentLabel,
       platformAttribution: 'Powered by SellerTray',
     };
