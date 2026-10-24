@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(22);
+select extensions.plan(24);
 
 select extensions.ok((select relrowsecurity from pg_class where oid='public.sellertray_commercial_setup_appointments'::regclass),'setup appointments are RLS protected');
 select extensions.ok((select relrowsecurity from pg_class where oid='public.sellertray_commercial_setup_appointment_events'::regclass),'setup appointment events are RLS protected');
@@ -27,6 +27,8 @@ select extensions.ok(position('is_active' in lower(pg_get_functiondef('public.as
 select extensions.ok(position('internal_note' in lower(pg_get_functiondef('public.get_sellertray_setup_schedule(uuid)'::regprocedure)))=0 and position('worker_id' in lower(pg_get_functiondef('public.get_sellertray_setup_schedule(uuid)'::regprocedure)))=0,'merchant scheduling projection excludes ProcessEdge internal note and workforce identity');
 select extensions.ok(exists(select 1 from pg_trigger where tgrelid='public.sellertray_commercial_setup_appointment_events'::regclass and tgname='sellertray_setup_events_immutable' and not tgisinternal),'appointment lifecycle history has an immutable update/delete trigger');
 select extensions.ok(position('owner' in lower(pg_get_functiondef('public.request_sellertray_setup_reschedule(uuid,uuid,timestamptz,timestamptz,text,uuid)'::regprocedure)))>0 and position('manager' in lower(pg_get_functiondef('public.request_sellertray_setup_reschedule(uuid,uuid,timestamptz,timestamptz,text,uuid)'::regprocedure)))>0,'merchant change requests enforce Owner/Manager authority');
+select extensions.ok(position('null::uuid' in lower(pg_get_functiondef('public.platform_admin_upsert_setup_service_area(uuid,uuid,uuid,text,text,boolean,text)'::regprocedure)))>0 and position('null::uuid' in lower(pg_get_functiondef('public.platform_admin_upsert_setup_worker(uuid,uuid,uuid,text,text,boolean,integer,integer,uuid[],text)'::regprocedure)))>0,'ProcessEdge-global service-area and workforce master mutations require platform-scoped capability resolution');
+select extensions.ok(position('cannot start in the past' in lower(pg_get_functiondef('public.request_sellertray_setup_reschedule(uuid,uuid,timestamptz,timestamptz,text,uuid)'::regprocedure)))>0,'merchant preferred setup windows reject past starts');
 
 select * from extensions.finish();
 rollback;
