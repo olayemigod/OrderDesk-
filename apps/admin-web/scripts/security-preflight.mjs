@@ -5,7 +5,7 @@ const root = resolve(process.cwd(), '../..');
 const appRoot = process.cwd();
 const supabaseClient = readFileSync(resolve(appRoot, 'src/supabase.ts'), 'utf8');
 const main = readFileSync(resolve(appRoot, 'src/main.tsx'), 'utf8');
-const activeWorkspace = readFileSync(resolve(appRoot, 'src/AdminWorkspaceV2.tsx'), 'utf8');
+const activeWorkspace = readFileSync(resolve(appRoot, 'src/AdminWorkspaceV3.tsx'), 'utf8');
 const legacyWorkspace = readFileSync(resolve(appRoot, 'src/AdminWorkspace.tsx'), 'utf8');
 const legacyApp = readFileSync(resolve(appRoot, 'src/App.tsx'), 'utf8');
 const legacySubscriptionAccess = readFileSync(resolve(appRoot, 'src/SubscriptionAccess.tsx'), 'utf8');
@@ -43,7 +43,7 @@ requireValue(
 );
 
 requireValue(
-  main.includes("import AdminWorkspaceV2 from './AdminWorkspaceV2'") &&
+  main.includes("import AdminWorkspaceV3 from './AdminWorkspaceV3'") &&
     !main.includes('SubscriptionAccess') &&
     !activeWorkspace.includes("action: 'extend_trial_days'") &&
     !activeWorkspace.includes('Extend trial'),
@@ -58,6 +58,9 @@ requireValue(
     activeWorkspace.includes("label: 'Communications'") &&
     activeWorkspace.includes("label: 'Platform Operations'") &&
     activeWorkspace.includes("label: 'Governance'") &&
+    activeWorkspace.includes("label: 'Commercial Orders'") &&
+    activeWorkspace.includes("label: 'Plans & Pricing'") &&
+    activeWorkspace.includes("label: 'Branch Readiness'") &&
     activeWorkspace.includes('admin-nav-group-button') &&
     activeWorkspace.includes('admin-nav-submenu-link'),
   'Admin Web must retain the approved grouped professional platform-operations navigation.',
