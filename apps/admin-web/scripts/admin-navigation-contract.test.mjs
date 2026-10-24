@@ -50,10 +50,15 @@ test('Merchant scope is persistent shell state and selectors are pure by default
   assert.doesNotMatch(selector, /showCommercialPortfolio \?\? mode === 'single'/);
 });
 
-test('Active Admin entrypoint and governance contract are wired', () => {
+test('Active Admin entrypoint and governance contract are wired without retired shells', () => {
   assert.match(entry, /AdminWorkspaceV3/);
   assert.match(entry, /admin-navigation\.css/);
-  assert.equal(existsSync(new URL('../src/AdminWorkspaceV2.tsx', import.meta.url)), false);
+  for (const retired of [
+    '../src/AdminWorkspace.tsx',
+    '../src/AdminWorkspaceV2.tsx',
+    '../src/CommercialBillingAdministration.tsx',
+    '../src/CommercialBillingAdministrationLegacy.tsx',
+  ]) assert.equal(existsSync(new URL(retired, import.meta.url)), false, `${retired} must stay retired`);
   assert.match(governance, /One Admin page represents one primary administrative job/);
   assert.match(governance, /group -> destination/);
   assert.match(governance, /OA4 Admin work must land in this group/);
