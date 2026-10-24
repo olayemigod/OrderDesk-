@@ -147,7 +147,6 @@ revoke all on table public.sellertray_setup_branch_service_areas from public,ano
 revoke all on table public.sellertray_commercial_setup_appointments from public,anon,authenticated;
 revoke all on table public.sellertray_commercial_setup_appointment_events from public,anon,authenticated;
 revoke all on table public.sellertray_setup_reschedule_requests from public,anon,authenticated;
-
 grant all on table public.sellertray_setup_service_areas to service_role;
 grant all on table public.sellertray_setup_workers to service_role;
 grant all on table public.sellertray_setup_worker_service_areas to service_role;
@@ -624,6 +623,7 @@ declare
   v_appointment public.sellertray_commercial_setup_appointments%rowtype;
   v_existing_event public.sellertray_commercial_setup_appointment_events%rowtype;
   v_target text:=lower(btrim(coalesce(p_target_status,'')));
+  v_expected_event_type text:=case when lower(btrim(coalesce(p_target_status,'')))='in_progress' then 'started' else lower(btrim(coalesce(p_target_status,''))) end;
   v_reason text:=btrim(coalesce(p_reason,''));
   v_readiness_id uuid;
   v_obligation_id uuid;
@@ -635,7 +635,7 @@ begin
 
   select e.* into v_existing_event from public.sellertray_commercial_setup_appointment_events e where e.command_id=p_command_id;
   if found then
-    if v_existing_event.appointment_id<>p_appointment_id or v_existing_event.event_type<>case v_target when 'in_progress' then 'started' else v_target end then raise exception 'Setup transition command is already used for different facts' using errcode='23505'; end if;
+    if v_existing_event.appointment_id<>p_appointment_id or v_existing_event.event_type<>v_expected_event_type then raise exception 'Setup transition command is already used for different facts' using errcode='23505'; end if;
     select jsonb_build_object('appointmentId',a.id,'status',a.status,'readinessId',r.id)
       into v_state
     from public.sellertray_commercial_setup_appointments a
@@ -657,7 +657,7 @@ begin
     appointment_id,tenant_id,commercial_order_id,branch_id,command_id,event_type,actor_user_id,actor_kind,reason,details
   ) values (
     p_appointment_id,p_tenant_id,v_appointment.commercial_order_id,v_appointment.branch_id,p_command_id,
-    case v_target when 'in_progress' then 'started' else v_target end,p_actor_user_id,'platform',v_reason,
+    v_expected_event_type,p_actor_user_id,'platform',v_reason,
     jsonb_build_object('fromStatus',v_appointment.status,'toStatus',v_target,'evidence',coalesce(p_evidence,'{}'::jsonb))
   );
 
