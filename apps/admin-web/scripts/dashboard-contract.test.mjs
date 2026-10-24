@@ -3,14 +3,14 @@ import { resolve } from 'node:path';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 const read = (path) => readFileSync(resolve(import.meta.dirname,'../..',path),'utf8');
-const workspace = read('admin-web/src/AdminWorkspace.tsx');
+const workspace = read('admin-web/src/AdminWorkspaceV3.tsx');
 const main = read('admin-web/src/main.tsx');
-const commercial = read('admin-web/src/CommercialBillingAdministration.tsx');
+const commercial = read('admin-web/src/CommercialAdminWorkspaces.tsx');
 const dashboard = read('admin-web/src/BusinessDashboard.tsx');
 const merchants = read('admin-web/src/MerchantPortfolio.tsx');
 const platformAdmin = read('../supabase/functions/platform-admin/index.ts');
 test('active entry keeps trial UI unreachable', () => {
-  assert.match(main,/import AdminWorkspace/);
+  assert.match(main,/import AdminWorkspaceV3/);
   assert.doesNotMatch(main+workspace+dashboard,/import .*SubscriptionAccess|import .*['"]\.\/App['"]|action: 'extend_trial_days'/);
 });
 test('active Admin UI uses business terminology', () => assert.doesNotMatch(workspace+commercial+dashboard+merchants,/C1B|C1A|pre-C2|No C2|deliberate C2/));
@@ -28,5 +28,6 @@ test('dashboard request is parsed before the Edge Function dispatches it', () =>
 test('attention drill-down survives hash routing', () => {
   assert.match(dashboard,/#merchants\?tenant=/);
   assert.match(workspace,/split\('\?'\)\[0\]/);
+  assert.match(workspace,/merchants: 'merchants\/all'/);
   assert.match(merchants,/setSelectedId\(merchantFromHash\(\)\)/);
 });
