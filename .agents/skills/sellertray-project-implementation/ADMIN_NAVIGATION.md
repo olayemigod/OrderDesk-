@@ -61,25 +61,38 @@ Merchant 360 is a contextual summary and launch point. It may show summary, onbo
 
 ### Commercial
 
-- Commercial Orders / initial commercial workspace
-- Plans & Pricing
-- Payments & Settlement
-- Installments
-- Agreements
-- Guarantees & Refunds
-- Promotions when implemented
+The currently converged first-class destinations are:
+
+- **Commercial Orders** — initial commercial purchase creation and immutable order review;
+- **Plans & Pricing** — effective-dated subscription and Branch setup pricing;
+- **Payments & Settlement** — authoritative balances, direct payments, discounts/adjustments and installment-policy overrides;
+- **Installments** — installment progress and entitlement review;
+- **Agreements** — template publication, issuance, immutable acceptance history and replacement.
+
+Future commercial destinations include:
+
+- Guarantees & Refunds when the governed decision/inspection workflow is implemented;
+- Promotions when implemented.
 
 Commercial grouping does not collapse these into one page. Pricing, commercial orders, payment/settlement, agreements, installment policy, guarantees and entitlement remain distinct governed authorities even though they participate in one commercial lifecycle.
 
 ### Onboarding & Setup
 
-- Activation Queue when its governed read model exists
-- Setup Appointments
-- Setup Completion
-- Branch Readiness
-- Setup Resources
+The currently converged first-class destinations are:
+
+- **Setup Appointments** — scheduling, rescheduling, capacity and setup-resource assignment;
+- **Branch Readiness** — review of immutable readiness against exact commercial order + Branch + Branch setup obligations.
+
+OA4 extends this group with the governed capabilities when implemented:
+
+- Activation Queue;
+- Setup Completion;
+- activation reconciliation/recovery integrated with Branch Readiness where appropriate;
+- Setup Resources may be separated from appointment operations when its dedicated platform-level management surface is extracted.
 
 Setup scheduling, equipment/completion evidence, Branch readiness and entitlement reconciliation are related lifecycle stages but distinct ProcessEdge jobs. Do not append setup-resource management, appointment scheduling, completion evidence and activation recovery below unrelated pricing/payment forms.
+
+Branch Readiness must not expose the legacy generic `Record ready` shortcut as the primary completion path. Readiness comes from the governed setup-completion authority; OA4 must enrich that completion evidence and recovery path rather than create another readiness or activation state machine.
 
 OA4 Admin work must land in this group rather than extending a catch-all Billing page.
 
@@ -136,6 +149,7 @@ Task pages should expose one clear primary job, its supporting context, prerequi
 2. Merchant-scoped deep links should preserve the intended Merchant/Business context.
 3. Legacy route aliases may redirect to the new destination during migration so existing links do not become dead ends.
 4. Browser Back/Forward navigation must restore both destination and merchant scope without mutating business state.
+5. The legacy `billing` and `commercial/core` destinations resolve to **Commercial Orders** after the focused commercial convergence; they must not resurrect the retired catch-all page.
 
 ## 7. Migration discipline
 
@@ -146,8 +160,9 @@ During that migration:
 1. separate already-independent components first;
 2. keep the existing governed RPC/command/service boundaries unchanged unless the business requirement itself changes;
 3. remove hidden component side effects such as a selector automatically rendering unrelated management modules;
-4. do not declare the full Admin IA complete while a major catch-all page remains;
-5. each intermediate branch/PR must state the residual bundled work explicitly.
+4. do not declare the full Admin IA complete while a major catch-all page remains active;
+5. each intermediate branch/PR must state the residual bundled work explicitly;
+6. retired legacy components may remain temporarily in source for comparison/rollback, but the active Admin entry point must not mount them once their jobs have focused destinations.
 
 ## 8. QA gate
 
@@ -164,7 +179,9 @@ For Admin navigation/process work verify at minimum:
 9. server-side capability checks remain authoritative;
 10. merchant selectors no longer inject unrelated management modules unless explicitly requested;
 11. browser Back/Forward restores route/context;
-12. no Merchant Web, Mobile, WhatsApp, AI or offline business behavior changes unless a shared business rule was intentionally changed.
+12. no Merchant Web, Mobile, WhatsApp, AI or offline business behavior changes unless a shared business rule was intentionally changed;
+13. active Commercial navigation does not mount the legacy all-in-one commercial workspace;
+14. Branch Readiness review does not expose a generic direct-readiness mutation that bypasses governed setup completion.
 
 ## 9. Cross-surface impact rule
 
