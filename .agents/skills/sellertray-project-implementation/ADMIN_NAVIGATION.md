@@ -108,7 +108,20 @@ Future **Integrations** or additional service-health destinations should be expo
 
 ### Insights & Reports
 
-Expose report destinations only when governed report/read models exist. Dashboard summaries do not replace deeper commercial, onboarding, adoption or operations reporting.
+The converged first-class destination is:
+
+- **Revenue Dashboard** — platform-wide ProcessEdge commercial reporting for confirmed collections, commercial order value, period comparison and outstanding installment exposure, with every amount kept separate by currency.
+
+Revenue Dashboard uses the governed server-side business-performance read model; it does not calculate financial truth in the browser. Its destination name does not authorise an accounting shortcut:
+
+1. confirmed collections are cash/settlement facts, not automatically recognised revenue;
+2. commercial order value is contract/order value, not automatically recognised revenue;
+3. outstanding installments are obligations/exposure, not earned revenue;
+4. merchant GMV remains merchant business activity and must not be presented as ProcessEdge revenue;
+5. currencies must remain separate unless a future governed FX/consolidation authority explicitly defines conversion;
+6. **recognised revenue must not be calculated or displayed until an approved SellerTray revenue-recognition/accounting authority exists**.
+
+Future commercial, onboarding, adoption and operations reports should be exposed here only when governed report/read models exist. Dashboard summaries do not replace deeper report destinations.
 
 ### Governance
 
@@ -146,6 +159,7 @@ Task pages should expose one clear primary job, its supporting context, prerequi
 5. The legacy `billing` and `commercial/core` destinations resolve to **Commercial Orders**; they must not resurrect the retired commercial catch-all page.
 6. Legacy `communications` / `communications/messages` resolve to **Compose Message**.
 7. Legacy `operations` / `operations/health` resolve to **WhatsApp Operations** as the primary service-health landing page.
+8. `reports/revenue` is the stable Revenue Dashboard destination; short `revenue` / `reports` aliases may resolve to it without changing report authority.
 
 ## 7. Migration discipline
 
@@ -180,7 +194,8 @@ For Admin navigation/process work verify at minimum:
 14. Branch Readiness review does not expose a generic direct-readiness mutation that bypasses governed setup completion;
 15. Setup Resources is not stacked into Setup Appointments;
 16. Campaign History is not stacked into Compose Message;
-17. WhatsApp Operations and AI Operations remain independent task pages even though they reuse the same governed platform summary authority.
+17. WhatsApp Operations and AI Operations remain independent task pages even though they reuse the same governed platform summary authority;
+18. Revenue Dashboard reads governed server facts, keeps currencies separate, and does not label collections, order value, outstanding installments or merchant GMV as recognised revenue.
 
 ## 9. Browser acceptance requirement
 
@@ -188,6 +203,18 @@ Static typecheck/build/contracts are necessary but do not replace browser accept
 
 When the preview provider is unavailable or rate-limited, do not claim visual/browser acceptance. Report the provider blocker explicitly while preserving the exact green static-CI evidence.
 
-## 10. Cross-surface impact rule
+## 10. Current implementation sequence
+
+The Admin implementation sequence after the initial IA convergence is:
+
+1. keep **Revenue Dashboard** as the first governed Insights & Reports destination using the existing server-calculated business-performance authority and financial semantic boundaries above;
+2. complete browser acceptance for desktop grouped navigation, narrow drawer, Merchant-context persistence and Back/Forward restoration;
+3. extend **Onboarding & Setup** with OA4 structured Setup Completion/equipment evidence;
+4. add OA4 activation blockers and readiness/entitlement reconciliation recovery without creating another activation state machine;
+5. add later report destinations only as their governed read models become available.
+
+This sequence is an implementation-order contract, not permission to skip the prerequisite authority, security, audit or cross-surface gates of the underlying capability.
+
+## 11. Cross-surface impact rule
 
 Admin information-architecture-only work normally has no business-behavior impact outside Admin Web because shared authority is unchanged. Still report Shared Core, Merchant Web, Mobile, WhatsApp, AI, reporting/audit and offline/sync effects explicitly under `CROSS_SURFACE.md`.
