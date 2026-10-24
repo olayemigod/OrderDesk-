@@ -7,6 +7,7 @@ const collection = readFileSync(resolve(root, 'src/redesign/OrderBalanceCollecti
 const documentsPanel = readFileSync(resolve(root, 'src/redesign/OrderDocumentsPanel.tsx'), 'utf8');
 const sellWorkspace = readFileSync(resolve(root, 'src/redesign/SellWorkspace.tsx'), 'utf8');
 const resumeWorkspace = readFileSync(resolve(root, 'src/redesign/ResumePosDraftWorkspace.tsx'), 'utf8');
+const orderDomain = readFileSync(resolve(root, 'src/domain/order.ts'), 'utf8');
 const printerRepository = readFileSync(resolve(root, 'src/data/printerRepository.ts'), 'utf8');
 const printExecutor = readFileSync(resolve(root, 'src/printing/printExecutor.ts'), 'utf8');
 const escPos = readFileSync(resolve(root, 'src/printing/escPosReceipt.ts'), 'utf8');
@@ -19,10 +20,14 @@ const allocationMigration = readFileSync(resolve(root, '../../supabase/migration
 
 const failures = [];
 const requireValue = (condition, message) => { if (!condition) failures.push(message); };
+const verificationIndex = orderDomain.indexOf("if (order.paymentStatus === 'verification_required')");
+const pendingIndex = orderDomain.indexOf("if (order.paymentStatus === 'pending')");
+const partialIndex = orderDomain.indexOf('if (order.amountPaid > 0.005');
 
 requireValue(orders.includes('OrderDocumentsPanel') && orders.includes('Payment: ${paymentLabel}') && orders.includes('Fulfilment: ${titleCase(order.fulfillmentStatus)}'), 'Orders must show explicit Payment and Fulfilment labels and expose the governed sale-document panel.');
 requireValue(!orders.includes('requestPrintJob') && !orders.includes('Print payment receipt'), 'Orders must not retain the old paid-only receipt shortcut; sale documents belong to the governed Sale documents panel.');
 requireValue(orders.includes('adjustsFontSizeToFit') && orders.includes('minimumFontScale={0.66}') && orders.includes("maxWidth: '48%'"), 'Order totals must adapt rather than overflow when monetary values are large.');
+requireValue(verificationIndex >= 0 && pendingIndex >= 0 && partialIndex >= 0 && verificationIndex < partialIndex && pendingIndex < partialIndex, 'Authoritative Verification required/Pending payment states must take precedence over the derived Partial balance label.');
 requireValue(!sellWorkspace.includes('requestPrintJob') && !sellWorkspace.includes('Payment Receipt') && sellWorkspace.includes('onDraftCreated?.(orderId)'), 'New-sale checkout must hand the completed order to the governed Orders document surface and must not auto-print a generic Payment Receipt.');
 requireValue(!resumeWorkspace.includes('requestPrintJob') && !resumeWorkspace.includes('Payment Receipt') && resumeWorkspace.includes('onCompleted(result.orderId)'), 'Resumed-sale checkout must hand the completed order to the governed Orders document surface and must not auto-print a generic Payment Receipt.');
 requireValue(collection.includes('adjustsFontSizeToFit') && collection.includes('Payment Receipt is available only after confirmation') && collection.includes('await onChanged()'), 'Balance collection must adapt large values, distinguish pending verification from confirmed receipt availability, and refresh authoritative order/payment state after collection.');
