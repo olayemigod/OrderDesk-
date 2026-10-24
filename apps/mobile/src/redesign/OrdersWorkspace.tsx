@@ -24,6 +24,7 @@ import { executePreparedPrintJob } from '../printing/printExecutor';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import { OrderBalanceCollection } from './OrderBalanceCollection';
+import { OrderDocumentsPanel } from './OrderDocumentsPanel';
 
 type Props = {
   tenantId: string;
@@ -204,16 +205,16 @@ export function OrdersWorkspace({
     setPrintNotice(null);
     try {
       const capabilities = await loadPrintingCapabilities(tenantId, order.branchId);
-      if (!capabilities.canPrintReceipt) throw new Error('Receipt printing is not available for your role.');
+      if (!capabilities.canPrintReceipt) throw new Error('Payment Receipt printing is not available for your role.');
       const activeShift = await loadActiveCashShift(tenantId, order.branchId);
       const printers = await loadPrinters(tenantId, order.branchId, null);
       const printer = chooseReceiptPrinter(printers, activeShift?.registerId ?? null);
       if (!printer) throw new Error('No active receipt printer is available for this branch. Set one printer as default in Devices & printers, then try again.');
       const printJob = await requestPrintJob({ tenantId, printerId: printer.id, jobType: 'receipt', orderId: order.id });
       await executePreparedPrintJob(tenantId, printJob);
-      setPrintNotice(`Receipt sent to ${printer.displayName}.`);
+      setPrintNotice(`Payment Receipt sent to ${printer.displayName}.`);
     } catch (cause) {
-      setPrintError(cause instanceof Error ? cause.message : 'Unable to print this receipt.');
+      setPrintError(cause instanceof Error ? cause.message : 'Unable to print this Payment Receipt.');
     } finally {
       setPrintingOrderId(null);
     }
@@ -254,13 +255,13 @@ export function OrdersWorkspace({
                 <Text style={[styles.orderMeta, dark && darkStyles.bodyText]}>{order.publicOrderId} · {sourceLabel(order.source)} · {order.items.length} {order.items.length === 1 ? 'item' : 'items'}</Text>
                 <Text style={[styles.orderAttribution, dark && darkStyles.bodyText]}>{order.branchName}{order.source === 'pos' && order.posOperatorName ? ` · Cashier: ${order.posOperatorName}` : ''}</Text>
               </View>
-              <View style={styles.orderValueWrap}><Text style={[styles.orderValue, dark && darkStyles.titleText]}>{total === null ? 'Needs pricing' : formatMoney(total, businessCurrency)}</Text><Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={theme.colors.muted} /></View>
+              <View style={styles.orderValueWrap}><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.66} style={[styles.orderValue, dark && darkStyles.titleText]}>{total === null ? 'Needs pricing' : formatMoney(total, businessCurrency)}</Text><Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={theme.colors.muted} /></View>
             </Pressable>
 
             <View style={styles.orderStateRow}>
               <StatePill label={order.returnStatus === 'returned' ? 'Returned' : order.returnStatus === 'partial' ? 'Partially returned' : titleCase(order.status)} positive={order.returnStatus !== 'none'} />
-              <StatePill label={paymentLabel} positive={order.paymentStatus === 'paid'} />
-              <StatePill label={titleCase(order.fulfillmentStatus)} positive={order.fulfillmentStatus === 'delivered' || order.fulfillmentStatus === 'collected'} />
+              <StatePill label={`Payment: ${paymentLabel}`} positive={order.paymentStatus === 'paid'} />
+              <StatePill label={`Fulfilment: ${titleCase(order.fulfillmentStatus)}`} positive={order.fulfillmentStatus === 'delivered' || order.fulfillmentStatus === 'collected'} />
             </View>
 
             <OrderBalanceCollection tenantId={tenantId} order={order} currency={businessCurrency} onChanged={onChanged} />
@@ -272,11 +273,13 @@ export function OrdersWorkspace({
               {editing && error ? <Banner text={error} error dark={dark} onDismiss={() => setError(null)} /> : null}
             </View> : null}
 
+            {expanded ? <OrderDocumentsPanel tenantId={tenantId} currency={businessCurrency} order={order} /> : null}
+
             {order.returnStatus !== 'none' ? <View style={[styles.returnedNotice, dark && darkStyles.subtleCard]}><Ionicons name="return-down-back-outline" size={18} color={theme.colors.greenDark} /><Text style={[styles.returnedText, dark && darkStyles.bodyText]}>{formatMoney(order.returnedAmount, businessCurrency)} of merchandise returned{order.returnStatus === 'partial' ? '; remaining quantities can still be returned.' : '.'} The original sale and payment remain in history.</Text></View> : null}
 
             {!action && !editing && (canManageDraft || canPrepareReturn || canPrintReceipt) ? <View style={styles.actionRow}>
               {canManageDraft ? <Pressable disabled={saving || printingOrderId !== null} onPress={() => onResumeDraft(order)} style={[styles.outlineAction, styles.resumeAction, dark && darkStyles.outlineButton]}><Ionicons name="cart-outline" size={17} color={theme.colors.greenDark} /><Text style={styles.resumeActionText}>Resume sale</Text></Pressable> : null}
-              {canPrintReceipt ? <Pressable disabled={saving || printingOrderId !== null} onPress={() => void printReceipt(order)} style={[styles.outlineAction, styles.printAction, dark && darkStyles.outlineButton, (saving || printingOrderId !== null) && styles.disabled]}>{printing ? <ActivityIndicator size="small" color={theme.colors.greenDark} /> : <Ionicons name="print-outline" size={17} color={theme.colors.greenDark} />}<Text style={styles.printActionText}>{printing ? 'Printing…' : 'Print receipt'}</Text></Pressable> : null}
+              {canPrintReceipt ? <Pressable disabled={saving || printingOrderId !== null} onPress={() => void printReceipt(order)} style={[styles.outlineAction, styles.printAction, dark && darkStyles.outlineButton, (saving || printingOrderId !== null) && styles.disabled]}>{printing ? <ActivityIndicator size="small" color={theme.colors.greenDark} /> : <Ionicons name="print-outline" size={17} color={theme.colors.greenDark} />}<Text style={styles.printActionText}>{printing ? 'Printing…' : 'Print payment receipt'}</Text></Pressable> : null}
               {canManageDraft ? <Pressable disabled={saving || printingOrderId !== null} onPress={() => beginDelete(order)} style={[styles.outlineAction, styles.deleteAction, dark && darkStyles.outlineButton]}><Ionicons name="trash-outline" size={17} color={theme.colors.danger} /><Text style={styles.deleteActionText}>Delete draft</Text></Pressable> : null}
               {canPrepareReturn ? <Pressable disabled={saving || printingOrderId !== null || loadingReturn} onPress={() => void beginReturn(order)} style={[styles.outlineAction, styles.returnAction, dark && darkStyles.outlineButton]}>{loadingReturn ? <ActivityIndicator size="small" color={theme.colors.greenDark} /> : <Ionicons name="return-down-back-outline" size={17} color={theme.colors.greenDark} />}<Text style={styles.returnActionText}>{loadingReturn ? 'Loading…' : 'Return items'}</Text></Pressable> : null}
             </View> : null}
@@ -365,7 +368,7 @@ function formatQuantity(value: number): string { return Number.isInteger(value) 
 const styles = StyleSheet.create({
   stack: { gap: 14 }, heading: { gap: 4 }, eyebrow: { color: theme.colors.muted, fontSize: 11, fontWeight: '900', letterSpacing: 1.05 }, pageTitle: { color: theme.colors.navy, fontSize: 28, fontWeight: '900' }, pageSubtitle: { color: theme.colors.muted, fontSize: 14, lineHeight: 20 },
   emptyCard: { alignItems: 'center', borderColor: theme.colors.border, borderRadius: 18, borderWidth: 1, gap: 9, padding: 22 }, emptyTitle: { color: theme.colors.navy, fontSize: 17, fontWeight: '900' }, emptyText: { color: theme.colors.muted, fontSize: 13, lineHeight: 19, textAlign: 'center' }, muted: { color: theme.colors.muted, fontSize: 13 },
-  orderCard: { backgroundColor: theme.colors.white, borderColor: theme.colors.border, borderRadius: 20, borderWidth: 1, gap: 13, padding: 16 }, orderTopRow: { alignItems: 'flex-start', flexDirection: 'row', gap: 12, justifyContent: 'space-between' }, orderIdentity: { flex: 1, gap: 3 }, customerName: { color: theme.colors.navy, fontSize: 16, fontWeight: '900' }, orderMeta: { color: theme.colors.muted, fontSize: 12, lineHeight: 18 }, orderAttribution: { color: theme.colors.slate, fontSize: 11, fontWeight: '700', lineHeight: 17 }, orderValueWrap: { alignItems: 'flex-end', flexDirection: 'row', gap: 7 }, orderValue: { color: theme.colors.navy, fontSize: 15, fontWeight: '900' },
+  orderCard: { backgroundColor: theme.colors.white, borderColor: theme.colors.border, borderRadius: 20, borderWidth: 1, gap: 13, padding: 16 }, orderTopRow: { alignItems: 'flex-start', flexDirection: 'row', gap: 12, justifyContent: 'space-between' }, orderIdentity: { flex: 1, gap: 3 }, customerName: { color: theme.colors.navy, fontSize: 16, fontWeight: '900' }, orderMeta: { color: theme.colors.muted, fontSize: 12, lineHeight: 18 }, orderAttribution: { color: theme.colors.slate, fontSize: 11, fontWeight: '700', lineHeight: 17 }, orderValueWrap: { alignItems: 'flex-end', flexDirection: 'row', flexShrink: 1, gap: 7, maxWidth: '48%' }, orderValue: { color: theme.colors.navy, flexShrink: 1, fontSize: 15, fontWeight: '900', textAlign: 'right' },
   orderStateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 }, statePill: { backgroundColor: theme.colors.cloud, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 }, statePillPositive: { backgroundColor: theme.colors.mintSoft }, statePillText: { color: theme.colors.slate, fontSize: 11, fontWeight: '800' }, statePillTextPositive: { color: theme.colors.greenDark },
   actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, outlineAction: { alignItems: 'center', borderColor: theme.colors.border, borderRadius: 12, borderWidth: 1, flexDirection: 'row', gap: 6, paddingHorizontal: 11, paddingVertical: 9 }, resumeAction: { borderColor: theme.colors.greenDark }, resumeActionText: { color: theme.colors.greenDark, fontSize: 12, fontWeight: '900' }, printAction: { borderColor: theme.colors.greenDark }, printActionText: { color: theme.colors.greenDark, fontSize: 12, fontWeight: '900' }, deleteAction: { borderColor: '#F1C5C5' }, deleteActionText: { color: theme.colors.danger, fontSize: 12, fontWeight: '900' }, returnAction: { borderColor: theme.colors.greenDark }, returnActionText: { color: theme.colors.greenDark, fontSize: 12, fontWeight: '900' }, disabled: { opacity: 0.55 },
   itemsPanel: { backgroundColor: theme.colors.mint, borderRadius: 16, gap: 11, padding: 12 }, itemsHeading: { alignItems: 'flex-start', flexDirection: 'row', gap: 10, justifyContent: 'space-between' }, itemsTitle: { color: theme.colors.navy, fontSize: 14, fontWeight: '900' }, itemsHelper: { color: theme.colors.muted, fontSize: 12, lineHeight: 17 }, editButton: { alignItems: 'center', flexDirection: 'row', gap: 5, paddingVertical: 3 }, editButtonText: { color: theme.colors.greenDark, fontSize: 12, fontWeight: '900' }, itemList: { gap: 8 }, itemRow: { alignItems: 'center', backgroundColor: theme.colors.white, borderRadius: 13, flexDirection: 'row', gap: 10, padding: 10 }, flexCopy: { flex: 1, gap: 2 }, itemName: { color: theme.colors.navy, fontSize: 13, fontWeight: '900' }, itemMeta: { color: theme.colors.muted, fontSize: 11, lineHeight: 16 }, itemPrice: { color: theme.colors.slate, fontSize: 12, fontWeight: '800' }, quantityText: { color: theme.colors.navy, fontSize: 13, fontWeight: '900' }, quantityInput: { backgroundColor: theme.colors.white, borderColor: theme.colors.border, borderRadius: 10, borderWidth: 1, color: theme.colors.navy, fontSize: 14, fontWeight: '800', minWidth: 72, paddingHorizontal: 10, paddingVertical: 8, textAlign: 'right' }, editActions: { flexDirection: 'row', gap: 8, justifyContent: 'flex-end' },
