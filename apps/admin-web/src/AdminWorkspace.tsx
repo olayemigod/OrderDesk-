@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import BusinessDashboard from './BusinessDashboard';
+import RevenueDashboard from './RevenueDashboard';
 import {
   BranchReadinessAdministration,
   CommercialAgreementAdministration,
@@ -34,8 +35,9 @@ type AdminRoute =
   | 'communications/history'
   | 'operations/whatsapp'
   | 'operations/ai'
+  | 'reports/revenue'
   | 'governance/audit';
-type IconName = 'overview' | 'merchants' | 'commercial' | 'setup' | 'communications' | 'operations' | 'governance' | 'menu' | 'close' | 'refresh' | 'search' | 'chevron';
+type IconName = 'overview' | 'merchants' | 'commercial' | 'setup' | 'communications' | 'operations' | 'reports' | 'governance' | 'menu' | 'close' | 'refresh' | 'search' | 'chevron';
 type PlatformBootstrap = { actorRole: AdminRole; generatedAt: string; merchantCount: number; legacyTrialRecords: number };
 type Enrollment = { factorId: string; qrCode: string; secret: string };
 type NavItem = { id: AdminRoute; label: string; description: string; merchantScoped?: boolean };
@@ -70,6 +72,9 @@ const NAV_GROUPS: NavGroup[] = [
   { id: 'operations', label: 'Platform Operations', icon: 'operations', items: [
     { id: 'operations/whatsapp', label: 'WhatsApp Operations', description: 'Cross-merchant connection health' },
     { id: 'operations/ai', label: 'AI Operations', description: 'Parser readiness and diagnostics' },
+  ] },
+  { id: 'reports', label: 'Insights & Reports', icon: 'reports', items: [
+    { id: 'reports/revenue', label: 'Revenue Dashboard', description: 'Collections, commercial value and installment exposure' },
   ] },
   { id: 'governance', label: 'Governance', icon: 'governance', items: [
     { id: 'governance/audit', label: 'Audit Log', description: 'Privileged administrator activity' },
@@ -247,6 +252,7 @@ function WorkspaceShell({ session, bootstrap, audit, onReload, onAuditRefresh, o
       case 'communications/history': return <PageFrame eyebrow="Communications" title="Campaign history" description="Review audited merchant-message publications independently from message composition."><CampaignHistory audit={audit} /></PageFrame>;
       case 'operations/whatsapp': return <PageFrame eyebrow="Platform Operations" title="WhatsApp operations" description="Monitor cross-merchant WhatsApp connection health without mixing AI diagnostics into the same page."><WhatsAppOperations session={session} /></PageFrame>;
       case 'operations/ai': return <PageFrame eyebrow="Platform Operations" title="AI operations" description="Review server-side parser readiness and run controlled diagnostics within ProcessEdge authority."><AiOperations session={session} actorRole={bootstrap.actorRole} /></PageFrame>;
+      case 'reports/revenue': return <RevenueDashboard session={session} refreshKey={bootstrap.generatedAt} />;
       case 'governance/audit': return <AuditPage audit={audit} onRefresh={onAuditRefresh} />;
     }
   })();
@@ -323,6 +329,7 @@ function Icon({ name }: { name: IconName }) {
       case 'setup': return <><path d="M4 7h16M6 7v12h12V7" /><path d="M9 4h6v6H9zM9 14h6" /></>;
       case 'communications': return <><path d="M4 5h16v11H8l-4 4z" /><path d="M8 9h8M8 12h6" /></>;
       case 'operations': return <><circle cx="12" cy="12" r="3" /><path d="M19 12h2M3 12h2M12 3v2M12 19v2M17 7l1.5-1.5M5.5 18.5 7 17M17 17l1.5 1.5M5.5 5.5 7 7" /></>;
+      case 'reports': return <><path d="M4 20V11M10 20V5M16 20v-8M22 20H2" /><path d="m4 8 6-4 6 5 4-3" /></>;
       case 'governance': return <><path d="M6 3h12v18H6z" /><path d="M9 7h6M9 11h6M9 15h4" /></>;
       case 'menu': return <path d="M4 7h16M4 12h16M4 17h16" />;
       case 'close': return <path d="M6 6l12 12M18 6 6 18" />;
@@ -345,6 +352,8 @@ function routeFromHash(): AdminRoute {
     'communications/messages': 'communications/compose',
     operations: 'operations/whatsapp',
     'operations/health': 'operations/whatsapp',
+    revenue: 'reports/revenue',
+    reports: 'reports/revenue',
     audit: 'governance/audit',
     settings: 'overview/dashboard',
   };
