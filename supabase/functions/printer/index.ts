@@ -1,11 +1,14 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.115.0';
 
 type JsonRecord = Record<string, unknown>;
-type PrinterAction = 'save_printer' | 'request_print' | 'update_print';
+type PrinterAction = 'save_printer' | 'request_print' | 'request_business_document_print' | 'update_print';
+type BusinessDocumentType = 'sales_invoice' | 'payment_receipt';
+type SupabaseClient = ReturnType<typeof createClient>;
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const MAX_BODY_BYTES = 16_384;
+const MONEY_EPSILON = 0.005;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -55,6 +58,10 @@ Deno.serve(async (request) => {
 
   if (membershipError) return json({ error: membershipError.message }, 400);
   if (!membership) return json({ error: 'You do not have access to this business' }, 403);
+
+  if (action === 'request_business_document_print') {
+    return requestBusinessDocumentPrint(admin, token, body, tenantId, userId);
+  }
 
   let rpcName: string;
   let rpcArgs: JsonRecord;
@@ -129,23 +136,305 @@ Deno.serve(async (request) => {
   const { data: result, error } = await admin.rpc(rpcName, rpcArgs);
   if (error || !result || typeof result !== 'object') {
     const message = error?.message ?? 'SellerTray could not complete this printer action';
-    const status = /permission|access|role|read-only|authentication/i.test(message)
-      ? 403
-      : /not found/i.test(message)
-        ? 404
-        : /already|different facts|unavailable|issued payment receipt|same branch|immutable|must start/i.test(message)
-          ? 409
-          : 400;
-    return json({ error: message }, status);
+    return json({ error: message }, printerErrorStatus(message));
   }
 
   return json({ ok: true, action, ...result });
 });
 
+async function requestBusinessDocumentPrint(
+  adminClient: SupabaseClient,
+  token: string,
+  body: JsonRecord,
+  tenantId: string,
+  userId: string,
+): Promise<Response> {
+  const printerId = cleanUuid(body.printerId);
+  const orderId = cleanUuid(body.orderId);
+  const documentType = cleanBusinessDocumentType(body.documentType);
+  const paymentId = body.paymentId === null || body.paymentId === undefined ? null : cleanUuid(body.paymentId);
+  const requestKey = cleanText(body.requestKey, 128);
+  if (!printerId || !orderId || !documentType || !requestKey
+      || (documentType === 'payment_receipt' && !paymentId)
+      || (documentType === 'sales_invoice' && paymentId !== null)) {
+    return json({ error: 'Printer, order, business document and request key are required' }, 400);
+  }
+
+  const { data: printer, error: printerError } = await adminClient
+    .from('sellertray_printers')
+    .select('id,branch_id,register_id,display_name,transport,hardware_identifier,paper_width_mm,is_active')
+    .eq('tenant_id', tenantId)
+    .eq('id', printerId)
+    .maybeSingle();
+  if (printerError) return json({ error: printerError.message }, 400);
+  if (!printer || printer.is_active !== true || printer.transport !== 'bluetooth') {
+    return json({ error: 'Selected printer is unavailable' }, 409);
+  }
+
+  // Preserve the same branch/capability authority as the existing SQL print command.
+  // The service key remains the apikey while the caller JWT is the Authorization
+  // credential, so auth.uid() and RLS/capability checks resolve to the signed-in user.
+  const userClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
+  });
+  const { data: capabilities, error: capabilityError } = await userClient.rpc(
+    'get_sellertray_printing_capabilities',
+    { p_tenant_id: tenantId, p_branch_id: printer.branch_id },
+  );
+  if (capabilityError) return json({ error: capabilityError.message }, 403);
+  const capability = Array.isArray(capabilities) ? capabilities[0] : null;
+  if (!capability || capability.can_print_receipt !== true) {
+    return json({ error: 'You do not have permission to print in this branch' }, 403);
+  }
+
+  const existing = await loadPrintJobByRequestKey(adminClient, tenantId, requestKey);
+  if (existing.error) return json({ error: existing.error }, 400);
+  if (existing.job) {
+    const snapshot = objectOrNull(existing.job.content_snapshot);
+    const matches = existing.job.printer_id === printerId
+      && existing.job.order_id === orderId
+      && existing.job.job_type === 'receipt'
+      && snapshot?.documentType === documentType
+      && (documentType !== 'payment_receipt' || snapshot?.paymentId === paymentId);
+    if (!matches) return json({ error: 'This print request key is already used for different facts' }, 409);
+    return json({ ok: true, action: 'request_business_document_print', ...printJobState(existing.job, true) });
+  }
+
+  const { data: order, error: orderError } = await adminClient
+    .from('orders')
+    .select('id,branch_id,branch_name_snapshot,pos_operator_name,public_order_id,status,fulfillment_status,payment_status,pos_payment_terms,amount_paid,total_amount,currency,customer_id,source')
+    .eq('tenant_id', tenantId)
+    .eq('id', orderId)
+    .maybeSingle();
+  if (orderError) return json({ error: orderError.message }, 400);
+  if (!order) return json({ error: 'Order not found' }, 404);
+  if (order.branch_id !== printer.branch_id) return json({ error: 'Sale document and printer must belong to the same branch' }, 409);
+  if (order.source !== 'pos') return json({ error: 'This Mobile print path is only available for POS sales' }, 409);
+  if (order.status !== 'completed') return json({ error: 'Only a completed POS sale can produce this sale document' }, 409);
+
+  const [{ data: invoice, error: invoiceError }, { data: business, error: businessError }, { data: itemRows, error: itemsError }] = await Promise.all([
+    adminClient
+      .from('order_financial_documents')
+      .select('id,document_reference,currency,amount,status,issued_at')
+      .eq('tenant_id', tenantId)
+      .eq('order_id', orderId)
+      .eq('document_type', 'invoice')
+      .eq('status', 'issued')
+      .order('issued_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    adminClient.from('tenants').select('name,business_email,business_phone').eq('id', tenantId).maybeSingle(),
+    adminClient
+      .from('order_items')
+      .select('id,item_name,quantity,selected_uom,unit_price,line_total,created_at')
+      .eq('tenant_id', tenantId)
+      .eq('order_id', orderId)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true }),
+  ]);
+  if (invoiceError) return json({ error: invoiceError.message }, 400);
+  if (businessError) return json({ error: businessError.message }, 400);
+  if (itemsError) return json({ error: itemsError.message }, 400);
+  if (!invoice) return json({ error: 'This sale does not have an issued Sales Invoice' }, 409);
+  if (!business) return json({ error: 'Business print identity is unavailable' }, 409);
+  if (!itemRows?.length) return json({ error: 'This Sales Invoice has no historical sale lines' }, 409);
+
+  const invoiceAmount = money(invoice.amount);
+  const governedOrderTotal = money(order.total_amount);
+  if (Math.abs(invoiceAmount - governedOrderTotal) > 0.01) {
+    return json({ error: 'The issued Sales Invoice total does not match the governed sale total' }, 409);
+  }
+
+  let customerName = 'Walk-in Customer';
+  let customerPhone: string | null = null;
+  if (order.customer_id) {
+    const { data: customer, error: customerError } = await adminClient
+      .from('customers')
+      .select('display_name,phone,wa_id')
+      .eq('tenant_id', tenantId)
+      .eq('id', order.customer_id)
+      .maybeSingle();
+    if (customerError) return json({ error: customerError.message }, 400);
+    if (customer) {
+      customerName = cleanText(customer.display_name, 160)
+        ?? cleanText(customer.phone, 80)
+        ?? cleanText(customer.wa_id, 80)
+        ?? customerName;
+      customerPhone = cleanText(customer.phone, 80) ?? cleanText(customer.wa_id, 80);
+    }
+  }
+
+  const items = itemRows.map((item) => ({
+    name: String(item.item_name ?? 'Item'),
+    quantity: numberValue(item.quantity),
+    uom: String(item.selected_uom ?? 'Each'),
+    unitPrice: money(item.unit_price),
+    lineTotal: money(item.line_total),
+  }));
+  const subtotalAmount = roundMoney(items.reduce((sum, item) => sum + item.lineTotal, 0));
+  const taxAmount = roundMoney(Math.max(invoiceAmount - subtotalAmount, 0));
+  const taxRatePercent = subtotalAmount > MONEY_EPSILON
+    ? roundNumber((taxAmount / subtotalAmount) * 100, 4)
+    : 0;
+  const branchName = cleanText(order.branch_name_snapshot, 160) ?? 'Branch';
+  const cashierName = cleanText(order.pos_operator_name, 160);
+  const fulfillmentLabel = titleCase(String(order.fulfillment_status ?? 'pending'));
+
+  let snapshot: JsonRecord;
+  if (documentType === 'sales_invoice') {
+    snapshot = {
+      formatVersion: 1,
+      documentType: 'sales_invoice',
+      businessName: String(business.name ?? 'SellerTray Business'),
+      businessEmail: cleanText(business.business_email, 200),
+      businessPhone: cleanText(business.business_phone, 80),
+      branchName,
+      cashierName,
+      orderReference: String(order.public_order_id ?? order.id),
+      invoiceReference: String(invoice.document_reference),
+      issuedAt: String(invoice.issued_at),
+      customerName,
+      customerPhone,
+      currency: String(invoice.currency ?? order.currency ?? 'NGN'),
+      subtotalAmount,
+      taxApplied: taxAmount > MONEY_EPSILON,
+      taxRatePercent,
+      taxAmount,
+      taxDisplayBreakdown: taxAmount > MONEY_EPSILON,
+      grossAmount: invoiceAmount,
+      paymentLabel: originalInvoicePaymentLabel(String(order.pos_payment_terms ?? ''), String(order.payment_status ?? 'unpaid')),
+      fulfillmentLabel,
+      items,
+      platformAttribution: 'Powered by SellerTray',
+    };
+  } else {
+    const { data: payment, error: paymentError } = await adminClient
+      .from('order_payments')
+      .select('id,method_type,provider,status,exception_state,amount,currency,provider_reference,provider_transaction_id,confirmed_at,created_at')
+      .eq('tenant_id', tenantId)
+      .eq('order_id', orderId)
+      .eq('id', paymentId)
+      .maybeSingle();
+    if (paymentError) return json({ error: paymentError.message }, 400);
+    if (!payment || payment.status !== 'confirmed' || payment.exception_state !== 'none') {
+      return json({ error: 'Only a confirmed payment can produce a Payment Receipt' }, 409);
+    }
+    snapshot = {
+      formatVersion: 1,
+      documentType: 'payment_receipt',
+      businessName: String(business.name ?? 'SellerTray Business'),
+      businessEmail: cleanText(business.business_email, 200),
+      businessPhone: cleanText(business.business_phone, 80),
+      branchName,
+      cashierName,
+      orderReference: String(order.public_order_id ?? order.id),
+      paymentId: String(payment.id),
+      paymentReference: cleanText(payment.provider_reference, 200) ?? cleanText(payment.provider_transaction_id, 200),
+      issuedAt: String(payment.confirmed_at ?? payment.created_at),
+      customerName,
+      customerPhone,
+      currency: String(payment.currency ?? invoice.currency ?? order.currency ?? 'NGN'),
+      amountReceived: money(payment.amount),
+      paymentMethod: String(payment.method_type ?? 'payment'),
+      paymentProvider: String(payment.provider ?? payment.method_type ?? 'payment'),
+      paymentLabel: paymentStatusLabel(String(order.payment_status ?? 'unpaid')),
+      fulfillmentLabel,
+      platformAttribution: 'Powered by SellerTray',
+    };
+  }
+
+  const { data: inserted, error: insertError } = await adminClient
+    .from('sellertray_print_jobs')
+    .insert({
+      tenant_id: tenantId,
+      branch_id: printer.branch_id,
+      register_id: printer.register_id,
+      printer_id: printer.id,
+      // The current live schema has the legacy receipt/test transport class only.
+      // Business meaning is governed by content_snapshot.documentType.
+      job_type: 'receipt',
+      order_id: orderId,
+      financial_document_id: invoice.id,
+      request_key: requestKey,
+      status: 'requested',
+      transport: 'bluetooth',
+      printer_name: printer.display_name,
+      hardware_identifier: printer.hardware_identifier,
+      paper_width_mm: printer.paper_width_mm,
+      content_snapshot: snapshot,
+      requested_by_user_id: userId,
+      requested_at: new Date().toISOString(),
+    })
+    .select('id,tenant_id,branch_id,register_id,printer_id,job_type,order_id,financial_document_id,status,transport,printer_name,hardware_identifier,paper_width_mm,content_snapshot,requested_at,started_at,completed_at,failed_at,failure_code,failure_message')
+    .single();
+
+  if (insertError || !inserted) {
+    if (insertError?.code === '23505') {
+      const raced = await loadPrintJobByRequestKey(adminClient, tenantId, requestKey);
+      if (!raced.error && raced.job) {
+        const racedSnapshot = objectOrNull(raced.job.content_snapshot);
+        const matches = raced.job.printer_id === printerId
+          && raced.job.order_id === orderId
+          && racedSnapshot?.documentType === documentType
+          && (documentType !== 'payment_receipt' || racedSnapshot?.paymentId === paymentId);
+        if (matches) return json({ ok: true, action: 'request_business_document_print', ...printJobState(raced.job, true) });
+      }
+    }
+    return json({ error: insertError?.message ?? 'SellerTray could not create this print attempt' }, 400);
+  }
+
+  return json({ ok: true, action: 'request_business_document_print', ...printJobState(inserted, false) });
+}
+
+async function loadPrintJobByRequestKey(
+  adminClient: SupabaseClient,
+  tenantId: string,
+  requestKey: string,
+): Promise<{ job: Record<string, any> | null; error: string | null }> {
+  const { data, error } = await adminClient
+    .from('sellertray_print_jobs')
+    .select('id,tenant_id,branch_id,register_id,printer_id,job_type,order_id,financial_document_id,status,transport,printer_name,hardware_identifier,paper_width_mm,content_snapshot,requested_at,started_at,completed_at,failed_at,failure_code,failure_message')
+    .eq('tenant_id', tenantId)
+    .eq('request_key', requestKey)
+    .maybeSingle();
+  return { job: data as Record<string, any> | null, error: error?.message ?? null };
+}
+
+function printJobState(row: Record<string, any>, idempotentReplay: boolean): JsonRecord {
+  return {
+    jobId: row.id,
+    status: row.status,
+    jobType: row.job_type,
+    orderId: row.order_id ?? null,
+    financialDocumentId: row.financial_document_id ?? null,
+    printerId: row.printer_id,
+    printerName: row.printer_name,
+    transport: row.transport,
+    hardwareIdentifier: row.hardware_identifier,
+    paperWidthMm: row.paper_width_mm,
+    contentSnapshot: row.content_snapshot,
+    requestedAt: row.requested_at ?? null,
+    startedAt: row.started_at ?? null,
+    completedAt: row.completed_at ?? null,
+    failedAt: row.failed_at ?? null,
+    failureCode: row.failure_code ?? null,
+    failureMessage: row.failure_message ?? null,
+    idempotentReplay,
+  };
+}
+
 function cleanAction(value: unknown): PrinterAction | null {
-  return value === 'save_printer' || value === 'request_print' || value === 'update_print'
+  return value === 'save_printer'
+    || value === 'request_print'
+    || value === 'request_business_document_print'
+    || value === 'update_print'
     ? value
     : null;
+}
+
+function cleanBusinessDocumentType(value: unknown): BusinessDocumentType | null {
+  return value === 'sales_invoice' || value === 'payment_receipt' ? value : null;
 }
 
 function cleanUuid(value: unknown): string | null {
@@ -160,6 +449,52 @@ function cleanText(value: unknown, max: number): string | null {
   if (typeof value !== 'string') return null;
   const clean = value.trim().replace(/\s+/g, ' ');
   return clean ? clean.slice(0, max) : null;
+}
+
+function objectOrNull(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function money(value: unknown): number {
+  return roundMoney(numberValue(value));
+}
+
+function numberValue(value: unknown): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function roundMoney(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function roundNumber(value: number, decimals: number): number {
+  const scale = 10 ** decimals;
+  return Math.round((value + Number.EPSILON) * scale) / scale;
+}
+
+function titleCase(value: string): string {
+  return value.replace(/[_-]+/g, ' ').split(' ').filter(Boolean).map((part) => part[0]?.toUpperCase() + part.slice(1)).join(' ');
+}
+
+function originalInvoicePaymentLabel(paymentTerms: string, paymentStatus: string): string {
+  if (paymentTerms === 'partial') return 'Partial';
+  if (paymentTerms === 'pay_later') return 'Pay later';
+  return paymentStatusLabel(paymentStatus);
+}
+
+function paymentStatusLabel(paymentStatus: string): string {
+  return titleCase(paymentStatus || 'unpaid');
+}
+
+function printerErrorStatus(message: string): number {
+  return /permission|access|role|read-only|authentication/i.test(message)
+    ? 403
+    : /not found/i.test(message)
+      ? 404
+      : /already|different facts|unavailable|issued payment receipt|same branch|immutable|must start/i.test(message)
+        ? 409
+        : 400;
 }
 
 async function readRequestTextLimited(

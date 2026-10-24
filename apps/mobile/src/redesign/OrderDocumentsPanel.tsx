@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { loadBusinesses, type MerchantBusiness } from '../data/businessRepository';
 import { loadActiveCashShift } from '../data/cashShiftRepository';
 import {
   loadOrderFinancials,
@@ -10,18 +9,13 @@ import {
   type OrderPaymentAttempt,
 } from '../data/orderPaymentsRepository';
 import {
-  loadPrinterReceiptSettings,
   loadPrinters,
   loadPrintingCapabilities,
-  type PrinterReceiptSettings,
+  requestBusinessDocumentPrint,
   type SellerTrayPrinter,
 } from '../data/printerRepository';
 import type { MerchantOrder } from '../domain/order';
-import {
-  buildSalesInvoiceSnapshot,
-  printPaymentReceiptDocument,
-  printSalesInvoiceDocument,
-} from '../printing/mobileBusinessDocuments';
+import { executePreparedPrintJob } from '../printing/printExecutor';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
@@ -34,12 +28,6 @@ type Props = {
 type FinancialState = {
   documents: OrderFinancialDocument[];
   payments: OrderPaymentAttempt[];
-};
-
-type PrintContext = {
-  business: MerchantBusiness;
-  printer: SellerTrayPrinter;
-  receiptSettings: PrinterReceiptSettings;
 };
 
 export function OrderDocumentsPanel({ tenantId, currency, order }: Props) {
@@ -80,32 +68,36 @@ export function OrderDocumentsPanel({ tenantId, currency, order }: Props) {
     return next;
   }
 
-  async function loadPrintContext(): Promise<PrintContext> {
-    const [capabilities, businesses, activeShift] = await Promise.all([
+  async function loadPrinter(): Promise<SellerTrayPrinter> {
+    const [capabilities, activeShift] = await Promise.all([
       loadPrintingCapabilities(tenantId, order.branchId),
-      loadBusinesses(),
       loadActiveCashShift(tenantId, order.branchId),
     ]);
     if (!capabilities.canPrintReceipt) throw new Error('Printing is not available for your role.');
-    const business = businesses.find((candidate) => candidate.id === tenantId);
-    if (!business) throw new Error('SellerTray could not load this Business for printing.');
     const printers = await loadPrinters(tenantId, order.branchId, null);
     const printer = choosePrinter(printers, activeShift?.registerId ?? null);
     if (!printer) throw new Error('No active printer is available for this Branch. Set one printer as default in Devices & printers, then try again.');
-    const receiptSettings = await loadPrinterReceiptSettings(tenantId, printer.id);
-    return { business, printer, receiptSettings };
+    return printer;
   }
 
   async function printSalesInvoice() {
     if (printingKey) return;
-    setPrintingKey('invoice'); setError(null); setNotice(null);
+    setPrintingKey('invoice');
+    setError(null);
+    setNotice(null);
     try {
-      const [context, latest] = await Promise.all([loadPrintContext(), refreshFinancials()]);
+      const [printer, latest] = await Promise.all([loadPrinter(), refreshFinancials()]);
       const latestInvoice = latest.documents.find((document) => document.documentType === 'invoice' && document.status === 'issued');
       if (!latestInvoice) throw new Error('This sale does not have an issued Sales Invoice.');
-      const snapshot = buildSalesInvoiceSnapshot({ business: context.business, order, invoice: latestInvoice });
-      await printSalesInvoiceDocument(context.printer, snapshot);
-      setNotice(`Sales Invoice sent to ${context.printer.displayName}.`);
+      const job = await requestBusinessDocumentPrint({
+        tenantId,
+        printerId: printer.id,
+        orderId: order.id,
+        documentType: 'sales_invoice',
+      });
+      if (job.contentSnapshot.documentType !== 'sales_invoice') throw new Error('SellerTray prepared the wrong sale document.');
+      await executePreparedPrintJob(tenantId, job);
+      setNotice(`Sales Invoice sent to ${printer.displayName}.`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to print this Sales Invoice.');
     } finally {
@@ -115,19 +107,27 @@ export function OrderDocumentsPanel({ tenantId, currency, order }: Props) {
 
   async function printPaymentReceipt(paymentId: string) {
     if (printingKey) return;
-    setPrintingKey(paymentId); setError(null); setNotice(null);
+    setPrintingKey(paymentId);
+    setError(null);
+    setNotice(null);
     try {
-      const [context, latest] = await Promise.all([loadPrintContext(), refreshFinancials()]);
+      const [printer, latest] = await Promise.all([loadPrinter(), refreshFinancials()]);
       const payment = latest.payments.find((entry) => entry.id === paymentId);
       if (!payment || payment.status !== 'confirmed' || payment.exceptionState !== 'none') {
         throw new Error('This payment is not currently eligible for a Payment Receipt.');
       }
-      await printPaymentReceiptDocument(context.printer, context.receiptSettings, {
-        business: context.business,
-        order,
-        payment,
+      const job = await requestBusinessDocumentPrint({
+        tenantId,
+        printerId: printer.id,
+        orderId: order.id,
+        documentType: 'payment_receipt',
+        paymentId,
       });
-      setNotice(`Payment Receipt sent to ${context.printer.displayName}.`);
+      if (job.contentSnapshot.documentType !== 'payment_receipt' || job.contentSnapshot.paymentId !== paymentId) {
+        throw new Error('SellerTray prepared the wrong payment receipt.');
+      }
+      await executePreparedPrintJob(tenantId, job);
+      setNotice(`Payment Receipt sent to ${printer.displayName}.`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to print this Payment Receipt.');
     } finally {

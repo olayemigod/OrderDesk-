@@ -23,6 +23,7 @@ The original sale document must not change identity merely because payment is la
 9. Overpayment remains server-blocked against the governed outstanding balance. Clients may provide earlier UX validation but must not weaken the server rule.
 10. Thermal and screen monetary rendering must adapt to large totals. Commercial values must wrap, shrink, or reflow safely rather than truncate digits, overlap controls, or silently display a different amount.
 11. Printing failure never rolls back or replays the commercial transaction. Print/reprint is presentation/audit activity only.
+12. Every Sales Invoice print/reprint and Payment Receipt print/reprint must create an immutable governed print attempt and transition through the shared print lifecycle. Mobile must not bypass print-job audit by writing these business documents directly to Bluetooth. The live print-job schema may retain a legacy internal transport/audit class while the immutable `contentSnapshot.documentType` carries the actual business meaning; that compatibility detail must never change the user-facing document identity.
 
 ## Offline replay
 
@@ -51,6 +52,7 @@ When this boundary is touched, verify at minimum:
 - overpayment rejection;
 - multiple confirmed collections;
 - payment-specific reprints;
+- immutable audited print attempts for original prints and reprints;
 - original Sales Invoice unchanged after later collection;
 - large totals on compact Mobile layouts and 58 mm / 80 mm thermal output;
 - offline Partial/Pay Later replay, repeated replay, retained outstanding balance and no duplicate payment/receivable effect.
