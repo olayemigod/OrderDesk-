@@ -59,10 +59,16 @@ const SETTINGS_TABS: Array<{ id: SettingsTab; label: string }> = [
   { id: 'pos', label: 'POS Policy' },
   { id: 'payments', label: 'Payments' },
 ];
+const BUSINESS_LOGO_BUCKET = 'business-logos';
+const BUSINESS_LOGO_MAX_BYTES = 5 * 1024 * 1024;
+const BUSINESS_LOGO_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 
 export default function SettingsManagement({ tenantId }: { tenantId: string }) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('business');
   const [profile, setProfile] = useState<BusinessProfile>({ name: '', businessEmail: '', businessPhone: '', businessType: '', logoUrl: '', currency: 'NGN', timezone: 'Africa/Lagos' });
+  const [businessLogoFile, setBusinessLogoFile] = useState<File | null>(null);
+  const [removeBusinessLogo, setRemoveBusinessLogo] = useState(false);
+  const [logoInputKey, setLogoInputKey] = useState(0);
   const [policy, setPolicy] = useState<OperationalPolicy>(DEFAULT_POLICY);
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
   const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
@@ -111,6 +117,9 @@ export default function SettingsManagement({ tenantId }: { tenantId: string }) {
       if (methodsResult.error) throw methodsResult.error;
       const profileRow = Array.isArray(profileResult.data) ? profileResult.data[0] : profileResult.data;
       setProfile(parseBusinessProfile(profileRow));
+      setBusinessLogoFile(null);
+      setRemoveBusinessLogo(false);
+      setLogoInputKey((current) => current + 1);
       setPolicy(parsePolicy(policyResult.data));
       const nextMethods = ((methodsResult.data ?? []) as Array<Record<string, unknown>>).map(parsePaymentMethod).filter((row) => row.id);
       setMethods(nextMethods);
@@ -122,27 +131,83 @@ export default function SettingsManagement({ tenantId }: { tenantId: string }) {
     finally { setLoading(false); }
   }
 
+  function selectBusinessLogo(file: File | null) {
+    clearNotice();
+    if (!file) {
+      setBusinessLogoFile(null);
+      return;
+    }
+    if (!BUSINESS_LOGO_MIME_TYPES.has(file.type)) {
+      setBusinessLogoFile(null);
+      setLogoInputKey((current) => current + 1);
+      setError('Business logo must be a PNG, JPG, or WebP image.');
+      return;
+    }
+    if (file.size > BUSINESS_LOGO_MAX_BYTES) {
+      setBusinessLogoFile(null);
+      setLogoInputKey((current) => current + 1);
+      setError('Business logo must be 5 MB or smaller.');
+      return;
+    }
+    setBusinessLogoFile(file);
+    setRemoveBusinessLogo(false);
+  }
+
   async function saveProfile(event: FormEvent) {
     event.preventDefault(); setBusy('profile'); clearNotice();
+    let uploadedLogoPath: string | null = null;
+    const previousLogoUrl = clean(profile.logoUrl);
+    let nextLogoUrl = removeBusinessLogo ? null : previousLogoUrl;
     try {
       const name = profile.name.trim(); const currency = profile.currency.trim().toUpperCase(); const timezone = profile.timezone.trim();
       if (!name) throw new Error('Business name is required.');
       if (!/^[A-Z]{3}$/.test(currency)) throw new Error('Currency must be a 3-letter code.');
       if (!timezone) throw new Error('Timezone is required.');
+
+      if (businessLogoFile) {
+        const extension = businessLogoExtension(businessLogoFile.type);
+        uploadedLogoPath = `${tenantId}/business-logo-${crypto.randomUUID()}.${extension}`;
+        const { error: uploadError } = await supabase.storage.from(BUSINESS_LOGO_BUCKET).upload(uploadedLogoPath, businessLogoFile, {
+          contentType: businessLogoFile.type,
+          upsert: false,
+        });
+        if (uploadError) throw uploadError;
+        const { data: publicLogo } = supabase.storage.from(BUSINESS_LOGO_BUCKET).getPublicUrl(uploadedLogoPath);
+        nextLogoUrl = publicLogo.publicUrl;
+        if (!nextLogoUrl) throw new Error('SellerTray could not resolve the uploaded business logo.');
+      }
+
       const { data, error: rpcError } = await supabase.rpc('save_sellertray_business_profile', {
         p_tenant_id: tenantId,
         p_name: name,
         p_business_email: clean(profile.businessEmail),
         p_business_phone: clean(profile.businessPhone),
         p_business_type: clean(profile.businessType),
-        p_logo_url: clean(profile.logoUrl),
+        p_logo_url: nextLogoUrl,
         p_currency: currency,
         p_timezone: timezone,
       });
       if (rpcError) throw rpcError;
-      setProfile(parseBusinessProfile(data));
+
+      const savedProfile = parseBusinessProfile(data);
+      const previousLogoPath = managedBusinessLogoPath(previousLogoUrl, tenantId);
+      setProfile(savedProfile);
+      setBusinessLogoFile(null);
+      setRemoveBusinessLogo(false);
+      setLogoInputKey((current) => current + 1);
       setMessage('Business profile saved.');
-    } catch (cause) { setError(errorMessage(cause, 'Unable to save the business profile.')); }
+
+      if (previousLogoPath && previousLogoUrl !== nextLogoUrl && previousLogoPath !== uploadedLogoPath) {
+        const { error: cleanupError } = await supabase.storage.from(BUSINESS_LOGO_BUCKET).remove([previousLogoPath]);
+        if (cleanupError) console.warn('Unable to remove the previous SellerTray business logo.', cleanupError);
+      }
+    } catch (cause) {
+      if (uploadedLogoPath) {
+        const { error: cleanupError } = await supabase.storage.from(BUSINESS_LOGO_BUCKET).remove([uploadedLogoPath]);
+        if (cleanupError) console.warn('Unable to clean up an uncommitted SellerTray business logo.', cleanupError);
+      }
+      setError(errorMessage(cause, 'Unable to save the business profile.'));
+    }
     finally { setBusy(null); }
   }
 
@@ -252,7 +317,14 @@ export default function SettingsManagement({ tenantId }: { tenantId: string }) {
           <Field label="Currency"><SellerTrayInput maxLength={3} value={profile.currency} onChange={(event) => setProfile((current) => ({ ...current, currency: event.target.value.toUpperCase() }))} /></Field>
           <Field label="Timezone"><SellerTrayInput value={profile.timezone} onChange={(event) => setProfile((current) => ({ ...current, timezone: event.target.value }))} placeholder="Africa/Lagos" /></Field>
         </div>
-        <Field label="Logo URL"><SellerTrayInput type="url" value={profile.logoUrl} onChange={(event) => setProfile((current) => ({ ...current, logoUrl: event.target.value }))} placeholder="https://…" /></Field>
+        <div className="settings-field">
+          <span>Business logo</span>
+          {profile.logoUrl && !businessLogoFile && !removeBusinessLogo ? <img src={profile.logoUrl} alt="Current business logo" style={{ width: 96, height: 96, objectFit: 'contain', borderRadius: 12 }} /> : null}
+          <SellerTrayInput key={logoInputKey} type="file" accept="image/png,image/jpeg,image/webp" disabled={busy !== null} onChange={(event) => selectBusinessLogo(event.target.files?.[0] ?? null)} />
+          {businessLogoFile ? <small className="muted">Selected: {businessLogoFile.name}</small> : <small className="muted">PNG, JPG or WebP. Maximum 5 MB.</small>}
+          {removeBusinessLogo ? <small className="muted">The current logo will be removed when you save the business profile.</small> : null}
+          {(profile.logoUrl || businessLogoFile) && !removeBusinessLogo ? <div><button type="button" className="secondary-button" disabled={busy !== null} onClick={() => { setBusinessLogoFile(null); setRemoveBusinessLogo(true); setLogoInputKey((current) => current + 1); clearNotice(); }}>Remove logo</button></div> : null}
+        </div>
         <div className="settings-actions"><button className="primary-button" disabled={busy !== null}>{busy === 'profile' ? 'Saving' : 'Save business profile'}</button></div>
       </form>
     </div>
@@ -346,6 +418,18 @@ function parsePaymentMethod(row: Record<string, unknown>): PaymentMethod {
 }
 function isPaymentMethodType(value: string): value is PaymentMethodType { return ['bank_transfer','card_terminal','paystack','flutterwave','cash_on_delivery','pay_on_pickup'].includes(value); }
 function paymentLabel(type: PaymentMethodType): string { if (type === 'bank_transfer') return 'Bank Transfer'; if (type === 'card_terminal') return 'Card Terminal'; if (type === 'cash_on_delivery') return 'Cash on Delivery'; if (type === 'pay_on_pickup') return 'Pay on Pickup'; return type === 'paystack' ? 'Paystack' : 'Flutterwave'; }
+function businessLogoExtension(mimeType: string): 'png' | 'jpg' | 'webp' { if (mimeType === 'image/png') return 'png'; if (mimeType === 'image/webp') return 'webp'; return 'jpg'; }
+function managedBusinessLogoPath(urlValue: string | null, tenantId: string): string | null {
+  if (!urlValue) return null;
+  try {
+    const url = new URL(urlValue);
+    const marker = `/storage/v1/object/public/${BUSINESS_LOGO_BUCKET}/`;
+    const markerIndex = url.pathname.indexOf(marker);
+    if (markerIndex < 0) return null;
+    const objectName = decodeURIComponent(url.pathname.slice(markerIndex + marker.length));
+    return objectName.startsWith(`${tenantId}/business-logo-`) ? objectName : null;
+  } catch { return null; }
+}
 function clean(value: string): string | null { const next = value.trim(); return next || null; }
 function optionalText(value: unknown): string { return typeof value === 'string' ? value : ''; }
 function booleanValue(value: unknown, fallback: boolean): boolean { return typeof value === 'boolean' ? value : fallback; }
