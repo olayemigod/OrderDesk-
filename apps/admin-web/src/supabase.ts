@@ -37,26 +37,63 @@ export async function invokeJson<T>(
     requestBody.requestId = requestId;
   }
 
-  let response: Response;
-  try {
-    response = await fetch(`${supabaseUrl}/functions/v1/${encodeURIComponent(functionName)}`, {
+  const sendRequest = async (accessToken: string): Promise<Response> => await fetch(
+    `${supabaseUrl}/functions/v1/${encodeURIComponent(functionName)}`,
+    {
       method: 'POST',
       signal: AbortSignal.timeout(15_000),
       headers: {
         apikey: supabasePublishableKey,
-        authorization: `Bearer ${activeSession.access_token}`,
+        authorization: `Bearer ${accessToken}`,
         'content-type': 'application/json',
       },
       body: JSON.stringify(requestBody),
-    });
+    },
+  );
+
+  let response: Response;
+  try {
+    response = await sendRequest(activeSession.access_token);
   } catch (error) {
     // Keep the publish UUID after an uncertain network failure. A retry of the
     // same payload reuses it and the database returns the original campaign.
     if (optionalAuditRequest) return emptyAuditResponse<T>();
-    if (error instanceof DOMException && error.name === 'TimeoutError') {
-      throw new Error('SellerTray did not respond in time. Check the operation status before retrying.');
+    throw transportError(error);
+  }
+
+  // A persisted browser session can outlive the access token accepted by the
+  // privileged Edge Function. Refresh once with Supabase Auth and replay the
+  // same idempotent request. If the refreshed identity is still rejected,
+  // clear only the local Admin session so the existing sign-in screen becomes
+  // the next actionable state instead of leaving the user on a dead-end retry.
+  if (response.status === 401) {
+    let refreshedSession: Session | null = null;
+    try {
+      const { data, error } = await supabase.auth.refreshSession();
+      if (!error) refreshedSession = data.session;
+    } catch {
+      refreshedSession = null;
     }
-    throw error;
+
+    if (refreshedSession?.access_token) {
+      try {
+        response = await sendRequest(refreshedSession.access_token);
+      } catch (error) {
+        if (optionalAuditRequest) return emptyAuditResponse<T>();
+        throw transportError(error);
+      }
+    }
+
+    if (response.status === 401) {
+      if (publishStorageKey) sessionStorage.removeItem(publishStorageKey);
+      try {
+        await supabase.auth.signOut({ scope: 'local' });
+      } catch {
+        // The local auth state is best-effort cleared by Supabase. Preserve the
+        // authentication error rather than replacing it with a sign-out error.
+      }
+      throw new Error('Authentication required. Sign in again.');
+    }
   }
 
   const raw = await response.text();
@@ -85,6 +122,13 @@ export async function invokeJson<T>(
 
   if (publishStorageKey) sessionStorage.removeItem(publishStorageKey);
   return (payload ?? {}) as T;
+}
+
+function transportError(error: unknown): unknown {
+  if (error instanceof DOMException && error.name === 'TimeoutError') {
+    return new Error('SellerTray did not respond in time. Check the operation status before retrying.');
+  }
+  return error;
 }
 
 async function idempotencyStorageKey(body: Record<string, unknown>): Promise<string> {
