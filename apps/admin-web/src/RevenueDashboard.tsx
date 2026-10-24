@@ -93,12 +93,17 @@ export default function RevenueDashboard({ session, refreshKey }: { session: Ses
       <section className="workspace-panel">
         <div className="workspace-panel-heading"><div><h2>Reporting scope</h2><p>This destination is intentionally narrower than the executive Business Dashboard.</p></div></div>
         <p>Merchant GMV and merchant returns remain merchant-business performance and are not presented as ProcessEdge revenue.</p>
-        <p>For commercial-order or payment investigation, use <a href="#commercial/orders">Commercial Orders</a> and <a href="#commercial/settlement">Payments & Settlement</a>.</p>
-        <p>For merchant adoption, sales activity and attention signals, use the <a href="#overview/dashboard">Business Dashboard</a>.</p>
+        <p>For commercial-order or payment investigation, use <a href={routeHref('commercial/orders')}>Commercial Orders</a> and <a href={routeHref('commercial/settlement')}>Payments & Settlement</a>.</p>
+        <p>For merchant adoption, sales activity and attention signals, use the <a href={routeHref('overview/dashboard')}>Business Dashboard</a>.</p>
         {Object.entries(summary.coverage).map(([key, value]) => <p className="workspace-muted small" key={key}>{value}</p>)}
       </section>
     </>}
   </div>;
+}
+
+function routeHref(route: string) {
+  const tenantId = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('tenant');
+  return tenantId ? `#${route}?tenant=${encodeURIComponent(tenantId)}` : `#${route}`;
 }
 
 function money(value: number, currency: string) {
