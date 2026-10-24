@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
 const workspace = readFileSync(new URL('../src/AdminWorkspaceV3.tsx', import.meta.url), 'utf8');
@@ -53,6 +53,7 @@ test('Merchant scope is persistent shell state and selectors are pure by default
 test('Active Admin entrypoint and governance contract are wired', () => {
   assert.match(entry, /AdminWorkspaceV3/);
   assert.match(entry, /admin-navigation\.css/);
+  assert.equal(existsSync(new URL('../src/AdminWorkspaceV2.tsx', import.meta.url)), false);
   assert.match(governance, /One Admin page represents one primary administrative job/);
   assert.match(governance, /group -> destination/);
   assert.match(governance, /OA4 Admin work must land in this group/);
