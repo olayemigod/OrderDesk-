@@ -203,7 +203,7 @@ async function startInstallmentCheckout(input: {
   // provider attempt. Paystack references are unique, so do not retry the same
   // failed reference. Tell Merchant Web to retire this command and create a new
   // command/reference on the next explicit payment attempt.
-  if (reservation.status === 'failed') {
+  if (reservation.status === 'failed' || reservation.status === 'superseded' || reservation.status === 'expired') {
     return json({
       status: 'retry_required',
       needsNewCommand: true,
@@ -268,7 +268,7 @@ async function startInstallmentCheckout(input: {
     });
   }
 
-  if (initialization.status === 'failed') {
+  if (initialization.status === 'failed' || initialization.status === 'superseded' || initialization.status === 'expired') {
     return json({
       status: 'retry_required',
       needsNewCommand: true,

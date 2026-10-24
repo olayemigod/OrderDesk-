@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import AiInsights from './AiInsights';
 import BusinessExpensesManagement from './BusinessExpensesManagement';
 import CashShiftsManagement from './CashShiftsManagement';
+import CommercialAgreementsManagement from './CommercialAgreementsManagement';
 import CustomersManagement from './CustomersManagement';
 import DashboardOverview from './DashboardOverview';
 import InventoryManagement from './InventoryManagement';
@@ -13,6 +14,7 @@ import PurchasingManagement from './PurchasingManagement';
 import ReportCenter from './ReportCenter';
 import ReturnsManagement from './ReturnsManagement';
 import SalesManagement from './SalesManagement';
+import SellerTrayBillingManagement from './SellerTrayBillingManagement';
 import WhatsAppManagement from './WhatsAppManagement';
 import { SellerTrayBrand, SellerTrayMark, NavIcon, ShellIcon } from './merchantShell';
 import { SellerTrayInput, SellerTraySelect } from './SellerTrayElements';
@@ -90,11 +92,7 @@ export default function MerchantApp() {
   function navigate(next: Page) { setPage(next); setNavOpen(false); }
   function openBranchPage(next: Page, nextBranchId: string) { setBranchId(nextBranchId); navigate(next); }
   function toggleSection(section: MerchantPortalSection) {
-    setCollapsedSections((current) => {
-      const next = new Set(current);
-      if (next.has(section)) next.delete(section); else next.add(section);
-      return next;
-    });
+    setCollapsedSections((current) => { const next = new Set(current); if (next.has(section)) next.delete(section); else next.add(section); return next; });
   }
 
   if (booting) return <Status title="Opening SellerTray" body="Checking your merchant session." />;
@@ -110,25 +108,17 @@ export default function MerchantApp() {
   return <div className={navOpen ? 'app-shell nav-open' : 'app-shell'}>
     <button className="nav-backdrop" aria-label="Close navigation" onClick={() => setNavOpen(false)} />
     <aside className="sidebar" id="merchant-navigation">
-      <div className="sidebar-brand-row">
-        <SellerTrayBrand />
-        <button className="sidebar-close" type="button" aria-label="Close navigation" onClick={() => setNavOpen(false)}><ShellIcon name="close" /></button>
-      </div>
+      <div className="sidebar-brand-row"><SellerTrayBrand /><button className="sidebar-close" type="button" aria-label="Close navigation" onClick={() => setNavOpen(false)}><ShellIcon name="close" /></button></div>
       <nav className="side-nav" aria-label="SellerTray management">
         {MERCHANT_PORTAL_SECTIONS.map((section) => {
           const items = NAV.filter((item) => item.section === section);
           if (!items.length) return null;
           if (section === 'Dashboard') {
             const item = items[0];
-            return <div key={section} className="nav-dashboard-link">
-              <button aria-current={page === item.id ? 'page' : undefined} className={page === item.id ? 'nav-button active' : 'nav-button'} onClick={() => navigate(item.id)}><span className="nav-button-icon"><NavIcon name={item.id} /></span><span className="nav-button-label">{item.label}</span></button>
-            </div>;
+            return <div key={section} className="nav-dashboard-link"><button aria-current={page === item.id ? 'page' : undefined} className={page === item.id ? 'nav-button active' : 'nav-button'} onClick={() => navigate(item.id)}><span className="nav-button-icon"><NavIcon name={item.id} /></span><span className="nav-button-label">{item.label}</span></button></div>;
           }
           const collapsed = collapsedSections.has(section);
-          return <div key={section} className="nav-group">
-            <button className="nav-section-button" aria-expanded={!collapsed} onClick={() => toggleSection(section)}><span>{section}</span><span className={collapsed ? 'nav-chevron collapsed' : 'nav-chevron'}><ShellIcon name="chevron" /></span></button>
-            <div className={collapsed ? 'nav-group-items collapsed' : 'nav-group-items'}>{items.map((item) => <button key={item.id} aria-current={page === item.id ? 'page' : undefined} className={page === item.id ? 'nav-button active' : 'nav-button'} onClick={() => navigate(item.id)}><span className="nav-button-icon"><NavIcon name={item.id} /></span><span className="nav-button-label">{item.label}</span></button>)}</div>
-          </div>;
+          return <div key={section} className="nav-group"><button className="nav-section-button" aria-expanded={!collapsed} onClick={() => toggleSection(section)}><span>{section}</span><span className={collapsed ? 'nav-chevron collapsed' : 'nav-chevron'}><ShellIcon name="chevron" /></span></button><div className={collapsed ? 'nav-group-items collapsed' : 'nav-group-items'}>{items.map((item) => <button key={item.id} aria-current={page === item.id ? 'page' : undefined} className={page === item.id ? 'nav-button active' : 'nav-button'} onClick={() => navigate(item.id)}><span className="nav-button-icon"><NavIcon name={item.id} /></span><span className="nav-button-label">{item.label}</span></button>)}</div></div>;
         })}
       </nav>
       <div className="sidebar-foot"><div className="account-summary"><span className="account-avatar">{accountInitial(session.user.email)}</span><div><strong>{session.user.email ?? 'SellerTray account'}</strong><span>{title(business.role)}</span></div></div><button className="text-button" onClick={() => void signOut()}>Sign out</button></div>
@@ -136,16 +126,8 @@ export default function MerchantApp() {
 
     <main className="workspace">
       <header className="topbar">
-        <div className="topbar-heading">
-          <button className="mobile-menu-button" type="button" aria-label="Open navigation" aria-controls="merchant-navigation" aria-expanded={navOpen} onClick={() => setNavOpen(true)}><ShellIcon name="menu" /></button>
-          <div><p className="eyebrow">{business.name}</p><h1>{currentNav?.label ?? 'Dashboard'}</h1><p className="topbar-context"><span className="context-dot" />{branch?.name ?? 'No active Branch'} <span aria-hidden="true">·</span> {title(business.role)}</p></div>
-        </div>
-        <div className="topbar-actions">
-          <Select label="Business" value={businessId} onChange={setBusinessId}>{managementBusinesses.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</Select>
-          <Select label="Branch" value={branchId} onChange={setBranchId} disabled={!branches.length}>{branches.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</Select>
-          <button className="icon-button compact-icon-button" aria-label={dark ? 'Use light theme' : 'Use dark theme'} title={dark ? 'Use light theme' : 'Use dark theme'} onClick={() => setDark((value) => !value)}><ShellIcon name={dark ? 'sun' : 'moon'} /></button>
-          <button className="secondary-button refresh-button" disabled={loading} onClick={() => void refresh()}><ShellIcon name="refresh" />{loading ? 'Refreshing' : 'Refresh'}</button>
-        </div>
+        <div className="topbar-heading"><button className="mobile-menu-button" type="button" aria-label="Open navigation" aria-controls="merchant-navigation" aria-expanded={navOpen} onClick={() => setNavOpen(true)}><ShellIcon name="menu" /></button><div><p className="eyebrow">{business.name}</p><h1>{currentNav?.label ?? 'Dashboard'}</h1><p className="topbar-context"><span className="context-dot" />{branch?.name ?? 'No active Branch'} <span aria-hidden="true">·</span> {title(business.role)}</p></div></div>
+        <div className="topbar-actions"><Select label="Business" value={businessId} onChange={setBusinessId}>{managementBusinesses.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</Select><Select label="Branch" value={branchId} onChange={setBranchId} disabled={!branches.length}>{branches.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</Select><button className="icon-button compact-icon-button" aria-label={dark ? 'Use light theme' : 'Use dark theme'} title={dark ? 'Use light theme' : 'Use dark theme'} onClick={() => setDark((value) => !value)}><ShellIcon name={dark ? 'sun' : 'moon'} /></button><button className="secondary-button refresh-button" disabled={loading} onClick={() => void refresh()}><ShellIcon name="refresh" />{loading ? 'Refreshing' : 'Refresh'}</button></div>
       </header>
 
       {error ? <div className="error-banner">{error}<button onClick={() => setError(null)}>Dismiss</button></div> : null}
@@ -160,12 +142,14 @@ export default function MerchantApp() {
       {page === 'returns' && !branch && <PageTable eyebrow="Returns" title="Choose a Branch" note="Select a Branch to review completed returns."><Empty title="No active Branch" body="Returns are reviewed within a Branch so refund, UOM and restored-stock context remain clear." /></PageTable>}
       {page === 'inventory' && <InventoryManagement tenantId={business.id} branch={branch} branches={branches} />}
       {page === 'payments' && <PaymentsManagement tenantId={business.id} />}
+      {page === 'sellertray_billing' && <SellerTrayBillingManagement tenantId={business.id} />}
       {page === 'cash' && <CashShiftsManagement tenantId={business.id} currency={business.currency} branches={branches} initialBranchId={branchId} />}
       {page === 'expenses' && <BusinessExpensesManagement tenantId={business.id} currency={business.currency} branches={branches} initialBranchId={branchId} />}
       {page === 'whatsapp' && <WhatsAppManagement tenantId={business.id} role={managementRole} branches={branches} connectionStatusHint={business.whatsappConnectionStatus} />}
       {page === 'reports' && <ReportCenter tenantId={business.id} currency={business.currency} branches={branches} go={navigate} openBranch={openBranchPage} />}
       {page === 'ai' && <AiInsights tenantId={business.id} />}
       {page === 'purchasing' && <PurchasingManagement tenantId={business.id} currency={business.currency} />}
+      {page === 'agreements' && <CommercialAgreementsManagement tenantId={business.id} />}
       {managementPage && <ManagementPage page={page} tenantId={business.id} currency={business.currency} onBranchesChanged={refresh} />}
     </main>
   </div>;

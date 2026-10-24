@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 
 const checkoutSource = readFileSync(new URL('./index.ts', import.meta.url), 'utf8');
 const merchantSource = readFileSync(
-  new URL('../../../apps/merchant-web/src/CommercialAgreementsManagement.tsx', import.meta.url),
+  new URL('../../../apps/merchant-web/src/SellerTrayBillingManagement.tsx', import.meta.url),
   'utf8',
 );
 
@@ -42,7 +42,7 @@ const merchantRequired = [
   "response.status === 'retry_required'",
   'response.needsNewCommand === true',
   'safeSessionStorageRemove(storageKey);',
-  'Select Pay installment again to create a new payment attempt.',
+  'Select Pay SellerTray again to create a new payment attempt.',
 ];
 for (const value of merchantRequired) {
   if (!merchantSource.includes(value)) {

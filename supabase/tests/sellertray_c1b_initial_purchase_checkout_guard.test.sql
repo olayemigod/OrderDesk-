@@ -241,14 +241,14 @@ select extensions.ok(
   'C1B initial-purchase installment guard is installed on shared checkout persistence'
 );
 
-select extensions.ok(
-  (select (public.reserve_sellertray_installment_checkout(
-    f.initial_tenant_id,f.initial_schedule_1_id,gen_random_uuid(),f.initial_owner_id,
-    'initial-owner@example.com'
-  )->>'status')='preparing'
-  from c1b_initial_purchase_fixture f),
-  'trial Business may reserve the first installment of its initial annual commercial order'
-);
+-- OA2 policy supersedes the initial/annual restriction, but never removes
+-- the current accepted-agreement prerequisite.
+select extensions.throws_ok(
+  format('select public.reserve_sellertray_installment_checkout(%L,%L,%L,%L,%L)',
+    f.initial_tenant_id,f.initial_schedule_1_id,gen_random_uuid(),f.initial_owner_id,'initial-owner@example.com'),
+  '23514','The current installment agreement must be accepted before checkout',
+  'even the initial purchase requires an accepted governed agreement'
+) from c1b_initial_purchase_fixture f;
 
 do $$
 begin
@@ -264,7 +264,7 @@ end
 $$;
 select extensions.ok(
   (select later_order_rejected from c1b_initial_purchase_fixture),
-  'later annual commercial order cannot use initial-purchase installment billing'
+  'later order without accepted terms cannot use installment billing'
 );
 
 do $$
@@ -281,21 +281,14 @@ end
 $$;
 select extensions.ok(
   (select legacy_active_rejected from c1b_initial_purchase_fixture),
-  'legacy active Business without same-order C1B entitlement cannot start an initial-purchase installment'
+  'legacy active Business cannot use an unsigned installment agreement'
 );
 
 select extensions.ok(
-  position('sellertray_commercial_entitlement_events' in pg_get_functiondef(
-    'public.guard_sellertray_initial_purchase_installment_checkout()'::regprocedure
-  ))>0
-  and position('current commercial order' in lower(pg_get_functiondef(
-    'public.guard_sellertray_initial_purchase_installment_checkout()'::regprocedure
-  )))=0
-  and position('commercial_order_id' in pg_get_functiondef(
-    'public.guard_sellertray_initial_purchase_installment_checkout()'::regprocedure
-  ))>0,
-  'C1B guard permits later installments only through same-order governed entitlement ownership rather than role/client state'
-);
+  (public.get_sellertray_installment_contract_checkout_policy(f.initial_tenant_id,f.initial_obligation_id)->>'draftEligible')::boolean
+  and not (public.get_sellertray_installment_contract_checkout_policy(f.initial_tenant_id,f.initial_obligation_id)->>'checkoutEligible')::boolean,
+  'current policy eligibility does not substitute for accepted contract authority'
+) from c1b_initial_purchase_fixture f;
 
 select * from extensions.finish();
 rollback;

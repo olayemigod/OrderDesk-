@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import BranchesManagement from './BranchesManagement';
 import CatalogueMasterManagement from './CatalogueMasterManagement';
-import CommercialAgreementsManagement from './CommercialAgreementsManagement';
 import DevicesPrintersManagement from './DevicesPrintersManagement';
 import FeedbackDashboard from './FeedbackDashboard';
 import PaymentBranchManagement from './PaymentBranchManagement';
@@ -35,7 +34,6 @@ export default function ManagementPage({
   if (page === 'devices') return <DeviceManagement tenantId={tenantId} />;
   if (page === 'feedback') return <FeedbackDashboard tenantId={tenantId} />;
   return <div className="page-stack">
-    <CommercialAgreementsManagement tenantId={tenantId} />
     <SettingsManagement tenantId={tenantId} />
     <section className="page-stack settings-payment-availability" aria-label="Payment configuration">
       <div className="section-heading"><div><p className="eyebrow">Settings · Payments</p><h2>Branch availability & terminals</h2></div><p className="muted">Configure where payment methods can be used and add physical card terminals. Reconciliation and customer balances remain under Money.</p></div>
