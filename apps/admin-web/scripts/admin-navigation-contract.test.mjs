@@ -77,6 +77,7 @@ test('Canonical Admin entrypoint is wired and retired shells stay retired', () =
   assert.match(entry, /admin-navigation\.css/);
   for (const retired of [
     '../src/AdminWorkspaceV2.tsx',
+    '../src/AdminWorkspaceV3.tsx',
     '../src/CommercialBillingAdministration.tsx',
     '../src/CommercialBillingAdministrationLegacy.tsx',
   ]) assert.equal(existsSync(new URL(retired, import.meta.url)), false, `${retired} must stay retired`);
