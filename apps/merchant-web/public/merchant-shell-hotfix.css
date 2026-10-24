@@ -1,54 +1,65 @@
 /* SellerTray Merchant Web shell QA hotfix.
- * Reuses the Admin portal SellerTray wordmark, keeps desktop navigation
- * pinned to the viewport, and preserves the mobile drawer.
+ * Keeps desktop navigation pinned to the viewport, preserves the mobile drawer,
+ * and renders the Merchant Web canonical square app mark. Admin Portal branding
+ * remains a separate surface and is not reused here.
  */
 
 .sidebar-brand-row {
-  align-items: flex-start;
+  align-items: center;
 }
 
 .sellertray-brand {
   display: flex;
   flex: 1 1 auto;
   min-width: 0;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
+  flex-direction: row;
+  align-items: center;
+  gap: 11px;
 }
 
 .sellertray-mark {
-  width: 172px;
-  height: auto;
-  flex: 0 0 auto;
-  display: block;
-  overflow: visible;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(16, 42, 67, .08), 0 5px 14px rgba(0, 0, 0, .16);
 }
 
 .sellertray-mark img {
   width: 100%;
-  height: auto;
+  height: 100%;
   display: block;
   object-fit: contain;
-  object-position: left center;
+  object-position: center;
 }
 
 .sellertray-mark.large {
-  width: min(240px, 72vw);
-  height: auto;
-  flex-basis: auto;
-  border-radius: 0;
+  width: 72px;
+  height: 72px;
+  flex-basis: 72px;
+  border-radius: 18px;
 }
 
-.sellertray-brand-surface {
+.sellertray-brand-copy {
+  min-width: 0;
+}
+
+.sellertray-brand-copy strong {
   display: block;
-  margin-left: 1px;
+  color: #fff;
+  font-size: 1.05rem;
+  letter-spacing: -.015em;
+}
+
+.sellertray-brand-copy span {
+  display: block;
+  margin-top: 2px;
   color: #9fb3c4;
-  font-size: .72rem;
-  font-weight: 700;
-  letter-spacing: .025em;
+  font-size: .73rem;
 }
 
 @media (min-width: 1025px) {
@@ -94,9 +105,5 @@
 
   .workspace {
     grid-column: auto;
-  }
-
-  .sellertray-mark {
-    width: 160px;
   }
 }
