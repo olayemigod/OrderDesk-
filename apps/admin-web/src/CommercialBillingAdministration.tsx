@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js';
 import CommercialBillingAdministrationLegacy from './CommercialBillingAdministrationLegacy';
 import CommercialSettlementAdministration from './CommercialSettlementAdministration';
+import SetupSchedulingAdministration from './SetupSchedulingAdministration';
 
 export default function CommercialBillingAdministration({
   session,
@@ -27,6 +28,7 @@ export default function CommercialBillingAdministration({
         </div>
         <CommercialSettlementAdministration session={session} initialTenantId={initialTenantId} />
       </section>
+      <SetupSchedulingAdministration session={session} initialTenantId={initialTenantId} />
     </div>
   );
 }
