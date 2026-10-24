@@ -7,6 +7,7 @@ import PaymentBranchManagement from './PaymentBranchManagement';
 import ProductsManagement from './ProductsManagement';
 import { SellerTraySelect } from './SellerTrayElements';
 import SettingsManagement from './SettingsManagement';
+import SetupSchedulingManagement from './SetupSchedulingManagement';
 import SuppliersManagement from './SuppliersManagement';
 import TeamPermissionsManagement from './TeamPermissionsManagement';
 import { errorMessage, supabase } from './supabase';
@@ -34,6 +35,7 @@ export default function ManagementPage({
   if (page === 'devices') return <DeviceManagement tenantId={tenantId} />;
   if (page === 'feedback') return <FeedbackDashboard tenantId={tenantId} />;
   return <div className="page-stack">
+    <SetupSchedulingManagement tenantId={tenantId} />
     <SettingsManagement tenantId={tenantId} />
     <section className="page-stack settings-payment-availability" aria-label="Payment configuration">
       <div className="section-heading"><div><p className="eyebrow">Settings · Payments</p><h2>Branch availability & terminals</h2></div><p className="muted">Configure where payment methods can be used and add physical card terminals. Reconciliation and customer balances remain under Money.</p></div>
