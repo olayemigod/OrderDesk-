@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 const read = (path) => readFileSync(resolve(import.meta.dirname, '../..', path), 'utf8');
-const workspace = read('admin-web/src/AdminWorkspaceV3.tsx');
+const workspace = read('admin-web/src/AdminWorkspace.tsx');
 const merchants = read('admin-web/src/MerchantPortfolio.tsx');
 const merchantReadModel = read('admin-web/src/merchant-read-model.ts');
 const commercial = read('admin-web/src/CommercialAdminWorkspaces.tsx');
