@@ -4,10 +4,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 const read = (path) => readFileSync(resolve(import.meta.dirname, '../..', path), 'utf8');
-const workspace = read('admin-web/src/AdminWorkspace.tsx');
+const workspace = read('admin-web/src/AdminWorkspaceV3.tsx');
 const selector = read('admin-web/src/MerchantSelector.tsx');
-const commercial = read('admin-web/src/CommercialBillingAdministration.tsx');
-const commercialLegacy = read('admin-web/src/CommercialBillingAdministrationLegacy.tsx');
+const commercial = read('admin-web/src/CommercialAdminWorkspaces.tsx');
 const edge = read('../supabase/functions/platform-admin/index.ts');
 const migration = read('../supabase/migrations/20261022064000_platform_admin_bounded_bootstrap.sql');
 
@@ -21,15 +20,17 @@ test('active Admin bootstrap is compact and does not load the merchant estate', 
   assert.doesNotMatch(migration, /jsonb_agg/);
 });
 
-test('Billing and Communications share bounded merchant selection', () => {
-  assert.match(workspace, /<MerchantSelector session=\{session\}/);
-  assert.match(commercial, /<CommercialBillingAdministrationLegacy/);
-  assert.match(commercialLegacy, /<MerchantSelector/);
+test('focused Admin work shares bounded persistent merchant context', () => {
+  assert.match(workspace, /Merchant context/);
+  assert.match(workspace, /tenantFromHash/);
+  assert.match(workspace, /setMerchantContext/);
+  assert.match(workspace, /CommercialOrdersAdministration/);
+  assert.match(workspace, /CommercialPricingAdministration/);
+  assert.match(commercial, /loadCommercialOnboarding/);
   assert.match(selector, /loadMerchantPortfolio/);
   assert.match(selector, /limit: pageSize/);
   assert.match(selector, /nextCursor/);
-  assert.doesNotMatch(commercial, /tenants: CommercialAdminTenant\[\]/);
-  assert.doesNotMatch(commercialLegacy, /tenants: CommercialAdminTenant\[\]/);
+  assert.doesNotMatch(workspace, /CommercialBillingAdministrationLegacy/);
 });
 
 test('Operations reads server aggregates and AI readiness avoids tenant iteration', () => {
