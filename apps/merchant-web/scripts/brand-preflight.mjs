@@ -3,8 +3,8 @@ import { join } from 'node:path';
 
 const root = process.cwd();
 const failures = [];
-const ADMIN_LOGO_PATH = '/brand/sellertray-admin-logo.webp';
-const ADMIN_FAVICON_URL = 'https://sellertray.vercel.app/brand/sellertray-app-icon-v2.png';
+const ADMIN_LOGO_PATH = '/brand/sellertray-logo-v2.svg';
+const ADMIN_FAVICON_URL = '/brand/sellertray-app-icon.png';
 
 function read(path) {
   return readFileSync(join(root, path), 'utf8');
@@ -18,7 +18,7 @@ const shell = read('src/merchantShell.tsx');
 const html = read('index.html');
 
 requireValue(
-  existsSync(join(root, 'public/brand/sellertray-admin-logo.webp')),
+  existsSync(join(root, 'public/brand/sellertray-logo-v2.svg')),
   'Merchant Web must bundle the exact Admin Portal SellerTray logo asset',
 );
 requireValue(

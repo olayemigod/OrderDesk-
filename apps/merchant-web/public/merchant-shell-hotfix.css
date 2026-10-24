@@ -1,0 +1,102 @@
+/* SellerTray Merchant Web shell QA hotfix.
+ * Reuses the Admin portal SellerTray wordmark, keeps desktop navigation
+ * pinned to the viewport, and preserves the mobile drawer.
+ */
+
+.sidebar-brand-row {
+  align-items: flex-start;
+}
+
+.sellertray-brand {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.sellertray-mark {
+  width: 172px;
+  height: auto;
+  flex: 0 0 auto;
+  display: block;
+  overflow: visible;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.sellertray-mark img {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.sellertray-mark.large {
+  width: min(240px, 72vw);
+  height: auto;
+  flex-basis: auto;
+  border-radius: 0;
+}
+
+.sellertray-brand-surface {
+  display: block;
+  margin-left: 1px;
+  color: #9fb3c4;
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .025em;
+}
+
+@media (min-width: 1025px) {
+  .app-shell {
+    align-items: start;
+    grid-template-columns: var(--shell-width) minmax(0, 1fr);
+  }
+
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: var(--shell-width);
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+    align-self: start;
+  }
+
+  .workspace {
+    grid-column: 2;
+  }
+}
+
+.sidebar > .side-nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.sidebar > .sidebar-foot {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 1024px) {
+  .sidebar {
+    width: min(330px, calc(100vw - 44px));
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+  }
+
+  .workspace {
+    grid-column: auto;
+  }
+
+  .sellertray-mark {
+    width: 160px;
+  }
+}
