@@ -31,7 +31,7 @@ const NAV_PATHS: Record<NavIconName, string[]> = {
   units: ['M4 7h16', 'M7 4v6', 'M12 5v4', 'M17 4v6', 'M4 17h16', 'M7 14v6', 'M12 15v4', 'M17 14v6'],
   inventory: ['M3 7l9-4 9 4-9 4-9-4Z', 'M3 7v10l9 4 9-4V7', 'M12 11v10'],
   purchasing: ['M3 3h2l2.4 11.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L21 7H6', 'M10 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z', 'M18 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z'],
-  suppliers: ['M3 21V8l9-5 9-5 9v13', 'M9 21v-6h6v6', 'M7 10h2', 'M15 10h2'],
+  suppliers: ['M3 21V8l9-5 9 5v13', 'M9 21v-6h6v6', 'M7 10h2', 'M15 10h2'],
   payments: ['M3 6h18v12H3V6Z', 'M3 10h18', 'M7 15h3'],
   cash: ['M4 6h16v12H4V6Z', 'M8 6V4h8v2', 'M12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z'],
   expenses: ['M6 3h12v18H6V3Z', 'M9 7h6', 'M9 11h6', 'M9 15h3'],
