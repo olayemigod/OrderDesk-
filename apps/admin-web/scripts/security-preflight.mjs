@@ -8,6 +8,7 @@ const main = readFileSync(resolve(appRoot, 'src/main.tsx'), 'utf8');
 const activeWorkspace = readFileSync(resolve(appRoot, 'src/AdminWorkspace.tsx'), 'utf8');
 const communications = readFileSync(resolve(appRoot, 'src/AdminCommunicationsWorkspaces.tsx'), 'utf8');
 const operations = readFileSync(resolve(appRoot, 'src/AdminOperationsWorkspaces.tsx'), 'utf8');
+const revenue = readFileSync(resolve(appRoot, 'src/RevenueDashboard.tsx'), 'utf8');
 const legacyApp = readFileSync(resolve(appRoot, 'src/App.tsx'), 'utf8');
 const legacySubscriptionAccess = readFileSync(resolve(appRoot, 'src/SubscriptionAccess.tsx'), 'utf8');
 const vercel = readFileSync(resolve(appRoot, 'vercel.json'), 'utf8');
@@ -26,6 +27,7 @@ requireValue(
     !activeWorkspace.includes('SERVICE_ROLE') &&
     !communications.includes('SERVICE_ROLE') &&
     !operations.includes('SERVICE_ROLE') &&
+    !revenue.includes('SERVICE_ROLE') &&
     !main.includes('SERVICE_ROLE') &&
     !legacyApp.includes('SERVICE_ROLE') &&
     !legacySubscriptionAccess.includes('SERVICE_ROLE') &&
@@ -33,6 +35,7 @@ requireValue(
     !activeWorkspace.includes('SUPABASE_SECRET') &&
     !communications.includes('SUPABASE_SECRET') &&
     !operations.includes('SUPABASE_SECRET') &&
+    !revenue.includes('SUPABASE_SECRET') &&
     !main.includes('SUPABASE_SECRET'),
   'Admin browser bundle must never reference a Supabase service-role or secret key.',
 );
@@ -61,6 +64,7 @@ requireValue(
     activeWorkspace.includes("label: 'Onboarding & Setup'") &&
     activeWorkspace.includes("label: 'Communications'") &&
     activeWorkspace.includes("label: 'Platform Operations'") &&
+    activeWorkspace.includes("label: 'Insights & Reports'") &&
     activeWorkspace.includes("label: 'Governance'") &&
     activeWorkspace.includes("label: 'Commercial Orders'") &&
     activeWorkspace.includes("label: 'Plans & Pricing'") &&
@@ -69,9 +73,19 @@ requireValue(
     activeWorkspace.includes("label: 'Campaign History'") &&
     activeWorkspace.includes("label: 'WhatsApp Operations'") &&
     activeWorkspace.includes("label: 'AI Operations'") &&
+    activeWorkspace.includes("label: 'Revenue Dashboard'") &&
     activeWorkspace.includes('admin-nav-group-button') &&
     activeWorkspace.includes('admin-nav-submenu-link'),
   'Admin Web must retain the approved grouped professional platform-operations navigation.',
+);
+
+requireValue(
+  revenue.includes("action: 'business_dashboard'") &&
+    revenue.includes('recognised revenue is not calculated or displayed here') &&
+    revenue.includes('Amounts are never combined across currencies') &&
+    platformAdminFunction.includes("action === 'business_dashboard'") &&
+    platformAdminFunction.includes('platform_admin_business_summary'),
+  'Revenue Dashboard must reuse governed platform reporting authority and preserve the accounting boundary.',
 );
 
 requireValue(
