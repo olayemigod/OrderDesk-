@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
-const workspace = readFileSync(new URL('../src/AdminWorkspaceV2.tsx', import.meta.url), 'utf8');
+const workspace = readFileSync(new URL('../src/AdminWorkspaceV3.tsx', import.meta.url), 'utf8');
 const selector = readFileSync(new URL('../src/MerchantSelector.tsx', import.meta.url), 'utf8');
+const commercial = readFileSync(new URL('../src/CommercialAdminWorkspaces.tsx', import.meta.url), 'utf8');
 const entry = readFileSync(new URL('../src/main.tsx', import.meta.url), 'utf8');
 const governance = readFileSync(new URL('../../../.agents/skills/sellertray-project-implementation/ADMIN_NAVIGATION.md', import.meta.url), 'utf8');
 
@@ -16,13 +17,29 @@ test('Admin shell uses grouped two-level navigation instead of one flat task pil
   assert.doesNotMatch(workspace, /label: 'Settings'/);
 });
 
-test('Independent settlement and setup workspaces are no longer mounted through the catch-all billing component', () => {
-  assert.match(workspace, /CommercialSettlementAdministration/);
-  assert.match(workspace, /SetupSchedulingAdministration/);
-  assert.match(workspace, /CommercialBillingAdministrationLegacy/);
-  assert.doesNotMatch(workspace, /import CommercialBillingAdministration from/);
-  assert.match(workspace, /'commercial\/settlement'/);
-  assert.match(workspace, /'setup\/appointments'/);
+test('Commercial and onboarding jobs have focused first-class destinations', () => {
+  for (const route of [
+    'commercial/orders',
+    'commercial/pricing',
+    'commercial/settlement',
+    'commercial/installments',
+    'commercial/agreements',
+    'setup/appointments',
+    'setup/readiness',
+  ]) assert.match(workspace, new RegExp(route.replace('/', '\\/')));
+  assert.match(workspace, /CommercialOrdersAdministration/);
+  assert.match(workspace, /CommercialPricingAdministration/);
+  assert.match(workspace, /InstallmentEntitlementAdministration/);
+  assert.match(workspace, /CommercialAgreementAdministration/);
+  assert.match(workspace, /BranchReadinessAdministration/);
+  assert.doesNotMatch(workspace, /CommercialBillingAdministrationLegacy/);
+});
+
+test('Branch readiness review cannot expose the legacy generic readiness shortcut', () => {
+  assert.match(commercial, /governed setup-completion path/);
+  assert.match(commercial, /does not expose the legacy generic/);
+  assert.doesNotMatch(commercial, /admin_mark_setup_ready/);
+  assert.doesNotMatch(commercial, /Record setup ready/);
 });
 
 test('Merchant scope is persistent shell state and selectors are pure by default', () => {
@@ -33,8 +50,8 @@ test('Merchant scope is persistent shell state and selectors are pure by default
   assert.doesNotMatch(selector, /showCommercialPortfolio \?\? mode === 'single'/);
 });
 
-test('New Admin entrypoint and governance contract are wired', () => {
-  assert.match(entry, /AdminWorkspaceV2/);
+test('Active Admin entrypoint and governance contract are wired', () => {
+  assert.match(entry, /AdminWorkspaceV3/);
   assert.match(entry, /admin-navigation\.css/);
   assert.match(governance, /One Admin page represents one primary administrative job/);
   assert.match(governance, /group -> destination/);
@@ -42,7 +59,7 @@ test('New Admin entrypoint and governance contract are wired', () => {
 });
 
 test('Legacy hashes remain recoverable after navigation convergence', () => {
-  for (const legacy of ['overview', 'merchants', 'billing', 'communications', 'operations', 'audit', 'settings']) {
-    assert.match(workspace, new RegExp(`${legacy}:`));
+  for (const legacy of ['overview', 'merchants', 'billing', 'commercial/core', 'communications', 'operations', 'audit', 'settings']) {
+    assert.match(workspace, new RegExp(`['\"]?${legacy.replace('/', '\\/')}['\"]?:`));
   }
 });
