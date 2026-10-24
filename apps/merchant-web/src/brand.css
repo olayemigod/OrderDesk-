@@ -1,7 +1,7 @@
-/* SellerTray brand rendering.
- * The approved Admin Portal logo binary is shared across SellerTray surfaces.
- * Merchant Web must preserve the logo artwork instead of cropping it into a
- * green square or recolouring it through its container.
+/* Merchant Web brand rendering.
+ * The square SellerTray app icon is the canonical mark for Merchant Web shell
+ * and sign-in surfaces. Admin Portal branding remains a separate surface and
+ * must not be repurposed here.
  */
 
 .sellertray-mark {
@@ -12,30 +12,25 @@
 .sellertray-mark img {
   width: 100%;
   height: 100%;
-  padding: 2px;
+  padding: 0;
   object-fit: contain;
   object-position: center;
 }
 
 .login-brand .sellertray-mark.large {
-  width: min(260px, 70%);
-  height: 82px;
-  flex-basis: auto;
-  overflow: visible;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.login-brand .sellertray-mark.large img {
-  padding: 0;
-  object-fit: contain;
-  object-position: left center;
+  width: 72px;
+  height: 72px;
+  flex-basis: 72px;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #fff;
 }
 
 @media (max-width: 560px) {
   .login-brand .sellertray-mark.large {
-    width: min(240px, 82vw);
+    width: 68px;
     height: 68px;
+    flex-basis: 68px;
+    border-radius: 17px;
   }
 }
