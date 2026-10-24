@@ -3,6 +3,7 @@ import BranchesManagement from './BranchesManagement';
 import CatalogueMasterManagement from './CatalogueMasterManagement';
 import DevicesPrintersManagement from './DevicesPrintersManagement';
 import FeedbackDashboard from './FeedbackDashboard';
+import PaymentBranchManagement from './PaymentBranchManagement';
 import ProductsManagement from './ProductsManagement';
 import { SellerTraySelect } from './SellerTrayElements';
 import SettingsManagement from './SettingsManagement';
@@ -32,7 +33,13 @@ export default function ManagementPage({
   if (page === 'team') return <TeamPermissionsManagement tenantId={tenantId} />;
   if (page === 'devices') return <DeviceManagement tenantId={tenantId} />;
   if (page === 'feedback') return <FeedbackDashboard tenantId={tenantId} />;
-  return <SettingsManagement tenantId={tenantId} />;
+  return <div className="page-stack">
+    <SettingsManagement tenantId={tenantId} />
+    <section className="page-stack settings-payment-availability" aria-label="Payment configuration">
+      <div className="section-heading"><div><p className="eyebrow">Settings · Payments</p><h2>Branch availability & terminals</h2></div><p className="muted">Configure where payment methods can be used and add physical card terminals. Reconciliation and customer balances remain under Money.</p></div>
+      <PaymentBranchManagement tenantId={tenantId} />
+    </section>
+  </div>;
 }
 
 function DeviceManagement({ tenantId }: { tenantId: string }) {
@@ -53,7 +60,7 @@ function DeviceManagement({ tenantId }: { tenantId: string }) {
   }, [tenantId]);
 
   if (error) return <article className="panel"><div className="error-banner compact">{error}</div></article>;
-  if (!branches.length) return <article className="panel"><div className="empty-state"><strong>No active Branch</strong><p>Create or activate a Branch before managing registers and printers.</p></div></article>;
+  if (!branches.length) return <article className="panel"><div className="empty-state"><strong>No active Branch</strong><p>Create or activate a Branch before managing printers.</p></div></article>;
 
   const branch = branches.find((row) => row.id === branchId) ?? branches[0];
   return <div className="page-stack">
