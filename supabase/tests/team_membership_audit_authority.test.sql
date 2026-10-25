@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(17);
+select extensions.plan(19);
 
 select extensions.ok(
   to_regclass('public.sellertray_membership_events') is not null,
@@ -99,6 +99,23 @@ select extensions.ok(
   position('platform_admin_has_capability' in pg_get_functiondef('public.platform_admin_transfer_tenant_ownership(uuid,uuid,text,text,uuid)'::regprocedure)) > 0
   and position('admin.merchant_ownership.transfer' in pg_get_functiondef('public.platform_admin_transfer_tenant_ownership(uuid,uuid,text,text,uuid)'::regprocedure)) > 0,
   'ownership transfer requires the scoped Platform Admin ownership-transfer capability'
+);
+
+select extensions.ok(
+  exists (
+    select 1
+    from pg_constraint c
+    where c.conrelid = 'public.sellertray_membership_events'::regclass
+      and c.conname = 'sellertray_membership_events_event_type_check'
+      and pg_get_constraintdef(c.oid) like '%initial_owner_assigned%'
+  ),
+  'membership event vocabulary includes initial owner assignment'
+);
+
+select extensions.ok(
+  position('initial_owner_assigned' in pg_get_functiondef('public.provision_business_for_user(uuid,text,text,text,text,text)'::regprocedure)) > 0
+  and position('sellertray_membership_events' in pg_get_functiondef('public.provision_business_for_user(uuid,text,text,text,text,text)'::regprocedure)) > 0,
+  'initial Business provisioning records the authenticated Owner in the membership audit ledger'
 );
 
 select * from extensions.finish();
