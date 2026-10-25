@@ -192,13 +192,13 @@ export function PosPaymentAllocator({
   return (
     <View style={styles.stack}>
       <View style={styles.summaryRow}>
-        <View>
+        <View style={styles.summaryCell}>
           <Text style={[styles.label, dark && styles.darkMuted]}>Allocated</Text>
-          <Text style={[styles.summaryValue, dark && styles.darkText]}>{formatMoney(allocated, currency)}</Text>
+          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.62} style={[styles.summaryValue, dark && styles.darkText]}>{formatMoney(allocated, currency)}</Text>
         </View>
         <View style={styles.summaryRight}>
           <Text style={[styles.label, dark && styles.darkMuted]}>Outstanding</Text>
-          <Text style={[styles.summaryValue, outstanding > 0.005 && styles.warningText, dark && styles.darkText, dark && outstanding > 0.005 && styles.darkWarningText]}>{formatMoney(outstanding, currency)}</Text>
+          <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.62} style={[styles.summaryValue, outstanding > 0.005 && styles.warningText, dark && styles.darkText, dark && outstanding > 0.005 && styles.darkWarningText]}>{formatMoney(outstanding, currency)}</Text>
         </View>
       </View>
 
@@ -282,7 +282,7 @@ export function PosPaymentAllocator({
         style={[styles.primaryButton, !canSubmit && styles.disabled, dark && !canSubmit && styles.darkDisabled]}
       >
         {submitting ? <ActivityIndicator color={theme.colors.white} /> : <Ionicons name="checkmark-circle-outline" size={20} color={theme.colors.white} />}
-        <Text style={styles.primaryText}>{submitting ? 'Processing…' : buttonLabel({ allocated, outstanding, payLater, currency })}</Text>
+        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.68} style={styles.primaryText}>{submitting ? 'Processing…' : buttonLabel({ allocated, outstanding, payLater, currency })}</Text>
       </Pressable>
     </View>
   );
@@ -326,11 +326,12 @@ function buttonLabel(input: { allocated: number; outstanding: number; payLater: 
 
 const styles = StyleSheet.create({
   stack: { gap: 12 },
-  flex: { flex: 1 },
+  flex: { flex: 1, minWidth: 0 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 16, paddingVertical: 4 },
-  summaryRight: { alignItems: 'flex-end' },
+  summaryCell: { flex: 1, minWidth: 0 },
+  summaryRight: { alignItems: 'flex-end', flex: 1, minWidth: 0 },
   label: { fontSize: 12, fontWeight: '700', color: theme.colors.muted, textTransform: 'uppercase', letterSpacing: 0.4 },
-  summaryValue: { marginTop: 3, fontSize: 20, fontWeight: '800', color: theme.colors.navy },
+  summaryValue: { marginTop: 3, fontSize: 20, fontWeight: '800', color: theme.colors.navy, flexShrink: 1, maxWidth: '100%' },
   warningText: { color: theme.colors.warning },
   methodCard: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, padding: 12, backgroundColor: theme.colors.white, gap: 10 },
   methodHeading: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -347,7 +348,7 @@ const styles = StyleSheet.create({
   policyNote: { fontSize: 12, lineHeight: 18, color: theme.colors.muted },
   errorText: { fontSize: 13, lineHeight: 18, fontWeight: '700', color: theme.colors.danger },
   primaryButton: { minHeight: 50, borderRadius: theme.radius.md, backgroundColor: theme.colors.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 14 },
-  primaryText: { color: theme.colors.white, fontSize: 15, fontWeight: '800' },
+  primaryText: { color: theme.colors.white, flexShrink: 1, fontSize: 15, fontWeight: '800', textAlign: 'center' },
   disabled: { opacity: 0.45 },
   darkCard: { backgroundColor: theme.dark.surfaceRaised, borderColor: theme.dark.border },
   darkInput: { backgroundColor: theme.dark.surface, borderColor: theme.dark.borderStrong, color: theme.dark.text },

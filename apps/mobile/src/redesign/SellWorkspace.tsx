@@ -364,7 +364,7 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
           <Pressable disabled={addDisabled} onPress={() => addToCart(product)} style={[styles.primary, styles.addButton, addDisabled && styles.disabled]}><Ionicons name={outOfStock ? 'ban-outline' : 'add'} size={18} color={theme.colors.white} /><Text style={styles.primaryText}>{outOfStock ? 'Out of stock' : 'Add'}</Text></Pressable>
         </View>;
       })}</View>
-      {cartLines.length ? <Pressable onPress={() => setStage('cart')} style={styles.checkout}><View><Text style={styles.primaryText}>{cartLines.length} product{cartLines.length === 1 ? '' : 's'} · {formatQuantity(unitCount)} units</Text><Text style={styles.checkoutTotal}>{formatMoney(total, currency)}</Text></View><Ionicons name="arrow-forward" size={22} color={theme.colors.white} /></Pressable> : null}
+      {cartLines.length ? <Pressable onPress={() => setStage('cart')} style={styles.checkout}><View style={styles.checkoutCopy}><Text style={styles.primaryText}>{cartLines.length} product{cartLines.length === 1 ? '' : 's'} · {formatQuantity(unitCount)} units</Text><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.62} style={styles.checkoutTotal}>{formatMoney(total, currency)}</Text></View><Ionicons name="arrow-forward" size={22} color={theme.colors.white} /></Pressable> : null}
     </> : null}
 
     {stage === 'cart' ? <>
@@ -408,7 +408,7 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
         <View style={styles.lineTotal}><Text style={[styles.price, dark && darkStyles.title]}>{formatMoney(line.quantity * line.sellingPrice, currency)}</Text><Pressable onPress={() => setQuantity(line, 0)}><Ionicons name="trash-outline" size={20} color={theme.colors.danger} /></Pressable></View>
       </View>)}</View>
       <PosCustomerSelector tenantId={tenantId} value={customer} disabled={saving} onChange={setCustomer} />
-      <View style={[styles.summary, dark && darkStyles.card]}><View><Text style={[styles.productName, dark && darkStyles.title]}>Sale total</Text>{taxQuote.taxApplied ? <Text style={[styles.muted, dark && darkStyles.body]}>Subtotal {formatMoney(subtotal, currency)} · Tax {formatMoney(taxQuote.taxAmount, currency)} ({formatRate(taxQuote.ratePercent)}%)</Text> : null}</View><Text style={[styles.summaryTotal, dark && darkStyles.title]}>{formatMoney(total, currency)}</Text></View>
+      <View style={[styles.summary, dark && darkStyles.card]}><View style={styles.summaryCopy}><Text style={[styles.productName, dark && darkStyles.title]}>Sale total</Text>{taxQuote.taxApplied ? <Text style={[styles.muted, dark && darkStyles.body]}>Subtotal {formatMoney(subtotal, currency)} · Tax {formatMoney(taxQuote.taxAmount, currency)} ({formatRate(taxQuote.ratePercent)}%)</Text> : null}</View><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.58} style={[styles.summaryTotal, dark && darkStyles.title]}>{formatMoney(total, currency)}</Text></View>
       {offlinePaymentOpen && posPolicy ? <OfflinePosPaymentAllocator
         amountDue={total}
         currency={currency}
@@ -423,7 +423,7 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
     </> : null}
 
     {stage === 'payment' && draftOrderId ? <>
-      <View style={[styles.summary, dark && darkStyles.card]}><View><Text style={[styles.productName, dark && darkStyles.title]}>Amount due</Text>{taxQuote.taxApplied ? <Text style={[styles.muted, dark && darkStyles.body]}>Subtotal {formatMoney(subtotal, currency)} · Tax {formatMoney(taxQuote.taxAmount, currency)}</Text> : null}</View><Text style={[styles.summaryTotal, dark && darkStyles.title]}>{formatMoney(total, currency)}</Text></View>
+      <View style={[styles.summary, dark && darkStyles.card]}><View style={styles.summaryCopy}><Text style={[styles.productName, dark && darkStyles.title]}>Amount due</Text>{taxQuote.taxApplied ? <Text style={[styles.muted, dark && darkStyles.body]}>Subtotal {formatMoney(subtotal, currency)} · Tax {formatMoney(taxQuote.taxAmount, currency)}</Text> : null}</View><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.58} style={[styles.summaryTotal, dark && darkStyles.title]}>{formatMoney(total, currency)}</Text></View>
       {posPolicy ? <PosPaymentAllocator tenantId={tenantId} orderId={draftOrderId} amountDue={total} currency={currency} paymentMethods={paymentMethods} policy={posPolicy} disabled={completing} onResult={(result) => void handleAllocatedCheckout(result)} onError={(message) => setError(message || null)} /> : <Pressable disabled={completing} onPress={() => Alert.alert('Confirm cash payment', `Confirm ${formatMoney(total, currency)} cash has been received.`, [{ text: 'Not yet', style: 'cancel' }, { text: 'Payment confirmed', onPress: () => void completeCash() }])} style={styles.primary}><Text style={styles.primaryText}>Complete cash sale</Text></Pressable>}
       <Pressable onPress={() => onDraftCreated?.(draftOrderId)} style={[styles.secondary, dark && darkStyles.secondary]}><Text style={[styles.backText, dark && darkStyles.backText]}>Save and open sale</Text></Pressable>
     </> : null}
@@ -487,8 +487,9 @@ const styles = StyleSheet.create({
   chipText: { color: theme.colors.slate, fontSize: 11, fontWeight: '800' },
   primary: { minHeight: 48, borderRadius: theme.radius.md, backgroundColor: theme.colors.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: 12 },
   primaryText: { color: theme.colors.white, fontSize: 12, fontWeight: '900' },
-  checkout: { minHeight: 66, borderRadius: theme.radius.lg, backgroundColor: theme.colors.green, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  checkoutTotal: { color: theme.colors.white, fontSize: 20, fontWeight: '900' },
+  checkout: { minHeight: 66, borderRadius: theme.radius.lg, backgroundColor: theme.colors.green, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  checkoutCopy: { flex: 1, minWidth: 0 },
+  checkoutTotal: { color: theme.colors.white, flexShrink: 1, fontSize: 20, fontWeight: '900', maxWidth: '100%' },
   back: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', minHeight: 36 },
   backText: { color: theme.colors.greenDark, fontWeight: '900', fontSize: 12 },
   cartLine: { backgroundColor: theme.colors.cloud, borderRadius: theme.radius.md, padding: 11, flexDirection: 'row', gap: 8 },
@@ -500,7 +501,8 @@ const styles = StyleSheet.create({
   permissionText: { color: theme.colors.muted, fontSize: 10, marginTop: 5 },
   lineTotal: { alignItems: 'flex-end', gap: 10 },
   summary: { borderRadius: theme.radius.lg, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  summaryTotal: { color: theme.colors.navy, fontSize: 24, fontWeight: '900' },
+  summaryCopy: { flex: 1, minWidth: 0 },
+  summaryTotal: { color: theme.colors.navy, flexShrink: 1, fontSize: 24, fontWeight: '900', maxWidth: '48%', textAlign: 'right' },
   secondary: { minHeight: 44, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, alignItems: 'center', justifyContent: 'center' },
   notice: { borderRadius: theme.radius.md, backgroundColor: '#EFF8FF', padding: 11, flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
   warning: { backgroundColor: '#FFFAEB' },
