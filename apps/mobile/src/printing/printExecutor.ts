@@ -16,7 +16,7 @@ export async function executePreparedPrintJob(tenantId: string, job: PrintJob): 
 
     const copies = receiptCopies(job);
     for (const copy of copies) {
-      const snapshot = job.contentSnapshot.documentType === 'receipt'
+      const snapshot = job.contentSnapshot.documentType === 'receipt' || job.contentSnapshot.documentType === 'payment_receipt'
         ? { ...job.contentSnapshot, copyLabel: copy.label }
         : job.contentSnapshot;
       const bytes = buildEscPosPrintBytes(snapshot, job.paperWidthMm);
@@ -31,7 +31,7 @@ export async function executePreparedPrintJob(tenantId: string, job: PrintJob): 
       if (!reconciled) throw statusError;
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'The receipt could not be printed.';
+    const message = error instanceof Error ? error.message : 'The document could not be printed.';
 
     if (hardwareWriteCompleted) {
       const reconciled = await reconcilePrintedStatus(tenantId, job.jobId);
@@ -49,7 +49,7 @@ export async function executePreparedPrintJob(tenantId: string, job: PrintJob): 
         });
       } catch {
         // The commercial transaction is already complete. A status-sync failure
-        // must never become a reason to replay or roll back the sale.
+        // must never become a reason to replay or roll back the sale/payment.
       }
     }
     throw new Error(message);
@@ -57,7 +57,9 @@ export async function executePreparedPrintJob(tenantId: string, job: PrintJob): 
 }
 
 function receiptCopies(job: PrintJob): ReceiptCopyDefinition[] {
-  if (job.contentSnapshot.documentType !== 'receipt') return [{ type: 'customer', label: '', sortOrder: 1 }];
+  if (job.contentSnapshot.documentType !== 'receipt' && job.contentSnapshot.documentType !== 'payment_receipt') {
+    return [{ type: 'customer', label: '', sortOrder: 1 }];
+  }
   const configured = job.contentSnapshot.copyDefinitions?.filter((copy) => copy.label.trim()) ?? [];
   return configured.length > 0
     ? [...configured].sort((a, b) => a.sortOrder - b.sortOrder)

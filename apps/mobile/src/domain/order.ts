@@ -178,11 +178,14 @@ export function orderOutstanding(order: MerchantOrder): number | null {
 }
 
 export function orderPaymentLabel(order: MerchantOrder): string {
+  // Explicit server payment states take precedence over any derived balance label.
+  // A partially collected sale that is still awaiting verification must remain
+  // visibly Pending/Verification required rather than being downgraded to Partial.
   if (order.paymentStatus === 'paid') return 'Paid';
   if (order.paymentStatus === 'payment_issue') return 'Payment issue';
-  if (order.amountPaid > 0.005 && (orderOutstanding(order) ?? 0) > 0.005) return 'Partial';
   if (order.paymentStatus === 'verification_required') return 'Verification required';
   if (order.paymentStatus === 'pending') return 'Pending';
+  if (order.amountPaid > 0.005 && (orderOutstanding(order) ?? 0) > 0.005) return 'Partial';
   if (order.paymentTerms === 'pay_later' && (orderOutstanding(order) ?? 0) > 0.005) return 'Pay later';
   return 'Unpaid';
 }
