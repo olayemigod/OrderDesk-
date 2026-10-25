@@ -106,3 +106,13 @@ test('Legacy hashes remain recoverable after navigation convergence', () => {
     assert.match(workspace, new RegExp(`['\"]?${legacy.replace('/', '\\/')}['\"]?:`));
   }
 });
+
+
+test('Browser history tracks the full hash so same-route Merchant context restores on Back and Forward', () => {
+  assert.match(workspace, /const \[locationHash, setLocationHash\] = useState\(\(\) => window\.location\.hash\)/);
+  assert.match(workspace, /const route = routeFromHash\(locationHash\)/);
+  assert.match(workspace, /const tenantId = tenantFromHash\(locationHash\)/);
+  assert.match(workspace, /const handleHashChange = \(\) => setLocationHash\(window\.location\.hash\)/);
+  assert.match(workspace, /\[session\.access_token, tenantId\]/);
+  assert.doesNotMatch(workspace, /const \[route, setRoute\]/);
+});
