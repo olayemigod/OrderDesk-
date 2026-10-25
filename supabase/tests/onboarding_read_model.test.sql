@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(15);
+select extensions.plan(16);
 
 select extensions.ok(
   has_function_privilege('authenticated','public.get_sellertray_onboarding_state(uuid)','EXECUTE'),
@@ -76,8 +76,8 @@ select extensions.is(
 );
 select extensions.is(
   (select public.get_sellertray_onboarding_state_core(tenant_id)->>'accessEnforcement' from oa1_fixture),
-  'informational_only_until_oa4',
-  'OA1 onboarding status is explicitly non-blocking until the governed activation cutover'
+  'governed_runtime',
+  'onboarding status identifies the governed runtime enforcement boundary'
 );
 select extensions.is(
   (select (public.get_sellertray_onboarding_state_core(tenant_id)#>>'{settlement,approvedAdjustmentAmount}')::numeric from oa1_fixture),
@@ -91,9 +91,15 @@ select extensions.is(
 );
 select extensions.is(
   (select (public.get_sellertray_onboarding_state_core(tenant_id)#>>'{legacyRuntime,compatibilityAccess}')::boolean from oa1_fixture),
-  true,
-  'OA1 exposes existing governed trial compatibility access without converting it into onboarding activation'
+  false,
+  'new Businesses do not receive operational trial access before activation'
 );
+
+-- An existing legacy trial remains compatible; OA4 does not retire the estate.
+update public.tenant_subscriptions s set trial_ends_at=now()+interval '5 days'
+from oa1_fixture f where f.tenant_id=s.tenant_id;
+select extensions.ok(public.orderdesk_subscription_can_write(tenant_id),
+  'legacy runtime access is preserved without a governed purchase') from oa1_fixture;
 
 select * from extensions.finish();
 rollback;

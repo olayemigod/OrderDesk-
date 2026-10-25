@@ -49,7 +49,7 @@ export function CreateBusinessView({ onCreate }: Props) {
   return (
     <View style={styles.wrap}>
       <View style={styles.hero}>
-        <Text style={styles.eyebrow}>CREATE ACCOUNT & BUSINESS SETUP</Text>
+        <Text style={styles.eyebrow}>BUSINESS SETUP</Text>
         <View style={styles.stepHeader}>
           <Text style={styles.stepText}>Step 1 of 3</Text>
           <Text style={styles.stepPercent}>33%</Text>
@@ -61,6 +61,16 @@ export function CreateBusinessView({ onCreate }: Props) {
         <Text style={styles.subtitle}>
           Add the business details SellerTray needs to create your merchant workspace.
         </Text>
+      </View>
+
+      <View style={styles.ownerNotice}>
+        <Ionicons name="person-circle-outline" size={22} color="#175CD3" />
+        <View style={styles.ownerNoticeCopy}>
+          <Text style={styles.ownerNoticeTitle}>Your signed-in SellerTray account will be the Owner</Text>
+          <Text style={styles.ownerNoticeText}>
+            Business contact details below do not change the login account or transfer ownership. Team access and ownership changes use the governed Team & Permissions flow.
+          </Text>
+        </View>
       </View>
 
       <View style={styles.card}>
@@ -113,7 +123,8 @@ export function CreateBusinessView({ onCreate }: Props) {
           />
         </Field>
 
-        <Field label="Business email">
+        <Field label="Business contact email">
+          <Text style={styles.help}>Used as a merchant contact address. It is not the SellerTray login or Owner account.</Text>
           <TextInput
             editable={!submitting}
             value={email}
@@ -125,7 +136,7 @@ export function CreateBusinessView({ onCreate }: Props) {
           />
         </Field>
 
-        <Field label="Business phone">
+        <Field label="Business contact phone">
           <TextInput
             editable={!submitting}
             value={phone}
@@ -228,6 +239,10 @@ const styles = StyleSheet.create({
   eyebrow: { color: '#12B76A', fontSize: 12, fontWeight: '900', letterSpacing: 1.4 },
   title: { color: '#102A43', fontSize: 28, lineHeight: 34, fontWeight: '900' },
   subtitle: { color: '#667085', fontSize: 14, lineHeight: 21 },
+  ownerNotice: { flexDirection: 'row', gap: 10, borderWidth: 1, borderColor: '#B2CCFF', backgroundColor: '#EFF8FF', borderRadius: 16, padding: 14 },
+  ownerNoticeCopy: { flex: 1, gap: 4 },
+  ownerNoticeTitle: { color: '#1849A9', fontSize: 14, lineHeight: 20, fontWeight: '900' },
+  ownerNoticeText: { color: '#175CD3', fontSize: 13, lineHeight: 19 },
   card: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 18, padding: 16, gap: 14 },
   field: { gap: 6 },
   label: { color: '#344054', fontSize: 13, fontWeight: '800' },

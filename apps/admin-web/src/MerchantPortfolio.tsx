@@ -43,7 +43,7 @@ export default function MerchantPortfolio({ session, refreshKey }: { session: Se
   }, [session.access_token, search, filter, cursor?.afterName, cursor?.afterId, refreshKey]);
 
   function selectMerchant(id: string) {
-    window.location.hash = `merchants?tenant=${encodeURIComponent(id)}`;
+    window.location.hash = `merchants/all?tenant=${encodeURIComponent(id)}`;
     setSelectedId(id);
   }
 
@@ -85,7 +85,7 @@ export default function MerchantPortfolio({ session, refreshKey }: { session: Se
           <div><button className="workspace-button subtle compact" disabled={!cursorStack.length || loading} onClick={() => setCursorStack((current) => current.slice(0, -1))}>Previous</button><button className="workspace-button subtle compact" disabled={!portfolio?.hasMore || !portfolio.nextCursor || loading} onClick={() => portfolio?.nextCursor && setCursorStack((current) => [...current, portfolio.nextCursor as MerchantCursor])}>Next</button></div>
         </div>
       </section>
-      {selectedId ? <Merchant360 session={session} tenantId={selectedId} onClose={() => { window.location.hash = 'merchants'; setSelectedId(null); }} /> : null}
+      {selectedId ? <Merchant360 session={session} tenantId={selectedId} onClose={() => { window.location.hash = 'merchants/all'; setSelectedId(null); }} /> : null}
     </div>
   );
 }
@@ -143,7 +143,7 @@ function Summary({ detail }: { detail: MerchantDetail }) {
 
 function Commercial({ detail }: { detail: MerchantDetail }) {
   const { commercial, merchant } = detail;
-  return <section className="workspace-drawer-section"><h3>Governed commercial readiness</h3><div className="workspace-detail-grid"><Detail label="Commercial orders" value={commercial.commercialOrders.toLocaleString()} /><Detail label="Latest order" value={formatDate(commercial.latestCommercialOrderAt, 'None recorded')} /><Detail label="Agreements" value={`${commercial.agreementsAccepted} accepted · ${commercial.agreementsIssued} issued`} /><Detail label="Branch setup" value={`${commercial.setupReady} ready · ${commercial.setupRequired} required`} /></div><div className="workspace-banner info">Payment confirmation, agreement acceptance, Branch setup readiness and entitlement remain separate authorities.</div><button className="workspace-button primary" onClick={() => { window.location.hash = `billing?tenant=${encodeURIComponent(merchant.id)}`; }}>Open Billing & Commercial</button></section>;
+  return <section className="workspace-drawer-section"><h3>Governed commercial readiness</h3><div className="workspace-detail-grid"><Detail label="Commercial orders" value={commercial.commercialOrders.toLocaleString()} /><Detail label="Latest order" value={formatDate(commercial.latestCommercialOrderAt, 'None recorded')} /><Detail label="Agreements" value={`${commercial.agreementsAccepted} accepted · ${commercial.agreementsIssued} issued`} /><Detail label="Branch setup" value={`${commercial.setupReady} ready · ${commercial.setupRequired} required`} /></div><div className="workspace-banner info">Payment confirmation, agreement acceptance, Branch setup readiness and entitlement remain separate authorities.</div><button className="workspace-button primary" onClick={() => { window.location.hash = `commercial/orders?tenant=${encodeURIComponent(merchant.id)}`; }}>Open Commercial Orders</button></section>;
 }
 
 function ActivityPanel({ detail }: { detail: MerchantDetail }) {

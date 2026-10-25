@@ -1,41 +1,42 @@
-/* SellerTray brand rendering.
- * The approved Admin Portal logo binary is shared across SellerTray surfaces.
- * Merchant Web must preserve the logo artwork instead of cropping it into a
- * green square or recolouring it through its container.
- */
-
-.sellertray-mark {
-  background: #fff;
-  box-shadow: inset 0 0 0 1px rgba(16, 42, 67, .08), 0 5px 14px rgba(0, 0, 0, .16);
-}
-
-.sellertray-mark img {
-  width: 100%;
-  height: 100%;
-  padding: 2px;
-  object-fit: contain;
-  object-position: center;
-}
-
+/* Shared approved Mobile v2 mark and wordmark, bundled for reliable rendering. */
+.sellertray-mark,
 .login-brand .sellertray-mark.large {
-  width: min(260px, 70%);
-  height: 82px;
-  flex-basis: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: auto;
+  height: auto;
+  flex: 0 0 auto;
   overflow: visible;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
 }
-
+.sellertray-mark img,
 .login-brand .sellertray-mark.large img {
+  display: block;
+  width: 42px;
+  height: 42px;
   padding: 0;
   object-fit: contain;
-  object-position: left center;
+  flex: 0 0 auto;
 }
-
+.sellertray-wordmark {
+  color: var(--ink, #102a43);
+  font-size: 25px;
+  font-weight: 900;
+  letter-spacing: -.8px;
+  line-height: 1.2;
+}
+.sellertray-wordmark span { color: #12b76a; }
+.login-brand .sellertray-wordmark { color: #f8fafc; font-size: 34px; }
+.login-brand .sellertray-mark.large img { width: 58px; height: 58px; }
+.sellertray-brand { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.sellertray-brand-surface { margin-left: 52px; color: var(--muted, #66788a); font-size: .72rem; font-weight: 700; }
+.sidebar .sellertray-wordmark { color: #f8fafc; }
+.sidebar .sellertray-brand-surface { color: #9fb3c4; }
+.status-card .sellertray-mark { justify-content: center; }
 @media (max-width: 560px) {
-  .login-brand .sellertray-mark.large {
-    width: min(240px, 82vw);
-    height: 68px;
-  }
+  .login-brand .sellertray-wordmark { font-size: 30px; }
+  .login-brand .sellertray-mark.large img { width: 50px; height: 50px; }
 }

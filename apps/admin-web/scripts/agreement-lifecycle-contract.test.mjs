@@ -5,14 +5,16 @@ import test from 'node:test';
 
 const read = (path) => readFileSync(resolve(import.meta.dirname, '../..', path), 'utf8');
 const selector = read('admin-web/src/MerchantSelector.tsx');
+const commercial = read('admin-web/src/CommercialAdminWorkspaces.tsx');
 const lifecycle = read('admin-web/src/AgreementLifecycleManagement.tsx');
 const agreementsGateway = read('../supabase/functions/commercial-agreements/index.ts');
 const c1a = read('../supabase/migrations/20261021001023_c1a_commercial_agreements_foundation.sql');
 
-test('single-Business Billing exposes agreement lifecycle after merchant selection only', () => {
-  assert.match(selector, /import AgreementLifecycleManagement/);
-  assert.match(selector, /selectedTenantId = mode === 'single'/);
-  assert.match(selector, /<AgreementLifecycleManagement session=\{session\} tenantId=\{selectedTenantId\}/);
+test('focused Agreements workspace exposes lifecycle after explicit merchant scope', () => {
+  assert.match(commercial, /import AgreementLifecycleManagement/);
+  assert.match(commercial, /<AgreementLifecycleManagement session=\{session\} tenantId=\{tenantId\}/);
+  assert.match(selector, /showCommercialPortfolio === true/);
+  assert.doesNotMatch(selector, /showCommercialPortfolio \?\? mode === 'single'/);
 });
 
 test('replacement workflow reuses governed Admin issue authority and explicit supersession', () => {

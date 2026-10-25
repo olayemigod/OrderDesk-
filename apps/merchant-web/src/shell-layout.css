@@ -1,0 +1,48 @@
+/* Merchant navigation positioning; branding is owned by src/brand.css. */
+@media (min-width: 1025px) {
+  .app-shell {
+    align-items: start;
+    grid-template-columns: var(--shell-width) minmax(0, 1fr);
+  }
+
+  .app-shell > .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: var(--shell-width);
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+    align-self: start;
+  }
+
+  .workspace {
+    grid-column: 2;
+  }
+}
+
+.app-shell > .sidebar > .side-nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.app-shell > .sidebar > .sidebar-foot {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 1024px) {
+  .app-shell > .sidebar {
+    width: min(330px, calc(100vw - 44px));
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+  }
+
+  .workspace {
+    grid-column: auto;
+  }
+}
+
+.app-shell > .sidebar > .sidebar-brand-row { flex: 0 0 auto; }

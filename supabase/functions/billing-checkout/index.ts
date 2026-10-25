@@ -42,7 +42,7 @@ Deno.serve(withObservability('billing-checkout', async (request) => {
   }
 
   const authorization = request.headers.get('authorization') ?? '';
-  const identity = getJwtIdentity(authorization);
+  const identity = await getVerifiedIdentity(authorization);
   if (!identity.userId || !identity.email) {
     return json({ error: 'Authentication required' }, 401);
   }
@@ -388,21 +388,21 @@ async function rest<T = unknown>(path: string, init: RequestInit = {}): Promise<
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
-function getJwtIdentity(authorization: string): { userId: string | null; email: string | null } {
-  const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
-  const payloadSegment = token.split('.')[1];
-  if (!payloadSegment) return { userId: null, email: null };
-
+async function getVerifiedIdentity(authorization: string): Promise<{ userId: string | null; email: string | null }> {
+  const denied = { userId: null, email: null };
+  if (!/^Bearer \S+$/i.test(authorization)) return denied;
   try {
-    const normalized = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
-    const payload = JSON.parse(atob(padded)) as JsonRecord;
+    const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { authorization, apikey: SERVICE_ROLE_KEY },
+    });
+    if (!response.ok) return denied;
+    const user = await response.json() as JsonRecord;
     return {
-      userId: asString(payload.sub),
-      email: asString(payload.email)?.toLowerCase() ?? null,
+      userId: cleanUuid(user.id),
+      email: asString(user.email)?.toLowerCase() ?? null,
     };
   } catch {
-    return { userId: null, email: null };
+    return denied;
   }
 }
 

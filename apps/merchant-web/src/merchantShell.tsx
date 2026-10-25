@@ -1,13 +1,13 @@
 export type ShellIconName = 'menu' | 'close' | 'sun' | 'moon' | 'refresh' | 'chevron';
 
-const SELLERTRAY_LOGO = '/brand/sellertray-admin-logo.webp';
+const SELLERTRAY_LOGO = '/brand/sellertray-v2-mark-128.png';
 
 export function SellerTrayMark({ large = false }: { large?: boolean }) {
-  return <span className={large ? 'sellertray-mark large' : 'sellertray-mark'} aria-hidden="true"><img src={SELLERTRAY_LOGO} alt="" /></span>;
+  return <span className={large ? 'sellertray-mark large' : 'sellertray-mark'} aria-hidden="true"><img src={SELLERTRAY_LOGO} alt="" /><strong className="sellertray-wordmark">Seller<span>Tray</span></strong></span>;
 }
 
 export function SellerTrayBrand({ subtitle = 'Merchant Web' }: { subtitle?: string }) {
-  return <div className="sellertray-brand"><SellerTrayMark /><div className="sellertray-brand-copy"><strong>SellerTray</strong><span>{subtitle}</span></div></div>;
+  return <div className="sellertray-brand"><SellerTrayMark /><span className="sellertray-brand-surface">{subtitle}</span></div>;
 }
 
 type NavIconName =

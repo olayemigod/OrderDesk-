@@ -176,6 +176,22 @@ export function useOfflineSalesSync() {
       const shouldFinalize = plan.payLater
         || (isPartial && confirmedAllocated > PAYMENT_EPSILON)
         || (allocated >= sale.total - PAYMENT_EPSILON && confirmedAllocated >= sale.total - PAYMENT_EPSILON);
+      const expectedAmountPaid = roundMoney(Math.min(confirmedAllocated, sale.total));
+      const expectedOutstanding = roundMoney(Math.max(sale.total - expectedAmountPaid, 0));
+
+      if (Math.abs(result.amountPaid - expectedAmountPaid) > PAYMENT_EPSILON) {
+        throw new PosDraftRequestError('Offline payment replay changed the confirmed amount paid. Review this queued sale.', 'conflict', 409);
+      }
+      if (Math.abs(result.outstandingAmount - expectedOutstanding) > PAYMENT_EPSILON) {
+        throw new PosDraftRequestError('Offline payment replay changed the outstanding customer balance. Review this queued sale.', 'conflict', 409);
+      }
+      const paymentIds = result.payments.map((payment) => payment.paymentId);
+      if (new Set(paymentIds).size !== paymentIds.length) {
+        throw new PosDraftRequestError('Offline payment replay returned duplicate payment allocations. Review this queued sale.', 'conflict', 409);
+      }
+      if (result.idempotentReplay && result.payments.length !== plan.allocations.length) {
+        throw new PosDraftRequestError('Offline payment replay duplicated or lost a governed payment allocation. Review this queued sale.', 'conflict', 409);
+      }
 
       if (shouldFinalize) {
         if (result.status !== 'completed' || result.inventoryMovementCount < 1) {

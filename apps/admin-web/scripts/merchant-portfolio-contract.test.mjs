@@ -7,7 +7,7 @@ const read = (path) => readFileSync(resolve(import.meta.dirname, '../..', path),
 const workspace = read('admin-web/src/AdminWorkspace.tsx');
 const merchants = read('admin-web/src/MerchantPortfolio.tsx');
 const merchantReadModel = read('admin-web/src/merchant-read-model.ts');
-const commercial = read('admin-web/src/CommercialBillingAdministration.tsx');
+const commercial = read('admin-web/src/CommercialAdminWorkspaces.tsx');
 const platformAdmin = read('../supabase/functions/platform-admin/index.ts');
 
 test('merchant discovery uses the governed paginated read model', () => {
@@ -19,11 +19,12 @@ test('merchant discovery uses the governed paginated read model', () => {
   assert.doesNotMatch(merchants, /overview\.tenants|\.reduce\(/);
 });
 
-test('Merchant 360 is a governed server read with a commercial drill-down', () => {
+test('Merchant 360 is a governed server read with a focused commercial drill-down', () => {
   assert.match(merchantReadModel, /action: 'merchant_detail'/);
-  assert.match(merchants, /billing\?tenant=/);
-  assert.match(workspace, /initialTenantId=\{merchantFromHash\(\)\}/);
-  assert.match(commercial, /initialTenantId\?: string \| null/);
+  assert.match(merchants, /commercial\/orders\?tenant=/);
+  assert.match(workspace, /tenantFromHash/);
+  assert.match(workspace, /case 'commercial\/orders'/);
+  assert.match(commercial, /CommercialOrdersAdministration/);
 });
 
 test('Edge Function validates and dispatches both merchant read models', () => {

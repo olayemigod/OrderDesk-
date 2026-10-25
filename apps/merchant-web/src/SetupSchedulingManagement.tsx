@@ -21,6 +21,7 @@ type ScheduleState = { tenantId: string; appointments: Appointment[]; generatedA
 type RequestDraft = { appointmentId: string; startLocal: string; endLocal: string; note: string };
 
 export default function SetupSchedulingManagement({ tenantId }: { tenantId: string }) {
+  const [onboarding, setOnboarding] = useState<Record<string, unknown> | null>(null);
   const [state, setState] = useState<ScheduleState | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -28,15 +29,22 @@ export default function SetupSchedulingManagement({ tenantId }: { tenantId: stri
   const [message, setMessage] = useState<string | null>(null);
   const [draft, setDraft] = useState<RequestDraft | null>(null);
   const commandIds = useRef(new Map<string,string>());
+  const currentTenant = useRef(tenantId);
+  currentTenant.current = tenantId;
 
-  useEffect(() => { setDraft(null); commandIds.current.clear(); void load(); }, [tenantId]);
+  useEffect(() => { setDraft(null); setState(null); setOnboarding(null); commandIds.current.clear(); void load(); }, [tenantId]);
 
   async function load() {
     setLoading(true); setError(null);
     try {
-      const { data, error: rpcError } = await supabase.rpc('get_sellertray_setup_schedule', { p_tenant_id: tenantId });
-      if (rpcError) throw rpcError;
-      setState(parseState(data));
+      const [schedule, status] = await Promise.all([
+        supabase.rpc('get_sellertray_setup_schedule', { p_tenant_id: tenantId }),
+        supabase.rpc('get_sellertray_onboarding_state', { p_tenant_id: tenantId }),
+      ]);
+      if (schedule.error) throw schedule.error;
+      if (status.error) throw status.error;
+      if (currentTenant.current !== tenantId) return;
+      setState(parseState(schedule.data)); setOnboarding(record(status.data));
     } catch (cause) { setError(errorMessage(cause, 'Unable to load setup scheduling.')); }
     finally { setLoading(false); }
   }
@@ -73,6 +81,13 @@ export default function SetupSchedulingManagement({ tenantId }: { tenantId: stri
   return <section className="page-stack" aria-label="Setup scheduling">
     <div className="section-heading"><div><p className="eyebrow">Business setup</p><h2>Setup appointments</h2></div><p className="muted">View the ProcessEdge setup appointment for each Branch. Appointment completion automatically feeds the existing Branch readiness and activation process.</p></div>
     {error ? <div className="error-banner compact">{error}</div> : null}
+    <button className="secondary-button" disabled={loading} onClick={() => void load()}>Refresh setup status</button>
+    {onboarding ? <article className="panel" aria-label="Activation status"><h3>{record(onboarding.activation).operationallyActive === true ? 'SellerTray is ready' : 'Setup & activation'}</h3>
+      {array(onboarding.blockers).map((b, i) => <p key={i}>{text(record(b).message)}</p>)}
+      {array(record(onboarding.branchSetup).branches).map((b) => { const branch = record(b); return <p key={text(branch.branchId)}><strong>{text(branch.branchName)}</strong> — {text(branch.setupStatus)}</p>; })}
+      <p>{text(record(onboarding.nextAction).label)}</p>
+      {record(onboarding.activation).guaranteeStart ? <p>One-month guarantee: {formatDate(text(record(onboarding.activation).guaranteeStart))} to {formatDate(text(record(onboarding.activation).guaranteeEnd))}</p> : null}
+    </article> : null}
     {message ? <div className="success-banner compact">{message}</div> : null}
     {loading && !state ? <article className="panel"><p className="muted">Loading setup appointments…</p></article> : null}
     {state?.appointments.length ? <div className="page-stack">{state.appointments.map((appointment) => <article className="panel" key={appointment.id}>

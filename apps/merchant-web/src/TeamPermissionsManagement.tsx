@@ -8,6 +8,17 @@ type Branch = { id: string; code: string; name: string; isDefault: boolean; isAc
 type TeamMember = { userId: string; email: string; role: MerchantRole; joinedAt: string };
 type Invitation = { id: string; email: string; role: InviteRole; expiresAt: string; createdAt: string };
 type TeamPayload = { actorRole: MerchantRole; members: TeamMember[]; invitations: Invitation[] };
+type MembershipEvent = {
+  id: string;
+  eventType: string;
+  subjectEmail: string | null;
+  previousRole: MerchantRole | null;
+  newRole: MerchantRole | null;
+  actorEmail: string | null;
+  actorKind: string;
+  reason: string | null;
+  createdAt: string;
+};
 type Capability =
   | 'can_manage_orders'
   | 'can_refund_sale'
@@ -57,6 +68,7 @@ const CAPABILITY_GROUPS: CapabilityGroup[] = [
 export default function TeamPermissionsManagement({ tenantId }: { tenantId: string }) {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [team, setTeam] = useState<TeamPayload>({ actorRole: 'staff', members: [], invitations: [] });
+  const [history, setHistory] = useState<MembershipEvent[]>([]);
   const [access, setAccess] = useState<AccessState[]>([]);
   const [actorUserId, setActorUserId] = useState('');
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
@@ -96,7 +108,13 @@ export default function TeamPermissionsManagement({ tenantId }: { tenantId: stri
       const nextTeam = parseTeam(teamResult.data);
       const nextAccess = parseAccess(accessResult.data);
       const userId = userResult.data.user?.id ?? '';
-      setBranches(nextBranches); setTeam(nextTeam); setAccess(nextAccess); setActorUserId(userId);
+      let nextHistory: MembershipEvent[] = [];
+      if (nextTeam.actorRole === 'owner' || nextTeam.actorRole === 'manager') {
+        const historyResult = await supabase.functions.invoke('team-management', { body: { action: 'history', tenantId, limit: 100 } });
+        if (historyResult.error) throw historyResult.error;
+        nextHistory = parseHistory(historyResult.data);
+      }
+      setBranches(nextBranches); setTeam(nextTeam); setHistory(nextHistory); setAccess(nextAccess); setActorUserId(userId);
       if (nextTeam.actorRole === 'manager') setInviteRole('staff');
       const wanted = preferredMemberId ?? selectedMemberId;
       const nextId = wanted && nextTeam.members.some((row) => row.userId === wanted)
@@ -117,11 +135,10 @@ export default function TeamPermissionsManagement({ tenantId }: { tenantId: stri
     if (!email || !email.includes('@')) { setError('Enter a valid email address.'); return; }
     setSaving(true); clearNotice();
     try {
-      const result = await invokeTeam({ action: 'invite', tenantId, email, role: team.actorRole === 'manager' ? 'staff' : inviteRole });
-      const outcome = isRecord(result.result) && result.result.outcome === 'joined' ? 'joined' : 'invited';
+      await invokeTeam({ action: 'invite', tenantId, email, role: team.actorRole === 'manager' ? 'staff' : inviteRole });
       setInviteEmail('');
       await loadAll(selectedMemberId);
-      setMessage(outcome === 'joined' ? 'Team member added.' : 'Invitation sent.');
+      setMessage('Invitation sent. Access begins only after the invited person accepts it in SellerTray.');
     } catch (cause) { setError(errorMessage(cause, 'Unable to invite this team member.')); }
     finally { setSaving(false); }
   }
@@ -213,7 +230,7 @@ export default function TeamPermissionsManagement({ tenantId }: { tenantId: stri
       <Metric label="Managers" value={managers} note="Business-wide management role" />
       <Metric label="Cashiers" value={cashiers} note="Branch-aware operational role" />
       <Metric label="Active Branches" value={activeBranches.length} note="Available for Cashier assignment" />
-      <Metric label="Pending invites" value={team.invitations.length} note="Invitations not yet accepted" />
+      <Metric label="Pending invites" value={team.invitations.length} note="Invitations awaiting explicit acceptance" />
     </div>
 
     <section className="management-block">
@@ -221,11 +238,14 @@ export default function TeamPermissionsManagement({ tenantId }: { tenantId: stri
       <form className="panel invite-form" onSubmit={invite}>
         <Field label="Email address"><SellerTrayInput type="email" required value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="person@example.com" /></Field>
         {team.actorRole === 'owner' ? <label className="field"><span>Role</span><SellerTraySelect value={inviteRole} onChange={(event) => setInviteRole(event.target.value as InviteRole)}><option value="staff">Cashier</option><option value="manager">Manager</option></SellerTraySelect></label> : <div className="role-lock"><span>Role</span><strong>Cashier</strong></div>}
-        <button className="primary-button" disabled={saving}>{saving ? 'Working…' : 'Invite team member'}</button>
+        <button className="primary-button" disabled={saving}>{saving ? 'Working…' : 'Send invitation'}</button>
       </form>
+      <p className="muted">Every invitation remains pending until the invited person explicitly accepts it in SellerTray, including existing SellerTray users.</p>
     </section>
 
     {team.invitations.length ? <article className="panel invitation-panel"><div className="panel-head"><div><p className="eyebrow">Pending</p><h3>Invitations</h3></div></div>{team.invitations.map((invitation) => <div className="invitation-row" key={invitation.id}><span><strong>{invitation.email}</strong><small>{roleLabel(invitation.role)} · expires {dateOnly(invitation.expiresAt)}</small></span><button className="text-button" type="button" disabled={saving || (team.actorRole === 'manager' && invitation.role !== 'staff')} onClick={() => void cancelInvitation(invitation)}>Cancel</button></div>)}</article> : null}
+
+    {history.length ? <article className="panel invitation-panel"><div className="panel-head"><div><p className="eyebrow">Audit trail</p><h3>Membership history</h3><p className="muted">Append-only history of invitations, acceptance, role changes, removals and ownership corrections.</p></div></div>{history.slice(0, 20).map((entry) => <div className="invitation-row" key={entry.id}><span><strong>{membershipEventLabel(entry)}</strong><small>{entry.subjectEmail ?? 'Unknown team member'} · by {entry.actorEmail ?? actorLabel(entry.actorKind)} · {dateTime(entry.createdAt)}{entry.reason ? ` · ${entry.reason}` : ''}</small></span></div>)}</article> : null}
 
     <div className="team-management-grid">
       <div className="panel member-list">
@@ -288,6 +308,29 @@ function parseTeam(value: unknown): TeamPayload {
   return { actorRole, members, invitations };
 }
 
+function parseHistory(value: unknown): MembershipEvent[] {
+  const root = isRecord(value) && Array.isArray(value.history) ? value.history : [];
+  return root.flatMap((candidate) => {
+    if (!isRecord(candidate)) return [];
+    const id = stringValue(candidate, 'eventId', 'event_id');
+    const eventType = stringValue(candidate, 'eventType', 'event_type');
+    const actorKind = stringValue(candidate, 'actorKind', 'actor_kind');
+    const createdAt = stringValue(candidate, 'createdAt', 'created_at');
+    if (!id || !eventType || !actorKind || !createdAt) return [];
+    return [{
+      id,
+      eventType,
+      subjectEmail: nullableStringValue(candidate, 'subjectEmail', 'subject_email'),
+      previousRole: nullableRole(valueAt(candidate, 'previousRole', 'previous_role')),
+      newRole: nullableRole(valueAt(candidate, 'newRole', 'new_role')),
+      actorEmail: nullableStringValue(candidate, 'actorEmail', 'actor_email'),
+      actorKind,
+      reason: nullableStringValue(candidate, 'reason'),
+      createdAt,
+    } satisfies MembershipEvent];
+  });
+}
+
 function parseAccess(value: unknown): AccessState[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((candidate) => {
@@ -299,7 +342,29 @@ function parseAccess(value: unknown): AccessState[] {
     return [{ userId: candidate.userId, role: parseRole(candidate.role), usesDefaultBranchFallback: candidate.usesDefaultBranchFallback === true, branchAccess, capabilities } satisfies AccessState];
   });
 }
+function membershipEventLabel(entry: MembershipEvent): string {
+  switch (entry.eventType) {
+    case 'invitation_created': return `Invitation sent · ${roleLabel(entry.newRole ?? 'staff')}`;
+    case 'invitation_refreshed': return `Invitation refreshed · ${roleLabel(entry.newRole ?? 'staff')}`;
+    case 'invitation_accepted': return `Invitation accepted · ${roleLabel(entry.newRole ?? 'staff')}`;
+    case 'invitation_declined': return 'Invitation declined';
+    case 'invitation_cancelled': return 'Invitation cancelled';
+    case 'invitation_expired': return 'Invitation expired';
+    case 'member_role_changed': return `Role changed · ${roleLabel(entry.previousRole ?? 'staff')} → ${roleLabel(entry.newRole ?? 'staff')}`;
+    case 'member_removed': return `Team member removed · ${roleLabel(entry.previousRole ?? 'staff')}`;
+    case 'ownership_transferred': return 'Business ownership transferred';
+    case 'legacy_membership_observed': return `Existing membership recorded · ${roleLabel(entry.newRole ?? 'staff')}`;
+    case 'legacy_invitation_observed': return 'Existing invitation recorded';
+    default: return entry.eventType.replaceAll('_', ' ');
+  }
+}
+function actorLabel(kind: string): string { return kind === 'legacy_backfill' ? 'legacy state import' : kind === 'system' ? 'SellerTray' : kind === 'platform_admin' ? 'ProcessEdge Admin' : kind === 'invitee' ? 'invited user' : 'team administrator'; }
+function valueAt(record: Record<string, unknown>, ...keys: string[]): unknown { for (const key of keys) if (key in record) return record[key]; return undefined; }
+function stringValue(record: Record<string, unknown>, ...keys: string[]): string { const value = valueAt(record, ...keys); return typeof value === 'string' ? value : ''; }
+function nullableStringValue(record: Record<string, unknown>, ...keys: string[]): string | null { const value = valueAt(record, ...keys); return typeof value === 'string' && value ? value : null; }
+function nullableRole(value: unknown): MerchantRole | null { return value === 'owner' || value === 'manager' || value === 'staff' ? value : null; }
 function parseRole(value: unknown): MerchantRole { return value === 'owner' || value === 'manager' || value === 'staff' ? value : 'staff'; }
 function roleLabel(value: MerchantRole | InviteRole): string { return value === 'staff' ? 'Cashier' : value === 'manager' ? 'Manager' : 'Owner'; }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value); }
 function dateOnly(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium' }).format(date); }
+function dateTime(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(date); }

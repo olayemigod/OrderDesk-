@@ -237,8 +237,8 @@ export function OfflinePosPaymentAllocator({
       })}
 
       <View style={[styles.summary, dark && darkStyles.details]}>
-        <View><Text style={[styles.body, dark && darkStyles.body]}>Allocated</Text><Text style={[styles.summaryValue, dark && darkStyles.title]}>{formatMoney(allocated, currency)}</Text></View>
-        <View><Text style={[styles.body, dark && darkStyles.body]}>Outstanding</Text><Text style={[styles.summaryValue, dark && darkStyles.title]}>{formatMoney(outstanding, currency)}</Text></View>
+        <View style={styles.summaryCell}><Text style={[styles.body, dark && darkStyles.body]}>Allocated</Text><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.62} style={[styles.summaryValue, dark && darkStyles.title]}>{formatMoney(allocated, currency)}</Text></View>
+        <View style={styles.summaryCellRight}><Text style={[styles.body, dark && darkStyles.body]}>Outstanding</Text><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.62} style={[styles.summaryValue, dark && darkStyles.title]}>{formatMoney(outstanding, currency)}</Text></View>
       </View>
 
       {policy.allowPayLater ? (
@@ -292,7 +292,9 @@ const styles = StyleSheet.create({
   input: { minHeight: 44, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 10, backgroundColor: theme.colors.white, color: theme.colors.navy, paddingHorizontal: 11 },
   helper: { color: theme.colors.muted, fontSize: 10, lineHeight: 15, marginTop: 4 },
   summary: { borderRadius: theme.radius.md, padding: 11, flexDirection: 'row', justifyContent: 'space-between', gap: 12, backgroundColor: theme.colors.cloud },
-  summaryValue: { color: theme.colors.navy, fontSize: 15, fontWeight: '900' },
+  summaryCell: { flex: 1, minWidth: 0 },
+  summaryCellRight: { alignItems: 'flex-end', flex: 1, minWidth: 0 },
+  summaryValue: { color: theme.colors.navy, flexShrink: 1, fontSize: 15, fontWeight: '900', maxWidth: '100%' },
   payLater: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.radius.md, padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10 },
   primary: { minHeight: 48, borderRadius: theme.radius.md, backgroundColor: theme.colors.green, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: 12 },
   primaryText: { color: theme.colors.white, fontSize: 12, fontWeight: '900' },

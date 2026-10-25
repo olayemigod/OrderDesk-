@@ -12,6 +12,10 @@ values
   ('72000000-0000-0000-0000-000000000010','Catalogue Master Test','catalogue-master-test','CM1','NGN','active'),
   ('72000000-0000-0000-0000-000000000020','Catalogue Other Test','catalogue-other-test','CM2','NGN','active');
 
+-- Catalogue administration fixture represents an already active legacy Business.
+update public.tenant_subscriptions set status='active'
+where tenant_id in ('72000000-0000-0000-0000-000000000010','72000000-0000-0000-0000-000000000020');
+
 insert into public.tenant_members(tenant_id,user_id,role)
 values
   ('72000000-0000-0000-0000-000000000010','72000000-0000-0000-0000-000000000001','owner'),

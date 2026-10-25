@@ -5,7 +5,10 @@ const root = resolve(process.cwd(), '../..');
 const appRoot = process.cwd();
 const supabaseClient = readFileSync(resolve(appRoot, 'src/supabase.ts'), 'utf8');
 const main = readFileSync(resolve(appRoot, 'src/main.tsx'), 'utf8');
-const workspace = readFileSync(resolve(appRoot, 'src/AdminWorkspace.tsx'), 'utf8');
+const activeWorkspace = readFileSync(resolve(appRoot, 'src/AdminWorkspace.tsx'), 'utf8');
+const communications = readFileSync(resolve(appRoot, 'src/AdminCommunicationsWorkspaces.tsx'), 'utf8');
+const operations = readFileSync(resolve(appRoot, 'src/AdminOperationsWorkspaces.tsx'), 'utf8');
+const revenue = readFileSync(resolve(appRoot, 'src/RevenueDashboard.tsx'), 'utf8');
 const legacyApp = readFileSync(resolve(appRoot, 'src/App.tsx'), 'utf8');
 const legacySubscriptionAccess = readFileSync(resolve(appRoot, 'src/SubscriptionAccess.tsx'), 'utf8');
 const vercel = readFileSync(resolve(appRoot, 'vercel.json'), 'utf8');
@@ -21,40 +24,68 @@ function requireValue(condition, message) {
 
 requireValue(
   !supabaseClient.includes('SERVICE_ROLE') &&
-    !workspace.includes('SERVICE_ROLE') &&
+    !activeWorkspace.includes('SERVICE_ROLE') &&
+    !communications.includes('SERVICE_ROLE') &&
+    !operations.includes('SERVICE_ROLE') &&
+    !revenue.includes('SERVICE_ROLE') &&
     !main.includes('SERVICE_ROLE') &&
     !legacyApp.includes('SERVICE_ROLE') &&
     !legacySubscriptionAccess.includes('SERVICE_ROLE') &&
     !supabaseClient.includes('SUPABASE_SECRET') &&
-    !workspace.includes('SUPABASE_SECRET') &&
+    !activeWorkspace.includes('SUPABASE_SECRET') &&
+    !communications.includes('SUPABASE_SECRET') &&
+    !operations.includes('SUPABASE_SECRET') &&
+    !revenue.includes('SUPABASE_SECRET') &&
     !main.includes('SUPABASE_SECRET'),
   'Admin browser bundle must never reference a Supabase service-role or secret key.',
 );
 
 requireValue(
   supabaseClient.includes('detectSessionInUrl: false') &&
-    workspace.includes('getAuthenticatorAssuranceLevel') &&
-    workspace.includes('challengeAndVerify') &&
-    workspace.includes("factorType: 'totp'"),
+    activeWorkspace.includes('getAuthenticatorAssuranceLevel') &&
+    activeWorkspace.includes('challengeAndVerify') &&
+    activeWorkspace.includes("factorType: 'totp'"),
   'Active Admin authentication must remain password-session based with TOTP/AAL2 enforcement.',
 );
 
 requireValue(
   main.includes("import AdminWorkspace from './AdminWorkspace'") &&
+    !main.includes('AdminWorkspaceV3') &&
     !main.includes('SubscriptionAccess') &&
-    !workspace.includes("action: 'extend_trial_days'") &&
-    !workspace.includes('Extend trial'),
+    !activeWorkspace.includes("action: 'extend_trial_days'") &&
+    !activeWorkspace.includes('Extend trial'),
   'The active Admin Web must not expose the legacy free-trial extension workflow.',
 );
 
 requireValue(
-  workspace.includes("'Overview'") &&
-    workspace.includes("'Merchants'") &&
-    workspace.includes("'Billing & Commercial'") &&
-    workspace.includes("'Communications'") &&
-    workspace.includes("'Platform Operations'") &&
-    workspace.includes("'Audit'"),
-  'Admin Web must retain the approved professional platform-operations navigation.',
+  activeWorkspace.includes("label: 'Overview'") &&
+    activeWorkspace.includes("label: 'Merchants'") &&
+    activeWorkspace.includes("label: 'Commercial'") &&
+    activeWorkspace.includes("label: 'Onboarding & Setup'") &&
+    activeWorkspace.includes("label: 'Communications'") &&
+    activeWorkspace.includes("label: 'Platform Operations'") &&
+    activeWorkspace.includes("label: 'Insights & Reports'") &&
+    activeWorkspace.includes("label: 'Governance'") &&
+    activeWorkspace.includes("label: 'Commercial Orders'") &&
+    activeWorkspace.includes("label: 'Plans & Pricing'") &&
+    activeWorkspace.includes("label: 'Setup Resources'") &&
+    activeWorkspace.includes("label: 'Compose Message'") &&
+    activeWorkspace.includes("label: 'Campaign History'") &&
+    activeWorkspace.includes("label: 'WhatsApp Operations'") &&
+    activeWorkspace.includes("label: 'AI Operations'") &&
+    activeWorkspace.includes("label: 'Revenue Dashboard'") &&
+    activeWorkspace.includes('admin-nav-group-button') &&
+    activeWorkspace.includes('admin-nav-submenu-link'),
+  'Admin Web must retain the approved grouped professional platform-operations navigation.',
+);
+
+requireValue(
+  revenue.includes("action: 'business_dashboard'") &&
+    revenue.includes('recognised revenue is not calculated or displayed here') &&
+    revenue.includes('Amounts are never combined across currencies') &&
+    platformAdminFunction.includes("action === 'business_dashboard'") &&
+    platformAdminFunction.includes('platform_admin_business_summary'),
+  'Revenue Dashboard must reuse governed platform reporting authority and preserve the accounting boundary.',
 );
 
 requireValue(
@@ -69,7 +100,7 @@ requireValue(
   supabaseClient.includes("functionName === 'platform-merchant-message'") &&
     supabaseClient.includes('sessionStorage.setItem') &&
     supabaseClient.includes("crypto.subtle.digest('SHA-256'") &&
-    workspace.includes("'platform-merchant-message'") &&
+    communications.includes("'platform-merchant-message'") &&
     edgeFunction.includes('p_request_id: requestId') &&
     migration.includes('platform_merchant_campaigns_actor_request_uidx') &&
     migration.includes("'idempotentReplay',true"),
@@ -102,13 +133,13 @@ requireValue(
 requireValue(
   supabaseClient.includes('optionalAuditRequest') &&
     supabaseClient.includes('emptyAuditResponse') &&
-    workspace.includes("event.action === 'merchant_message_published'"),
+    communications.includes("event.action === 'merchant_message_published'"),
   'Audit refresh must remain supplementary and must not turn a committed broadcast into an apparent publish failure.',
 );
 
 requireValue(
-  workspace.includes("action: 'operations_summary'") &&
-    workspace.includes("action: 'ai_parser_probe'") &&
+  operations.includes("action: 'operations_summary'") &&
+    operations.includes("action: 'ai_parser_probe'") &&
     platformAdminFunction.includes("bootstrap.actorRole !== 'admin'") &&
     platformAdminFunction.includes('platform_admin_operations_summary') &&
     platformAdminFunction.includes('ProcessEdge platform Admin role required for AI smoke test'),

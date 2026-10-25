@@ -548,6 +548,13 @@ Unless a later explicit decision changes the order, implement this lifecycle in 
 - multi-Branch blocker presentation;
 - guarantee start from activation.
 
+OA4 implementation contract:
+
+- Completion evidence version 1 requires Branch configuration and merchant walkthrough, at least one supplied/configured Bluetooth printer with serial/device identifier, successful pairing and test receipt, handover condition, receiving representative and acknowledgement/evidence reference. Missing, malformed or failed evidence prevents both completion and readiness. The appointment event records the assigned worker, verified ProcessEdge actor and server completion time.
+- Completion and exact purchase-line readiness commit together. Entitlement reconciliation uses the existing authority in an isolated exception block; a failure preserves those prerequisite facts and is audited. Recovery retries entitlement reconciliation only, never rewrites readiness, payment, agreement or runtime entitlement directly.
+- Every initial-purchase Branch obligation remains required. All three surfaces consume the shared named-Branch projection. Guarantee boundaries derive from the original entitlement activation timestamp.
+- Newly created Businesses receive no operational trial window. The compatibility row retains its pre-C2 representation, with an immediately ended trial window, until governed reconciliation activates it. Existing legacy rows are not backfilled or retired in OA4. A trial-compatibility Business with a governed subscription purchase cannot use its former trial window to bypass activation. This is a forward onboarding safeguard, not the C2 estate migration.
+
 ### OA5 — Notifications, reporting and acceptance
 
 - governed email/push/eligible WhatsApp reminders;

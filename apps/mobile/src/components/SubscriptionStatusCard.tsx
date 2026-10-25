@@ -49,12 +49,12 @@ export function SubscriptionStatusCard({ role, subscription, loading, error }: P
         </View>
         <View style={[styles.pill, readOnly ? styles.pillBlocked : styles.pillActive]}>
           <Text style={[styles.pillText, readOnly ? styles.pillTextBlocked : styles.pillTextActive]}>
-            {readOnly ? 'Read only' : statusLabel(subscription.effectiveStatus)}
+            {subscription.effectiveStatus === 'pending_setup' ? 'Preparation' : readOnly ? 'Read only' : statusLabel(subscription.effectiveStatus)}
           </Text>
         </View>
       </View>
 
-      {subscription.baseStatus === 'trial' && subscription.trialEndsAt ? (
+      {subscription.effectiveStatus !== 'pending_setup' && subscription.baseStatus === 'trial' && subscription.trialEndsAt ? (
         <Text style={[styles.body, appearance.dark && darkStyles.bodyText]}>
           {trialDays !== null && trialDays >= 0
             ? `${trialDays} day${trialDays === 1 ? '' : 's'} left in trial · ends ${formatDate(subscription.trialEndsAt)}`
@@ -72,7 +72,7 @@ export function SubscriptionStatusCard({ role, subscription, loading, error }: P
 
       {readOnly ? (
         <View style={[styles.readOnlyBox, appearance.dark && darkStyles.dangerCard]}>
-          <Text style={[styles.readOnlyTitle, appearance.dark && darkStyles.dangerTitle]}>Business operations are paused</Text>
+          <Text style={[styles.readOnlyTitle, appearance.dark && darkStyles.dangerTitle]}>{subscription.effectiveStatus === 'pending_setup' ? 'Complete setup to start selling' : 'Business operations are paused'}</Text>
           <Text style={[styles.readOnlyText, appearance.dark && darkStyles.dangerText]}>
             Existing orders and history remain visible. New orders, order changes, catalogue changes and customer-notification settings are blocked until the subscription is reactivated.
           </Text>
@@ -149,13 +149,14 @@ function formatMoney(value: number, currency: string): string {
 
 function statusLabel(value: SubscriptionAccess['effectiveStatus']): string {
   const labels: Record<SubscriptionAccess['effectiveStatus'], string> = {
-    trial: 'Trial',
+    pending_setup: 'Preparation',
+    trial: 'Preparation',
     active: 'Active',
     past_due: 'Past due',
     grace: 'Grace',
     suspended: 'Suspended',
     cancelled: 'Cancelled',
-    trial_expired: 'Trial expired',
+    trial_expired: 'Setup pending',
     grace_expired: 'Grace expired',
   };
   return labels[value];

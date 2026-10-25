@@ -73,6 +73,9 @@ The Business Dashboard remains server-calculated from governed commercial/report
 - `admin.merchants.read`
 - `admin.merchant_detail.read`
 - `admin.merchant_support.manage` for bounded support metadata/actions
+- `admin.merchant_ownership.transfer` for governed Business ownership correction/transfer
+
+`admin.merchant_ownership.transfer` is a sensitive mutation capability. It must remain distinct from ordinary merchant read/support authority, must support tenant scope, requires MFA/AAL2 at the Admin transport, requires a reason and idempotency command identifier, and must write immutable membership plus Platform Admin audit evidence. Platform Support does not receive it by default.
 
 Merchant discovery must remain paginated/bounded. Capability assignment is not permission to download the full merchant estate into browser memory.
 
@@ -138,9 +141,10 @@ Only true platform-level settings belong here. Merchant business configuration s
 The following is the intended **direction**, not permission to bypass current tested behavior during migration:
 
 | Capability family | Platform Admin | Platform Support |
-| --- | --- | --- |
+| --- | --- |
 | Business Dashboard read | Default yes | Default yes where support needs platform context |
 | Merchant estate/detail read | Default yes | Default yes |
+| Merchant ownership transfer | Eligible by capability | No by default |
 | Commercial read | Default yes | Default yes |
 | Pricing/promotions mutation | Eligible by capability | No by default |
 | Installment/payment reconciliation mutation | Eligible by capability | No by default |
@@ -185,6 +189,7 @@ The MVP may initially use global ProcessEdge scope for a small trusted team, but
 
 The following require explicit capability checks and immutable audit. Require a reason when the action changes commercial/legal/financial state or where the existing governed command already requires one:
 
+- Business ownership transfer/correction;
 - plan/price/promotion changes;
 - merchant-specific commercial overrides;
 - installment/payment reconciliation or correction;
