@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(19);
+select extensions.plan(26);
 
 select extensions.ok(
   to_regclass('public.sellertray_membership_events') is not null,
@@ -41,6 +41,41 @@ select extensions.ok(
       and not tg.tgisinternal
   ),
   'membership ledger has an append-only mutation guard'
+);
+
+select extensions.ok(
+  not has_table_privilege('authenticated', 'public.tenant_members', 'INSERT'),
+  'authenticated clients cannot create membership rows directly'
+);
+
+select extensions.ok(
+  not has_table_privilege('authenticated', 'public.tenant_members', 'UPDATE'),
+  'authenticated clients cannot change membership rows directly'
+);
+
+select extensions.ok(
+  not has_table_privilege('authenticated', 'public.tenant_members', 'DELETE'),
+  'authenticated clients cannot remove membership rows directly'
+);
+
+select extensions.ok(
+  not has_table_privilege('authenticated', 'public.tenant_invitations', 'SELECT'),
+  'authenticated clients cannot bypass governed invitation reads'
+);
+
+select extensions.ok(
+  not has_table_privilege('authenticated', 'public.tenant_invitations', 'INSERT'),
+  'authenticated clients cannot create invitations directly'
+);
+
+select extensions.ok(
+  not has_table_privilege('authenticated', 'public.tenant_invitations', 'UPDATE'),
+  'authenticated clients cannot mutate invitations directly'
+);
+
+select extensions.ok(
+  not has_table_privilege('authenticated', 'public.tenant_invitations', 'DELETE'),
+  'authenticated clients cannot delete invitations directly'
 );
 
 select extensions.ok(
