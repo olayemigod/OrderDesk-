@@ -1,6 +1,16 @@
 type JsonRecord = Record<string, unknown>;
 
-type TeamAction = 'claim' | 'list' | 'invite' | 'set_role' | 'remove' | 'cancel_invite';
+type TeamAction =
+  | 'claim'
+  | 'pending_invites'
+  | 'accept_invite'
+  | 'decline_invite'
+  | 'list'
+  | 'history'
+  | 'invite'
+  | 'set_role'
+  | 'remove'
+  | 'cancel_invite';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -26,8 +36,8 @@ Deno.serve(withObservability('team-management', async (request) => {
   }
 
   const authorization = request.headers.get('authorization') ?? '';
-  const identity = getJwtIdentity(authorization);
-  if (!identity.userId) {
+  const identity = await verifiedIdentity(authorization);
+  if (!identity) {
     return json({ error: 'Authentication required' }, 401);
   }
 
@@ -49,13 +59,34 @@ Deno.serve(withObservability('team-management', async (request) => {
   }
 
   try {
+    // Compatibility only: already-installed Mobile clients call `claim` while refreshing
+    // Businesses. Never mutate membership here. New clients must show the pending invitation
+    // and call accept_invite for one explicit invitation.
     if (action === 'claim') {
-      if (!identity.email) return json({ error: 'Authenticated email is required' }, 400);
-      const claimed = await rpc<number>('claim_orderdesk_team_invitations', {
+      return json({ claimed: 0, requiresExplicitAcceptance: true });
+    }
+
+    if (action === 'pending_invites') {
+      const invitations = await rpc<JsonRecord[]>('list_orderdesk_pending_team_invitations', {
         p_user_id: identity.userId,
-        p_email: identity.email,
       });
-      return json({ claimed: typeof claimed === 'number' ? claimed : 0 });
+      return json({ invitations: Array.isArray(invitations) ? invitations : [] });
+    }
+
+    if (action === 'accept_invite' || action === 'decline_invite') {
+      const invitationId = cleanUuid(body.invitationId);
+      if (!invitationId) return json({ error: 'invitationId is required' }, 400);
+
+      const result = await rpc<JsonRecord>(
+        action === 'accept_invite'
+          ? 'accept_orderdesk_team_invitation'
+          : 'decline_orderdesk_team_invitation',
+        {
+          p_invitation_id: invitationId,
+          p_user_id: identity.userId,
+        },
+      );
+      return json({ result });
     }
 
     const tenantId = cleanUuid(body.tenantId);
@@ -67,6 +98,19 @@ Deno.serve(withObservability('team-management', async (request) => {
         p_actor_user_id: identity.userId,
       });
       return json({ team });
+    }
+
+    if (action === 'history') {
+      const requestedLimit = Number(body.limit ?? 100);
+      const limit = Number.isFinite(requestedLimit)
+        ? Math.min(250, Math.max(1, Math.trunc(requestedLimit)))
+        : 100;
+      const history = await rpc<JsonRecord[]>('list_orderdesk_team_membership_history', {
+        p_tenant_id: tenantId,
+        p_actor_user_id: identity.userId,
+        p_limit: limit,
+      });
+      return json({ history: Array.isArray(history) ? history : [] });
     }
 
     const canWrite = await rpc<boolean>('orderdesk_subscription_can_write', {
@@ -132,9 +176,9 @@ Deno.serve(withObservability('team-management', async (request) => {
     return json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Team management request failed';
-    const status = /not a member|only an owner|only an Owner|Managers can|protected|cannot change your own|read-only/i.test(message)
+    const status = /not a member|only an owner|only an Owner|Managers can|protected|cannot change your own|read-only|belongs to another identity/i.test(message)
       ? 403
-      : /already a member|already/i.test(message)
+      : /already a member|already|conflicts/i.test(message)
         ? 409
         : /not found/i.test(message)
           ? 404
@@ -167,27 +211,42 @@ async function rpc<T>(name: string, body: JsonRecord): Promise<T> {
   return (raw ? JSON.parse(raw) : null) as T;
 }
 
-function getJwtIdentity(authorization: string): { userId: string | null; email: string | null } {
-  const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
-  const payloadSegment = token.split('.')[1];
-  if (!payloadSegment) return { userId: null, email: null };
+async function verifiedIdentity(
+  authorization: string,
+): Promise<{ userId: string; email: string | null } | null> {
+  if (!authorization.startsWith('Bearer ')) return null;
 
+  const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: { apikey: SERVICE_ROLE_KEY, authorization },
+  });
+  if (!response.ok) return null;
+
+  let user: JsonRecord;
   try {
-    const normalized = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
-    const payload = JSON.parse(atob(padded)) as JsonRecord;
-    return {
-      userId: typeof payload.sub === 'string' && payload.sub ? payload.sub : null,
-      email: typeof payload.email === 'string' && payload.email ? payload.email.toLowerCase() : null,
-    };
+    user = await response.json() as JsonRecord;
   } catch {
-    return { userId: null, email: null };
+    return null;
   }
+
+  const userId = cleanUuid(user.id);
+  const email = typeof user.email === 'string' ? cleanEmail(user.email) : null;
+  return userId ? { userId, email } : null;
 }
 
 function cleanAction(value: unknown): TeamAction | null {
   if (typeof value !== 'string') return null;
-  const supported: TeamAction[] = ['claim', 'list', 'invite', 'set_role', 'remove', 'cancel_invite'];
+  const supported: TeamAction[] = [
+    'claim',
+    'pending_invites',
+    'accept_invite',
+    'decline_invite',
+    'list',
+    'history',
+    'invite',
+    'set_role',
+    'remove',
+    'cancel_invite',
+  ];
   return supported.includes(value as TeamAction) ? value as TeamAction : null;
 }
 
@@ -378,4 +437,3 @@ function emitObservability(
   else if (level === 'warn') console.warn(line);
   else console.info(line);
 }
-

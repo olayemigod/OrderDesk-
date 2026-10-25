@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type { MerchantBusiness } from '../data/businessRepository';
-import type { TeamInviteRole, TeamInvitation, TeamMember } from '../data/teamRepository';
+import type { TeamInviteRole, TeamInvitation, TeamMember, TeamMembershipEvent } from '../data/teamRepository';
 import { useTeam } from '../hooks/useTeam';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
@@ -12,9 +12,9 @@ type Props = {
 
 export function TeamManagementView({ business }: Props) {
   const appearance = useSellerTrayAppearance();
-  const { team, loading, busy, error, refresh, invite, setRole, remove, cancelInvitation } = useTeam(business.id);
+  const { team, history, loading, busy, error, refresh, invite, setRole, remove, cancelInvitation } = useTeam(business.id);
   const [email, setEmail] = useState('');
-  const [role, setRoleDraft] = useState<TeamInviteRole>(business.role === 'manager' ? 'staff' : 'staff');
+  const [role, setRoleDraft] = useState<TeamInviteRole>('staff');
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -34,13 +34,9 @@ export function TeamManagementView({ business }: Props) {
 
     setNotice(null);
     try {
-      const outcome = await invite(cleanEmail, role);
+      await invite(cleanEmail, role);
       setEmail('');
-      setNotice(
-        outcome === 'joined'
-          ? 'Existing SellerTray user added to the team.'
-          : 'Invitation saved. Ask this person to create/sign in to SellerTray with the same email; the business will attach automatically.',
-      );
+      setNotice('Invitation sent. The Business is added only after that person accepts the invitation in SellerTray.');
     } catch {
       // Hook exposes the server error below.
     }
@@ -106,7 +102,7 @@ export function TeamManagementView({ business }: Props) {
 
       {canManage ? (
         <View style={[styles.inviteBox, appearance.dark && darkStyles.subtleCard]}>
-          <Text style={[styles.inviteTitle, appearance.dark && darkStyles.titleText]}>Add a team member</Text>
+          <Text style={[styles.inviteTitle, appearance.dark && darkStyles.titleText]}>Invite a team member</Text>
           <TextInput
             editable={!busy}
             value={email}
@@ -129,10 +125,10 @@ export function TeamManagementView({ business }: Props) {
             onPress={() => void submitInvite()}
             style={({ pressed }) => [styles.primaryButton, (busy || !email.trim()) && styles.disabled, pressed && styles.pressed]}
           >
-            <Text style={styles.primaryButtonText}>{busy ? 'Working…' : 'Add / invite member'}</Text>
+            <Text style={styles.primaryButtonText}>{busy ? 'Working…' : 'Send invitation'}</Text>
           </Pressable>
           <Text style={[styles.inviteHelper, appearance.dark && darkStyles.bodyText]}>
-            If the email already belongs to a SellerTray account, access is added immediately. Otherwise a 7-day pending invitation is created. Automatic invitation email delivery will be enabled with production SMTP.
+            Every invitation stays pending until the invited person explicitly accepts it in SellerTray, including people who already have a SellerTray account. Invitations expire after 7 days.
           </Text>
         </View>
       ) : (
@@ -156,6 +152,18 @@ export function TeamManagementView({ business }: Props) {
                 void cancelInvitation(invitation.id).catch(() => undefined);
               }}
             />
+          ))}
+        </View>
+      ) : null}
+
+      {canManage && history.length > 0 ? (
+        <View style={[styles.historySection, appearance.dark && darkStyles.subtleCard]}>
+          <Text style={[styles.pendingTitle, appearance.dark && darkStyles.titleText]}>Membership history</Text>
+          <Text style={[styles.inviteHelper, appearance.dark && darkStyles.bodyText]}>
+            SellerTray records invitations, acceptance, role changes, removals and ownership corrections as an append-only audit trail.
+          </Text>
+          {history.slice(0, 10).map((event) => (
+            <HistoryRow key={event.id} event={event} />
           ))}
         </View>
       ) : null}
@@ -248,6 +256,45 @@ function InvitationRow({
   );
 }
 
+function HistoryRow({ event }: { event: TeamMembershipEvent }) {
+  const appearance = useSellerTrayAppearance();
+  const subject = event.subjectEmail ?? 'Unknown team member';
+  const actor = event.actorEmail ?? actorLabel(event.actorKind);
+  return (
+    <View style={[styles.historyRow, appearance.dark && darkStyles.rowBorder]}>
+      <Text style={[styles.memberEmail, appearance.dark && darkStyles.titleText]}>{eventLabel(event)}</Text>
+      <Text style={[styles.memberMeta, appearance.dark && darkStyles.bodyText]}>{subject}</Text>
+      <Text style={[styles.memberMeta, appearance.dark && darkStyles.bodyText]}>By {actor} · {formatDateTime(event.createdAt)}</Text>
+      {event.reason ? <Text style={[styles.memberMeta, appearance.dark && darkStyles.bodyText]}>Reason: {event.reason}</Text> : null}
+    </View>
+  );
+}
+
+function eventLabel(event: TeamMembershipEvent): string {
+  switch (event.eventType) {
+    case 'invitation_created': return `Invitation sent · ${formatRole(event.newRole ?? '')}`;
+    case 'invitation_refreshed': return `Invitation refreshed · ${formatRole(event.newRole ?? '')}`;
+    case 'invitation_accepted': return `Invitation accepted · ${formatRole(event.newRole ?? '')}`;
+    case 'invitation_declined': return 'Invitation declined';
+    case 'invitation_cancelled': return 'Invitation cancelled';
+    case 'invitation_expired': return 'Invitation expired';
+    case 'member_role_changed': return `Role changed · ${formatRole(event.previousRole ?? '')} → ${formatRole(event.newRole ?? '')}`;
+    case 'member_removed': return `Team member removed · ${formatRole(event.previousRole ?? '')}`;
+    case 'ownership_transferred': return 'Business ownership transferred';
+    case 'legacy_membership_observed': return `Existing membership recorded · ${formatRole(event.newRole ?? '')}`;
+    case 'legacy_invitation_observed': return 'Existing invitation recorded';
+    default: return event.eventType.replaceAll('_', ' ');
+  }
+}
+
+function actorLabel(actorKind: string): string {
+  if (actorKind === 'legacy_backfill') return 'legacy state import';
+  if (actorKind === 'system') return 'SellerTray';
+  if (actorKind === 'platform_admin') return 'ProcessEdge Admin';
+  if (actorKind === 'invitee') return 'invited user';
+  return 'team administrator';
+}
+
 function RoleButton({
   label,
   active,
@@ -272,6 +319,7 @@ function canCancelInvitation(actorRole: 'owner' | 'manager' | 'staff', invitatio
 }
 
 function formatRole(role: string): string {
+  if (!role) return 'Not set';
   if (role === 'staff') return 'Cashier';
   return role.charAt(0).toUpperCase() + role.slice(1);
 }
@@ -280,6 +328,18 @@ function formatDate(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'unknown';
   return new Intl.DateTimeFormat('en-NG', { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
+}
+
+function formatDateTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'unknown';
+  return new Intl.DateTimeFormat('en-NG', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
 }
 
 const styles = StyleSheet.create({
@@ -315,6 +375,8 @@ const styles = StyleSheet.create({
   readOnlyTitle: { color: '#344054', fontSize: 12, fontWeight: '900', marginBottom: 2 },
   pendingSection: { gap: 3 },
   pendingTitle: { color: '#344054', fontSize: 12, fontWeight: '900' },
+  historySection: { backgroundColor: '#F9FAFB', borderRadius: 13, padding: 12, gap: 6 },
+  historyRow: { paddingVertical: 7, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E4E7EC' },
   errorBox: { backgroundColor: '#FEF3F2', borderRadius: 11, padding: 10, gap: 4 },
   error: { color: '#B42318', fontSize: 12, lineHeight: 15 },
   retry: { color: '#B42318', fontSize: 12, fontWeight: '900' },
