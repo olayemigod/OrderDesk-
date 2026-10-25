@@ -5,12 +5,12 @@ import test from 'node:test';
 const read = (path) => readFileSync(resolve(import.meta.dirname,'../..',path),'utf8');
 const workspace = read('admin-web/src/AdminWorkspace.tsx');
 const main = read('admin-web/src/main.tsx');
-const commercial = read('admin-web/src/CommercialBillingAdministration.tsx');
+const commercial = read('admin-web/src/CommercialAdminWorkspaces.tsx');
 const dashboard = read('admin-web/src/BusinessDashboard.tsx');
 const merchants = read('admin-web/src/MerchantPortfolio.tsx');
 const platformAdmin = read('../supabase/functions/platform-admin/index.ts');
 test('active entry keeps trial UI unreachable', () => {
-  assert.match(main,/import AdminWorkspace/);
+  assert.match(main,/import AdminWorkspace from '.\/AdminWorkspace'/);
   assert.doesNotMatch(main+workspace+dashboard,/import .*SubscriptionAccess|import .*['"]\.\/App['"]|action: 'extend_trial_days'/);
 });
 test('active Admin UI uses business terminology', () => assert.doesNotMatch(workspace+commercial+dashboard+merchants,/C1B|C1A|pre-C2|No C2|deliberate C2/));
@@ -25,8 +25,9 @@ test('dashboard request is parsed before the Edge Function dispatches it', () =>
   const dispatchAt = platformAdmin.indexOf("if (action === 'business_dashboard')");
   assert.ok(parsedAt >= 0 && actionAt > parsedAt && dispatchAt > actionAt);
 });
-test('attention drill-down survives hash routing', () => {
+test('attention drill-down survives focused hash routing', () => {
   assert.match(dashboard,/#merchants\?tenant=/);
+  assert.match(workspace,/merchants: 'merchants\/all'/);
   assert.match(workspace,/split\('\?'\)\[0\]/);
   assert.match(merchants,/setSelectedId\(merchantFromHash\(\)\)/);
 });

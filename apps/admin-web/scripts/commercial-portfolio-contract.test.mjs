@@ -9,9 +9,10 @@ const portfolio = read('admin-web/src/CommercialPortfolio.tsx');
 const gateway = read('../supabase/functions/platform-admin-commercial/index.ts');
 const migration = read('../supabase/migrations/20261023063450_platform_admin_commercial_portfolio_convergence.sql');
 
-test('Billing single-merchant selection exposes the commercial portfolio without changing multi-select communications', () => {
+test('Commercial portfolio rendering is explicit opt-in and does not leak into shell merchant selection', () => {
   assert.match(selector, /import CommercialPortfolio/);
-  assert.match(selector, /showCommercialPortfolio \?\? mode === 'single'/);
+  assert.match(selector, /showCommercialPortfolio === true/);
+  assert.doesNotMatch(selector, /showCommercialPortfolio \?\? mode === 'single'/);
   assert.match(selector, /<CommercialPortfolio/);
   assert.match(selector, /onOpenMerchant=\{\(merchant\) => onChange\(new Set\(\[merchant\.id\]\), merchant\)\}/);
 });

@@ -13,6 +13,7 @@ type PendingRequest = { id: string; appointmentId: string; branchId: string; req
 type Onboarding = { blockers: { message: string }[]; commercialOrder: { installmentObligationId?: string } | null; activation: { operationallyActive?: boolean; guaranteeStart?: string; guaranteeEnd?: string }; nextAction: { label?: string } };
 type Center = { onboarding: Onboarding; canManage: boolean; canManagePlatformMasters: boolean; serviceAreas: ServiceArea[]; workers: Worker[]; branchAreas: BranchArea[]; setupSubjects: SetupSubject[]; appointments: Appointment[]; pendingRequests: PendingRequest[] };
 type Response = { ok?: boolean; id?: string; center?: unknown; result?: unknown };
+type SetupView = 'all' | 'appointments' | 'resources' | 'completion' | 'activation';
 
 type ScheduleDraft = {
   subjectKey: string;
@@ -27,7 +28,17 @@ type ScheduleDraft = {
   rescheduleRequestId: string | null;
 };
 
-export default function SetupSchedulingAdministration({ session, initialTenantId }: { session: Session; initialTenantId?: string | null }) {
+export default function SetupSchedulingAdministration({
+  session,
+  initialTenantId,
+  view = 'all',
+  showMerchantSelector = true,
+}: {
+  session: Session;
+  initialTenantId?: string | null;
+  view?: SetupView;
+  showMerchantSelector?: boolean;
+}) {
   const [tenantId, setTenantId] = useState(initialTenantId ?? '');
   const [center, setCenter] = useState<Center | null>(null);
   const [loading, setLoading] = useState(false);
@@ -43,11 +54,15 @@ export default function SetupSchedulingAdministration({ session, initialTenantId
   currentTenant.current = tenantId;
   const [loadedTenantId, setLoadedTenantId] = useState('');
 
-  useEffect(() => { if (initialTenantId) setTenantId(initialTenantId); }, [initialTenantId]);
+  useEffect(() => { if (initialTenantId !== undefined) setTenantId(initialTenantId ?? ''); }, [initialTenantId]);
   useEffect(() => { setCenter(null); setSchedule(null); setCompletion(null); commandIds.current.clear(); if (tenantId) void load(); }, [tenantId]);
 
   const activeAreas = useMemo(() => center?.serviceAreas.filter((row) => row.active) ?? [], [center]);
   const activeWorkers = useMemo(() => center?.workers.filter((row) => row.active) ?? [], [center]);
+  const showResources = view === 'all' || view === 'resources';
+  const showAppointments = view === 'all' || view === 'appointments';
+  const showCompletion = view === 'all' || view === 'completion';
+  const showActivation = view === 'all' || view === 'activation';
 
   async function invoke(payload: Record<string, unknown>) {
     return await invokeJson<Response>('platform-admin-setup-scheduling', payload, session);
@@ -137,17 +152,27 @@ export default function SetupSchedulingAdministration({ session, initialTenantId
     void mutate(`request:${request.id}`, { action: 'resolve_request', requestId: request.id, decision: 'declined', reason }, 'Reschedule request declined.');
   }
 
+  const heading = view === 'resources'
+    ? ['Setup resources', 'Manage ProcessEdge setup service areas, workforce coverage, capacity and travel buffers.']
+    : view === 'completion'
+      ? ['Setup completion', 'Record structured equipment, pairing/test and merchant handover evidence against the exact purchased Branch setup obligation.']
+      : view === 'activation'
+        ? ['Activation queue', 'Review named activation blockers and retry governed entitlement reconciliation when prerequisites are satisfied.']
+        : view === 'appointments'
+          ? ['Setup appointments', 'Schedule, reschedule and progress ProcessEdge setup work against exact purchased Branch setup obligations.']
+          : ['Setup & activation', 'Manage governed setup scheduling, completion evidence and activation recovery.'];
+
   return <div className="workspace-stack">
     <section className="workspace-panel">
-      <div className="workspace-panel-heading"><div><h2>Setup scheduling</h2><p>Schedule ProcessEdge setup work against the exact governed Branch setup obligation. Completion feeds the existing readiness and activation authority.</p></div></div>
-      <MerchantSelector session={session} mode="single" selectedIds={tenantId ? new Set([tenantId]) : new Set()} onChange={(next) => setTenantId([...next][0] ?? '')} />
+      <div className="workspace-panel-heading"><div><h2>{heading[0]}</h2><p>{heading[1]}</p></div></div>
+      {showMerchantSelector ? <MerchantSelector session={session} mode="single" selectedIds={tenantId ? new Set([tenantId]) : new Set()} onChange={(next) => setTenantId([...next][0] ?? '')} /> : null}
       {error ? <div className="workspace-banner error">{error}</div> : null}
       {message ? <div className="workspace-banner success">{message}</div> : null}
       {loading ? <div className="workspace-banner info">Loading governed scheduling authority…</div> : null}
     </section>
 
     {center && loadedTenantId === tenantId ? <>
-      <section className="workspace-panel" aria-label="Activation status">
+      {showActivation ? <section className="workspace-panel" aria-label="Activation status">
         <h3>{center.onboarding.activation.operationallyActive ? 'SellerTray is ready' : 'Setup & activation'}</h3>
         {center.onboarding.blockers.map((blocker, index) => <p key={index}>{blocker.message}</p>)}
         <p>{center.onboarding.nextAction.label}</p>
@@ -156,8 +181,8 @@ export default function SetupSchedulingAdministration({ session, initialTenantId
           const reason = window.prompt('Reason for retrying the activation check?')?.trim() ?? '';
           if (reason.length >= 6) void mutate('recovery', { action: 'retry_activation', installmentObligationId: center.onboarding.commercialOrder?.installmentObligationId, reason }, 'Activation check finished. Review the current status and any remaining blockers.');
         }}>Retry activation check</button> : null}
-      </section>
-      {completion && center.canManage ? <SetupCompletionForm key={completion.id} branchName={completion.branchName} saving={saving !== null} onClose={() => setCompletion(null)} onSubmit={async (evidence, reason) => {
+      </section> : null}
+      {showCompletion && completion && center.canManage ? <SetupCompletionForm key={completion.id} branchName={completion.branchName} saving={saving !== null} onClose={() => setCompletion(null)} onSubmit={async (evidence, reason) => {
         const storageKey = 'sellertray.setupCompletion.v1:' + tenantId + ':' + completion.id;
         const facts = JSON.stringify({ evidence, reason });
         const previous = sessionStorage.getItem(storageKey);
@@ -168,7 +193,7 @@ export default function SetupSchedulingAdministration({ session, initialTenantId
         if (ok) sessionStorage.removeItem(storageKey);
         return ok;
       }} /> : null}
-      <section className="workspace-panel">
+      {showResources ? <section className="workspace-panel">
         <div className="workspace-panel-heading"><div><h3>Coverage & capacity</h3><p>Service-area coverage and worker capacity are ProcessEdge-wide and enforced by the shared scheduling authority, including travel buffers.</p></div></div>
         {center.canManagePlatformMasters ? <>
           <div className="workspace-field-grid two"><label>Service area code<input value={areaForm.code} onChange={(e) => setAreaForm({ ...areaForm, code: e.target.value })} /></label><label>Service area name<input value={areaForm.name} onChange={(e) => setAreaForm({ ...areaForm, name: e.target.value })} /></label></div>
@@ -185,18 +210,18 @@ export default function SetupSchedulingAdministration({ session, initialTenantId
           {activeAreas.map((area) => <span key={area.id} className="workspace-check-pill">{area.name}</span>)}
           {activeWorkers.map((worker) => <span key={worker.id} className="workspace-check-pill">{worker.name} · capacity {worker.maxConcurrentSetups} · buffer {worker.travelBufferMinutes}m</span>)}
         </div>
-      </section>
+      </section> : null}
 
-      <section className="workspace-panel">
-        <div className="workspace-panel-heading"><div><h3>Branch setup obligations</h3><p>Each appointment stays linked to its purchased Branch setup line. Ready facts remain immutable.</p></div></div>
+      {showAppointments || showCompletion ? <section className="workspace-panel">
+        <div className="workspace-panel-heading"><div><h3>{showCompletion && !showAppointments ? 'Setup completion obligations' : 'Branch setup obligations'}</h3><p>Each appointment stays linked to its purchased Branch setup line. Ready facts remain immutable.</p></div></div>
         <fieldset disabled={!center.canManage || saving !== null} style={{ border: 0, padding: 0 }}><div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Branch</th><th>Service area</th><th>Appointment</th><th>Status</th><th>Action</th></tr></thead><tbody>{center.setupSubjects.map((subject) => {
           const appointment = center.appointments.find((item) => item.commercialOrderId === subject.commercialOrderId && item.branchId === subject.branchId && ['scheduled','in_progress'].includes(item.status)) ?? center.appointments.find((item) => item.commercialOrderId === subject.commercialOrderId && item.branchId === subject.branchId && item.status === 'completed');
           const request = appointment ? center.pendingRequests.find((item) => item.appointmentId === appointment.id) : undefined;
-          return <tr key={key(subject)}><td><strong>{subject.branchName}</strong><small>{subject.branchCode}</small></td><td>{subject.serviceAreaId ? activeAreas.find((area) => area.id === subject.serviceAreaId)?.name ?? 'Assigned' : <select value="" onChange={(e) => assignArea(subject.branchId, e.target.value)}><option value="">Assign area</option>{activeAreas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}</select>}</td><td>{appointment ? <><strong>{formatDate(appointment.scheduledStartAt)}</strong><small>{appointment.workerName}</small></> : 'Not scheduled'}</td><td>{subject.ready ? 'Ready' : appointment?.status ?? 'Pending'}</td><td>{subject.ready ? <details><summary>Completion evidence</summary><p>Received by: {text(subject.completionEvidence?.receivedBy)}</p><p>Acknowledgement: {text(subject.completionEvidence?.acknowledgement)}</p>{array(subject.completionEvidence?.equipment).map((e, i) => <p key={i}>{text(record(e).identifier)} · {text(record(e).handoverCondition)} · Pairing: {text(record(e).pairingTestResult)}</p>)}</details> : appointment ? <div className="workspace-filter-row"><button className="workspace-button subtle compact" onClick={() => openSchedule(subject, appointment, request)}>Reschedule</button>{appointment.status === 'scheduled' ? <button className="workspace-button subtle compact" onClick={() => transition(appointment,'in_progress')}>Start</button> : null}{['scheduled','in_progress'].includes(appointment.status) ? <button className="workspace-button primary compact" onClick={() => transition(appointment,'completed')}>Complete</button> : null}{appointment.status === 'scheduled' ? <button className="workspace-button subtle compact" onClick={() => transition(appointment,'cancelled')}>Cancel</button> : null}</div> : subject.serviceAreaId ? <button className="workspace-button primary compact" onClick={() => openSchedule(subject)}>Schedule</button> : 'Assign area first'}</td></tr>;
+          return <tr key={key(subject)}><td><strong>{subject.branchName}</strong><small>{subject.branchCode}</small></td><td>{subject.serviceAreaId ? activeAreas.find((area) => area.id === subject.serviceAreaId)?.name ?? 'Assigned' : <select value="" onChange={(e) => assignArea(subject.branchId, e.target.value)}><option value="">Assign area</option>{activeAreas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}</select>}</td><td>{appointment ? <><strong>{formatDate(appointment.scheduledStartAt)}</strong><small>{appointment.workerName}</small></> : 'Not scheduled'}</td><td>{subject.ready ? 'Ready' : appointment?.status ?? 'Pending'}</td><td>{subject.ready ? (showCompletion ? <details><summary>Completion evidence</summary><p>Received by: {text(subject.completionEvidence?.receivedBy)}</p><p>Acknowledgement: {text(subject.completionEvidence?.acknowledgement)}</p>{array(subject.completionEvidence?.equipment).map((e, i) => <p key={i}>{text(record(e).identifier)} · {text(record(e).handoverCondition)} · Pairing: {text(record(e).pairingTestResult)}</p>)}</details> : 'Ready') : appointment ? <div className="workspace-filter-row">{showAppointments ? <button className="workspace-button subtle compact" onClick={() => openSchedule(subject, appointment, request)}>Reschedule</button> : null}{showAppointments && appointment.status === 'scheduled' ? <button className="workspace-button subtle compact" onClick={() => transition(appointment,'in_progress')}>Start</button> : null}{showCompletion && ['scheduled','in_progress'].includes(appointment.status) ? <button className="workspace-button primary compact" onClick={() => transition(appointment,'completed')}>Complete setup</button> : null}{showAppointments && appointment.status === 'scheduled' ? <button className="workspace-button subtle compact" onClick={() => transition(appointment,'cancelled')}>Cancel</button> : null}</div> : subject.serviceAreaId ? (showAppointments ? <button className="workspace-button primary compact" onClick={() => openSchedule(subject)}>Schedule</button> : 'Schedule setup first') : 'Assign area first'}</td></tr>;
         })}</tbody></table></div></fieldset>
-      </section>
+      </section> : null}
 
-      {schedule ? (() => { const subject = center.setupSubjects.find((item) => key(item) === schedule.subjectKey); return subject ? <section className="workspace-panel"><div className="workspace-panel-heading"><div><h3>{schedule.appointmentId ? 'Reschedule' : 'Schedule'} {subject.branchName}</h3><p>Capacity and travel-buffer conflicts are checked transactionally when saved.</p></div></div><div className="workspace-field-grid two"><label>Service area<select value={schedule.serviceAreaId} onChange={(e) => setSchedule({ ...schedule, serviceAreaId: e.target.value, workerId: '' })}><option value="">Choose area</option>{activeAreas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}</select></label><label>Setup worker<select value={schedule.workerId} onChange={(e) => setSchedule({ ...schedule, workerId: e.target.value })}><option value="">Choose worker</option>{activeWorkers.filter((worker) => !schedule.serviceAreaId || worker.serviceAreaIds.includes(schedule.serviceAreaId)).map((worker) => <option key={worker.id} value={worker.id}>{worker.name} · capacity {worker.maxConcurrentSetups}</option>)}</select></label><label>Starts<input type="datetime-local" value={schedule.startLocal} onChange={(e) => setSchedule({ ...schedule, startLocal: e.target.value })} /></label><label>Ends<input type="datetime-local" value={schedule.endLocal} onChange={(e) => setSchedule({ ...schedule, endLocal: e.target.value })} /></label><label>Merchant-visible note<textarea value={schedule.merchantNote} onChange={(e) => setSchedule({ ...schedule, merchantNote: e.target.value })} /></label><label>ProcessEdge internal note<textarea value={schedule.internalNote} onChange={(e) => setSchedule({ ...schedule, internalNote: e.target.value })} /></label></div><label>Reason<input value={schedule.reason} onChange={(e) => setSchedule({ ...schedule, reason: e.target.value })} /></label><div className="workspace-filter-row"><button className="workspace-button primary" disabled={saving !== null} onClick={() => saveSchedule(subject)}>Save appointment</button><button className="workspace-button subtle" onClick={() => setSchedule(null)}>Close</button></div></section> : null; })() : null}
+      {showAppointments && schedule ? (() => { const subject = center.setupSubjects.find((item) => key(item) === schedule.subjectKey); return subject ? <section className="workspace-panel"><div className="workspace-panel-heading"><div><h3>{schedule.appointmentId ? 'Reschedule' : 'Schedule'} {subject.branchName}</h3><p>Capacity and travel-buffer conflicts are checked transactionally when saved.</p></div></div><div className="workspace-field-grid two"><label>Service area<select value={schedule.serviceAreaId} onChange={(e) => setSchedule({ ...schedule, serviceAreaId: e.target.value, workerId: '' })}><option value="">Choose area</option>{activeAreas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}</select></label><label>Setup worker<select value={schedule.workerId} onChange={(e) => setSchedule({ ...schedule, workerId: e.target.value })}><option value="">Choose worker</option>{activeWorkers.filter((worker) => !schedule.serviceAreaId || worker.serviceAreaIds.includes(schedule.serviceAreaId)).map((worker) => <option key={worker.id} value={worker.id}>{worker.name} · capacity {worker.maxConcurrentSetups}</option>)}</select></label><label>Starts<input type="datetime-local" value={schedule.startLocal} onChange={(e) => setSchedule({ ...schedule, startLocal: e.target.value })} /></label><label>Ends<input type="datetime-local" value={schedule.endLocal} onChange={(e) => setSchedule({ ...schedule, endLocal: e.target.value })} /></label><label>Merchant-visible note<textarea value={schedule.merchantNote} onChange={(e) => setSchedule({ ...schedule, merchantNote: e.target.value })} /></label><label>ProcessEdge internal note<textarea value={schedule.internalNote} onChange={(e) => setSchedule({ ...schedule, internalNote: e.target.value })} /></label></div><label>Reason<input value={schedule.reason} onChange={(e) => setSchedule({ ...schedule, reason: e.target.value })} /></label><div className="workspace-filter-row"><button className="workspace-button primary" disabled={saving !== null} onClick={() => saveSchedule(subject)}>Save appointment</button><button className="workspace-button subtle" onClick={() => setSchedule(null)}>Close</button></div></section> : null; })() : null}
 
       {center.pendingRequests.length ? <section className="workspace-panel"><div className="workspace-panel-heading"><div><h3>Merchant reschedule requests</h3><p>Requests never alter the appointment directly. ProcessEdge accepts them only through a governed reschedule.</p></div></div>{center.pendingRequests.map((request) => { const appointment = center.appointments.find((item) => item.id === request.appointmentId); const subject = appointment ? center.setupSubjects.find((item) => item.branchId === appointment.branchId && item.commercialOrderId === appointment.commercialOrderId) : undefined; return <article className="workspace-operation-action" key={request.id}><div><strong>{appointment?.branchName ?? 'Branch setup'}</strong><p>{request.merchantNote}</p><small>{request.requestedStartAt ? `${formatDate(request.requestedStartAt)} → ${formatDate(request.requestedEndAt)}` : 'Merchant requested a new appointment time.'}</small></div><div className="workspace-filter-row">{appointment && subject ? <button className="workspace-button primary compact" onClick={() => openSchedule(subject, appointment, request)}>Review & reschedule</button> : null}<button className="workspace-button subtle compact" onClick={() => declineRequest(request)}>Decline</button></div></article>; })}</section> : null}
     </> : null}
