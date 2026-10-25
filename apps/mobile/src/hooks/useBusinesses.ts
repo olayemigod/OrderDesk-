@@ -9,7 +9,6 @@ import {
   type InitialBusinessInput,
   type MerchantBusiness,
 } from '../data/businessRepository';
-import { claimTeamInvitations } from '../data/teamRepository';
 
 const ACTIVE_BUSINESS_KEY = 'orderdesk.activeBusinessId';
 const ACTIVE_BUSINESS_ROLE_HINT_KEY = 'orderdesk.activeBusinessRoleHint';
@@ -23,17 +22,7 @@ export function useBusinesses() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      let nextBusinesses = await loadBusinesses();
-
-      try {
-        const claimed = await claimTeamInvitations();
-        if (claimed > 0) nextBusinesses = await loadBusinesses();
-      } catch (claimError) {
-        // Existing merchants should not lose access if invitation claiming is temporarily unavailable.
-        // A user with no workspace, however, must not be pushed into creating a new business while an invite may be pending.
-        if (nextBusinesses.length === 0) throw claimError;
-      }
-
+      const nextBusinesses = await loadBusinesses();
       const storedBusinessId = await AsyncStorage.getItem(ACTIVE_BUSINESS_KEY);
       const storedIsValid = nextBusinesses.some((business) => business.id === storedBusinessId);
       const nextActiveId = storedIsValid ? storedBusinessId! : nextBusinesses[0]?.id ?? '';
