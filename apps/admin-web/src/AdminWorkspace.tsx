@@ -175,29 +175,30 @@ export default function AdminWorkspace() {
 }
 
 function WorkspaceShell({ session, bootstrap, audit, onReload, onAuditRefresh, onSignOut }: { session: Session; bootstrap: PlatformBootstrap; audit: AdminAuditEvent[]; onReload: () => Promise<void>; onAuditRefresh: () => Promise<void>; onSignOut: () => Promise<void> }) {
-  const [route, setRoute] = useState<AdminRoute>(() => routeFromHash());
+  const [locationHash, setLocationHash] = useState(() => window.location.hash);
+  const route = routeFromHash(locationHash);
   const [merchant, setMerchant] = useState<MerchantContext>(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [merchantPickerOpen, setMerchantPickerOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set(NAV_GROUPS.map((group) => group.id)));
-  const tenantId = tenantFromHash();
+  const tenantId = tenantFromHash(locationHash);
 
   useEffect(() => {
-    const handleHashChange = () => setRoute(routeFromHash());
+    const handleHashChange = () => setLocationHash(window.location.hash);
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
   useEffect(() => {
-    const nextTenantId = tenantFromHash();
+    const nextTenantId = tenantId;
     if (!nextTenantId) { setMerchant(null); return; }
     let active = true;
     void loadMerchantDetail(session, nextTenantId)
       .then((detail) => { if (active) setMerchant({ id: detail.merchant.id, name: detail.merchant.name }); })
       .catch(() => { if (active) setMerchant({ id: nextTenantId, name: 'Selected merchant' }); });
     return () => { active = false; };
-  }, [session.access_token, route]);
+  }, [session.access_token, tenantId]);
 
   useEffect(() => {
     const group = NAV_GROUPS.find((candidate) => candidate.items.some((item) => item.id === route));
@@ -215,7 +216,6 @@ function WorkspaceShell({ session, bootstrap, audit, onReload, onAuditRefresh, o
   function navigate(next: AdminRoute) {
     const query = tenantId ? `?tenant=${encodeURIComponent(tenantId)}` : '';
     window.location.hash = `${next}${query}`;
-    setRoute(next);
     setMobileNavOpen(false);
   }
 
@@ -329,7 +329,7 @@ function Icon({ name }: { name: IconName }) {
       case 'setup': return <><path d="M4 7h16M6 7v12h12V7" /><path d="M9 4h6v6H9zM9 14h6" /></>;
       case 'communications': return <><path d="M4 5h16v11H8l-4 4z" /><path d="M8 9h8M8 12h6" /></>;
       case 'operations': return <><circle cx="12" cy="12" r="3" /><path d="M19 12h2M3 12h2M12 3v2M12 19v2M17 7l1.5-1.5M5.5 18.5 7 17M17 17l1.5 1.5M5.5 5.5 7 7" /></>;
-      case 'reports': return <><path d="M4 20V11M10 20V5M16 20v-8M22 20H2" /><path d="m4 8 6-4 6 5 4-3" /></>;
+      case 'reports': return <><path d="M4 19V9M10 19V5M16 19v-7M3 19h18" /></>;
       case 'governance': return <><path d="M6 3h12v18H6z" /><path d="M9 7h6M9 11h6M9 15h4" /></>;
       case 'menu': return <path d="M4 7h16M4 12h16M4 17h16" />;
       case 'close': return <path d="M6 6l12 12M18 6 6 18" />;
@@ -341,8 +341,8 @@ function Icon({ name }: { name: IconName }) {
   return <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{path}</svg>;
 }
 
-function routeFromHash(): AdminRoute {
-  const raw = window.location.hash.replace(/^#/, '').split('?')[0];
+function routeFromHash(hash = window.location.hash): AdminRoute {
+  const raw = hash.replace(/^#/, '').split('?')[0];
   const aliases: Record<string, AdminRoute> = {
     overview: 'overview/dashboard',
     merchants: 'merchants/all',
@@ -360,7 +360,7 @@ function routeFromHash(): AdminRoute {
   const candidate = aliases[raw] ?? raw;
   return ALL_ITEMS.some((item) => item.id === candidate) ? candidate as AdminRoute : 'overview/dashboard';
 }
-function tenantFromHash(): string | null { const value = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('tenant'); return value && /^[0-9a-f-]{36}$/i.test(value) ? value : null; }
+function tenantFromHash(hash = window.location.hash): string | null { const value = new URLSearchParams(hash.split('?')[1] ?? '').get('tenant'); return value && /^[0-9a-f-]{36}$/i.test(value) ? value : null; }
 function normalizeBootstrap(value: unknown): PlatformBootstrap { if (!isRecord(value)) throw new Error('Platform admin returned an invalid bootstrap response.'); const actorRole = value.actorRole === 'support' ? 'support' : value.actorRole === 'admin' ? 'admin' : null; if (!actorRole) throw new Error('This account is not configured for ProcessEdge platform administration.'); return { actorRole, generatedAt: stringValue(value.generatedAt), merchantCount: numberValue(value.merchantCount), legacyTrialRecords: numberValue(value.legacyTrialRecords) }; }
 function normalizeAudit(value: unknown): AdminAuditEvent[] { const source = Array.isArray(value) ? value : isRecord(value) && Array.isArray(value.events) ? value.events : []; return source.filter(isRecord).map((event) => ({ id: stringValue(event.id) || crypto.randomUUID(), action: stringValue(event.action), detail: isRecord(event.detail) ? event.detail : {}, createdAt: stringValue(event.createdAt), actorEmail: stringValue(event.actorEmail) })); }
 function auditReference(detail: Record<string, unknown>): string { return shortId(stringValue(detail.tenant_id) || stringValue(detail.tenantId) || stringValue(detail.campaign_id) || stringValue(detail.campaignId) || stringValue(detail.request_id) || stringValue(detail.requestId)); }
