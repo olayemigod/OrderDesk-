@@ -1,0 +1,60 @@
+name: Admin OA4 convergence bootstrap
+
+on:
+  push:
+    branches:
+      - automation/admin-oa4-convergence-bootstrap-20261025
+
+permissions:
+  contents: write
+
+jobs:
+  converge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: 46799b841ff02197b387c9c4d63d783806f13a40
+
+      - name: Create exact OA4 plus Admin IA convergence merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          OA4_HEAD='46799b841ff02197b387c9c4d63d783806f13a40'
+          ADMIN_IA_HEAD='1864752089d88d7b3829edf42ccdd4bdcb19220c'
+          TARGET_BRANCH='feat/admin-oa4-convergence-20261025'
+          ARCHIVE_URL='https://sb-2ixqpw41cqsc.vercel.run/admin-oa4-convergence.tar.gz'
+          ARCHIVE_SHA256='8fb7bad8470f240992c159a7276554e6700bbd5ae71f32916ff5dab69a5fe063'
+
+          git config user.name 'SellerTray Convergence Bot'
+          git config user.email 'sellertray-convergence@users.noreply.github.com'
+          git fetch origin "$ADMIN_IA_HEAD"
+          git checkout -B "$TARGET_BRANCH" "$OA4_HEAD"
+
+          # Intentionally create a real merge so both governed work streams remain
+          # ancestry-visible. The archive below contains the already-tested conflict
+          # resolution and focused OA4 Admin IA, not an independent business truth.
+          git merge --no-commit --no-ff "$ADMIN_IA_HEAD" || true
+
+          curl --fail --location --silent --show-error "$ARCHIVE_URL" -o /tmp/admin-oa4-convergence.tar.gz
+          echo "$ARCHIVE_SHA256  /tmp/admin-oa4-convergence.tar.gz" | sha256sum --check --strict
+          tar -xzf /tmp/admin-oa4-convergence.tar.gz -C .
+
+          if [[ -f .deletions ]]; then
+            while IFS= read -r path; do
+              [[ -n "$path" ]] && rm -f -- "$path"
+            done < .deletions
+            rm -f .deletions
+          fi
+
+          git add -A
+          if git diff --name-only --diff-filter=U | grep -q .; then
+            echo 'Unresolved merge conflicts remain:' >&2
+            git diff --name-only --diff-filter=U >&2
+            exit 1
+          fi
+
+          git commit -m 'merge: converge OA4 with focused Admin IA'
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
