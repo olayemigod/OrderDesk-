@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(16);
+select extensions.plan(17);
 
 select extensions.ok(
   to_regclass('public.sellertray_membership_events') is not null,
@@ -93,6 +93,12 @@ select extensions.ok(
   position('team.ownership_transfer' in pg_get_functiondef('public.platform_admin_transfer_tenant_ownership(uuid,uuid,text,text,uuid)'::regprocedure)) > 0
   and position('command_id' in pg_get_functiondef('public.platform_admin_transfer_tenant_ownership(uuid,uuid,text,text,uuid)'::regprocedure)) > 0,
   'ownership transfer writes platform audit and carries an idempotency command id'
+);
+
+select extensions.ok(
+  position('platform_admin_has_capability' in pg_get_functiondef('public.platform_admin_transfer_tenant_ownership(uuid,uuid,text,text,uuid)'::regprocedure)) > 0
+  and position('admin.merchant_ownership.transfer' in pg_get_functiondef('public.platform_admin_transfer_tenant_ownership(uuid,uuid,text,text,uuid)'::regprocedure)) > 0,
+  'ownership transfer requires the scoped Platform Admin ownership-transfer capability'
 );
 
 select * from extensions.finish();
