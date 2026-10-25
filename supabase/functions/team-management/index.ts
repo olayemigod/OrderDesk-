@@ -1,6 +1,7 @@
 type JsonRecord = Record<string, unknown>;
 
 type TeamAction =
+  | 'claim'
   | 'pending_invites'
   | 'accept_invite'
   | 'decline_invite'
@@ -58,6 +59,13 @@ Deno.serve(withObservability('team-management', async (request) => {
   }
 
   try {
+    // Compatibility only: already-installed Mobile clients call `claim` while refreshing
+    // Businesses. Never mutate membership here. New clients must show the pending invitation
+    // and call accept_invite for one explicit invitation.
+    if (action === 'claim') {
+      return json({ claimed: 0, requiresExplicitAcceptance: true });
+    }
+
     if (action === 'pending_invites') {
       const invitations = await rpc<JsonRecord[]>('list_orderdesk_pending_team_invitations', {
         p_user_id: identity.userId,
@@ -228,6 +236,7 @@ async function verifiedIdentity(
 function cleanAction(value: unknown): TeamAction | null {
   if (typeof value !== 'string') return null;
   const supported: TeamAction[] = [
+    'claim',
     'pending_invites',
     'accept_invite',
     'decline_invite',
