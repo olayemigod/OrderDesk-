@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 import type { Session } from '@supabase/supabase-js';
 import ManagementPage from './ManagementPage';
 import CashShiftsManagement from './CashShiftsManagement';
+import IncomingBusinessInvitations from './IncomingBusinessInvitations';
 import { errorMessage, numberValue, supabase } from './supabase';
 
 type MerchantRole = 'owner' | 'manager' | 'staff';
@@ -192,14 +193,14 @@ export default function App() {
     return <Status
       title="Use SellerTray mobile for daily operations"
       body="Merchant Web management is available to business Owners and Managers. Staff access remains available in the SellerTray mobile app for permitted Branch operations."
-      action={<button className="secondary-button" onClick={() => void signOut()}>Sign out</button>}
+      action={<div className="page-stack"><IncomingBusinessInvitations onMembershipChanged={loadBusinesses} /><button className="secondary-button" onClick={() => void signOut()}>Sign out</button></div>}
     />;
   }
   if (!business) {
     return <Status
       title="No management workspace"
       body={error || 'No Owner or Manager business is available for this account.'}
-      action={<button className="secondary-button" onClick={() => void signOut()}>Sign out</button>}
+      action={<div className="page-stack"><IncomingBusinessInvitations onMembershipChanged={loadBusinesses} /><button className="secondary-button" onClick={() => void signOut()}>Sign out</button></div>}
     />;
   }
 
@@ -227,6 +228,7 @@ export default function App() {
         </div>
       </header>
 
+      <IncomingBusinessInvitations onMembershipChanged={loadBusinesses} />
       {error ? <div className="error-banner">{error}<button onClick={() => setError(null)}>Dismiss</button></div> : null}
       <section className="context-bar">
         <Context label="Role" value={title(business.role)} />
