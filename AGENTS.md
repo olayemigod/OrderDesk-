@@ -32,6 +32,10 @@ For any task touching Admin Web, ProcessEdge internal roles, Platform Admin/Plat
 
 `ADMIN_CAPABILITIES.md` preserves Platform Admin and Platform Support as broad responsibility bundles while making explicit server-governed capabilities, scope and immutable audit the long-term authorization authority. Merchant Owner/Manager/Cashier permissions remain a separate merchant-domain model.
 
+For any task touching SellerTray Admin Web information architecture, navigation, page separation, merchant context, commercial workspace layout, responsive Admin shell behavior or ProcessEdge operating workflows, also read and follow:
+
+`.agents/skills/sellertray-project-implementation/ADMIN_NAVIGATION.md`
+
 For any task touching inventory valuation, stock history, purchasing cost, COGS, profitability, inventory reports, transfers, returns, or offline/backdated stock events, also read and follow:
 
 `.agents/skills/sellertray-project-implementation/VALUATION.md`
@@ -46,7 +50,7 @@ For any task touching merchant registration, first Business/Branch preparation, 
 
 `.agents/skills/sellertray-project-implementation/ONBOARDING_ACTIVATION.md`
 
-`ONBOARDING_ACTIVATION.md` records the later approved seamless registration -> Business -> web payment -> setup scheduling -> setup readiness -> automatic activation lifecycle. It also governs ProcessEdge Admin intervention at the payment stage: authorised direct-payment confirmation and merchant-specific order discounts feed the same commercial settlement authority and never become a shortcut for directly mutating entitlement.
+`ONBOARDING_ACTIVATION.md` records the seamless registration -> Business -> web payment -> setup scheduling -> setup readiness -> automatic activation lifecycle and current OA4 compatibility behavior. Where its older all-initial-Branches activation wording conflicts with the later Commercial V2 Branch-owned target architecture, `COMMERCIAL_V2.md` and `OA5_C2_SEQUENCE.md` control.
 
 For any task touching onboarding, subscriptions, setup fees, Branch commercial activation, Merchant Web billing, Admin Web commercial operations, installments, payment schedules, agreements/terms, money-back guarantees, supplied setup equipment, plans/pricing, VAT/tax presentation, promotions, merchant-specific commercial terms, referrals/rewards, or SellerTray editions, also read and follow:
 
@@ -62,7 +66,19 @@ For C1 commercial-core work and any implementation that depends on the C1/C1A/C1
 
 `.agents/skills/sellertray-project-implementation/COMMERCIAL_C1.md`
 
-`COMMERCIAL_C1.md` records the later approved additive-C1 sequencing decision and overrides older C1/C1A/C1B sequence wording where they conflict, except where a still-later explicit decision is recorded in `ONBOARDING_ACTIVATION.md` for qualifying confirmed settlement and Admin commercial intervention, or in `COMMERCIAL_FLEXIBILITY.md` for configurable installment availability and schedule behavior.
+`COMMERCIAL_C1.md` records the additive-C1 sequencing decision and the legacy runtime compatibility boundary. Its original C2 purpose remains valid: C2 deliberately retires the legacy trial-oriented Business subscription runtime only after controlled lifecycle evidence.
+
+For any task touching SellerTray subscription ownership, Branch subscriptions, Plan Profiles, plan features/capabilities/limits, commercial master configuration, subscription renewal/extension/change-plan, commercial tax/payment-method masters, agreement-version acceptance, merchant self-service subscription lifecycle, or the C2 target architecture, also read and follow:
+
+`.agents/skills/sellertray-project-implementation/COMMERCIAL_V2.md`
+
+`COMMERCIAL_V2.md` records the later approved target architecture: subscription is Branch-owned; plans are editable/versioned profiles rather than hard-coded editions; features, capabilities and limits come from one governed catalogue; Business subscription state is an aggregate; Branch activation is independent; Admin commercial configuration is master-driven; legal agreements are accepted by required published version rather than on every unchanged order. It controls where older commercial/onboarding rules conflict.
+
+For any task touching OA4 closure, OA5 notifications/reporting, controlled first-merchant acceptance, C2 sequencing, legacy subscription-runtime retirement, Commercial V2 migration/cutover or final mixed-plan multi-Branch acceptance, also read and follow:
+
+`.agents/skills/sellertray-project-implementation/OA5_C2_SEQUENCE.md`
+
+`OA5_C2_SEQUENCE.md` fixes the implementation order as **OA4 acceptance/closure -> OA5 lifecycle notifications/reporting + controlled real-merchant proof -> C2 Commercial V2 cutover/legacy runtime retirement -> later commercial/operations maturity -> launch acceptance**. Do not start the C2 cutover merely because OA4 CI is green.
 
 For any task touching offline POS selling, cached payment methods, offline payment capture/verification, outbox replay, sync conflicts, retry/idempotency, or degraded-connectivity payment behavior, also read and follow:
 
@@ -74,9 +90,9 @@ For any task touching sale/invoice printing, receipt semantics, Partial or Pay L
 
 `SALE_DOCUMENTS.md` records the later approved separation between the immutable commercial **Sales Invoice** and payment-specific **Payment Receipt** evidence. It requires explicit Payment/Fulfilment status presentation, confirmed-payment-only receipts, unchanged original invoices after later collection, adaptive monetary rendering, and duplicate-safe Partial/Pay Later replay.
 
-`CROSS_SURFACE.md`, `INTELLIGENT_IMPLEMENTATION.md`, `ADAPTIVE.md`, `ADMIN_CAPABILITIES.md`, `VALUATION.md`, `RETURNS.md`, `ONBOARDING_ACTIVATION.md`, `COMMERCIAL.md`, `COMMERCIAL_FLEXIBILITY.md`, `COMMERCIAL_C1.md`, `OFFLINE.md` and `SALE_DOCUMENTS.md` are normative extensions of the governing SellerTray skill for their applicable boundaries. `CROSS_SURFACE.md` and `INTELLIGENT_IMPLEMENTATION.md` apply universally; the others apply when their domains are touched. They do not replace or weaken any rule in `SKILL.md`; later explicit product decisions documented in an applicable extension control only where an older extension conflicts.
+`CROSS_SURFACE.md`, `INTELLIGENT_IMPLEMENTATION.md`, `ADAPTIVE.md`, `ADMIN_CAPABILITIES.md`, `ADMIN_NAVIGATION.md`, `VALUATION.md`, `RETURNS.md`, `ONBOARDING_ACTIVATION.md`, `COMMERCIAL.md`, `COMMERCIAL_FLEXIBILITY.md`, `COMMERCIAL_C1.md`, `COMMERCIAL_V2.md`, `OA5_C2_SEQUENCE.md`, `OFFLINE.md` and `SALE_DOCUMENTS.md` are normative extensions of the governing SellerTray skill for their applicable boundaries. `CROSS_SURFACE.md` and `INTELLIGENT_IMPLEMENTATION.md` apply universally; the others apply when their domains are touched. They do not replace or weaken any rule in `SKILL.md`; later explicit product decisions documented in an applicable extension control only where an older extension conflicts.
 
-That governing skill and its applicable normative extensions are the repository-level implementation contract for the SellerTray redesign. They govern intelligent lifecycle completion, cross-surface flow closure, adaptive Mobile UX and device-form-factor behavior, Admin capability/RBAC boundaries, mobile UX, merchant web boundaries, Admin Web platform/commercial operations, shared commerce architecture, POS, inventory, branch awareness, UOM, WhatsApp commerce, payments, returns/refunds/receivables, sale/invoice/payment-document semantics, subscriptions, onboarding/setup scheduling, Admin commercial intervention, setup, configurable installments, agreements, guarantees, promotions, Bluetooth printing, reporting, AI, permissions, offline behaviour, implementation phases, QA gates, and anti-divergence rules.
+That governing skill and its applicable normative extensions are the repository-level implementation contract for the SellerTray redesign. They govern intelligent lifecycle completion, cross-surface flow closure, adaptive Mobile UX and device-form-factor behavior, Admin capability/RBAC boundaries, Admin information architecture, mobile UX, merchant web boundaries, Admin Web platform/commercial operations, shared commerce architecture, POS, inventory, branch awareness, UOM, WhatsApp commerce, payments, returns/refunds/receivables, sale/invoice/payment-document semantics, Branch-owned subscriptions, onboarding/setup scheduling, Admin commercial intervention, setup, configurable installments, Plan Profiles, entitlement features/capabilities/limits, commercial masters, agreement versioning, Merchant Web subscription self-service, OA5 lifecycle evidence, C2 cutover, Bluetooth printing, reporting, AI, permissions, offline behaviour, implementation phases, QA gates, and anti-divergence rules.
 
 The originating SellerTray redesign conversation is the primary decision record when it is available to the agent. The repository skill is the durable fallback and must be used when that thread is unavailable.
 
@@ -84,11 +100,15 @@ A later explicit user decision overrides older guidance. When product direction 
 
 ## Non-negotiable product model
 
-> Mobile performs. Web manages. WhatsApp sells. AI assists. All channels use the same SellerTray commerce, inventory, UOM, customer, branch, payment, permission, reporting, and applicable commercial core.
+> Mobile performs. Web manages. WhatsApp sells. AI assists. Admin operates the platform. Shared core governs business truth.
+
+All channels use the same SellerTray commerce, inventory, UOM, customer, branch, payment, permission, reporting, and applicable commercial core.
 
 Do not implement a change that creates conflicting business truth across mobile, web, WhatsApp, AI, or Admin operations.
 
 When one surface creates or changes configuration, master data, validation, lifecycle, permissions, state, reporting dimensions, or another process contract that necessarily affects another surface, treat the dependent flow as part of the same business implementation batch. Do not leave affected operational clients on stale free text, hard-coded options, duplicated enums, obsolete validation, or ungoverned behaviour.
+
+For Commercial V2 specifically, do not implement plan-name conditionals, Business-wide subscription authority, duplicated plan feature lists, client-owned entitlement rules or one-surface commercial masters. Branch subscription, Plan Profile, feature/capability/limit, price/tax/installment/payment-method and agreement-version changes must be assessed across Shared Core, Admin Web, Merchant Web, Mobile, WhatsApp, AI, reporting/audit and offline/sync.
 
 ## Before declaring work complete
 
@@ -97,6 +117,8 @@ Confirm the applicable QA gates from the governing skill and normative extension
 Every completion report must state the cross-surface impact for Shared Core, Merchant Web, Mobile, Admin Web, WhatsApp, AI, reporting/audit, and offline/sync, with either the implemented/verified effect or a concrete no-impact reason.
 
 For Mobile UI/UX work, report the adaptive window classes and device/window sizes actually verified when `ADAPTIVE.md` applies. For Admin work, report the ProcessEdge persona, required capability, scope, MFA/AAL2 boundary, server enforcement point and audit behavior when `ADMIN_CAPABILITIES.md` applies.
+
+For OA4/OA5/C2 commercial work, explicitly state which sequence gate is being worked, which preceding gate has actually been accepted, and whether legacy Business/trial runtime authority remains active. Do not describe a C2 foundation as runtime cutover until migration and controlled acceptance have completed.
 
 ## Standing SellerTray progress conclusion
 
@@ -111,3 +133,7 @@ At minimum, conclude with:
 5. **Next bounded step** — the single recommended next implementation batch so work can resume safely in another thread without losing sequence.
 
 Keep commercial/onboarding work, Merchant Web completion, Admin Web completion, mobile work and shared-core work visible as parallel or sequential tracks where applicable. A newly introduced track must not silently erase or block previously pending work unless the user explicitly reprioritises it.
+
+For the current approved onboarding/commercial programme, preserve this visible sequence until a later explicit decision changes it:
+
+> **OA4 acceptance/closure -> OA5 lifecycle notifications/reporting + controlled real-merchant proof -> C2 Commercial V2 cutover/legacy runtime retirement -> remaining commercial/operations maturity -> launch acceptance.**
