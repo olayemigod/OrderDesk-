@@ -19,6 +19,15 @@ export function useTeam(tenantId: string | null) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const loadTeamState = useCallback(async () => {
+    if (!tenantId) return { team: null, history: [] as TeamMembershipEvent[] };
+    const nextTeam = await loadTeam(tenantId);
+    const nextHistory = nextTeam.actorRole === 'owner' || nextTeam.actorRole === 'manager'
+      ? await loadTeamMembershipHistory(tenantId)
+      : [];
+    return { team: nextTeam, history: nextHistory };
+  }, [tenantId]);
+
   const refresh = useCallback(async () => {
     if (!tenantId) {
       setTeam(null);
@@ -30,33 +39,26 @@ export function useTeam(tenantId: string | null) {
 
     setLoading(true);
     try {
-      const [nextTeam, nextHistory] = await Promise.all([
-        loadTeam(tenantId),
-        loadTeamMembershipHistory(tenantId),
-      ]);
-      setTeam(nextTeam);
-      setHistory(nextHistory);
+      const next = await loadTeamState();
+      setTeam(next.team);
+      setHistory(next.history);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load team members.');
     } finally {
       setLoading(false);
     }
-  }, [tenantId]);
+  }, [loadTeamState, tenantId]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
   const refreshAfterMutation = useCallback(async () => {
-    if (!tenantId) return;
-    const [nextTeam, nextHistory] = await Promise.all([
-      loadTeam(tenantId),
-      loadTeamMembershipHistory(tenantId),
-    ]);
-    setTeam(nextTeam);
-    setHistory(nextHistory);
-  }, [tenantId]);
+    const next = await loadTeamState();
+    setTeam(next.team);
+    setHistory(next.history);
+  }, [loadTeamState]);
 
   const run = useCallback(async (operation: () => Promise<void>) => {
     setBusy(true);
