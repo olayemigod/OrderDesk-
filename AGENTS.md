@@ -60,7 +60,7 @@ For any task touching SellerTray agreement publication, agreement-version resolu
 
 `.agents/skills/sellertray-project-implementation/AGREEMENTS.md`
 
-`AGREEMENTS.md` records the later approved universal Master Agreement model: one platform-wide immutable version applies to every merchant; each Business accepts a required version once; acceptance is never per commercial order; payment/order processing is independent; and the current required version is checked before a new governed service-delivery/activation commitment. It controls wherever older commercial/onboarding guidance or C1A implementation wording conflicts.
+`AGREEMENTS.md` records the later approved universal Master Agreement model and consolidated Agreement Package UX: one platform-wide immutable Master Agreement version applies to every merchant; each Business accepts a required Master version once; the Merchant may review that universal legal authority together with incorporated Schedules and an applicable merchant-specific Order Form through one coherent acceptance experience; the underlying universal Master acceptance and merchant-specific commercial instrument retain distinct governed identities/evidence; and the current required Master version is checked before a new governed service-delivery/activation commitment. It controls wherever older commercial/onboarding guidance or C1A implementation wording conflicts.
 
 For any task touching installment availability, installment enable/disable behavior, installment eligibility, schedule templates, schedule customization, merchant/order-specific installment overrides, or safe treatment of active installment contracts after policy changes, also read and follow:
 
@@ -116,7 +116,7 @@ When one surface creates or changes configuration, master data, validation, life
 
 For Commercial V2 specifically, do not implement plan-name conditionals, Business-wide subscription authority, duplicated plan feature lists, client-owned entitlement rules or one-surface commercial masters. Branch subscription, Plan Profile, feature/capability/limit, price/tax/installment/payment-method and agreement-version changes must be assessed across Shared Core, Admin Web, Merchant Web, Mobile, WhatsApp, AI, reporting/audit and offline/sync.
 
-For agreements specifically, current-path code must use the universal Master Agreement authority in `AGREEMENTS.md`. Do not issue, render, sign or require a merchant/order-specific agreement, and do not gate payment merely because Master Agreement acceptance is pending.
+For agreements specifically, current-path code must use the universal Master Agreement authority in `AGREEMENTS.md`. Do not create merchant-specific variants of the universal Master Agreement or make merchant/order facts part of its version identity. Merchant-specific Order Forms/commercial instruments may be rendered and accepted as part of the approved consolidated Agreement Package while retaining separate governed identity/evidence. Do not require re-acceptance of an unchanged Master Agreement merely because a new order exists, and do not gate payment merely because Master Agreement acceptance is pending.
 
 ## Before declaring work complete
 
