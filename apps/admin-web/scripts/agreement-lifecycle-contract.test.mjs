@@ -7,20 +7,20 @@ const read = (path) => readFileSync(resolve(import.meta.dirname, '../..', path),
 const workspace = read('admin-web/src/AdminWorkspace.tsx');
 const selector = read('admin-web/src/MerchantSelector.tsx');
 const commercial = read('admin-web/src/CommercialAdminWorkspaces.tsx');
+const commercialState = read('admin-web/src/commercial-admin-state.ts');
 const lifecycle = read('admin-web/src/AgreementLifecycleManagement.tsx');
 const masterGateway = read('../supabase/functions/master-agreements/index.ts');
 const legacyGateway = read('../supabase/functions/commercial-agreements/index.ts');
 const masterAuthority = read('../supabase/migrations/20261026060117_universal_master_agreement_authority.sql');
 
-test('focused Agreements workspace is platform-scoped with optional merchant review context', () => {
+test('focused Agreements workspace routes directly to the platform-scoped Master Agreement lifecycle', () => {
   assert.match(workspace, /\{ id: 'commercial\/agreements', label: 'Agreements', description: 'Master Agreement publication and Business acceptance history' \}/);
   assert.match(workspace, /case 'commercial\/agreements': return <PageFrame/);
-  assert.match(workspace, /<CommercialAgreementAdministration session=\{session\} tenantId=\{tenantId\} \/>/);
+  assert.match(workspace, /<AgreementLifecycleManagement session=\{session\} tenantId=\{tenantId \?\? undefined\} \/>/);
+  assert.doesNotMatch(workspace, /CommercialAgreementAdministration/);
   assert.doesNotMatch(workspace, /commercial\/agreements'.*merchantScoped: true/);
-  assert.match(commercial, /<AgreementLifecycleManagement session=\{session\} tenantId=\{tenantId \?\? undefined\} \/>/);
-  assert.match(commercial, /Legacy agreement history/);
-  assert.match(commercial, /immutable historical evidence only/);
-  assert.doesNotMatch(commercial, /admin_publish_template|admin_issue|Publish agreement template|Issue merchant agreement/);
+  assert.doesNotMatch(commercial, /AgreementLifecycleManagement|CommercialAgreementAdministration|LegacyAgreementHistory|Legacy agreement history/);
+  assert.doesNotMatch(commercialState, /OnboardingTemplate|OnboardingAgreement|templates:|agreements:|row\.family/);
   assert.match(selector, /showCommercialPortfolio === true/);
   assert.doesNotMatch(selector, /showCommercialPortfolio \?\? mode === 'single'/);
 });
