@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(11);
+select extensions.plan(12);
 
 select extensions.ok(
   to_regprocedure('public.platform_admin_verify_oa5c_real_merchant_proof(uuid,uuid,uuid)') is not null,
@@ -50,15 +50,15 @@ select extensions.ok(
 select extensions.ok(
   position(
     '(v_gateway_payment_count+v_direct_payment_count)>0'
-    in lower(replace(pg_get_functiondef(
+    in lower(regexp_replace(pg_get_functiondef(
       'public.platform_admin_verify_oa5c_real_merchant_proof(uuid,uuid,uuid)'::regprocedure
-    ),' ',''))
+    ),'\s+','','g'))
   ) > 0
   and position(
     'v_confirmed_payment_amount>0'
-    in lower(replace(pg_get_functiondef(
+    in lower(regexp_replace(pg_get_functiondef(
       'public.platform_admin_verify_oa5c_real_merchant_proof(uuid,uuid,uuid)'::regprocedure
-    ),' ',''))
+    ),'\s+','','g'))
   ) > 0,
   'discount-only settlement cannot satisfy the genuine-confirmed-settlement gate'
 );
@@ -146,17 +146,39 @@ select extensions.ok(
 select extensions.ok(
   position(
     'manualsurfaceobservationrequired'',true'
-    in lower(replace(pg_get_functiondef(
+    in lower(regexp_replace(pg_get_functiondef(
       'public.platform_admin_verify_oa5c_real_merchant_proof(uuid,uuid,uuid)'::regprocedure
-    ),' ',''))
+    ),'\s+','','g'))
   ) > 0
   and position(
     '''oa5caccepted'',false'
-    in lower(replace(pg_get_functiondef(
+    in lower(regexp_replace(pg_get_functiondef(
       'public.platform_admin_verify_oa5c_real_merchant_proof(uuid,uuid,uuid)'::regprocedure
-    ),' ',''))
+    ),'\s+','','g'))
   ) > 0,
   'read-only verifier cannot self-declare a fixture real or bypass Mobile/Merchant Web observation'
+);
+
+select extensions.ok(
+  position(
+    'insert into'
+    in lower(pg_get_functiondef(
+      'public.platform_admin_verify_oa5c_real_merchant_proof(uuid,uuid,uuid)'::regprocedure
+    ))
+  ) = 0
+  and position(
+    'update public.'
+    in lower(pg_get_functiondef(
+      'public.platform_admin_verify_oa5c_real_merchant_proof(uuid,uuid,uuid)'::regprocedure
+    ))
+  ) = 0
+  and position(
+    'delete from'
+    in lower(pg_get_functiondef(
+      'public.platform_admin_verify_oa5c_real_merchant_proof(uuid,uuid,uuid)'::regprocedure
+    ))
+  ) = 0,
+  'OA5C verifier contains no lifecycle write statements'
 );
 
 select * from extensions.finish();
