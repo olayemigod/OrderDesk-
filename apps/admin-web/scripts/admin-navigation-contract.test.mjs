@@ -35,7 +35,10 @@ test('Commercial and onboarding jobs have focused first-class destinations', () 
   assert.match(workspace, /CommercialOrdersAdministration/);
   assert.match(workspace, /CommercialPricingAdministration/);
   assert.match(workspace, /InstallmentEntitlementAdministration/);
-  assert.match(workspace, /CommercialAgreementAdministration/);
+  assert.match(workspace, /AgreementLifecycleManagement/);
+  assert.doesNotMatch(workspace, /CommercialAgreementAdministration/);
+  assert.match(workspace, /label: 'Master Agreement'/);
+  assert.match(workspace, /Publish the platform-wide Master Agreement and review immutable Business acceptance history/);
   assert.match(workspace, /BranchReadinessAdministration/);
   assert.match(workspace, /view="appointments" showMerchantSelector=\{false\}/);
   assert.match(workspace, /view="resources" showMerchantSelector=\{false\}/);

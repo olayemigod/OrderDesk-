@@ -28,6 +28,11 @@ const INSTALLMENT_STRUCTURES = new Set([
   'two_installment_70_30',
   'three_installment_60_20_20',
 ]);
+const RETIRED_AGREEMENT_MUTATIONS = new Set<Action>([
+  'merchant_accept',
+  'admin_publish_template',
+  'admin_issue',
+]);
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-request-id',
@@ -57,6 +62,9 @@ Deno.serve(async (request) => {
 
   const action = cleanAction(body.action);
   if (!action) return json({ error: 'Unsupported commercial agreement action' }, 400);
+  if (RETIRED_AGREEMENT_MUTATIONS.has(action)) {
+    return json({ error: 'This legacy agreement mutation is retired. Use the SellerTray Master Agreement authority.' }, 410);
+  }
 
   try {
     if (action === 'merchant_list') {

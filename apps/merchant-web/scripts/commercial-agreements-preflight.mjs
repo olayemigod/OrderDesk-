@@ -8,6 +8,7 @@ const merchantApp = read('src/MerchantApp.tsx');
 const navigation = read('src/portalNavigation.ts');
 const agreements = read('src/CommercialAgreementsManagement.tsx');
 const billing = read('src/SellerTrayBillingManagement.tsx');
+const legacyAgreementApi = read('../../supabase/functions/commercial-agreements/index.ts');
 const failures = [];
 const requireValue = (condition, message) => { if (!condition) failures.push(message); };
 const excludes = (source, values) => values.every((value) => !source.includes(value));
@@ -16,10 +17,10 @@ requireValue(
   navigation.includes("id: 'sellertray_billing'")
     && navigation.includes("label: 'SellerTray Billing'")
     && navigation.includes("id: 'agreements'")
-    && navigation.includes("label: 'Agreements'")
+    && navigation.includes("label: 'Master Agreement'")
     && navigation.includes("id: 'payments'")
     && navigation.includes("label: 'Payments & Receivables'"),
-  'Merchant navigation must keep SellerTray Billing, Agreements, and customer Payments & Receivables as separate surfaces.',
+  'Merchant navigation must keep SellerTray Billing, Master Agreement, and customer Payments & Receivables as separate surfaces.',
 );
 
 requireValue(
@@ -27,7 +28,7 @@ requireValue(
     && merchantApp.includes('<SellerTrayBillingManagement tenantId={business.id} />')
     && merchantApp.includes("page === 'agreements'")
     && merchantApp.includes('<CommercialAgreementsManagement tenantId={business.id} />'),
-  'Merchant App must route SellerTray Billing and Agreements to their dedicated surfaces.',
+  'Merchant App must route SellerTray Billing and Master Agreement to their dedicated surfaces.',
 );
 
 requireValue(
@@ -39,7 +40,7 @@ requireValue(
   agreements.includes("functions.invoke('master-agreements'")
     && agreements.includes("action: 'merchant_get'")
     && agreements.includes("action: 'merchant_accept'"),
-  'Agreements must use the governed master-agreements runtime for reads and acceptance.',
+  'Master Agreement must use the governed master-agreements runtime for reads and acceptance.',
 );
 
 requireValue(
@@ -59,7 +60,7 @@ requireValue(
   agreements.includes('new orders do not require the same agreement again')
     && agreements.includes('Commercial orders and payments remain separate')
     && agreements.includes('independent of your commercial orders, plans, Branches and payment schedule'),
-  'Merchant Agreement UI must keep universal legal acceptance independent of orders and payment.',
+  'Merchant Master Agreement UI must keep universal legal acceptance independent of orders and payment.',
 );
 
 requireValue(
@@ -75,6 +76,22 @@ requireValue(
     'SUPABASE_SECRET',
   ]),
   'Master Agreement surface must remain universal/legal-only and must not revive order-bound agreement or payment authority.',
+);
+
+const retiredGuardIndex = legacyAgreementApi.indexOf('if (RETIRED_AGREEMENT_MUTATIONS.has(action))');
+const legacyAcceptIndex = legacyAgreementApi.indexOf("if (action === 'merchant_accept')");
+const legacyPublishIndex = legacyAgreementApi.indexOf("if (action === 'admin_publish_template')");
+const legacyIssueIndex = legacyAgreementApi.indexOf("const agreementId = await rpc<string>('issue_sellertray_commercial_agreement_admin'");
+requireValue(
+  legacyAgreementApi.includes("'merchant_accept'")
+    && legacyAgreementApi.includes("'admin_publish_template'")
+    && legacyAgreementApi.includes("'admin_issue'")
+    && retiredGuardIndex >= 0
+    && legacyAcceptIndex > retiredGuardIndex
+    && legacyPublishIndex > retiredGuardIndex
+    && legacyIssueIndex > retiredGuardIndex
+    && legacyAgreementApi.includes('This legacy agreement mutation is retired. Use the SellerTray Master Agreement authority.'),
+  'Legacy order-bound agreement mutations must fail closed before any old acceptance, template-publication, or issuance branch can execute.',
 );
 
 requireValue(
