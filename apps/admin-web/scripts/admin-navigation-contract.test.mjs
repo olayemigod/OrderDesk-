@@ -5,6 +5,8 @@ import { test } from 'node:test';
 const workspace = readFileSync(new URL('../src/AdminWorkspace.tsx', import.meta.url), 'utf8');
 const selector = readFileSync(new URL('../src/MerchantSelector.tsx', import.meta.url), 'utf8');
 const commercial = readFileSync(new URL('../src/CommercialAdminWorkspaces.tsx', import.meta.url), 'utf8');
+const commercialState = readFileSync(new URL('../src/commercial-admin-state.ts', import.meta.url), 'utf8');
+const lifecycle = readFileSync(new URL('../src/AgreementLifecycleManagement.tsx', import.meta.url), 'utf8');
 const communications = readFileSync(new URL('../src/AdminCommunicationsWorkspaces.tsx', import.meta.url), 'utf8');
 const operations = readFileSync(new URL('../src/AdminOperationsWorkspaces.tsx', import.meta.url), 'utf8');
 const revenue = readFileSync(new URL('../src/RevenueDashboard.tsx', import.meta.url), 'utf8');
@@ -35,7 +37,8 @@ test('Commercial and onboarding jobs have focused first-class destinations', () 
   assert.match(workspace, /CommercialOrdersAdministration/);
   assert.match(workspace, /CommercialPricingAdministration/);
   assert.match(workspace, /InstallmentEntitlementAdministration/);
-  assert.match(workspace, /CommercialAgreementAdministration/);
+  assert.match(workspace, /AgreementLifecycleManagement/);
+  assert.doesNotMatch(workspace, /CommercialAgreementAdministration/);
   assert.match(workspace, /BranchReadinessAdministration/);
   assert.match(workspace, /view="appointments" showMerchantSelector=\{false\}/);
   assert.match(workspace, /view="resources" showMerchantSelector=\{false\}/);
@@ -46,12 +49,13 @@ test('Commercial and onboarding jobs have focused first-class destinations', () 
 test('Agreements navigation is platform-scoped and does not expose retired bespoke agreement jobs', () => {
   assert.match(workspace, /\{ id: 'commercial\/agreements', label: 'Agreements', description: 'Master Agreement publication and Business acceptance history' \}/);
   assert.match(workspace, /case 'commercial\/agreements': return <PageFrame/);
+  assert.match(workspace, /<AgreementLifecycleManagement session=\{session\} tenantId=\{tenantId \?\? undefined\} \/>/);
   assert.doesNotMatch(workspace, /commercial\/agreements'.*merchantScoped: true/);
   assert.doesNotMatch(workspace, /Templates, issuance, acceptance and replacement/);
   assert.doesNotMatch(workspace, /Publish governed templates, issue merchant agreements/);
-  assert.doesNotMatch(commercial, /Publish agreement template|Issue merchant agreement|admin_publish_template|admin_issue/);
-  assert.match(commercial, /Legacy agreement history/);
-  assert.match(commercial, /historical evidence only/);
+  assert.doesNotMatch(commercial, /AgreementLifecycleManagement|CommercialAgreementAdministration|LegacyAgreementHistory|Legacy agreement history|Publish agreement template|Issue merchant agreement|admin_publish_template|admin_issue/);
+  assert.doesNotMatch(commercialState, /OnboardingTemplate|OnboardingAgreement|templates:|agreements:|row\.family/);
+  assert.match(lifecycle, /'master-agreements'/);
   assert.match(governance, /platform-scoped for publication/i);
   assert.match(governance, /must not expose bespoke merchant agreement issuance\/replacement actions/i);
 });
