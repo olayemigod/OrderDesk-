@@ -15,6 +15,8 @@ function requireValue(condition, message) {
 const redesignWorkspace = read(join(mobileRoot, 'src/redesign/RedesignWorkspace.tsx'));
 const mobileShell = read(join(mobileRoot, 'src/redesign/MobileShell.tsx'));
 const notificationsWorkspace = read(join(mobileRoot, 'src/redesign/NotificationsWorkspace.tsx'));
+const notificationRepository = read(join(mobileRoot, 'src/data/merchantNotificationsRepository.ts'));
+const notificationHook = read(join(mobileRoot, 'src/hooks/useMerchantNotifications.ts'));
 
 requireValue(
   redesignWorkspace.includes('notificationCount={notifications.unreadCount}'),
@@ -59,6 +61,29 @@ requireValue(
   notificationsWorkspace.includes('await onMarkRead(notification.id)') &&
     notificationsWorkspace.includes('if (notification.orderId) onOpenOrder(notification.orderId);'),
   'Opening an order notification must mark it read before routing to the referenced order',
+);
+requireValue(
+  notificationRepository.includes("supabase.rpc('sellertray_merchant_unread_notification_count'") &&
+    notificationHook.includes('loadMerchantUnreadNotificationCount(tenantId)') &&
+    notificationHook.includes('setUnreadCount(count)'),
+  'Mobile unread badge count must come from the exact governed server count RPC',
+);
+requireValue(
+  !notificationHook.includes('const unreadCount = useMemo(() => notifications.length') &&
+    !notificationHook.includes('const unreadCount = notifications.length'),
+  'Mobile must not derive the notification bell count from the bounded inbox list',
+);
+requireValue(
+  notificationRepository.includes("table: 'merchant_notifications'") &&
+    notificationRepository.includes("table: 'merchant_notification_reads'"),
+  'Mobile notification refresh must observe both notification facts and per-user read facts',
+);
+requireValue(
+  notificationRepository.includes("| 'commercial_order_created'") &&
+    notificationRepository.includes("| 'master_agreement_required'") &&
+    notificationRepository.includes("| 'activation_succeeded'") &&
+    notificationRepository.includes("| 'entitlement_expired'"),
+  'Mobile notification typing must include the governed OA5A lifecycle vocabulary',
 );
 
 if (failures.length > 0) {
