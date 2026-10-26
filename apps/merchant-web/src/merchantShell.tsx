@@ -1,4 +1,4 @@
-export type ShellIconName = 'menu' | 'close' | 'sun' | 'moon' | 'refresh' | 'chevron';
+export type ShellIconName = 'menu' | 'close' | 'sun' | 'moon' | 'refresh' | 'chevron' | 'bell';
 
 const SELLERTRAY_LOGO = '/brand/sellertray-v2-mark-128.png';
 
@@ -47,9 +47,13 @@ export function NavIcon({ name }: { name: NavIconName }) {
 }
 
 const SHELL_PATHS: Record<ShellIconName, string[]> = {
-  menu: ['M4 7h16', 'M4 12h16', 'M4 17h16'], close: ['M6 6l12 12', 'M18 6 6 18'],
+  menu: ['M4 7h16', 'M4 12h16', 'M4 17h16'],
+  close: ['M6 6l12 12', 'M18 6 6 18'],
   sun: ['M12 4V2', 'M12 22v-2', 'M4.93 4.93 3.5 3.5', 'M20.5 20.5l-1.43-1.43', 'M4 12H2', 'M22 12h-2', 'M4.93 19.07 3.5 20.5', 'M20.5 3.5l-1.43 1.43', 'M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z'],
-  moon: ['M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z'], refresh: ['M20 11a8 8 0 1 0-2.34 5.66', 'M20 4v7h-7'], chevron: ['m8 10 4 4 4-4'],
+  moon: ['M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 9.8Z'],
+  refresh: ['M20 11a8 8 0 1 0-2.34 5.66', 'M20 4v7h-7'],
+  chevron: ['m8 10 4 4 4-4'],
+  bell: ['M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z', 'M10 21h4'],
 };
 
 export function ShellIcon({ name }: { name: ShellIconName }) {
