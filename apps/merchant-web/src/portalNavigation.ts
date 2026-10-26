@@ -1,5 +1,6 @@
 export type MerchantPortalPage =
   | 'overview'
+  | 'notifications'
   | 'sales'
   | 'orders'
   | 'customers'
