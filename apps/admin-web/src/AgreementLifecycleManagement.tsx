@@ -1,161 +1,106 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { invokeJson } from './supabase';
 
-type AcceptanceEvidence = {
+type AgreementVersion = {
   id: string;
-  acceptedAt: string;
-  acceptedLegalName: string;
-  acceptedRole: string;
-  acceptedByUserId: string;
-  agreementContentSha256: string;
-  templateContentSha256: string;
-};
-
-type AgreementRow = {
-  id: string;
-  reference: string;
-  family: string;
-  title: string;
-  templateVersionId: string;
-  templateVersion: string;
-  templateContentSha256: string;
-  contentSha256: string;
-  renderedContent: string;
-  commercialOrderId: string;
-  installmentObligationId: string | null;
-  supersedesAgreementId: string | null;
-  isCurrent: boolean;
-  issuedAt: string;
-  acceptance: AcceptanceEvidence | null;
-};
-
-type TemplateRow = {
-  id: string;
-  family: string;
   versionCode: string;
   title: string;
   contentBody: string;
   contentSha256: string;
   effectiveFrom: string;
   publishedAt: string;
+  publishedByUserId: string;
+  publishReason: string;
 };
 
-type AgreementLifecycle = {
-  canManage: boolean;
-  agreements: AgreementRow[];
-  templates: TemplateRow[];
+type Acceptance = {
+  id: string;
+  versionCode: string;
+  acceptedAt: string;
+  acceptedLegalName: string;
+  acceptedRole: string;
+  acceptedByUserId: string;
+};
+
+type TenantState = {
+  published: boolean;
+  accepted: boolean;
+  acceptanceRequired: boolean;
+  serviceDeliveryAllowed: boolean;
+  currentVersion: AgreementVersion | null;
+  acceptance: Acceptance | null;
+};
+
+type AgreementOverview = {
+  actorRole: string;
+  canPublish: boolean;
+  versions: AgreementVersion[];
+  tenantState: TenantState | null;
 };
 
 type AdminResponse = { ok?: boolean; overview?: unknown };
 
-type ReplacementForm = {
-  agreementId: string;
-  templateVersionId: string;
-  reference: string;
-  renderedContent: string;
+type PublishForm = {
+  versionCode: string;
+  title: string;
+  contentBody: string;
+  effectiveFrom: string;
   reason: string;
 };
 
-export default function AgreementLifecycleManagement({
-  session,
-  tenantId,
-}: {
-  session: Session;
-  tenantId: string;
-}) {
-  const [state, setState] = useState<AgreementLifecycle | null>(null);
+const emptyForm = (): PublishForm => ({
+  versionCode: '',
+  title: 'SellerTray Master Agreement',
+  contentBody: '',
+  effectiveFrom: localDateTime(new Date()),
+  reason: '',
+});
+
+export default function AgreementLifecycleManagement({ session, tenantId }: { session: Session; tenantId: string }) {
+  const [state, setState] = useState<AgreementOverview | null>(null);
+  const [form, setForm] = useState<PublishForm>(() => emptyForm());
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [replacement, setReplacement] = useState<ReplacementForm | null>(null);
   const requestSequence = useRef(0);
 
-  useEffect(() => {
-    setReplacement(null);
-    setMessage(null);
-    void load();
-  }, [tenantId, session]);
+  useEffect(() => { setMessage(null); void load(); }, [tenantId, session]);
 
-  async function load() {
+  async function load(preferredId?: string | null) {
     const sequence = ++requestSequence.current;
     setLoading(true);
     setError(null);
     try {
-      const response = await invokeJson<AdminResponse>('commercial-agreements', {
-        action: 'admin_overview',
+      const response = await invokeJson<AdminResponse>('master-agreements', {
+        action: 'admin_get',
         tenantId,
       }, session);
       if (sequence !== requestSequence.current) return;
-      setState(parseLifecycle(response.overview));
+      const next = parseOverview(response.overview);
+      setState(next);
+      const wanted = preferredId ?? selectedId;
+      setSelectedId(wanted && next.versions.some((version) => version.id === wanted)
+        ? wanted
+        : next.tenantState?.currentVersion?.id ?? next.versions[0]?.id ?? null);
     } catch (cause) {
       if (sequence !== requestSequence.current) return;
       setState(null);
-      setError(messageFrom(cause, 'Unable to load agreement lifecycle.'));
+      setError(messageFrom(cause, 'Unable to load Master Agreement governance.'));
     } finally {
       if (sequence === requestSequence.current) setLoading(false);
     }
   }
 
-  function templatesFor(agreement: AgreementRow) {
-    const now = Date.now();
-    return (state?.templates ?? []).filter((template) => {
-      const effectiveAt = new Date(template.effectiveFrom).getTime();
-      return template.family === agreement.family && !Number.isNaN(effectiveAt) && effectiveAt <= now;
-    });
-  }
-
-  function prepareReplacement(agreement: AgreementRow) {
-    if (!state?.canManage || !agreement.isCurrent) return;
-    const candidates = templatesFor(agreement);
-    const template = candidates[0] ?? null;
-    if (!template) {
-      setError(`Publish an effective ${familyLabel(agreement.family)} template before replacing this agreement.`);
-      return;
-    }
-    setError(null);
-    setMessage(null);
-    setReplacement({
-      agreementId: agreement.id,
-      templateVersionId: template.id,
-      reference: '',
-      renderedContent: template.contentBody,
-      reason: '',
-    });
-  }
-
-  function chooseTemplate(templateVersionId: string) {
-    if (!replacement || !state) return;
-    const agreement = state.agreements.find((row) => row.id === replacement.agreementId);
-    if (!agreement) return;
-    const template = templatesFor(agreement).find((row) => row.id === templateVersionId);
-    if (!template) return;
-    setReplacement({
-      ...replacement,
-      templateVersionId,
-      renderedContent: template.contentBody,
-    });
-  }
-
-  async function issueReplacement() {
-    if (!replacement || !state?.canManage || saving) return;
-    const agreement = state.agreements.find((row) => row.id === replacement.agreementId);
-    if (!agreement || !agreement.isCurrent) {
-      setError('The selected agreement is no longer current. Reload before continuing.');
-      return;
-    }
-    const template = templatesFor(agreement).find((row) => row.id === replacement.templateVersionId);
-    if (!template) {
-      setError('Select an effective replacement template from the same agreement family.');
-      return;
-    }
-    if (!replacement.reference.trim() || !replacement.renderedContent.trim()) {
-      setError('Enter a new immutable agreement reference and replacement agreement content.');
-      return;
-    }
-    if (replacement.reason.trim().replace(/\s+/g, ' ').length < 6) {
-      setError('Enter a replacement reason of at least 6 characters.');
+  async function publish(event: FormEvent) {
+    event.preventDefault();
+    if (!state?.canPublish) return;
+    const effective = new Date(form.effectiveFrom);
+    if (Number.isNaN(effective.getTime())) { setError('Enter a valid effective date and time.'); return; }
+    if (!form.versionCode.trim() || !form.title.trim() || !form.contentBody.trim() || form.reason.trim().length < 6) {
+      setError('Version, title, agreement content and a publication reason are required.');
       return;
     }
 
@@ -163,151 +108,148 @@ export default function AgreementLifecycleManagement({
     setError(null);
     setMessage(null);
     try {
-      await invokeJson<AdminResponse>('commercial-agreements', {
-        action: 'admin_issue',
+      const response = await invokeJson<AdminResponse & { agreementVersionId?: string }>('master-agreements', {
+        action: 'admin_publish',
         tenantId,
-        commercialOrderId: agreement.commercialOrderId,
-        installmentObligationId: agreement.installmentObligationId,
-        templateVersionId: template.id,
-        supersedesAgreementId: agreement.id,
-        reference: replacement.reference.trim(),
-        renderedContent: replacement.renderedContent,
-        reason: replacement.reason.trim().replace(/\s+/g, ' '),
+        versionCode: form.versionCode.trim(),
+        title: form.title.trim(),
+        contentBody: form.contentBody.trim(),
+        effectiveFrom: effective.toISOString(),
+        reason: form.reason.trim(),
       }, session);
-      setReplacement(null);
-      await load();
-      setMessage('Replacement agreement issued. The merchant must accept the new current agreement before it satisfies the governed acceptance prerequisite.');
+      const next = parseOverview(response.overview);
+      setState(next);
+      setSelectedId(response.agreementVersionId ?? next.tenantState?.currentVersion?.id ?? next.versions[0]?.id ?? null);
+      setForm(emptyForm());
+      setMessage('Universal Master Agreement version published. The same immutable content applies to every SellerTray Business when it becomes effective.');
     } catch (cause) {
-      setError(messageFrom(cause, 'Unable to issue the governed replacement agreement.'));
+      setError(messageFrom(cause, 'Unable to publish this Master Agreement version.'));
     } finally {
       setSaving(false);
     }
   }
 
-  const replacementAgreement = replacement && state
-    ? state.agreements.find((row) => row.id === replacement.agreementId) ?? null
-    : null;
+  const versions = state?.versions ?? [];
+  const selected = versions.find((version) => version.id === selectedId) ?? versions[0] ?? null;
+  const tenantState = state?.tenantState ?? null;
 
-  return (
-    <section className="workspace-panel" style={{ marginTop: 16 }}>
-      <div className="workspace-panel-heading">
-        <div>
-          <h3>Agreement lifecycle</h3>
-          <p>Review immutable issuance and acceptance history. Corrections use explicit replacement; accepted records are never edited in place.</p>
-        </div>
+  return <section className="page-stack">
+    <div className="section-heading">
+      <div><p className="eyebrow">Platform legal governance</p><h2>SellerTray Master Agreement</h2></div>
+      <p className="muted">Publish one immutable agreement version for the entire SellerTray platform. Merchant-specific issuance and order-specific agreement replacement are retired.</p>
+    </div>
+
+    {error ? <div className="error-banner">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div> : null}
+    {message ? <div className="success-banner">{message}<button type="button" onClick={() => setMessage(null)}>Dismiss</button></div> : null}
+
+    {tenantState ? <article className="panel">
+      <div className="panel-head"><div><p className="eyebrow">Selected Merchant</p><h3>Acceptance status</h3></div><span className="role-pill">{tenantState.accepted ? 'Accepted' : tenantState.published ? 'Pending' : 'Not published'}</span></div>
+      <div className="settings-grid two">
+        <Fact label="Current version" value={tenantState.currentVersion?.versionCode ?? 'No effective version'} />
+        <Fact label="Service-delivery agreement gate" value={tenantState.serviceDeliveryAllowed ? 'Satisfied' : 'Blocked'} />
+        <Fact label="Accepted by" value={tenantState.acceptance?.acceptedLegalName ?? '—'} />
+        <Fact label="Accepted at" value={tenantState.acceptance?.acceptedAt ? formatDate(tenantState.acceptance.acceptedAt) : '—'} />
       </div>
+      <div className="governance-note">This status is Business + Master Agreement version evidence. It is not tied to a commercial order, installment, Branch or payment.</div>
+    </article> : null}
 
-      {loading ? <div className="workspace-empty"><strong>Loading agreements</strong><p>Reading governed commercial agreement history…</p></div> : null}
-      {error ? <div className="workspace-banner error">{error}</div> : null}
-      {message ? <div className="workspace-banner success">{message}</div> : null}
-      {!loading && state && !state.canManage ? <div className="workspace-banner info">Platform Support can review agreement history and acceptance evidence. Only Platform Admin may issue a replacement.</div> : null}
+    <div className="two-column">
+      <article className="panel">
+        <div className="panel-head"><div><p className="eyebrow">Version history</p><h3>Published Master Agreement versions</h3></div></div>
+        {loading && !state ? <p className="muted">Loading agreement versions…</p> : null}
+        {!loading && !versions.length ? <div className="empty-state"><strong>No Master Agreement published</strong><p>Publish the reviewed universal legal text before a new SellerTray service-delivery activation is allowed.</p></div> : null}
+        {versions.map((version) => <button key={version.id} type="button" className={selected?.id === version.id ? 'member-row active' : 'member-row'} onClick={() => setSelectedId(version.id)}>
+          <span className="member-avatar">V</span>
+          <span><strong>{version.title}</strong><small>Version {version.versionCode} · Effective {formatDate(version.effectiveFrom)}</small></span>
+        </button>)}
+      </article>
 
-      {!loading && state ? (
-        <div className="workspace-table-wrap">
-          <table className="workspace-table compact-table">
-            <thead><tr><th>Agreement</th><th>Subject</th><th>Lifecycle</th><th>Acceptance</th><th>Issued</th><th>Action</th></tr></thead>
-            <tbody>
-              {state.agreements.map((agreement) => (
-                <tr key={agreement.id}>
-                  <td><strong>{agreement.title}</strong><small>{agreement.reference} · {agreement.templateVersion}</small></td>
-                  <td>{familyLabel(agreement.family)}<small>Order {shortId(agreement.commercialOrderId)}</small></td>
-                  <td><span className={`workspace-status ${agreement.isCurrent ? 'success' : 'neutral'}`}>{agreement.isCurrent ? 'Current' : 'Replaced'}</span>{agreement.supersedesAgreementId ? <small>Replaces {shortId(agreement.supersedesAgreementId)}</small> : null}</td>
-                  <td>{agreement.acceptance ? <><strong>{agreement.acceptance.acceptedLegalName}</strong><small>{label(agreement.acceptance.acceptedRole)} · {formatDate(agreement.acceptance.acceptedAt)}</small></> : <span className="workspace-status attention">Awaiting acceptance</span>}</td>
-                  <td>{formatDate(agreement.issuedAt)}<small>Hash {shortHash(agreement.contentSha256)}</small></td>
-                  <td>{agreement.isCurrent && state.canManage ? <button className="workspace-button subtle compact" type="button" disabled={saving} onClick={() => prepareReplacement(agreement)}>Prepare replacement</button> : agreement.isCurrent ? 'Review only' : 'Immutable history'}</td>
-                </tr>
-              ))}
-              {!state.agreements.length ? <tr><td colSpan={6}>No merchant-specific agreements have been issued for this Business.</td></tr> : null}
-            </tbody>
-          </table>
-        </div>
-      ) : null}
-
-      {replacement && replacementAgreement && state ? (
-        <div className="workspace-form-stack" style={{ marginTop: 16 }}>
-          <div className="workspace-banner warning"><strong>Explicit replacement.</strong> {replacementAgreement.reference} remains immutable historical evidence. The new agreement must preserve the same commercial subject and requires fresh merchant acceptance.</div>
-          <div className="workspace-detail-grid">
-            <Detail label="Agreement family" value={familyLabel(replacementAgreement.family)} />
-            <Detail label="Commercial order" value={shortId(replacementAgreement.commercialOrderId)} />
-            <Detail label="Previous acceptance" value={replacementAgreement.acceptance ? `${replacementAgreement.acceptance.acceptedLegalName} · ${formatDate(replacementAgreement.acceptance.acceptedAt)}` : 'Not accepted'} />
-            <Detail label="Previous content hash" value={shortHash(replacementAgreement.contentSha256)} />
+      <article className="panel">
+        {selected ? <>
+          <div className="panel-head"><div><p className="eyebrow">Immutable published version</p><h3>{selected.title}</h3><p className="muted">Version {selected.versionCode}</p></div></div>
+          <div className="settings-grid two">
+            <Fact label="Effective" value={formatDate(selected.effectiveFrom)} />
+            <Fact label="Published" value={formatDate(selected.publishedAt)} />
+            <Fact label="Content integrity" value={`${selected.contentSha256.slice(0, 16)}…`} />
+            <Fact label="Scope" value="All SellerTray Businesses" />
           </div>
-          <label>Replacement template
-            <select value={replacement.templateVersionId} onChange={(event) => chooseTemplate(event.target.value)}>
-              {templatesFor(replacementAgreement).map((template) => <option key={template.id} value={template.id}>{template.title} · {template.versionCode}</option>)}
-            </select>
-          </label>
-          <label>New agreement reference<input maxLength={128} value={replacement.reference} onChange={(event) => setReplacement({ ...replacement, reference: event.target.value })} placeholder="Enter a new immutable reference" /></label>
-          <label>Replacement agreement content<textarea rows={10} maxLength={300000} value={replacement.renderedContent} onChange={(event) => setReplacement({ ...replacement, renderedContent: event.target.value })} /></label>
-          <label>Replacement reason<input maxLength={1000} value={replacement.reason} onChange={(event) => setReplacement({ ...replacement, reason: event.target.value })} /></label>
-          <div className="workspace-filter-row">
-            <button className="workspace-button primary" type="button" disabled={saving} onClick={() => void issueReplacement()}>{saving ? 'Issuing replacement…' : 'Issue replacement agreement'}</button>
-            <button className="workspace-button subtle" type="button" disabled={saving} onClick={() => setReplacement(null)}>Cancel</button>
-          </div>
+          <div className="governance-note">Reason: {selected.publishReason}</div>
+          <div className="panel agreement-document"><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: 'inherit', margin: 0 }}>{selected.contentBody}</pre></div>
+        </> : <div className="empty-state"><strong>No version selected</strong><p>Published versions are immutable and remain available for legal history.</p></div>}
+      </article>
+    </div>
+
+    <article className="panel">
+      <div className="panel-head"><div><p className="eyebrow">Publish version</p><h3>New universal Master Agreement</h3></div>{!state?.canPublish ? <span className="role-pill">Review only</span> : null}</div>
+      <div className="governance-note">Do not enter merchant-specific pricing, order IDs, Branch terms or bespoke merchant clauses here. The exact content published here applies to every SellerTray Business.</div>
+      {state?.canPublish ? <form className="settings-form" onSubmit={publish}>
+        <div className="settings-grid two">
+          <label className="field"><span>Version code</span><input maxLength={64} required value={form.versionCode} onChange={(event) => setForm((current) => ({ ...current, versionCode: event.target.value }))} placeholder="e.g. 2026.1" /></label>
+          <label className="field"><span>Title</span><input maxLength={200} required value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} /></label>
+          <label className="field"><span>Effective from</span><input type="datetime-local" required value={form.effectiveFrom} onChange={(event) => setForm((current) => ({ ...current, effectiveFrom: event.target.value }))} /></label>
+          <label className="field"><span>Publication reason</span><input maxLength={1000} required value={form.reason} onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))} placeholder="Reviewed legal version publication" /></label>
         </div>
-      ) : null}
-    </section>
-  );
+        <label className="field"><span>Master Agreement content</span><textarea rows={18} maxLength={200000} required value={form.contentBody} onChange={(event) => setForm((current) => ({ ...current, contentBody: event.target.value }))} placeholder="Paste the reviewed universal SellerTray Master Agreement text here." /></label>
+        <div className="settings-actions"><button className="primary-button" disabled={saving}>{saving ? 'Publishing…' : 'Publish immutable version'}</button></div>
+      </form> : <p className="muted">Your ProcessEdge access is review-only for Master Agreement publication.</p>}
+    </article>
+  </section>;
 }
 
-function parseLifecycle(value: unknown): AgreementLifecycle {
-  const root = record(value);
+function Fact({ label, value }: { label: string; value: string }) { return <div className="role-lock"><span>{label}</span><strong>{value}</strong></div>; }
+function record(value: unknown): Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
+function formatDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(date); }
+function localDateTime(date: Date) { const offset = date.getTimezoneOffset(); return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 16); }
+function messageFrom(value: unknown, fallback: string) { return value instanceof Error && value.message ? value.message : fallback; }
+function parseVersion(value: unknown): AgreementVersion | null {
+  const row = record(value);
+  if (typeof row.id !== 'string') return null;
   return {
-    canManage: root.canManage === true,
-    agreements: array(root.agreements).map((value) => {
-      const row = record(value);
-      const acceptance = recordOrNull(row.acceptance);
-      return {
-        id: stringValue(row.id),
-        reference: stringValue(row.reference),
-        family: stringValue(row.family),
-        title: stringValue(row.title, 'Commercial agreement'),
-        templateVersionId: stringValue(row.templateVersionId),
-        templateVersion: stringValue(row.templateVersion),
-        templateContentSha256: stringValue(row.templateContentSha256),
-        contentSha256: stringValue(row.contentSha256),
-        renderedContent: stringValue(row.renderedContent),
-        commercialOrderId: stringValue(row.commercialOrderId),
-        installmentObligationId: nullableString(row.installmentObligationId),
-        supersedesAgreementId: nullableString(row.supersedesAgreementId),
-        isCurrent: row.isCurrent === true,
-        issuedAt: stringValue(row.issuedAt),
-        acceptance: acceptance ? {
-          id: stringValue(acceptance.id),
-          acceptedAt: stringValue(acceptance.acceptedAt),
-          acceptedLegalName: stringValue(acceptance.acceptedLegalName),
-          acceptedRole: stringValue(acceptance.acceptedRole),
-          acceptedByUserId: stringValue(acceptance.acceptedByUserId),
-          agreementContentSha256: stringValue(acceptance.agreementContentSha256),
-          templateContentSha256: stringValue(acceptance.templateContentSha256),
-        } : null,
-      } as AgreementRow;
-    }).filter((row) => row.id && row.commercialOrderId),
-    templates: array(root.templates).map((value) => {
-      const row = record(value);
-      return {
-        id: stringValue(row.id),
-        family: stringValue(row.family),
-        versionCode: stringValue(row.versionCode),
-        title: stringValue(row.title),
-        contentBody: stringValue(row.contentBody),
-        contentSha256: stringValue(row.contentSha256),
-        effectiveFrom: stringValue(row.effectiveFrom),
-        publishedAt: stringValue(row.publishedAt),
-      } as TemplateRow;
-    }).filter((row) => row.id && row.family),
+    id: row.id,
+    versionCode: String(row.versionCode ?? ''),
+    title: String(row.title ?? 'SellerTray Master Agreement'),
+    contentBody: String(row.contentBody ?? ''),
+    contentSha256: String(row.contentSha256 ?? ''),
+    effectiveFrom: String(row.effectiveFrom ?? ''),
+    publishedAt: String(row.publishedAt ?? ''),
+    publishedByUserId: String(row.publishedByUserId ?? ''),
+    publishReason: String(row.publishReason ?? ''),
   };
 }
-
-function Detail({ label: text, value }: { label: string; value: string }) { return <div><span>{text}</span><strong>{value}</strong></div>; }
-function record(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
-function recordOrNull(value: unknown): Record<string, unknown> | null { const result = record(value); return Object.keys(result).length ? result : null; }
-function array(value: unknown): unknown[] { return Array.isArray(value) ? value : []; }
-function stringValue(value: unknown, fallback = ''): string { return typeof value === 'string' ? value : fallback; }
-function nullableString(value: unknown): string | null { return typeof value === 'string' && value ? value : null; }
-function familyLabel(value: string) { return label(value.replace(/_agreement$/, ' agreement').replace(/_/g, ' ')); }
-function label(value: string) { return value.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()); }
-function formatDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(date); }
-function shortId(value: string) { return value.length > 12 ? `${value.slice(0, 8)}…` : value; }
-function shortHash(value: string) { return value.length > 16 ? `${value.slice(0, 12)}…` : value || 'Not available'; }
-function messageFrom(cause: unknown, fallback: string) { return cause instanceof Error && cause.message ? cause.message : fallback; }
+function parseAcceptance(value: unknown): Acceptance | null {
+  const row = record(value);
+  if (typeof row.id !== 'string') return null;
+  return {
+    id: row.id,
+    versionCode: String(row.versionCode ?? ''),
+    acceptedAt: String(row.acceptedAt ?? ''),
+    acceptedLegalName: String(row.acceptedLegalName ?? ''),
+    acceptedRole: String(row.acceptedRole ?? ''),
+    acceptedByUserId: String(row.acceptedByUserId ?? ''),
+  };
+}
+function parseTenantState(value: unknown): TenantState | null {
+  const row = record(value);
+  if (!Object.keys(row).length) return null;
+  return {
+    published: row.published === true,
+    accepted: row.accepted === true,
+    acceptanceRequired: row.acceptanceRequired === true,
+    serviceDeliveryAllowed: row.serviceDeliveryAllowed === true,
+    currentVersion: parseVersion(row.currentVersion),
+    acceptance: parseAcceptance(row.acceptance),
+  };
+}
+function parseOverview(value: unknown): AgreementOverview {
+  const root = record(value);
+  const versions = Array.isArray(root.versions) ? root.versions.flatMap((item) => {
+    const parsed = parseVersion(item);
+    return parsed ? [parsed] : [];
+  }) : [];
+  return {
+    actorRole: String(root.actorRole ?? ''),
+    canPublish: root.canPublish === true,
+    versions,
+    tenantState: parseTenantState(root.tenantState),
+  };
+}

@@ -7,23 +7,17 @@ type Acceptance = {
   acceptedAt: string;
   acceptedLegalName: string;
   acceptedRole: 'owner' | 'manager';
-  acceptedByCurrentUser: boolean;
+  acceptedByCurrentUser?: boolean;
 };
 
-type Agreement = {
+type AgreementVersion = {
   id: string;
-  reference: string;
-  family: string;
+  versionCode: string;
   title: string;
-  templateVersion: string;
-  renderedContent: string;
+  contentBody: string;
   contentSha256: string;
-  commercialOrderId: string;
-  installmentObligationId: string | null;
-  supersedesAgreementId: string | null;
-  isCurrent: boolean;
-  termsCurrent: boolean;
-  issuedAt: string;
+  effectiveFrom: string;
+  publishedAt: string;
   acceptance: Acceptance | null;
 };
 
@@ -31,7 +25,13 @@ type AgreementCenter = {
   tenantId: string;
   actorRole: 'owner' | 'manager';
   canAccept: boolean;
-  agreements: Agreement[];
+  published: boolean;
+  accepted: boolean;
+  acceptanceRequired: boolean;
+  serviceDeliveryAllowed: boolean;
+  currentVersion: AgreementVersion | null;
+  acceptance: Acceptance | null;
+  versions: AgreementVersion[];
 };
 
 export default function CommercialAgreementsManagement({ tenantId }: { tenantId: string }) {
@@ -47,140 +47,177 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
 
   useEffect(() => { void load(); }, [tenantId]);
 
-  const agreements = center?.agreements ?? [];
-  const current = useMemo(() => agreements.filter((agreement) => agreement.isCurrent), [agreements]);
-  const history = useMemo(() => agreements.filter((agreement) => !agreement.isCurrent), [agreements]);
-  const selected = agreements.find((agreement) => agreement.id === selectedId) ?? current[0] ?? agreements[0] ?? null;
+  const versions = center?.versions ?? [];
+  const current = center?.currentVersion ?? null;
+  const selected = useMemo(
+    () => versions.find((version) => version.id === selectedId) ?? current ?? versions[0] ?? null,
+    [versions, selectedId, current],
+  );
 
   async function load(preferredId?: string | null) {
-    setLoading(true); setError(null);
+    setLoading(true);
+    setError(null);
     try {
-      const { data, error: functionError } = await supabase.functions.invoke('commercial-agreements', {
-        body: { action: 'merchant_list', tenantId },
+      const { data, error: functionError } = await supabase.functions.invoke('master-agreements', {
+        body: { action: 'merchant_get', tenantId },
       });
       if (functionError) throw functionError;
       const next = parseCenter(record(data).center);
       setCenter(next);
       const wanted = preferredId ?? selectedId;
-      setSelectedId(wanted && next.agreements.some((agreement) => agreement.id === wanted)
+      setSelectedId(wanted && next.versions.some((version) => version.id === wanted)
         ? wanted
-        : next.agreements.find((agreement) => agreement.isCurrent)?.id ?? next.agreements[0]?.id ?? null);
+        : next.currentVersion?.id ?? next.versions[0]?.id ?? null);
     } catch (cause) {
-      setError(errorMessage(cause, 'Unable to load SellerTray commercial agreements.'));
-    } finally { setLoading(false); }
+      setError(errorMessage(cause, 'Unable to load the SellerTray Master Agreement.'));
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function accept(event: FormEvent) {
     event.preventDefault();
-    if (!selected || !selected.isCurrent || selected.acceptance || !center?.canAccept) return;
+    if (!center?.currentVersion || center.accepted || !center.canAccept) return;
     const name = legalName.trim().replace(/\s+/g, ' ');
     if (!name) { setError('Enter the authorised representative legal name.'); return; }
-    if (!confirmed) { setError('Confirm that you are authorised and accept the agreement before continuing.'); return; }
+    if (!confirmed) { setError('Confirm that you are authorised and accept the Master Agreement before continuing.'); return; }
 
-    const commandId = acceptanceCommandIds.current.get(selected.id) ?? crypto.randomUUID();
-    acceptanceCommandIds.current.set(selected.id, commandId);
-    setBusy(true); setError(null); setMessage(null);
+    const versionId = center.currentVersion.id;
+    const commandId = acceptanceCommandIds.current.get(versionId) ?? crypto.randomUUID();
+    acceptanceCommandIds.current.set(versionId, commandId);
+    setBusy(true);
+    setError(null);
+    setMessage(null);
     try {
-      const { data, error: functionError } = await supabase.functions.invoke('commercial-agreements', {
-        body: { action: 'merchant_accept', tenantId, agreementId: selected.id, legalName: name, authorityConfirmed: true, commandId },
+      const { data, error: functionError } = await supabase.functions.invoke('master-agreements', {
+        body: {
+          action: 'merchant_accept',
+          tenantId,
+          agreementVersionId: versionId,
+          legalName: name,
+          authorityConfirmed: true,
+          commandId,
+        },
       });
       if (functionError) throw functionError;
       const next = parseCenter(record(data).center);
-      acceptanceCommandIds.current.delete(selected.id);
+      acceptanceCommandIds.current.delete(versionId);
       setCenter(next);
-      setSelectedId(selected.id);
-      setLegalName(''); setConfirmed(false);
-      setMessage('Commercial agreement accepted and recorded.');
+      setSelectedId(versionId);
+      setLegalName('');
+      setConfirmed(false);
+      setMessage(`Master Agreement version ${next.currentVersion?.versionCode ?? ''} accepted and recorded.`.trim());
     } catch (cause) {
-      setError(errorMessage(cause, 'Unable to accept this commercial agreement.'));
-    } finally { setBusy(false); }
+      setError(errorMessage(cause, 'Unable to accept the SellerTray Master Agreement.'));
+    } finally {
+      setBusy(false);
+    }
   }
 
-  if (loading && !center) return <article className="panel"><p className="muted">Loading commercial agreements…</p></article>;
+  if (loading && !center) return <article className="panel"><p className="muted">Loading Master Agreement…</p></article>;
 
   return <section className="page-stack">
     <div className="section-heading">
-      <div><p className="eyebrow">Legal & commercial documents</p><h2>Agreements</h2></div>
-      <p className="muted">Review immutable SellerTray agreements and acceptance history. Balances, discounts and payments are managed separately under SellerTray Billing.</p>
+      <div><p className="eyebrow">Legal agreement</p><h2>SellerTray Master Agreement</h2></div>
+      <p className="muted">One platform-wide agreement applies to every SellerTray Business. Your Business accepts each published version once; new orders do not require the same agreement again.</p>
     </div>
+
     {error ? <div className="error-banner">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div> : null}
     {message ? <div className="success-banner">{message}<button type="button" onClick={() => setMessage(null)}>Dismiss</button></div> : null}
 
-    {!agreements.length ? <article className="panel empty-state"><strong>No commercial agreements issued</strong><p>SellerTray commercial documents issued by ProcessEdge will appear here for review and acceptance.</p></article> : <div className="team-management-grid">
+    {!center?.published || !current ? <article className="panel empty-state">
+      <strong>Master Agreement not yet published</strong>
+      <p>ProcessEdge must publish the universal SellerTray Master Agreement before a new service-delivery activation can complete. Commercial orders and payments remain separate.</p>
+    </article> : <div className="team-management-grid">
       <div className="panel member-list">
-        {current.map((agreement) => <AgreementButton key={agreement.id} agreement={agreement} selected={selected?.id === agreement.id} onSelect={() => selectAgreement(agreement.id)} />)}
-        {history.length ? <div className="nav-section">Agreement history</div> : null}
-        {history.map((agreement) => <AgreementButton key={agreement.id} agreement={agreement} selected={selected?.id === agreement.id} onSelect={() => selectAgreement(agreement.id)} />)}
+        {versions.map((version) => <button
+          key={version.id}
+          type="button"
+          className={selected?.id === version.id ? 'member-row active' : 'member-row'}
+          onClick={() => { setSelectedId(version.id); setLegalName(''); setConfirmed(false); }}
+        >
+          <span className="member-avatar">{version.id === current.id ? 'C' : 'H'}</span>
+          <span><strong>{version.title}</strong><small>Version {version.versionCode} · {version.acceptance ? 'Accepted' : version.id === current.id ? 'Current' : 'Historical'}</small></span>
+        </button>)}
       </div>
 
       {selected ? <article className="panel member-editor">
-        <div className="panel-head"><div><p className="eyebrow">{familyLabel(selected.family)}</p><h3>{selected.title}</h3><p className="muted">Reference {selected.reference} · Version {selected.templateVersion}</p></div><span className="role-pill">{selected.acceptance ? 'Accepted' : selected.isCurrent ? 'Pending' : 'Replaced'}</span></div>
-        <div className="settings-grid two">
-          <Fact label="Issued" value={formatDate(selected.issuedAt)} />
-          <Fact label="Commercial order" value={shortId(selected.commercialOrderId)} />
-          <Fact label="Agreement integrity" value={selected.contentSha256 ? `${selected.contentSha256.slice(0, 16)}…` : '—'} />
-          <Fact label="Status" value={selected.isCurrent ? selected.acceptance ? 'Accepted' : 'Awaiting acceptance' : 'Replaced'} />
+        <div className="panel-head">
+          <div><p className="eyebrow">{selected.id === current.id ? 'Current universal version' : 'Version history'}</p><h3>{selected.title}</h3><p className="muted">Version {selected.versionCode}</p></div>
+          <span className="role-pill">{selected.acceptance ? 'Accepted' : selected.id === current.id ? 'Pending' : 'Historical'}</span>
         </div>
-        <div className="governance-note">This is the immutable agreement content recorded for your business. Replaced versions remain visible as historical evidence.</div>
-        <div className="panel agreement-document"><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: 'inherit', margin: 0 }}>{selected.renderedContent}</pre></div>
+
+        <div className="settings-grid two">
+          <Fact label="Effective" value={formatDate(selected.effectiveFrom)} />
+          <Fact label="Published" value={formatDate(selected.publishedAt)} />
+          <Fact label="Agreement integrity" value={selected.contentSha256 ? `${selected.contentSha256.slice(0, 16)}…` : '—'} />
+          <Fact label="Applies to" value="All SellerTray Businesses" />
+        </div>
+
+        <div className="governance-note">This exact published version is identical for every SellerTray merchant. It is independent of your commercial orders, plans, Branches and payment schedule.</div>
+        <div className="panel agreement-document"><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: 'inherit', margin: 0 }}>{selected.contentBody}</pre></div>
+
         {selected.acceptance ? <div className="success-banner">Accepted {formatDate(selected.acceptance.acceptedAt)} by {selected.acceptance.acceptedLegalName} ({roleLabel(selected.acceptance.acceptedRole)}).</div> : null}
-        {!selected.isCurrent ? <div className="warning-banner">This agreement has been replaced. Review and accept the current replacement where required.</div> : null}
-        {selected.isCurrent && !selected.termsCurrent ? <div className="warning-banner">Commercial terms have changed. Ask ProcessEdge for a replacement agreement before continuing payment or activation. Your previous acceptance remains in history.</div> : null}
-        {selected.isCurrent && !selected.acceptance && !center?.canAccept ? <div className="warning-banner">Only the Business Owner or a Manager explicitly authorised by the Owner can accept SellerTray commercial agreements.</div> : null}
-        {selected.isCurrent && selected.termsCurrent && !selected.acceptance && center?.canAccept ? <form className="settings-form" onSubmit={accept}>
+        {selected.id !== current.id && !selected.acceptance ? <div className="governance-note">This historical version was not accepted by this Business. Only the current required version controls new service delivery.</div> : null}
+        {selected.id === current.id && !center.canAccept && !center.accepted ? <div className="warning-banner">Only the Business Owner or a Manager explicitly authorised by the Owner can accept the current Master Agreement.</div> : null}
+
+        {selected.id === current.id && !center.accepted && center.canAccept ? <form className="settings-form" onSubmit={accept}>
           <label className="field"><span>Authorised representative legal name</span><SellerTrayInput maxLength={200} required value={legalName} onChange={(event) => setLegalName(event.target.value)} placeholder="Full legal name" /></label>
-          <label className="access-card"><SellerTrayInput type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span><strong>I confirm I am authorised to act for this business and accept this agreement.</strong><small>Your authenticated SellerTray identity, authority, agreement version and integrity evidence are recorded.</small></span></label>
-          <div className="settings-actions"><button className="primary-button" disabled={busy || !confirmed || !legalName.trim()}>{busy ? 'Recording acceptance…' : 'Accept agreement'}</button></div>
+          <label className="access-card"><SellerTrayInput type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span><strong>I confirm I am authorised to act for this Business and accept this SellerTray Master Agreement version.</strong><small>Your authenticated identity, authority, version and content integrity evidence are recorded once for this Business.</small></span></label>
+          <div className="settings-actions"><button className="primary-button" disabled={busy || !confirmed || !legalName.trim()}>{busy ? 'Recording acceptance…' : 'Accept Master Agreement'}</button></div>
         </form> : null}
       </article> : null}
     </div>}
   </section>;
-
-  function selectAgreement(id: string) { setSelectedId(id); setLegalName(''); setConfirmed(false); }
 }
 
-function AgreementButton({ agreement, selected, onSelect }: { agreement: Agreement; selected: boolean; onSelect: () => void }) {
-  return <button type="button" className={selected ? 'member-row active' : 'member-row'} onClick={onSelect}>
-    <span className="member-avatar">{agreement.isCurrent ? 'A' : 'H'}</span>
-    <span><strong>{agreement.title}</strong><small>{agreement.reference} · {agreement.acceptance ? 'Accepted' : agreement.isCurrent ? 'Pending' : 'Replaced'}</small></span>
-  </button>;
-}
 function Fact({ label, value }: { label: string; value: string }) { return <div className="role-lock"><span>{label}</span><strong>{value}</strong></div>; }
-function familyLabel(value: string) { return value.split('_').map((part) => part ? part[0].toUpperCase() + part.slice(1) : '').join(' '); }
 function roleLabel(value: string) { return value === 'owner' ? 'Owner' : 'Manager'; }
-function shortId(value: string) { return value ? `${value.slice(0, 8)}…` : '—'; }
 function formatDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(date); }
 function record(value: unknown): Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
+function parseAcceptance(value: unknown): Acceptance | null {
+  const row = record(value);
+  if (typeof row.id !== 'string') return null;
+  return {
+    id: row.id,
+    acceptedAt: String(row.acceptedAt ?? ''),
+    acceptedLegalName: String(row.acceptedLegalName ?? ''),
+    acceptedRole: row.acceptedRole === 'owner' ? 'owner' : 'manager',
+    acceptedByCurrentUser: row.acceptedByCurrentUser === true,
+  };
+}
+function parseVersion(value: unknown): AgreementVersion | null {
+  const row = record(value);
+  if (typeof row.id !== 'string') return null;
+  return {
+    id: row.id,
+    versionCode: String(row.versionCode ?? ''),
+    title: String(row.title ?? 'SellerTray Master Agreement'),
+    contentBody: String(row.contentBody ?? ''),
+    contentSha256: String(row.contentSha256 ?? ''),
+    effectiveFrom: String(row.effectiveFrom ?? ''),
+    publishedAt: String(row.publishedAt ?? ''),
+    acceptance: parseAcceptance(row.acceptance),
+  };
+}
 function parseCenter(value: unknown): AgreementCenter {
   const root = record(value);
-  const actorRole = root.actorRole === 'owner' ? 'owner' : 'manager';
-  const agreements = Array.isArray(root.agreements) ? root.agreements.flatMap((raw) => {
-    const row = record(raw);
-    if (typeof row.id !== 'string') return [];
-    const acceptanceRow = record(row.acceptance);
-    const acceptance = typeof acceptanceRow.id === 'string' ? {
-      id: acceptanceRow.id,
-      acceptedAt: String(acceptanceRow.acceptedAt ?? ''),
-      acceptedLegalName: String(acceptanceRow.acceptedLegalName ?? ''),
-      acceptedRole: acceptanceRow.acceptedRole === 'owner' ? 'owner' : 'manager',
-      acceptedByCurrentUser: acceptanceRow.acceptedByCurrentUser === true,
-    } satisfies Acceptance : null;
-    return [{
-      id: row.id,
-      reference: String(row.reference ?? ''),
-      family: String(row.family ?? ''),
-      title: String(row.title ?? 'SellerTray agreement'),
-      templateVersion: String(row.templateVersion ?? ''),
-      renderedContent: String(row.renderedContent ?? ''),
-      contentSha256: String(row.contentSha256 ?? ''),
-      commercialOrderId: String(row.commercialOrderId ?? ''),
-      installmentObligationId: typeof row.installmentObligationId === 'string' ? row.installmentObligationId : null,
-      supersedesAgreementId: typeof row.supersedesAgreementId === 'string' ? row.supersedesAgreementId : null,
-      isCurrent: row.isCurrent === true,
-      termsCurrent: row.termsCurrent !== false,
-      issuedAt: String(row.issuedAt ?? ''),
-      acceptance,
-    } satisfies Agreement];
+  const versions = Array.isArray(root.versions) ? root.versions.flatMap((item) => {
+    const parsed = parseVersion(item);
+    return parsed ? [parsed] : [];
   }) : [];
-  return { tenantId: String(root.tenantId ?? ''), actorRole, canAccept: root.canAccept === true, agreements };
+  const current = parseVersion(root.currentVersion);
+  const acceptance = parseAcceptance(root.acceptance);
+  return {
+    tenantId: String(root.tenantId ?? ''),
+    actorRole: root.actorRole === 'owner' ? 'owner' : 'manager',
+    canAccept: root.canAccept === true,
+    published: root.published === true,
+    accepted: root.accepted === true,
+    acceptanceRequired: root.acceptanceRequired === true,
+    serviceDeliveryAllowed: root.serviceDeliveryAllowed === true,
+    currentVersion: current ? { ...current, acceptance } : null,
+    acceptance,
+    versions,
+  };
 }

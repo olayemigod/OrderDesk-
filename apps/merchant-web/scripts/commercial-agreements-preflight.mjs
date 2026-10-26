@@ -32,39 +32,49 @@ requireValue(
 
 requireValue(
   !management.includes('CommercialAgreementsManagement'),
-  'Merchant Settings must remain settings-only and must not embed commercial agreements.',
+  'Merchant Settings must remain settings-only and must not embed legal agreement authority.',
 );
 
 requireValue(
-  agreements.includes("functions.invoke('commercial-agreements'")
-    && agreements.includes("action: 'merchant_list'")
+  agreements.includes("functions.invoke('master-agreements'")
+    && agreements.includes("action: 'merchant_get'")
     && agreements.includes("action: 'merchant_accept'"),
-  'Agreements must use the governed commercial-agreements runtime for reads and acceptance.',
+  'Agreements must use the governed master-agreements runtime for reads and acceptance.',
 );
 
 requireValue(
   agreements.includes('authorityConfirmed: true')
-    && agreements.includes('I confirm I am authorised to act for this business and accept this agreement.'),
-  'Commercial agreement acceptance must carry the explicit merchant authority confirmation shown in the UI.',
+    && agreements.includes('I confirm I am authorised to act for this Business and accept this SellerTray Master Agreement version.'),
+  'Master Agreement acceptance must carry the explicit merchant authority confirmation shown in the UI.',
 );
 
 requireValue(
-  agreements.includes('acceptanceCommandIds.current.get(selected.id)')
-    && agreements.includes('acceptanceCommandIds.current.set(selected.id, commandId)')
-    && agreements.includes('acceptanceCommandIds.current.delete(selected.id)'),
-  'Commercial agreement acceptance must preserve one command identity across failed retries and clear it only after success.',
+  agreements.includes('acceptanceCommandIds.current.get(versionId)')
+    && agreements.includes('acceptanceCommandIds.current.set(versionId, commandId)')
+    && agreements.includes('acceptanceCommandIds.current.delete(versionId)'),
+  'Master Agreement acceptance must preserve one command identity per current version across failed retries and clear it only after success.',
+);
+
+requireValue(
+  agreements.includes('new orders do not require the same agreement again')
+    && agreements.includes('Commercial orders and payments remain separate')
+    && agreements.includes('independent of your commercial orders, plans, Branches and payment schedule'),
+  'Merchant Agreement UI must keep universal legal acceptance independent of orders and payment.',
 );
 
 requireValue(
   excludes(agreements, [
+    "functions.invoke('commercial-agreements'",
     "functions.invoke('billing-checkout'",
     "from('sellertray_commercial_agreements')",
     "from('sellertray_commercial_agreement_acceptances')",
     "from('sellertray_commercial_agreement_template_versions')",
+    'commercialOrderId',
+    'installmentObligationId',
     'SERVICE_ROLE',
     'SUPABASE_SECRET',
   ]),
-  'Agreements must remain legal-only and must not bypass authority or own SellerTray payment checkout.',
+  'Master Agreement surface must remain universal/legal-only and must not revive order-bound agreement or payment authority.',
 );
 
 requireValue(
@@ -83,9 +93,9 @@ requireValue(
 );
 
 if (failures.length) {
-  console.error('SellerTray commercial agreement and billing preflight failed:');
+  console.error('SellerTray Master Agreement and billing preflight failed:');
   for (const failure of failures) console.error('- ' + failure);
   process.exit(1);
 }
 
-console.log('SellerTray commercial agreement and billing preflight passed.');
+console.log('SellerTray Master Agreement and billing preflight passed.');

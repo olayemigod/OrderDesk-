@@ -15,7 +15,6 @@ create temp table c1b_structure_fixture (
   schedule_1_id uuid,
   schedule_2_id uuid,
   schedule_3_id uuid,
-  template_id uuid,
   agreement_id uuid,
   checkout_1_id uuid,
   checkout_2_id uuid,
@@ -100,9 +99,6 @@ select tenant_id,commercial_order_id,2,'branch_setup',setup_price_id,branch_id,'
 from c1b_structure_fixture;
 set constraints all immediate;
 
--- SET CONSTRAINTS ALL IMMEDIATE persists for the transaction. Re-defer both
--- installment validators before creating the obligation so validation sees the
--- complete governed 60:20:20 schedule rather than empty/partial fixture state.
 set constraints validate_sellertray_commercial_installment_obligation deferred;
 set constraints validate_sellertray_commercial_installment_schedule_line deferred;
 
@@ -136,19 +132,16 @@ update c1b_structure_fixture set schedule_3_id=(select id from inserted);
 set constraints all immediate;
 
 update c1b_structure_fixture f
-set template_id=public.publish_sellertray_commercial_agreement_template_version(
-  'installment_agreement','c1b-three-2026.1','SellerTray Three-Part Installment Agreement',
-  'C1B three-part test agreement content',now()-interval '1 minute',f.admin_user_id
+set agreement_id=public.publish_sellertray_master_agreement_admin(
+  'test-'||substr(f.tenant_id::text,1,8),
+  'SellerTray Master Agreement',
+  'Universal C1B three-part agreement content',
+  now()-interval '1 minute',
+  'C1B structure test publication',
+  f.admin_user_id
 );
 
-update c1b_structure_fixture f
-set agreement_id=public.issue_sellertray_commercial_agreement(
-  f.tenant_id,f.commercial_order_id,f.installment_obligation_id,f.template_id,
-  'AGR-C1B3-'||upper(substr(f.tenant_id::text,1,8)),
-  'Merchant-specific C1B three-part installment agreement',null,f.admin_user_id
-);
-
-select public.accept_sellertray_commercial_agreement(
+select public.accept_sellertray_master_agreement(
   f.tenant_id,f.agreement_id,'C1B Three-Part Test Owner',
   jsonb_build_object('channel','merchant_web','authority_confirmed',true),
   gen_random_uuid(),f.owner_user_id

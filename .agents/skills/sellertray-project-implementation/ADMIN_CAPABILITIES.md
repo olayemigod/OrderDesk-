@@ -2,7 +2,7 @@
 
 Status: **Normative extension of `SKILL.md` for every SellerTray Admin Web, platform-operations, commercial-admin, privileged-support or internal-role task**
 
-This extension governs ProcessEdge-internal access to SellerTray Admin. It complements `COMMERCIAL.md` and does not weaken merchant Owner/Manager/Cashier permissions.
+This extension governs ProcessEdge-internal access to SellerTray Admin. It complements `COMMERCIAL.md` and does not weaken merchant Owner/Manager/Cashier permissions. For agreement-specific behavior, the later universal Master Agreement contract in `AGREEMENTS.md` controls.
 
 ## Governing rule
 
@@ -97,12 +97,13 @@ Separate sensitive mutations rather than one universal `commercial.manage` switc
 - `admin.promotions.manage`
 - `admin.installments.manage`
 - `admin.payments.reconcile`
-- `admin.agreements.issue`
-- `admin.agreements.replace`
+- `admin.agreements.publish`
 - `admin.guarantees.manage`
 - `admin.refunds.decide`
 - `admin.entitlements.manage`
 - `admin.branch_setup.manage`
+
+`admin.agreements.publish` is platform-scoped legal publication authority for a new immutable universal SellerTray Master Agreement version. It is not merchant-specific issuance/replacement authority. A published version applies identically to every SellerTray Business when effective; Admin may review Business acceptance status but must not manufacture acceptance on behalf of a merchant.
 
 A later implementation may group some capabilities where operations are inseparable, but do not collapse unrelated financial/legal powers merely for frontend convenience.
 
@@ -148,7 +149,7 @@ The following is the intended **direction**, not permission to bypass current te
 | Commercial read | Default yes | Default yes |
 | Pricing/promotions mutation | Eligible by capability | No by default |
 | Installment/payment reconciliation mutation | Eligible by capability | No by default |
-| Agreement issue/replace | Eligible by capability | No by default |
+| Master Agreement publication | Eligible by capability | No by default |
 | Guarantee/refund decision | Eligible by capability | No by default |
 | Communications read | Default yes | Default yes where assigned |
 | Communications publish | Eligible by capability | Explicit grant only |
@@ -185,6 +186,8 @@ Do not assume every internal user with a capability automatically has unrestrict
 
 The MVP may initially use global ProcessEdge scope for a small trusted team, but the data model should not make future scoping impossible.
 
+Master Agreement publication is intentionally platform-scoped rather than tenant-scoped because one published version applies to every SellerTray Business. Business context is relevant only when reviewing acceptance status/history.
+
 ## Sensitive action classes
 
 The following require explicit capability checks and immutable audit. Require a reason when the action changes commercial/legal/financial state or where the existing governed command already requires one:
@@ -194,7 +197,7 @@ The following require explicit capability checks and immutable audit. Require a 
 - merchant-specific commercial overrides;
 - installment/payment reconciliation or correction;
 - entitlement release/suspension/override;
-- agreement issue/replacement;
+- universal Master Agreement version publication;
 - guarantee decision;
 - refund decision/processing;
 - Branch setup readiness changes;
@@ -234,6 +237,7 @@ Platform Operations owns technical/service health. Business Dashboard owns Proce
 3. A selected merchant/Business context must remain visible for merchant-scoped Admin actions.
 4. Sensitive confirmation dialogs must state the business effect and required reason where applicable.
 5. Do not expose internal capability codes as the primary user-facing language; use responsibility-oriented labels while preserving inspectable capability detail in appropriate administration/audit surfaces.
+6. The Agreements workspace is platform-scoped for publication and merchant-scoped only for acceptance review. It must not expose bespoke merchant agreement issuance/replacement actions.
 
 ## Capability administration boundary
 
@@ -271,6 +275,8 @@ For any Admin slice that adds or changes a privileged action, verify at minimum:
 12. retry/idempotency remains correct for commands that can be retried;
 13. UI accurately reflects review-only vs actionable state;
 14. audit/export permissions are tested separately from ordinary reads.
+
+For Master Agreement publication specifically, also verify platform-global scope, immutable version content/hash, AAL2 transport enforcement, `admin.agreements.publish`, publication audit, identical current version across Businesses, and absence of merchant-specific issuance controls.
 
 ## Implementation sequence
 
@@ -332,7 +338,8 @@ Do not:
 - hide a button and call the action secured;
 - let Audit read permission imply mutation permission;
 - use capability filtering to change metric definitions or transaction truth;
-- implement new privileged Admin mutations without adding a capability decision and audit requirement.
+- implement new privileged Admin mutations without adding a capability decision and audit requirement;
+- issue or replace merchant-specific agreements in Admin after the universal Master Agreement model is active.
 
 ## Completion reporting
 

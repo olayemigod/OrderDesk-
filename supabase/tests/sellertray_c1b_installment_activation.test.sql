@@ -14,7 +14,6 @@ create temp table sellertray_c1b_fixture (
   installment_obligation_id uuid,
   schedule_1_id uuid,
   schedule_2_id uuid,
-  template_id uuid,
   agreement_id uuid,
   checkout_1_command uuid not null,
   checkout_2_command uuid not null,
@@ -107,9 +106,6 @@ select tenant_id,commercial_order_id,2,'branch_setup',setup_price_id,branch_id,'
 from sellertray_c1b_fixture;
 set constraints all immediate;
 
--- SET CONSTRAINTS ALL IMMEDIATE persists for the transaction. Re-defer both
--- installment validators before creating the obligation so validation sees the
--- complete governed 70:30 schedule rather than the empty/partial fixture state.
 set constraints validate_sellertray_commercial_installment_obligation deferred;
 set constraints validate_sellertray_commercial_installment_schedule_line deferred;
 
@@ -140,16 +136,13 @@ update sellertray_c1b_fixture set schedule_2_id=(select id from inserted);
 set constraints all immediate;
 
 update sellertray_c1b_fixture f
-set template_id=public.publish_sellertray_commercial_agreement_template_version(
-  'installment_agreement','c1b-2026.1','SellerTray Installment Agreement',
-  'C1B test agreement content',now()-interval '1 minute',f.admin_user_id
-);
-
-update sellertray_c1b_fixture f
-set agreement_id=public.issue_sellertray_commercial_agreement(
-  f.tenant_id,f.commercial_order_id,f.installment_obligation_id,f.template_id,
-  'AGR-C1B-'||upper(substr(f.tenant_id::text,1,8)),
-  'Merchant-specific C1B installment agreement',null,f.admin_user_id
+set agreement_id=public.publish_sellertray_master_agreement_admin(
+  'test-'||substr(f.tenant_id::text,1,8),
+  'SellerTray Master Agreement',
+  'Universal C1B installment activation agreement content',
+  now()-interval '1 minute',
+  'C1B activation test publication',
+  f.admin_user_id
 );
 
 select extensions.ok(
@@ -169,7 +162,7 @@ select extensions.ok(
     (select tenant_id from sellertray_c1b_fixture),
     (select installment_obligation_id from sellertray_c1b_fixture)
   )->>'setupRequiredCount')::integer=1,
-  'C1B starts pending agreement and derives Branch setup from the commercial order'
+  'C1B starts pending Master Agreement and derives Branch setup from the commercial order'
 );
 
 do $$
@@ -188,7 +181,7 @@ select extensions.ok(
   'later installment cannot bypass an unpaid earlier installment'
 );
 
-select public.accept_sellertray_commercial_agreement(
+select public.accept_sellertray_master_agreement(
   f.tenant_id,f.agreement_id,'C1B Test Owner',
   jsonb_build_object('channel','merchant_web','authority_confirmed',true),
   gen_random_uuid(),f.owner_user_id
@@ -199,7 +192,7 @@ select extensions.is(
     (select tenant_id from sellertray_c1b_fixture),
     (select installment_obligation_id from sellertray_c1b_fixture)
   )->>'entitlementState','pending_setup'::text,
-  'agreement acceptance alone does not activate entitlement'
+  'Master Agreement acceptance alone does not activate entitlement'
 );
 
 select public.mark_sellertray_commercial_branch_setup_ready(
@@ -212,7 +205,7 @@ select extensions.is(
     (select tenant_id from sellertray_c1b_fixture),
     (select installment_obligation_id from sellertray_c1b_fixture)
   )->>'entitlementState','awaiting_qualifying_settlement'::text,
-  'agreement plus setup readiness still waits for confirmed payment'
+  'Master Agreement plus setup readiness still waits for confirmed payment'
 );
 
 with reserved as (
@@ -286,9 +279,6 @@ update sellertray_c1b_fixture set checkout_2_id=(reserved.result->>'sessionId'):
 select extensions.ok((select checkout_2_id is not null from sellertray_c1b_fixture),
   'second installment becomes payable only after the first is confirmed');
 
--- Exercise the crash/lost-response recovery path: the provider attempt has
--- started, but the authorization URL was never persisted before the signed
--- provider confirmation arrives. The leased `preparing` checkout is valid.
 select public.begin_sellertray_installment_checkout_initialization(f.checkout_2_id)
 from sellertray_c1b_fixture f;
 update sellertray_c1b_fixture set second_paid_at=now();
