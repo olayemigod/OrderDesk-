@@ -48,28 +48,32 @@ begin
       (s.state->'commercialOrder'->>'id')::uuid as commercial_order_id,
       (s.state->'commercialOrder'->>'orderedAt')::timestamptz as commercial_order_at,
       (s.state->'agreement'->>'acceptedAt')::timestamptz as agreement_accepted_at,
-      coalesce(
-        (s.state->'settlement'->>'firstPaidAt')::timestamptz,
-        (
-          select max(f.event_at)
-          from (
-            select pc.paid_at as event_at
-            from public.sellertray_commercial_installment_payment_confirmations pc
-            where pc.tenant_id=s.tenant_id
-              and pc.commercial_order_id=(s.state->'commercialOrder'->>'id')::uuid
-            union all
-            select dp.paid_at
-            from public.sellertray_commercial_direct_payment_confirmations dp
-            where dp.tenant_id=s.tenant_id
-              and dp.commercial_order_id=(s.state->'commercialOrder'->>'id')::uuid
-            union all
-            select a.approved_at
-            from public.sellertray_commercial_adjustments a
-            where a.tenant_id=s.tenant_id
-              and a.commercial_order_id=(s.state->'commercialOrder'->>'id')::uuid
-          ) f
-        )
-      ) as qualifying_settlement_at,
+      case
+        when coalesce((s.state->'settlement'->>'qualifyingSettlementSatisfied')::boolean,false) then
+          coalesce(
+            (s.state->'settlement'->>'firstPaidAt')::timestamptz,
+            (
+              select max(f.event_at)
+              from (
+                select pc.paid_at as event_at
+                from public.sellertray_commercial_installment_payment_confirmations pc
+                where pc.tenant_id=s.tenant_id
+                  and pc.commercial_order_id=(s.state->'commercialOrder'->>'id')::uuid
+                union all
+                select dp.paid_at
+                from public.sellertray_commercial_direct_payment_confirmations dp
+                where dp.tenant_id=s.tenant_id
+                  and dp.commercial_order_id=(s.state->'commercialOrder'->>'id')::uuid
+                union all
+                select a.approved_at
+                from public.sellertray_commercial_adjustments a
+                where a.tenant_id=s.tenant_id
+                  and a.commercial_order_id=(s.state->'commercialOrder'->>'id')::uuid
+              ) f
+            )
+          )
+        else null
+      end as qualifying_settlement_at,
       (s.state->'activation'->>'effectiveFrom')::timestamptz as activation_at,
       (
         select min(b.created_at)
