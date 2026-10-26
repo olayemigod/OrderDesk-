@@ -4,17 +4,25 @@ select extensions.plan(10);
 
 select extensions.ok(
   position(
-    'get_sellertray_commercial_settlement_state' in
+    'get_sellertray_installment_billing_state_legacy_order_agreement' in
     lower(pg_get_functiondef('public.get_sellertray_installment_billing_state(uuid,uuid)'::regprocedure))
+  ) > 0
+  and position(
+    'get_sellertray_commercial_settlement_state' in
+    lower(pg_get_functiondef('public.get_sellertray_installment_billing_state_legacy_order_agreement(uuid,uuid)'::regprocedure))
   ) > 0,
-  'installment billing state consumes the shared OA2 settlement projection'
+  'current billing wrapper preserves the shared OA2 settlement projection through delegated calculation'
 );
 select extensions.ok(
   position(
     'sellertray_installment_contract_snapshots' in
+    lower(pg_get_functiondef('public.get_sellertray_installment_billing_state_legacy_order_agreement(uuid,uuid)'::regprocedure))
+  ) > 0
+  and position(
+    'sellertray_master_agreement_accepted_at' in
     lower(pg_get_functiondef('public.get_sellertray_installment_billing_state(uuid,uuid)'::regprocedure))
   ) > 0,
-  'billing state consumes immutable contract snapshot metadata'
+  'billing state preserves immutable contract metadata while overlaying current Master Agreement acceptance'
 );
 select extensions.ok(
   position(
