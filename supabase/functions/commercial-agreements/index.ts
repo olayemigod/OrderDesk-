@@ -3,26 +3,22 @@ import { createClient } from 'npm:@supabase/supabase-js@2.115.0';
 type JsonRecord = Record<string, unknown>;
 type Action =
   | 'merchant_list'
-  | 'merchant_accept'
   | 'admin_overview'
   | 'admin_onboarding'
   | 'admin_publish_subscription_price'
   | 'admin_publish_setup_price'
   | 'admin_create_initial_purchase'
-  | 'admin_publish_template'
-  | 'admin_issue'
   | 'admin_mark_setup_ready';
+
+type RetiredAgreementMutation = 'merchant_accept' | 'admin_publish_template' | 'admin_issue';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const MAX_BODY_BYTES = 400_000;
-const AGREEMENT_FAMILIES = new Set([
-  'terms_of_service',
-  'subscription_order',
-  'installment_agreement',
-  'money_back_guarantee_terms',
-  'branch_setup_equipment_acknowledgement',
-  'privacy_data_terms',
+const RETIRED_AGREEMENT_MUTATIONS = new Set<RetiredAgreementMutation>([
+  'merchant_accept',
+  'admin_publish_template',
+  'admin_issue',
 ]);
 const INSTALLMENT_STRUCTURES = new Set([
   'two_installment_70_30',
@@ -55,7 +51,15 @@ Deno.serve(async (request) => {
   try { body = JSON.parse(bodyRead.text) as JsonRecord; }
   catch { return json({ error: 'Invalid JSON' }, 400); }
 
-  const action = cleanAction(body.action);
+  const requestedAction = typeof body.action === 'string' ? body.action.trim() : '';
+  if (isRetiredAgreementMutation(requestedAction)) {
+    return json({
+      error: 'This order-bound agreement mutation is retired. Use the universal SellerTray Master Agreement authority.',
+      retired: true,
+    }, 410);
+  }
+
+  const action = cleanAction(requestedAction);
   if (!action) return json({ error: 'Unsupported commercial agreement action' }, 400);
 
   try {
@@ -65,32 +69,6 @@ Deno.serve(async (request) => {
       await authorizeMerchantAgreementRead(tenantId, userId);
       await reconcileTenantInstallmentsBestEffort(tenantId, 'merchant agreement center');
       return json({ ok: true, center: await loadMerchantCenter(tenantId, userId) });
-    }
-
-    if (action === 'merchant_accept') {
-      const tenantId = cleanUuid(body.tenantId);
-      const agreementId = cleanUuid(body.agreementId);
-      const commandId = cleanUuid(body.commandId);
-      const legalName = cleanText(body.legalName, 200);
-      if (!tenantId || !agreementId || !commandId) return json({ error: 'Business, agreement and acceptance command are required' }, 400);
-      if (!legalName) return json({ error: 'Enter the authorised representative legal name' }, 400);
-      if (body.authorityConfirmed !== true) return json({ error: 'Confirm your authority and agreement acceptance before continuing' }, 400);
-
-      const userAgent = cleanText(request.headers.get('user-agent'), 512);
-      const acceptanceId = await rpc<string>('accept_sellertray_commercial_agreement', {
-        p_tenant_id: tenantId,
-        p_agreement_id: agreementId,
-        p_accepted_legal_name: legalName,
-        p_request_evidence: {
-          channel: 'merchant_web',
-          authority_confirmed: true,
-          ...(userAgent ? { user_agent: userAgent } : {}),
-        },
-        p_command_id: commandId,
-        p_actor_user_id: userId,
-      });
-      await reconcileTenantInstallmentsBestEffort(tenantId, 'agreement acceptance');
-      return json({ ok: true, acceptanceId, center: await loadMerchantCenter(tenantId, userId) });
     }
 
     if (action === 'admin_overview') {
@@ -187,28 +165,6 @@ Deno.serve(async (request) => {
       return json({ ok: true, purchase, onboarding: await loadAdminOnboarding(tenantId, userId) }, 201);
     }
 
-    if (action === 'admin_publish_template') {
-      const family = cleanFamily(body.family);
-      const versionCode = cleanText(body.versionCode, 64);
-      const title = cleanText(body.title, 200);
-      const contentBody = cleanRawText(body.contentBody, 200_000);
-      const effectiveFrom = cleanIsoTimestamp(body.effectiveFrom);
-      const reason = cleanReason(body.reason);
-      if (!family || !versionCode || !title || !contentBody || !effectiveFrom || !reason) {
-        return json({ error: 'Agreement family, version, title, content, effective time and reason are required' }, 400);
-      }
-      const templateId = await rpc<string>('publish_sellertray_commercial_agreement_template_admin', {
-        p_agreement_family: family,
-        p_version_code: versionCode,
-        p_title: title,
-        p_content_body: contentBody,
-        p_effective_from: effectiveFrom,
-        p_reason: reason,
-        p_actor_user_id: userId,
-      });
-      return json({ ok: true, templateId, overview: await loadAdminOverview(null, userId) }, 201);
-    }
-
     if (action === 'admin_mark_setup_ready') {
       const tenantId = cleanUuid(body.tenantId);
       const commercialOrderId = cleanUuid(body.commercialOrderId);
@@ -234,32 +190,7 @@ Deno.serve(async (request) => {
       return json({ ok: true, readinessId, overview: await loadAdminOverview(tenantId, userId) });
     }
 
-    const tenantId = cleanUuid(body.tenantId);
-    const commercialOrderId = cleanUuid(body.commercialOrderId);
-    const templateVersionId = cleanUuid(body.templateVersionId);
-    const installmentObligationId = optionalUuid(body.installmentObligationId);
-    const supersedesAgreementId = optionalUuid(body.supersedesAgreementId);
-    const reference = cleanText(body.reference, 128);
-    const renderedContent = cleanRawText(body.renderedContent, 300_000);
-    const reason = cleanReason(body.reason);
-    if (!tenantId || !commercialOrderId || !templateVersionId || !reference || !renderedContent || !reason) {
-      return json({ error: 'Business, commercial order, template, reference, agreement content and reason are required' }, 400);
-    }
-    if (body.installmentObligationId && !installmentObligationId) return json({ error: 'A valid installment obligation is required' }, 400);
-    if (body.supersedesAgreementId && !supersedesAgreementId) return json({ error: 'A valid replacement agreement is required' }, 400);
-
-    const agreementId = await rpc<string>('issue_sellertray_commercial_agreement_admin', {
-      p_tenant_id: tenantId,
-      p_commercial_order_id: commercialOrderId,
-      p_installment_obligation_id: installmentObligationId,
-      p_template_version_id: templateVersionId,
-      p_agreement_reference: reference,
-      p_rendered_content: renderedContent,
-      p_supersedes_agreement_id: supersedesAgreementId,
-      p_reason: reason,
-      p_actor_user_id: userId,
-    });
-    return json({ ok: true, agreementId, overview: await loadAdminOverview(tenantId, userId) }, 201);
+    return json({ error: 'Unsupported commercial agreement action' }, 400);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Commercial agreement request failed';
     return json({ error: message }, statusForError(message));
@@ -354,16 +285,16 @@ async function rpc<T>(name: string, args: JsonRecord): Promise<T> {
   return data as T;
 }
 
+function isRetiredAgreementMutation(value: string): value is RetiredAgreementMutation {
+  return RETIRED_AGREEMENT_MUTATIONS.has(value as RetiredAgreementMutation);
+}
 function cleanAction(value: unknown): Action | null {
   return value === 'merchant_list'
-    || value === 'merchant_accept'
     || value === 'admin_overview'
     || value === 'admin_onboarding'
     || value === 'admin_publish_subscription_price'
     || value === 'admin_publish_setup_price'
     || value === 'admin_create_initial_purchase'
-    || value === 'admin_publish_template'
-    || value === 'admin_issue'
     || value === 'admin_mark_setup_ready'
     ? value
     : null;
@@ -382,11 +313,6 @@ function cleanUuidArray(value: unknown): string[] | null {
   if (clean.some((item) => !item)) return null;
   const ids = clean as string[];
   return new Set(ids).size === ids.length ? ids : null;
-}
-function cleanFamily(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const clean = value.trim().toLowerCase();
-  return AGREEMENT_FAMILIES.has(clean) ? clean : null;
 }
 function cleanInstallmentStructure(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -414,11 +340,6 @@ function cleanReason(value: unknown): string | null {
 function cleanText(value: unknown, max: number): string | null {
   if (typeof value !== 'string') return null;
   const clean = value.trim().replace(/\s+/g, ' ');
-  return clean && clean.length <= max ? clean : null;
-}
-function cleanRawText(value: unknown, max: number): string | null {
-  if (typeof value !== 'string') return null;
-  const clean = value.trim();
   return clean && clean.length <= max ? clean : null;
 }
 function cleanIsoTimestamp(value: unknown): string | null {
