@@ -1,0 +1,64 @@
+name: Merchant Web Candidate Gate
+
+on:
+  push:
+    branches:
+      - fix/agreement-workspace-cleanup-20261026
+    paths:
+      - '.github/workflows/merchant-web-candidate-gate.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/merchant-web
+    steps:
+      - name: Checkout exact candidate source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - name: Verify exact candidate checkout
+        run: |
+          expected="${{ github.sha }}"
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Enforce internal authority RPC boundary
+        run: node ../../scripts/check-internal-authority-rpc-boundary.mjs
+      - name: Install dependencies
+        run: npm --prefix . install --no-audit --no-fund
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Security preflight
+        run: npm run preflight
+      - name: Production build
+        run: npm run build
+
+  dependency-audit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/merchant-web
+    steps:
+      - name: Checkout exact candidate source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - name: Verify exact candidate checkout
+        run: |
+          expected="${{ github.sha }}"
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm --prefix . install --no-audit --no-fund
+      - name: Audit production dependencies
+        run: npm --prefix . audit --omit=dev --audit-level=high
