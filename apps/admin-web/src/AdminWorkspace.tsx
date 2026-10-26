@@ -60,7 +60,7 @@ const NAV_GROUPS: NavGroup[] = [
     { id: 'commercial/pricing', label: 'Plans & Pricing', description: 'Subscription and Branch setup pricing', merchantScoped: true },
     { id: 'commercial/settlement', label: 'Payments & Settlement', description: 'Discounts, direct payments and balances', merchantScoped: true },
     { id: 'commercial/installments', label: 'Installments', description: 'Installment and entitlement review', merchantScoped: true },
-    { id: 'commercial/agreements', label: 'Agreements', description: 'Templates, issuance, acceptance and replacement', merchantScoped: true },
+    { id: 'commercial/agreements', label: 'Agreements', description: 'Master Agreement publication and Business acceptance history' },
   ] },
   { id: 'setup', label: 'Onboarding & Setup', icon: 'setup', items: [
     { id: 'setup/appointments', label: 'Setup Appointments', description: 'Scheduling and rescheduling', merchantScoped: true },
@@ -163,7 +163,7 @@ export default function AdminWorkspace() {
   async function refreshAudit() {
     if (!session) return;
     const result = await invokeJson<{ audit?: unknown }>('platform-admin', { action: 'audit', tenantId: null, limit: 100 }, session);
-    setAudit(normalizeAudit(result.audit));
+    setAudit(normalizeAudit(auditResult(auditResult))); 
   }
 
   async function signOut() { await supabase.auth.signOut(); }
@@ -248,7 +248,7 @@ function WorkspaceShell({ session, bootstrap, audit, onReload, onAuditRefresh, o
       case 'commercial/pricing': return <MerchantScopedPage eyebrow="Commercial" title="Plans & pricing" description="Manage effective SellerTray subscription and Branch setup pricing as a focused commercial job." tenantId={tenantId} choose={chooseMerchant}>{tenantId ? <CommercialPricingAdministration session={session} actorRole={bootstrap.actorRole} tenantId={tenantId} /> : null}</MerchantScopedPage>;
       case 'commercial/settlement': return <MerchantScopedPage eyebrow="Commercial" title="Payments & settlement" description="Review authoritative order balances, ProcessEdge direct payments, discounts and installment-policy overrides without mixing them with setup scheduling." tenantId={tenantId} choose={chooseMerchant}>{tenantId ? <div className="admin-context-bound admin-hide-first-scope-card"><CommercialSettlementAdministration key={tenantId} session={session} initialTenantId={tenantId} /></div> : null}</MerchantScopedPage>;
       case 'commercial/installments': return <MerchantScopedPage eyebrow="Commercial" title="Installments" description="Review installment progress and entitlement state without placing payment corrections or setup actions on the same page." tenantId={tenantId} choose={chooseMerchant}>{tenantId ? <InstallmentEntitlementAdministration session={session} tenantId={tenantId} /> : null}</MerchantScopedPage>;
-      case 'commercial/agreements': return <MerchantScopedPage eyebrow="Commercial" title="Agreements" description="Publish governed templates, issue merchant agreements and review immutable acceptance/replacement history." tenantId={tenantId} choose={chooseMerchant}>{tenantId ? <CommercialAgreementAdministration session={session} actorRole={bootstrap.actorRole} tenantId={tenantId} /> : null}</MerchantScopedPage>;
+      case 'commercial/agreements': return <PageFrame eyebrow="Commercial" title="Agreements" description="Publish one universal SellerTray Master Agreement for the platform. Select a Merchant context only when you need to review that Business's acceptance status or preserved legacy agreement history."><CommercialAgreementAdministration session={session} tenantId={tenantId} /></PageFrame>;
       case 'setup/appointments': return <MerchantScopedPage eyebrow="Onboarding & Setup" title="Setup appointments" description="Schedule and reschedule ProcessEdge Branch setup work against exact purchased setup obligations." tenantId={tenantId} choose={chooseMerchant}>{tenantId ? <SetupSchedulingAdministration session={session} initialTenantId={tenantId} view="appointments" showMerchantSelector={false} /> : null}</MerchantScopedPage>;
       case 'setup/resources': return <MerchantScopedPage eyebrow="Onboarding & Setup" title="Setup resources" description="Manage ProcessEdge setup service areas, workforce coverage and capacity separately from merchant appointment work." tenantId={tenantId} choose={chooseMerchant}>{tenantId ? <SetupSchedulingAdministration session={session} initialTenantId={tenantId} view="resources" showMerchantSelector={false} /> : null}</MerchantScopedPage>;
       case 'setup/completion': return <MerchantScopedPage eyebrow="Onboarding & Setup" title="Setup completion" description="Record the structured equipment, pairing/test, handover and merchant acknowledgement evidence required before Branch readiness can converge." tenantId={tenantId} choose={chooseMerchant}>{tenantId ? <SetupSchedulingAdministration session={session} initialTenantId={tenantId} view="completion" showMerchantSelector={false} /> : null}</MerchantScopedPage>;
