@@ -44,9 +44,11 @@ requireValue(
   'Merchant Web must not read notification tables directly or derive the badge from a bounded list.',
 );
 requireValue(
-  inbox.includes('Commercial, agreement, setup, activation and service-term notices')
-    && inbox.includes('Operational Admin queues remain separate.'),
-  'Merchant Web must keep merchant lifecycle notifications distinct from Admin operational queues.',
+  app.includes("table: 'merchant_notifications'")
+    && app.includes("table: 'merchant_notification_reads'")
+    && app.includes('window.addEventListener(\'focus\', refreshCount)')
+    && inbox.includes('const unread = unreadCount;'),
+  'Merchant Web must refresh the exact unread count outside the inbox and use it for mark-all availability.',
 );
 
 if (failures.length) {

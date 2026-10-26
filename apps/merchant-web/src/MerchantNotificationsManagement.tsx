@@ -14,9 +14,11 @@ type NotificationRow = {
 
 export default function MerchantNotificationsManagement({
   tenantId,
+  unreadCount,
   onUnreadChanged,
 }: {
   tenantId: string;
+  unreadCount: number;
   onUnreadChanged: () => void;
 }) {
   const [rows, setRows] = useState<NotificationRow[]>([]);
@@ -93,18 +95,18 @@ export default function MerchantNotificationsManagement({
     }
   }
 
-  const unread = rows.filter((row) => !row.is_read).length;
+  const unread = unreadCount;
 
   return <div className="page-stack notifications-page">
     <div className="section-heading">
-      <div><p className="eyebrow">Shared lifecycle inbox</p><h2>Notifications</h2></div>
-      <div className="notification-page-actions"><span>{unread ? `${unread} unread in this view` : 'All caught up'}</span><button className="secondary-button" disabled={!unread || busyId === 'all'} onClick={() => void markAllRead()}>{busyId === 'all' ? 'Updating' : 'Mark all read'}</button></div>
+      <div><p className="eyebrow">Business updates</p><h2>Notifications</h2></div>
+      <div className="notification-page-actions"><span>{unread ? `${unread} unread` : 'All caught up'}</span><button className="secondary-button" disabled={!unread || busyId === 'all'} onClick={() => void markAllRead()}>{busyId === 'all' ? 'Updating' : 'Mark all read'}</button></div>
     </div>
-    <p className="muted notification-page-note">Commercial, agreement, setup, activation and service-term notices come from the same governed SellerTray events used by Mobile. Operational Admin queues remain separate.</p>
+    <p className="muted notification-page-note">See updates about your payments, agreement, Branch setup and subscription.</p>
     {error ? <div className="error-banner">{error}<button onClick={() => setError(null)}>Dismiss</button></div> : null}
     <article className="panel notification-list-panel">
-      {loading && rows.length === 0 ? <div className="notification-empty"><strong>Loading notifications</strong><p>Reading the governed SellerTray inbox.</p></div> : null}
-      {!loading && rows.length === 0 ? <div className="notification-empty"><strong>No notifications yet</strong><p>SellerTray lifecycle and operational notices will appear here when there is something relevant to this Business.</p></div> : null}
+      {loading && rows.length === 0 ? <div className="notification-empty"><strong>Loading notifications</strong><p>Checking your latest business updates.</p></div> : null}
+      {!loading && rows.length === 0 ? <div className="notification-empty"><strong>No notifications yet</strong><p>Updates about your Business will appear here.</p></div> : null}
       {rows.map((row) => <div className={row.is_read ? 'notification-row read' : 'notification-row'} key={row.id}>
         <span className={`notification-severity ${row.severity}`} aria-hidden="true" />
         <div className="notification-copy"><div className="notification-title-line"><strong>{row.title}</strong>{!row.is_read ? <span className="notification-unread-label">Unread</span> : null}</div><p>{row.body}</p><small>{dateTime(row.created_at)} · {humanize(row.event_key)}</small></div>

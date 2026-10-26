@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+import { AppState } from 'react-native';
 
 import {
   loadMerchantNotifications,
@@ -17,7 +19,13 @@ export function useMerchantNotifications(tenantId: string | null) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const scope = useRef(tenantId);
+  const request = useRef(0);
+  const [loadedTenant, setLoadedTenant] = useState<string | null>(null);
+
   const refresh = useCallback(async () => {
+    if (scope.current !== tenantId) return;
+    const revision = ++request.current;
     if (!tenantId) {
       setNotifications([]);
       setUnreadCount(0);
@@ -31,21 +39,28 @@ export function useMerchantNotifications(tenantId: string | null) {
         loadMerchantNotifications(tenantId),
         loadMerchantUnreadNotificationCount(tenantId),
       ]);
+      if (scope.current !== tenantId || request.current !== revision) return;
+      setLoadedTenant(tenantId);
       setNotifications(next.filter((notification) => !notification.isRead));
       setUnreadCount(count);
       setError(null);
     } catch (err) {
+      if (scope.current !== tenantId || request.current !== revision) return;
       if (isLikelyConnectivityError(err)) {
         setError(null);
       } else {
         setError(err instanceof Error ? err.message : 'Unable to load notifications.');
       }
     } finally {
-      setLoading(false);
+      if (scope.current === tenantId && request.current === revision) setLoading(false);
     }
   }, [tenantId]);
 
   useEffect(() => {
+    scope.current = tenantId;
+    setNotifications([]);
+    setUnreadCount(0);
+    setError(null);
     void refresh();
     if (!tenantId) return undefined;
 
@@ -53,23 +68,31 @@ export function useMerchantNotifications(tenantId: string | null) {
       void refresh();
     });
 
+    const interval = setInterval(() => { if (AppState.currentState === 'active') void refresh(); }, 60000);
+    const appState = AppState.addEventListener('change', (state) => { if (state === 'active') void refresh(); });
     return () => {
+      scope.current = null;
+      request.current += 1;
+      clearInterval(interval);
+      appState.remove();
       void unsubscribeFromMerchantNotifications(channel);
     };
   }, [refresh, tenantId]);
 
   const markRead = useCallback(async (id: string) => {
     await markMerchantNotificationRead(id);
-    setNotifications((current) => current.filter((notification) => notification.id !== id));
-    setUnreadCount((current) => Math.max(0, current - 1));
-  }, []);
+    await refresh();
+  }, [refresh]);
 
   const markAllRead = useCallback(async () => {
     if (!tenantId) return;
     await markAllMerchantNotificationsRead(tenantId);
-    setNotifications([]);
-    setUnreadCount(0);
-  }, [tenantId]);
+    await refresh();
+  }, [tenantId, refresh]);
 
-  return { notifications, unreadCount, loading, error, refresh, markRead, markAllRead };
+  return {
+    notifications: loadedTenant === tenantId ? notifications : [],
+    unreadCount: loadedTenant === tenantId ? unreadCount : 0,
+    loading, error, refresh, markRead, markAllRead,
+  };
 }

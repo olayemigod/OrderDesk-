@@ -86,6 +86,14 @@ requireValue(
   'Mobile notification typing must include the governed OA5A lifecycle vocabulary',
 );
 
+requireValue(
+  notificationHook.includes('await refresh();') &&
+    !notificationHook.includes('current - 1') &&
+    redesignWorkspace.includes('unreadCount={notifications.unreadCount}') &&
+    notificationsWorkspace.includes('unreadCount: number;'),
+  'Read replay and inbox summary must use the authoritative unread count, never local subtraction or a bounded list',
+);
+
 if (failures.length > 0) {
   console.error('SellerTray notification shell preflight failed:');
   for (const failure of failures) console.error('- ' + failure);

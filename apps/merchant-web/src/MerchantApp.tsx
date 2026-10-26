@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import AiInsights from './AiInsights';
 import BusinessExpensesManagement from './BusinessExpensesManagement';
@@ -42,6 +42,8 @@ export default function MerchantApp() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const notificationScope = useRef('');
+  const notificationRequest = useRef(0);
   const [dark, setDark] = useState(() => localStorage.getItem('sellertray.merchant.theme') === 'dark');
   const [navOpen, setNavOpen] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Set<MerchantPortalSection>>(() => new Set());
@@ -57,7 +59,7 @@ export default function MerchantApp() {
   useEffect(() => {
     if (businessId) {
       void loadWorkspace(businessId);
-      void loadUnreadCount(businessId);
+
     } else {
       setUnreadCount(0);
     }
@@ -96,16 +98,42 @@ export default function MerchantApp() {
     } catch (cause) { setError(errorMessage(cause, 'Unable to load SellerTray management data.')); } finally { setLoading(false); }
   }
 
-  async function loadUnreadCount(tenantId: string) {
+  const loadUnreadCount = useCallback(async (tenantId: string) => {
+    if (notificationScope.current !== tenantId) return;
+    const revision = ++notificationRequest.current;
     try {
       const { data, error: rpcError } = await supabase.rpc('sellertray_merchant_unread_notification_count', { p_tenant_id: tenantId });
       if (rpcError) throw rpcError;
+      if (notificationScope.current !== tenantId || notificationRequest.current !== revision) return;
       const count = Number(data ?? 0);
       setUnreadCount(Number.isFinite(count) && count > 0 ? Math.floor(count) : 0);
     } catch (cause) {
-      setError(errorMessage(cause, 'Unable to load SellerTray notification status.'));
+      if (notificationScope.current === tenantId && notificationRequest.current === revision) {
+        setError(errorMessage(cause, 'Unable to load SellerTray notification status.'));
+      }
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    notificationScope.current = businessId;
+    setUnreadCount(0);
+    if (!businessId) return;
+    const refreshCount = () => { void loadUnreadCount(businessId); };
+    refreshCount();
+    const channel = supabase.channel(`merchant-web-notification-count-${businessId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'merchant_notifications', filter: `tenant_id=eq.${businessId}` }, refreshCount)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'merchant_notification_reads', filter: `tenant_id=eq.${businessId}` }, refreshCount)
+      .subscribe((status) => { if (status === 'SUBSCRIBED') refreshCount(); });
+    const interval = window.setInterval(refreshCount, 60000);
+    window.addEventListener('focus', refreshCount);
+    return () => {
+      notificationScope.current = '';
+      notificationRequest.current += 1;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshCount);
+      void supabase.removeChannel(channel);
+    };
+  }, [businessId, loadUnreadCount]);
 
   async function refresh() { if (businessId) await Promise.all([loadWorkspace(businessId), loadUnreadCount(businessId)]); }
   async function signOut() { await supabase.auth.signOut(); }
@@ -154,7 +182,7 @@ export default function MerchantApp() {
       {error ? <div className="error-banner">{error}<button onClick={() => setError(null)}>Dismiss</button></div> : null}
       <section className="context-bar" aria-label="Current business context"><Context label="Business code" value={business.merchantCode || '—'} /><Context label="Subscription" value={statusText(business.subscriptionStatus)} /><Context label="Active Branch" value={branch?.name ?? 'No active Branch'} /></section>
       {page === 'overview' && <DashboardOverview tenantId={business.id} currency={business.currency} go={navigate} openBranch={openBranchPage} />}
-      {page === 'notifications' && <MerchantNotificationsManagement tenantId={business.id} onUnreadChanged={() => void loadUnreadCount(business.id)} />}
+      {page === 'notifications' && <MerchantNotificationsManagement key={business.id} tenantId={business.id} unreadCount={unreadCount} onUnreadChanged={() => void loadUnreadCount(business.id)} />}
       {page === 'sales' && branch && <SalesManagement tenantId={business.id} branchId={branch.id} />}
       {page === 'sales' && !branch && <PageTable eyebrow="Sales" title="Choose a Branch" note="Select a Branch to review completed sales."><Empty title="No active Branch" body="Sales are reviewed within a Branch so transaction and stock context remain clear." /></PageTable>}
       {page === 'orders' && branch && <OrdersManagement tenantId={business.id} branchId={branch.id} currency={business.currency} />}

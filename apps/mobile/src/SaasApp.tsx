@@ -373,6 +373,7 @@ function Workspace() {
           {view === 'notifications' ? (
             <NotificationCenterView
               notifications={merchantNotifications}
+              unreadCount={merchantUnreadCount}
               loading={merchantNotificationsLoading}
               syncError={pageError}
               onMarkAllRead={() => void markAllMerchantNotificationsRead()}
@@ -543,7 +544,6 @@ function MerchantNotificationsView({
   ) => Promise<void>;
   onOpenOrder: (notificationId: string, orderId: string | null) => void;
 }) {
-  const unreadCount = notifications.filter((notification) => !notification.isRead).length;
 
   return (
     <View style={styles.sectionStack}>
@@ -1773,6 +1773,7 @@ function ConversationsView({
 
 function NotificationCenterView({
   notifications,
+  unreadCount,
   loading,
   syncError,
   onMarkAllRead,
@@ -1780,6 +1781,7 @@ function NotificationCenterView({
   onBack,
 }: {
   notifications: MerchantNotification[];
+  unreadCount: number;
   loading: boolean;
   syncError: string | null;
   onMarkAllRead: () => void;
