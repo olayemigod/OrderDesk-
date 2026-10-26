@@ -17,22 +17,14 @@ values (
 insert into public.platform_admins (user_id,role)
 values ('00000000-0000-0000-0000-00000000c501'::uuid,'admin');
 
+-- Tenant provisioning creates the default active MAIN Branch. Reuse that
+-- governed provisioning result instead of creating a duplicate fixture Branch.
 insert into public.tenants (id,name,slug,merchant_code)
 values (
   '00000000-0000-0000-0000-00000000c502'::uuid,
   'OA5C runtime verifier fixture',
   'oa5c-runtime-verifier-fixture',
   'Z5C'
-);
-
-insert into public.branches (id,tenant_id,code,name,is_default,is_active)
-values (
-  '00000000-0000-0000-0000-00000000c503'::uuid,
-  '00000000-0000-0000-0000-00000000c502'::uuid,
-  'MAIN',
-  'Main Branch',
-  true,
-  true
 );
 
 insert into public.sellertray_commercial_orders (
@@ -88,7 +80,7 @@ with proof as (
 select extensions.ok(
   coalesce((payload#>>'{gates,singleActiveBranch,pass}')::boolean,false)=true
   and coalesce((payload#>>'{gates,governedPricingAndTax,pass}')::boolean,false)=false,
-  'runtime proof selects the one active Branch deterministically but blocks absent governed pricing/tax evidence'
+  'runtime proof reuses the provisioned active Branch but blocks absent governed pricing/tax evidence'
 )
 from proof;
 
