@@ -1,0 +1,244 @@
+/* SellerTray Admin workspace convergence.
+ * Presentation-only treatment for governed Commercial and Onboarding & Setup jobs.
+ */
+
+/* Focused job pages should read as one operating workspace, not a stack of unrelated forms. */
+.admin-context-bound,
+.workspace-page > .admin-context-bound {
+  display: grid;
+  gap: 16px;
+}
+
+.workspace-grid.two {
+  gap: 14px;
+  align-items: start;
+}
+
+.workspace-form-stack {
+  gap: 13px;
+}
+
+.workspace-form-stack > label,
+.workspace-field-grid > label {
+  display: grid;
+  gap: 6px;
+  color: #344054;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .005em;
+}
+
+.workspace-form-stack input,
+.workspace-form-stack select,
+.workspace-form-stack textarea,
+.workspace-field-grid input,
+.workspace-field-grid select,
+.workspace-field-grid textarea {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--admin-border);
+  border-radius: 9px;
+  background: #fff;
+  color: #101828;
+  font: inherit;
+  font-weight: 450;
+  outline: none;
+  transition: border-color .14s ease, box-shadow .14s ease, background .14s ease;
+}
+
+.workspace-form-stack textarea,
+.workspace-field-grid textarea {
+  min-height: 112px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.workspace-form-stack input:focus,
+.workspace-form-stack select:focus,
+.workspace-form-stack textarea:focus,
+.workspace-field-grid input:focus,
+.workspace-field-grid select:focus,
+.workspace-field-grid textarea:focus {
+  border-color: #84caff;
+  box-shadow: 0 0 0 3px #eff8ff;
+}
+
+.workspace-form-stack input:disabled,
+.workspace-form-stack select:disabled,
+.workspace-form-stack textarea:disabled {
+  background: #f8fafc;
+  color: #98a2b3;
+}
+
+.workspace-field-grid.two {
+  gap: 12px;
+}
+
+.workspace-panel-heading {
+  padding-bottom: 12px;
+  border-bottom: 1px solid #eef1f5;
+}
+
+.workspace-panel-heading p {
+  max-width: 760px;
+  margin-top: 4px;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Merchant scope remains shell/navigation state; this only makes the scope visually unmistakable. */
+.admin-context-strip {
+  min-height: 48px;
+  padding: 10px 12px;
+  box-shadow: 0 1px 2px rgba(16,24,40,.025);
+}
+
+.admin-context-strip strong {
+  color: #1849a9;
+}
+
+.admin-context-bound > .workspace-banner:first-child,
+.workspace-page > .workspace-banner:first-of-type {
+  box-shadow: 0 1px 2px rgba(16,24,40,.02);
+}
+
+/* Commercial order/setup choices become touch-friendly operational selectors. */
+.workspace-check-pill {
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--admin-border);
+  border-radius: 9px;
+  background: #fff;
+  color: #344054;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: border-color .14s ease, background .14s ease, box-shadow .14s ease;
+}
+
+.workspace-check-pill:hover {
+  border-color: #b2ddff;
+  background: #f5fbff;
+}
+
+.workspace-check-pill:has(input:checked) {
+  border-color: #84caff;
+  background: #eff8ff;
+  color: #175cd3;
+  box-shadow: inset 0 0 0 1px rgba(46,144,250,.08);
+}
+
+.workspace-check-pill input {
+  accent-color: var(--admin-brand);
+}
+
+/* Keep commercial/setup histories readable while preserving the underlying governed facts. */
+.compact-table th,
+.compact-table td {
+  padding-inline: 11px;
+}
+
+.compact-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.workspace-panel .workspace-table-wrap + .workspace-button,
+.workspace-panel .workspace-table-wrap + .workspace-toolbar {
+  margin-top: 14px;
+}
+
+.workspace-panel > .workspace-button.primary:last-child,
+.workspace-form-stack > .workspace-button.primary:last-child {
+  justify-self: start;
+  min-width: 156px;
+}
+
+/* Setup/onboarding evidence is dense; improve section rhythm without changing its lifecycle. */
+.workspace-form-stack > fieldset,
+.workspace-panel fieldset {
+  margin: 0;
+  padding: 13px;
+  border: 1px solid #e9edf3;
+  border-radius: 11px;
+  background: #fbfcfe;
+}
+
+.workspace-panel legend {
+  padding: 0 5px;
+  color: #344054;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.workspace-panel details {
+  border-radius: 9px;
+}
+
+.workspace-panel summary {
+  cursor: pointer;
+  color: #344054;
+  font-weight: 650;
+}
+
+/* Action rows stay clear on wide screens and become safe stacked controls on phones. */
+.workspace-actions,
+.workspace-action-row {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.workspace-button:focus-visible,
+.workspace-check-pill:focus-within {
+  outline: 2px solid #2e90fa;
+  outline-offset: 2px;
+}
+
+@media (max-width: 900px) {
+  .workspace-grid.two,
+  .workspace-field-grid.two {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-panel > .workspace-button.primary:last-child,
+  .workspace-form-stack > .workspace-button.primary:last-child {
+    justify-self: stretch;
+  }
+}
+
+@media (max-width: 520px) {
+  .admin-context-bound { gap: 12px; }
+
+  .workspace-form-stack { gap: 11px; }
+
+  .workspace-form-stack input,
+  .workspace-form-stack select,
+  .workspace-form-stack textarea,
+  .workspace-field-grid input,
+  .workspace-field-grid select,
+  .workspace-field-grid textarea {
+    min-height: 44px;
+    font-size: 16px; /* Prevent mobile browser zoom while preserving readable controls. */
+  }
+
+  .workspace-filter-row:has(.workspace-check-pill) {
+    display: grid;
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+
+  .workspace-check-pill {
+    min-height: 44px;
+  }
+
+  .workspace-actions > .workspace-button,
+  .workspace-action-row > .workspace-button,
+  .workspace-form-stack > .workspace-button.primary:last-child {
+    width: 100%;
+  }
+
+  .workspace-panel fieldset {
+    padding: 11px;
+  }
+}
