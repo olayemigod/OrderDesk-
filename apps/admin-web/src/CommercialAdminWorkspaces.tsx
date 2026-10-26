@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import AgreementLifecycleManagement from './AgreementLifecycleManagement';
 import {
   invokeCommercialAdmin,
   loadCommercialOnboarding,
@@ -130,27 +129,6 @@ export function CommercialOrdersAdministration({ session, actorRole, tenantId }:
         <div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Reference</th><th>Ordered</th><th>Total</th><th>Installment structure</th><th>Obligation</th></tr></thead><tbody>{state.orders.map((order) => <OrderRow key={order.id} order={order} />)}{!state.orders.length ? <tr><td colSpan={5}>No commercial orders have been created for this Business.</td></tr> : null}</tbody></table></div>
       </section>
     </> : null}
-  </WorkspaceState>;
-}
-
-export function CommercialAgreementAdministration({ session, tenantId }: { session: Session; tenantId?: string | null }) {
-  return <div className="workspace-stack">
-    <AgreementLifecycleManagement session={session} tenantId={tenantId ?? undefined} />
-    {tenantId ? <LegacyAgreementHistory session={session} tenantId={tenantId} /> : null}
-  </div>;
-}
-
-function LegacyAgreementHistory({ session, tenantId }: { session: Session; tenantId: string }) {
-  const { state, loading, error, reload } = useOnboardingWorkspace(session, tenantId);
-  return <WorkspaceState loading={loading} error={error} onReload={reload}>
-    {state ? <section className="workspace-panel">
-      <PanelHeading title="Legacy agreement history" description="Retired order-bound agreement and template records remain available as immutable historical evidence only. They are not current agreement authority and cannot be issued, replaced or accepted from this workspace." />
-      <div className="workspace-banner info">Current legal authority is the universal SellerTray Master Agreement above. These records are preserved only for audit and historical review.</div>
-      <div className="workspace-grid two" style={{ marginTop: 16 }}>
-        <div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Legacy agreement</th><th>Order</th><th>Historical status</th></tr></thead><tbody>{state.agreements.map((row) => <tr key={row.id}><td><strong>{row.reference || shortId(row.id)}</strong><small>{shortId(row.id)}</small></td><td>{shortId(row.commercialOrderId)}</td><td>{row.accepted ? 'Accepted historically' : 'Not accepted'}</td></tr>)}{!state.agreements.length ? <tr><td colSpan={3}>No legacy order-bound agreement records for this Business.</td></tr> : null}</tbody></table></div>
-        <div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Legacy template</th><th>Version</th><th>Effective</th></tr></thead><tbody>{state.templates.map((row) => <tr key={row.id}><td><strong>{row.title}</strong><small>{label(row.family)}</small></td><td>{row.versionCode}</td><td>{formatDate(row.effectiveFrom)}</td></tr>)}{!state.templates.length ? <tr><td colSpan={3}>No legacy template records available.</td></tr> : null}</tbody></table></div>
-      </div>
-    </section> : null}
   </WorkspaceState>;
 }
 
