@@ -57,7 +57,7 @@ test('Agreements navigation is platform-scoped and does not expose retired bespo
   assert.doesNotMatch(commercialState, /OnboardingTemplate|OnboardingAgreement|templates:|agreements:|row\.family/);
   assert.match(lifecycle, /'master-agreements'/);
   assert.match(governance, /platform-scoped for publication/i);
-  assert.match(governance, /must not expose bespoke merchant agreement issuance\/replacement actions/i);
+  assert.match(governance, /must not expose merchant-specific agreement issuance, replacement, bespoke legal text or Admin-created merchant acceptance/i);
 });
 
 test('Communications and platform operations are split into task-specific destinations', () => {
