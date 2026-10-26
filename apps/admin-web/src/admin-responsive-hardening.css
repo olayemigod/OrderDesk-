@@ -175,14 +175,29 @@
   }
 }
 
-/* Compact phones: prioritise menu + merchant scope + refresh, and keep all touch controls reachable. */
+/* Compact phones: retain ProcessEdge operating context while prioritising menu + merchant scope + refresh. */
 @media (max-width: 520px) {
   .workspace-topbar {
     gap: 7px;
   }
 
   .workspace-topbar-title {
+    display: flex;
+    flex: 0 1 82px;
+    overflow: hidden;
+  }
+
+  .workspace-topbar-title strong {
     display: none;
+  }
+
+  .workspace-topbar-title span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 9px;
+    line-height: 1.25;
   }
 
   .admin-merchant-context-button span {
@@ -197,6 +212,10 @@
     left: 8px;
     right: 8px;
     padding: 12px;
+  }
+
+  .workspace-topbar-actions .workspace-generated {
+    display: none;
   }
 
   .admin-context-strip {
@@ -250,6 +269,10 @@
 
   .workspace-topbar {
     padding-inline: 7px;
+  }
+
+  .workspace-topbar-title {
+    flex-basis: 66px;
   }
 
   .workspace-sidebar {
