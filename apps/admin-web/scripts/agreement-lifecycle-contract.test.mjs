@@ -4,20 +4,29 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 const read = (path) => readFileSync(resolve(import.meta.dirname, '../..', path), 'utf8');
+const workspace = read('admin-web/src/AdminWorkspace.tsx');
 const selector = read('admin-web/src/MerchantSelector.tsx');
 const commercial = read('admin-web/src/CommercialAdminWorkspaces.tsx');
 const lifecycle = read('admin-web/src/AgreementLifecycleManagement.tsx');
 const masterGateway = read('../supabase/functions/master-agreements/index.ts');
+const legacyGateway = read('../supabase/functions/commercial-agreements/index.ts');
 const masterAuthority = read('../supabase/migrations/20261026060117_universal_master_agreement_authority.sql');
 
-test('focused Agreements workspace exposes universal governance after explicit merchant scope', () => {
-  assert.match(commercial, /import AgreementLifecycleManagement/);
-  assert.match(commercial, /<AgreementLifecycleManagement session=\{session\} tenantId=\{tenantId\}/);
+test('focused Agreements workspace is platform-scoped with optional merchant review context', () => {
+  assert.match(workspace, /\{ id: 'commercial\/agreements', label: 'Agreements', description: 'Master Agreement publication and Business acceptance history' \}/);
+  assert.match(workspace, /case 'commercial\/agreements': return <PageFrame/);
+  assert.match(workspace, /<CommercialAgreementAdministration session=\{session\} tenantId=\{tenantId\} \/>/);
+  assert.doesNotMatch(workspace, /commercial\/agreements'.*merchantScoped: true/);
+  assert.match(commercial, /<AgreementLifecycleManagement session=\{session\} tenantId=\{tenantId \?\? undefined\} \/>/);
+  assert.match(commercial, /Legacy agreement history/);
+  assert.match(commercial, /immutable historical evidence only/);
+  assert.doesNotMatch(commercial, /admin_publish_template|admin_issue|Publish agreement template|Issue merchant agreement/);
   assert.match(selector, /showCommercialPortfolio === true/);
   assert.doesNotMatch(selector, /showCommercialPortfolio \?\? mode === 'single'/);
 });
 
 test('Agreements workspace publishes one universal version and reviews Business acceptance only', () => {
+  assert.match(lifecycle, /tenantId\?: string/);
   assert.match(lifecycle, /'master-agreements'/);
   assert.match(lifecycle, /action: 'admin_get'/);
   assert.match(lifecycle, /action: 'admin_publish'/);
@@ -28,6 +37,18 @@ test('Agreements workspace publishes one universal version and reviews Business 
   assert.doesNotMatch(lifecycle, /action: 'admin_issue'/);
   assert.doesNotMatch(lifecycle, /supersedesAgreementId|commercialOrderId|installmentObligationId/);
   assert.doesNotMatch(lifecycle, /accept_sellertray_commercial_agreement/);
+});
+
+test('legacy commercial gateway fails closed on retired agreement mutations', () => {
+  for (const action of ['merchant_accept', 'admin_publish_template', 'admin_issue']) {
+    assert.match(legacyGateway, new RegExp(`'${action}'`));
+  }
+  assert.match(legacyGateway, /RETIRED_AGREEMENT_MUTATIONS/);
+  assert.match(legacyGateway, /order-bound agreement mutation is retired/);
+  assert.match(legacyGateway, /}, 410\);/);
+  assert.doesNotMatch(legacyGateway, /accept_sellertray_commercial_agreement/);
+  assert.doesNotMatch(legacyGateway, /publish_sellertray_commercial_agreement_template_admin/);
+  assert.doesNotMatch(legacyGateway, /issue_sellertray_commercial_agreement_admin/);
 });
 
 test('shared Master Agreement authority is platform-wide and retires current-path order agreements', () => {
