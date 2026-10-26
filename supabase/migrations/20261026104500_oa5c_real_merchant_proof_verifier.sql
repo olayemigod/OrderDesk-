@@ -104,7 +104,7 @@ begin
   v_state := public.get_sellertray_onboarding_state_core(p_tenant_id);
   v_current_agreement_version_id := public.resolve_sellertray_master_agreement_version_id(now());
 
-  select count(*)::integer,min(b.id)
+  select count(*)::integer,min(b.id::text)::uuid
     into v_active_branch_count,v_active_branch_id
   from public.branches b
   where b.tenant_id=p_tenant_id
@@ -147,7 +147,7 @@ begin
     and ps.commercial_order_id=p_commercial_order_id;
 
   select
-    min(a.id),
+    min(a.id::text)::uuid,
     count(*)::integer,
     coalesce(bool_and(
       a.accepted_by_user_id is not null
