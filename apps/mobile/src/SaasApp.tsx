@@ -29,6 +29,7 @@ import { SetupGuideCard } from './components/SetupGuideCard';
 import { SellerTrayBrand } from './components/SellerTrayBrand';
 import { SellerTrayLoadingScreen } from './components/SellerTrayLoadingScreen';
 import type { MerchantBusiness } from './data/businessRepository';
+import type { MerchantNotification } from './data/merchantNotificationsRepository';
 import type { OrderFulfillmentInput, OrderItemInput } from './data/ordersRepository';
 import { sendMerchantPaymentOptions } from './data/orderPaymentsRepository';
 import { orderTotal, type MerchantOrder, type OrderStatus } from './domain/order';
@@ -1778,16 +1779,7 @@ function NotificationCenterView({
   onOpenNotification,
   onBack,
 }: {
-  notifications: Array<{
-    id: string;
-    eventKey: 'new_whatsapp_order' | 'order_change_request' | 'new_whatsapp_message' | 'payment_verification_required' | 'payment_confirmed' | 'payment_failed' | 'payment_exception' | 'payment_gate_blocked' | 'customer_complaint' | 'refund_request' | 'catalogue_enquiry' | 'customer_enquiry' | 'workflow_clarification';
-    severity: 'info' | 'attention' | 'urgent';
-    title: string;
-    body: string;
-    orderId: string | null;
-    isRead: boolean;
-    createdAt: string;
-  }>;
+  notifications: MerchantNotification[];
   loading: boolean;
   syncError: string | null;
   onMarkAllRead: () => void;
