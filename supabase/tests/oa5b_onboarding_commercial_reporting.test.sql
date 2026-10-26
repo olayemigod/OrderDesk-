@@ -129,9 +129,11 @@ select extensions.ok(
       public.platform_admin_onboarding_commercial_report(f.admin_user_id,100)->'items'
     ) item
     where item->>'tenantId'=f.tenant_id::text
-      and item->>'currentStage'='business_setup'
+      and item->>'currentStage'=(
+        public.get_sellertray_onboarding_state_core(f.tenant_id)->>'currentStage'
+      )
   ),
-  'OA5B reports a Business with no active Branch at the governed business-setup stage'
+  'OA5B current stage matches the shared governed onboarding authority'
 )
 from oa5b_fixture f;
 
@@ -142,9 +144,14 @@ select extensions.ok(
       public.platform_admin_onboarding_commercial_report(f.admin_user_id,100)->'items'
     ) item
     where item->>'tenantId'=f.tenant_id::text
-      and item->'branches'='[]'::jsonb
+      and jsonb_typeof(item->'branches')='array'
+      and jsonb_array_length(item->'branches')=(
+        select count(*)::integer
+        from public.branches b
+        where b.tenant_id=f.tenant_id
+      )
   ),
-  'OA5B Branch reporting is explicit even when a Business has no Branch yet'
+  'OA5B Branch reporting exactly matches governed Branch membership for the Business'
 )
 from oa5b_fixture f;
 
