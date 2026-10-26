@@ -43,6 +43,19 @@ test('Commercial and onboarding jobs have focused first-class destinations', () 
   assert.doesNotMatch(workspace, /CommercialBillingAdministrationLegacy/);
 });
 
+test('Agreements navigation is platform-scoped and does not expose retired bespoke agreement jobs', () => {
+  assert.match(workspace, /\{ id: 'commercial\/agreements', label: 'Agreements', description: 'Master Agreement publication and Business acceptance history' \}/);
+  assert.match(workspace, /case 'commercial\/agreements': return <PageFrame/);
+  assert.doesNotMatch(workspace, /commercial\/agreements'.*merchantScoped: true/);
+  assert.doesNotMatch(workspace, /Templates, issuance, acceptance and replacement/);
+  assert.doesNotMatch(workspace, /Publish governed templates, issue merchant agreements/);
+  assert.doesNotMatch(commercial, /Publish agreement template|Issue merchant agreement|admin_publish_template|admin_issue/);
+  assert.match(commercial, /Legacy agreement history/);
+  assert.match(commercial, /historical evidence only/);
+  assert.match(governance, /platform-scoped for publication/i);
+  assert.match(governance, /must not expose bespoke merchant agreement issuance\/replacement actions/i);
+});
+
 test('Communications and platform operations are split into task-specific destinations', () => {
   for (const route of ['communications/compose', 'communications/history', 'operations/whatsapp', 'operations/ai']) {
     assert.match(workspace, new RegExp(route.replace('/', '\\/')));
@@ -106,7 +119,6 @@ test('Legacy hashes remain recoverable after navigation convergence', () => {
     assert.match(workspace, new RegExp(`['\"]?${legacy.replace('/', '\\/')}['\"]?:`));
   }
 });
-
 
 test('Browser history tracks the full hash so same-route Merchant context restores on Back and Forward', () => {
   assert.match(workspace, /const \[locationHash, setLocationHash\] = useState\(\(\) => window\.location\.hash\)/);
