@@ -1,0 +1,288 @@
+/* Final responsive/accessibility hardening for the SellerTray Admin visual redesign.
+ * Presentation only: no routes, capabilities, commands, merchant scope or business truth change here.
+ */
+
+/* Prevent long operational labels and values from forcing the shell wider than the viewport. */
+.workspace-main-shell,
+.workspace-content,
+.workspace-page,
+.workspace-panel,
+.workspace-topbar-title,
+.admin-merchant-context,
+.admin-context-strip,
+.workspace-toolbar,
+.workspace-grid > *,
+.workspace-panel-heading > * {
+  min-width: 0;
+}
+
+.workspace-page-header h1,
+.workspace-panel-heading h2,
+.workspace-drawer-header h2,
+.admin-context-strip strong,
+.workspace-detail strong {
+  overflow-wrap: anywhere;
+}
+
+/* Make horizontal data overflow explicit rather than shrinking operational text. */
+.workspace-table-wrap {
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
+}
+
+.workspace-table th,
+.workspace-table td {
+  line-height: 1.45;
+}
+
+.workspace-table td:first-child,
+.workspace-table th:first-child {
+  padding-left: 14px;
+}
+
+.workspace-table td:last-child,
+.workspace-table th:last-child {
+  padding-right: 14px;
+}
+
+/* Keep the persistent merchant scope usable with unusually long Business names. */
+.admin-merchant-context-button {
+  min-height: 42px;
+}
+
+.admin-merchant-context-button strong,
+.admin-context-strip strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-merchant-context-popover {
+  overscroll-behavior: contain;
+}
+
+/* More robust keyboard treatment for the active operating shell. */
+.workspace-search input:focus-visible,
+.workspace-form-stack input:focus-visible,
+.workspace-form-stack select:focus-visible,
+.workspace-form-stack textarea:focus-visible,
+.workspace-field-grid input:focus-visible,
+.workspace-field-grid select:focus-visible,
+.workspace-field-grid textarea:focus-visible,
+.workspace-auth-card input:focus-visible,
+.workspace-otp:focus-visible {
+  outline: 2px solid #2e90fa;
+  outline-offset: 2px;
+}
+
+.workspace-clickable-row:focus-visible td {
+  background: #f5faff;
+}
+
+/* Narrow desktop/tablet: protect the top bar before the drawer breakpoint. */
+@media (max-width: 1024px) {
+  .workspace-topbar {
+    padding-inline: 16px;
+  }
+
+  .workspace-topbar-title {
+    flex: 1 1 180px;
+  }
+
+  .admin-merchant-context {
+    flex: 1 1 220px;
+  }
+
+  .admin-merchant-context-button {
+    width: 100%;
+    min-width: 0;
+    max-width: 260px;
+  }
+}
+
+/* Admin shell becomes the governed slide-over navigation on narrow application windows. */
+@media (max-width: 820px) {
+  .workspace-sidebar {
+    width: min(320px, 88vw);
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .workspace-nav-backdrop {
+    background: rgba(7, 25, 43, .56);
+    backdrop-filter: blur(2px);
+  }
+
+  .workspace-topbar {
+    min-height: calc(62px + env(safe-area-inset-top));
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .workspace-topbar-title {
+    flex: 0 1 190px;
+  }
+
+  .admin-merchant-context {
+    flex: 1 1 180px;
+  }
+
+  .admin-merchant-context-button {
+    max-width: none;
+  }
+
+  .admin-merchant-context-popover {
+    top: calc(70px + env(safe-area-inset-top));
+    bottom: max(12px, env(safe-area-inset-bottom));
+    max-height: none;
+  }
+
+  .workspace-content {
+    padding-bottom: max(30px, calc(18px + env(safe-area-inset-bottom)));
+  }
+}
+
+@media (max-width: 640px) {
+  .workspace-topbar {
+    flex-wrap: nowrap;
+  }
+
+  .workspace-topbar-title {
+    flex: 0 1 112px;
+  }
+
+  .workspace-topbar-title strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .admin-merchant-context {
+    flex: 1 1 auto;
+  }
+
+  .admin-merchant-context-button {
+    min-height: 44px;
+    padding: 6px 9px;
+  }
+
+  .workspace-topbar-actions {
+    flex: 0 0 auto;
+  }
+
+  .workspace-auth-card,
+  .workspace-security-card {
+    width: min(100% - 24px, 470px);
+  }
+}
+
+/* Compact phones: prioritise menu + merchant scope + refresh, and keep all touch controls reachable. */
+@media (max-width: 520px) {
+  .workspace-topbar {
+    gap: 7px;
+  }
+
+  .workspace-topbar-title {
+    display: none;
+  }
+
+  .admin-merchant-context-button span {
+    font-size: 8px;
+  }
+
+  .admin-merchant-context-button strong {
+    font-size: 11px;
+  }
+
+  .admin-merchant-context-popover {
+    left: 8px;
+    right: 8px;
+    padding: 12px;
+  }
+
+  .admin-context-strip {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 8px;
+  }
+
+  .admin-context-strip > span {
+    grid-column: 1 / -1;
+  }
+
+  .admin-context-strip > button {
+    align-self: center;
+  }
+
+  .workspace-table-wrap {
+    margin-inline: -1px;
+  }
+
+  .workspace-auth-brand {
+    min-height: 250px;
+    padding: 32px 20px;
+  }
+
+  .workspace-auth-brand img {
+    width: min(220px, 72%);
+    margin-bottom: 20px;
+  }
+
+  .workspace-auth-brand h1 {
+    font-size: 34px;
+  }
+
+  .workspace-auth-card {
+    margin: 20px auto;
+    padding: 20px;
+  }
+
+  .workspace-auth-card input,
+  .workspace-otp {
+    min-height: 44px;
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 360px) {
+  .workspace-content {
+    padding-inline: 7px;
+  }
+
+  .workspace-topbar {
+    padding-inline: 7px;
+  }
+
+  .workspace-sidebar {
+    width: min(300px, 92vw);
+  }
+
+  .admin-context-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-context-strip > button,
+  .admin-context-strip > strong,
+  .admin-context-strip > span {
+    grid-column: 1;
+  }
+
+  .admin-context-strip > button {
+    width: 100%;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .workspace-panel,
+  .workspace-stat-card,
+  .workspace-table-wrap,
+  .workspace-search,
+  .admin-merchant-context-button {
+    border-color: #98a2b3;
+  }
+
+  .workspace-muted,
+  .workspace-panel-heading p,
+  .workspace-table th {
+    color: #475467;
+  }
+}

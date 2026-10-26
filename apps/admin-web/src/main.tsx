@@ -7,6 +7,7 @@ import './admin-workspace.css';
 import './admin-navigation.css';
 import './admin-redesign.css';
 import './admin-workspaces-redesign.css';
+import './admin-responsive-hardening.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
