@@ -2,27 +2,43 @@ import { SellerTrayInput } from './SellerTrayElements';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { errorMessage, supabase } from './supabase';
 
-type Acceptance = {
+type MasterAcceptance = {
   id: string;
   acceptedAt: string;
   acceptedLegalName: string;
   acceptedRole: 'owner' | 'manager';
   acceptedByCurrentUser: boolean;
 };
-type Agreement = {
+type MasterAgreement = {
+  id: string;
+  versionCode: string;
+  title: string;
+  contentBody: string;
+  contentSha256: string;
+  effectiveFrom: string;
+  acceptance: MasterAcceptance | null;
+};
+type OrderFormConfirmation = {
+  id: string;
+  confirmedAt: string;
+  confirmedLegalName: string;
+  confirmedRole: 'owner' | 'manager';
+  confirmedByCurrentUser: boolean;
+  packageFingerprint: string;
+};
+type OrderForm = {
   id: string;
   reference: string;
-  family: string;
   title: string;
   templateVersion: string;
   renderedContent: string;
   contentSha256: string;
   commercialOrderId: string;
   installmentObligationId: string | null;
-  supersedesAgreementId: string | null;
+  supersedesOrderFormId: string | null;
   isCurrent: boolean;
   issuedAt: string;
-  acceptance: Acceptance | null;
+  confirmation: OrderFormConfirmation | null;
 };
 type InstallmentLine = {
   id: string;
@@ -67,7 +83,9 @@ type AgreementCenter = {
   tenantId: string;
   actorRole: 'owner' | 'manager';
   canAccept: boolean;
-  agreements: Agreement[];
+  masterAgreement: MasterAgreement | null;
+  masterAcceptanceRequired: boolean;
+  orderForms: OrderForm[];
   installmentBilling: InstallmentBilling[];
 };
 
@@ -91,49 +109,49 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
   const [payingScheduleId, setPayingScheduleId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const acceptanceCommandIds = useRef(new Map<string, string>());
+  const confirmationCommandIds = useRef(new Map<string, string>());
 
   useEffect(() => { void load(); }, [tenantId]);
 
-  const agreements = center?.agreements ?? [];
-  const current = useMemo(() => agreements.filter((agreement) => agreement.isCurrent), [agreements]);
-  const history = useMemo(() => agreements.filter((agreement) => !agreement.isCurrent), [agreements]);
-  const selected = agreements.find((agreement) => agreement.id === selectedId) ?? current[0] ?? agreements[0] ?? null;
+  const orderForms = center?.orderForms ?? [];
+  const current = useMemo(() => orderForms.filter((form) => form.isCurrent), [orderForms]);
+  const history = useMemo(() => orderForms.filter((form) => !form.isCurrent), [orderForms]);
+  const selected = orderForms.find((form) => form.id === selectedId) ?? current[0] ?? orderForms[0] ?? null;
 
   async function load(preferredId?: string | null) {
     setLoading(true); setError(null);
     try {
-      const { data, error: functionError } = await supabase.functions.invoke('commercial-agreements', {
+      const { data, error: functionError } = await supabase.functions.invoke('master-agreements', {
         body: { action: 'merchant_list', tenantId },
       });
       if (functionError) throw functionError;
       const next = parseCenter(record(data).center);
       setCenter(next);
       const wanted = preferredId ?? selectedId;
-      setSelectedId(wanted && next.agreements.some((agreement) => agreement.id === wanted)
+      setSelectedId(wanted && next.orderForms.some((form) => form.id === wanted)
         ? wanted
-        : next.agreements.find((agreement) => agreement.isCurrent)?.id ?? next.agreements[0]?.id ?? null);
+        : next.orderForms.find((form) => form.isCurrent)?.id ?? next.orderForms[0]?.id ?? null);
     } catch (cause) {
       setError(errorMessage(cause, 'Unable to load SellerTray commercial agreements.'));
     } finally { setLoading(false); }
   }
 
-  async function accept(event: FormEvent) {
+  async function confirmPackage(event: FormEvent) {
     event.preventDefault();
-    if (!selected || !selected.isCurrent || selected.acceptance || !center?.canAccept) return;
+    if (!selected || !selected.isCurrent || selected.confirmation || !center?.canAccept) return;
     const name = legalName.trim().replace(/\s+/g, ' ');
     if (!name) { setError('Enter the authorised representative legal name.'); return; }
-    if (!confirmed) { setError('Confirm that you are authorised and accept the agreement before continuing.'); return; }
+    if (!confirmed) { setError('Confirm that you are authorised and approve this purchase before continuing.'); return; }
 
-    const commandId = acceptanceCommandIds.current.get(selected.id) ?? crypto.randomUUID();
-    acceptanceCommandIds.current.set(selected.id, commandId);
+    const commandId = confirmationCommandIds.current.get(selected.id) ?? crypto.randomUUID();
+    confirmationCommandIds.current.set(selected.id, commandId);
     setBusy(true); setError(null); setMessage(null);
     try {
-      const { data, error: functionError } = await supabase.functions.invoke('commercial-agreements', {
+      const { data, error: functionError } = await supabase.functions.invoke('master-agreements', {
         body: {
-          action: 'merchant_accept',
+          action: 'merchant_confirm_package',
           tenantId,
-          agreementId: selected.id,
+          orderFormId: selected.id,
           legalName: name,
           authorityConfirmed: true,
           commandId,
@@ -141,13 +159,15 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
       });
       if (functionError) throw functionError;
       const next = parseCenter(record(data).center);
-      acceptanceCommandIds.current.delete(selected.id);
+      confirmationCommandIds.current.delete(selected.id);
       setCenter(next);
       setSelectedId(selected.id);
       setLegalName(''); setConfirmed(false);
-      setMessage('Commercial agreement accepted and recorded.');
+      setMessage(center?.masterAcceptanceRequired
+        ? 'Master Agreement accepted and purchase confirmed.'
+        : 'Purchase confirmed under your accepted Master Agreement.');
     } catch (cause) {
-      setError(errorMessage(cause, 'Unable to accept this commercial agreement.'));
+      setError(errorMessage(cause, 'Unable to confirm this SellerTray purchase.'));
     } finally { setBusy(false); }
   }
 
@@ -189,7 +209,7 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
   return <section className="page-stack">
     <div className="section-heading">
       <div><p className="eyebrow">Commercial</p><h2>Billing & agreements</h2></div>
-      <p className="muted">Review issued SellerTray commercial documents, setup readiness and installment payments. Agreement acceptance, setup completion, payment confirmation and subscription entitlement remain separate governed facts.</p>
+      <p className="muted">Review the SellerTray Master Agreement and the exact Order Form for each purchase. Contract evidence, setup readiness, payment confirmation and subscription entitlement remain separate governed facts.</p>
     </div>
     {error ? <div className="error-banner">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div> : null}
     {message ? <div className="success-banner">{message}<button type="button" onClick={() => setMessage(null)}>Dismiss</button></div> : null}
@@ -201,31 +221,37 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
       onPay={(scheduleId) => void payInstallment(scheduleId)}
     /> : null}
 
-    {!agreements.length ? <article className="panel empty-state"><strong>No commercial agreements issued</strong><p>SellerTray commercial documents issued by ProcessEdge will appear here for review and acceptance.</p></article> : <div className="team-management-grid">
+    {!orderForms.length ? <article className="panel empty-state"><strong>No Order Forms issued</strong><p>Purchase-specific SellerTray Order Forms issued by ProcessEdge will appear here for review and confirmation.</p></article> : <div className="team-management-grid">
       <div className="panel member-list">
-        {current.map((agreement) => <AgreementButton key={agreement.id} agreement={agreement} selected={selected?.id === agreement.id} onSelect={() => { setSelectedId(agreement.id); setLegalName(''); setConfirmed(false); }} />)}
-        {history.length ? <div className="nav-section">Agreement history</div> : null}
-        {history.map((agreement) => <AgreementButton key={agreement.id} agreement={agreement} selected={selected?.id === agreement.id} onSelect={() => { setSelectedId(agreement.id); setLegalName(''); setConfirmed(false); }} />)}
+        {current.map((form) => <OrderFormButton key={form.id} form={form} selected={selected?.id === form.id} onSelect={() => { setSelectedId(form.id); setLegalName(''); setConfirmed(false); }} />)}
+        {history.length ? <div className="nav-section">Order Form history</div> : null}
+        {history.map((form) => <OrderFormButton key={form.id} form={form} selected={selected?.id === form.id} onSelect={() => { setSelectedId(form.id); setLegalName(''); setConfirmed(false); }} />)}
       </div>
 
       {selected ? <article className="panel member-editor">
-        <div className="panel-head"><div><p className="eyebrow">{familyLabel(selected.family)}</p><h3>{selected.title}</h3><p className="muted">Reference {selected.reference} · Version {selected.templateVersion}</p></div><Status agreement={selected} /></div>
+        <div className="panel-head"><div><p className="eyebrow">Order Form</p><h3>{selected.title}</h3><p className="muted">Reference {selected.reference} · Version {selected.templateVersion}</p></div><Status form={selected} /></div>
         <div className="settings-grid two">
           <Fact label="Issued" value={formatDate(selected.issuedAt)} />
           <Fact label="Commercial order" value={shortId(selected.commercialOrderId)} />
-          <Fact label="Agreement integrity" value={selected.contentSha256.slice(0, 16) + '…'} />
-          <Fact label="Status" value={selected.isCurrent ? selected.acceptance ? 'Accepted' : 'Awaiting acceptance' : 'Replaced'} />
+          <Fact label="Order Form integrity" value={selected.contentSha256.slice(0, 16) + '…'} />
+          <Fact label="Status" value={selected.isCurrent ? selected.confirmation ? 'Confirmed' : 'Awaiting confirmation' : 'Replaced'} />
         </div>
-        <div className="governance-note">This is the immutable agreement content recorded for your business. Replaced versions remain visible as historical evidence.</div>
+        {center?.masterAgreement ? <div className="panel agreement-document">
+          <p className="eyebrow">Master Agreement · Version {center.masterAgreement.versionCode}</p>
+          <h3>{center.masterAgreement.title}</h3>
+          <p className="muted">Integrity {center.masterAgreement.contentSha256.slice(0, 16)}… · {center.masterAgreement.acceptance ? `Accepted ${formatDate(center.masterAgreement.acceptance.acceptedAt)}` : 'Acceptance required with this purchase'}</p>
+          <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: 'inherit', margin: 0 }}>{center.masterAgreement.contentBody}</pre>
+        </div> : <div className="warning-banner">The current SellerTray Master Agreement is not available. Contact ProcessEdge before continuing.</div>}
+        <div className="governance-note">This immutable Order Form records the exact purchase. SellerTray creates deterministic package evidence binding it to the current Master Agreement.</div>
         <div className="panel agreement-document"><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: 'inherit', margin: 0 }}>{selected.renderedContent}</pre></div>
 
-        {selected.acceptance ? <div className="success-banner">Accepted {formatDate(selected.acceptance.acceptedAt)} by {selected.acceptance.acceptedLegalName} ({roleLabel(selected.acceptance.acceptedRole)}).</div> : null}
-        {!selected.isCurrent ? <div className="warning-banner">This agreement has been replaced. Review and accept the current replacement where required.</div> : null}
-        {selected.isCurrent && !selected.acceptance && !center?.canAccept ? <div className="warning-banner">Only the Business Owner or a Manager explicitly authorised by the Owner can accept SellerTray commercial agreements.</div> : null}
-        {selected.isCurrent && !selected.acceptance && center?.canAccept ? <form className="settings-form" onSubmit={accept}>
+        {selected.confirmation ? <div className="success-banner">Purchase confirmed {formatDate(selected.confirmation.confirmedAt)} by {selected.confirmation.confirmedLegalName} ({roleLabel(selected.confirmation.confirmedRole)}). Package fingerprint {selected.confirmation.packageFingerprint.slice(0, 16)}…</div> : null}
+        {!selected.isCurrent ? <div className="warning-banner">This Order Form has been replaced. Review and confirm the current replacement where required.</div> : null}
+        {selected.isCurrent && !selected.confirmation && !center?.canAccept ? <div className="warning-banner">Only the Business Owner or a Manager explicitly authorised by the Owner can confirm SellerTray purchases.</div> : null}
+        {selected.isCurrent && !selected.confirmation && center?.canAccept && center.masterAgreement ? <form className="settings-form" onSubmit={confirmPackage}>
           <label className="field"><span>Authorised representative legal name</span><SellerTrayInput maxLength={200} required value={legalName} onChange={(event) => setLegalName(event.target.value)} placeholder="Full legal name" /></label>
-          <label className="access-card"><SellerTrayInput type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span><strong>I confirm I am authorised to act for this business and accept this agreement.</strong><small>Your authenticated SellerTray identity, authority, agreement version and integrity evidence are recorded.</small></span></label>
-          <div className="settings-actions"><button className="primary-button" disabled={busy || !confirmed || !legalName.trim()}>{busy ? 'Recording acceptance…' : 'Accept agreement'}</button></div>
+          <label className="access-card"><SellerTrayInput type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span><strong>{center.masterAcceptanceRequired ? 'I accept the Master Agreement and confirm this exact Order Form.' : 'I confirm this exact Order Form under the accepted Master Agreement.'}</strong><small>Your authenticated SellerTray identity, authority, exact document hashes and package fingerprint are recorded.</small></span></label>
+          <div className="settings-actions"><button className="primary-button" disabled={busy || !confirmed || !legalName.trim()}>{busy ? 'Recording confirmation…' : center.masterAcceptanceRequired ? 'Accept & Continue' : 'Confirm Purchase'}</button></div>
         </form> : null}
       </article> : null}
     </div>}
@@ -278,18 +304,17 @@ function InstallmentBillingSection({
   </div>;
 }
 
-function AgreementButton({ agreement, selected, onSelect }: { agreement: Agreement; selected: boolean; onSelect: () => void }) {
+function OrderFormButton({ form, selected, onSelect }: { form: OrderForm; selected: boolean; onSelect: () => void }) {
   return <button type="button" className={selected ? 'member-row active' : 'member-row'} onClick={onSelect}>
-    <span className="member-avatar">{agreement.isCurrent ? 'A' : 'H'}</span>
-    <span><strong>{agreement.title}</strong><small>{agreement.reference} · {agreement.acceptance ? 'Accepted' : agreement.isCurrent ? 'Pending' : 'Replaced'}</small></span>
+    <span className="member-avatar">{form.isCurrent ? 'O' : 'H'}</span>
+    <span><strong>{form.title}</strong><small>{form.reference} · {form.confirmation ? 'Confirmed' : form.isCurrent ? 'Pending' : 'Replaced'}</small></span>
   </button>;
 }
-function Status({ agreement }: { agreement: Agreement }) {
-  const label = agreement.acceptance ? 'Accepted' : agreement.isCurrent ? 'Pending' : 'Replaced';
+function Status({ form }: { form: OrderForm }) {
+  const label = form.confirmation ? 'Confirmed' : form.isCurrent ? 'Pending' : 'Replaced';
   return <span className="role-pill">{label}</span>;
 }
 function Fact({ label, value }: { label: string; value: string }) { return <div className="role-lock"><span>{label}</span><strong>{value}</strong></div>; }
-function familyLabel(value: string) { return value.split('_').map((part) => part ? part[0].toUpperCase() + part.slice(1) : '').join(' '); }
 function roleLabel(value: string) { return value === 'owner' ? 'Owner' : value === 'manager' ? 'Manager' : value; }
 function shortId(value: string) { return value ? `${value.slice(0, 8)}…` : '—'; }
 function formatDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(date); }
@@ -320,32 +345,50 @@ function nullableString(value: unknown) { return typeof value === 'string' && va
 function parseCenter(value: unknown): AgreementCenter {
   const root = record(value);
   const actorRole = root.actorRole === 'owner' ? 'owner' : 'manager';
-  const agreements = Array.isArray(root.agreements) ? root.agreements.flatMap((raw) => {
+  const masterRow = record(root.masterAgreement);
+  const masterAcceptanceRow = record(masterRow.acceptance);
+  const masterAcceptance = typeof masterAcceptanceRow.id === 'string' ? {
+    id: masterAcceptanceRow.id,
+    acceptedAt: String(masterAcceptanceRow.acceptedAt ?? ''),
+    acceptedLegalName: String(masterAcceptanceRow.acceptedLegalName ?? ''),
+    acceptedRole: masterAcceptanceRow.acceptedRole === 'owner' ? 'owner' : 'manager',
+    acceptedByCurrentUser: masterAcceptanceRow.acceptedByCurrentUser === true,
+  } satisfies MasterAcceptance : null;
+  const masterAgreement = typeof masterRow.id === 'string' ? {
+    id: masterRow.id,
+    versionCode: String(masterRow.versionCode ?? ''),
+    title: String(masterRow.title ?? 'SellerTray Master Agreement'),
+    contentBody: String(masterRow.contentBody ?? ''),
+    contentSha256: String(masterRow.contentSha256 ?? ''),
+    effectiveFrom: String(masterRow.effectiveFrom ?? ''),
+    acceptance: masterAcceptance,
+  } satisfies MasterAgreement : null;
+  const orderForms = Array.isArray(root.orderForms) ? root.orderForms.flatMap((raw) => {
     const row = record(raw);
     if (typeof row.id !== 'string') return [];
-    const acceptanceRow = record(row.acceptance);
-    const acceptance = typeof acceptanceRow.id === 'string' ? {
-      id: acceptanceRow.id,
-      acceptedAt: String(acceptanceRow.acceptedAt ?? ''),
-      acceptedLegalName: String(acceptanceRow.acceptedLegalName ?? ''),
-      acceptedRole: acceptanceRow.acceptedRole === 'owner' ? 'owner' : 'manager',
-      acceptedByCurrentUser: acceptanceRow.acceptedByCurrentUser === true,
-    } satisfies Acceptance : null;
+    const confirmationRow = record(row.confirmation);
+    const confirmation = typeof confirmationRow.id === 'string' ? {
+      id: confirmationRow.id,
+      confirmedAt: String(confirmationRow.confirmedAt ?? ''),
+      confirmedLegalName: String(confirmationRow.confirmedLegalName ?? ''),
+      confirmedRole: confirmationRow.confirmedRole === 'owner' ? 'owner' : 'manager',
+      confirmedByCurrentUser: confirmationRow.confirmedByCurrentUser === true,
+      packageFingerprint: String(confirmationRow.packageFingerprint ?? ''),
+    } satisfies OrderFormConfirmation : null;
     return [{
       id: row.id,
       reference: String(row.reference ?? ''),
-      family: String(row.family ?? ''),
-      title: String(row.title ?? 'SellerTray agreement'),
+      title: String(row.title ?? 'SellerTray Order Form'),
       templateVersion: String(row.templateVersion ?? ''),
       renderedContent: String(row.renderedContent ?? ''),
       contentSha256: String(row.contentSha256 ?? ''),
       commercialOrderId: String(row.commercialOrderId ?? ''),
       installmentObligationId: typeof row.installmentObligationId === 'string' ? row.installmentObligationId : null,
-      supersedesAgreementId: typeof row.supersedesAgreementId === 'string' ? row.supersedesAgreementId : null,
+      supersedesOrderFormId: typeof row.supersedesOrderFormId === 'string' ? row.supersedesOrderFormId : null,
       isCurrent: row.isCurrent === true,
       issuedAt: String(row.issuedAt ?? ''),
-      acceptance,
-    } satisfies Agreement];
+      confirmation,
+    } satisfies OrderForm];
   }) : [];
   const installmentBilling = Array.isArray(root.installmentBilling) ? root.installmentBilling.flatMap((raw) => {
     const row = record(raw);
@@ -396,5 +439,13 @@ function parseCenter(value: unknown): AgreementCenter {
       dueEnforcementMode: 'informational_only',
     } satisfies InstallmentBilling];
   }) : [];
-  return { tenantId: String(root.tenantId ?? ''), actorRole, canAccept: root.canAccept === true, agreements, installmentBilling };
+  return {
+    tenantId: String(root.tenantId ?? ''),
+    actorRole,
+    canAccept: root.canAccept === true,
+    masterAgreement,
+    masterAcceptanceRequired: root.masterAcceptanceRequired === true,
+    orderForms,
+    installmentBilling,
+  };
 }

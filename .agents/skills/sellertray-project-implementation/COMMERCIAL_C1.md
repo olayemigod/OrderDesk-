@@ -77,6 +77,18 @@ Acceptance of an agreement does not confirm a payment and does not activate, ext
 
 `sellertray_installment_agreement_is_accepted(...)` is a governed prerequisite fact for C1B only. It may report whether the **current, non-superseded** installment agreement has immutable acceptance evidence; it must not itself perform payment qualification, entitlement activation, due-state changes or runtime access mutation.
 
+The later approved active contracting architecture is **Master Agreement -> Order Form -> Agreement Package Manifest**:
+
+- the versioned Master Agreement contains reusable service terms and is accepted once per Business per exact Master version;
+- every governed commercial order has its own immutable Order Form and exact confirmation evidence;
+- the server creates or reuses a deterministic immutable package manifest whose SHA-256 fingerprint binds the exact Master version/hash and Order Form/hash;
+- a second purchase under an unchanged Master Agreement reuses the earlier Master acceptance and records only the new Order Form confirmation;
+- Merchant Web presents **Accept & Continue** only when the current Master still requires acceptance, otherwise **Confirm Purchase**;
+- the consolidated server command must preserve one retry command identity, create/reuse the package, accept the Master only when required, and confirm the exact Order Form;
+- all earlier commercial agreement/template/acceptance rows remain unchanged as legacy evidence and continue through an explicit compatibility predicate rather than destructive backfill.
+
+Master acceptance, Order Form confirmation, payment confirmation, setup readiness and entitlement remain separate authorities. Neither the package command nor either contractual evidence record may directly mutate runtime entitlement.
+
 When an agreement is superseded, the earlier immutable agreement and acceptance remain historical evidence, but downstream commercial activation must fail closed until the replacement agreement is accepted where acceptance is required.
 
 ## C1B — Installment activation and entitlement release

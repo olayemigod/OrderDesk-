@@ -6,7 +6,9 @@ import test from 'node:test';
 const read = (path) => readFileSync(resolve(import.meta.dirname, '../..', path), 'utf8');
 const selector = read('admin-web/src/MerchantSelector.tsx');
 const lifecycle = read('admin-web/src/AgreementLifecycleManagement.tsx');
+const billing = read('admin-web/src/CommercialBillingAdministration.tsx');
 const agreementsGateway = read('../supabase/functions/commercial-agreements/index.ts');
+const masterGateway = read('../supabase/functions/master-agreements/index.ts');
 const c1a = read('../supabase/migrations/20261021001023_c1a_commercial_agreements_foundation.sql');
 
 test('single-Business Billing exposes agreement lifecycle after merchant selection only', () => {
@@ -46,4 +48,12 @@ test('agreement lifecycle does not invent due, refund, guarantee decision or ent
   assert.doesNotMatch(lifecycle, /dueAt|past_due|grace|refundAmount|guaranteeStatus|current_period_end|tenant_subscriptions/);
   assert.match(lifecycle, /requires fresh merchant acceptance/);
   assert.match(lifecycle, /remains immutable historical evidence/);
+});
+
+test('new commercial purchases issue Order Forms through the Master Agreement boundary', () => {
+  assert.match(billing, /'master-agreements'/);
+  assert.match(billing, /action: 'admin_issue_order_form'/);
+  assert.match(billing, /Issue Order Form/);
+  assert.match(masterGateway, /issue_sellertray_commercial_order_form_admin/);
+  assert.doesNotMatch(agreementsGateway, /action === 'merchant_accept'/);
 });

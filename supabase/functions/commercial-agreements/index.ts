@@ -3,7 +3,6 @@ import { createClient } from 'npm:@supabase/supabase-js@2.115.0';
 type JsonRecord = Record<string, unknown>;
 type Action =
   | 'merchant_list'
-  | 'merchant_accept'
   | 'admin_overview'
   | 'admin_onboarding'
   | 'admin_publish_subscription_price'
@@ -65,32 +64,6 @@ Deno.serve(async (request) => {
       await authorizeMerchantAgreementRead(tenantId, userId);
       await reconcileTenantInstallmentsBestEffort(tenantId, 'merchant agreement center');
       return json({ ok: true, center: await loadMerchantCenter(tenantId, userId) });
-    }
-
-    if (action === 'merchant_accept') {
-      const tenantId = cleanUuid(body.tenantId);
-      const agreementId = cleanUuid(body.agreementId);
-      const commandId = cleanUuid(body.commandId);
-      const legalName = cleanText(body.legalName, 200);
-      if (!tenantId || !agreementId || !commandId) return json({ error: 'Business, agreement and acceptance command are required' }, 400);
-      if (!legalName) return json({ error: 'Enter the authorised representative legal name' }, 400);
-      if (body.authorityConfirmed !== true) return json({ error: 'Confirm your authority and agreement acceptance before continuing' }, 400);
-
-      const userAgent = cleanText(request.headers.get('user-agent'), 512);
-      const acceptanceId = await rpc<string>('accept_sellertray_commercial_agreement', {
-        p_tenant_id: tenantId,
-        p_agreement_id: agreementId,
-        p_accepted_legal_name: legalName,
-        p_request_evidence: {
-          channel: 'merchant_web',
-          authority_confirmed: true,
-          ...(userAgent ? { user_agent: userAgent } : {}),
-        },
-        p_command_id: commandId,
-        p_actor_user_id: userId,
-      });
-      await reconcileTenantInstallmentsBestEffort(tenantId, 'agreement acceptance');
-      return json({ ok: true, acceptanceId, center: await loadMerchantCenter(tenantId, userId) });
     }
 
     if (action === 'admin_overview') {
@@ -356,7 +329,6 @@ async function rpc<T>(name: string, args: JsonRecord): Promise<T> {
 
 function cleanAction(value: unknown): Action | null {
   return value === 'merchant_list'
-    || value === 'merchant_accept'
     || value === 'admin_overview'
     || value === 'admin_onboarding'
     || value === 'admin_publish_subscription_price'

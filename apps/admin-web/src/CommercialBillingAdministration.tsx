@@ -129,6 +129,7 @@ export default function CommercialBillingAdministration({
   const [agreementForm, setAgreementForm] = useState({ commercialOrderId: '', templateVersionId: '', reference: '', renderedContent: '', reason: '' });
 
   const selectedOrder = onboarding?.orders.find((order) => order.id === agreementForm.commercialOrderId) ?? null;
+  const orderFormTemplates = onboarding?.templates.filter((template) => template.family === 'subscription_order' || template.family === 'installment_agreement') ?? [];
   const canManage = actorRole === 'admin' && onboarding?.canManage === true;
 
   useEffect(() => {
@@ -184,9 +185,11 @@ export default function CommercialBillingAdministration({
         commercialOrderId: nextOnboarding.orders.some((order) => order.id === current.commercialOrderId)
           ? current.commercialOrderId
           : nextOnboarding.orders[0]?.id ?? '',
-        templateVersionId: nextOnboarding.templates.some((template) => template.id === current.templateVersionId)
+        templateVersionId: nextOnboarding.templates.some((template) => (template.family === 'subscription_order' || template.family === 'installment_agreement') && template.id === current.templateVersionId)
           ? current.templateVersionId
-          : nextOnboarding.templates[0]?.id ?? '',
+          : nextOnboarding.templates.find((template) => template.family === 'installment_agreement')?.id
+            ?? nextOnboarding.templates.find((template) => template.family === 'subscription_order')?.id
+            ?? '',
       }));
       setPurchaseForm((current) => {
         const retainedBranchIds = current.branchIds.filter((branchId) => activeBranchSet.has(branchId));
@@ -205,13 +208,13 @@ export default function CommercialBillingAdministration({
     }
   }
 
-  async function runMutation(key: string, payload: Record<string, unknown>, success: string) {
+  async function runMutation(key: string, payload: Record<string, unknown>, success: string, gateway = 'commercial-agreements') {
     if (!selectedTenantId || saving) return;
     setSaving(key);
     setError(null);
     setMessage(null);
     try {
-      await invoke(payload);
+      await invokeJson<AdminResponse>(gateway, payload, session);
       await loadTenant(selectedTenantId);
       setMessage(success);
     } catch (cause) {
@@ -274,16 +277,16 @@ export default function CommercialBillingAdministration({
     }, 'Governed agreement template published.');
   }
 
-  function issueAgreement() {
+  function issueOrderForm() {
     if (!canManage || !selectedOrder) return;
     if (!agreementForm.templateVersionId || !agreementForm.reference.trim() || !agreementForm.renderedContent.trim()) return setError('Select an order and template, then enter agreement reference and rendered agreement content.');
     if (agreementForm.reason.trim().length < 6) return setError('Enter an issuance reason of at least 6 characters.');
-    void runMutation('agreement', {
-      action: 'admin_issue', tenantId: selectedTenantId,
+    void runMutation('order-form', {
+      action: 'admin_issue_order_form', tenantId: selectedTenantId,
       commercialOrderId: selectedOrder.id, installmentObligationId: selectedOrder.installmentObligationId,
       templateVersionId: agreementForm.templateVersionId, reference: agreementForm.reference,
       renderedContent: agreementForm.renderedContent, reason: agreementForm.reason,
-    }, 'Merchant agreement issued from governed commercial facts.');
+    }, 'Immutable Order Form issued from governed commercial facts.', 'master-agreements');
   }
 
   function toggleBranch(branchId: string) {
@@ -395,7 +398,7 @@ export default function CommercialBillingAdministration({
         </article>
 
         <article className="workspace-module-card">
-          <h3>4. Agreement template</h3><p>Publish immutable legal text. Canonical commercial amounts are built server-side at issuance.</p>
+          <h3>4. Contract templates</h3><p>Publish the reusable Terms of Service Master Agreement and immutable Order Form templates. Canonical commercial amounts are built server-side at Order Form issuance.</p>
           <div className="workspace-form-stack">
             <label>Agreement family<select value={templateForm.family} onChange={(e) => setTemplateForm({ ...templateForm, family: e.target.value })}>{AGREEMENT_FAMILIES.map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></label>
             <div className="workspace-field-grid two"><label>Version<input maxLength={64} value={templateForm.versionCode} onChange={(e) => setTemplateForm({ ...templateForm, versionCode: e.target.value })} /></label><label>Effective from<input type="datetime-local" value={templateForm.effectiveFrom} onChange={(e) => setTemplateForm({ ...templateForm, effectiveFrom: e.target.value })} /></label></div>
@@ -407,13 +410,13 @@ export default function CommercialBillingAdministration({
         </article>
 
         <article className="workspace-module-card" style={{ gridColumn: '1 / -1' }}>
-          <h3>5. Issue merchant agreement</h3><p>Issue against the exact immutable order and installment obligation. Merchant acceptance remains separate.</p>
+          <h3>5. Issue Order Form</h3><p>Issue the purchase-specific form against the exact immutable order and installment obligation. The merchant accepts the current Master only when required and confirms every exact Order Form.</p>
           <div className="workspace-form-stack">
-            <div className="workspace-field-grid two"><label>Commercial order<select value={agreementForm.commercialOrderId} onChange={(e) => setAgreementForm({ ...agreementForm, commercialOrderId: e.target.value })}><option value="">Select order</option>{onboarding.orders.map((order) => <option key={order.id} value={order.id}>{order.reference} · {money(order.totalGrossAmount, order.currency)}</option>)}</select></label><label>Template<select value={agreementForm.templateVersionId} onChange={(e) => setAgreementForm({ ...agreementForm, templateVersionId: e.target.value })}><option value="">Select template</option>{onboarding.templates.map((template) => <option key={template.id} value={template.id}>{template.title} · {template.versionCode}</option>)}</select></label></div>
-            <label>Agreement reference<input maxLength={128} value={agreementForm.reference} onChange={(e) => setAgreementForm({ ...agreementForm, reference: e.target.value })} /></label>
-            <label>Rendered agreement content<textarea rows={8} maxLength={300000} value={agreementForm.renderedContent} onChange={(e) => setAgreementForm({ ...agreementForm, renderedContent: e.target.value })} /></label>
+            <div className="workspace-field-grid two"><label>Commercial order<select value={agreementForm.commercialOrderId} onChange={(e) => setAgreementForm({ ...agreementForm, commercialOrderId: e.target.value })}><option value="">Select order</option>{onboarding.orders.map((order) => <option key={order.id} value={order.id}>{order.reference} · {money(order.totalGrossAmount, order.currency)}</option>)}</select></label><label>Order Form template<select value={agreementForm.templateVersionId} onChange={(e) => setAgreementForm({ ...agreementForm, templateVersionId: e.target.value })}><option value="">Select template</option>{orderFormTemplates.map((template) => <option key={template.id} value={template.id}>{template.title} · {template.versionCode}</option>)}</select></label></div>
+            <label>Order Form reference<input maxLength={128} value={agreementForm.reference} onChange={(e) => setAgreementForm({ ...agreementForm, reference: e.target.value })} /></label>
+            <label>Rendered Order Form content<textarea rows={8} maxLength={300000} value={agreementForm.renderedContent} onChange={(e) => setAgreementForm({ ...agreementForm, renderedContent: e.target.value })} /></label>
             <label>Issuance reason<input maxLength={1000} value={agreementForm.reason} onChange={(e) => setAgreementForm({ ...agreementForm, reason: e.target.value })} /></label>
-            <button type="button" className="workspace-button primary" disabled={!canManage || saving !== null || !selectedOrder || !agreementForm.templateVersionId} onClick={issueAgreement}>{saving === 'agreement' ? 'Issuing…' : 'Issue merchant agreement'}</button>
+            <button type="button" className="workspace-button primary" disabled={!canManage || saving !== null || !selectedOrder || !agreementForm.templateVersionId} onClick={issueOrderForm}>{saving === 'order-form' ? 'Issuing…' : 'Issue Order Form'}</button>
           </div>
         </article>
       </div>
