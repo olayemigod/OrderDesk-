@@ -8,6 +8,7 @@ const merchantApp = read('src/MerchantApp.tsx');
 const navigation = read('src/portalNavigation.ts');
 const agreements = read('src/CommercialAgreementsManagement.tsx');
 const billing = read('src/SellerTrayBillingManagement.tsx');
+const legacyAgreementApi = read('../../supabase/functions/commercial-agreements/index.ts');
 const failures = [];
 const requireValue = (condition, message) => { if (!condition) failures.push(message); };
 const excludes = (source, values) => values.every((value) => !source.includes(value));
@@ -75,6 +76,22 @@ requireValue(
     'SUPABASE_SECRET',
   ]),
   'Master Agreement surface must remain universal/legal-only and must not revive order-bound agreement or payment authority.',
+);
+
+const retiredGuardIndex = legacyAgreementApi.indexOf('if (RETIRED_AGREEMENT_MUTATIONS.has(action))');
+const legacyAcceptIndex = legacyAgreementApi.indexOf("if (action === 'merchant_accept')");
+const legacyPublishIndex = legacyAgreementApi.indexOf("if (action === 'admin_publish_template')");
+const legacyIssueIndex = legacyAgreementApi.indexOf("const agreementId = await rpc<string>('issue_sellertray_commercial_agreement_admin'");
+requireValue(
+  legacyAgreementApi.includes("'merchant_accept'")
+    && legacyAgreementApi.includes("'admin_publish_template'")
+    && legacyAgreementApi.includes("'admin_issue'")
+    && retiredGuardIndex >= 0
+    && legacyAcceptIndex > retiredGuardIndex
+    && legacyPublishIndex > retiredGuardIndex
+    && legacyIssueIndex > retiredGuardIndex
+    && legacyAgreementApi.includes('This legacy agreement mutation is retired. Use the SellerTray Master Agreement authority.'),
+  'Legacy order-bound agreement mutations must fail closed before any old acceptance, template-publication, or issuance branch can execute.',
 );
 
 requireValue(
