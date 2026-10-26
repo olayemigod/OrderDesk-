@@ -57,7 +57,7 @@ const emptyForm = (): PublishForm => ({
   reason: '',
 });
 
-export default function AgreementLifecycleManagement({ session, tenantId }: { session: Session; tenantId: string }) {
+export default function AgreementLifecycleManagement({ session, tenantId }: { session: Session; tenantId?: string }) {
   const [state, setState] = useState<AgreementOverview | null>(null);
   const [form, setForm] = useState<PublishForm>(() => emptyForm());
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -76,7 +76,7 @@ export default function AgreementLifecycleManagement({ session, tenantId }: { se
     try {
       const response = await invokeJson<AdminResponse>('master-agreements', {
         action: 'admin_get',
-        tenantId,
+        ...(tenantId ? { tenantId } : {}),
       }, session);
       if (sequence !== requestSequence.current) return;
       const next = parseOverview(response.overview);
@@ -110,7 +110,7 @@ export default function AgreementLifecycleManagement({ session, tenantId }: { se
     try {
       const response = await invokeJson<AdminResponse & { agreementVersionId?: string }>('master-agreements', {
         action: 'admin_publish',
-        tenantId,
+        ...(tenantId ? { tenantId } : {}),
         versionCode: form.versionCode.trim(),
         title: form.title.trim(),
         contentBody: form.contentBody.trim(),
