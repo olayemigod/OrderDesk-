@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(24);
+select extensions.plan(25);
 
 select extensions.ok(
   to_regclass('public.sellertray_master_agreement_versions') is not null,
@@ -196,7 +196,11 @@ select extensions.ok(
   'publishing a newer effective version makes old-version acceptance insufficient for new service delivery'
 );
 select extensions.ok(
-  (select count(*)=1 from public.sellertray_master_agreement_acceptances a join master_agreement_fixture f on a.tenant_a_id is not null where a.tenant_id=f.tenant_a_id and a.agreement_version_id=f.version_1_id),
+  (select count(*)=1
+   from public.sellertray_master_agreement_acceptances a
+   join master_agreement_fixture f
+     on a.tenant_id=f.tenant_a_id
+    and a.agreement_version_id=f.version_1_id),
   'new version publication preserves historical version-one acceptance evidence'
 );
 
