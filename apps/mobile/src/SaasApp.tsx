@@ -544,6 +544,7 @@ function MerchantNotificationsView({
   ) => Promise<void>;
   onOpenOrder: (notificationId: string, orderId: string | null) => void;
 }) {
+  const unreadCount = notifications.filter((notification) => !notification.isRead).length;
 
   return (
     <View style={styles.sectionStack}>
@@ -1789,7 +1790,6 @@ function NotificationCenterView({
   onBack: () => void;
 }) {
   const appearance = useSellerTrayAppearance();
-  const unreadCount = notifications.filter((notification) => !notification.isRead).length;
 
   return (
     <View style={styles.sectionStack}>
