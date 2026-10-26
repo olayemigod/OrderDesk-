@@ -109,7 +109,7 @@ select
   tenant_id,
   'OA5B Reporting Business',
   'oa5b-report-'||substr(tenant_id::text,1,8),
-  'OA5B-'||substr(tenant_id::text,1,8),
+  upper(substr(replace(tenant_id::text,'-',''),1,3)),
   'trial'
 from oa5b_fixture;
 
