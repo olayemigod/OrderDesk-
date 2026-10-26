@@ -8,6 +8,7 @@ import CustomersManagement from './CustomersManagement';
 import DashboardOverview from './DashboardOverview';
 import InventoryManagement from './InventoryManagement';
 import ManagementPage from './ManagementPage';
+import MerchantNotificationsManagement from './MerchantNotificationsManagement';
 import OrdersManagement from './OrdersManagement';
 import PaymentsManagement from './PaymentsManagement';
 import PurchasingManagement from './PurchasingManagement';
@@ -40,6 +41,7 @@ export default function MerchantApp() {
   const [page, setPage] = useState<Page>('overview');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [dark, setDark] = useState(() => localStorage.getItem('sellertray.merchant.theme') === 'dark');
   const [navOpen, setNavOpen] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Set<MerchantPortalSection>>(() => new Set());
@@ -47,12 +49,19 @@ export default function MerchantApp() {
   useEffect(() => {
     let mounted = true;
     void supabase.auth.getSession().then(({ data }) => { if (mounted) { setSession(data.session); setBooting(false); } });
-    const { data } = supabase.auth.onAuthStateChange((_event, next) => { setSession(next); if (!next) { setBusinesses([]); setBusinessId(''); setBranches([]); setBranchId(''); } });
+    const { data } = supabase.auth.onAuthStateChange((_event, next) => { setSession(next); if (!next) { setBusinesses([]); setBusinessId(''); setBranches([]); setBranchId(''); setUnreadCount(0); } });
     return () => { mounted = false; data.subscription.unsubscribe(); };
   }, []);
   useEffect(() => { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; localStorage.setItem('sellertray.merchant.theme', dark ? 'dark' : 'light'); }, [dark]);
   useEffect(() => { if (session) void loadBusinesses(); }, [session?.access_token]);
-  useEffect(() => { if (businessId) void loadWorkspace(businessId); }, [businessId]);
+  useEffect(() => {
+    if (businessId) {
+      void loadWorkspace(businessId);
+      void loadUnreadCount(businessId);
+    } else {
+      setUnreadCount(0);
+    }
+  }, [businessId]);
   useEffect(() => {
     if (!navOpen) return;
     const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setNavOpen(false); };
@@ -87,7 +96,18 @@ export default function MerchantApp() {
     } catch (cause) { setError(errorMessage(cause, 'Unable to load SellerTray management data.')); } finally { setLoading(false); }
   }
 
-  async function refresh() { if (businessId) await loadWorkspace(businessId); }
+  async function loadUnreadCount(tenantId: string) {
+    try {
+      const { data, error: rpcError } = await supabase.rpc('sellertray_merchant_unread_notification_count', { p_tenant_id: tenantId });
+      if (rpcError) throw rpcError;
+      const count = Number(data ?? 0);
+      setUnreadCount(Number.isFinite(count) && count > 0 ? Math.floor(count) : 0);
+    } catch (cause) {
+      setError(errorMessage(cause, 'Unable to load SellerTray notification status.'));
+    }
+  }
+
+  async function refresh() { if (businessId) await Promise.all([loadWorkspace(businessId), loadUnreadCount(businessId)]); }
   async function signOut() { await supabase.auth.signOut(); }
   function navigate(next: Page) { setPage(next); setNavOpen(false); }
   function openBranchPage(next: Page, nextBranchId: string) { setBranchId(nextBranchId); navigate(next); }
@@ -103,6 +123,7 @@ export default function MerchantApp() {
 
   const managementRole = business.role as ManagementRole;
   const currentNav = NAV.find((item) => item.id === page);
+  const currentPageLabel = page === 'notifications' ? 'Notifications' : currentNav?.label ?? 'Dashboard';
   const managementPage = page === 'products' || page === 'categories' || page === 'units' || page === 'suppliers' || page === 'branches' || page === 'team' || page === 'devices' || page === 'feedback' || page === 'settings';
 
   return <div className={navOpen ? 'app-shell nav-open' : 'app-shell'}>
@@ -126,13 +147,14 @@ export default function MerchantApp() {
 
     <main className="workspace">
       <header className="topbar">
-        <div className="topbar-heading"><button className="mobile-menu-button" type="button" aria-label="Open navigation" aria-controls="merchant-navigation" aria-expanded={navOpen} onClick={() => setNavOpen(true)}><ShellIcon name="menu" /></button><div><p className="eyebrow">{business.name}</p><h1>{currentNav?.label ?? 'Dashboard'}</h1><p className="topbar-context"><span className="context-dot" />{branch?.name ?? 'No active Branch'} <span aria-hidden="true">·</span> {title(business.role)}</p></div></div>
-        <div className="topbar-actions"><Select label="Business" value={businessId} onChange={setBusinessId}>{managementBusinesses.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</Select><Select label="Branch" value={branchId} onChange={setBranchId} disabled={!branches.length}>{branches.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</Select><button className="icon-button compact-icon-button" aria-label={dark ? 'Use light theme' : 'Use dark theme'} title={dark ? 'Use light theme' : 'Use dark theme'} onClick={() => setDark((value) => !value)}><ShellIcon name={dark ? 'sun' : 'moon'} /></button><button className="secondary-button refresh-button" disabled={loading} onClick={() => void refresh()}><ShellIcon name="refresh" />{loading ? 'Refreshing' : 'Refresh'}</button></div>
+        <div className="topbar-heading"><button className="mobile-menu-button" type="button" aria-label="Open navigation" aria-controls="merchant-navigation" aria-expanded={navOpen} onClick={() => setNavOpen(true)}><ShellIcon name="menu" /></button><div><p className="eyebrow">{business.name}</p><h1>{currentPageLabel}</h1><p className="topbar-context"><span className="context-dot" />{branch?.name ?? 'No active Branch'} <span aria-hidden="true">·</span> {title(business.role)}</p></div></div>
+        <div className="topbar-actions"><Select label="Business" value={businessId} onChange={setBusinessId}>{managementBusinesses.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</Select><Select label="Branch" value={branchId} onChange={setBranchId} disabled={!branches.length}>{branches.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</Select><button className="icon-button compact-icon-button notification-bell-button" aria-label={unreadCount ? `Open notifications, ${unreadCount} unread` : 'Open notifications'} title="Notifications" onClick={() => navigate('notifications')}><ShellIcon name="bell" />{unreadCount > 0 ? <span className="notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span> : null}</button><button className="icon-button compact-icon-button" aria-label={dark ? 'Use light theme' : 'Use dark theme'} title={dark ? 'Use light theme' : 'Use dark theme'} onClick={() => setDark((value) => !value)}><ShellIcon name={dark ? 'sun' : 'moon'} /></button><button className="secondary-button refresh-button" disabled={loading} onClick={() => void refresh()}><ShellIcon name="refresh" />{loading ? 'Refreshing' : 'Refresh'}</button></div>
       </header>
 
       {error ? <div className="error-banner">{error}<button onClick={() => setError(null)}>Dismiss</button></div> : null}
       <section className="context-bar" aria-label="Current business context"><Context label="Business code" value={business.merchantCode || '—'} /><Context label="Subscription" value={statusText(business.subscriptionStatus)} /><Context label="Active Branch" value={branch?.name ?? 'No active Branch'} /></section>
       {page === 'overview' && <DashboardOverview tenantId={business.id} currency={business.currency} go={navigate} openBranch={openBranchPage} />}
+      {page === 'notifications' && <MerchantNotificationsManagement tenantId={business.id} onUnreadChanged={() => void loadUnreadCount(business.id)} />}
       {page === 'sales' && branch && <SalesManagement tenantId={business.id} branchId={branch.id} />}
       {page === 'sales' && !branch && <PageTable eyebrow="Sales" title="Choose a Branch" note="Select a Branch to review completed sales."><Empty title="No active Branch" body="Sales are reviewed within a Branch so transaction and stock context remain clear." /></PageTable>}
       {page === 'orders' && branch && <OrdersManagement tenantId={business.id} branchId={branch.id} currency={business.currency} />}
