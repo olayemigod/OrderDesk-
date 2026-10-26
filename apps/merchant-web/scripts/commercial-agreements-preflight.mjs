@@ -16,10 +16,10 @@ requireValue(
   navigation.includes("id: 'sellertray_billing'")
     && navigation.includes("label: 'SellerTray Billing'")
     && navigation.includes("id: 'agreements'")
-    && navigation.includes("label: 'Agreements'")
+    && navigation.includes("label: 'Master Agreement'")
     && navigation.includes("id: 'payments'")
     && navigation.includes("label: 'Payments & Receivables'"),
-  'Merchant navigation must keep SellerTray Billing, Agreements, and customer Payments & Receivables as separate surfaces.',
+  'Merchant navigation must keep SellerTray Billing, Master Agreement, and customer Payments & Receivables as separate surfaces.',
 );
 
 requireValue(
@@ -27,7 +27,7 @@ requireValue(
     && merchantApp.includes('<SellerTrayBillingManagement tenantId={business.id} />')
     && merchantApp.includes("page === 'agreements'")
     && merchantApp.includes('<CommercialAgreementsManagement tenantId={business.id} />'),
-  'Merchant App must route SellerTray Billing and Agreements to their dedicated surfaces.',
+  'Merchant App must route SellerTray Billing and Master Agreement to their dedicated surfaces.',
 );
 
 requireValue(
@@ -39,7 +39,7 @@ requireValue(
   agreements.includes("functions.invoke('master-agreements'")
     && agreements.includes("action: 'merchant_get'")
     && agreements.includes("action: 'merchant_accept'"),
-  'Agreements must use the governed master-agreements runtime for reads and acceptance.',
+  'Master Agreement must use the governed master-agreements runtime for reads and acceptance.',
 );
 
 requireValue(
@@ -59,7 +59,7 @@ requireValue(
   agreements.includes('new orders do not require the same agreement again')
     && agreements.includes('Commercial orders and payments remain separate')
     && agreements.includes('independent of your commercial orders, plans, Branches and payment schedule'),
-  'Merchant Agreement UI must keep universal legal acceptance independent of orders and payment.',
+  'Merchant Master Agreement UI must keep universal legal acceptance independent of orders and payment.',
 );
 
 requireValue(
