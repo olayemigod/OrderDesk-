@@ -14,6 +14,8 @@ The business architecture remains:
 
 Navigation and page separation must never be implemented by duplicating commercial, setup, entitlement, payment, merchant, reporting or audit truth in the browser.
 
+For agreement-specific behavior, `AGREEMENTS.md` controls: Admin publishes one immutable platform-wide Master Agreement version and may review Business acceptance status/history; merchant-specific issuance/replacement is retired.
+
 ## 1. Admin shell contract
 
 1. Desktop uses a persistent SellerTray Admin sidebar with collapsible navigation groups and labelled submenus.
@@ -62,11 +64,13 @@ The converged first-class destinations are:
 - **Plans & Pricing** — effective-dated subscription and Branch setup pricing;
 - **Payments & Settlement** — authoritative balances, direct payments, discounts/adjustments and installment-policy overrides;
 - **Installments** — installment progress and entitlement review;
-- **Agreements** — template publication, issuance, immutable acceptance history and replacement.
+- **Agreements** — platform-wide Master Agreement version publication plus immutable Business/version acceptance review/history.
+
+The Agreements destination is platform-scoped for publication. Selecting a Merchant/Business adds that Business's acceptance status/history as review context only. It must not expose merchant-specific agreement issuance, replacement, bespoke legal text or Admin-created merchant acceptance.
 
 Future commercial destinations include **Guarantees & Refunds** and **Promotions** when their governed decision/read models exist.
 
-Commercial grouping does not collapse these into one page. Pricing, commercial orders, payment/settlement, agreements, installment policy, guarantees and entitlement remain distinct governed authorities even though they participate in one commercial lifecycle.
+Commercial grouping does not collapse these into one page. Pricing, commercial orders, payment/settlement, Master Agreement publication/acceptance, installment policy, guarantees and entitlement remain distinct governed authorities even though they participate in one commercial lifecycle.
 
 ### Onboarding & Setup
 
@@ -143,12 +147,15 @@ Avoid:
 
 Task pages should expose one clear primary job, its supporting context, prerequisites, evidence/history and the next valid action.
 
+For Agreements, the primary platform job is **publish/review Master Agreement versions**. Merchant context is secondary review of whether that Business accepted the current/historical version; it never changes the published content for that merchant.
+
 ## 5. Capability and persona behavior
 
 1. Platform Admin and Platform Support remain responsibility bundles; explicit server capabilities remain authority.
 2. Support/read-only users should see coherent review surfaces, not unexplained disabled mutation controls scattered through giant pages.
 3. Sensitive actions retain existing AAL2, capability, scope, reason/evidence and audit requirements from `ADMIN_CAPABILITIES.md`.
 4. Reorganising navigation must not broaden a role, bypass a governed command, move authority into the browser or weaken audit/idempotency.
+5. Publishing a Master Agreement version requires the platform-global publication capability; merchant-context selection does not grant or narrow that legal publication authority.
 
 ## 6. Deep-link and routing contract
 
@@ -160,6 +167,7 @@ Task pages should expose one clear primary job, its supporting context, prerequi
 6. Legacy `communications` / `communications/messages` resolve to **Compose Message**.
 7. Legacy `operations` / `operations/health` resolve to **WhatsApp Operations** as the primary service-health landing page.
 8. `reports/revenue` is the stable Revenue Dashboard destination; short `revenue` / `reports` aliases may resolve to it without changing report authority.
+9. Any legacy merchant-specific agreement issuance/replacement route may resolve to **Agreements** for history/review, but it must not re-enable the retired mutation path.
 
 ## 7. Migration discipline
 
@@ -173,6 +181,8 @@ During migration:
 4. do not declare the full Admin IA complete while a major catch-all page remains active;
 5. each intermediate branch/PR must state residual bundled work explicitly;
 6. once focused destinations replace a catch-all, retire the old active shell/component rather than leaving multiple competing implementations for future agents to accidentally reactivate.
+
+Agreement governance is an intentional business-requirement change: migrate current paths to the universal Master Agreement authority while preserving legacy order-bound agreement records as immutable history only.
 
 ## 8. QA gate
 
@@ -195,7 +205,9 @@ For Admin navigation/process work verify at minimum:
 15. Setup Resources is not stacked into Setup Appointments;
 16. Campaign History is not stacked into Compose Message;
 17. WhatsApp Operations and AI Operations remain independent task pages even though they reuse the same governed platform summary authority;
-18. Revenue Dashboard reads governed server facts, keeps currencies separate, and does not label collections, order value, outstanding installments or merchant GMV as recognised revenue.
+18. Revenue Dashboard reads governed server facts, keeps currencies separate, and does not label collections, order value, outstanding installments or merchant GMV as recognised revenue;
+19. Agreements publishes one universal immutable version, and merchant context is acceptance review only;
+20. no Admin route can issue/replace a bespoke merchant/order agreement or fabricate merchant acceptance.
 
 ## 9. Browser acceptance requirement
 
@@ -211,10 +223,13 @@ The Admin implementation sequence after the initial IA convergence is:
 2. complete browser acceptance for desktop grouped navigation, narrow drawer, Merchant-context persistence and Back/Forward restoration;
 3. extend **Onboarding & Setup** with OA4 structured Setup Completion/equipment evidence;
 4. add OA4 activation blockers and readiness/entitlement reconciliation recovery without creating another activation state machine;
-5. add later report destinations only as their governed read models become available.
+5. preserve **Agreements** as universal Master Agreement publication + acceptance review under `AGREEMENTS.md`;
+6. add later report destinations only as their governed read models become available.
 
 This sequence is an implementation-order contract, not permission to skip the prerequisite authority, security, audit or cross-surface gates of the underlying capability.
 
 ## 11. Cross-surface impact rule
 
 Admin information-architecture-only work normally has no business-behavior impact outside Admin Web because shared authority is unchanged. Still report Shared Core, Merchant Web, Mobile, WhatsApp, AI, reporting/audit and offline/sync effects explicitly under `CROSS_SURFACE.md`.
+
+The universal Master Agreement correction is not IA-only: Admin publication, Merchant acceptance and Shared Core service-delivery gating must converge in the same governed business change while Mobile/WhatsApp/AI/offline remain consumers or no-impact surfaces as documented in `AGREEMENTS.md`.
