@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import {
   loadMerchantNotifications,
+  loadMerchantUnreadNotificationCount,
   markAllMerchantNotificationsRead,
   markMerchantNotificationRead,
   subscribeToMerchantNotifications,
@@ -12,20 +13,26 @@ import { isLikelyConnectivityError } from '../data/offlineSalesRepository';
 
 export function useMerchantNotifications(tenantId: string | null) {
   const [notifications, setNotifications] = useState<MerchantNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!tenantId) {
       setNotifications([]);
+      setUnreadCount(0);
       setError(null);
       return;
     }
 
     setLoading(true);
     try {
-      const next = await loadMerchantNotifications(tenantId);
+      const [next, count] = await Promise.all([
+        loadMerchantNotifications(tenantId),
+        loadMerchantUnreadNotificationCount(tenantId),
+      ]);
       setNotifications(next.filter((notification) => !notification.isRead));
+      setUnreadCount(count);
       setError(null);
     } catch (err) {
       if (isLikelyConnectivityError(err)) {
@@ -51,17 +58,17 @@ export function useMerchantNotifications(tenantId: string | null) {
     };
   }, [refresh, tenantId]);
 
-  const unreadCount = useMemo(() => notifications.length, [notifications]);
-
   const markRead = useCallback(async (id: string) => {
     await markMerchantNotificationRead(id);
     setNotifications((current) => current.filter((notification) => notification.id !== id));
+    setUnreadCount((current) => Math.max(0, current - 1));
   }, []);
 
   const markAllRead = useCallback(async () => {
     if (!tenantId) return;
     await markAllMerchantNotificationsRead(tenantId);
     setNotifications([]);
+    setUnreadCount(0);
   }, [tenantId]);
 
   return { notifications, unreadCount, loading, error, refresh, markRead, markAllRead };
