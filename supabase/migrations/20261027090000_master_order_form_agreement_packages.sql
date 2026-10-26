@@ -75,6 +75,16 @@ create index sellertray_order_forms_order_idx
 create index sellertray_order_forms_obligation_idx
   on public.sellertray_commercial_order_forms(tenant_id,installment_obligation_id)
   where installment_obligation_id is not null;
+create index sellertray_order_forms_installment_order_fk_idx
+  on public.sellertray_commercial_order_forms(tenant_id,commercial_order_id,installment_obligation_id)
+  where installment_obligation_id is not null;
+create index sellertray_order_forms_supersedes_tenant_fk_idx
+  on public.sellertray_commercial_order_forms(tenant_id,supersedes_order_form_id)
+  where supersedes_order_form_id is not null;
+create index sellertray_order_forms_template_idx
+  on public.sellertray_commercial_order_forms(order_form_template_version_id);
+create index sellertray_order_forms_issuer_idx
+  on public.sellertray_commercial_order_forms(issued_by_user_id);
 
 create table public.sellertray_agreement_packages (
   id uuid primary key default gen_random_uuid(),
@@ -139,10 +149,18 @@ create table public.sellertray_order_form_confirmations (
 
 create index sellertray_master_acceptances_actor_idx
   on public.sellertray_master_agreement_acceptances(accepted_by_user_id,accepted_at desc);
+create index sellertray_master_acceptances_version_idx
+  on public.sellertray_master_agreement_acceptances(master_agreement_version_id);
 create index sellertray_package_order_idx
   on public.sellertray_agreement_packages(tenant_id,commercial_order_id,created_at desc);
+create index sellertray_package_order_form_fk_idx
+  on public.sellertray_agreement_packages(tenant_id,order_form_id);
+create index sellertray_package_master_version_idx
+  on public.sellertray_agreement_packages(master_agreement_version_id);
 create index sellertray_order_form_confirmations_actor_idx
   on public.sellertray_order_form_confirmations(confirmed_by_user_id,confirmed_at desc);
+create index sellertray_order_form_confirmations_package_fk_idx
+  on public.sellertray_order_form_confirmations(tenant_id,agreement_package_id);
 
 create or replace function public.prepare_sellertray_master_agreement_acceptance()
 returns trigger
