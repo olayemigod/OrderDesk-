@@ -1,0 +1,27 @@
+.notification-bell-button { position: relative; }
+.notification-badge { position: absolute; top: -7px; right: -7px; min-width: 20px; height: 20px; padding: 0 5px; display: grid; place-items: center; border: 2px solid var(--surface); border-radius: 999px; color: #052b1a; background: var(--green); font-size: .64rem; font-weight: 850; line-height: 1; }
+.notification-page-actions { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: .78rem; }
+.notification-page-note { max-width: 760px; margin: -8px 0 0; line-height: 1.55; }
+.notification-list-panel { padding: 0; overflow: hidden; }
+.notification-row { display: grid; grid-template-columns: 10px minmax(0,1fr) auto; gap: 14px; align-items: start; padding: 16px 18px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.notification-row:last-child { border-bottom: 0; }
+.notification-row.read { background: var(--surface-alt); }
+.notification-severity { width: 9px; height: 9px; margin-top: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px rgba(18,183,106,.1); }
+.notification-severity.attention { background: #f79009; box-shadow: 0 0 0 4px rgba(247,144,9,.12); }
+.notification-severity.urgent { background: var(--danger); box-shadow: 0 0 0 4px rgba(180,35,24,.1); }
+.notification-copy { min-width: 0; }
+.notification-title-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.notification-copy strong { color: var(--navy-strong); font-size: .88rem; }
+.notification-copy p { margin: 5px 0 7px; color: var(--slate); font-size: .82rem; line-height: 1.55; }
+.notification-copy small { color: var(--muted); font-size: .7rem; }
+.notification-unread-label { padding: 3px 7px; border-radius: 999px; color: #075b36; background: var(--mint); font-size: .62rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+.notification-read-button { white-space: nowrap; margin-top: 2px; }
+.notification-empty { padding: 28px 20px; text-align: center; }
+.notification-empty strong { display: block; margin-bottom: 6px; }
+.notification-empty p { max-width: 620px; margin: 0 auto; color: var(--muted); font-size: .82rem; line-height: 1.55; }
+@media (max-width: 720px) {
+  .notification-page-actions { width: 100%; justify-content: space-between; }
+  .notifications-page .section-heading { align-items: stretch; flex-direction: column; gap: 10px; }
+  .notification-row { grid-template-columns: 10px minmax(0,1fr); }
+  .notification-read-button { grid-column: 2; justify-self: start; }
+}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -8,6 +8,7 @@ import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
 type Props = {
   notifications: MerchantNotification[];
+  unreadCount: number;
   loading: boolean;
   error: string | null;
   onBack: () => void;
@@ -19,6 +20,7 @@ type Props = {
 
 export function NotificationsWorkspace({
   notifications,
+  unreadCount,
   loading,
   error,
   onBack,
@@ -33,10 +35,6 @@ export function NotificationsWorkspace({
   const [markingAll, setMarkingAll] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const unreadCount = useMemo(
-    () => notifications.filter((notification) => !notification.isRead).length,
-    [notifications],
-  );
 
   async function markRead(notification: MerchantNotification) {
     if (notification.isRead || pendingId) return;

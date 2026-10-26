@@ -4,7 +4,42 @@ import { supabase } from '../lib/supabase';
 
 export type MerchantNotification = {
   id: string;
-  eventKey: 'new_whatsapp_order' | 'order_change_request' | 'new_whatsapp_message' | 'payment_verification_required' | 'payment_confirmed' | 'payment_failed' | 'payment_exception' | 'payment_gate_blocked' | 'customer_complaint' | 'refund_request' | 'catalogue_enquiry' | 'customer_enquiry' | 'workflow_clarification';
+  eventKey:
+    | 'new_whatsapp_order'
+    | 'order_change_request'
+    | 'new_whatsapp_message'
+    | 'payment_verification_required'
+    | 'payment_confirmed'
+    | 'payment_failed'
+    | 'payment_exception'
+    | 'payment_gate_blocked'
+    | 'customer_complaint'
+    | 'refund_request'
+    | 'catalogue_enquiry'
+    | 'customer_enquiry'
+    | 'workflow_clarification'
+    | 'platform_update'
+    | 'platform_service'
+    | 'platform_information'
+    | 'platform_promotion'
+    | 'commercial_order_created'
+    | 'commercial_adjustment_applied'
+    | 'commercial_payment_confirmed'
+    | 'commercial_balance_outstanding'
+    | 'master_agreement_required'
+    | 'master_agreement_accepted'
+    | 'setup_scheduled'
+    | 'setup_rescheduled'
+    | 'setup_reassigned'
+    | 'setup_cancelled'
+    | 'setup_completed'
+    | 'setup_missed'
+    | 'branch_readiness_reached'
+    | 'activation_succeeded'
+    | 'activation_attention_required'
+    | 'entitlement_full_released'
+    | 'entitlement_expiring'
+    | 'entitlement_expired';
   severity: 'info' | 'attention' | 'urgent';
   title: string;
   body: string;
@@ -55,6 +90,16 @@ export async function loadMerchantNotifications(
   }));
 }
 
+export async function loadMerchantUnreadNotificationCount(tenantId: string): Promise<number> {
+  if (!tenantId) return 0;
+  const { data, error } = await supabase.rpc('sellertray_merchant_unread_notification_count', {
+    p_tenant_id: tenantId,
+  });
+  if (error) throw error;
+  const count = Number(data ?? 0);
+  return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+}
+
 export async function markMerchantNotificationRead(id: string): Promise<void> {
   const { error } = await supabase.rpc('sellertray_mark_merchant_notification_read', {
     p_notification_id: id,
@@ -80,6 +125,11 @@ export function subscribeToMerchantNotifications(
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'merchant_notifications', filter: `tenant_id=eq.${tenantId}` },
+      onChange,
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'merchant_notification_reads', filter: `tenant_id=eq.${tenantId}` },
       onChange,
     )
     .subscribe();

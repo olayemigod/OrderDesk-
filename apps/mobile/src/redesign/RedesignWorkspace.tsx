@@ -481,6 +481,7 @@ export default function RedesignWorkspace() {
       {showNotifications ? (
         <NotificationsWorkspace
           notifications={unreadNotifications}
+          unreadCount={notifications.unreadCount}
           loading={notifications.loading}
           error={notifications.error}
           onBack={() => setShowNotifications(false)}
