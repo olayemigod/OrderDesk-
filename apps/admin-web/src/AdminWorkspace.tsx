@@ -163,7 +163,7 @@ export default function AdminWorkspace() {
   async function refreshAudit() {
     if (!session) return;
     const result = await invokeJson<{ audit?: unknown }>('platform-admin', { action: 'audit', tenantId: null, limit: 100 }, session);
-    setAudit(normalizeAudit(auditResult(auditResult))); 
+    setAudit(normalizeAudit(result.audit));
   }
 
   async function signOut() { await supabase.auth.signOut(); }
