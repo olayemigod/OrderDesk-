@@ -74,8 +74,6 @@ export type OnboardingOrder = {
   installmentObligationId: string | null;
   structureCode: string | null;
 };
-export type OnboardingTemplate = { id: string; family: string; versionCode: string; title: string; effectiveFrom: string; publishedAt: string };
-export type OnboardingAgreement = { id: string; commercialOrderId: string; reference: string; accepted: boolean };
 export type CommercialOnboarding = {
   canManage: boolean;
   eligibleForInitialInstallment: boolean;
@@ -84,8 +82,6 @@ export type CommercialOnboarding = {
   branches: OnboardingBranch[];
   prices: OnboardingPrice[];
   orders: OnboardingOrder[];
-  templates: OnboardingTemplate[];
-  agreements: OnboardingAgreement[];
 };
 
 type AdminResponse = { ok?: boolean; overview?: unknown; onboarding?: unknown };
@@ -199,14 +195,6 @@ function parseOnboarding(value: unknown): CommercialOnboarding {
         installmentObligationId: nullableString(row.installmentObligationId),
         structureCode: nullableString(row.structureCode),
       };
-    }).filter((row) => row.id),
-    templates: array(root.templates).map((value) => {
-      const row = record(value);
-      return { id: stringValue(row.id), family: stringValue(row.family), versionCode: stringValue(row.versionCode), title: stringValue(row.title), effectiveFrom: stringValue(row.effectiveFrom), publishedAt: stringValue(row.publishedAt) };
-    }).filter((row) => row.id),
-    agreements: array(root.agreements).map((value) => {
-      const row = record(value);
-      return { id: stringValue(row.id), commercialOrderId: stringValue(row.commercialOrderId), reference: stringValue(row.reference), accepted: row.accepted === true };
     }).filter((row) => row.id),
   };
 }
