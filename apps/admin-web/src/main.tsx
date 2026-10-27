@@ -10,6 +10,7 @@ import './admin-workspaces-redesign.css';
 import './admin-responsive-hardening.css';
 import './admin-portfolio-revenue-redesign.css';
 import './admin-workspace-composition-v2.css';
+import './admin-console-v3.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
