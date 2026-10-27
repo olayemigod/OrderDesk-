@@ -10,6 +10,7 @@ const gateway = readRepo('supabase/functions/master-agreements/index.ts');
 const pdf = readRepo('supabase/functions/master-agreements/agreement-pdf.ts');
 const migration = readRepo('supabase/migrations/20261027170000_agreement_document_artifacts.sql');
 const governance = readRepo('.agents/skills/sellertray-project-implementation/AGREEMENTS.md');
+const governanceLower = governance.toLowerCase();
 
 const failures = [];
 const requireValue = (condition, message) => { if (!condition) failures.push(message); };
@@ -62,9 +63,9 @@ requireValue(
   'Database authority must preserve immutable review/executed PDF metadata and reviewed-package confirmation.',
 );
 requireValue(
-  governance.includes('Rendered Agreement Package documents')
-    && governance.includes('review artifact automatically or lazily')
-    && governance.includes('executed-copy generation is likewise automatic')
+  governanceLower.includes('rendered agreement package documents')
+    && governanceLower.includes('review artifact automatically or lazily')
+    && governanceLower.includes('executed-copy generation is likewise automatic')
     && governance.includes('Review agreement')
     && governance.includes('Accept & Continue')
     && governance.includes('Confirm Purchase'),
