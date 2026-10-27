@@ -15,6 +15,8 @@ body,
 /*
  * Reuse the approved SellerTray wordmark already shared with Merchant Web.
  * The Admin surface changes only the surface label beneath the product mark.
+ * Render the wordmark on the brand container rather than replacing an <img>
+ * through CSS content, which is not reliable for replaced elements.
  */
 .workspace-sidebar .workspace-sidebar-brand {
   position: relative;
@@ -26,17 +28,17 @@ body,
   gap: 2px !important;
 }
 
+.workspace-sidebar .workspace-sidebar-brand::before {
+  content: '';
+  display: block;
+  width: min(205px, calc(100% - 48px));
+  height: 46px;
+  flex: 0 0 46px;
+  background: url('/brand/sellertray-logo-v2.svg') left center / contain no-repeat;
+}
+
 .workspace-sidebar .workspace-sidebar-brand > img {
-  content: url('/brand/sellertray-logo-v2.svg');
-  width: min(205px, calc(100% - 48px)) !important;
-  height: auto !important;
-  max-height: 46px !important;
-  padding: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  object-fit: contain !important;
-  object-position: left center !important;
+  display: none !important;
 }
 
 .workspace-sidebar .workspace-sidebar-brand > div {
