@@ -19,14 +19,14 @@ test('focused Agreements workspace exposes universal governance after explicit m
 
 test('Agreements workspace publishes one universal version and reviews Business acceptance only', () => {
   assert.match(lifecycle, /'master-agreements'/);
-  assert.match(lifecycle, /action: 'admin_get'/);
-  assert.match(lifecycle, /action: 'admin_publish'/);
+  assert.match(lifecycle, /action:\s*'admin_get'/);
+  assert.match(lifecycle, /action:\s*'admin_publish'/);
   assert.match(lifecycle, /state\?\.canPublish/);
   assert.match(lifecycle, /All SellerTray Businesses/);
   assert.match(lifecycle, /Merchant-specific issuance remains retired/);
   assert.match(lifecycle, /not tied to an order, installment, Branch or payment/);
   assert.match(lifecycle, /Do not enter merchant-specific pricing, order IDs, Branch terms or bespoke merchant clauses/);
-  assert.doesNotMatch(lifecycle, /action: 'admin_issue'/);
+  assert.doesNotMatch(lifecycle, /action:\s*'admin_issue'/);
   assert.doesNotMatch(lifecycle, /supersedesAgreementId|commercialOrderId|installmentObligationId/);
   assert.doesNotMatch(lifecycle, /accept_sellertray_commercial_agreement/);
 });
