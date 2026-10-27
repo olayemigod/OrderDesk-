@@ -38,28 +38,30 @@ requireValue(
 requireValue(
   agreements.includes("functions.invoke('master-agreements'")
     && agreements.includes("action: 'merchant_get'")
-    && agreements.includes("action: 'merchant_accept'"),
-  'Agreements must use the governed master-agreements runtime for reads and acceptance.',
+    && agreements.includes("action: 'merchant_confirm_package'")
+    && !agreements.includes("action: 'merchant_accept'"),
+  'Agreements must use the governed Master Agreement + exact Order Form package authority and must not use direct Master-only acceptance.',
 );
 
 requireValue(
-  agreements.includes('authorityConfirmed: true')
-    && agreements.includes('I confirm I am authorised to act for this Business and accept this SellerTray Master Agreement version.'),
-  'Master Agreement acceptance must carry the explicit merchant authority confirmation shown in the UI.',
+  agreements.includes("center.masterAcceptanceRequired ? 'Accept & Continue' : 'Confirm Purchase'")
+    && agreements.includes("'I accept the current Master Agreement and confirm this exact Order Form.'")
+    && agreements.includes("'I confirm this exact Order Form under the accepted Master Agreement.'"),
+  'Merchant CTA must distinguish Master acceptance from later purchase confirmation while preserving one affirmative package action.',
 );
 
 requireValue(
-  agreements.includes('acceptanceCommandIds.current.get(versionId)')
-    && agreements.includes('acceptanceCommandIds.current.set(versionId, commandId)')
-    && agreements.includes('acceptanceCommandIds.current.delete(versionId)'),
-  'Master Agreement acceptance must preserve one command identity per current version across failed retries and clear it only after success.',
+  agreements.includes('`${selected.id}:${center.masterAgreement.id}`')
+    && agreements.includes('confirmationCommandIds.current.set(commandKey, commandId)')
+    && agreements.includes('confirmationCommandIds.current.delete(commandKey)'),
+  'Package confirmation must preserve one command identity per exact Order Form + Master pair across failed retries.',
 );
 
 requireValue(
-  agreements.includes('new orders do not require the same agreement again')
-    && agreements.includes('Commercial orders and payments remain separate')
-    && agreements.includes('independent of your commercial orders, plans, Branches and payment schedule'),
-  'Merchant Agreement UI must keep universal legal acceptance independent of orders and payment.',
+  agreements.includes('Commercial snapshot integrity')
+    && agreements.includes('server-governed commercial snapshot')
+    && agreements.includes('deterministic Agreement Package fingerprint'),
+  'Merchant review must expose immutable Order Form/package evidence without making browser prose the commercial authority.',
 );
 
 requireValue(
@@ -69,12 +71,10 @@ requireValue(
     "from('sellertray_commercial_agreements')",
     "from('sellertray_commercial_agreement_acceptances')",
     "from('sellertray_commercial_agreement_template_versions')",
-    'commercialOrderId',
-    'installmentObligationId',
     'SERVICE_ROLE',
     'SUPABASE_SECRET',
   ]),
-  'Master Agreement surface must remain universal/legal-only and must not revive order-bound agreement or payment authority.',
+  'Agreement Package UI must use server-governed package reads/commands and remain separate from payment authority.',
 );
 
 requireValue(
@@ -84,18 +84,18 @@ requireValue(
     && billing.includes('nextPayableAmount')
     && billing.includes("response.status === 'retry_required'")
     && billing.includes('response.needsNewCommand === true'),
-  'SellerTray Billing must read server-owned settlement state and preserve governed checkout retry semantics.',
+  'SellerTray Billing must continue using server-owned settlement state and governed checkout retry semantics.',
 );
 
 requireValue(
   excludes(billing, ['SERVICE_ROLE', 'SUPABASE_SECRET', "from('sellertray_commercial_payment_confirmations')"]),
-  'SellerTray Billing must not bypass the governed commercial billing and checkout authorities.',
+  'SellerTray Billing must not bypass governed commercial billing and checkout authorities.',
 );
 
 if (failures.length) {
-  console.error('SellerTray Master Agreement and billing preflight failed:');
+  console.error('SellerTray Agreement Package and billing preflight failed:');
   for (const failure of failures) console.error('- ' + failure);
   process.exit(1);
 }
 
-console.log('SellerTray Master Agreement and billing preflight passed.');
+console.log('SellerTray Agreement Package and billing preflight passed.');

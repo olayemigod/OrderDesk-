@@ -1,7 +1,14 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.115.0';
 
 type JsonRecord = Record<string, unknown>;
-type Action = 'merchant_get' | 'merchant_accept' | 'admin_get' | 'admin_publish';
+type Action =
+  | 'merchant_get'
+  | 'merchant_confirm_package'
+  | 'merchant_accept'
+  | 'admin_get'
+  | 'admin_publish'
+  | 'admin_publish_order_form_template'
+  | 'admin_issue_order_form';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -42,7 +49,7 @@ Deno.serve(async (request) => {
     if (action === 'merchant_get') {
       const tenantId = cleanUuid(body.tenantId);
       if (!tenantId) return json({ error: 'Business is required' }, 400);
-      const center = await rpc<JsonRecord>('get_sellertray_master_agreement_center', {
+      const center = await rpc<JsonRecord>('get_sellertray_agreement_package_center', {
         p_tenant_id: tenantId,
         p_actor_user_id: userId,
       });
@@ -50,22 +57,28 @@ Deno.serve(async (request) => {
     }
 
     if (action === 'merchant_accept') {
+      return json({
+        error: 'Master Agreement acceptance now completes with the exact current Order Form. Refresh Billing & agreements and confirm the purchase package.',
+      }, 409);
+    }
+
+    if (action === 'merchant_confirm_package') {
       const tenantId = cleanUuid(body.tenantId);
-      const agreementVersionId = cleanUuid(body.agreementVersionId);
+      const orderFormId = cleanUuid(body.orderFormId);
       const commandId = cleanUuid(body.commandId);
       const legalName = cleanText(body.legalName, 200);
-      if (!tenantId || !agreementVersionId || !commandId || !legalName) {
-        return json({ error: 'Business, current Master Agreement, legal name and command are required' }, 400);
+      if (!tenantId || !orderFormId || !commandId || !legalName) {
+        return json({ error: 'Business, current Order Form, legal name and command are required' }, 400);
       }
       if (body.authorityConfirmed !== true) {
-        return json({ error: 'Confirm your authority and Master Agreement acceptance before continuing' }, 400);
+        return json({ error: 'Confirm your authority and purchase approval before continuing' }, 400);
       }
 
       const userAgent = cleanText(request.headers.get('user-agent'), 512);
-      const acceptanceId = await rpc<string>('accept_sellertray_master_agreement', {
+      const result = await rpc<JsonRecord>('confirm_sellertray_agreement_package', {
         p_tenant_id: tenantId,
-        p_agreement_version_id: agreementVersionId,
-        p_accepted_legal_name: legalName,
+        p_order_form_id: orderFormId,
+        p_confirmed_legal_name: legalName,
         p_request_evidence: {
           channel: 'merchant_web',
           authority_confirmed: true,
@@ -75,12 +88,12 @@ Deno.serve(async (request) => {
         p_actor_user_id: userId,
       });
 
-      await reconcileTenantInstallmentsBestEffort(tenantId, 'Master Agreement acceptance');
-      const center = await rpc<JsonRecord>('get_sellertray_master_agreement_center', {
+      await reconcileTenantInstallmentsBestEffort(tenantId, 'Agreement Package confirmation');
+      const center = await rpc<JsonRecord>('get_sellertray_agreement_package_center', {
         p_tenant_id: tenantId,
         p_actor_user_id: userId,
       });
-      return json({ ok: true, acceptanceId, center });
+      return json({ ok: true, result, center });
     }
 
     if (action === 'admin_get') {
@@ -88,7 +101,7 @@ Deno.serve(async (request) => {
       if (body.tenantId !== null && body.tenantId !== undefined && body.tenantId !== '' && !tenantId) {
         return json({ error: 'A valid Business is required' }, 400);
       }
-      const overview = await rpc<JsonRecord>('get_sellertray_master_agreement_admin', {
+      const overview = await rpc<JsonRecord>('get_sellertray_order_forms_admin', {
         p_actor_user_id: userId,
         p_tenant_id: tenantId,
       });
@@ -96,7 +109,68 @@ Deno.serve(async (request) => {
     }
 
     if (jwtAal(token) !== 'aal2') {
-      return json({ error: 'MFA verification is required to publish a Master Agreement version' }, 403);
+      return json({ error: 'MFA verification is required for this legal/commercial administrator action' }, 403);
+    }
+
+    if (action === 'admin_issue_order_form') {
+      const tenantId = cleanUuid(body.tenantId);
+      const commercialOrderId = cleanUuid(body.commercialOrderId);
+      const installmentObligationId = optionalUuid(body.installmentObligationId);
+      const templateVersionId = cleanUuid(body.templateVersionId);
+      const orderFormReference = cleanText(body.orderFormReference, 128);
+      const supersedesOrderFormId = optionalUuid(body.supersedesOrderFormId);
+      const reason = cleanReason(body.reason);
+      if (!tenantId || !commercialOrderId || !templateVersionId || !orderFormReference || !reason) {
+        return json({ error: 'Business, commercial order, Order Form template, reference and reason are required' }, 400);
+      }
+      if (body.installmentObligationId && !installmentObligationId) {
+        return json({ error: 'A valid installment obligation is required' }, 400);
+      }
+      if (body.supersedesOrderFormId && !supersedesOrderFormId) {
+        return json({ error: 'A valid superseded Order Form is required' }, 400);
+      }
+
+      const orderFormId = await rpc<string>('issue_sellertray_commercial_order_form_admin', {
+        p_tenant_id: tenantId,
+        p_commercial_order_id: commercialOrderId,
+        p_installment_obligation_id: installmentObligationId,
+        p_template_version_id: templateVersionId,
+        p_order_form_reference: orderFormReference,
+        p_supersedes_order_form_id: supersedesOrderFormId,
+        p_reason: reason,
+        p_actor_user_id: userId,
+      });
+      const overview = await rpc<JsonRecord>('get_sellertray_order_forms_admin', {
+        p_actor_user_id: userId,
+        p_tenant_id: tenantId,
+      });
+      return json({ ok: true, orderFormId, overview }, 201);
+    }
+
+    if (action === 'admin_publish_order_form_template') {
+      const family = cleanText(body.family, 64);
+      const versionCode = cleanText(body.versionCode, 64);
+      const title = cleanText(body.title, 200);
+      const contentBody = cleanRawText(body.contentBody, 200_000);
+      const effectiveFrom = cleanIsoTimestamp(body.effectiveFrom);
+      const reason = cleanReason(body.reason);
+      if (!family || !versionCode || !title || !contentBody || !effectiveFrom || !reason) {
+        return json({ error: 'Order Form family, version, title, content, effective time and publication reason are required' }, 400);
+      }
+      const templateVersionId = await rpc<string>('publish_sellertray_order_form_template_admin', {
+        p_agreement_family: family,
+        p_version_code: versionCode,
+        p_title: title,
+        p_content_body: contentBody,
+        p_effective_from: effectiveFrom,
+        p_reason: reason,
+        p_actor_user_id: userId,
+      });
+      const overview = await rpc<JsonRecord>('get_sellertray_order_forms_admin', {
+        p_actor_user_id: userId,
+        p_tenant_id: optionalUuid(body.tenantId),
+      });
+      return json({ ok: true, templateVersionId, overview }, 201);
     }
 
     const versionCode = cleanText(body.versionCode, 64);
@@ -116,7 +190,7 @@ Deno.serve(async (request) => {
       p_reason: reason,
       p_actor_user_id: userId,
     });
-    const overview = await rpc<JsonRecord>('get_sellertray_master_agreement_admin', {
+    const overview = await rpc<JsonRecord>('get_sellertray_order_forms_admin', {
       p_actor_user_id: userId,
       p_tenant_id: optionalUuid(body.tenantId),
     });
@@ -150,7 +224,13 @@ async function rpc<T>(name: string, args: JsonRecord): Promise<T> {
 }
 
 function cleanAction(value: unknown): Action | null {
-  return value === 'merchant_get' || value === 'merchant_accept' || value === 'admin_get' || value === 'admin_publish'
+  return value === 'merchant_get'
+    || value === 'merchant_confirm_package'
+    || value === 'merchant_accept'
+    || value === 'admin_get'
+    || value === 'admin_publish'
+    || value === 'admin_publish_order_form_template'
+    || value === 'admin_issue_order_form'
     ? value
     : null;
 }
@@ -194,7 +274,7 @@ function jwtAal(token: string): string | null {
 function statusForError(message: string): number {
   if (/access|required|authori[sz]ed|owner|manager|capability|mfa/i.test(message)) return 403;
   if (/not found/i.test(message)) return 404;
-  if (/already|different|conflict|current/i.test(message)) return 409;
+  if (/already|different|conflict|current|replaced|superseded/i.test(message)) return 409;
   return 400;
 }
 async function readRequestTextLimited(request: Request, maxBytes: number): Promise<{ ok: true; text: string } | { ok: false }> {
