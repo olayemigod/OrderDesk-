@@ -8,6 +8,7 @@ import './admin-navigation.css';
 import './admin-redesign.css';
 import './admin-workspaces-redesign.css';
 import './admin-responsive-hardening.css';
+import './admin-portfolio-revenue-redesign.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
