@@ -77,7 +77,7 @@ jobs:
           deno-version: v2.5.6
 
       - name: Smoke-load Agreement PDF Edge module
-        run: deno eval --node-modules-dir=auto "await import('./supabase/functions/master-agreements/agreement-pdf.ts'); console.log('Agreement PDF Edge module loaded.');"
+        run: deno eval --node-modules-dir=auto "await import('./supabase/functions/master-agreements/agreement-pdf.ts'); console.log('Agreement PDF Edge module loaded.'); Deno.exit(0);"
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
