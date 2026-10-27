@@ -37,7 +37,7 @@ body,
   width: 48px;
   height: 48px;
   display: block;
-  background: #f8fafc url('/brand/sellertray-app-icon.png') center / 42px 42px no-repeat;
+  background: #f8fafc url('https://sellertray.vercel.app/brand/sellertray-app-icon-v2.png') center / 42px 42px no-repeat;
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, .14);
 }
