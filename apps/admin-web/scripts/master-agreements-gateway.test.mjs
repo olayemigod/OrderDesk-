@@ -11,12 +11,23 @@ const commandId = '00000000-0000-4000-8000-000000000401';
 const commercialOrderId = '00000000-0000-4000-8000-000000000501';
 const templateVersionId = '00000000-0000-4000-8000-000000000601';
 const installmentObligationId = '00000000-0000-4000-8000-000000000602';
+const agreementPackageId = '00000000-0000-4000-8000-000000000901';
+const packageFingerprint = 'a'.repeat(64);
 
 const sourcePath = resolve(import.meta.dirname, '../../../supabase/functions/master-agreements/index.ts');
-const source = readFileSync(sourcePath, 'utf8').replace(
-  /^import \{ createClient \} from 'npm:@supabase\/supabase-js@2\.115\.0';/,
-  'const createClient = globalThis.__sellertrayCreateClient;',
-);
+const source = readFileSync(sourcePath, 'utf8')
+  .replace(
+    /^import \{ createClient \} from 'npm:@supabase\/supabase-js@2\.115\.0';/m,
+    'const createClient = globalThis.__sellertrayCreateClient;',
+  )
+  .replace(
+    /^import \{ buildAgreementPackagePdf, inspectUploadedMasterPdf, sha256Hex, type AgreementPdfInput \} from '\.\/agreement-pdf\.ts';/m,
+    [
+      'const buildAgreementPackagePdf = globalThis.__sellertrayBuildAgreementPackagePdf;',
+      'const inspectUploadedMasterPdf = globalThis.__sellertrayInspectUploadedMasterPdf;',
+      'const sha256Hex = globalThis.__sellertraySha256Hex;',
+    ].join('\n'),
+  );
 const compiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
 }).outputText;
@@ -38,13 +49,13 @@ const rpcResults = {
   get_sellertray_agreement_package_center: center,
   get_sellertray_order_forms_admin: adminOverview,
   reconcile_sellertray_installment_entitlements_for_tenant: [],
-  confirm_sellertray_agreement_package: {
+  confirm_sellertray_agreement_package_reviewed: {
     masterAcceptanceId: '00000000-0000-4000-8000-000000000701',
     masterAcceptanceCreated: true,
     orderFormConfirmationId: '00000000-0000-4000-8000-000000000801',
     orderFormConfirmationCreated: true,
-    agreementPackageId: '00000000-0000-4000-8000-000000000901',
-    packageFingerprint: 'a'.repeat(64),
+    agreementPackageId,
+    packageFingerprint,
   },
   publish_sellertray_order_form_template_admin: templateVersionId,
   issue_sellertray_commercial_order_form_admin: orderFormId,
@@ -62,6 +73,13 @@ globalThis.__sellertrayCreateClient = () => ({
     return { data: rpcResults[name], error: null };
   },
 });
+globalThis.__sellertrayBuildAgreementPackagePdf = async () => new Uint8Array([37, 80, 68, 70, 45]);
+globalThis.__sellertrayInspectUploadedMasterPdf = async () => ({
+  text: 'Reviewed SellerTray Master Agreement legal content for test execution.'.repeat(3),
+  pageCount: 1,
+  pdfSha256: 'b'.repeat(64),
+});
+globalThis.__sellertraySha256Hex = async () => 'c'.repeat(64);
 
 new Function('Deno', compiled)({
   env: { get: (key) => ({ SUPABASE_URL: 'https://fixture.invalid', SUPABASE_SERVICE_ROLE_KEY: 'fixture-service-key' })[key] },
@@ -102,25 +120,39 @@ test('legacy direct Master acceptance action fails closed', async () => {
   assert.equal(response.status, 409);
 });
 
-test('merchant package confirmation requires explicit authority and dispatches exact command facts', async () => {
+test('merchant package confirmation requires exact reviewed package and explicit authority', async () => {
   assert.equal((await request({
     action: 'merchant_confirm_package', tenantId, orderFormId, commandId,
+    legalName: 'Merchant Owner', authorityConfirmed: true,
+  })).status, 400);
+
+  assert.equal((await request({
+    action: 'merchant_confirm_package', tenantId, orderFormId, commandId,
+    expectedPackageId: agreementPackageId, expectedPackageFingerprint: packageFingerprint,
     legalName: 'Merchant Owner', authorityConfirmed: false,
   })).status, 400);
 
   calls = [];
   const response = await request({
     action: 'merchant_confirm_package', tenantId, orderFormId, commandId,
+    expectedPackageId: agreementPackageId,
+    expectedPackageFingerprint: packageFingerprint,
     legalName: '  Merchant   Owner  ', authorityConfirmed: true,
     actorUserId: '00000000-0000-4000-8000-000000000999',
   });
   assert.equal(response.status, 200);
-  const call = calls.find(({ name }) => name === 'confirm_sellertray_agreement_package');
+  const call = calls.find(({ name }) => name === 'confirm_sellertray_agreement_package_reviewed');
   assert.deepEqual(call?.args, {
     p_tenant_id: tenantId,
     p_order_form_id: orderFormId,
+    p_expected_package_id: agreementPackageId,
+    p_expected_package_fingerprint: packageFingerprint,
     p_confirmed_legal_name: 'Merchant Owner',
-    p_request_evidence: { channel: 'merchant_web', authority_confirmed: true },
+    p_request_evidence: {
+      channel: 'merchant_web',
+      authority_confirmed: true,
+      electronic_signature_method: 'authenticated_typed_legal_name',
+    },
     p_command_id: commandId,
     p_actor_user_id: actorUserId,
   });

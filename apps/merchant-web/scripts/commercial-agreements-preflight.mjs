@@ -61,7 +61,7 @@ requireValue(
 
 requireValue(
   agreements.includes('Commercial snapshot integrity')
-    && agreements.includes('server-governed commercial snapshot')
+    && agreements.includes('governed commercial snapshot')
     && agreements.includes('reviewDocument.packageFingerprint')
     && agreements.includes('expectedPackageFingerprint'),
   'Merchant review must expose immutable Order Form/package evidence and bind the signature to the exact reviewed package.',
