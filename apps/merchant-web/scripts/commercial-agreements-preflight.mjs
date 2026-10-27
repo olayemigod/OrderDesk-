@@ -8,6 +8,7 @@ const merchantApp = read('src/MerchantApp.tsx');
 const navigation = read('src/portalNavigation.ts');
 const agreements = read('src/CommercialAgreementsManagement.tsx');
 const billing = read('src/SellerTrayBillingManagement.tsx');
+const quarantineAuthority = read('../../supabase/migrations/20261027123000_master_agreement_publication_quarantine.sql');
 const failures = [];
 const requireValue = (condition, message) => { if (!condition) failures.push(message); };
 const excludes = (source, values) => values.every((value) => !source.includes(value));
@@ -62,6 +63,14 @@ requireValue(
     && agreements.includes('server-governed commercial snapshot')
     && agreements.includes('deterministic Agreement Package fingerprint'),
   'Merchant review must expose immutable Order Form/package evidence without making browser prose the commercial authority.',
+);
+
+requireValue(
+  quarantineAuthority.includes('sellertray_master_agreement_version_quarantines')
+    && quarantineAuthority.includes('quarantine_sellertray_master_agreement_version_admin')
+    && quarantineAuthority.includes('where not exists (')
+    && quarantineAuthority.includes('get_sellertray_master_agreement_center'),
+  'Merchant agreement reads must exclude quarantined invalid/non-production Master publications from current and historical customer-facing authority.',
 );
 
 requireValue(

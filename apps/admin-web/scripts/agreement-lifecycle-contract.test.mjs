@@ -11,6 +11,7 @@ const masterGateway = read('../supabase/functions/master-agreements/index.ts');
 const masterAuthority = read('../supabase/migrations/20261026060117_universal_master_agreement_authority.sql');
 const packageAuthority = read('../supabase/migrations/20261027100000_master_order_form_package_oa5c_convergence.sql');
 const retirement = read('../supabase/migrations/20261027100100_order_form_admin_boundary_and_legacy_retirement.sql');
+const quarantineAuthority = read('../supabase/migrations/20261027123000_master_agreement_publication_quarantine.sql');
 
 test('focused Agreements workspace keeps universal governance and current Order Form administration after explicit merchant scope', () => {
   assert.match(commercial, /import AgreementLifecycleManagement/);
@@ -50,6 +51,18 @@ test('Master Agreement authority remains platform-wide while Order Forms are exa
   assert.match(packageAuthority, /commercial_snapshot_sha256/);
   assert.match(packageAuthority, /package_fingerprint/);
   assert.match(packageAuthority, /sellertray_installment_contract_accepted_at/);
+});
+
+test('invalid Master publications are quarantined without rewriting immutable legal evidence', () => {
+  assert.match(quarantineAuthority, /sellertray_master_agreement_version_quarantines/);
+  assert.match(quarantineAuthority, /quarantine_sellertray_master_agreement_version_admin/);
+  assert.match(quarantineAuthority, /sellertray_master_agreement_version_quarantined/);
+  assert.match(quarantineAuthority, /resolve_sellertray_master_agreement_version_id/);
+  assert.match(quarantineAuthority, /not exists[\s\S]*sellertray_master_agreement_version_quarantines/);
+  assert.match(quarantineAuthority, /'quarantined',q\.id is not null/);
+  assert.match(quarantineAuthority, /'quarantineReason',q\.reason/);
+  assert.doesNotMatch(quarantineAuthority, /delete from public\.sellertray_master_agreement_versions/);
+  assert.doesNotMatch(quarantineAuthority, /update public\.sellertray_master_agreement_versions/);
 });
 
 test('Master Agreement gateway enforces AAL2 Admin legal authority and package commands', () => {
