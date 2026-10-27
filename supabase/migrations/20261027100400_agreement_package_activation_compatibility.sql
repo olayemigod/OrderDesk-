@@ -78,4 +78,36 @@ revoke all on function public.sellertray_installment_contract_accepted_at(uuid,u
 grant execute on function public.sellertray_installment_contract_accepted_at(uuid,uuid,uuid)
   to service_role;
 
+-- Keep the universal legal prerequisite visible at the actual service-delivery
+-- boundary. The renamed core retains the package-aware Order Form check above.
+alter function public.reconcile_sellertray_installment_entitlement(uuid,uuid)
+  rename to reconcile_sellertray_installment_entitlement_package_core;
+
+create or replace function public.reconcile_sellertray_installment_entitlement(
+  p_tenant_id uuid,
+  p_installment_obligation_id uuid
+)
+returns jsonb
+language plpgsql
+security invoker
+set search_path=''
+as $$
+begin
+  if public.sellertray_master_agreement_accepted_at(p_tenant_id,now()) is null then
+    return public.get_sellertray_installment_billing_state(
+      p_tenant_id,p_installment_obligation_id
+    );
+  end if;
+
+  return public.reconcile_sellertray_installment_entitlement_package_core(
+    p_tenant_id,p_installment_obligation_id
+  );
+end;
+$$;
+
+revoke all on function public.reconcile_sellertray_installment_entitlement(uuid,uuid)
+  from public,anon,authenticated;
+grant execute on function public.reconcile_sellertray_installment_entitlement(uuid,uuid)
+  to service_role;
+
 commit;
