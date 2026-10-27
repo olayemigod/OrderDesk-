@@ -29,6 +29,31 @@ Rules:
 7. When a new Master Agreement version requiring re-acceptance becomes effective, SellerTray may again present the required legal package and relevant commercial context in one consolidated acceptance experience.
 8. Acceptance evidence must make it possible to determine exactly which universal legal version(s) and which applicable Merchant-specific commercial instrument were presented/accepted, without conflating their underlying authorities.
 
+## Scalable zero-touch operating model
+
+SellerTray agreement handling is designed for a platform that may onboard hundreds or thousands of merchants per day. The normal merchant lifecycle must not require ProcessEdge staff to create, issue, prepare, attach or approve an Agreement Package one merchant at a time.
+
+The governing operating principle is:
+
+> **Configure platform legal/commercial rules once. Automatically instantiate exact merchant evidence from governed facts. Route only genuine exceptions to Admin.**
+
+Rules:
+
+1. ProcessEdge Admin publishes universal Master Agreement versions and governed Order Form template versions as platform configuration. This is occasional legal/commercial administration, not a per-merchant operating step.
+2. When the shared commercial authority creates or materially replaces a governed commercial order, the server must automatically resolve the applicable current Order Form template, freeze the exact commercial snapshot, generate/reuse the Order Form identity/reference, and create/reuse the Agreement Package manifest/fingerprint idempotently.
+3. A normal merchant purchase must **not** wait for an Admin user to select that merchant, select a template, type an Order Form reference, provide a routine issuance reason or click **Issue Order Form**.
+4. Order Form references are system-generated from a governed reference sequence/identity rule. Human-entered references are reserved for controlled migrations or exceptional recovery where explicitly authorised and audited.
+5. Review-document preparation is an implementation detail. The platform should generate or materialise the current review artifact automatically or lazily when the merchant reaches the review step. The Merchant should not have to understand or trigger a technical **Prepare PDF** operation.
+6. Executed-copy generation is likewise automatic after valid acceptance/confirmation. The merchant-facing action is to review/accept and later view/download the signed copy; storage, hashing, rendering, retries and artifact creation remain behind the scenes.
+7. Package hashes, SHA values, deterministic fingerprints, storage paths, idempotency keys and server-rendering mechanics are internal integrity/audit evidence. They must not be primary merchant-facing UX. Expose them only in authorised diagnostic/audit views where they are genuinely useful.
+8. Merchant-facing language must describe the business action: **Review agreement**, **Accept & Continue**, **Confirm Purchase**, **Signed agreement**, **Download copy**. Do not expose implementation vocabulary merely because the backend uses sophisticated evidence controls.
+9. The system must be event-driven/reconcilable and idempotent. If an automatic step is interrupted, retry/reconciliation must complete or safely reuse the same governed evidence without creating duplicate Order Forms, packages, acceptances, notifications or entitlement effects.
+10. Admin Web should operate an **exceptions and governance** model. Normal flow is monitored through status/coverage/reporting; Admin intervention is reserved for exceptions such as no current approved Master, no applicable published Order Form template, invalid commercial configuration, generation/storage failure, supersession conflict, unauthorised merchant signer or another explicit fail-closed state.
+11. Exception states must be explicit and actionable, with enough evidence for recovery. They must not silently degrade into manual per-merchant processing as the default operating procedure.
+12. Merchant notifications should be action-oriented and sparse. Notify when the merchant genuinely needs to review/accept or when an exception materially blocks progression; do not narrate internal workflow steps.
+13. AI is not part of the legal authority and should not be visible as the explanation for ordinary deterministic agreement operations. SellerTray should feel like a coherent product, not a sequence of exposed automation or AI orchestration steps.
+14. The normal happy path must remain viable at high concurrency without a ProcessEdge staff member in the loop. Scaling merchant volume should increase infrastructure workload, not proportionally increase agreement-administration headcount.
+
 ## Rendered Agreement Package documents and electronic signing
 
 SellerTray may present the consolidated Agreement Package as a professionally branded PDF while keeping the underlying legal and commercial authorities separate.
@@ -42,9 +67,9 @@ Rules:
 1. The Agreement Package PDF is a rendered evidence artifact, not a second legal/commercial source of truth. The authoritative facts remain the immutable Master Agreement version, exact Order Form, governed commercial snapshot, hashes, package manifest/fingerprint and authenticated acceptance/confirmation records.
 2. Merchant Web is the primary authenticated review/signing surface. The Merchant must review the exact current package before the electronic signing action is enabled.
 3. The signing command must bind the exact reviewed Agreement Package ID and package fingerprint. If the current required Master Agreement changes after review, signing fails closed and the Merchant must review the new package.
-4. A first purchase or required new Master version may use **Accept & Sign**. A later purchase under an already accepted unchanged Master uses **Confirm & Sign** for the exact new Order Form without manufacturing another Master acceptance.
-5. The default electronic signature evidence is the authenticated SellerTray identity, authorised merchant role/capability, typed legal name, exact hashes/fingerprint, idempotency command, request evidence and server timestamps. A decorative signature-style rendering may appear on the executed PDF but is not itself the security authority.
-6. After the required Master acceptance and Order Form confirmation exist, SellerTray may generate an immutable **Executed Agreement Package PDF** containing an electronic execution certificate and verification reference.
+4. A first purchase or required new Master version may use **Accept & Continue**. A later purchase under an already accepted unchanged Master uses **Confirm Purchase** for the exact new Order Form without manufacturing another Master acceptance. Internal evidence may still represent an electronic signature/confirmation even when the merchant-facing label stays simple.
+5. The default electronic signature evidence is the authenticated SellerTray identity, authorised merchant role/capability, typed legal name or governed profile legal-name confirmation, exact hashes/fingerprint, idempotency command, request evidence and server timestamps. A decorative signature-style rendering may appear on the executed PDF but is not itself the security authority.
+6. After the required Master acceptance and Order Form confirmation exist, SellerTray automatically generates/reuses an immutable **Executed Agreement Package PDF** containing an electronic execution certificate and verification reference.
 7. Review and executed PDF bytes are generated server-side and retained in private storage with immutable metadata including PDF SHA-256. Browser-generated canonical agreement PDFs are prohibited.
 8. Admin may retrieve the same governed review/executed artifacts for authorised review, but Admin cannot sign, accept or manufacture merchant acceptance on the merchant's behalf.
 9. Mobile may surface governed agreement-required notifications or a secure handoff to Merchant Web, but it does not become an independent signing authority. WhatsApp and AI likewise cannot accept on behalf of the Merchant.
@@ -100,6 +125,7 @@ Rules for this baseline:
 Master Agreement authority remains distinguishable from commercial-order truth even when the UI presents them together.
 
 - A merchant may create or receive a commercial order without generating a new universal Master Agreement.
+- Creating/materially replacing a current-path commercial order automatically creates/reuses its governed Order Form and Agreement Package evidence from the applicable published template and server-derived commercial snapshot; this is not a per-merchant Admin issuance task.
 - Payment or settlement progression does not itself create or prove Master Agreement acceptance.
 - Installment checkout must not require a separate copy/version of the universal Master Agreement.
 - The first-subscription experience may present the current Master Agreement and applicable Merchant Order Form together in one consolidated acceptance experience.
@@ -178,9 +204,11 @@ ProcessEdge Admin may:
 - review current and historical Master Agreement versions;
 - publish a new immutable universal version through the governed capability;
 - upload the reviewed PDF for a new immutable universal version through the redesigned Add New tab;
+- publish/version governed Order Form templates that the shared core applies automatically;
 - inspect Business acceptance status/history when a Merchant context is selected;
 - audit who published and who accepted each version;
-- inspect the commercial instrument associated with a consolidated acceptance where authorised;
+- inspect automatically generated commercial instruments associated with consolidated acceptance where authorised;
+- review agreement/package exception queues and perform explicit governed recovery where an automatic process has failed;
 - retrieve the same governed Agreement Package review/executed PDFs available to the Merchant.
 
 ProcessEdge Admin must not:
@@ -189,27 +217,32 @@ ProcessEdge Admin must not:
 - replace the universal Master Agreement for only one merchant;
 - edit published content in place;
 - attach a new source PDF to rewrite an already-published version;
-- mark acceptance on behalf of a merchant by direct database write.
+- mark acceptance on behalf of a merchant by direct database write;
+- manually issue routine per-merchant Order Forms as the normal happy path;
+- type routine Order Form references, choose routine templates per merchant or prepare routine package PDFs one merchant at a time.
 
-Use a semantic publication capability such as `admin.agreements.publish`; read authority remains separately governed.
+Use a semantic publication capability such as `admin.agreements.publish`; read authority remains separately governed. Any manual recovery capability must be exceptional, capability-gated, reasoned, audited and idempotent.
 
 ## Merchant Web
 
-Merchant Web provides a simple consolidated legal/commercial acceptance experience rather than a multi-agreement checklist.
+Merchant Web provides a simple consolidated legal/commercial acceptance experience rather than a multi-agreement checklist or a technical evidence console.
 
 It may show:
 
-- current effective Master Agreement version;
-- exact incorporated legal content and Schedules;
+- a concise purchase/agreement summary;
+- current effective Master Agreement version where useful to the merchant;
+- exact incorporated legal content and Schedules through a normal **Review agreement** experience;
 - applicable Merchant Order Form/commercial particulars where part of the current transaction;
 - whether this Business has accepted the current required Master Agreement version;
 - accepted-by/accepted-at evidence where applicable;
-- version history;
-- the professional branded review PDF;
-- the executed PDF/certificate after completion;
+- version/history where useful;
+- the professional branded agreement document;
+- the executed/signed copy after completion;
 - one affirmative acceptance action when acceptance is required and the signed-in user has authority.
 
-Do not require a Merchant to separately accept every incorporated Schedule. Do not create a new universal Master Agreement version merely because an Order Form changes.
+The normal Merchant UI must not require or prominently expose package fingerprints, content hashes, SHA-256 values, storage mechanics, idempotency keys, package-generation terminology or other implementation evidence. Those facts remain available to authorised diagnostics/audit when needed.
+
+Do not require a Merchant to separately accept every incorporated Schedule. Do not create a new universal Master Agreement version merely because an Order Form changes. Do not make the Merchant click a technical **Prepare Agreement PDF** action before review; the platform prepares the appropriate document under the hood.
 
 ## Legacy C1A order-bound agreements
 
@@ -221,13 +254,13 @@ Current-path code must not create merchant-specific copies/versions of the unive
 
 ## Cross-surface effects
 
-- **Shared Core:** owns version resolution, immutable Business/version Master Agreement acceptance, commercial-instrument association, document hashes/artifacts and service-delivery checks.
-- **Merchant Web:** provides the governed consolidated PDF review/acceptance/signing experience and executed-copy retrieval.
-- **Admin Web:** publishes universal legal versions through Add New (PDF upload or reviewed text), manages legal governance and reviews acceptance/commercial/document evidence; it does not create merchant-specific Master Agreement variants or merchant acceptance.
+- **Shared Core:** owns version resolution, automatic Order Form/package instantiation, immutable Business/version Master Agreement acceptance, commercial-instrument association, document hashes/artifacts, reconciliation/retry and service-delivery checks.
+- **Merchant Web:** provides the simple governed review/accept/confirm experience and signed-copy retrieval while hiding technical evidence mechanics from the normal UI.
+- **Admin Web:** publishes universal legal versions and reusable Order Form templates, monitors coverage/exceptions and performs explicit recovery only when necessary; it does not create merchant-specific Master Agreement variants, routine per-merchant Order Forms or merchant acceptance.
 - **Mobile:** surfaces the governed agreement-required lifecycle notification where applicable and may hand off to Merchant Web, but it does not render canonical agreement PDFs or create acceptance truth.
 - **WhatsApp:** may notify or deep-link a merchant to the governed acceptance surface; WhatsApp chat text is not acceptance truth unless a later explicitly approved authenticated signing flow is designed.
-- **AI:** may explain status/terms from the governed version but cannot accept on behalf of a merchant.
-- **Reporting/audit:** version publication, source-document hash, Business acceptance, applicable commercial association and rendered artifact evidence are auditable immutable facts.
+- **AI:** may explain status/terms from the governed version but cannot accept on behalf of a merchant and must not become visible orchestration for deterministic agreement lifecycle work.
+- **Reporting/audit:** version publication, automatic package lifecycle, source-document hash, Business acceptance, applicable commercial association, exception/recovery activity and rendered artifact evidence are auditable immutable facts.
 - **Offline:** agreement review/acceptance is not an offline authoritative write; service-delivery reconciliation fails closed until the server has the required acceptance fact.
 
 ## QA gate
@@ -259,10 +292,17 @@ Verify at minimum:
 23. text-based PDF extraction fails closed for invalid/scanned-only/unreasonably large documents;
 24. the exact uploaded Master PDF hash participates in newly-created Agreement Package fingerprints;
 25. review PDF generation is server-owned and private;
-26. signing is impossible until the exact current package is reviewed and the expected package ID/fingerprint match;
+26. signing is impossible until the exact current package is reviewed and the expected package ID/fingerprint match internally;
 27. executed PDF generation requires the applicable Master acceptance and Order Form confirmation evidence;
 28. Admin and Merchant retrieve the same governed package artifacts without Admin acquiring merchant signing authority;
-29. Mobile notification behavior remains consistent with the shared agreement lifecycle and does not create separate signing truth.
+29. Mobile notification behavior remains consistent with the shared agreement lifecycle and does not create separate signing truth;
+30. creating a qualifying commercial order automatically creates/reuses the exact Order Form/package without Admin intervention;
+31. routine Order Form reference/template selection is automatic and deterministic from governed configuration;
+32. interrupted automatic package creation is retry/reconciliation safe and duplicate-free;
+33. merchant happy-path UI does not expose hashes/fingerprints/storage/idempotency mechanics;
+34. review/executed document generation requires no routine per-merchant Admin action;
+35. genuine automatic-processing failures enter a bounded Admin exception/recovery queue rather than silently becoming manual happy-path work;
+36. high-volume concurrent merchant creation does not require proportional ProcessEdge agreement-administration actions.
 
 ## Precedence
 
@@ -270,7 +310,9 @@ This file records the latest explicit product decisions and therefore controls w
 
 - the universal Master Agreement authority;
 - the consolidated one-review/one-acceptance Merchant UX;
-- the professional server-rendered PDF/electronic-signing evidence layer;
+- the scalable zero-touch agreement operating model;
+- automatic server-owned Order Form/package instantiation and exception-only Admin intervention;
+- professional server-rendered PDF/electronic-signing evidence kept behind simple merchant-facing actions;
 - the Admin Add New reviewed-PDF publication path;
 - the distinction between universal legal version identity and Merchant-specific commercial facts;
 - the approved v0.9 baseline and its later-version rule.
