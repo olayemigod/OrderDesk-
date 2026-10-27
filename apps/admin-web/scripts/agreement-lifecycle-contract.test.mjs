@@ -23,8 +23,9 @@ test('Agreements workspace publishes one universal version and reviews Business 
   assert.match(lifecycle, /action: 'admin_publish'/);
   assert.match(lifecycle, /state\?\.canPublish/);
   assert.match(lifecycle, /All SellerTray Businesses/);
-  assert.match(lifecycle, /Merchant-specific issuance and order-specific agreement replacement are retired/);
-  assert.match(lifecycle, /not tied to a commercial order, installment, Branch or payment/);
+  assert.match(lifecycle, /Merchant-specific issuance remains retired/);
+  assert.match(lifecycle, /not tied to an order, installment, Branch or payment/);
+  assert.match(lifecycle, /Do not enter merchant-specific pricing, order IDs, Branch terms or bespoke merchant clauses/);
   assert.doesNotMatch(lifecycle, /action: 'admin_issue'/);
   assert.doesNotMatch(lifecycle, /supersedesAgreementId|commercialOrderId|installmentObligationId/);
   assert.doesNotMatch(lifecycle, /accept_sellertray_commercial_agreement/);
@@ -52,7 +53,7 @@ test('Master Agreement Admin gateway enforces verified publication authority', (
 
 test('agreement lifecycle does not invent commercial, refund, guarantee or entitlement policy', () => {
   assert.doesNotMatch(lifecycle, /dueAt|past_due|grace|refundAmount|guaranteeStatus|current_period_end|tenant_subscriptions/);
-  assert.match(lifecycle, /Published versions are immutable and remain available for legal history/);
-  assert.match(lifecycle, /Publish one immutable agreement version for the entire SellerTray platform/);
+  assert.match(lifecycle, /Published versions remain available for immutable legal history/);
+  assert.match(lifecycle, /Publish one reviewed immutable version for the entire SellerTray platform/);
   assert.match(lifecycle, /review-only for Master Agreement publication/);
 });
