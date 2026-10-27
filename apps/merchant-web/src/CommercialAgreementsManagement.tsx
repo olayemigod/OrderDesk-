@@ -66,8 +66,10 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
     finally { setLoading(false); }
   }
 
-  async function prepareDocument(artifactKind: 'review_pdf' | 'executed_pdf') {
+  async function openDocument(artifactKind: 'review_pdf' | 'executed_pdf') {
     if (!selected || documentBusy) return;
+    const popup = window.open('about:blank', '_blank');
+    if (popup) popup.opener = null;
     setDocumentBusy(artifactKind); setError(null);
     try {
       const { data, error: functionError } = await supabase.functions.invoke('master-agreements', {
@@ -75,10 +77,17 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
       });
       if (functionError) throw functionError;
       const document = parseDocument(record(data).document);
-      if (artifactKind === 'review_pdf') { setReviewDocument(document); setReviewedFingerprint(null); }
-      else setExecutedDocument(document);
-    } catch (cause) { setError(errorMessage(cause, 'Unable to prepare this SellerTray Agreement Package PDF.')); }
-    finally { setDocumentBusy(null); }
+      if (artifactKind === 'review_pdf') {
+        setReviewDocument(document);
+        if (popup) setReviewedFingerprint(document.packageFingerprint);
+      } else {
+        setExecutedDocument(document);
+      }
+      if (popup) popup.location.href = document.signedUrl;
+    } catch (cause) {
+      if (popup) popup.close();
+      setError(errorMessage(cause, artifactKind === 'review_pdf' ? 'Unable to open this SellerTray Agreement Package.' : 'Unable to open the signed SellerTray Agreement Package.'));
+    } finally { setDocumentBusy(null); }
   }
 
   async function confirmPackage(event: FormEvent) {
@@ -110,10 +119,10 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
       setReviewDocument(null); setReviewedFingerprint(null); setExecutedDocument(null);
       setMessage(result.masterAcceptanceCreated
         ? selected.confirmation
-          ? 'Current Master Agreement accepted. Your existing Order Form confirmation remains valid.'
-          : 'Master Agreement accepted and this purchase signed.'
-        : 'Purchase signed under your accepted Master Agreement.');
-    } catch (cause) { setError(errorMessage(cause, 'Unable to record this SellerTray Agreement Package.')); }
+          ? 'Current Master Agreement accepted. Your purchase confirmation remains valid.'
+          : 'Agreement accepted and purchase confirmed.'
+        : 'Purchase confirmed under your accepted Master Agreement.');
+    } catch (cause) { setError(errorMessage(cause, 'Unable to confirm this SellerTray agreement.')); }
     finally { setBusy(false); }
   }
 
@@ -122,7 +131,7 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
   return <section className="page-stack">
     <div className="section-heading">
       <div><p className="eyebrow">Commercial</p><h2>Agreements</h2></div>
-      <p className="muted">Review one professional SellerTray Agreement Package containing the universal Master Agreement and the exact Order Form for this purchase.</p>
+      <p className="muted">Review the agreement for your purchase, then accept or confirm it when required.</p>
     </div>
 
     {error ? <div className="error-banner">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div> : null}
@@ -131,21 +140,21 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
     {center?.masterAgreement ? <article className="panel agreement-brand-panel">
       <div className="agreement-brand-heading">
         <img className="agreement-brand-logo" src="/brand/sellertray-logo-v2.svg" alt="SellerTray" />
-        <div><p className="eyebrow">Universal Master Agreement</p><h3>{center.masterAgreement.title}</h3><p className="muted">Version {center.masterAgreement.versionCode} · Effective {formatDate(center.masterAgreement.effectiveFrom)}</p></div>
+        <div><p className="eyebrow">Master Agreement</p><h3>{center.masterAgreement.title}</h3><p className="muted">Version {center.masterAgreement.versionCode} · Effective {formatDate(center.masterAgreement.effectiveFrom)}</p></div>
         <span className="role-pill">{center.masterAcceptanceRequired ? 'Acceptance required' : 'Accepted'}</span>
       </div>
       <div className="settings-grid two">
         <Fact label="Version" value={center.masterAgreement.versionCode} />
-        <Fact label="Integrity" value={`${center.masterAgreement.contentSha256.slice(0, 16)}…`} />
+        <Fact label="Status" value={center.masterAcceptanceRequired ? 'Acceptance required' : 'Accepted'} />
         <Fact label="Accepted by" value={center.masterAgreement.acceptance?.acceptedLegalName ?? '—'} />
         <Fact label="Accepted at" value={center.masterAgreement.acceptance?.acceptedAt ? formatDate(center.masterAgreement.acceptance.acceptedAt) : '—'} />
       </div>
-      <details className="agreement-transcript"><summary>Accessible Master Agreement text</summary><div className="panel agreement-document"><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: 'inherit', margin: 0 }}>{center.masterAgreement.contentBody}</pre></div></details>
-    </article> : <div className="warning-banner">The current SellerTray Master Agreement has not been published. Purchase confirmation is unavailable until ProcessEdge publishes the approved legal version.</div>}
+      <details className="agreement-transcript"><summary>Read Master Agreement text</summary><div className="panel agreement-document"><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: 'inherit', margin: 0 }}>{center.masterAgreement.contentBody}</pre></div></details>
+    </article> : <div className="warning-banner">The current SellerTray Master Agreement is not available yet. You can keep your commercial record, but activation cannot proceed until the approved agreement is available.</div>}
 
     {!orderForms.length ? <article className="panel empty-state">
-      <strong>No Order Forms issued</strong>
-      <p>Your exact purchase-specific Order Form will appear here after ProcessEdge issues it from the governed commercial order.</p>
+      <strong>Agreement is being prepared automatically</strong>
+      <p>SellerTray creates the purchase-specific Order Form from the governed commercial order. If this status persists, ProcessEdge can reconcile the configuration without recreating your purchase.</p>
     </article> : <div className="team-management-grid">
       <div className="panel member-list">
         {current.map((form) => <OrderFormButton key={form.id} form={form} selected={selected?.id === form.id} onSelect={() => selectForm(form.id)} />)}
@@ -159,44 +168,44 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
           <Status form={selected} masterAcceptanceRequired={center?.masterAcceptanceRequired === true} />
         </div>
         <div className="settings-grid two">
-          <Fact label="Issued" value={formatDate(selected.issuedAt)} />
+          <Fact label="Created" value={formatDate(selected.issuedAt)} />
           <Fact label="Order reference" value={selected.commercialSnapshot.orderReference || selected.reference} />
-          <Fact label="Order Form integrity" value={`${selected.contentSha256.slice(0, 16)}…`} />
-          <Fact label="Commercial snapshot integrity" value={`${selected.commercialSnapshotSha256.slice(0, 16)}…`} />
         </div>
 
         <CommercialFacts snapshot={selected.commercialSnapshot} />
-        <details className="agreement-transcript"><summary>Accessible Order Form legal text</summary><div className="panel agreement-document"><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: 'inherit', margin: 0 }}>{selected.renderedContent}</pre></div></details>
+        <details className="agreement-transcript"><summary>Read Order Form text</summary><div className="panel agreement-document"><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: 'inherit', margin: 0 }}>{selected.renderedContent}</pre></div></details>
 
         <div className="agreement-package-card">
           <div className="agreement-package-card-copy">
-            <p className="eyebrow">Professional document</p><h3>SellerTray Agreement Package PDF</h3>
-            <p>The PDF is rendered by SellerTray from immutable server evidence. It binds the exact Master Agreement version, this Order Form and the governed commercial snapshot.</p>
+            <p className="eyebrow">Agreement document</p><h3>SellerTray Agreement Package</h3>
+            <p>Review the Master Agreement and the exact purchase terms together in one professional document.</p>
           </div>
           <div className="agreement-package-actions">
-            {!reviewDocument ? <button type="button" className="secondary-button" disabled={documentBusy !== null || !selected.isCurrent} onClick={() => void prepareDocument('review_pdf')}>{documentBusy === 'review_pdf' ? 'Preparing PDF…' : 'Prepare Agreement PDF'}</button> : <a className="primary-button agreement-document-link" href={reviewDocument.signedUrl} target="_blank" rel="noreferrer" onClick={() => setReviewedFingerprint(reviewDocument.packageFingerprint)}>Open & review PDF</a>}
-            {reviewDocument ? <small>Package fingerprint {reviewDocument.packageFingerprint.slice(0, 20)}… · PDF SHA-256 {reviewDocument.pdfSha256.slice(0, 16)}…</small> : null}
-            {selected.confirmation ? (!executedDocument ? <button type="button" className="secondary-button" disabled={documentBusy !== null} onClick={() => void prepareDocument('executed_pdf')}>{documentBusy === 'executed_pdf' ? 'Preparing executed copy…' : 'Prepare executed PDF'}</button> : <a className="secondary-button agreement-document-link" href={executedDocument.signedUrl} target="_blank" rel="noreferrer">Open executed PDF</a>) : null}
+            <button type="button" className="primary-button" disabled={documentBusy !== null || !selected.isCurrent} onClick={() => void openDocument('review_pdf')}>{documentBusy === 'review_pdf' ? 'Opening agreement…' : reviewReady ? 'Review agreement again' : 'Review agreement'}</button>
+            {reviewDocument && !reviewReady ? <a className="primary-button agreement-document-link" href={reviewDocument.signedUrl} target="_blank" rel="noreferrer" onClick={() => setReviewedFingerprint(reviewDocument.packageFingerprint)}>Open agreement</a> : null}
+            {reviewReady ? <small>Agreement opened for review. You can continue below when ready.</small> : null}
+            {selected.confirmation ? <button type="button" className="secondary-button" disabled={documentBusy !== null} onClick={() => void openDocument('executed_pdf')}>{documentBusy === 'executed_pdf' ? 'Opening signed copy…' : 'Open signed copy'}</button> : null}
+            {executedDocument ? <a className="secondary-button agreement-document-link" href={executedDocument.signedUrl} target="_blank" rel="noreferrer">Open signed copy again</a> : null}
           </div>
         </div>
 
-        {selected.confirmation ? <div className="success-banner">Purchase confirmed {formatDate(selected.confirmation.confirmedAt)} by {selected.confirmation.confirmedLegalName} ({roleLabel(selected.confirmation.confirmedRole)}). Package fingerprint {selected.confirmation.packageFingerprint.slice(0, 16)}…</div> : null}
+        {selected.confirmation ? <div className="success-banner">Purchase confirmed {formatDate(selected.confirmation.confirmedAt)} by {selected.confirmation.confirmedLegalName} ({roleLabel(selected.confirmation.confirmedRole)}).</div> : null}
         {!selected.isCurrent ? <div className="warning-banner">This Order Form has been replaced. Review the current replacement instead.</div> : null}
-        {selected.isCurrent && actionRequired && !center?.canAccept ? <div className="warning-banner">Only the Business Owner or a Manager explicitly authorised by the Owner can sign SellerTray agreement packages.</div> : null}
+        {selected.isCurrent && actionRequired && !center?.canAccept ? <div className="warning-banner">Only the Business Owner or a Manager explicitly authorised by the Owner can accept or confirm SellerTray agreements.</div> : null}
 
         {selected.isCurrent && actionRequired && center?.canAccept && center.masterAgreement ? <form className="settings-form agreement-signature-form" onSubmit={confirmPackage}>
-          <div className={`agreement-review-status ${reviewReady ? 'ready' : ''}`}><strong>{reviewReady ? 'Reviewed package ready to sign' : 'Open the Agreement Package PDF before signing'}</strong><span>{reviewReady && reviewDocument ? `Exact reviewed fingerprint: ${reviewDocument.packageFingerprint.slice(0, 24)}…` : 'SellerTray binds your signature to the exact package you reviewed.'}</span></div>
+          <div className={`agreement-review-status ${reviewReady ? 'ready' : ''}`}><strong>{reviewReady ? 'Agreement reviewed and ready to confirm' : 'Review the Agreement Package before continuing'}</strong><span>{reviewReady ? 'SellerTray will record your authenticated approval against the exact agreement you opened.' : 'Use Review agreement above to open the exact agreement for this purchase.'}</span></div>
           <label className="field"><span>Authorised representative legal name</span><SellerTrayInput maxLength={200} required value={legalName} onChange={(event) => setLegalName(event.target.value)} placeholder="Full legal name" /></label>
           <label className="access-card">
             <SellerTrayInput type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
             <span><strong>{center.masterAcceptanceRequired
               ? selected.confirmation
-                ? 'I accept the current Master Agreement and confirm my authority to sign.'
-                : 'I accept the current Master Agreement, confirm this exact Order Form and confirm my authority to sign.'
-              : 'I confirm this exact Order Form under the accepted Master Agreement and confirm my authority to sign.'}</strong>
-            <small>Your authenticated SellerTray identity, authority, exact document hashes and deterministic package fingerprint are recorded.</small></span>
+                ? 'I accept the current Master Agreement and confirm my authority to continue.'
+                : 'I accept the Master Agreement, confirm this purchase and confirm my authority to continue.'
+              : 'I confirm this purchase under the accepted Master Agreement and confirm my authority to continue.'}</strong>
+            <small>Your authenticated SellerTray identity, authority and the exact agreement reviewed are recorded as acceptance evidence.</small></span>
           </label>
-          <div className="settings-actions"><button className="primary-button" disabled={busy || !confirmed || !legalName.trim() || !reviewReady}>{busy ? 'Recording signature…' : center.masterAcceptanceRequired ? 'Accept & Sign' : 'Confirm & Sign'}</button></div>
+          <div className="settings-actions"><button className="primary-button" disabled={busy || !confirmed || !legalName.trim() || !reviewReady}>{busy ? 'Recording approval…' : center.masterAcceptanceRequired ? 'Accept & Continue' : 'Confirm Purchase'}</button></div>
         </form> : null}
       </article> : null}
     </div>}
@@ -216,8 +225,8 @@ function CommercialFacts({ snapshot }: { snapshot: CommercialSnapshot }) {
   </div>;
 }
 
-function OrderFormButton({ form, selected, onSelect }: { form: OrderForm; selected: boolean; onSelect: () => void }) { return <button type="button" className={selected ? 'member-row active' : 'member-row'} onClick={onSelect}><span className="member-avatar">O</span><span><strong>{form.reference}</strong><small>{form.isCurrent ? form.confirmation ? 'Confirmed' : 'Signature required' : 'Replaced'} · {formatDate(form.issuedAt)}</small></span></button>; }
-function Status({ form, masterAcceptanceRequired }: { form: OrderForm; masterAcceptanceRequired: boolean }) { const label = !form.isCurrent ? 'Replaced' : masterAcceptanceRequired ? 'Action required' : form.confirmation ? 'Confirmed' : 'Signature required'; return <span className="role-pill">{label}</span>; }
+function OrderFormButton({ form, selected, onSelect }: { form: OrderForm; selected: boolean; onSelect: () => void }) { return <button type="button" className={selected ? 'member-row active' : 'member-row'} onClick={onSelect}><span className="member-avatar">O</span><span><strong>{form.reference}</strong><small>{form.isCurrent ? form.confirmation ? 'Confirmed' : 'Action required' : 'Replaced'} · {formatDate(form.issuedAt)}</small></span></button>; }
+function Status({ form, masterAcceptanceRequired }: { form: OrderForm; masterAcceptanceRequired: boolean }) { const label = !form.isCurrent ? 'Replaced' : masterAcceptanceRequired ? 'Action required' : form.confirmation ? 'Confirmed' : 'Action required'; return <span className="role-pill">{label}</span>; }
 function Fact({ label, value }: { label: string; value: string }) { return <div className="role-lock"><span>{label}</span><strong>{value}</strong></div>; }
 function roleLabel(value: string) { return value === 'owner' ? 'Owner' : value === 'manager' ? 'Manager' : value; }
 function structureLabel(value: string) { return value === 'two_installment_70_30' ? '70% + 30%' : value === 'three_installment_60_20_20' ? '60% + 20% + 20%' : value.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()); }
