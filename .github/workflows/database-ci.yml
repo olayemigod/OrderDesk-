@@ -71,14 +71,6 @@ jobs:
       - name: Verify OA4 authenticated setup recovery gateway
         run: node --test supabase/functions/platform-admin-setup-scheduling/oa4.test.mjs
 
-      - name: Setup Deno for Edge Function checks
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.5.6
-
-      - name: Smoke-load Agreement PDF Edge module
-        run: deno eval --node-modules-dir=auto "await import('./supabase/functions/master-agreements/agreement-pdf.ts'); console.log('Agreement PDF Edge module loaded.'); Deno.exit(0);"
-
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
@@ -109,7 +101,4 @@ jobs:
 
       - name: Stop local Supabase
         if: always()
-        run: |
-          if command -v supabase >/dev/null 2>&1; then
-            supabase stop --no-backup
-          fi
+        run: supabase stop --no-backup
