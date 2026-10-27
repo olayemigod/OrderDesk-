@@ -77,7 +77,7 @@ jobs:
           deno-version: v2.5.6
 
       - name: Check Master Agreement Edge Function bundle imports
-        run: deno check supabase/functions/master-agreements/index.ts
+        run: deno check --node-modules-dir=auto supabase/functions/master-agreements/index.ts
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
@@ -109,4 +109,7 @@ jobs:
 
       - name: Stop local Supabase
         if: always()
-        run: supabase stop --no-backup
+        run: |
+          if command -v supabase >/dev/null 2>&1; then
+            supabase stop --no-backup
+          fi
