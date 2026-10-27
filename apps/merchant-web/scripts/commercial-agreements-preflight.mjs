@@ -39,30 +39,32 @@ requireValue(
 requireValue(
   agreements.includes("functions.invoke('master-agreements'")
     && agreements.includes("action: 'merchant_get'")
+    && agreements.includes("action: 'merchant_get_document'")
     && agreements.includes("action: 'merchant_confirm_package'")
     && !agreements.includes("action: 'merchant_accept'"),
   'Agreements must use the governed Master Agreement + exact Order Form package authority and must not use direct Master-only acceptance.',
 );
 
 requireValue(
-  agreements.includes("center.masterAcceptanceRequired ? 'Accept & Continue' : 'Confirm Purchase'")
-    && agreements.includes("'I accept the current Master Agreement and confirm this exact Order Form.'")
-    && agreements.includes("'I confirm this exact Order Form under the accepted Master Agreement.'"),
-  'Merchant CTA must distinguish Master acceptance from later purchase confirmation while preserving one affirmative package action.',
+  agreements.includes("center.masterAcceptanceRequired ? 'Accept & Sign' : 'Confirm & Sign'")
+    && agreements.includes("'I accept the current Master Agreement, confirm this exact Order Form and confirm my authority to sign.'")
+    && agreements.includes("'I confirm this exact Order Form under the accepted Master Agreement and confirm my authority to sign.'"),
+  'Merchant CTA must distinguish Master acceptance from later purchase confirmation while preserving one affirmative electronic-signature action.',
 );
 
 requireValue(
-  agreements.includes('`${selected.id}:${center.masterAgreement.id}`')
+  agreements.includes('`${selected.id}:${center.masterAgreement.id}:${reviewDocument.packageFingerprint}`')
     && agreements.includes('confirmationCommandIds.current.set(commandKey, commandId)')
     && agreements.includes('confirmationCommandIds.current.delete(commandKey)'),
-  'Package confirmation must preserve one command identity per exact Order Form + Master pair across failed retries.',
+  'Package confirmation must preserve one command identity per exact reviewed Order Form + Master + package fingerprint across failed retries.',
 );
 
 requireValue(
   agreements.includes('Commercial snapshot integrity')
     && agreements.includes('server-governed commercial snapshot')
-    && agreements.includes('deterministic Agreement Package fingerprint'),
-  'Merchant review must expose immutable Order Form/package evidence without making browser prose the commercial authority.',
+    && agreements.includes('reviewDocument.packageFingerprint')
+    && agreements.includes('expectedPackageFingerprint'),
+  'Merchant review must expose immutable Order Form/package evidence and bind the signature to the exact reviewed package.',
 );
 
 requireValue(
@@ -82,8 +84,10 @@ requireValue(
     "from('sellertray_commercial_agreement_template_versions')",
     'SERVICE_ROLE',
     'SUPABASE_SECRET',
+    'pdf-lib',
+    'jsPDF',
   ]),
-  'Agreement Package UI must use server-governed package reads/commands and remain separate from payment authority.',
+  'Agreement Package UI must use server-governed package reads/documents/commands and remain separate from payment and canonical PDF authority.',
 );
 
 requireValue(

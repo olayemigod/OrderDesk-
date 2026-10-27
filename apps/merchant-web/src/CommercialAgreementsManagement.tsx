@@ -2,87 +2,27 @@ import { SellerTrayInput } from './SellerTrayElements';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { errorMessage, supabase } from './supabase';
 
-type MasterAcceptance = {
-  id: string;
-  acceptedAt: string;
-  acceptedLegalName: string;
-  acceptedRole: 'owner' | 'manager';
-};
-type MasterAgreement = {
-  id: string;
-  versionCode: string;
-  title: string;
-  contentBody: string;
-  contentSha256: string;
-  effectiveFrom: string;
-  acceptance: MasterAcceptance | null;
-};
-type OrderFormConfirmation = {
-  id: string;
-  confirmedAt: string;
-  confirmedLegalName: string;
-  confirmedRole: 'owner' | 'manager';
-  packageFingerprint: string;
-};
-type PriceLine = {
-  lineNo: number;
-  description: string;
-  quantity: number;
-  currency: string;
-  grossAmount: number;
-  taxRatePercent: number | null;
-  taxAmount: number;
-};
-type InstallmentLine = {
-  sequenceNo: number;
-  percentage: number;
-  amountDue: number;
-  dueAt: string | null;
-};
+type MasterAcceptance = { id: string; acceptedAt: string; acceptedLegalName: string; acceptedRole: 'owner' | 'manager' };
+type MasterAgreement = { id: string; versionCode: string; title: string; contentBody: string; contentSha256: string; effectiveFrom: string; acceptance: MasterAcceptance | null };
+type OrderFormConfirmation = { id: string; confirmedAt: string; confirmedLegalName: string; confirmedRole: 'owner' | 'manager'; packageFingerprint: string };
+type PriceLine = { lineNo: number; description: string; quantity: number; currency: string; grossAmount: number; taxRatePercent: number | null; taxAmount: number };
+type InstallmentLine = { sequenceNo: number; percentage: number; amountDue: number; dueAt: string | null };
 type CommercialSnapshot = {
-  businessName: string;
-  businessEmail: string;
-  businessPhone: string;
-  orderReference: string;
-  currency: string;
-  totalGrossAmount: number;
-  orderedAt: string;
-  approvedAdjustmentAmount: number;
-  netAmountDue: number;
-  priceLines: PriceLine[];
-  installmentStructure: string | null;
-  installmentAmount: number | null;
-  installmentSchedule: InstallmentLine[];
+  businessName: string; businessEmail: string; businessPhone: string; orderReference: string; currency: string;
+  totalGrossAmount: number; orderedAt: string; approvedAdjustmentAmount: number; netAmountDue: number;
+  priceLines: PriceLine[]; installmentStructure: string | null; installmentAmount: number | null; installmentSchedule: InstallmentLine[];
 };
 type OrderForm = {
-  id: string;
-  reference: string;
-  title: string;
-  templateVersion: string;
-  renderedContent: string;
-  contentSha256: string;
-  commercialSnapshotSha256: string;
-  commercialSnapshot: CommercialSnapshot;
-  commercialOrderId: string;
-  installmentObligationId: string | null;
-  supersedesOrderFormId: string | null;
-  isCurrent: boolean;
-  issuedAt: string;
+  id: string; reference: string; title: string; templateVersion: string; renderedContent: string; contentSha256: string;
+  commercialSnapshotSha256: string; commercialSnapshot: CommercialSnapshot; commercialOrderId: string;
+  installmentObligationId: string | null; supersedesOrderFormId: string | null; isCurrent: boolean; issuedAt: string;
   confirmation: OrderFormConfirmation | null;
 };
-type AgreementCenter = {
-  tenantId: string;
-  actorRole: 'owner' | 'manager';
-  canAccept: boolean;
-  masterAgreement: MasterAgreement | null;
-  masterAcceptanceRequired: boolean;
-  orderForms: OrderForm[];
-};
-type ConfirmResult = {
-  masterAcceptanceCreated: boolean;
-  orderFormConfirmationCreated: boolean;
-  agreementPackageId: string;
-  packageFingerprint: string;
+type AgreementCenter = { tenantId: string; actorRole: 'owner' | 'manager'; canAccept: boolean; masterAgreement: MasterAgreement | null; masterAcceptanceRequired: boolean; orderForms: OrderForm[] };
+type ConfirmResult = { masterAcceptanceCreated: boolean; orderFormConfirmationCreated: boolean; agreementPackageId: string; packageFingerprint: string };
+type AgreementDocument = {
+  artifactId: string; artifactKind: 'review_pdf' | 'executed_pdf'; packageId: string; packageFingerprint: string;
+  pdfSha256: string; byteSize: number; generatedAt: string; fileName: string; signedUrl: string; expiresInSeconds: number;
 };
 
 export default function CommercialAgreementsManagement({ tenantId }: { tenantId: string }) {
@@ -90,8 +30,12 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [legalName, setLegalName] = useState('');
   const [confirmed, setConfirmed] = useState(false);
+  const [reviewDocument, setReviewDocument] = useState<AgreementDocument | null>(null);
+  const [executedDocument, setExecutedDocument] = useState<AgreementDocument | null>(null);
+  const [reviewedFingerprint, setReviewedFingerprint] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [documentBusy, setDocumentBusy] = useState<'review_pdf' | 'executed_pdf' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const confirmationCommandIds = useRef(new Map<string, string>());
@@ -103,14 +47,12 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
   const history = useMemo(() => orderForms.filter((form) => !form.isCurrent), [orderForms]);
   const selected = orderForms.find((form) => form.id === selectedId) ?? current[0] ?? orderForms[0] ?? null;
   const actionRequired = Boolean(selected?.isCurrent && (center?.masterAcceptanceRequired || !selected.confirmation));
+  const reviewReady = Boolean(reviewDocument && reviewedFingerprint === reviewDocument.packageFingerprint);
 
   async function load(preferredId?: string | null) {
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     try {
-      const { data, error: functionError } = await supabase.functions.invoke('master-agreements', {
-        body: { action: 'merchant_get', tenantId },
-      });
+      const { data, error: functionError } = await supabase.functions.invoke('master-agreements', { body: { action: 'merchant_get', tenantId } });
       if (functionError) throw functionError;
       const next = parseCenter(record(data).center);
       setCenter(next);
@@ -119,37 +61,44 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
         ? wanted
         : next.orderForms.find((form) => form.isCurrent && !form.confirmation)?.id
           ?? next.orderForms.find((form) => form.isCurrent)?.id
-          ?? next.orderForms[0]?.id
-          ?? null);
-    } catch (cause) {
-      setError(errorMessage(cause, 'Unable to load SellerTray agreements.'));
-    } finally {
-      setLoading(false);
-    }
+          ?? next.orderForms[0]?.id ?? null);
+    } catch (cause) { setError(errorMessage(cause, 'Unable to load SellerTray agreements.')); }
+    finally { setLoading(false); }
+  }
+
+  async function prepareDocument(artifactKind: 'review_pdf' | 'executed_pdf') {
+    if (!selected || documentBusy) return;
+    setDocumentBusy(artifactKind); setError(null);
+    try {
+      const { data, error: functionError } = await supabase.functions.invoke('master-agreements', {
+        body: { action: 'merchant_get_document', tenantId, orderFormId: selected.id, artifactKind },
+      });
+      if (functionError) throw functionError;
+      const document = parseDocument(record(data).document);
+      if (artifactKind === 'review_pdf') { setReviewDocument(document); setReviewedFingerprint(null); }
+      else setExecutedDocument(document);
+    } catch (cause) { setError(errorMessage(cause, 'Unable to prepare this SellerTray Agreement Package PDF.')); }
+    finally { setDocumentBusy(null); }
   }
 
   async function confirmPackage(event: FormEvent) {
     event.preventDefault();
-    if (!selected || !selected.isCurrent || !center?.canAccept || !center.masterAgreement || !actionRequired) return;
+    if (!selected || !selected.isCurrent || !center?.canAccept || !center.masterAgreement || !actionRequired || !reviewDocument || !reviewReady) return;
     const name = legalName.trim().replace(/\s+/g, ' ');
     if (!name) { setError('Enter the authorised representative legal name.'); return; }
     if (!confirmed) { setError('Confirm your authority and approval before continuing.'); return; }
 
-    const commandKey = `${selected.id}:${center.masterAgreement.id}`;
+    const commandKey = `${selected.id}:${center.masterAgreement.id}:${reviewDocument.packageFingerprint}`;
     const commandId = confirmationCommandIds.current.get(commandKey) ?? crypto.randomUUID();
     confirmationCommandIds.current.set(commandKey, commandId);
-    setBusy(true);
-    setError(null);
-    setMessage(null);
+    setBusy(true); setError(null); setMessage(null);
     try {
       const { data, error: functionError } = await supabase.functions.invoke('master-agreements', {
         body: {
-          action: 'merchant_confirm_package',
-          tenantId,
-          orderFormId: selected.id,
-          legalName: name,
-          authorityConfirmed: true,
-          commandId,
+          action: 'merchant_confirm_package', tenantId, orderFormId: selected.id,
+          expectedPackageId: reviewDocument.packageId,
+          expectedPackageFingerprint: reviewDocument.packageFingerprint,
+          legalName: name, authorityConfirmed: true, commandId,
         },
       });
       if (functionError) throw functionError;
@@ -157,35 +106,31 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
       const result = parseConfirmResult(response.result);
       const next = parseCenter(response.center);
       confirmationCommandIds.current.delete(commandKey);
-      setCenter(next);
-      setSelectedId(selected.id);
-      setLegalName('');
-      setConfirmed(false);
+      setCenter(next); setSelectedId(selected.id); setLegalName(''); setConfirmed(false);
+      setReviewDocument(null); setReviewedFingerprint(null); setExecutedDocument(null);
       setMessage(result.masterAcceptanceCreated
         ? selected.confirmation
           ? 'Current Master Agreement accepted. Your existing Order Form confirmation remains valid.'
-          : 'Master Agreement accepted and this purchase confirmed.'
-        : 'Purchase confirmed under your accepted Master Agreement.');
-    } catch (cause) {
-      setError(errorMessage(cause, 'Unable to record this SellerTray agreement package.'));
-    } finally {
-      setBusy(false);
-    }
+          : 'Master Agreement accepted and this purchase signed.'
+        : 'Purchase signed under your accepted Master Agreement.');
+    } catch (cause) { setError(errorMessage(cause, 'Unable to record this SellerTray Agreement Package.')); }
+    finally { setBusy(false); }
   }
 
   if (loading && !center) return <article className="panel"><p className="muted">Loading agreements…</p></article>;
 
   return <section className="page-stack">
     <div className="section-heading">
-      <div><p className="eyebrow">Commercial</p><h2>Billing & agreements</h2></div>
-      <p className="muted">Review the universal SellerTray Master Agreement and the exact Order Form for each purchase. Contract evidence, payment, setup readiness and entitlement remain separate governed facts.</p>
+      <div><p className="eyebrow">Commercial</p><h2>Agreements</h2></div>
+      <p className="muted">Review one professional SellerTray Agreement Package containing the universal Master Agreement and the exact Order Form for this purchase.</p>
     </div>
 
     {error ? <div className="error-banner">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div> : null}
     {message ? <div className="success-banner">{message}<button type="button" onClick={() => setMessage(null)}>Dismiss</button></div> : null}
 
-    {center?.masterAgreement ? <article className="panel">
-      <div className="panel-head">
+    {center?.masterAgreement ? <article className="panel agreement-brand-panel">
+      <div className="agreement-brand-heading">
+        <img className="agreement-brand-logo" src="/brand/sellertray-logo-v2.svg" alt="SellerTray" />
         <div><p className="eyebrow">Universal Master Agreement</p><h3>{center.masterAgreement.title}</h3><p className="muted">Version {center.masterAgreement.versionCode} · Effective {formatDate(center.masterAgreement.effectiveFrom)}</p></div>
         <span className="role-pill">{center.masterAcceptanceRequired ? 'Acceptance required' : 'Accepted'}</span>
       </div>
@@ -195,12 +140,12 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
         <Fact label="Accepted by" value={center.masterAgreement.acceptance?.acceptedLegalName ?? '—'} />
         <Fact label="Accepted at" value={center.masterAgreement.acceptance?.acceptedAt ? formatDate(center.masterAgreement.acceptance.acceptedAt) : '—'} />
       </div>
-      <div className="panel agreement-document"><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: 'inherit', margin: 0 }}>{center.masterAgreement.contentBody}</pre></div>
+      <details className="agreement-transcript"><summary>Accessible Master Agreement text</summary><div className="panel agreement-document"><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: 'inherit', margin: 0 }}>{center.masterAgreement.contentBody}</pre></div></details>
     </article> : <div className="warning-banner">The current SellerTray Master Agreement has not been published. Purchase confirmation is unavailable until ProcessEdge publishes the approved legal version.</div>}
 
     {!orderForms.length ? <article className="panel empty-state">
       <strong>No Order Forms issued</strong>
-      <p>Your exact purchase-specific Order Form will appear here after ProcessEdge issues it from the governed commercial order. Master Agreement acceptance is recorded together with an applicable Order Form, not as a free-standing purchase approval.</p>
+      <p>Your exact purchase-specific Order Form will appear here after ProcessEdge issues it from the governed commercial order.</p>
     </article> : <div className="team-management-grid">
       <div className="panel member-list">
         {current.map((form) => <OrderFormButton key={form.id} form={form} selected={selected?.id === form.id} onSelect={() => selectForm(form.id)} />)}
@@ -213,7 +158,6 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
           <div><p className="eyebrow">Order Form</p><h3>{selected.title}</h3><p className="muted">Reference {selected.reference} · Version {selected.templateVersion}</p></div>
           <Status form={selected} masterAcceptanceRequired={center?.masterAcceptanceRequired === true} />
         </div>
-
         <div className="settings-grid two">
           <Fact label="Issued" value={formatDate(selected.issuedAt)} />
           <Fact label="Order reference" value={selected.commercialSnapshot.orderReference || selected.reference} />
@@ -222,79 +166,58 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
         </div>
 
         <CommercialFacts snapshot={selected.commercialSnapshot} />
+        <details className="agreement-transcript"><summary>Accessible Order Form legal text</summary><div className="panel agreement-document"><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: 'inherit', margin: 0 }}>{selected.renderedContent}</pre></div></details>
 
-        <div className="governance-note">This immutable Order Form is generated from the published Order Form template plus the server-governed commercial snapshot. SellerTray binds it to the applicable Master Agreement using a deterministic Agreement Package fingerprint.</div>
-        <div className="panel agreement-document"><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: 'inherit', margin: 0 }}>{selected.renderedContent}</pre></div>
+        <div className="agreement-package-card">
+          <div className="agreement-package-card-copy">
+            <p className="eyebrow">Professional document</p><h3>SellerTray Agreement Package PDF</h3>
+            <p>The PDF is rendered by SellerTray from immutable server evidence. It binds the exact Master Agreement version, this Order Form and the governed commercial snapshot.</p>
+          </div>
+          <div className="agreement-package-actions">
+            {!reviewDocument ? <button type="button" className="secondary-button" disabled={documentBusy !== null || !selected.isCurrent} onClick={() => void prepareDocument('review_pdf')}>{documentBusy === 'review_pdf' ? 'Preparing PDF…' : 'Prepare Agreement PDF'}</button> : <a className="primary-button agreement-document-link" href={reviewDocument.signedUrl} target="_blank" rel="noreferrer" onClick={() => setReviewedFingerprint(reviewDocument.packageFingerprint)}>Open & review PDF</a>}
+            {reviewDocument ? <small>Package fingerprint {reviewDocument.packageFingerprint.slice(0, 20)}… · PDF SHA-256 {reviewDocument.pdfSha256.slice(0, 16)}…</small> : null}
+            {selected.confirmation ? (!executedDocument ? <button type="button" className="secondary-button" disabled={documentBusy !== null} onClick={() => void prepareDocument('executed_pdf')}>{documentBusy === 'executed_pdf' ? 'Preparing executed copy…' : 'Prepare executed PDF'}</button> : <a className="secondary-button agreement-document-link" href={executedDocument.signedUrl} target="_blank" rel="noreferrer">Open executed PDF</a>) : null}
+          </div>
+        </div>
 
         {selected.confirmation ? <div className="success-banner">Purchase confirmed {formatDate(selected.confirmation.confirmedAt)} by {selected.confirmation.confirmedLegalName} ({roleLabel(selected.confirmation.confirmedRole)}). Package fingerprint {selected.confirmation.packageFingerprint.slice(0, 16)}…</div> : null}
         {!selected.isCurrent ? <div className="warning-banner">This Order Form has been replaced. Review the current replacement instead.</div> : null}
-        {selected.isCurrent && actionRequired && !center?.canAccept ? <div className="warning-banner">Only the Business Owner or a Manager explicitly authorised by the Owner can accept the Master Agreement or confirm purchases.</div> : null}
+        {selected.isCurrent && actionRequired && !center?.canAccept ? <div className="warning-banner">Only the Business Owner or a Manager explicitly authorised by the Owner can sign SellerTray agreement packages.</div> : null}
 
-        {selected.isCurrent && actionRequired && center?.canAccept && center.masterAgreement ? <form className="settings-form" onSubmit={confirmPackage}>
+        {selected.isCurrent && actionRequired && center?.canAccept && center.masterAgreement ? <form className="settings-form agreement-signature-form" onSubmit={confirmPackage}>
+          <div className={`agreement-review-status ${reviewReady ? 'ready' : ''}`}><strong>{reviewReady ? 'Reviewed package ready to sign' : 'Open the Agreement Package PDF before signing'}</strong><span>{reviewReady && reviewDocument ? `Exact reviewed fingerprint: ${reviewDocument.packageFingerprint.slice(0, 24)}…` : 'SellerTray binds your signature to the exact package you reviewed.'}</span></div>
           <label className="field"><span>Authorised representative legal name</span><SellerTrayInput maxLength={200} required value={legalName} onChange={(event) => setLegalName(event.target.value)} placeholder="Full legal name" /></label>
           <label className="access-card">
             <SellerTrayInput type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
-            <span>
-              <strong>{center.masterAcceptanceRequired
-                ? selected.confirmation
-                  ? 'I accept the current Master Agreement for SellerTray service delivery.'
-                  : 'I accept the current Master Agreement and confirm this exact Order Form.'
-                : 'I confirm this exact Order Form under the accepted Master Agreement.'}</strong>
-              <small>Your authenticated SellerTray identity, authority, exact document hashes and deterministic package fingerprint are recorded.</small>
-            </span>
+            <span><strong>{center.masterAcceptanceRequired
+              ? selected.confirmation
+                ? 'I accept the current Master Agreement and confirm my authority to sign.'
+                : 'I accept the current Master Agreement, confirm this exact Order Form and confirm my authority to sign.'
+              : 'I confirm this exact Order Form under the accepted Master Agreement and confirm my authority to sign.'}</strong>
+            <small>Your authenticated SellerTray identity, authority, exact document hashes and deterministic package fingerprint are recorded.</small></span>
           </label>
-          <div className="settings-actions"><button className="primary-button" disabled={busy || !confirmed || !legalName.trim()}>{busy ? 'Recording confirmation…' : center.masterAcceptanceRequired ? 'Accept & Continue' : 'Confirm Purchase'}</button></div>
+          <div className="settings-actions"><button className="primary-button" disabled={busy || !confirmed || !legalName.trim() || !reviewReady}>{busy ? 'Recording signature…' : center.masterAcceptanceRequired ? 'Accept & Sign' : 'Confirm & Sign'}</button></div>
         </form> : null}
       </article> : null}
     </div>}
   </section>;
 
   function selectForm(id: string) {
-    setSelectedId(id);
-    setLegalName('');
-    setConfirmed(false);
-    setError(null);
-    setMessage(null);
+    setSelectedId(id); setLegalName(''); setConfirmed(false); setError(null); setMessage(null);
+    setReviewDocument(null); setExecutedDocument(null); setReviewedFingerprint(null);
   }
 }
 
 function CommercialFacts({ snapshot }: { snapshot: CommercialSnapshot }) {
   return <div className="page-stack">
-    <article className="panel">
-      <div className="panel-head"><div><p className="eyebrow">Purchase summary</p><h3>{snapshot.businessName || 'SellerTray purchase'}</h3></div></div>
-      <div className="settings-grid two">
-        <Fact label="Business" value={snapshot.businessName || '—'} />
-        <Fact label="Order reference" value={snapshot.orderReference || '—'} />
-        <Fact label="Order total" value={money(snapshot.totalGrossAmount, snapshot.currency)} />
-        <Fact label="Current amount due" value={money(snapshot.netAmountDue, snapshot.currency)} />
-        <Fact label="Approved adjustments" value={money(snapshot.approvedAdjustmentAmount, snapshot.currency)} />
-        <Fact label="Order date" value={snapshot.orderedAt ? formatDate(snapshot.orderedAt) : '—'} />
-      </div>
-      {snapshot.businessEmail || snapshot.businessPhone ? <p className="muted">Business contact: {[snapshot.businessEmail, snapshot.businessPhone].filter(Boolean).join(' · ')}</p> : null}
-    </article>
-
-    {snapshot.priceLines.length ? <article className="panel">
-      <div className="panel-head"><div><p className="eyebrow">Purchase lines</p><h3>Commercial items</h3></div></div>
-      <div className="table-wrap"><table><thead><tr><th>Description</th><th>Qty</th><th>Gross</th><th>Tax</th></tr></thead><tbody>{snapshot.priceLines.map((line) => <tr key={line.lineNo}><td>{line.description || `Line ${line.lineNo}`}</td><td>{line.quantity}</td><td>{money(line.grossAmount, line.currency || snapshot.currency)}</td><td>{line.taxRatePercent === null ? 'Included / not separately stated' : `${line.taxRatePercent}% (${money(line.taxAmount, line.currency || snapshot.currency)})`}</td></tr>)}</tbody></table></div>
-    </article> : null}
-
-    {snapshot.installmentStructure ? <article className="panel">
-      <div className="panel-head"><div><p className="eyebrow">Payment schedule</p><h3>{structureLabel(snapshot.installmentStructure)}</h3></div><span className="role-pill">{snapshot.installmentAmount === null ? 'Installment purchase' : money(snapshot.installmentAmount, snapshot.currency)}</span></div>
-      <div className="table-wrap"><table><thead><tr><th>Installment</th><th>Share</th><th>Amount</th><th>Due</th></tr></thead><tbody>{snapshot.installmentSchedule.map((line) => <tr key={line.sequenceNo}><td>{line.sequenceNo}</td><td>{line.percentage}%</td><td>{money(line.amountDue, snapshot.currency)}</td><td>{line.dueAt ? formatDate(line.dueAt) : 'Not scheduled'}</td></tr>)}</tbody></table></div>
-    </article> : null}
+    <article className="panel"><div className="panel-head"><div><p className="eyebrow">Purchase summary</p><h3>{snapshot.businessName || 'SellerTray purchase'}</h3></div></div><div className="settings-grid two"><Fact label="Business" value={snapshot.businessName || '—'} /><Fact label="Order reference" value={snapshot.orderReference || '—'} /><Fact label="Order total" value={money(snapshot.totalGrossAmount, snapshot.currency)} /><Fact label="Current amount due" value={money(snapshot.netAmountDue, snapshot.currency)} /><Fact label="Approved adjustments" value={money(snapshot.approvedAdjustmentAmount, snapshot.currency)} /><Fact label="Order date" value={snapshot.orderedAt ? formatDate(snapshot.orderedAt) : '—'} /></div>{snapshot.businessEmail || snapshot.businessPhone ? <p className="muted">Business contact: {[snapshot.businessEmail, snapshot.businessPhone].filter(Boolean).join(' · ')}</p> : null}</article>
+    {snapshot.priceLines.length ? <article className="panel"><div className="panel-head"><div><p className="eyebrow">Purchase lines</p><h3>Commercial items</h3></div></div><div className="table-wrap"><table><thead><tr><th>Description</th><th>Qty</th><th>Gross</th><th>Tax</th></tr></thead><tbody>{snapshot.priceLines.map((line) => <tr key={line.lineNo}><td>{line.description || `Line ${line.lineNo}`}</td><td>{line.quantity}</td><td>{money(line.grossAmount, line.currency || snapshot.currency)}</td><td>{line.taxRatePercent === null ? 'Included / not separately stated' : `${line.taxRatePercent}% (${money(line.taxAmount, line.currency || snapshot.currency)})`}</td></tr>)}</tbody></table></div></article> : null}
+    {snapshot.installmentStructure ? <article className="panel"><div className="panel-head"><div><p className="eyebrow">Payment schedule</p><h3>{structureLabel(snapshot.installmentStructure)}</h3></div><span className="role-pill">{snapshot.installmentAmount === null ? 'Installment purchase' : money(snapshot.installmentAmount, snapshot.currency)}</span></div><div className="table-wrap"><table><thead><tr><th>Installment</th><th>Share</th><th>Amount</th><th>Due</th></tr></thead><tbody>{snapshot.installmentSchedule.map((line) => <tr key={line.sequenceNo}><td>{line.sequenceNo}</td><td>{line.percentage}%</td><td>{money(line.amountDue, snapshot.currency)}</td><td>{line.dueAt ? formatDate(line.dueAt) : 'Not scheduled'}</td></tr>)}</tbody></table></div></article> : null}
   </div>;
 }
 
-function OrderFormButton({ form, selected, onSelect }: { form: OrderForm; selected: boolean; onSelect: () => void }) {
-  return <button type="button" className={selected ? 'member-row active' : 'member-row'} onClick={onSelect}>
-    <span className="member-avatar">O</span>
-    <span><strong>{form.reference}</strong><small>{form.isCurrent ? form.confirmation ? 'Confirmed' : 'Confirmation required' : 'Replaced'} · {formatDate(form.issuedAt)}</small></span>
-  </button>;
-}
-function Status({ form, masterAcceptanceRequired }: { form: OrderForm; masterAcceptanceRequired: boolean }) {
-  const label = !form.isCurrent ? 'Replaced' : masterAcceptanceRequired ? 'Action required' : form.confirmation ? 'Confirmed' : 'Confirmation required';
-  return <span className="role-pill">{label}</span>;
-}
+function OrderFormButton({ form, selected, onSelect }: { form: OrderForm; selected: boolean; onSelect: () => void }) { return <button type="button" className={selected ? 'member-row active' : 'member-row'} onClick={onSelect}><span className="member-avatar">O</span><span><strong>{form.reference}</strong><small>{form.isCurrent ? form.confirmation ? 'Confirmed' : 'Signature required' : 'Replaced'} · {formatDate(form.issuedAt)}</small></span></button>; }
+function Status({ form, masterAcceptanceRequired }: { form: OrderForm; masterAcceptanceRequired: boolean }) { const label = !form.isCurrent ? 'Replaced' : masterAcceptanceRequired ? 'Action required' : form.confirmation ? 'Confirmed' : 'Signature required'; return <span className="role-pill">{label}</span>; }
 function Fact({ label, value }: { label: string; value: string }) { return <div className="role-lock"><span>{label}</span><strong>{value}</strong></div>; }
 function roleLabel(value: string) { return value === 'owner' ? 'Owner' : value === 'manager' ? 'Manager' : value; }
 function structureLabel(value: string) { return value === 'two_installment_70_30' ? '70% + 30%' : value === 'three_installment_60_20_20' ? '60% + 20% + 20%' : value.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()); }
@@ -306,60 +229,22 @@ function stringValue(value: unknown, fallback = ''): string { return typeof valu
 function nullableString(value: unknown): string | null { return typeof value === 'string' && value ? value : null; }
 function numberValue(value: unknown): number { const parsed = typeof value === 'number' ? value : Number(value); return Number.isFinite(parsed) ? parsed : 0; }
 function nullableNumber(value: unknown): number | null { if (value === null || value === undefined || value === '') return null; const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
-
-function parseAcceptance(value: unknown): MasterAcceptance | null {
-  const row = record(value);
-  if (!stringValue(row.id)) return null;
-  return { id: stringValue(row.id), acceptedAt: stringValue(row.acceptedAt), acceptedLegalName: stringValue(row.acceptedLegalName), acceptedRole: row.acceptedRole === 'manager' ? 'manager' : 'owner' };
-}
-function parseMaster(value: unknown): MasterAgreement | null {
-  const row = record(value);
-  if (!stringValue(row.id)) return null;
-  return {
-    id: stringValue(row.id), versionCode: stringValue(row.versionCode), title: stringValue(row.title, 'SellerTray Master Agreement'),
-    contentBody: stringValue(row.contentBody), contentSha256: stringValue(row.contentSha256), effectiveFrom: stringValue(row.effectiveFrom), acceptance: parseAcceptance(row.acceptance),
-  };
-}
+function parseAcceptance(value: unknown): MasterAcceptance | null { const row = record(value); if (!stringValue(row.id)) return null; return { id: stringValue(row.id), acceptedAt: stringValue(row.acceptedAt), acceptedLegalName: stringValue(row.acceptedLegalName), acceptedRole: row.acceptedRole === 'manager' ? 'manager' : 'owner' }; }
+function parseMaster(value: unknown): MasterAgreement | null { const row = record(value); if (!stringValue(row.id)) return null; return { id: stringValue(row.id), versionCode: stringValue(row.versionCode), title: stringValue(row.title, 'SellerTray Master Agreement'), contentBody: stringValue(row.contentBody), contentSha256: stringValue(row.contentSha256), effectiveFrom: stringValue(row.effectiveFrom), acceptance: parseAcceptance(row.acceptance) }; }
 function parseSnapshot(value: unknown): CommercialSnapshot {
-  const row = record(value);
-  const merchant = record(row.merchant);
-  const settlement = record(row.settlementTerms);
-  const installment = record(row.installment);
-  return {
-    businessName: stringValue(merchant.business_name), businessEmail: stringValue(merchant.business_email), businessPhone: stringValue(merchant.business_phone),
-    orderReference: stringValue(row.order_reference), currency: stringValue(row.currency, 'NGN'), totalGrossAmount: numberValue(row.total_gross_amount), orderedAt: stringValue(row.ordered_at),
-    approvedAdjustmentAmount: numberValue(settlement.approvedAdjustmentAmount), netAmountDue: numberValue(settlement.netAmountDue),
-    priceLines: array(row.price_snapshots).map((item) => { const line = record(item); return { lineNo: numberValue(line.line_no), description: stringValue(line.description), quantity: numberValue(line.quantity), currency: stringValue(line.currency, stringValue(row.currency, 'NGN')), grossAmount: numberValue(line.gross_amount), taxRatePercent: nullableNumber(line.tax_rate_percent), taxAmount: numberValue(line.tax_amount) }; }),
-    installmentStructure: nullableString(installment.structure_code), installmentAmount: nullableNumber(installment.obligated_amount),
-    installmentSchedule: array(installment.schedule).map((item) => { const line = record(item); return { sequenceNo: numberValue(line.sequence_no), percentage: numberValue(line.percentage), amountDue: numberValue(line.amount_due), dueAt: nullableString(line.due_at) }; }),
-  };
+  const row = record(value); const merchant = record(row.merchant); const settlement = record(row.settlementTerms); const installment = record(row.installment);
+  return { businessName: stringValue(merchant.business_name), businessEmail: stringValue(merchant.business_email), businessPhone: stringValue(merchant.business_phone), orderReference: stringValue(row.order_reference), currency: stringValue(row.currency, 'NGN'), totalGrossAmount: numberValue(row.total_gross_amount), orderedAt: stringValue(row.ordered_at), approvedAdjustmentAmount: numberValue(settlement.approvedAdjustmentAmount), netAmountDue: numberValue(settlement.netAmountDue), priceLines: array(row.price_snapshots).map((item) => { const line = record(item); return { lineNo: numberValue(line.line_no), description: stringValue(line.description), quantity: numberValue(line.quantity), currency: stringValue(line.currency, stringValue(row.currency, 'NGN')), grossAmount: numberValue(line.gross_amount), taxRatePercent: nullableNumber(line.tax_rate_percent), taxAmount: numberValue(line.tax_amount) }; }), installmentStructure: nullableString(installment.structure_code), installmentAmount: nullableNumber(installment.obligated_amount), installmentSchedule: array(installment.schedule).map((item) => { const line = record(item); return { sequenceNo: numberValue(line.sequence_no), percentage: numberValue(line.percentage), amountDue: numberValue(line.amount_due), dueAt: nullableString(line.due_at) }; }) };
 }
 function parseOrderForm(value: unknown): OrderForm | null {
-  const row = record(value);
-  const id = stringValue(row.id);
-  if (!id) return null;
-  const confirmationRow = record(row.confirmation);
-  const confirmation = stringValue(confirmationRow.id) ? {
-    id: stringValue(confirmationRow.id), confirmedAt: stringValue(confirmationRow.confirmedAt), confirmedLegalName: stringValue(confirmationRow.confirmedLegalName), confirmedRole: confirmationRow.confirmedRole === 'manager' ? 'manager' as const : 'owner' as const, packageFingerprint: stringValue(confirmationRow.packageFingerprint),
-  } : null;
-  return {
-    id, reference: stringValue(row.reference), title: stringValue(row.title, 'SellerTray Order Form'), templateVersion: stringValue(row.templateVersion), renderedContent: stringValue(row.renderedContent),
-    contentSha256: stringValue(row.contentSha256), commercialSnapshotSha256: stringValue(row.commercialSnapshotSha256), commercialSnapshot: parseSnapshot(row.commercialSnapshot),
-    commercialOrderId: stringValue(row.commercialOrderId), installmentObligationId: nullableString(row.installmentObligationId), supersedesOrderFormId: nullableString(row.supersedesOrderFormId), isCurrent: row.isCurrent === true, issuedAt: stringValue(row.issuedAt), confirmation,
-  };
+  const row = record(value); const id = stringValue(row.id); if (!id) return null; const confirmationRow = record(row.confirmation);
+  const confirmation = stringValue(confirmationRow.id) ? { id: stringValue(confirmationRow.id), confirmedAt: stringValue(confirmationRow.confirmedAt), confirmedLegalName: stringValue(confirmationRow.confirmedLegalName), confirmedRole: confirmationRow.confirmedRole === 'manager' ? 'manager' as const : 'owner' as const, packageFingerprint: stringValue(confirmationRow.packageFingerprint) } : null;
+  return { id, reference: stringValue(row.reference), title: stringValue(row.title, 'SellerTray Order Form'), templateVersion: stringValue(row.templateVersion), renderedContent: stringValue(row.renderedContent), contentSha256: stringValue(row.contentSha256), commercialSnapshotSha256: stringValue(row.commercialSnapshotSha256), commercialSnapshot: parseSnapshot(row.commercialSnapshot), commercialOrderId: stringValue(row.commercialOrderId), installmentObligationId: nullableString(row.installmentObligationId), supersedesOrderFormId: nullableString(row.supersedesOrderFormId), isCurrent: row.isCurrent === true, issuedAt: stringValue(row.issuedAt), confirmation };
 }
-function parseCenter(value: unknown): AgreementCenter {
-  const root = record(value);
-  return {
-    tenantId: stringValue(root.tenantId), actorRole: root.actorRole === 'manager' ? 'manager' : 'owner', canAccept: root.canAccept === true,
-    masterAgreement: parseMaster(root.masterAgreement), masterAcceptanceRequired: root.masterAcceptanceRequired === true,
-    orderForms: array(root.orderForms).flatMap((item) => { const form = parseOrderForm(item); return form ? [form] : []; }),
-  };
-}
-function parseConfirmResult(value: unknown): ConfirmResult {
-  const row = record(value);
-  return {
-    masterAcceptanceCreated: row.masterAcceptanceCreated === true, orderFormConfirmationCreated: row.orderFormConfirmationCreated === true,
-    agreementPackageId: stringValue(row.agreementPackageId), packageFingerprint: stringValue(row.packageFingerprint),
-  };
+function parseCenter(value: unknown): AgreementCenter { const root = record(value); return { tenantId: stringValue(root.tenantId), actorRole: root.actorRole === 'manager' ? 'manager' : 'owner', canAccept: root.canAccept === true, masterAgreement: parseMaster(root.masterAgreement), masterAcceptanceRequired: root.masterAcceptanceRequired === true, orderForms: array(root.orderForms).flatMap((item) => { const form = parseOrderForm(item); return form ? [form] : []; }) }; }
+function parseConfirmResult(value: unknown): ConfirmResult { const row = record(value); return { masterAcceptanceCreated: row.masterAcceptanceCreated === true, orderFormConfirmationCreated: row.orderFormConfirmationCreated === true, agreementPackageId: stringValue(row.agreementPackageId), packageFingerprint: stringValue(row.packageFingerprint) }; }
+function parseDocument(value: unknown): AgreementDocument {
+  const row = record(value); const artifactKind = row.artifactKind === 'executed_pdf' ? 'executed_pdf' : 'review_pdf';
+  const result = { artifactId: stringValue(row.artifactId), artifactKind, packageId: stringValue(row.packageId), packageFingerprint: stringValue(row.packageFingerprint), pdfSha256: stringValue(row.pdfSha256), byteSize: numberValue(row.byteSize), generatedAt: stringValue(row.generatedAt), fileName: stringValue(row.fileName), signedUrl: stringValue(row.signedUrl), expiresInSeconds: numberValue(row.expiresInSeconds) };
+  if (!result.artifactId || !result.packageId || !result.packageFingerprint || !result.signedUrl) throw new Error('Agreement Package PDF response is incomplete.');
+  return result;
 }
