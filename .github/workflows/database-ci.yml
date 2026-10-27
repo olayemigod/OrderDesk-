@@ -71,6 +71,14 @@ jobs:
       - name: Verify OA4 authenticated setup recovery gateway
         run: node --test supabase/functions/platform-admin-setup-scheduling/oa4.test.mjs
 
+      - name: Setup Deno for Edge Function checks
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.5.6
+
+      - name: Check Master Agreement Edge Function bundle imports
+        run: deno check supabase/functions/master-agreements/index.ts
+
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
