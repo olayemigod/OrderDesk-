@@ -7,7 +7,10 @@ type AgreementVersion={id:string;versionCode:string;title:string;contentBody:str
 type Acceptance={id:string;versionCode:string;acceptedAt:string;acceptedLegalName:string;acceptedRole:string;acceptedByUserId:string};
 type TenantState={published:boolean;accepted:boolean;acceptanceRequired:boolean;serviceDeliveryAllowed:boolean;currentVersion:AgreementVersion|null;acceptance:Acceptance|null};
 type AdminOrderForm={id:string;reference:string;commercialOrderId:string;templateVersionCode:string;confirmed:boolean;confirmedAt:string|null;packageFingerprint:string|null;issuedAt:string};
-type AgreementOverview={actorRole:string;canPublish:boolean;versions:AgreementVersion[];tenantState:TenantState|null;orderForms:AdminOrderForm[]};
+type AgreementProcessingSummary={pending:number;retryable:number;resolved:number;manualAttention:number};
+type AgreementProcessingItem={id:string;commercialOrderId:string;installmentObligationId:string|null;subjectKind:string;orderFormFamily:string;status:'pending'|'retryable'|'resolved'|'manual_attention';attemptCount:number;lastResultCode:string|null;lastErrorDetail:string|null;lastAttemptAt:string|null;nextRetryAt:string|null;resolvedAt:string|null;updatedAt:string|null};
+type AgreementProcessing={summary:AgreementProcessingSummary;items:AgreementProcessingItem[]};
+type AgreementOverview={actorRole:string;canPublish:boolean;canRecoverAgreementPackages:boolean;versions:AgreementVersion[];tenantState:TenantState|null;orderForms:AdminOrderForm[];agreementProcessing:AgreementProcessing};
 type AdminResponse={ok?:boolean;overview?:unknown;agreementVersionId?:string};
 type PublishForm={versionCode:string;title:string;contentBody:string;effectiveFrom:string;reason:string};
 type AgreementTab='list'|'add';
@@ -16,6 +19,7 @@ type PreparedDocument={orderFormId:string;artifactKind:'review_pdf'|'executed_pd
 
 const MAX_PDF_BYTES=8*1024*1024;
 const emptyForm=():PublishForm=>({versionCode:'',title:'SellerTray Master Agreement',contentBody:'',effectiveFrom:localDateTime(new Date()),reason:''});
+const emptyProcessing=():AgreementProcessing=>({summary:{pending:0,retryable:0,resolved:0,manualAttention:0},items:[]});
 
 export default function AgreementLifecycleManagement({session,tenantId}:{session:Session;tenantId:string}){
   const [state,setState]=useState<AgreementOverview|null>(null);
@@ -97,6 +101,11 @@ export default function AgreementLifecycleManagement({session,tenantId}:{session
   const selected=versions.find(v=>v.id===selectedId)??versions[0]??null;
   const tenantState=state?.tenantState??null;
   const orderForms=state?.orderForms??[];
+  const canInspectProcessing=state?.canRecoverAgreementPackages===true;
+  const processing=state?.agreementProcessing??emptyProcessing();
+  const activeProcessing=canInspectProcessing?processing.items.filter(item=>item.status!=='resolved'):[];
+  const automationTone=!canInspectProcessing?'neutral':processing.summary.manualAttention>0?'warn':processing.summary.retryable>0||processing.summary.pending>0?'neutral':'good';
+  const automationLabel=!canInspectProcessing?'Restricted':processing.summary.manualAttention>0?`${processing.summary.manualAttention} need attention`:processing.summary.retryable>0||processing.summary.pending>0?'Recovering automatically':'Healthy';
 
   return <section className="workspace-page admin-agreement-workspace">
     <header className="workspace-page-header">
@@ -118,6 +127,15 @@ export default function AgreementLifecycleManagement({session,tenantId}:{session
         <div className="workspace-panel-heading"><div><p className="workspace-eyebrow">Selected merchant</p><h2>Acceptance status</h2><p>Business + Master Agreement version evidence. This status is not tied to an order, installment, Branch or payment.</p></div><span className={`workspace-status-pill ${tenantState.accepted?'good':tenantState.published?'warn':'neutral'}`}>{tenantState.accepted?'Accepted':tenantState.published?'Pending':'Not published'}</span></div>
         <div className="workspace-detail-grid admin-agreement-facts"><Fact label="Current version" value={tenantState.currentVersion?.versionCode??'No effective version'}/><Fact label="Service-delivery gate" value={tenantState.serviceDeliveryAllowed?'Satisfied':'Blocked'}/><Fact label="Accepted by" value={tenantState.acceptance?.acceptedLegalName??'—'}/><Fact label="Accepted at" value={tenantState.acceptance?.acceptedAt?formatDate(tenantState.acceptance.acceptedAt):'—'}/></div>
       </article>:null}
+
+      <article className="workspace-panel">
+        <div className="workspace-panel-heading"><div><p className="workspace-eyebrow">Zero-touch operations</p><h2>Agreement automation</h2><p>SellerTray creates and retries governed agreement packages automatically. Admin only needs to investigate cases that remain unresolved after bounded retries.</p></div><span className={`workspace-status-pill ${automationTone}`}>{automationLabel}</span></div>
+        {!canInspectProcessing?<div className="workspace-banner info"><strong>Operational exception access restricted</strong><span>Your ProcessEdge access can review legal governance but cannot inspect merchant agreement recovery cases.</span></div>:<>
+          <div className="workspace-detail-grid admin-agreement-facts"><Fact label="Pending" value={String(processing.summary.pending)}/><Fact label="Auto-retry" value={String(processing.summary.retryable)}/><Fact label="Needs attention" value={String(processing.summary.manualAttention)}/><Fact label="Resolved" value={String(processing.summary.resolved)}/></div>
+          {!activeProcessing.length?<div className="workspace-banner success"><strong>No active agreement automation exceptions</strong><span>Normal merchant agreement creation remains automatic; no merchant-by-merchant Admin issuance is required.</span></div>:<div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Case</th><th>Status</th><th>Next action</th><th>Updated</th></tr></thead><tbody>{activeProcessing.map(item=><tr key={item.id}><td><strong>{processingSubjectLabel(item)}</strong><small>Order {shortId(item.commercialOrderId)}</small></td><td><span className={`workspace-status-pill ${item.status==='manual_attention'?'warn':'neutral'}`}>{processingStatusLabel(item.status)}</span></td><td>{processingNextAction(item)}</td><td>{item.updatedAt?formatDate(item.updatedAt):'—'}</td></tr>)}</tbody></table></div>}
+          {processing.summary.manualAttention>0?<div className="workspace-banner warning"><strong>Manual attention is exceptional</strong><span>Correct the underlying legal/commercial configuration before using governed recovery. Do not issue a replacement Order Form manually.</span></div>:null}
+        </>}
+      </article>
 
       <div className="workspace-grid two admin-agreement-history-grid">
         <article className="workspace-panel">
@@ -157,16 +175,23 @@ function Fact({label,value}:{label:string;value:string}){return <div className="
 function record(value:unknown):Record<string,unknown>{return typeof value==='object'&&value!==null&&!Array.isArray(value)?value as Record<string,unknown>:{};}
 function array(value:unknown):unknown[]{return Array.isArray(value)?value:[];}
 function stringValue(value:unknown,fallback=''):string{return typeof value==='string'?value:fallback;}
+function nullableString(value:unknown):string|null{return typeof value==='string'&&value?value:null;}
 function numberValue(value:unknown):number{const parsed=typeof value==='number'?value:Number(value);return Number.isFinite(parsed)?parsed:0;}
 function formatDate(value:string){const date=new Date(value);return Number.isNaN(date.getTime())?'—':new Intl.DateTimeFormat('en-NG',{dateStyle:'medium',timeStyle:'short'}).format(date);}
 function localDateTime(date:Date){const offset=date.getTimezoneOffset();return new Date(date.getTime()-offset*60_000).toISOString().slice(0,16);}
 function messageFrom(value:unknown,fallback:string){return value instanceof Error&&value.message?value.message:fallback;}
 function formatBytes(value:number){return value<1024*1024?`${Math.max(1,Math.round(value/1024))} KB`:`${(value/(1024*1024)).toFixed(1)} MB`;}
+function shortId(value:string){return value?`${value.slice(0,8)}…`:'—';}
+function processingSubjectLabel(item:AgreementProcessingItem){return item.orderFormFamily==='installment_agreement'?'Installment agreement':'Subscription order';}
+function processingStatusLabel(status:AgreementProcessingItem['status']){if(status==='manual_attention')return'Needs attention';if(status==='retryable')return'Auto-retry';if(status==='pending')return'Pending';return'Resolved';}
+function processingNextAction(item:AgreementProcessingItem){if(item.status==='manual_attention')return'Correct the underlying configuration, then use governed recovery.';if(item.status==='retryable')return item.nextRetryAt?`Automatic retry ${formatDate(item.nextRetryAt)}`:'Automatic retry scheduled';if(item.status==='pending')return'Automatic processing is in progress.';return'No action required.';}
 async function fileToBase64(file:File):Promise<string>{const buffer=new Uint8Array(await file.arrayBuffer());let binary='';const chunk=0x8000;for(let offset=0;offset<buffer.length;offset+=chunk)binary+=String.fromCharCode(...buffer.subarray(offset,Math.min(offset+chunk,buffer.length)));return btoa(binary);}
 function parseSourceDocument(value:unknown):SourceDocument|null{const row=record(value);if(!stringValue(row.filename)||!stringValue(row.pdfSha256))return null;return{filename:stringValue(row.filename),pdfSha256:stringValue(row.pdfSha256),byteSize:numberValue(row.byteSize),pageCount:numberValue(row.pageCount)};}
 function parseVersion(value:unknown):AgreementVersion|null{const row=record(value);if(typeof row.id!=='string')return null;return{id:row.id,versionCode:String(row.versionCode??''),title:String(row.title??'SellerTray Master Agreement'),contentBody:String(row.contentBody??''),contentSha256:String(row.contentSha256??''),effectiveFrom:String(row.effectiveFrom??''),publishedAt:String(row.publishedAt??''),publishedByUserId:String(row.publishedByUserId??''),publishReason:String(row.publishReason??''),sourceDocument:parseSourceDocument(row.sourceDocument)};}
 function parseAcceptance(value:unknown):Acceptance|null{const row=record(value);if(typeof row.id!=='string')return null;return{id:row.id,versionCode:String(row.versionCode??''),acceptedAt:String(row.acceptedAt??''),acceptedLegalName:String(row.acceptedLegalName??''),acceptedRole:String(row.acceptedRole??''),acceptedByUserId:String(row.acceptedByUserId??'')};}
 function parseTenantState(value:unknown):TenantState|null{const row=record(value);if(!Object.keys(row).length)return null;return{published:row.published===true,accepted:row.accepted===true,acceptanceRequired:row.acceptanceRequired===true,serviceDeliveryAllowed:row.serviceDeliveryAllowed===true,currentVersion:parseVersion(row.currentVersion),acceptance:parseAcceptance(row.acceptance)};}
-function parseOrderForm(value:unknown):AdminOrderForm|null{const row=record(value);const id=stringValue(row.id);if(!id)return null;return{id,reference:stringValue(row.reference),commercialOrderId:stringValue(row.commercialOrderId),templateVersionCode:stringValue(row.templateVersionCode),confirmed:row.confirmed===true,confirmedAt:typeof row.confirmedAt==='string'?row.confirmedAt:null,packageFingerprint:typeof row.packageFingerprint==='string'?row.packageFingerprint:null,issuedAt:stringValue(row.issuedAt)};}
-function parseOverview(value:unknown):AgreementOverview{const root=record(value);const versions=array(root.versions).flatMap(item=>{const parsed=parseVersion(item);return parsed?[parsed]:[]});const orderForms=array(root.orderForms).flatMap(item=>{const parsed=parseOrderForm(item);return parsed?[parsed]:[]});return{actorRole:String(root.actorRole??''),canPublish:root.canPublish===true,versions,tenantState:parseTenantState(root.tenantState),orderForms};}
+function parseOrderForm(value:unknown):AdminOrderForm|null{const row=record(value);const id=stringValue(row.id);if(!id)return null;return{id,reference:stringValue(row.reference),commercialOrderId:stringValue(row.commercialOrderId),templateVersionCode:stringValue(row.templateVersionCode),confirmed:row.confirmed===true,confirmedAt:nullableString(row.confirmedAt),packageFingerprint:nullableString(row.packageFingerprint),issuedAt:stringValue(row.issuedAt)};}
+function parseProcessingItem(value:unknown):AgreementProcessingItem|null{const row=record(value);const id=stringValue(row.id);const status=stringValue(row.status);if(!id||!['pending','retryable','resolved','manual_attention'].includes(status))return null;return{id,commercialOrderId:stringValue(row.commercialOrderId),installmentObligationId:nullableString(row.installmentObligationId),subjectKind:stringValue(row.subjectKind),orderFormFamily:stringValue(row.orderFormFamily),status:status as AgreementProcessingItem['status'],attemptCount:numberValue(row.attemptCount),lastResultCode:nullableString(row.lastResultCode),lastErrorDetail:nullableString(row.lastErrorDetail),lastAttemptAt:nullableString(row.lastAttemptAt),nextRetryAt:nullableString(row.nextRetryAt),resolvedAt:nullableString(row.resolvedAt),updatedAt:nullableString(row.updatedAt)};}
+function parseProcessing(value:unknown):AgreementProcessing{const root=record(value);const summary=record(root.summary);const items=array(root.items).flatMap(item=>{const parsed=parseProcessingItem(item);return parsed?[parsed]:[]});return{summary:{pending:numberValue(summary.pending),retryable:numberValue(summary.retryable),resolved:numberValue(summary.resolved),manualAttention:numberValue(summary.manualAttention)},items};}
+function parseOverview(value:unknown):AgreementOverview{const root=record(value);const versions=array(root.versions).flatMap(item=>{const parsed=parseVersion(item);return parsed?[parsed]:[]});const orderForms=array(root.orderForms).flatMap(item=>{const parsed=parseOrderForm(item);return parsed?[parsed]:[]});return{actorRole:String(root.actorRole??''),canPublish:root.canPublish===true,canRecoverAgreementPackages:root.canRecoverAgreementPackages===true,versions,tenantState:parseTenantState(root.tenantState),orderForms,agreementProcessing:parseProcessing(root.agreementProcessing)};}
 function parseDocument(value:unknown,orderFormId:string,artifactKind:'review_pdf'|'executed_pdf'):PreparedDocument{const row=record(value);const signedUrl=stringValue(row.signedUrl);if(!signedUrl)throw new Error('Agreement Package PDF response is incomplete.');return{orderFormId,artifactKind,signedUrl,fileName:stringValue(row.fileName,'SellerTray Agreement Package.pdf'),packageFingerprint:stringValue(row.packageFingerprint),pdfSha256:stringValue(row.pdfSha256)};}

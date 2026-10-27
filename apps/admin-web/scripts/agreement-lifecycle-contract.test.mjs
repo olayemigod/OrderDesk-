@@ -14,6 +14,7 @@ const retirement = read('../supabase/migrations/20261027100100_order_form_admin_
 const quarantineAuthority = read('../supabase/migrations/20261027123000_master_agreement_publication_quarantine.sql');
 const documentAuthority = read('../supabase/migrations/20261027170000_agreement_document_artifacts.sql');
 const zeroTouchAuthority = read('../supabase/migrations/20261027173000_agreement_package_zero_touch_orchestration.sql');
+const selfHealingAuthority = read('../supabase/migrations/20261027224913_agreement_package_processing_self_healing.sql');
 
 test('focused Agreements workspace keeps universal governance and reusable Order Form configuration without routine issuance', () => {
   assert.match(commercial, /import AgreementLifecycleManagement/);
@@ -46,6 +47,22 @@ test('universal Master Agreement publication remains one platform-wide immutable
   assert.doesNotMatch(lifecycle, /action:'admin_issue_order_form'/);
 });
 
+test('Admin agreement workspace surfaces zero-touch recovery status only to recovery-capable operators without restoring routine issuance', () => {
+  assert.match(lifecycle, /Agreement automation/);
+  assert.match(lifecycle, /Pending/);
+  assert.match(lifecycle, /Auto-retry/);
+  assert.match(lifecycle, /Needs attention/);
+  assert.match(lifecycle, /Resolved/);
+  assert.match(lifecycle, /Normal merchant agreement creation remains automatic/);
+  assert.match(lifecycle, /Do not issue a replacement Order Form manually/);
+  assert.match(lifecycle, /agreementProcessing/);
+  assert.match(lifecycle, /canRecoverAgreementPackages/);
+  assert.match(lifecycle, /Operational exception access restricted/);
+  assert.match(lifecycle, /!canInspectProcessing\?'Restricted'/);
+  assert.doesNotMatch(lifecycle, /Issue Order Form/);
+  assert.doesNotMatch(lifecycle, /action:'admin_reconcile_agreement_package'/);
+});
+
 test('Master Agreement authority remains platform-wide while Order Forms are exact automatically-instantiated purchase evidence', () => {
   assert.match(masterAuthority, /create table public\.sellertray_master_agreement_versions/);
   assert.match(masterAuthority, /create table public\.sellertray_master_agreement_acceptances/);
@@ -64,6 +81,19 @@ test('Master Agreement authority remains platform-wide while Order Forms are exa
   assert.match(zeroTouchAuthority, /ST-OF-/);
   assert.match(zeroTouchAuthority, /order_form_template_missing/);
   assert.match(zeroTouchAuthority, /master_agreement_missing/);
+});
+
+test('zero-touch Agreement Package processing is durable, bounded and limited to registered orchestration subjects', () => {
+  assert.match(selfHealingAuthority, /create table public\.sellertray_agreement_package_processing/);
+  assert.match(selfHealingAuthority, /ensure_sellertray_agreement_package_managed/);
+  assert.match(selfHealingAuthority, /ensure_sellertray_agreement_package_for_commercial_order/);
+  assert.match(selfHealingAuthority, /process_sellertray_agreement_package_retries/);
+  assert.match(selfHealingAuthority, /for update skip locked/i);
+  assert.match(selfHealingAuthority, /sellertray-agreement-package-retry/);
+  assert.match(selfHealingAuthority, /wake_sellertray_agreement_package_processing_after_configuration/);
+  assert.match(selfHealingAuthority, /No zero-touch Agreement Package exception is registered for this commercial order/);
+  assert.match(selfHealingAuthority, /'canIssueOrderForms',false/);
+  assert.doesNotMatch(selfHealingAuthority, /insert into public\.sellertray_agreement_package_processing\s*\([^;]+select[^;]+from public\.sellertray_commercial_orders/i);
 });
 
 test('invalid Master publications are quarantined without rewriting immutable legal evidence', () => {
