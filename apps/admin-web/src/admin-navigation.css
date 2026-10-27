@@ -13,28 +13,33 @@ body,
 }
 
 /*
- * Reuse the approved SellerTray wordmark already shared with Merchant Web.
- * The Admin surface changes only the surface label beneath the product mark.
- * Render the wordmark on the brand container rather than replacing an <img>
- * through CSS content, which is not reliable for replaced elements.
+ * Render the approved SellerTray identity without depending on the SVG
+ * wordmark as a CSS image. The app mark is the approved SellerTray mark and
+ * the Seller/Tray wordmark is rendered explicitly so it cannot disappear in
+ * browsers that fail to paint the embedded-image SVG from CSS.
  */
 .workspace-sidebar .workspace-sidebar-brand {
   position: relative;
   min-height: 104px !important;
   padding: 14px 18px 13px !important;
-  flex-direction: column !important;
-  align-items: flex-start !important;
-  justify-content: center !important;
-  gap: 2px !important;
+  display: grid !important;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  column-gap: 12px !important;
+  row-gap: 1px !important;
+  align-items: center !important;
 }
 
 .workspace-sidebar .workspace-sidebar-brand::before {
   content: '';
+  grid-column: 1;
+  grid-row: 1 / 3;
+  width: 48px;
+  height: 48px;
   display: block;
-  width: min(205px, calc(100% - 48px));
-  height: 46px;
-  flex: 0 0 46px;
-  background: url('/brand/sellertray-logo-v2.svg') left center / contain no-repeat;
+  background: #f8fafc url('/brand/sellertray-app-icon.png') center / 42px 42px no-repeat;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .14);
 }
 
 .workspace-sidebar .workspace-sidebar-brand > img {
@@ -42,13 +47,41 @@ body,
 }
 
 .workspace-sidebar .workspace-sidebar-brand > div {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  min-width: 0;
   width: 100%;
-  display: block !important;
-  padding-left: 59px;
+  padding: 0 !important;
+  display: grid !important;
+  align-content: center;
+  gap: 2px;
 }
 
 .workspace-sidebar .workspace-sidebar-brand > div strong {
-  display: none !important;
+  display: block !important;
+  color: transparent !important;
+  font-size: 0 !important;
+  line-height: 1 !important;
+  white-space: nowrap;
+}
+
+.workspace-sidebar .workspace-sidebar-brand > div strong::before,
+.workspace-sidebar .workspace-sidebar-brand > div strong::after {
+  display: inline;
+  font-size: 26px;
+  font-weight: 850;
+  line-height: 1;
+  letter-spacing: -.045em;
+}
+
+.workspace-sidebar .workspace-sidebar-brand > div strong::before {
+  content: 'Seller';
+  color: #ffffff;
+}
+
+.workspace-sidebar .workspace-sidebar-brand > div strong::after {
+  content: 'Tray';
+  color: #12b76a;
 }
 
 .workspace-sidebar .workspace-sidebar-brand > div span {
@@ -70,9 +103,10 @@ body,
 }
 
 .workspace-sidebar .workspace-sidebar-brand > .workspace-icon-button {
-  position: absolute;
-  top: 14px;
-  right: 12px;
+  grid-column: 3;
+  grid-row: 1 / 3;
+  position: static !important;
+  align-self: start;
 }
 
 .admin-grouped-nav {
