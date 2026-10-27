@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(9);
+select extensions.plan(11);
 
 select extensions.ok(
   to_regprocedure('public.ensure_sellertray_agreement_package_for_commercial_order(uuid,uuid,uuid,uuid)') is not null,
@@ -33,6 +33,18 @@ select extensions.ok(
   and not has_function_privilege('authenticated','public.reconcile_sellertray_agreement_package_admin(uuid,uuid,uuid,text)','EXECUTE')
   and has_function_privilege('service_role','public.reconcile_sellertray_agreement_package_admin(uuid,uuid,uuid,text)','EXECUTE'),
   'exception reconciliation is service-bound'
+);
+
+select extensions.ok(
+  not has_function_privilege('service_role','public.issue_sellertray_commercial_order_form_admin(uuid,uuid,uuid,uuid,text,uuid,text,uuid)','EXECUTE'),
+  'routine per-merchant Order Form issuance is retired from the trusted service boundary'
+);
+
+select extensions.ok(
+  position('admin.agreements.recover' in pg_get_functiondef(
+    'public.reconcile_sellertray_agreement_package_admin(uuid,uuid,uuid,text)'::regprocedure
+  ))>0,
+  'exception reconciliation requires the dedicated semantic recovery capability'
 );
 
 select extensions.ok(

@@ -8,6 +8,20 @@ begin;
 -- reported as a non-fatal orchestration state and never fabricates acceptance
 -- or rolls back an otherwise valid commercial order.
 
+alter table public.platform_admin_capability_grant_versions
+  drop constraint if exists platform_admin_capability_code_check,
+  add constraint platform_admin_capability_code_check
+  check (capability_code = any (array[
+    'admin.pricing.manage'::text,
+    'admin.payments.reconcile'::text,
+    'admin.installments.manage'::text,
+    'admin.branch_setup.manage'::text,
+    'admin.agreements.publish'::text,
+    'admin.order_forms.publish'::text,
+    'admin.order_forms.issue'::text,
+    'admin.agreements.recover'::text
+  ]));
+
 create or replace function public.ensure_sellertray_agreement_package_for_commercial_order(
   p_tenant_id uuid,
   p_commercial_order_id uuid,
@@ -216,7 +230,7 @@ declare
   v_result jsonb;
 begin
   if p_actor_user_id is null or not public.platform_admin_has_capability(
-    p_actor_user_id,'admin.order_forms.issue',p_tenant_id,now()
+    p_actor_user_id,'admin.agreements.recover',p_tenant_id,now()
   ) then
     raise exception 'Agreement reconciliation capability required' using errcode='42501';
   end if;
@@ -252,5 +266,11 @@ revoke all on function public.reconcile_sellertray_agreement_package_admin(uuid,
   from public,anon,authenticated;
 grant execute on function public.reconcile_sellertray_agreement_package_admin(uuid,uuid,uuid,text)
   to service_role;
+
+-- Routine per-merchant issuance is no longer part of any service/web happy path.
+-- Keep the immutable function/history for compatibility and audit, but remove the
+-- trusted web-service execution grant. Exception recovery uses reconciliation above.
+revoke execute on function public.issue_sellertray_commercial_order_form_admin(uuid,uuid,uuid,uuid,text,uuid,text,uuid)
+  from service_role;
 
 commit;

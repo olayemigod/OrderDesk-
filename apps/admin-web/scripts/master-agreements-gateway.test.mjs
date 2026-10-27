@@ -10,7 +10,6 @@ const orderFormId = '00000000-0000-4000-8000-000000000301';
 const commandId = '00000000-0000-4000-8000-000000000401';
 const commercialOrderId = '00000000-0000-4000-8000-000000000501';
 const templateVersionId = '00000000-0000-4000-8000-000000000601';
-const installmentObligationId = '00000000-0000-4000-8000-000000000602';
 const agreementPackageId = '00000000-0000-4000-8000-000000000901';
 const packageFingerprint = 'a'.repeat(64);
 
@@ -44,7 +43,7 @@ const center = {
   orderForms: [{ id: orderFormId, isCurrent: true, confirmation: null }],
   legacyAgreements: [],
 };
-const adminOverview = { actorRole: 'admin', canPublish: true, canIssueOrderForms: true, versions: [], orderForms: [] };
+const adminOverview = { actorRole: 'admin', canPublish: true, versions: [], orderForms: [] };
 const rpcResults = {
   get_sellertray_agreement_package_center: center,
   get_sellertray_order_forms_admin: adminOverview,
@@ -58,7 +57,14 @@ const rpcResults = {
     packageFingerprint,
   },
   publish_sellertray_order_form_template_admin: templateVersionId,
-  issue_sellertray_commercial_order_form_admin: orderFormId,
+  reconcile_sellertray_agreement_package_admin: {
+    status: 'ready_for_review',
+    ready: true,
+    tenantId,
+    commercialOrderId,
+    orderFormId,
+    agreementPackageId,
+  },
 };
 
 globalThis.__sellertrayCreateClient = () => ({
@@ -135,8 +141,7 @@ test('merchant package confirmation requires exact reviewed package and explicit
   calls = [];
   const response = await request({
     action: 'merchant_confirm_package', tenantId, orderFormId, commandId,
-    expectedPackageId: agreementPackageId,
-    expectedPackageFingerprint: packageFingerprint,
+    expectedPackageId: agreementPackageId, expectedPackageFingerprint: packageFingerprint,
     legalName: '  Merchant   Owner  ', authorityConfirmed: true,
     actorUserId: '00000000-0000-4000-8000-000000000999',
   });
@@ -159,6 +164,14 @@ test('merchant package confirmation requires exact reviewed package and explicit
   assert.ok(calls.some(({ name }) => name === 'reconcile_sellertray_installment_entitlements_for_tenant'));
 });
 
+test('routine manual Order Form issuance is not an exposed gateway action', async () => {
+  const response = await request({
+    action: 'admin_issue_order_form', tenantId, commercialOrderId,
+    templateVersionId, orderFormReference: 'OF-001', reason: 'Issue governed Order Form',
+  }, token('aal2'));
+  assert.equal(response.status, 400);
+});
+
 test('Admin legal mutations require AAL2', async () => {
   const template = await request({
     action: 'admin_publish_order_form_template', tenantId, family: 'installment_agreement',
@@ -167,11 +180,11 @@ test('Admin legal mutations require AAL2', async () => {
   }, token('aal1'));
   assert.equal(template.status, 403);
 
-  const issuance = await request({
-    action: 'admin_issue_order_form', tenantId, commercialOrderId, installmentObligationId,
-    templateVersionId, orderFormReference: 'OF-001', reason: 'Issue governed Order Form',
+  const reconciliation = await request({
+    action: 'admin_reconcile_agreement_package', tenantId, commercialOrderId,
+    reason: 'Retry automatic agreement orchestration',
   }, token('aal1'));
-  assert.equal(issuance.status, 403);
+  assert.equal(reconciliation.status, 403);
 });
 
 test('AAL2 Order Form template publication uses authenticated actor and governed RPC', async () => {
@@ -195,31 +208,29 @@ test('AAL2 Order Form template publication uses authenticated actor and governed
   });
 });
 
-test('Admin Order Form issuance validates reason', async () => {
+test('Admin agreement reconciliation validates reason', async () => {
   const incomplete = await request({
-    action: 'admin_issue_order_form', tenantId, commercialOrderId, installmentObligationId,
-    templateVersionId, orderFormReference: 'OF-001', reason: 'short',
+    action: 'admin_reconcile_agreement_package', tenantId, commercialOrderId, reason: 'short',
   }, token('aal2'));
   assert.equal(incomplete.status, 400);
 });
 
-test('AAL2 Admin Order Form issuance uses authenticated actor and governed RPC', async () => {
+test('AAL2 Admin agreement reconciliation uses authenticated actor and no manual legal facts', async () => {
   calls = [];
   const response = await request({
-    action: 'admin_issue_order_form', tenantId, commercialOrderId, installmentObligationId,
-    templateVersionId, orderFormReference: 'OF-001', reason: 'Issue governed Order Form',
+    action: 'admin_reconcile_agreement_package', tenantId, commercialOrderId,
+    reason: 'Retry automatic agreement orchestration',
     actorUserId: '00000000-0000-4000-8000-000000000999',
+    templateVersionId,
+    orderFormReference: 'SHOULD-BE-IGNORED',
   }, token('aal2'));
-  assert.equal(response.status, 201);
-  const call = calls.find(({ name }) => name === 'issue_sellertray_commercial_order_form_admin');
+  assert.equal(response.status, 200);
+  const call = calls.find(({ name }) => name === 'reconcile_sellertray_agreement_package_admin');
   assert.deepEqual(call?.args, {
     p_tenant_id: tenantId,
     p_commercial_order_id: commercialOrderId,
-    p_installment_obligation_id: installmentObligationId,
-    p_template_version_id: templateVersionId,
-    p_order_form_reference: 'OF-001',
-    p_supersedes_order_form_id: null,
-    p_reason: 'Issue governed Order Form',
     p_actor_user_id: actorUserId,
+    p_reason: 'Retry automatic agreement orchestration',
   });
+  assert.ok(!calls.some(({ name }) => name === 'issue_sellertray_commercial_order_form_admin'));
 });

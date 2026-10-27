@@ -13,7 +13,7 @@ type Action =
   | 'admin_publish'
   | 'admin_publish_pdf'
   | 'admin_publish_order_form_template'
-  | 'admin_issue_order_form';
+  | 'admin_reconcile_agreement_package';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -144,32 +144,22 @@ Deno.serve(async (request) => {
       return json({ ok: true, document });
     }
 
-    if (action === 'admin_issue_order_form') {
+    if (action === 'admin_reconcile_agreement_package') {
       const tenantId = cleanUuid(body.tenantId);
       const commercialOrderId = cleanUuid(body.commercialOrderId);
-      const installmentObligationId = optionalUuid(body.installmentObligationId);
-      const templateVersionId = cleanUuid(body.templateVersionId);
-      const orderFormReference = cleanText(body.orderFormReference, 128);
-      const supersedesOrderFormId = optionalUuid(body.supersedesOrderFormId);
       const reason = cleanReason(body.reason);
-      if (!tenantId || !commercialOrderId || !templateVersionId || !orderFormReference || !reason) {
-        return json({ error: 'Business, commercial order, Order Form template, reference and reason are required' }, 400);
+      if (!tenantId || !commercialOrderId || !reason) {
+        return json({ error: 'Business, commercial order and reconciliation reason are required' }, 400);
       }
-      if (body.installmentObligationId && !installmentObligationId) return json({ error: 'A valid installment obligation is required' }, 400);
-      if (body.supersedesOrderFormId && !supersedesOrderFormId) return json({ error: 'A valid superseded Order Form is required' }, 400);
 
-      const orderFormId = await rpc<string>('issue_sellertray_commercial_order_form_admin', {
+      const result = await rpc<JsonRecord>('reconcile_sellertray_agreement_package_admin', {
         p_tenant_id: tenantId,
         p_commercial_order_id: commercialOrderId,
-        p_installment_obligation_id: installmentObligationId,
-        p_template_version_id: templateVersionId,
-        p_order_form_reference: orderFormReference,
-        p_supersedes_order_form_id: supersedesOrderFormId,
-        p_reason: reason,
         p_actor_user_id: userId,
+        p_reason: reason,
       });
       const overview = await adminOverview(userId, tenantId);
-      return json({ ok: true, orderFormId, overview }, 201);
+      return json({ ok: true, result, overview });
     }
 
     if (action === 'admin_publish_order_form_template') {
@@ -503,7 +493,7 @@ function cleanAction(value: unknown): Action | null {
     || value === 'admin_publish'
     || value === 'admin_publish_pdf'
     || value === 'admin_publish_order_form_template'
-    || value === 'admin_issue_order_form'
+    || value === 'admin_reconcile_agreement_package'
     ? value
     : null;
 }

@@ -9,6 +9,7 @@ const navigation = read('src/portalNavigation.ts');
 const agreements = read('src/CommercialAgreementsManagement.tsx');
 const billing = read('src/SellerTrayBillingManagement.tsx');
 const quarantineAuthority = read('../../supabase/migrations/20261027123000_master_agreement_publication_quarantine.sql');
+const zeroTouchAuthority = read('../../supabase/migrations/20261027173000_agreement_package_zero_touch_orchestration.sql');
 const failures = [];
 const requireValue = (condition, message) => { if (!condition) failures.push(message); };
 const excludes = (source, values) => values.every((value) => !source.includes(value));
@@ -46,25 +47,36 @@ requireValue(
 );
 
 requireValue(
-  agreements.includes("center.masterAcceptanceRequired ? 'Accept & Sign' : 'Confirm & Sign'")
-    && agreements.includes("'I accept the current Master Agreement, confirm this exact Order Form and confirm my authority to sign.'")
-    && agreements.includes("'I confirm this exact Order Form under the accepted Master Agreement and confirm my authority to sign.'"),
-  'Merchant CTA must distinguish Master acceptance from later purchase confirmation while preserving one affirmative electronic-signature action.',
+  agreements.includes("center.masterAcceptanceRequired ? 'Accept & Continue' : 'Confirm Purchase'")
+    && agreements.includes("'I accept the Master Agreement, confirm this purchase and confirm my authority to continue.'")
+    && agreements.includes("'I confirm this purchase under the accepted Master Agreement and confirm my authority to continue.'"),
+  'Merchant CTA must distinguish required Master acceptance from later purchase confirmation with simple merchant-facing language.',
 );
 
 requireValue(
   agreements.includes('`${selected.id}:${center.masterAgreement.id}:${reviewDocument.packageFingerprint}`')
     && agreements.includes('confirmationCommandIds.current.set(commandKey, commandId)')
-    && agreements.includes('confirmationCommandIds.current.delete(commandKey)'),
-  'Package confirmation must preserve one command identity per exact reviewed Order Form + Master + package fingerprint across failed retries.',
+    && agreements.includes('confirmationCommandIds.current.delete(commandKey)')
+    && agreements.includes('expectedPackageId: reviewDocument.packageId')
+    && agreements.includes('expectedPackageFingerprint: reviewDocument.packageFingerprint'),
+  'Package confirmation must preserve one command identity and exact reviewed-package binding behind the merchant UI.',
 );
 
 requireValue(
-  agreements.includes('Commercial snapshot integrity')
-    && agreements.includes('governed commercial snapshot')
-    && agreements.includes('reviewDocument.packageFingerprint')
-    && agreements.includes('expectedPackageFingerprint'),
-  'Merchant review must expose immutable Order Form/package evidence and bind the signature to the exact reviewed package.',
+  agreements.includes('Review agreement')
+    && agreements.includes('Agreement opened for review. You can continue below when ready.')
+    && agreements.includes('Open signed copy')
+    && agreements.includes('Agreement is being prepared automatically')
+    && excludes(agreements, ['Prepare Agreement PDF', 'Package fingerprint', 'PDF SHA-256', 'Order Form integrity', 'Commercial snapshot integrity', 'deterministic package fingerprint']),
+  'Merchant review must hide technical integrity mechanics while preserving one simple review/confirm experience.',
+);
+
+requireValue(
+  zeroTouchAuthority.includes('ensure_sellertray_agreement_package_for_commercial_order')
+    && zeroTouchAuthority.includes('orchestrate_sellertray_agreement_package_after_installment_schedule')
+    && zeroTouchAuthority.includes("'order_form_template_missing'")
+    && zeroTouchAuthority.includes("'master_agreement_missing'"),
+  'Shared authority must automatically instantiate/reconcile the exact Order Form and Agreement Package without per-merchant Admin issuance.',
 );
 
 requireValue(

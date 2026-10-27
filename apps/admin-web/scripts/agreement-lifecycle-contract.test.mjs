@@ -13,15 +13,18 @@ const packageAuthority = read('../supabase/migrations/20261027100000_master_orde
 const retirement = read('../supabase/migrations/20261027100100_order_form_admin_boundary_and_legacy_retirement.sql');
 const quarantineAuthority = read('../supabase/migrations/20261027123000_master_agreement_publication_quarantine.sql');
 const documentAuthority = read('../supabase/migrations/20261027170000_agreement_document_artifacts.sql');
+const zeroTouchAuthority = read('../supabase/migrations/20261027173000_agreement_package_zero_touch_orchestration.sql');
 
-test('focused Agreements workspace keeps universal governance and current Order Form administration after explicit merchant scope', () => {
+test('focused Agreements workspace keeps universal governance and reusable Order Form configuration without routine issuance', () => {
   assert.match(commercial, /import AgreementLifecycleManagement/);
   assert.match(commercial, /<AgreementLifecycleManagement session=\{session\} tenantId=\{tenantId\}/);
   assert.match(commercial, /title="Order Form templates"/);
-  assert.match(commercial, /title="Issue Order Form"/);
+  assert.match(commercial, /Automatic agreement orchestration/);
+  assert.match(commercial, /Zero-touch normal path/);
   assert.match(commercial, /action: 'admin_publish_order_form_template'/);
-  assert.match(commercial, /action: 'admin_issue_order_form'/);
-  assert.doesNotMatch(commercial, /action: 'admin_issue'/);
+  assert.doesNotMatch(commercial, /title="Issue Order Form"/);
+  assert.doesNotMatch(commercial, /action: 'admin_issue_order_form'/);
+  assert.doesNotMatch(commercial, /Order Form reference<input/);
   assert.doesNotMatch(commercial, /Rendered agreement content/);
   assert.match(selector, /showCommercialPortfolio === true/);
   assert.doesNotMatch(selector, /showCommercialPortfolio \?\? mode === 'single'/);
@@ -43,7 +46,7 @@ test('universal Master Agreement publication remains one platform-wide immutable
   assert.doesNotMatch(lifecycle, /action:'admin_issue_order_form'/);
 });
 
-test('Master Agreement authority remains platform-wide while Order Forms are exact purchase evidence', () => {
+test('Master Agreement authority remains platform-wide while Order Forms are exact automatically-instantiated purchase evidence', () => {
   assert.match(masterAuthority, /create table public\.sellertray_master_agreement_versions/);
   assert.match(masterAuthority, /create table public\.sellertray_master_agreement_acceptances/);
   assert.match(masterAuthority, /unique \(tenant_id,agreement_version_id\)/);
@@ -56,6 +59,11 @@ test('Master Agreement authority remains platform-wide while Order Forms are exa
   assert.match(packageAuthority, /commercial_snapshot_sha256/);
   assert.match(packageAuthority, /package_fingerprint/);
   assert.match(packageAuthority, /sellertray_installment_contract_accepted_at/);
+  assert.match(zeroTouchAuthority, /ensure_sellertray_agreement_package_for_commercial_order/);
+  assert.match(zeroTouchAuthority, /orchestrate_sellertray_agreement_package_after_installment_schedule/);
+  assert.match(zeroTouchAuthority, /ST-OF-/);
+  assert.match(zeroTouchAuthority, /order_form_template_missing/);
+  assert.match(zeroTouchAuthority, /master_agreement_missing/);
 });
 
 test('invalid Master publications are quarantined without rewriting immutable legal evidence', () => {
@@ -82,23 +90,27 @@ test('reviewed PDF upload remains an immutable version publication path rather t
   assert.match(masterGateway, /p_source_pdf_sha256/);
 });
 
-test('Master Agreement gateway enforces AAL2 Admin legal authority and package commands', () => {
+test('Master Agreement gateway enforces AAL2 Admin legal authority and exception-only reconciliation', () => {
   assert.match(masterGateway, /action === 'admin_get'/);
   assert.match(masterGateway, /jwtAal\(token\) !== 'aal2'/);
   assert.match(masterGateway, /publish_sellertray_master_agreement_admin/);
   assert.match(masterGateway, /publish_sellertray_master_agreement_pdf_admin/);
   assert.match(masterGateway, /publish_sellertray_order_form_template_admin/);
-  assert.match(masterGateway, /issue_sellertray_commercial_order_form_admin/);
+  assert.match(masterGateway, /admin_reconcile_agreement_package/);
+  assert.match(masterGateway, /reconcile_sellertray_agreement_package_admin/);
   assert.match(masterGateway, /confirm_sellertray_agreement_package_reviewed/);
   assert.match(masterGateway, /get_sellertray_order_forms_admin/);
+  assert.doesNotMatch(masterGateway, /admin_issue_order_form/);
+  assert.doesNotMatch(masterGateway, /issue_sellertray_commercial_order_form_admin/);
   assert.doesNotMatch(masterGateway, /accept_sellertray_commercial_agreement/);
 });
 
-test('legacy C1A mutation is retired without deleting historical evidence', () => {
+test('legacy C1A and routine manual Order Form mutation are retired without deleting historical evidence', () => {
   assert.match(retirement, /revoke execute on function public\.accept_sellertray_commercial_agreement/);
   assert.match(retirement, /revoke execute on function public\.issue_sellertray_commercial_agreement_admin/);
   assert.match(retirement, /revoke execute on function public\.publish_sellertray_commercial_agreement_template_admin/);
   assert.match(retirement, /revoke execute on function public\.publish_sellertray_commercial_agreement_template_version/);
+  assert.match(zeroTouchAuthority, /revoke execute on function public\.issue_sellertray_commercial_order_form_admin/);
   assert.doesNotMatch(retirement, /drop table public\.sellertray_commercial_agreements/);
   assert.doesNotMatch(retirement, /delete from public\.sellertray_commercial_agreement/);
 });
@@ -108,6 +120,6 @@ test('agreement lifecycle does not invent commercial, refund, guarantee or entit
   assert.match(lifecycle, /Published versions remain available for immutable legal history/);
   assert.match(lifecycle, /one reviewed immutable version for the entire SellerTray platform/);
   assert.match(lifecycle, /review-only for Master Agreement publication/);
-  assert.match(commercial, /server owns the commercial snapshot and document hashes/);
+  assert.match(commercial, /Governed commercial order → exact commercial snapshot → Order Form → Agreement Package/);
   assert.doesNotMatch(commercial, /refundAmount|guaranteeStatus|tenant_subscriptions/);
 });
