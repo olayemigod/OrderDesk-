@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import AgreementLifecycleManagement from './AgreementLifecycleManagement';
 import { invokeJson } from './supabase';
@@ -143,32 +143,7 @@ export function CommercialAgreementAdministration({ session, actorRole, tenantId
   const { state, loading, error, message, reload, setError, setMessage } = useOnboardingWorkspace(session, tenantId);
   const [legalSaving, setLegalSaving] = useState<string | null>(null);
   const [template, setTemplate] = useState({ family: 'installment_agreement', versionCode: '', title: 'SellerTray Order Form', contentBody: '', effectiveFrom: nowLocal(), reason: '' });
-  const [orderForm, setOrderForm] = useState({ commercialOrderId: '', templateVersionId: '', reference: '', reason: '' });
   const canManage = actorRole === 'admin' && state?.canManage === true;
-  const selectedOrder = state?.orders.find((row) => row.id === orderForm.commercialOrderId) ?? null;
-  const compatibleTemplates = useMemo(() => {
-    const family = selectedOrder?.installmentObligationId ? 'installment_agreement' : 'subscription_order';
-    return (state?.templates ?? []).filter((row) => row.family === family);
-  }, [state?.templates, selectedOrder?.installmentObligationId]);
-
-  useEffect(() => {
-    if (!state) return;
-    const nextOrderId = state.orders.some((row) => row.id === orderForm.commercialOrderId) ? orderForm.commercialOrderId : state.orders[0]?.id ?? '';
-    const nextOrder = state.orders.find((row) => row.id === nextOrderId) ?? null;
-    const family = nextOrder?.installmentObligationId ? 'installment_agreement' : 'subscription_order';
-    const candidates = state.templates.filter((row) => row.family === family);
-    setOrderForm((current) => ({
-      ...current,
-      commercialOrderId: nextOrderId,
-      templateVersionId: candidates.some((row) => row.id === current.templateVersionId) ? current.templateVersionId : candidates[0]?.id ?? '',
-    }));
-    setTemplate((current) => ({ ...current, family }));
-  }, [state?.orders, state?.templates]);
-
-  useEffect(() => {
-    if (compatibleTemplates.some((row) => row.id === orderForm.templateVersionId)) return;
-    setOrderForm((current) => ({ ...current, templateVersionId: compatibleTemplates[0]?.id ?? '' }));
-  }, [compatibleTemplates]);
 
   async function publishOrderFormTemplate() {
     if (!canManage || legalSaving) return;
@@ -184,38 +159,17 @@ export function CommercialAgreementAdministration({ session, actorRole, tenantId
       }, session);
       await reload();
       setTemplate((current) => ({ ...current, versionCode: '', contentBody: '', reason: '' }));
-      setMessage('Immutable Order Form template published through governed legal administration.');
+      setMessage('Immutable Order Form template published. New governed purchases will use the applicable template automatically.');
     } catch (cause) {
       setError(messageFrom(cause, 'Unable to publish this Order Form template.'));
     } finally { setLegalSaving(null); }
   }
 
-  async function issueOrderForm() {
-    if (!canManage || !selectedOrder || legalSaving) return;
-    if (!orderForm.templateVersionId || !orderForm.reference.trim()) return setError('Select a commercial order and compatible Order Form template, then enter the Order Form reference.');
-    if (orderForm.reason.trim().length < 6) return setError('Enter an issuance reason of at least 6 characters.');
-    setLegalSaving('order-form'); setError(null); setMessage(null);
-    try {
-      await invokeJson('master-agreements', {
-        action: 'admin_issue_order_form', tenantId,
-        commercialOrderId: selectedOrder.id,
-        installmentObligationId: selectedOrder.installmentObligationId,
-        templateVersionId: orderForm.templateVersionId,
-        orderFormReference: orderForm.reference.trim(),
-        reason: orderForm.reason.trim(),
-      }, session);
-      setOrderForm((current) => ({ ...current, reference: '', reason: '' }));
-      setMessage('Immutable Order Form issued from the exact server-governed commercial snapshot.');
-    } catch (cause) {
-      setError(messageFrom(cause, 'Unable to issue this governed Order Form.'));
-    } finally { setLegalSaving(null); }
-  }
-
   return <WorkspaceState loading={loading} error={error} message={message} onReload={reload}>
-    {!canManage ? <div className="workspace-banner info">Platform Support can review Master Agreement status and Order Form history. Publication and issuance remain restricted to explicitly authorised Platform Admin authority.</div> : null}
+    {!canManage ? <div className="workspace-banner info">Platform Support can review agreement configuration and history. Legal publication remains restricted to explicitly authorised Platform Admin authority.</div> : null}
     {state ? <div className="workspace-grid two">
       <section className="workspace-panel workspace-form-stack">
-        <PanelHeading title="Order Form templates" description="Publish only reviewed purchase-specific legal wording. Universal Master Agreement publication remains in the dedicated Master Agreement panel below." />
+        <PanelHeading title="Order Form templates" description="Publish reusable purchase-specific legal wording once. SellerTray automatically instantiates the applicable Order Form and Agreement Package from each governed commercial order." />
         <label>Order Form type<select value={template.family} onChange={(event) => setTemplate({ ...template, family: event.target.value })}>{ORDER_FORM_FAMILIES.map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></label>
         <div className="workspace-field-grid two"><label>Version<input maxLength={64} value={template.versionCode} onChange={(event) => setTemplate({ ...template, versionCode: event.target.value })} /></label><label>Effective from<input type="datetime-local" value={template.effectiveFrom} onChange={(event) => setTemplate({ ...template, effectiveFrom: event.target.value })} /></label></div>
         <label>Title<input maxLength={200} value={template.title} onChange={(event) => setTemplate({ ...template, title: event.target.value })} /></label>
@@ -224,13 +178,11 @@ export function CommercialAgreementAdministration({ session, actorRole, tenantId
         <button type="button" className="workspace-button primary" disabled={!canManage || legalSaving !== null} onClick={() => void publishOrderFormTemplate()}>{legalSaving === 'template' ? 'Publishing…' : 'Publish Order Form template'}</button>
       </section>
       <section className="workspace-panel workspace-form-stack">
-        <PanelHeading title="Issue Order Form" description="Issue an immutable purchase-specific instrument from the exact commercial order. The server owns the commercial snapshot and document hashes." />
-        <label>Commercial order<select value={orderForm.commercialOrderId} onChange={(event) => setOrderForm({ ...orderForm, commercialOrderId: event.target.value })}><option value="">Select order</option>{state.orders.map((order) => <option key={order.id} value={order.id}>{order.reference} · {money(order.totalGrossAmount, order.currency)}</option>)}</select></label>
-        <label>Compatible Order Form template<select value={orderForm.templateVersionId} onChange={(event) => setOrderForm({ ...orderForm, templateVersionId: event.target.value })}><option value="">Select template</option>{compatibleTemplates.map((row) => <option key={row.id} value={row.id}>{row.title} · {row.versionCode}</option>)}</select></label>
-        <label>Order Form reference<input maxLength={128} value={orderForm.reference} onChange={(event) => setOrderForm({ ...orderForm, reference: event.target.value })} placeholder="e.g. ST-OF-2026-0001" /></label>
-        <label>Issuance reason<input maxLength={1000} value={orderForm.reason} onChange={(event) => setOrderForm({ ...orderForm, reason: event.target.value })} /></label>
-        <div className="workspace-banner info">Do not type price, plan, Branch or installment facts into the legal content. Issuance snapshots those governed facts from the selected commercial order and binds them into the Order Form integrity hash.</div>
-        <button type="button" className="workspace-button primary" disabled={!canManage || legalSaving !== null || !selectedOrder || !orderForm.templateVersionId} onClick={() => void issueOrderForm()}>{legalSaving === 'order-form' ? 'Issuing…' : 'Issue Order Form'}</button>
+        <PanelHeading title="Automatic agreement orchestration" description="Routine per-merchant Order Form issuance is no longer an Admin task." />
+        <div className="workspace-banner success"><strong>Zero-touch normal path</strong><span>Governed commercial order → exact commercial snapshot → Order Form → Agreement Package → merchant review and acceptance.</span></div>
+        <div className="workspace-detail-grid"><Detail label="Governed orders" value={String(state.orders.length)} /><Detail label="Reusable Order Form templates" value={String(state.templates.filter((row) => row.family === 'installment_agreement' || row.family === 'subscription_order').length)} /></div>
+        <div className="workspace-banner info">If legal configuration is missing, SellerTray preserves the commercial order and blocks activation rather than asking Admin to recreate the purchase. Admin intervention is limited to correcting configuration and running governed reconciliation.</div>
+        <div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Template</th><th>Type</th><th>Version</th><th>Effective</th></tr></thead><tbody>{state.templates.filter((row) => row.family === 'installment_agreement' || row.family === 'subscription_order').map((row) => <tr key={row.id}><td>{row.title}</td><td>{label(row.family)}</td><td>{row.versionCode}</td><td>{formatDate(row.effectiveFrom)}</td></tr>)}{!state.templates.some((row) => row.family === 'installment_agreement' || row.family === 'subscription_order') ? <tr><td colSpan={4}>No reusable Order Form template is configured.</td></tr> : null}</tbody></table></div>
       </section>
     </div> : null}
     <AgreementLifecycleManagement session={session} tenantId={tenantId} />
