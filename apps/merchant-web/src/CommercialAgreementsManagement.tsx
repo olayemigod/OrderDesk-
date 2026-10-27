@@ -243,8 +243,9 @@ function parseOrderForm(value: unknown): OrderForm | null {
 function parseCenter(value: unknown): AgreementCenter { const root = record(value); return { tenantId: stringValue(root.tenantId), actorRole: root.actorRole === 'manager' ? 'manager' : 'owner', canAccept: root.canAccept === true, masterAgreement: parseMaster(root.masterAgreement), masterAcceptanceRequired: root.masterAcceptanceRequired === true, orderForms: array(root.orderForms).flatMap((item) => { const form = parseOrderForm(item); return form ? [form] : []; }) }; }
 function parseConfirmResult(value: unknown): ConfirmResult { const row = record(value); return { masterAcceptanceCreated: row.masterAcceptanceCreated === true, orderFormConfirmationCreated: row.orderFormConfirmationCreated === true, agreementPackageId: stringValue(row.agreementPackageId), packageFingerprint: stringValue(row.packageFingerprint) }; }
 function parseDocument(value: unknown): AgreementDocument {
-  const row = record(value); const artifactKind = row.artifactKind === 'executed_pdf' ? 'executed_pdf' : 'review_pdf';
-  const result = { artifactId: stringValue(row.artifactId), artifactKind, packageId: stringValue(row.packageId), packageFingerprint: stringValue(row.packageFingerprint), pdfSha256: stringValue(row.pdfSha256), byteSize: numberValue(row.byteSize), generatedAt: stringValue(row.generatedAt), fileName: stringValue(row.fileName), signedUrl: stringValue(row.signedUrl), expiresInSeconds: numberValue(row.expiresInSeconds) };
+  const row = record(value);
+  const artifactKind: AgreementDocument['artifactKind'] = row.artifactKind === 'executed_pdf' ? 'executed_pdf' : 'review_pdf';
+  const result: AgreementDocument = { artifactId: stringValue(row.artifactId), artifactKind, packageId: stringValue(row.packageId), packageFingerprint: stringValue(row.packageFingerprint), pdfSha256: stringValue(row.pdfSha256), byteSize: numberValue(row.byteSize), generatedAt: stringValue(row.generatedAt), fileName: stringValue(row.fileName), signedUrl: stringValue(row.signedUrl), expiresInSeconds: numberValue(row.expiresInSeconds) };
   if (!result.artifactId || !result.packageId || !result.packageFingerprint || !result.signedUrl) throw new Error('Agreement Package PDF response is incomplete.');
   return result;
 }
