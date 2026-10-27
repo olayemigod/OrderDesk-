@@ -31,7 +31,7 @@ export default function RevenueDashboard({ session, refreshKey }: { session: Ses
       <div className="admin-page-actions"><label className="admin-period-control"><span>Compare</span><select value={days} onChange={(event) => setDays(Number(event.target.value))}>{[7,30,90].map((value) => <option key={value} value={value}>{value} days</option>)}</select></label><button className="workspace-button subtle" onClick={() => setRetry((value) => value + 1)}>Refresh</button></div>
     </header>
 
-    <div className="admin-accounting-boundary"><span className="workspace-status-pill neutral">Reporting boundary</span><p><strong>Recognised revenue is not calculated here.</strong> Collections, commercial order value and outstanding installments remain separate facts and currencies are never combined.</p></div>
+    <div className="admin-accounting-boundary"><span className="workspace-status-pill neutral">Reporting boundary</span><p><strong>ProcessEdge recognised revenue is not calculated or displayed here.</strong> Collections, commercial order value and outstanding installments remain separate facts. Amounts are never combined across currencies.</p></div>
 
     {error ? <div className="workspace-banner error" role="alert">{error} Retry using Refresh.</div> : !summary ? <div className="admin-workspace-loading" role="status">Loading governed commercial performance…</div> : <>
       <div className="admin-report-meta"><span>Updated {formatDate(summary.generatedAt)}</span><span>Current period from {formatDate(summary.startAt)}</span><span>Previous period from {formatDate(summary.previousStartAt)}</span></div>
