@@ -4,10 +4,11 @@ import type { Session } from '@supabase/supabase-js';
 import ManagementPage from './ManagementPage';
 import CashShiftsManagement from './CashShiftsManagement';
 import IncomingBusinessInvitations from './IncomingBusinessInvitations';
+import SellerTrayBillingManagement from './SellerTrayBillingManagement';
 import { errorMessage, numberValue, supabase } from './supabase';
 
 type MerchantRole = 'owner' | 'manager' | 'staff';
-type Page = 'overview' | 'orders' | 'inventory' | 'cash' | 'whatsapp' | 'reports' | 'products' | 'team' | 'devices' | 'settings';
+type Page = 'overview' | 'orders' | 'inventory' | 'cash' | 'whatsapp' | 'reports' | 'billing' | 'products' | 'team' | 'devices' | 'settings';
 type Business = { id: string; name: string; merchantCode: string; role: MerchantRole; currency: string; subscriptionStatus: string; whatsappConnectionStatus: string };
 type Branch = { id: string; code: string; name: string; isDefault: boolean };
 type CustomerRow = { display_name: string | null; phone: string | null; wa_id: string };
@@ -25,7 +26,8 @@ const NAV: Array<{ id: Page; label: string; section?: string }> = [
   { id: 'cash', label: 'Cash & Shifts' },
   { id: 'whatsapp', label: 'WhatsApp' },
   { id: 'reports', label: 'Reports' },
-  { id: 'products', label: 'Products & Pricing', section: 'Management' },
+  { id: 'billing', label: 'Billing Center', section: 'Management' },
+  { id: 'products', label: 'Products & Pricing' },
   { id: 'team', label: 'Team & Branches' },
   { id: 'devices', label: 'Devices & Printers' },
   { id: 'settings', label: 'Settings' },
@@ -243,6 +245,7 @@ export default function App() {
       {page === 'cash' && <CashShiftsManagement tenantId={business.id} currency={business.currency} branches={branches} initialBranchId={branchId} />}
       {page === 'whatsapp' && <WhatsApp business={business} />}
       {page === 'reports' && <Reports business={business} report={workspace.report} />}
+      {page === 'billing' && <SellerTrayBillingManagement tenantId={business.id} />}
       {(page === 'products' || page === 'team' || page === 'devices' || page === 'settings') && <ManagementPage page={page} tenantId={business.id} currency={business.currency} onBranchesChanged={refresh} />}
     </main>
   </div>;
