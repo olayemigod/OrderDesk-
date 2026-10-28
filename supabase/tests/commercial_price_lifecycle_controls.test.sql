@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(15);
+select extensions.plan(16);
 
 select extensions.has_table(
   'public','sellertray_commercial_price_version_controls',
@@ -99,6 +99,19 @@ select extensions.ok(
   and position('v_actionnotin(''pause'',''resume'',''deactivate'',''void'')' in body)>0
   and position('v_yearly.gross_amount-(v_monthly.gross_amount*10)' in body)>0,
   'lifecycle command is pricing-capability controlled, action-bounded and preserves subscription pair coherence'
+)
+from definition;
+
+with definition as (
+  select lower(regexp_replace(pg_get_functiondef(
+    'public.control_sellertray_commercial_price_version_admin(uuid,text,text,uuid,uuid)'::regprocedure
+  ),'\s+','','g')) as body
+)
+select extensions.ok(
+  position('pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(v_lock_identity,0))' in body)>0
+  and position('v_control_at:=clock_timestamp()' in body)>0
+  and position('sellertray_commercial_price_version_state(x,v_control_at)' in body)>0,
+  'lifecycle transitions serialize per exact price/pair before state inspection and establish their control timestamp after locking'
 )
 from definition;
 
