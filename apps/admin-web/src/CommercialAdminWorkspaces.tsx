@@ -14,14 +14,15 @@ import {
 
 type ListAddTab = 'list' | 'add';
 
-export function CommercialPricingAdministration({ session, actorRole, tenantId }: { session: Session; actorRole: AdminRole; tenantId: string }) {
+export function CommercialPricingAdministration({ session, tenantId }: { session: Session; actorRole: AdminRole; tenantId: string }) {
   const { state, loading, error, message, saving, reload, mutate, setError } = useOnboardingWorkspace(session, tenantId);
   const [tab, setTab] = useState<ListAddTab>('list');
   const [subscriptionForm, setSubscriptionForm] = useState({ planCode: 'business', currency: 'NGN', monthlyGross: '', taxRate: '', effectiveFrom: nowLocal(), reason: '' });
   const [setupForm, setSetupForm] = useState({ currency: 'NGN', gross: '', taxRate: '', effectiveFrom: nowLocal(), reason: '' });
   const [subscriptionOverride, setSubscriptionOverride] = useState({ planCode: 'business', currency: 'NGN', monthlyGross: '', effectiveFrom: nowLocal(), effectiveUntil: tomorrowLocal(), reason: '' });
   const [setupOverride, setSetupOverride] = useState({ currency: 'NGN', gross: '', effectiveFrom: nowLocal(), effectiveUntil: tomorrowLocal(), reason: '' });
-  const canManage = actorRole === 'admin' && state?.canManage === true;
+  const canManageGlobalPricing = state?.canManageGlobalPricing === true;
+  const canManageMerchantPricing = state?.canManageMerchantPricing === true;
 
   useEffect(() => {
     if (!state?.plans[0]) return;
@@ -35,7 +36,7 @@ export function CommercialPricingAdministration({ session, actorRole, tenantId }
   }, [state, subscriptionForm.planCode, subscriptionOverride.planCode]);
 
   async function publishSubscriptionPrice() {
-    if (!canManage) return;
+    if (!canManageGlobalPricing) return;
     const monthlyGrossAmount = positiveNumber(subscriptionForm.monthlyGross);
     const taxRatePercent = optionalPercent(subscriptionForm.taxRate);
     const effectiveFrom = isoFromLocal(subscriptionForm.effectiveFrom);
@@ -54,7 +55,7 @@ export function CommercialPricingAdministration({ session, actorRole, tenantId }
   }
 
   async function publishSetupPrice() {
-    if (!canManage) return;
+    if (!canManageGlobalPricing) return;
     const grossAmount = positiveNumber(setupForm.gross);
     const taxRatePercent = optionalPercent(setupForm.taxRate);
     const effectiveFrom = isoFromLocal(setupForm.effectiveFrom);
@@ -72,7 +73,7 @@ export function CommercialPricingAdministration({ session, actorRole, tenantId }
   }
 
   async function publishSubscriptionOverride() {
-    if (!canManage) return;
+    if (!canManageMerchantPricing) return;
     const monthlyGrossAmount = positiveNumber(subscriptionOverride.monthlyGross);
     const effectiveFrom = isoFromLocal(subscriptionOverride.effectiveFrom);
     const effectiveUntil = isoFromLocal(subscriptionOverride.effectiveUntil);
@@ -91,7 +92,7 @@ export function CommercialPricingAdministration({ session, actorRole, tenantId }
   }
 
   async function publishSetupOverride() {
-    if (!canManage) return;
+    if (!canManageMerchantPricing) return;
     const grossAmount = positiveNumber(setupOverride.gross);
     const effectiveFrom = isoFromLocal(setupOverride.effectiveFrom);
     const effectiveUntil = isoFromLocal(setupOverride.effectiveUntil);
@@ -110,7 +111,9 @@ export function CommercialPricingAdministration({ session, actorRole, tenantId }
 
   return <WorkspaceState loading={loading} error={error} message={message} onReload={reload}>
     <WorkspaceTabs value={tab} onChange={setTab} tabs={[["list", "Price List"], ["add", "Add New"]]} label="Plans and pricing views" />
-    {!canManage ? <div className="workspace-banner info">Platform Support can review effective prices. Publishing price changes remains restricted to authorised Platform Admin authority.</div> : null}
+    {!canManageGlobalPricing && !canManageMerchantPricing ? <div className="workspace-banner info">Pricing is review-only for your current ProcessEdge authority.</div> : null}
+    {!canManageGlobalPricing && canManageMerchantPricing ? <div className="workspace-banner info">You may publish pricing for this selected Business. Standard platform pricing remains review-only.</div> : null}
+    {canManageGlobalPricing && !canManageMerchantPricing ? <div className="workspace-banner info">You may publish standard platform pricing. Business-specific pricing is not authorised for this selected Business.</div> : null}
     {state && tab === 'list' ? <section className="workspace-panel">
       <PanelHeading title="Effective price history" description="Standard platform prices and this Business's audited overrides are effective-dated. Historical orders retain the exact price version they used." />
       <div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Scope</th><th>Price</th><th>Cycle</th><th>Gross</th><th>Tax</th><th>Effective</th><th>Until</th></tr></thead><tbody>{state.prices.map((price) => <tr key={price.id}><td><span className={`workspace-status ${price.priceScope === 'merchant_override' ? 'attention' : 'info'}`}>{price.priceScope === 'merchant_override' ? 'Business override' : 'Standard'}</span></td><td>{price.priceKind === 'branch_setup' ? 'Branch setup' : price.planCode ?? 'Subscription'}</td><td>{price.billingCycle ?? 'One-time'}</td><td>{money(price.grossAmount, price.currency)}</td><td>{price.taxRatePercent === null ? 'Not separately recorded' : `${price.taxRatePercent}%`}</td><td>{formatDate(price.effectiveFrom)}</td><td>{price.effectiveUntil ? formatDate(price.effectiveUntil) : 'Open-ended'}</td></tr>)}{!state.prices.length ? <tr><td colSpan={7}>No governed pricing has been published.</td></tr> : null}</tbody></table></div>
@@ -119,7 +122,7 @@ export function CommercialPricingAdministration({ session, actorRole, tenantId }
       <div className="workspace-grid two">
         <section className="workspace-panel workspace-form-stack">
           <PanelHeading title="Standard subscription pricing" description="Publish platform-wide VAT-inclusive monthly pricing. The governed service derives the annual 10-for-12 price." />
-          <fieldset disabled={!canManage || saving !== null} style={{ border: 0, padding: 0, display: 'contents' }}>
+          <fieldset disabled={!canManageGlobalPricing || saving !== null} style={{ border: 0, padding: 0, display: 'contents' }}>
             <label>Plan<select value={subscriptionForm.planCode} onChange={(event) => setSubscriptionForm({ ...subscriptionForm, planCode: event.target.value })}>{state.plans.filter((plan) => plan.active).map((plan) => <option key={plan.code} value={plan.code}>{plan.name}</option>)}</select></label>
             <div className="workspace-field-grid two"><label>Currency<input maxLength={3} value={subscriptionForm.currency} onChange={(event) => setSubscriptionForm({ ...subscriptionForm, currency: event.target.value.toUpperCase() })} /></label><label>Monthly VAT-inclusive price<input inputMode="decimal" value={subscriptionForm.monthlyGross} onChange={(event) => setSubscriptionForm({ ...subscriptionForm, monthlyGross: event.target.value })} /></label></div>
             <div className="workspace-field-grid two"><label>Underlying tax rate % (optional)<input inputMode="decimal" value={subscriptionForm.taxRate} onChange={(event) => setSubscriptionForm({ ...subscriptionForm, taxRate: event.target.value })} /></label><label>Effective from<input type="datetime-local" value={subscriptionForm.effectiveFrom} onChange={(event) => setSubscriptionForm({ ...subscriptionForm, effectiveFrom: event.target.value })} /></label></div>
@@ -130,7 +133,7 @@ export function CommercialPricingAdministration({ session, actorRole, tenantId }
         </section>
         <section className="workspace-panel workspace-form-stack">
           <PanelHeading title="Standard Branch setup pricing" description="Publish the platform-wide one-time setup price used for each purchased Branch setup obligation." />
-          <fieldset disabled={!canManage || saving !== null} style={{ border: 0, padding: 0, display: 'contents' }}>
+          <fieldset disabled={!canManageGlobalPricing || saving !== null} style={{ border: 0, padding: 0, display: 'contents' }}>
             <div className="workspace-field-grid two"><label>Currency<input maxLength={3} value={setupForm.currency} onChange={(event) => setSetupForm({ ...setupForm, currency: event.target.value.toUpperCase() })} /></label><label>VAT-inclusive setup price<input inputMode="decimal" value={setupForm.gross} onChange={(event) => setSetupForm({ ...setupForm, gross: event.target.value })} /></label></div>
             <div className="workspace-field-grid two"><label>Underlying tax rate % (optional)<input inputMode="decimal" value={setupForm.taxRate} onChange={(event) => setSetupForm({ ...setupForm, taxRate: event.target.value })} /></label><label>Effective from<input type="datetime-local" value={setupForm.effectiveFrom} onChange={(event) => setSetupForm({ ...setupForm, effectiveFrom: event.target.value })} /></label></div>
             <label>Change reason<input maxLength={1000} value={setupForm.reason} onChange={(event) => setSetupForm({ ...setupForm, reason: event.target.value })} /></label>
@@ -142,7 +145,7 @@ export function CommercialPricingAdministration({ session, actorRole, tenantId }
       <div className="workspace-grid two">
         <section className="workspace-panel workspace-form-stack">
           <PanelHeading title="Business subscription override" description="Set a temporary negotiated monthly price for this Business; annual remains exactly 10× monthly for 12 months." />
-          <fieldset disabled={!canManage || saving !== null} style={{ border: 0, padding: 0, display: 'contents' }}>
+          <fieldset disabled={!canManageMerchantPricing || saving !== null} style={{ border: 0, padding: 0, display: 'contents' }}>
             <label>Plan<select value={subscriptionOverride.planCode} onChange={(event) => setSubscriptionOverride({ ...subscriptionOverride, planCode: event.target.value })}>{state.plans.filter((plan) => plan.active).map((plan) => <option key={plan.code} value={plan.code}>{plan.name}</option>)}</select></label>
             <div className="workspace-field-grid two"><label>Currency<input maxLength={3} value={subscriptionOverride.currency} onChange={(event) => setSubscriptionOverride({ ...subscriptionOverride, currency: event.target.value.toUpperCase() })} /></label><label>Monthly VAT-inclusive override<input inputMode="decimal" value={subscriptionOverride.monthlyGross} onChange={(event) => setSubscriptionOverride({ ...subscriptionOverride, monthlyGross: event.target.value })} /></label></div>
             <div className="workspace-field-grid two"><label>Effective from<input type="datetime-local" value={subscriptionOverride.effectiveFrom} onChange={(event) => setSubscriptionOverride({ ...subscriptionOverride, effectiveFrom: event.target.value })} /></label><label>Effective until<input type="datetime-local" value={subscriptionOverride.effectiveUntil} onChange={(event) => setSubscriptionOverride({ ...subscriptionOverride, effectiveUntil: event.target.value })} /></label></div>
@@ -153,7 +156,7 @@ export function CommercialPricingAdministration({ session, actorRole, tenantId }
         </section>
         <section className="workspace-panel workspace-form-stack">
           <PanelHeading title="Business Branch setup override" description="Set a temporary negotiated Branch setup price for this Business only." />
-          <fieldset disabled={!canManage || saving !== null} style={{ border: 0, padding: 0, display: 'contents' }}>
+          <fieldset disabled={!canManageMerchantPricing || saving !== null} style={{ border: 0, padding: 0, display: 'contents' }}>
             <div className="workspace-field-grid two"><label>Currency<input maxLength={3} value={setupOverride.currency} onChange={(event) => setSetupOverride({ ...setupOverride, currency: event.target.value.toUpperCase() })} /></label><label>VAT-inclusive setup override<input inputMode="decimal" value={setupOverride.gross} onChange={(event) => setSetupOverride({ ...setupOverride, gross: event.target.value })} /></label></div>
             <div className="workspace-field-grid two"><label>Effective from<input type="datetime-local" value={setupOverride.effectiveFrom} onChange={(event) => setSetupOverride({ ...setupOverride, effectiveFrom: event.target.value })} /></label><label>Effective until<input type="datetime-local" value={setupOverride.effectiveUntil} onChange={(event) => setSetupOverride({ ...setupOverride, effectiveUntil: event.target.value })} /></label></div>
             <label>Override reason<input maxLength={1000} value={setupOverride.reason} onChange={(event) => setSetupOverride({ ...setupOverride, reason: event.target.value })} /></label>
