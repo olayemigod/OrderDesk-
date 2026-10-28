@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import MerchantApp from './MerchantApp';
 import MerchantAuth, { merchantAuthModeFromLocation } from './MerchantAuth';
 import { SellerTrayMark } from './merchantShell';
 import { errorMessage, supabase } from './supabase';
 
 type WorkspaceState = 'checking' | 'ready' | 'none' | 'error';
 
-export default function MerchantPortalRoot() {
+export default function MerchantPortalRoot({ children }: { children: ReactNode }) {
   const [booting, setBooting] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
   const [workspaceState, setWorkspaceState] = useState<WorkspaceState>('checking');
@@ -123,7 +122,7 @@ export default function MerchantPortalRoot() {
     />;
   }
 
-  return <MerchantApp />;
+  return <>{children}</>;
 }
 
 function PortalStatus({ title, body, action }: { title: string; body: string; action?: ReactNode }) {
