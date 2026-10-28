@@ -5,8 +5,11 @@ import test from 'node:test';
 
 const read = (path) => readFileSync(resolve(import.meta.dirname, '../..', path), 'utf8');
 const selector = read('admin-web/src/MerchantSelector.tsx');
+const workspace = read('admin-web/src/AdminWorkspace.tsx');
 const commercial = read('admin-web/src/CommercialAdminWorkspaces.tsx');
-const lifecycle = read('admin-web/src/AgreementLifecycleManagement.tsx');
+const lifecycleShell = read('admin-web/src/AgreementLifecycleManagement.tsx');
+const lifecycle = read('admin-web/src/AgreementLifecycleCore.tsx');
+const orderFormAdmin = read('admin-web/src/OrderFormTemplateAdministration.tsx');
 const masterGateway = read('../supabase/functions/master-agreements/index.ts');
 const masterAuthority = read('../supabase/migrations/20261026060117_universal_master_agreement_authority.sql');
 const packageAuthority = read('../supabase/migrations/20261027100000_master_order_form_package_oa5c_convergence.sql');
@@ -16,17 +19,19 @@ const documentAuthority = read('../supabase/migrations/20261027170000_agreement_
 const zeroTouchAuthority = read('../supabase/migrations/20261027173000_agreement_package_zero_touch_orchestration.sql');
 const selfHealingAuthority = read('../supabase/migrations/20261027224913_agreement_package_processing_self_healing.sql');
 
-test('focused Agreements workspace keeps universal governance and reusable Order Form configuration without routine issuance', () => {
-  assert.match(commercial, /import AgreementLifecycleManagement/);
-  assert.match(commercial, /<AgreementLifecycleManagement session=\{session\} tenantId=\{tenantId\}/);
-  assert.match(commercial, /title="Order Form templates"/);
-  assert.match(commercial, /Automatic agreement orchestration/);
-  assert.match(commercial, /Zero-touch normal path/);
-  assert.match(commercial, /action: 'admin_publish_order_form_template'/);
-  assert.doesNotMatch(commercial, /title="Issue Order Form"/);
-  assert.doesNotMatch(commercial, /action: 'admin_issue_order_form'/);
-  assert.doesNotMatch(commercial, /Order Form reference<input/);
-  assert.doesNotMatch(commercial, /Rendered agreement content/);
+test('focused Agreements workspace is platform-scoped and keeps reusable Order Form configuration without routine issuance', () => {
+  assert.match(workspace, /label: 'Agreements', description: 'Master Agreement publication and Business acceptance history'/);
+  assert.doesNotMatch(workspace, /commercial\/agreements[^\n]+merchantScoped: true/);
+  assert.match(workspace, /<AgreementLifecycleManagement session=\{session\} tenantId=\{tenantId \?\? undefined\}/);
+  assert.match(lifecycleShell, /AgreementLifecycleCore/);
+  assert.match(lifecycleShell, /OrderFormTemplateAdministration/);
+  assert.match(orderFormAdmin, /Order Form templates/);
+  assert.match(orderFormAdmin, /Zero-touch normal path/);
+  assert.match(orderFormAdmin, /action: 'admin_publish_order_form_template'/);
+  assert.doesNotMatch(orderFormAdmin, /Issue Order Form/);
+  assert.doesNotMatch(orderFormAdmin, /admin_issue_order_form/);
+  assert.doesNotMatch(commercial, /CommercialAgreementAdministration/);
+  assert.doesNotMatch(commercial, /AgreementLifecycleManagement/);
   assert.match(selector, /showCommercialPortfolio === true/);
   assert.doesNotMatch(selector, /showCommercialPortfolio \?\? mode === 'single'/);
 });
@@ -150,6 +155,6 @@ test('agreement lifecycle does not invent commercial, refund, guarantee or entit
   assert.match(lifecycle, /Published versions remain available for immutable legal history/);
   assert.match(lifecycle, /one reviewed immutable version for the entire SellerTray platform/);
   assert.match(lifecycle, /review-only for Master Agreement publication/);
-  assert.match(commercial, /Governed commercial order → exact commercial snapshot → Order Form → Agreement Package/);
-  assert.doesNotMatch(commercial, /refundAmount|guaranteeStatus|tenant_subscriptions/);
+  assert.match(orderFormAdmin, /governed purchase facts/);
+  assert.doesNotMatch(orderFormAdmin, /refundAmount|guaranteeStatus|tenant_subscriptions/);
 });
