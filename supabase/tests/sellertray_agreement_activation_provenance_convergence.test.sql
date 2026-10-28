@@ -1,6 +1,20 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(14);
+select extensions.plan(15);
+
+select extensions.ok(
+  exists(
+    select 1
+    from supabase_migrations.schema_migrations
+    where version::text='20261027100400'
+  )
+  and exists(
+    select 1
+    from supabase_migrations.schema_migrations
+    where version::text='20261028052000'
+  ),
+  'original activation compatibility and forward convergence migrations both replayed'
+);
 
 select extensions.ok(
   to_regprocedure('public.sellertray_installment_contract_accepted_at(uuid,uuid,uuid)') is not null,
