@@ -27,6 +27,15 @@ test('all Admin pricing publication actions require verified AAL2 transport', ()
   }
 });
 
+test('legacy commercial agreement mutations remain retired during pricing convergence', () => {
+  assert.match(edge, /const RETIRED_AGREEMENT_MUTATIONS = new Set<Action>/);
+  assert.match(edge, /'merchant_accept'/);
+  assert.match(edge, /'admin_publish_template'/);
+  assert.match(edge, /'admin_issue'/);
+  assert.match(edge, /if \(RETIRED_AGREEMENT_MUTATIONS\.has\(action\)\)/);
+  assert.match(edge, /Use the SellerTray Master Agreement authority/);
+});
+
 test('database authority separates platform pricing from Business-scoped pricing', () => {
   assert.match(migration, /admin\.pricing\.manage',null,now\(\)/);
   assert.match(migration, /admin\.pricing\.manage',p_tenant_id,now\(\)/);
