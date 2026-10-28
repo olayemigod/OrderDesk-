@@ -68,20 +68,26 @@ For this bounded step, do **not** invent replacement commercial/legal wording. E
 
 Once v0.9 is published, any material wording change requires a later version.
 
-## Clause 92 production contact completion
+## Approved Clause 92 production contact facts
 
-Clause 92 requires ProcessEdge legal, privacy, support and billing contact details to be stated in the production Agreement or applicable Order Form before publication.
+ProcessEdge supplied and approved the following production facts on 2026-10-28 for the v0.9 merchant-facing artifact:
 
-Do not invent these facts from guessed addresses or generic mailbox conventions. Before the final v0.9 publication artifact is approved, ProcessEdge must explicitly supply or approve the exact production values for:
+- **Registered company:** ProcessEdge Solutions Limited
+- **Registered/business address:** 14, Damilola Alao Street, Ikorodu, Lagos State, Nigeria
+- **Company Registration No.:** 9519408
+- **SellerTray website:** www.sellertray.com
+- **Legal notices:** support@sellertray.com
+- **Privacy / Data Protection:** support@sellertray.com
+- **Customer support:** support@sellertray.com
+- **Customer support phone / WhatsApp:** 09049849859
+- **Staffed support hours:** 8:00 a.m. - 4:00 p.m., Monday to Friday
+- **Virtual support:** available at all times with limited support outside staffed hours
+- **Billing / Accounts:** billing@sellertray.com
+- **General fallback / enquiries:** info@sellertray.com
 
-- legal-notice email and, where used, postal/physical notice address and recipient/department;
-- privacy/data-protection email and, where different, address/recipient or DPO contact;
-- customer-support email, support phone/WhatsApp number and any stated support hours;
-- billing/accounts email and, where used, phone/WhatsApp number and recipient/department;
-- exact registered company name, registered/business address, company registration number where ProcessEdge wants it stated, and website/domain; and
-- any explicit decision that one shared contact/address applies to multiple categories above.
+The final v0.9 production artifact must state these facts without inventing additional addresses, people, departments, phone numbers or service-hour commitments.
 
-A clean artifact with Clause 92 still saying that these details "shall be stated ... before publication" is an **approval-preparation candidate only**. It must not be treated as the final merchant-publishable PDF until the approved contact facts have been inserted into the Agreement or governed Order Form as ProcessEdge directs.
+Clause 92 may therefore be finalised in the merchant-facing production artifact using these exact approved contact facts. This closes the factual contact-detail blocker that previously prevented the candidate from being treated as merchant-publishable.
 
 ## Schedule 9 treatment
 
@@ -95,7 +101,7 @@ Before LIVE publication:
 
 - exact merchant-facing v0.9 text/PDF identified;
 - no `NOT FOR MERCHANT ACCEPTANCE` or equivalent review-only presentation marker remains;
-- Clause 92 contact requirement is satisfied using explicit ProcessEdge-approved contact facts in the Agreement or applicable governed Order Form;
+- Clause 92 contains the exact ProcessEdge-approved production contact facts above;
 - substantive v0.9 terms have not been silently changed;
 - title and version code are exactly approved;
 - effective timestamp is explicitly chosen;
