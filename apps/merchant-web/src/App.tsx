@@ -311,7 +311,7 @@ function Overview({ business, branch, data, go }: { business: Business; branch: 
     </div>
     {report?.topItems.length ? <article className="panel">
       <div className="panel-head"><div><p className="eyebrow">Top products</p><h3>Sales contribution</h3></div><button className="text-button" onClick={() => go('reports')}>Open reports</button></div>
-      <Table headers={['Product', 'Quantity', 'Value']}>{report.topItems.slice(0, 6).map((item) => <tr key={item.name}><td><strong>{item.name}</strong></td><td>{formatNumber(item.quantity)}</td><td>{money(item.value, business.currency)}</td></tr>)}</Table>
+      <Table headers={['Product', 'Quantity', 'Value']}>{report.topItems.slice(0, 6).map((item) => <tr key={item.name}><td>{item.name}</td><td>{formatNumber(item.quantity)}</td><td>{money(item.value, business.currency)}</td></tr>)}</Table>
     </article> : null}
   </div>;
 }
