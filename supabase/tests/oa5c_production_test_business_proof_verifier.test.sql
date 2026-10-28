@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(12);
+select extensions.plan(14);
 
 select extensions.has_function(
   'public',
@@ -53,6 +53,32 @@ with definition as (
   ),'\s+','','g')) as body
 )
 select extensions.ok(
+  position('v_template.publication_scope=''production''' in body)>0
+  and position('v_template.production_authorized_at<=v_order_form.issued_at' in body)>0
+  and position('v_template.version_code=v_order_form.template_version_code' in body)>0
+  and position('v_template.content_sha256=v_order_form.template_content_sha256' in body)>0,
+  'OA5C requires exact immutable production-authorized Order Form template provenance'
+)
+from definition;
+
+with definition as (
+  select lower(regexp_replace(pg_get_functiondef(
+    'public.platform_admin_verify_oa5c_production_test_business_proof(uuid,uuid,uuid)'::regprocedure
+  ),'\s+','','g')) as body
+)
+select extensions.ok(
+  position('v_order_form_okandv_order_form_template_authorizedandv_manifest_ok' in body)>0
+  and position('orderformtemplateproductionauthorized' in body)>0,
+  'production template provenance is mandatory for the Agreement Package gate and automated evidence'
+)
+from definition;
+
+with definition as (
+  select lower(regexp_replace(pg_get_functiondef(
+    'public.platform_admin_verify_oa5c_production_test_business_proof(uuid,uuid,uuid)'::regprocedure
+  ),'\s+','','g')) as body
+)
+select extensions.ok(
   position('v_package.master_content_sha256=v_current_master_hash' in body)>0
   and position('v_package.order_form_content_sha256=v_order_form.content_sha256' in body)>0
   and position('v_package.order_form_commercial_snapshot_sha256=v_order_form.commercial_snapshot_sha256' in body)>0
@@ -72,6 +98,18 @@ select extensions.ok(
   and position('acceptance_component' in body)>0
   and position('order_form_confirmation' in body)>0,
   'Order Form confirmation must be authenticated merchant action with explicit authority evidence'
+)
+from definition;
+
+with definition as (
+  select lower(regexp_replace(pg_get_functiondef(
+    'public.platform_admin_verify_oa5c_production_test_business_proof(uuid,uuid,uuid)'::regprocedure
+  ),'\s+','','g')) as body
+)
+select extensions.ok(
+  position('coalesce(v_confirmation.request_evidence->>''authority_confirmed'','''')=''true''' in body)>0
+  and position('(v_confirmation.request_evidence->>''authority_confirmed'')::boolean' in body)=0,
+  'malformed authority_confirmed evidence fails closed instead of throwing a boolean cast error'
 )
 from definition;
 
