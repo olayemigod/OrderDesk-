@@ -34,6 +34,10 @@ for each row execute function public.prevent_sellertray_commercial_history_mutat
 comment on table public.sellertray_commercial_price_version_controls is
   'Append-only Pause/Resume/Deactivate/Void evidence for immutable SellerTray commercial price versions. Existing orders retain their snapshotted prices.';
 
+-- This helper is deliberately SECURITY DEFINER because the existing Business-aware
+-- resolver is callable by anon/authenticated roles while the control ledger itself
+-- must remain private. The helper exposes only the effective lifecycle state, never
+-- actor/reason/audit detail from the underlying control evidence.
 create or replace function public.sellertray_commercial_price_version_state(
   p_price_version_id uuid,
   p_as_of timestamptz
@@ -41,6 +45,7 @@ create or replace function public.sellertray_commercial_price_version_state(
 returns text
 language sql
 stable
+security definer
 set search_path=''
 as $$
   with latest as (
@@ -58,6 +63,9 @@ as $$
     else 'active'
   end;
 $$;
+
+revoke all on function public.sellertray_commercial_price_version_state(uuid,timestamptz) from public;
+grant execute on function public.sellertray_commercial_price_version_state(uuid,timestamptz) to anon,authenticated,service_role;
 
 create or replace function public.resolve_sellertray_commercial_price_version(
   p_price_kind text,
