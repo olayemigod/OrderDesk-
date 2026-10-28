@@ -22,6 +22,7 @@ export type MerchantPortalPage =
   | 'team'
   | 'agreements'
   | 'feedback'
+  | 'setup_activation'
   | 'settings';
 
 export type MerchantPortalSection =
@@ -54,7 +55,6 @@ export const MERCHANT_PORTAL_NAVIGATION: MerchantPortalNavigationItem[] = [
   { id: 'purchasing', label: 'Purchase Orders & Receiving', section: 'Purchasing', available: true },
   { id: 'suppliers', label: 'Suppliers', section: 'Purchasing', available: true },
   { id: 'payments', label: 'Payments & Receivables', section: 'Money', available: true },
-  { id: 'sellertray_billing', label: 'SellerTray Billing', section: 'Money', available: true },
   { id: 'cash', label: 'Cash & Shifts', section: 'Money', available: true },
   { id: 'expenses', label: 'Business Expenses', section: 'Money', available: true },
   { id: 'whatsapp', label: 'WhatsApp', section: 'Channels', available: true },
@@ -65,6 +65,8 @@ export const MERCHANT_PORTAL_NAVIGATION: MerchantPortalNavigationItem[] = [
   { id: 'team', label: 'Team & Permissions', section: 'Business', available: true },
   { id: 'agreements', label: 'Agreements', section: 'Business', available: true },
   { id: 'feedback', label: 'Feedback', section: 'Business', available: true },
+  { id: 'sellertray_billing', label: 'Billing', section: 'Business', available: true },
+  { id: 'setup_activation', label: 'Setup & Activation', section: 'Business', available: true },
   { id: 'settings', label: 'Settings', section: 'Business', available: true },
 ];
 
