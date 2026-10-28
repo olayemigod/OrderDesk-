@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(14);
+select extensions.plan(15);
 
 select extensions.has_table(
   'public','sellertray_commercial_price_version_controls',
@@ -34,6 +34,17 @@ select extensions.has_function(
   'public','sellertray_commercial_price_version_state',
   array['uuid','timestamp with time zone'],
   'price lifecycle state resolver exists'
+);
+
+select extensions.ok(
+  (select p.prosecdef
+   from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+   where n.nspname='public' and p.oid='public.sellertray_commercial_price_version_state(uuid,timestamp with time zone)'::regprocedure)
+  and has_function_privilege('authenticated','public.sellertray_commercial_price_version_state(uuid,timestamp with time zone)','EXECUTE')
+  and has_function_privilege('anon','public.sellertray_commercial_price_version_state(uuid,timestamp with time zone)','EXECUTE')
+  and not has_table_privilege('authenticated','public.sellertray_commercial_price_version_controls','SELECT')
+  and not has_table_privilege('anon','public.sellertray_commercial_price_version_controls','SELECT'),
+  'narrow SECURITY DEFINER state helper preserves existing resolver-role compatibility without exposing the control ledger'
 );
 
 with definition as (
