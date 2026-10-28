@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { SellerTrayInput } from './SellerTrayElements';
+import { SellerTrayMark } from './merchantShell';
 import { errorMessage, supabase } from './supabase';
 import './merchant-auth.css';
 
@@ -67,7 +68,6 @@ export default function MerchantAuth({
       if (result.error) throw result.error;
       if (!result.data.session) throw new Error('SellerTray did not receive a valid session. Please try again.');
 
-      // Confirm the identity with Supabase Auth rather than trusting browser storage alone.
       const verified = await supabase.auth.getUser(result.data.session.access_token);
       if (verified.error || !verified.data.user || verified.data.user.id !== result.data.session.user.id) {
         await supabase.auth.signOut({ scope: 'local' });
@@ -211,15 +211,15 @@ export default function MerchantAuth({
 
   return <div className="login-shell">
     <section className="login-brand">
-      <div className="brand-mark large">S</div>
+      <SellerTrayMark large />
       <p className="eyebrow">SellerTray</p>
-      <h1>Run the business. Keep selling on mobile.</h1>
+      <h1>Manage the business. Keep selling on mobile.</h1>
       <p>Manage orders, stock, Branch performance, cash controls, WhatsApp and reporting from one merchant workspace.</p>
     </section>
 
     <form className="login-card auth-card" onSubmit={mode === 'sign-in' ? signIn : mode === 'forgot-password' ? requestPasswordReset : mode === 'reset-password' ? resetPassword : createBusiness}>
       <div>
-        <p className="eyebrow">Merchant Management</p>
+        <p className="eyebrow">Merchant Web</p>
         <h2>{title}</h2>
         <p className="muted">{mode === 'forgot-password'
           ? 'Enter your account email and SellerTray will send recovery instructions.'
