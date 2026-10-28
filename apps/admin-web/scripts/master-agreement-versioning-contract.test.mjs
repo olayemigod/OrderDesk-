@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-const adminSource = readFileSync(resolve(import.meta.dirname, '../src/AgreementLifecycleManagement.tsx'), 'utf8');
+const adminSource = readFileSync(resolve(import.meta.dirname, '../src/AgreementLifecycleCore.tsx'), 'utf8');
 const gatewaySource = readFileSync(resolve(import.meta.dirname, '../../../supabase/functions/master-agreements/index.ts'), 'utf8');
 const quarantineMigration = readFileSync(resolve(import.meta.dirname, '../../../supabase/migrations/20261027123000_master_agreement_publication_quarantine.sql'), 'utf8');
 

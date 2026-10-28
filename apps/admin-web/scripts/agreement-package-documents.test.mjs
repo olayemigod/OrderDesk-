@@ -8,12 +8,14 @@ const repo = path.resolve(root, '../..');
 const read = (relative) => fs.readFileSync(path.resolve(root, relative), 'utf8');
 const readRepo = (relative) => fs.readFileSync(path.resolve(repo, relative), 'utf8');
 
-const adminUi = read('src/AgreementLifecycleManagement.tsx');
+const adminShell = read('src/AgreementLifecycleManagement.tsx');
+const adminUi = read('src/AgreementLifecycleCore.tsx');
 const gateway = readRepo('supabase/functions/master-agreements/index.ts');
 const renderer = readRepo('supabase/functions/master-agreements/agreement-pdf.ts');
 const migration = readRepo('supabase/migrations/20261027170000_agreement_document_artifacts.sql');
 
 test('redesigned Admin Add New tab supports reviewed PDF publication without bypassing publication governance', () => {
+  assert.match(adminShell, /AgreementLifecycleCore/);
   assert.match(adminUi, /Add New/);
   assert.match(adminUi, /Upload reviewed PDF/);
   assert.match(adminUi, /Paste legal content/);

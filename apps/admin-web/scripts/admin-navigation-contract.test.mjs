@@ -35,7 +35,10 @@ test('Commercial and onboarding jobs have focused first-class destinations', () 
   assert.match(workspace, /CommercialOrdersAdministration/);
   assert.match(workspace, /CommercialPricingAdministration/);
   assert.match(workspace, /InstallmentEntitlementAdministration/);
-  assert.match(workspace, /CommercialAgreementAdministration/);
+  assert.match(workspace, /AgreementLifecycleManagement/);
+  assert.match(workspace, /Master Agreement publication and Business acceptance history/);
+  assert.doesNotMatch(workspace, /CommercialAgreementAdministration/);
+  assert.doesNotMatch(workspace, /commercial\/agreements[^\n]+merchantScoped: true/);
   assert.match(workspace, /BranchReadinessAdministration/);
   assert.match(workspace, /view="appointments" showMerchantSelector=\{false\}/);
   assert.match(workspace, /view="resources" showMerchantSelector=\{false\}/);
@@ -106,7 +109,6 @@ test('Legacy hashes remain recoverable after navigation convergence', () => {
     assert.match(workspace, new RegExp(`['\"]?${legacy.replace('/', '\\/')}['\"]?:`));
   }
 });
-
 
 test('Browser history tracks the full hash so same-route Merchant context restores on Back and Forward', () => {
   assert.match(workspace, /const \[locationHash, setLocationHash\] = useState\(\(\) => window\.location\.hash\)/);

@@ -1,7 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import AgreementLifecycleManagement from './AgreementLifecycleManagement';
-import { invokeJson } from './supabase';
 import {
   invokeCommercialAdmin,
   loadCommercialOnboarding,
@@ -12,11 +10,6 @@ import {
   type CommercialOverview,
   type OnboardingOrder,
 } from './commercial-admin-state';
-
-const ORDER_FORM_FAMILIES = [
-  ['installment_agreement', 'Installment Order Form'],
-  ['subscription_order', 'Subscription Order Form'],
-] as const;
 
 export function CommercialPricingAdministration({ session, actorRole, tenantId }: { session: Session; actorRole: AdminRole; tenantId: string }) {
   const { state, loading, error, message, saving, reload, mutate, setError } = useOnboardingWorkspace(session, tenantId);
@@ -139,56 +132,6 @@ export function CommercialOrdersAdministration({ session, actorRole, tenantId }:
   </WorkspaceState>;
 }
 
-export function CommercialAgreementAdministration({ session, actorRole, tenantId }: { session: Session; actorRole: AdminRole; tenantId: string }) {
-  const { state, loading, error, message, reload, setError, setMessage } = useOnboardingWorkspace(session, tenantId);
-  const [legalSaving, setLegalSaving] = useState<string | null>(null);
-  const [template, setTemplate] = useState({ family: 'installment_agreement', versionCode: '', title: 'SellerTray Order Form', contentBody: '', effectiveFrom: nowLocal(), reason: '' });
-  const canManage = actorRole === 'admin' && state?.canManage === true;
-
-  async function publishOrderFormTemplate() {
-    if (!canManage || legalSaving) return;
-    const effectiveFrom = isoFromLocal(template.effectiveFrom);
-    if (!template.versionCode.trim() || !template.title.trim() || !template.contentBody.trim()) return setError('Order Form version, title and reviewed legal content are required.');
-    if (!effectiveFrom || template.reason.trim().length < 6) return setError('Enter a valid effective time and a publication reason of at least 6 characters.');
-    setLegalSaving('template'); setError(null); setMessage(null);
-    try {
-      await invokeJson('master-agreements', {
-        action: 'admin_publish_order_form_template', tenantId,
-        family: template.family, versionCode: template.versionCode.trim(), title: template.title.trim(),
-        contentBody: template.contentBody.trim(), effectiveFrom, reason: template.reason.trim(),
-      }, session);
-      await reload();
-      setTemplate((current) => ({ ...current, versionCode: '', contentBody: '', reason: '' }));
-      setMessage('Immutable Order Form template published. New governed purchases will use the applicable template automatically.');
-    } catch (cause) {
-      setError(messageFrom(cause, 'Unable to publish this Order Form template.'));
-    } finally { setLegalSaving(null); }
-  }
-
-  return <WorkspaceState loading={loading} error={error} message={message} onReload={reload}>
-    {!canManage ? <div className="workspace-banner info">Platform Support can review agreement configuration and history. Legal publication remains restricted to explicitly authorised Platform Admin authority.</div> : null}
-    {state ? <div className="workspace-grid two">
-      <section className="workspace-panel workspace-form-stack">
-        <PanelHeading title="Order Form templates" description="Publish reusable purchase-specific legal wording once. SellerTray automatically instantiates the applicable Order Form and Agreement Package from each governed commercial order." />
-        <label>Order Form type<select value={template.family} onChange={(event) => setTemplate({ ...template, family: event.target.value })}>{ORDER_FORM_FAMILIES.map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></label>
-        <div className="workspace-field-grid two"><label>Version<input maxLength={64} value={template.versionCode} onChange={(event) => setTemplate({ ...template, versionCode: event.target.value })} /></label><label>Effective from<input type="datetime-local" value={template.effectiveFrom} onChange={(event) => setTemplate({ ...template, effectiveFrom: event.target.value })} /></label></div>
-        <label>Title<input maxLength={200} value={template.title} onChange={(event) => setTemplate({ ...template, title: event.target.value })} /></label>
-        <label>Reviewed Order Form legal content<textarea rows={8} maxLength={200000} value={template.contentBody} onChange={(event) => setTemplate({ ...template, contentBody: event.target.value })} placeholder="Paste approved Order Form wording. Commercial price, Branch and installment facts are snapshotted by the server and are not typed here." /></label>
-        <label>Publication reason<input maxLength={1000} value={template.reason} onChange={(event) => setTemplate({ ...template, reason: event.target.value })} /></label>
-        <button type="button" className="workspace-button primary" disabled={!canManage || legalSaving !== null} onClick={() => void publishOrderFormTemplate()}>{legalSaving === 'template' ? 'Publishing…' : 'Publish Order Form template'}</button>
-      </section>
-      <section className="workspace-panel workspace-form-stack">
-        <PanelHeading title="Automatic agreement orchestration" description="Routine per-merchant Order Form issuance is no longer an Admin task." />
-        <div className="workspace-banner success"><strong>Zero-touch normal path</strong><span>Governed commercial order → exact commercial snapshot → Order Form → Agreement Package → merchant review and acceptance.</span></div>
-        <div className="workspace-detail-grid"><Detail label="Governed orders" value={String(state.orders.length)} /><Detail label="Reusable Order Form templates" value={String(state.templates.filter((row) => row.family === 'installment_agreement' || row.family === 'subscription_order').length)} /></div>
-        <div className="workspace-banner info">If legal configuration is missing, SellerTray preserves the commercial order and blocks activation rather than asking Admin to recreate the purchase. Admin intervention is limited to correcting configuration and running governed reconciliation.</div>
-        <div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Template</th><th>Type</th><th>Version</th><th>Effective</th></tr></thead><tbody>{state.templates.filter((row) => row.family === 'installment_agreement' || row.family === 'subscription_order').map((row) => <tr key={row.id}><td>{row.title}</td><td>{label(row.family)}</td><td>{row.versionCode}</td><td>{formatDate(row.effectiveFrom)}</td></tr>)}{!state.templates.some((row) => row.family === 'installment_agreement' || row.family === 'subscription_order') ? <tr><td colSpan={4}>No reusable Order Form template is configured.</td></tr> : null}</tbody></table></div>
-      </section>
-    </div> : null}
-    <AgreementLifecycleManagement session={session} tenantId={tenantId} />
-  </WorkspaceState>;
-}
-
 export function InstallmentEntitlementAdministration({ session, tenantId }: { session: Session; tenantId: string }) {
   const { state, loading, error, reload } = useOverviewWorkspace(session, tenantId);
   return <WorkspaceState loading={loading} error={error} onReload={reload}>
@@ -247,7 +190,7 @@ function useOnboardingWorkspace(session: Session, tenantId: string) {
     finally { setSaving(null); }
   }
 
-  return { state, loading, saving, error, message, reload, mutate, setError, setMessage };
+  return { state, loading, saving, error, message, reload, mutate, setError };
 }
 
 function useOverviewWorkspace(session: Session, tenantId: string) {
