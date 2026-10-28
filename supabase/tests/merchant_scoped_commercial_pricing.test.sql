@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(17);
+select extensions.plan(18);
 
 select extensions.ok(
   (select count(*)=3 from information_schema.columns
