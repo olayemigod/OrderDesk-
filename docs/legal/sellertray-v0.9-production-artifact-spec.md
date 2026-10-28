@@ -1,6 +1,6 @@
 # SellerTray Master Agreement v0.9 - Production Artifact Specification
 
-Status: **approval preparation / publication input specification**
+Status: **production publication input prepared; final publication still requires governed LIVE approval/execution**
 
 This specification converts the retained `SellerTray_Counsel_Review_Copy_v0.9` source into the merchant-facing initial production artifact while preserving the approved v0.9 substantive terms.
 
@@ -87,7 +87,20 @@ ProcessEdge supplied and approved the following production facts on 2026-10-28 f
 
 The final v0.9 production artifact must state these facts without inventing additional addresses, people, departments, phone numbers or service-hour commitments.
 
-Clause 92 may therefore be finalised in the merchant-facing production artifact using these exact approved contact facts. This closes the factual contact-detail blocker that previously prevented the candidate from being treated as merchant-publishable.
+Clause 92 is finalised in the prepared merchant-facing production artifact using these exact approved contact facts. The former factual contact-detail blocker is closed.
+
+## Prepared production artifact
+
+The prepared merchant-facing artifact:
+
+- removes the review-only/counsel-only presentation matter listed above;
+- preserves Part I clauses 1-92 and Schedules 1-9;
+- includes the approved company identity on the cover;
+- contains the approved Clause 92 legal/privacy/support/billing/general contact facts;
+- presents Schedule 9 as a governed Merchant Order Form template rather than embedding merchant-specific commercial values into the universal Master Agreement; and
+- is formatted as an A4, text-based, merchant-readable production PDF suitable for the existing Admin reviewed-PDF publication path after final approval and LIVE reconciliation.
+
+The final rendered publication PDF must be treated as immutable input once published; any later material legal wording change requires a later Master Agreement version.
 
 ## Schedule 9 treatment
 
