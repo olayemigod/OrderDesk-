@@ -114,6 +114,7 @@ Deno.serve(async (request) => {
     }
 
     if (action === 'admin_publish_subscription_price') {
+      if (jwtAal(token) !== 'aal2') return json({ error: 'MFA/AAL2 required for commercial pricing' }, 403);
       const tenantId = optionalUuid(body.tenantId);
       const planCode = cleanText(body.planCode, 64);
       const currency = cleanCurrency(body.currency);
@@ -137,6 +138,7 @@ Deno.serve(async (request) => {
     }
 
     if (action === 'admin_publish_setup_price') {
+      if (jwtAal(token) !== 'aal2') return json({ error: 'MFA/AAL2 required for commercial pricing' }, 403);
       const tenantId = optionalUuid(body.tenantId);
       const currency = cleanCurrency(body.currency);
       const grossAmount = cleanPositiveAmount(body.grossAmount);
