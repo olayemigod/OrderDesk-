@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(13);
+select extensions.plan(14);
 
 select extensions.has_table(
   'public','sellertray_commercial_price_version_controls',
