@@ -83,6 +83,8 @@ export type OnboardingTemplate = { id: string; family: string; versionCode: stri
 export type OnboardingAgreement = { id: string; commercialOrderId: string; reference: string; accepted: boolean };
 export type CommercialOnboarding = {
   canManage: boolean;
+  canManageGlobalPricing: boolean;
+  canManageMerchantPricing: boolean;
   eligibleForInitialInstallment: boolean;
   planCode: string | null;
   plans: OnboardingPlan[];
@@ -170,6 +172,8 @@ function parseOnboarding(value: unknown): CommercialOnboarding {
   const runtime = record(root.runtimeCompatibility);
   return {
     canManage: root.canManage === true,
+    canManageGlobalPricing: root.canManageGlobalPricing === true,
+    canManageMerchantPricing: root.canManageMerchantPricing === true,
     eligibleForInitialInstallment: runtime.eligibleForInitialInstallment === true,
     planCode: nullableString(runtime.planCode),
     plans: array(root.plans).map((value) => {
