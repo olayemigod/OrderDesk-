@@ -1,7 +1,18 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(9);
+select extensions.plan(11);
+
+with definition as (
+  select lower(regexp_replace(pg_get_functiondef(
+    'public.publish_sellertray_subscription_price_pair_admin(text,text,numeric,numeric,timestamp with time zone,text,uuid)'::regprocedure
+  ),'\s+','','g')) as body
+)
+select extensions.ok(
+  position('v_roleisdistinctfrom''admin''' in body)>0,
+  'standard subscription pricing preserves the NULL-safe Platform Admin-only boundary'
+)
+from definition;
 
 with definition as (
   select lower(regexp_replace(pg_get_functiondef(
@@ -11,7 +22,18 @@ with definition as (
 select extensions.ok(
   position('admin.pricing.manage' in body)>0
   and position('p_actor_user_id,''admin.pricing.manage'',null,now()' in body)>0,
-  'standard subscription pricing requires platform-scoped admin.pricing.manage authority'
+  'standard subscription pricing additionally requires platform-scoped admin.pricing.manage authority'
+)
+from definition;
+
+with definition as (
+  select lower(regexp_replace(pg_get_functiondef(
+    'public.publish_sellertray_branch_setup_price_admin(text,numeric,numeric,timestamp with time zone,text,uuid)'::regprocedure
+  ),'\s+','','g')) as body
+)
+select extensions.ok(
+  position('v_roleisdistinctfrom''admin''' in body)>0,
+  'standard Branch setup pricing preserves the NULL-safe Platform Admin-only boundary'
 )
 from definition;
 
@@ -23,7 +45,7 @@ with definition as (
 select extensions.ok(
   position('admin.pricing.manage' in body)>0
   and position('p_actor_user_id,''admin.pricing.manage'',null,now()' in body)>0,
-  'standard Branch setup pricing requires platform-scoped admin.pricing.manage authority'
+  'standard Branch setup pricing additionally requires platform-scoped admin.pricing.manage authority'
 )
 from definition;
 
@@ -70,8 +92,8 @@ with definition as (
   ),'\s+','','g')) as body
 )
 select extensions.ok(
-  position('''canmanageglobalpricing'',public.platform_admin_has_capability(p_actor_user_id,''admin.pricing.manage'',null,now())' in body)>0,
-  'Admin onboarding exposes platform-wide pricing authority separately'
+  position('''canmanageglobalpricing'',v_role=''admin''andpublic.platform_admin_has_capability(p_actor_user_id,''admin.pricing.manage'',null,now())' in body)>0,
+  'Admin onboarding exposes standard pricing authority as Admin role plus platform capability'
 )
 from definition;
 
