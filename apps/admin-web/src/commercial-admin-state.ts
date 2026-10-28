@@ -64,6 +64,11 @@ export type OnboardingPrice = {
   grossAmount: number;
   taxRatePercent: number | null;
   effectiveFrom: string;
+  effectiveUntil: string | null;
+  changeReason: string | null;
+  priceScope: 'standard' | 'merchant_override';
+  tenantId: string | null;
+  sourceStandardPriceVersionId: string | null;
 };
 export type OnboardingOrder = {
   id: string;
@@ -186,6 +191,11 @@ function parseOnboarding(value: unknown): CommercialOnboarding {
         grossAmount: numberValue(row.grossAmount),
         taxRatePercent: nullableNumber(row.taxRatePercent),
         effectiveFrom: stringValue(row.effectiveFrom),
+        effectiveUntil: nullableString(row.effectiveUntil),
+        changeReason: nullableString(row.changeReason),
+        priceScope: row.priceScope === 'merchant_override' ? 'merchant_override' : 'standard',
+        tenantId: nullableString(row.tenantId),
+        sourceStandardPriceVersionId: nullableString(row.sourceStandardPriceVersionId),
       } as OnboardingPrice;
     }).filter((row) => row.id),
     orders: array(root.orders).map((value) => {
