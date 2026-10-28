@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import MerchantApp from './MerchantApp';
 import MerchantAuth, { merchantAuthModeFromLocation } from './MerchantAuth';
@@ -126,7 +126,7 @@ export default function MerchantPortalRoot() {
   return <MerchantApp />;
 }
 
-function PortalStatus({ title, body, action }: { title: string; body: string; action?: React.ReactNode }) {
+function PortalStatus({ title, body, action }: { title: string; body: string; action?: ReactNode }) {
   return <div className="status-page">
     <div className="status-card">
       <SellerTrayMark large />
