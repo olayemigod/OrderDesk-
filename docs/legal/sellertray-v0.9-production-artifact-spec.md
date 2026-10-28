@@ -68,6 +68,21 @@ For this bounded step, do **not** invent replacement commercial/legal wording. E
 
 Once v0.9 is published, any material wording change requires a later version.
 
+## Clause 92 production contact completion
+
+Clause 92 requires ProcessEdge legal, privacy, support and billing contact details to be stated in the production Agreement or applicable Order Form before publication.
+
+Do not invent these facts from guessed addresses or generic mailbox conventions. Before the final v0.9 publication artifact is approved, ProcessEdge must explicitly supply or approve the exact production values for:
+
+- legal-notice email and, where used, postal/physical notice address and recipient/department;
+- privacy/data-protection email and, where different, address/recipient or DPO contact;
+- customer-support email, support phone/WhatsApp number and any stated support hours;
+- billing/accounts email and, where used, phone/WhatsApp number and recipient/department;
+- exact registered company name, registered/business address, company registration number where ProcessEdge wants it stated, and website/domain; and
+- any explicit decision that one shared contact/address applies to multiple categories above.
+
+A clean artifact with Clause 92 still saying that these details "shall be stated ... before publication" is an **approval-preparation candidate only**. It must not be treated as the final merchant-publishable PDF until the approved contact facts have been inserted into the Agreement or governed Order Form as ProcessEdge directs.
+
 ## Schedule 9 treatment
 
 Schedule 9 remains the governed Merchant Order Form template structure. Merchant-specific values are generated from governed commercial authority and must not be hard-coded into the universal Master Agreement.
@@ -80,6 +95,7 @@ Before LIVE publication:
 
 - exact merchant-facing v0.9 text/PDF identified;
 - no `NOT FOR MERCHANT ACCEPTANCE` or equivalent review-only presentation marker remains;
+- Clause 92 contact requirement is satisfied using explicit ProcessEdge-approved contact facts in the Agreement or applicable governed Order Form;
 - substantive v0.9 terms have not been silently changed;
 - title and version code are exactly approved;
 - effective timestamp is explicitly chosen;
