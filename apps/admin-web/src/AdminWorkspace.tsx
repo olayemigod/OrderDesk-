@@ -11,7 +11,7 @@ import {
 } from './CommercialAdminWorkspaces';
 import CommercialSettlementAdministration from './CommercialSettlementAdministration';
 import { CampaignHistory, MerchantMessageComposer, type AdminAuditEvent } from './AdminCommunicationsWorkspaces';
-import { AiOperations, WhatsAppOperations } from './AdminOperationsWorkspaces';
+import { AiOperations, PaymentInfrastructure, WhatsAppOperations } from './AdminOperationsWorkspaces';
 import MerchantPortfolio from './MerchantPortfolio';
 import MerchantSelector from './MerchantSelector';
 import SetupSchedulingAdministration from './SetupSchedulingAdministration';
@@ -37,6 +37,7 @@ type AdminRoute =
   | 'communications/history'
   | 'operations/whatsapp'
   | 'operations/ai'
+  | 'operations/payments'
   | 'reports/revenue'
   | 'governance/audit';
 type IconName = 'overview' | 'merchants' | 'commercial' | 'setup' | 'communications' | 'operations' | 'reports' | 'governance' | 'menu' | 'close' | 'refresh' | 'search' | 'chevron';
@@ -76,6 +77,7 @@ const NAV_GROUPS: NavGroup[] = [
   { id: 'operations', label: 'Platform Operations', icon: 'operations', items: [
     { id: 'operations/whatsapp', label: 'WhatsApp Operations', description: 'Cross-merchant connection health' },
     { id: 'operations/ai', label: 'AI Operations', description: 'Parser readiness and diagnostics' },
+    { id: 'operations/payments', label: 'Payment Infrastructure', description: 'ProcessEdge collection readiness' },
   ] },
   { id: 'reports', label: 'Insights & Reports', icon: 'reports', items: [
     { id: 'reports/revenue', label: 'Revenue Dashboard', description: 'Collections, commercial value and installment exposure' },
@@ -258,6 +260,7 @@ function WorkspaceShell({ session, bootstrap, audit, onReload, onAuditRefresh, o
       case 'communications/history': return <PageFrame eyebrow="Communications" title="Campaign history" description="Review audited merchant-message publications independently from message composition."><CampaignHistory audit={audit} /></PageFrame>;
       case 'operations/whatsapp': return <PageFrame eyebrow="Platform Operations" title="WhatsApp operations" description="Monitor cross-merchant WhatsApp connection health without mixing AI diagnostics into the same page."><WhatsAppOperations session={session} /></PageFrame>;
       case 'operations/ai': return <PageFrame eyebrow="Platform Operations" title="AI operations" description="Review server-side parser readiness and run controlled diagnostics within ProcessEdge authority."><AiOperations session={session} actorRole={bootstrap.actorRole} /></PageFrame>;
+      case 'operations/payments': return <PageFrame eyebrow="Platform Operations" title="Payment infrastructure" description="Review server-side ProcessEdge/SellerTray collection readiness without exposing or storing raw gateway credentials in Admin Web."><PaymentInfrastructure session={session} /></PageFrame>;
       case 'reports/revenue': return <RevenueDashboard session={session} refreshKey={bootstrap.generatedAt} />;
       case 'governance/audit': return <AuditPage audit={audit} onRefresh={onAuditRefresh} />;
     }
@@ -358,6 +361,7 @@ function routeFromHash(hash = window.location.hash): AdminRoute {
     'communications/messages': 'communications/compose',
     operations: 'operations/whatsapp',
     'operations/health': 'operations/whatsapp',
+    'payment-infrastructure': 'operations/payments',
     revenue: 'reports/revenue',
     reports: 'reports/revenue',
     audit: 'governance/audit',
