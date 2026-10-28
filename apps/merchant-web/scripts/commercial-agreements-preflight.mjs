@@ -14,12 +14,13 @@ const excludes = (source, values) => values.every((value) => !source.includes(va
 
 requireValue(
   navigation.includes("id: 'sellertray_billing'")
-    && navigation.includes("label: 'SellerTray Billing'")
+    && navigation.includes("label: 'Billing'")
+    && navigation.includes("section: 'Business'")
     && navigation.includes("id: 'agreements'")
     && navigation.includes("label: 'Agreements'")
     && navigation.includes("id: 'payments'")
     && navigation.includes("label: 'Payments & Receivables'"),
-  'Merchant navigation must keep SellerTray Billing, Agreements, and customer Payments & Receivables as separate surfaces.',
+  'Merchant navigation must keep Billing, Agreements, and customer Payments & Receivables as separate governed surfaces.',
 );
 
 requireValue(
@@ -27,7 +28,7 @@ requireValue(
     && merchantApp.includes('<SellerTrayBillingManagement tenantId={business.id} />')
     && merchantApp.includes("page === 'agreements'")
     && merchantApp.includes('<CommercialAgreementsManagement tenantId={business.id} />'),
-  'Merchant App must route SellerTray Billing and Agreements to their dedicated surfaces.',
+  'Merchant App must route Billing and Agreements to their dedicated surfaces.',
 );
 
 requireValue(
@@ -74,12 +75,12 @@ requireValue(
     && billing.includes('nextPayableAmount')
     && billing.includes("response.status === 'retry_required'")
     && billing.includes('response.needsNewCommand === true'),
-  'SellerTray Billing must read server-owned settlement state and preserve governed checkout retry semantics.',
+  'Billing must read server-owned settlement state and preserve governed checkout retry semantics.',
 );
 
 requireValue(
   excludes(billing, ['SERVICE_ROLE', 'SUPABASE_SECRET', "from('sellertray_commercial_payment_confirmations')"]),
-  'SellerTray Billing must not bypass the governed commercial billing and checkout authorities.',
+  'Billing must not bypass the governed commercial billing and checkout authorities.',
 );
 
 if (failures.length) {

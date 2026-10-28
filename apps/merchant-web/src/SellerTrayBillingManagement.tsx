@@ -122,10 +122,9 @@ export default function SellerTrayBillingManagement({ tenantId }: { tenantId: st
 
   return <section className="page-stack">
     <div className="section-heading">
-      <div><p className="eyebrow">ProcessEdge commercial account</p><h2>SellerTray Billing</h2></div>
+      <div><p className="eyebrow">ProcessEdge commercial account</p><h2>Billing</h2></div>
       <p className="muted">Review what your business owes ProcessEdge for SellerTray. Customer receivables remain under Payments & Receivables.</p>
     </div>
-    <div className="governance-note">Discounts, direct ProcessEdge payments and provider payments are separate immutable settlement facts. The balance and next payable amount shown here come from SellerTray’s server authority.</div>
     {error ? <div className="error-banner">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div> : null}
     {message ? <div className="success-banner">{message}<button type="button" onClick={() => setMessage(null)}>Dismiss</button></div> : null}
 
@@ -147,7 +146,7 @@ export default function SellerTrayBillingManagement({ tenantId }: { tenantId: st
         </div>
 
         {state.outstandingAmount >= 0.005 ? <div className="access-card">
-          <span style={{ flex: 1 }}><strong>Next payable: {money(state.nextPayableAmount, order.currency)}</strong><small>This value is resolved by the server after all approved adjustments and confirmed payments.</small></span>
+          <span style={{ flex: 1 }}><strong>Next payable: {money(state.nextPayableAmount, order.currency)}</strong></span>
           {canPay ? <button type="button" className="primary-button" disabled={payingOrderId !== null} onClick={() => void pay(order)}>{payingOrderId === order.commercialOrderId ? 'Opening secure payment…' : 'Pay SellerTray'}</button> : center.canPay ? <span className="role-pill">No payable installment</span> : <span className="role-pill">Owner payment</span>}
         </div> : <div className="success-banner">This commercial order is fully settled.</div>}
 

@@ -103,7 +103,7 @@ export default function MerchantApp() {
 
   const managementRole = business.role as ManagementRole;
   const currentNav = NAV.find((item) => item.id === page);
-  const managementPage = page === 'products' || page === 'categories' || page === 'units' || page === 'suppliers' || page === 'branches' || page === 'team' || page === 'devices' || page === 'feedback' || page === 'settings';
+  const managementPage = page === 'products' || page === 'categories' || page === 'units' || page === 'suppliers' || page === 'branches' || page === 'team' || page === 'devices' || page === 'feedback' || page === 'setup_activation' || page === 'settings';
 
   return <div className={navOpen ? 'app-shell nav-open' : 'app-shell'}>
     <button className="nav-backdrop" aria-label="Close navigation" onClick={() => setNavOpen(false)} />

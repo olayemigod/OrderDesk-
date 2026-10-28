@@ -12,7 +12,7 @@ import SuppliersManagement from './SuppliersManagement';
 import TeamPermissionsManagement from './TeamPermissionsManagement';
 import { errorMessage, supabase } from './supabase';
 
-type ManagementPageId = 'products' | 'categories' | 'units' | 'suppliers' | 'branches' | 'team' | 'devices' | 'feedback' | 'settings';
+type ManagementPageId = 'products' | 'categories' | 'units' | 'suppliers' | 'branches' | 'team' | 'devices' | 'feedback' | 'setup_activation' | 'settings';
 type Branch = { id: string; name: string; isDefault: boolean };
 
 export default function ManagementPage({
@@ -34,14 +34,15 @@ export default function ManagementPage({
   if (page === 'team') return <TeamPermissionsManagement tenantId={tenantId} />;
   if (page === 'devices') return <DeviceManagement tenantId={tenantId} />;
   if (page === 'feedback') return <FeedbackDashboard tenantId={tenantId} />;
-  return <div className="page-stack">
-    <SetupSchedulingManagement tenantId={tenantId} />
+  if (page === 'setup_activation') return <SetupSchedulingManagement tenantId={tenantId} />;
+  if (page === 'settings') return <div className="page-stack">
     <SettingsManagement tenantId={tenantId} />
     <section className="page-stack settings-payment-availability" aria-label="Payment configuration">
       <div className="section-heading"><div><p className="eyebrow">Settings · Payments</p><h2>Branch availability & terminals</h2></div><p className="muted">Configure where payment methods can be used and add physical card terminals. Reconciliation and customer balances remain under Money.</p></div>
       <PaymentBranchManagement tenantId={tenantId} />
     </section>
   </div>;
+  return null;
 }
 
 function DeviceManagement({ tenantId }: { tenantId: string }) {

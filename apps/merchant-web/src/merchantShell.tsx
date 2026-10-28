@@ -13,7 +13,7 @@ export function SellerTrayBrand({ subtitle = 'Merchant Web' }: { subtitle?: stri
 type NavIconName =
   | 'overview' | 'sales' | 'orders' | 'customers' | 'returns' | 'products' | 'categories' | 'units' | 'inventory'
   | 'purchasing' | 'suppliers' | 'payments' | 'sellertray_billing' | 'cash' | 'expenses' | 'whatsapp' | 'devices' | 'reports'
-  | 'ai' | 'branches' | 'team' | 'agreements' | 'feedback' | 'settings';
+  | 'ai' | 'branches' | 'team' | 'agreements' | 'feedback' | 'setup_activation' | 'settings';
 
 const NAV_PATHS: Record<NavIconName, string[]> = {
   overview: ['M4 13h6V4H4v9Z', 'M14 20h6V11h-6v9Z', 'M14 7h6V4h-6v3Z', 'M4 20h6v-3H4v3Z'],
@@ -39,6 +39,7 @@ const NAV_PATHS: Record<NavIconName, string[]> = {
   team: ['M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2', 'M8.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z', 'M20 8v6', 'M17 11h6'],
   agreements: ['M6 3h9l3 3v15H6V3Z', 'M15 3v4h4', 'M9 11h6', 'M9 15h6'],
   feedback: ['M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z', 'M8 9h8', 'M8 13h5'],
+  setup_activation: ['M5 4h14v16H5V4Z', 'M8 2v4', 'M16 2v4', 'M5 9h14', 'm9 5 2 2 4-4'],
   settings: ['M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z', 'M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.1 3.6-.2-.1a1.7 1.7 0 0 0-1.9-.2l-.9.5a1.7 1.7 0 0 0-.9 1.5V22H9.6v-.3a1.7 1.7 0 0 0-.9-1.5l-.9-.5a1.7 1.7 0 0 0-1.9.2l-.2.1L3.6 16.4l.1-.1A1.7 1.7 0 0 0 4 14.4v-1a1.7 1.7 0 0 0-.3-1.9l-.1-.1 2.1-3.6.2.1a1.7 1.7 0 0 0 1.9.2l.9-.5a1.7 1.7 0 0 0 .9-1.5V6h4.2v.3a1.7 1.7 0 0 0 .9 1.5l.9.5a1.7 1.7 0 0 0 1.9-.2l.2-.1 2.1 3.6-.1.1a1.7 1.7 0 0 0-.3 1.9v1Z'],
 };
 
