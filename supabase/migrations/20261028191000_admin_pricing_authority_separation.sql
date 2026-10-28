@@ -1,8 +1,9 @@
 begin;
 
 -- Keep pricing publication authority distinct from initial commercial-order creation.
--- Standard platform pricing requires a platform-scoped pricing capability; a selected
--- Business override requires pricing authority in that Business scope. The Admin
+-- Standard platform pricing preserves the existing Platform Admin-only boundary and
+-- additionally requires platform-scoped pricing capability. A selected Business
+-- override may use narrower pricing authority in that Business scope. The Admin
 -- onboarding read model exposes those authorities separately while preserving the
 -- existing Admin-only initial-purchase command boundary.
 
@@ -19,7 +20,17 @@ returns jsonb
 language plpgsql
 set search_path=''
 as $$
+declare
+  v_role text;
 begin
+  select pa.role into v_role
+  from public.platform_admins pa
+  where pa.user_id=p_actor_user_id;
+
+  if v_role is distinct from 'admin' then
+    raise exception 'Platform admin role required for this action' using errcode='42501';
+  end if;
+
   if not public.platform_admin_has_capability(
     p_actor_user_id,'admin.pricing.manage',null,now()
   ) then
@@ -50,7 +61,17 @@ returns uuid
 language plpgsql
 set search_path=''
 as $$
+declare
+  v_role text;
 begin
+  select pa.role into v_role
+  from public.platform_admins pa
+  where pa.user_id=p_actor_user_id;
+
+  if v_role is distinct from 'admin' then
+    raise exception 'Platform admin role required for this action' using errcode='42501';
+  end if;
+
   if not public.platform_admin_has_capability(
     p_actor_user_id,'admin.pricing.manage',null,now()
   ) then
@@ -74,9 +95,9 @@ grant execute on function public.publish_sellertray_subscription_price_pair_admi
 grant execute on function public.publish_sellertray_branch_setup_price_admin(text,numeric,numeric,timestamptz,text,uuid) to service_role;
 
 comment on function public.publish_sellertray_subscription_price_pair_admin(text,text,numeric,numeric,timestamptz,text,uuid) is
-  'Publishes immutable platform-wide SellerTray subscription prices only for an actor with platform-scoped admin.pricing.manage authority. Transport remains service-role-only and Admin AAL2-gated.';
+  'Publishes immutable platform-wide SellerTray subscription prices only for a Platform Admin with platform-scoped admin.pricing.manage authority. Transport remains service-role-only and Admin AAL2-gated.';
 comment on function public.publish_sellertray_branch_setup_price_admin(text,numeric,numeric,timestamptz,text,uuid) is
-  'Publishes immutable platform-wide SellerTray Branch setup pricing only for an actor with platform-scoped admin.pricing.manage authority. Transport remains service-role-only and Admin AAL2-gated.';
+  'Publishes immutable platform-wide SellerTray Branch setup pricing only for a Platform Admin with platform-scoped admin.pricing.manage authority. Transport remains service-role-only and Admin AAL2-gated.';
 
 create or replace function public.get_sellertray_commercial_onboarding_admin(
   p_actor_user_id uuid,
@@ -109,11 +130,13 @@ begin
     -- purchase command still requires the Platform Admin role independently of
     -- pricing authority.
     'canManage',v_role='admin',
-    -- Standard platform pricing is deliberately platform-scoped.
-    'canManageGlobalPricing',public.platform_admin_has_capability(
+    -- Standard platform pricing preserves the Admin-only legacy boundary and
+    -- adds explicit platform-scoped pricing capability.
+    'canManageGlobalPricing',v_role='admin' and public.platform_admin_has_capability(
       p_actor_user_id,'admin.pricing.manage',null,now()
     ),
-    -- Merchant-specific negotiated pricing may be narrower than platform scope.
+    -- Merchant-specific negotiated pricing may be narrower than platform scope;
+    -- the mutation RPC remains the final server-side authority.
     'canManageMerchantPricing',public.platform_admin_has_capability(
       p_actor_user_id,'admin.pricing.manage',p_tenant_id,now()
     )
