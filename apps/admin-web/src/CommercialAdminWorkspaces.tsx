@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import {
   invokeCommercialAdmin,
@@ -11,8 +11,11 @@ import {
   type OnboardingOrder,
 } from './commercial-admin-state';
 
+type ListAddTab = 'list' | 'add';
+
 export function CommercialPricingAdministration({ session, actorRole, tenantId }: { session: Session; actorRole: AdminRole; tenantId: string }) {
   const { state, loading, error, message, saving, reload, mutate, setError } = useOnboardingWorkspace(session, tenantId);
+  const [tab, setTab] = useState<ListAddTab>('list');
   const [subscriptionForm, setSubscriptionForm] = useState({ planCode: 'business', currency: 'NGN', monthlyGross: '', taxRate: '', effectiveFrom: nowLocal(), reason: '' });
   const [setupForm, setSetupForm] = useState({ currency: 'NGN', gross: '', taxRate: '', effectiveFrom: nowLocal(), reason: '' });
   const canManage = actorRole === 'admin' && state?.canManage === true;
@@ -20,9 +23,9 @@ export function CommercialPricingAdministration({ session, actorRole, tenantId }
   useEffect(() => {
     if (!state?.plans[0] || state.plans.some((plan) => plan.code === subscriptionForm.planCode)) return;
     setSubscriptionForm((current) => ({ ...current, planCode: state.plans[0].code, currency: state.plans[0].currency || current.currency }));
-  }, [state]);
+  }, [state, subscriptionForm.planCode]);
 
-  function publishSubscriptionPrice() {
+  async function publishSubscriptionPrice() {
     if (!canManage) return;
     const monthlyGrossAmount = positiveNumber(subscriptionForm.monthlyGross);
     const taxRatePercent = optionalPercent(subscriptionForm.taxRate);
@@ -30,14 +33,18 @@ export function CommercialPricingAdministration({ session, actorRole, tenantId }
     if (monthlyGrossAmount === null) return setError('Enter a positive VAT-inclusive monthly subscription price.');
     if (taxRatePercent === undefined) return setError('Tax rate must be blank or between 0 and 100%.');
     if (!effectiveFrom || subscriptionForm.reason.trim().length < 6) return setError('Enter a valid effective time and a reason of at least 6 characters.');
-    void mutate('subscription-price', {
+    const ok = await mutate('subscription-price', {
       action: 'admin_publish_subscription_price', tenantId,
       planCode: subscriptionForm.planCode, currency: subscriptionForm.currency,
       monthlyGrossAmount, taxRatePercent, effectiveFrom, reason: subscriptionForm.reason,
     }, 'Governed monthly and annual subscription prices published.');
+    if (ok) {
+      setSubscriptionForm((current) => ({ ...current, monthlyGross: '', taxRate: '', effectiveFrom: nowLocal(), reason: '' }));
+      setTab('list');
+    }
   }
 
-  function publishSetupPrice() {
+  async function publishSetupPrice() {
     if (!canManage) return;
     const grossAmount = positiveNumber(setupForm.gross);
     const taxRatePercent = optionalPercent(setupForm.taxRate);
@@ -45,43 +52,51 @@ export function CommercialPricingAdministration({ session, actorRole, tenantId }
     if (grossAmount === null) return setError('Enter a positive VAT-inclusive Branch setup price.');
     if (taxRatePercent === undefined) return setError('Tax rate must be blank or between 0 and 100%.');
     if (!effectiveFrom || setupForm.reason.trim().length < 6) return setError('Enter a valid effective time and a reason of at least 6 characters.');
-    void mutate('setup-price', {
+    const ok = await mutate('setup-price', {
       action: 'admin_publish_setup_price', tenantId,
       currency: setupForm.currency, grossAmount, taxRatePercent, effectiveFrom, reason: setupForm.reason,
     }, 'Governed Branch setup price published.');
+    if (ok) {
+      setSetupForm((current) => ({ ...current, gross: '', taxRate: '', effectiveFrom: nowLocal(), reason: '' }));
+      setTab('list');
+    }
   }
 
   return <WorkspaceState loading={loading} error={error} message={message} onReload={reload}>
+    <WorkspaceTabs value={tab} onChange={setTab} tabs={[["list", "Price List"], ["add", "Add New"]]} label="Plans and pricing views" />
     {!canManage ? <div className="workspace-banner info">Platform Support can review effective prices. Publishing price changes remains restricted to authorised Platform Admin authority.</div> : null}
-    {state ? <>
-      <div className="workspace-grid two">
-        <section className="workspace-panel workspace-form-stack">
-          <PanelHeading title="Subscription pricing" description="Publish VAT-inclusive monthly pricing. The governed service derives the annual 10-for-12 price." />
+    {state && tab === 'list' ? <section className="workspace-panel">
+      <PanelHeading title="Effective price history" description="Published commercial pricing is effective-dated and historical orders remain snapshotted." />
+      <div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Price</th><th>Cycle</th><th>Gross</th><th>Tax</th><th>Effective</th></tr></thead><tbody>{state.prices.map((price) => <tr key={price.id}><td>{price.priceKind === 'branch_setup' ? 'Branch setup' : price.planCode ?? 'Subscription'}</td><td>{price.billingCycle ?? 'One-time'}</td><td>{money(price.grossAmount, price.currency)}</td><td>{price.taxRatePercent === null ? 'Not separately recorded' : `${price.taxRatePercent}%`}</td><td>{formatDate(price.effectiveFrom)}</td></tr>)}{!state.prices.length ? <tr><td colSpan={5}>No governed pricing has been published.</td></tr> : null}</tbody></table></div>
+    </section> : null}
+    {state && tab === 'add' ? <div className="workspace-grid two">
+      <section className="workspace-panel workspace-form-stack">
+        <PanelHeading title="Subscription pricing" description="Publish VAT-inclusive monthly pricing. The governed service derives the annual 10-for-12 price." />
+        <fieldset disabled={!canManage || saving !== null} style={{ border: 0, padding: 0, display: 'contents' }}>
           <label>Plan<select value={subscriptionForm.planCode} onChange={(event) => setSubscriptionForm({ ...subscriptionForm, planCode: event.target.value })}>{state.plans.filter((plan) => plan.active).map((plan) => <option key={plan.code} value={plan.code}>{plan.name}</option>)}</select></label>
           <div className="workspace-field-grid two"><label>Currency<input maxLength={3} value={subscriptionForm.currency} onChange={(event) => setSubscriptionForm({ ...subscriptionForm, currency: event.target.value.toUpperCase() })} /></label><label>Monthly VAT-inclusive price<input inputMode="decimal" value={subscriptionForm.monthlyGross} onChange={(event) => setSubscriptionForm({ ...subscriptionForm, monthlyGross: event.target.value })} /></label></div>
           <div className="workspace-field-grid two"><label>Underlying tax rate % (optional)<input inputMode="decimal" value={subscriptionForm.taxRate} onChange={(event) => setSubscriptionForm({ ...subscriptionForm, taxRate: event.target.value })} /></label><label>Effective from<input type="datetime-local" value={subscriptionForm.effectiveFrom} onChange={(event) => setSubscriptionForm({ ...subscriptionForm, effectiveFrom: event.target.value })} /></label></div>
           <label>Change reason<input maxLength={1000} value={subscriptionForm.reason} onChange={(event) => setSubscriptionForm({ ...subscriptionForm, reason: event.target.value })} /></label>
           {positiveNumber(subscriptionForm.monthlyGross) !== null ? <small>Annual preview: {money((positiveNumber(subscriptionForm.monthlyGross) ?? 0) * 10, subscriptionForm.currency)} for 12 months.</small> : null}
-          <button type="button" className="workspace-button primary" disabled={!canManage || saving !== null} onClick={publishSubscriptionPrice}>{saving === 'subscription-price' ? 'Publishing…' : 'Publish subscription prices'}</button>
-        </section>
-        <section className="workspace-panel workspace-form-stack">
-          <PanelHeading title="Branch setup pricing" description="Publish the separate one-time setup price used for each purchased Branch setup obligation." />
+          <button type="button" className="workspace-button primary" onClick={() => void publishSubscriptionPrice()}>{saving === 'subscription-price' ? 'Publishing…' : 'Publish subscription prices'}</button>
+        </fieldset>
+      </section>
+      <section className="workspace-panel workspace-form-stack">
+        <PanelHeading title="Branch setup pricing" description="Publish the separate one-time setup price used for each purchased Branch setup obligation." />
+        <fieldset disabled={!canManage || saving !== null} style={{ border: 0, padding: 0, display: 'contents' }}>
           <div className="workspace-field-grid two"><label>Currency<input maxLength={3} value={setupForm.currency} onChange={(event) => setSetupForm({ ...setupForm, currency: event.target.value.toUpperCase() })} /></label><label>VAT-inclusive setup price<input inputMode="decimal" value={setupForm.gross} onChange={(event) => setSetupForm({ ...setupForm, gross: event.target.value })} /></label></div>
           <div className="workspace-field-grid two"><label>Underlying tax rate % (optional)<input inputMode="decimal" value={setupForm.taxRate} onChange={(event) => setSetupForm({ ...setupForm, taxRate: event.target.value })} /></label><label>Effective from<input type="datetime-local" value={setupForm.effectiveFrom} onChange={(event) => setSetupForm({ ...setupForm, effectiveFrom: event.target.value })} /></label></div>
           <label>Change reason<input maxLength={1000} value={setupForm.reason} onChange={(event) => setSetupForm({ ...setupForm, reason: event.target.value })} /></label>
-          <button type="button" className="workspace-button primary" disabled={!canManage || saving !== null} onClick={publishSetupPrice}>{saving === 'setup-price' ? 'Publishing…' : 'Publish Branch setup price'}</button>
-        </section>
-      </div>
-      <section className="workspace-panel">
-        <PanelHeading title="Effective price history" description="Published commercial pricing is effective-dated and historical orders remain snapshotted." />
-        <div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Price</th><th>Cycle</th><th>Gross</th><th>Tax</th><th>Effective</th></tr></thead><tbody>{state.prices.map((price) => <tr key={price.id}><td>{price.priceKind === 'branch_setup' ? 'Branch setup' : price.planCode ?? 'Subscription'}</td><td>{price.billingCycle ?? 'One-time'}</td><td>{money(price.grossAmount, price.currency)}</td><td>{price.taxRatePercent === null ? 'Not separately recorded' : `${price.taxRatePercent}%`}</td><td>{formatDate(price.effectiveFrom)}</td></tr>)}{!state.prices.length ? <tr><td colSpan={5}>No governed pricing has been published.</td></tr> : null}</tbody></table></div>
+          <button type="button" className="workspace-button primary" onClick={() => void publishSetupPrice()}>{saving === 'setup-price' ? 'Publishing…' : 'Publish Branch setup price'}</button>
+        </fieldset>
       </section>
-    </> : null}
+    </div> : null}
   </WorkspaceState>;
 }
 
 export function CommercialOrdersAdministration({ session, actorRole, tenantId }: { session: Session; actorRole: AdminRole; tenantId: string }) {
   const { state, loading, error, message, saving, reload, mutate, setError } = useOnboardingWorkspace(session, tenantId);
+  const [tab, setTab] = useState<ListAddTab>('list');
   const [purchase, setPurchase] = useState({ branchIds: [] as string[], structureCode: 'two_installment_70_30', orderReference: '', reason: '' });
   const canManage = actorRole === 'admin' && state?.canManage === true;
 
@@ -99,36 +114,41 @@ export function CommercialOrdersAdministration({ session, actorRole, tenantId }:
     setPurchase((current) => ({ ...current, branchIds: current.branchIds.includes(branchId) ? current.branchIds.filter((id) => id !== branchId) : [...current.branchIds, branchId] }));
   }
 
-  function createInitialPurchase() {
+  async function createInitialPurchase() {
     if (!canManage || !state) return;
     if (!state.eligibleForInitialInstallment) return setError('This Business is not eligible for the initial installment purchase.');
     if (!purchase.branchIds.length) return setError('Select at least one active Branch.');
     if (!purchase.orderReference.trim() || purchase.reason.trim().length < 6) return setError('Enter an order reference and a reason of at least 6 characters.');
     const plan = state.plans.find((row) => row.code === state.planCode) ?? state.plans[0];
-    void mutate('purchase', {
+    const ok = await mutate('purchase', {
       action: 'admin_create_initial_purchase', tenantId,
       planCode: plan?.code ?? state.planCode ?? 'business', currency: plan?.currency ?? 'NGN',
       branchIds: purchase.branchIds, structureCode: purchase.structureCode,
       orderReference: purchase.orderReference, reason: purchase.reason,
-    }, 'Initial annual installment purchase created from governed prices.').then(() => setPurchase((current) => ({ ...current, orderReference: '', reason: '' })));
+    }, 'Initial annual installment purchase created from governed prices.');
+    if (ok) {
+      setPurchase((current) => ({ ...current, orderReference: '', reason: '' }));
+      setTab('list');
+    }
   }
 
   return <WorkspaceState loading={loading} error={error} message={message} onReload={reload}>
+    <WorkspaceTabs value={tab} onChange={setTab} tabs={[["list", "List View"], ["add", "Add New"]]} label="Commercial order views" />
     {!canManage ? <div className="workspace-banner info">Platform Support can review commercial orders. New purchase creation remains restricted to authorised Platform Admin authority.</div> : null}
-    {state ? <>
-      <section className="workspace-panel workspace-form-stack">
-        <PanelHeading title="Create initial commercial order" description="Create one immutable annual purchase from governed prices and the selected active Branch setup obligations." />
-        {!state.eligibleForInitialInstallment ? <div className="workspace-banner warning">This Business is not currently eligible for the initial installment purchase flow.</div> : null}
+    {state && tab === 'list' ? <section className="workspace-panel">
+      <PanelHeading title="Commercial orders" description="Immutable order value remains separate from later discounts, direct payments and provider confirmations." />
+      <div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Reference</th><th>Ordered</th><th>Total</th><th>Installment structure</th><th>Obligation</th></tr></thead><tbody>{state.orders.map((order) => <OrderRow key={order.id} order={order} />)}{!state.orders.length ? <tr><td colSpan={5}>No commercial orders have been created for this Business.</td></tr> : null}</tbody></table></div>
+    </section> : null}
+    {state && tab === 'add' ? <section className="workspace-panel workspace-form-stack">
+      <PanelHeading title="Create initial commercial order" description="Create one immutable annual purchase from governed prices and the selected active Branch setup obligations." />
+      {!state.eligibleForInitialInstallment ? <div className="workspace-banner warning">This Business is not currently eligible for the initial installment purchase flow.</div> : null}
+      <fieldset disabled={!canManage || saving !== null || !state.eligibleForInitialInstallment} style={{ border: 0, padding: 0, display: 'contents' }}>
         <div><strong>Branches</strong><div className="workspace-filter-row" style={{ marginTop: 8 }}>{state.branches.filter((branch) => branch.active).map((branch) => <label key={branch.id} className="workspace-check-pill"><input type="checkbox" checked={purchase.branchIds.includes(branch.id)} onChange={() => toggleBranch(branch.id)} />{branch.name}</label>)}</div></div>
         <div className="workspace-field-grid two"><label>Installment structure<select value={purchase.structureCode} onChange={(event) => setPurchase({ ...purchase, structureCode: event.target.value })}><option value="two_installment_70_30">70% + 30%</option><option value="three_installment_60_20_20">60% + 20% + 20%</option></select></label><label>Commercial order reference<input maxLength={128} value={purchase.orderReference} onChange={(event) => setPurchase({ ...purchase, orderReference: event.target.value })} placeholder="e.g. ST-2026-0001" /></label></div>
         <label>Creation reason<input maxLength={1000} value={purchase.reason} onChange={(event) => setPurchase({ ...purchase, reason: event.target.value })} /></label>
-        <button type="button" className="workspace-button primary" disabled={!canManage || saving !== null || !state.eligibleForInitialInstallment} onClick={createInitialPurchase}>{saving === 'purchase' ? 'Creating…' : 'Create governed purchase'}</button>
-      </section>
-      <section className="workspace-panel">
-        <PanelHeading title="Commercial orders" description="Immutable order value remains separate from later discounts, direct payments and provider confirmations." />
-        <div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Reference</th><th>Ordered</th><th>Total</th><th>Installment structure</th><th>Obligation</th></tr></thead><tbody>{state.orders.map((order) => <OrderRow key={order.id} order={order} />)}{!state.orders.length ? <tr><td colSpan={5}>No commercial orders have been created for this Business.</td></tr> : null}</tbody></table></div>
-      </section>
-    </> : null}
+        <button type="button" className="workspace-button primary" onClick={() => void createInitialPurchase()}>{saving === 'purchase' ? 'Creating…' : 'Create governed purchase'}</button>
+      </fieldset>
+    </section> : null}
   </WorkspaceState>;
 }
 
@@ -183,10 +203,10 @@ function useOnboardingWorkspace(session: Session, tenantId: string) {
   useEffect(() => { void reload(); }, [tenantId, session.access_token]);
 
   async function mutate(key: string, payload: Record<string, unknown>, success: string) {
-    if (saving) return;
+    if (saving) return false;
     setSaving(key); setError(null); setMessage(null);
-    try { await invokeCommercialAdmin(session, payload); await reload(); setMessage(success); }
-    catch (cause) { setError(messageFrom(cause, 'Unable to complete the governed commercial action.')); }
+    try { await invokeCommercialAdmin(session, payload); await reload(); setMessage(success); return true; }
+    catch (cause) { setError(messageFrom(cause, 'Unable to complete the governed commercial action.')); return false; }
     finally { setSaving(null); }
   }
 
@@ -209,7 +229,11 @@ function useOverviewWorkspace(session: Session, tenantId: string) {
   return { state, loading, error, reload };
 }
 
-function WorkspaceState({ loading, error, message, onReload, children }: { loading: boolean; error?: string | null; message?: string | null; onReload: () => Promise<void>; children: React.ReactNode }) {
+function WorkspaceTabs<T extends string>({ value, onChange, tabs, label: ariaLabel }: { value: T; onChange: (value: T) => void; tabs: readonly (readonly [T, string])[]; label: string }) {
+  return <nav className="workspace-panel" aria-label={ariaLabel} style={{ padding: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>{tabs.map(([id, text]) => <button key={id} type="button" className={`workspace-button ${value === id ? 'primary' : 'secondary'}`} aria-current={value === id ? 'page' : undefined} onClick={() => onChange(id)}>{text}</button>)}</nav>;
+}
+
+function WorkspaceState({ loading, error, message, onReload, children }: { loading: boolean; error?: string | null; message?: string | null; onReload: () => Promise<void>; children: ReactNode }) {
   return <div className="workspace-stack">
     {loading ? <div className="workspace-banner info">Loading governed state…</div> : null}
     {error ? <div className="workspace-banner error">{error} <button type="button" className="workspace-button text compact" onClick={() => void onReload()}>Retry</button></div> : null}
@@ -223,14 +247,14 @@ function Detail({ label: text, value }: { label: string; value: string }) { retu
 function Empty({ title, body }: { title: string; body: string }) { return <div className="workspace-empty"><strong>{title}</strong><p>{body}</p></div>; }
 function OrderRow({ order }: { order: OnboardingOrder }) { return <tr><td><strong>{order.reference || shortId(order.id)}</strong><small>{shortId(order.id)}</small></td><td>{formatDate(order.orderedAt)}</td><td>{money(order.totalGrossAmount, order.currency)}</td><td>{order.structureCode ? structureLabel(order.structureCode) : 'Not installment-linked'}</td><td>{order.installmentObligationId ? shortId(order.installmentObligationId) : '—'}</td></tr>; }
 function ReadinessRow({ row }: { row: BranchSetupState }) { return <tr><td><strong>{row.branchName}</strong><small>{row.branchCode}</small></td><td>{shortId(row.commercialOrderId)}</td><td>{row.description}</td><td>{money(row.grossAmount, row.currency)}</td><td><span className={`workspace-status ${row.ready ? 'success' : 'attention'}`}>{row.ready ? 'Ready' : 'Pending'}</span></td><td>{row.readyAt ? formatDate(row.readyAt) : '—'}</td></tr>; }
-function readinessKey(row: BranchSetupState) { return `${row.commercialOrderId}:${row.branchId}:${row.lineNo}`; }
-function positiveNumber(value: string): number | null { const result = Number(value); return Number.isFinite(result) && result > 0 ? Math.round(result * 100) / 100 : null; }
-function optionalPercent(value: string): number | null | undefined { if (!value.trim()) return null; const result = Number(value); return Number.isFinite(result) && result >= 0 && result <= 100 ? result : undefined; }
-function nowLocal() { const date = new Date(Date.now() - new Date().getTimezoneOffset() * 60000); return date.toISOString().slice(0, 16); }
+function readinessKey(row: BranchSetupState) { return `${row.commercialOrderId}:${row.lineNo}:${row.branchId}`; }
+function positiveNumber(value: string): number | null { const parsed = Number(value); return Number.isFinite(parsed) && parsed > 0 ? Math.round((parsed + Number.EPSILON) * 100) / 100 : null; }
+function optionalPercent(value: string): number | null | undefined { if (!value.trim()) return null; const parsed = Number(value); return Number.isFinite(parsed) && parsed >= 0 && parsed <= 100 ? parsed : undefined; }
 function isoFromLocal(value: string): string | null { const date = new Date(value); return Number.isNaN(date.getTime()) ? null : date.toISOString(); }
-function money(value: number, currency: string) { try { return new Intl.NumberFormat('en-NG', { style: 'currency', currency: currency || 'NGN', maximumFractionDigits: 2 }).format(value); } catch { return `${currency} ${value.toFixed(2)}`; } }
-function formatDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(date); }
+function nowLocal() { const date = new Date(Date.now() - new Date().getTimezoneOffset() * 60_000); return date.toISOString().slice(0, 16); }
+function money(value: number, currency: string) { try { return new Intl.NumberFormat('en-NG', { style: 'currency', currency: currency || 'NGN' }).format(value); } catch { return `${currency || 'NGN'} ${value.toLocaleString()}`; } }
+function formatDate(value: string) { if (!value) return '—'; const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(date); }
 function structureLabel(value: string) { return value === 'two_installment_70_30' ? '70% + 30%' : value === 'three_installment_60_20_20' ? '60% + 20% + 20%' : label(value); }
-function label(value: string) { return value.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()); }
+function label(value: string) { return value ? value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()) : '—'; }
 function shortId(value: string) { return value ? `${value.slice(0, 8)}…` : '—'; }
 function messageFrom(value: unknown, fallback: string) { return value instanceof Error && value.message ? value.message : fallback; }

@@ -14,6 +14,7 @@ type Onboarding = { blockers: { message: string }[]; commercialOrder: { installm
 type Center = { onboarding: Onboarding; canManage: boolean; canManagePlatformMasters: boolean; serviceAreas: ServiceArea[]; workers: Worker[]; branchAreas: BranchArea[]; setupSubjects: SetupSubject[]; appointments: Appointment[]; pendingRequests: PendingRequest[] };
 type Response = { ok?: boolean; id?: string; center?: unknown; result?: unknown };
 type SetupView = 'all' | 'appointments' | 'resources' | 'completion' | 'activation';
+type ResourceTab = 'list' | 'area' | 'worker';
 
 type ScheduleDraft = {
   subjectKey: string;
@@ -45,6 +46,7 @@ export default function SetupSchedulingAdministration({
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [resourceTab, setResourceTab] = useState<ResourceTab>('list');
   const [areaForm, setAreaForm] = useState({ code: '', name: '', reason: '' });
   const [workerForm, setWorkerForm] = useState({ workerCode: '', displayName: '', maxConcurrentSetups: '1', travelBufferMinutes: '30', serviceAreaIds: [] as string[], reason: '' });
   const [completion, setCompletion] = useState<Appointment | null>(null);
@@ -55,7 +57,7 @@ export default function SetupSchedulingAdministration({
   const [loadedTenantId, setLoadedTenantId] = useState('');
 
   useEffect(() => { if (initialTenantId !== undefined) setTenantId(initialTenantId ?? ''); }, [initialTenantId]);
-  useEffect(() => { setCenter(null); setSchedule(null); setCompletion(null); commandIds.current.clear(); if (tenantId) void load(); }, [tenantId]);
+  useEffect(() => { setCenter(null); setSchedule(null); setCompletion(null); setResourceTab('list'); commandIds.current.clear(); if (tenantId) void load(); }, [tenantId]);
 
   const activeAreas = useMemo(() => center?.serviceAreas.filter((row) => row.active) ?? [], [center]);
   const activeWorkers = useMemo(() => center?.workers.filter((row) => row.active) ?? [], [center]);
@@ -80,9 +82,9 @@ export default function SetupSchedulingAdministration({
     finally { setLoading(false); }
   }
 
-  async function mutate(key: string, payload: Record<string, unknown>, success: string) {
+  async function mutate(keyName: string, payload: Record<string, unknown>, success: string) {
     if (!tenantId || saving) return false;
-    setSaving(key); setError(null); setMessage(null);
+    setSaving(keyName); setError(null); setMessage(null);
     try {
       const response = await invoke({ ...payload, tenantId });
       if (currentTenant.current !== tenantId) return false;
@@ -94,19 +96,19 @@ export default function SetupSchedulingAdministration({
     finally { setSaving(null); }
   }
 
-  function saveArea() {
+  async function saveArea() {
     if (!center?.canManagePlatformMasters) return setError('Platform-level setup master authority is required to edit service areas.');
     if (!areaForm.code.trim() || !areaForm.name.trim() || areaForm.reason.trim().length < 6) return setError('Enter a service area code, name and reason of at least 6 characters.');
-    void mutate('area', { action: 'save_service_area', code: areaForm.code, name: areaForm.name, active: true, reason: areaForm.reason }, 'Setup service area saved.');
-    setAreaForm({ code: '', name: '', reason: '' });
+    const ok = await mutate('area', { action: 'save_service_area', code: areaForm.code, name: areaForm.name, active: true, reason: areaForm.reason }, 'Setup service area saved.');
+    if (ok) { setAreaForm({ code: '', name: '', reason: '' }); setResourceTab('list'); }
   }
 
-  function saveWorker() {
+  async function saveWorker() {
     if (!center?.canManagePlatformMasters) return setError('Platform-level setup master authority is required to edit the ProcessEdge workforce.');
     const capacity = Number(workerForm.maxConcurrentSetups); const buffer = Number(workerForm.travelBufferMinutes);
     if (!workerForm.workerCode.trim() || !workerForm.displayName.trim() || !Number.isInteger(capacity) || capacity < 1 || !Number.isInteger(buffer) || buffer < 0 || workerForm.reason.trim().length < 6) return setError('Enter valid worker identity, capacity, travel buffer and reason.');
-    void mutate('worker', { action: 'save_worker', workerCode: workerForm.workerCode, displayName: workerForm.displayName, active: true, maxConcurrentSetups: capacity, travelBufferMinutes: buffer, serviceAreaIds: workerForm.serviceAreaIds, reason: workerForm.reason }, 'Setup worker saved.');
-    setWorkerForm({ workerCode: '', displayName: '', maxConcurrentSetups: '1', travelBufferMinutes: '30', serviceAreaIds: [], reason: '' });
+    const ok = await mutate('worker', { action: 'save_worker', workerCode: workerForm.workerCode, displayName: workerForm.displayName, active: true, maxConcurrentSetups: capacity, travelBufferMinutes: buffer, serviceAreaIds: workerForm.serviceAreaIds, reason: workerForm.reason }, 'Setup worker saved.');
+    if (ok) { setWorkerForm({ workerCode: '', displayName: '', maxConcurrentSetups: '1', travelBufferMinutes: '30', serviceAreaIds: [], reason: '' }); setResourceTab('list'); }
   }
 
   function assignArea(branchId: string, serviceAreaId: string) {
@@ -182,6 +184,7 @@ export default function SetupSchedulingAdministration({
           if (reason.length >= 6) void mutate('recovery', { action: 'retry_activation', installmentObligationId: center.onboarding.commercialOrder?.installmentObligationId, reason }, 'Activation check finished. Review the current status and any remaining blockers.');
         }}>Retry activation check</button> : null}
       </section> : null}
+
       {showCompletion && completion && center.canManage ? <SetupCompletionForm key={completion.id} branchName={completion.branchName} saving={saving !== null} onClose={() => setCompletion(null)} onSubmit={async (evidence, reason) => {
         const storageKey = 'sellertray.setupCompletion.v1:' + tenantId + ':' + completion.id;
         const facts = JSON.stringify({ evidence, reason });
@@ -193,24 +196,34 @@ export default function SetupSchedulingAdministration({
         if (ok) sessionStorage.removeItem(storageKey);
         return ok;
       }} /> : null}
-      {showResources ? <section className="workspace-panel">
-        <div className="workspace-panel-heading"><div><h3>Coverage & capacity</h3><p>Service-area coverage and worker capacity are ProcessEdge-wide and enforced by the shared scheduling authority, including travel buffers.</p></div></div>
-        {center.canManagePlatformMasters ? <>
-          <div className="workspace-field-grid two"><label>Service area code<input value={areaForm.code} onChange={(e) => setAreaForm({ ...areaForm, code: e.target.value })} /></label><label>Service area name<input value={areaForm.name} onChange={(e) => setAreaForm({ ...areaForm, name: e.target.value })} /></label></div>
-          <label>Reason<input value={areaForm.reason} onChange={(e) => setAreaForm({ ...areaForm, reason: e.target.value })} /></label>
-          <button type="button" className="workspace-button subtle" disabled={saving !== null} onClick={saveArea}>Add service area</button>
-          <div className="workspace-divider" />
-          <div className="workspace-field-grid two"><label>Worker code<input value={workerForm.workerCode} onChange={(e) => setWorkerForm({ ...workerForm, workerCode: e.target.value })} /></label><label>Worker name<input value={workerForm.displayName} onChange={(e) => setWorkerForm({ ...workerForm, displayName: e.target.value })} /></label><label>Concurrent setups<input type="number" min={1} max={20} value={workerForm.maxConcurrentSetups} onChange={(e) => setWorkerForm({ ...workerForm, maxConcurrentSetups: e.target.value })} /></label><label>Travel buffer (minutes)<input type="number" min={0} max={480} value={workerForm.travelBufferMinutes} onChange={(e) => setWorkerForm({ ...workerForm, travelBufferMinutes: e.target.value })} /></label></div>
-          <div className="workspace-filter-row">{activeAreas.map((area) => <label key={area.id} className="workspace-check-pill"><input type="checkbox" checked={workerForm.serviceAreaIds.includes(area.id)} onChange={() => setWorkerForm((current) => ({ ...current, serviceAreaIds: current.serviceAreaIds.includes(area.id) ? current.serviceAreaIds.filter((id) => id !== area.id) : [...current.serviceAreaIds, area.id] }))} />{area.name}</label>)}</div>
-          <label>Reason<input value={workerForm.reason} onChange={(e) => setWorkerForm({ ...workerForm, reason: e.target.value })} /></label>
-          <button type="button" className="workspace-button subtle" disabled={saving !== null} onClick={saveWorker}>Add setup worker</button>
-        </> : <div className="workspace-banner info">You can schedule and manage setup work for this Business, but ProcessEdge-wide service areas and workforce capacity are review-only for your current scope.</div>}
-        <div className="workspace-divider" />
-        <div className="workspace-filter-row">
-          {activeAreas.map((area) => <span key={area.id} className="workspace-check-pill">{area.name}</span>)}
-          {activeWorkers.map((worker) => <span key={worker.id} className="workspace-check-pill">{worker.name} · capacity {worker.maxConcurrentSetups} · buffer {worker.travelBufferMinutes}m</span>)}
-        </div>
-      </section> : null}
+
+      {showResources ? <>
+        <ResourceTabs value={resourceTab} onChange={setResourceTab} />
+        {resourceTab === 'list' ? <section className="workspace-panel">
+          <div className="workspace-panel-heading"><div><h3>Resource list</h3><p>ProcessEdge-wide setup coverage and workforce capacity from the governed scheduling authority.</p></div>{!center.canManagePlatformMasters ? <span className="workspace-status-pill neutral">Review only</span> : null}</div>
+          <div className="workspace-grid two">
+            <div><h4>Service areas</h4><div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Code</th><th>Name</th><th>Status</th></tr></thead><tbody>{center.serviceAreas.map((area) => <tr key={area.id}><td><strong>{area.code}</strong></td><td>{area.name}</td><td>{area.active ? 'Active' : 'Inactive'}</td></tr>)}{!center.serviceAreas.length ? <tr><td colSpan={3}>No setup service areas configured.</td></tr> : null}</tbody></table></div></div>
+            <div><h4>Setup workforce</h4><div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Worker</th><th>Capacity</th><th>Buffer</th><th>Coverage</th></tr></thead><tbody>{center.workers.map((worker) => <tr key={worker.id}><td><strong>{worker.name}</strong><small>{worker.code}</small></td><td>{worker.maxConcurrentSetups}</td><td>{worker.travelBufferMinutes}m</td><td>{worker.serviceAreaIds.map((id) => center.serviceAreas.find((area) => area.id === id)?.name ?? 'Unknown').join(', ') || 'No areas'}</td></tr>)}{!center.workers.length ? <tr><td colSpan={4}>No setup workers configured.</td></tr> : null}</tbody></table></div></div>
+          </div>
+        </section> : null}
+        {resourceTab === 'area' ? <section className="workspace-panel workspace-form-stack">
+          <div className="workspace-panel-heading"><div><h3>Add service area</h3><p>Create a governed ProcessEdge setup service area used by scheduling and capacity checks.</p></div>{!center.canManagePlatformMasters ? <span className="workspace-status-pill neutral">Review only</span> : null}</div>
+          {center.canManagePlatformMasters ? <>
+            <div className="workspace-field-grid two"><label>Service area code<input value={areaForm.code} onChange={(e) => setAreaForm({ ...areaForm, code: e.target.value })} /></label><label>Service area name<input value={areaForm.name} onChange={(e) => setAreaForm({ ...areaForm, name: e.target.value })} /></label></div>
+            <label>Reason<input value={areaForm.reason} onChange={(e) => setAreaForm({ ...areaForm, reason: e.target.value })} /></label>
+            <button type="button" className="workspace-button primary" disabled={saving !== null} onClick={() => void saveArea()}>{saving === 'area' ? 'Saving…' : 'Add service area'}</button>
+          </> : <div className="workspace-banner info">ProcessEdge-wide service-area changes require platform master authority.</div>}
+        </section> : null}
+        {resourceTab === 'worker' ? <section className="workspace-panel workspace-form-stack">
+          <div className="workspace-panel-heading"><div><h3>Add setup worker</h3><p>Add ProcessEdge workforce capacity and assign the service areas this worker can cover.</p></div>{!center.canManagePlatformMasters ? <span className="workspace-status-pill neutral">Review only</span> : null}</div>
+          {center.canManagePlatformMasters ? <>
+            <div className="workspace-field-grid two"><label>Worker code<input value={workerForm.workerCode} onChange={(e) => setWorkerForm({ ...workerForm, workerCode: e.target.value })} /></label><label>Worker name<input value={workerForm.displayName} onChange={(e) => setWorkerForm({ ...workerForm, displayName: e.target.value })} /></label><label>Concurrent setups<input type="number" min={1} max={20} value={workerForm.maxConcurrentSetups} onChange={(e) => setWorkerForm({ ...workerForm, maxConcurrentSetups: e.target.value })} /></label><label>Travel buffer (minutes)<input type="number" min={0} max={480} value={workerForm.travelBufferMinutes} onChange={(e) => setWorkerForm({ ...workerForm, travelBufferMinutes: e.target.value })} /></label></div>
+            <div><strong>Service-area coverage</strong><div className="workspace-filter-row" style={{ marginTop: 8 }}>{activeAreas.map((area) => <label key={area.id} className="workspace-check-pill"><input type="checkbox" checked={workerForm.serviceAreaIds.includes(area.id)} onChange={() => setWorkerForm((current) => ({ ...current, serviceAreaIds: current.serviceAreaIds.includes(area.id) ? current.serviceAreaIds.filter((id) => id !== area.id) : [...current.serviceAreaIds, area.id] }))} />{area.name}</label>)}</div></div>
+            <label>Reason<input value={workerForm.reason} onChange={(e) => setWorkerForm({ ...workerForm, reason: e.target.value })} /></label>
+            <button type="button" className="workspace-button primary" disabled={saving !== null} onClick={() => void saveWorker()}>{saving === 'worker' ? 'Saving…' : 'Add setup worker'}</button>
+          </> : <div className="workspace-banner info">ProcessEdge workforce changes require platform master authority.</div>}
+        </section> : null}
+      </> : null}
 
       {showAppointments || showCompletion ? <section className="workspace-panel">
         <div className="workspace-panel-heading"><div><h3>{showCompletion && !showAppointments ? 'Setup completion obligations' : 'Branch setup obligations'}</h3><p>Each appointment stays linked to its purchased Branch setup line. Ready facts remain immutable.</p></div></div>
@@ -221,11 +234,16 @@ export default function SetupSchedulingAdministration({
         })}</tbody></table></div></fieldset>
       </section> : null}
 
-      {showAppointments && schedule ? (() => { const subject = center.setupSubjects.find((item) => key(item) === schedule.subjectKey); return subject ? <section className="workspace-panel"><div className="workspace-panel-heading"><div><h3>{schedule.appointmentId ? 'Reschedule' : 'Schedule'} {subject.branchName}</h3><p>Capacity and travel-buffer conflicts are checked transactionally when saved.</p></div></div><div className="workspace-field-grid two"><label>Service area<select value={schedule.serviceAreaId} onChange={(e) => setSchedule({ ...schedule, serviceAreaId: e.target.value, workerId: '' })}><option value="">Choose area</option>{activeAreas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}</select></label><label>Setup worker<select value={schedule.workerId} onChange={(e) => setSchedule({ ...schedule, workerId: e.target.value })}><option value="">Choose worker</option>{activeWorkers.filter((worker) => !schedule.serviceAreaId || worker.serviceAreaIds.includes(schedule.serviceAreaId)).map((worker) => <option key={worker.id} value={worker.id}>{worker.name} · capacity {worker.maxConcurrentSetups}</option>)}</select></label><label>Starts<input type="datetime-local" value={schedule.startLocal} onChange={(e) => setSchedule({ ...schedule, startLocal: e.target.value })} /></label><label>Ends<input type="datetime-local" value={schedule.endLocal} onChange={(e) => setSchedule({ ...schedule, endLocal: e.target.value })} /></label><label>Merchant-visible note<textarea value={schedule.merchantNote} onChange={(e) => setSchedule({ ...schedule, merchantNote: e.target.value })} /></label><label>ProcessEdge internal note<textarea value={schedule.internalNote} onChange={(e) => setSchedule({ ...schedule, internalNote: e.target.value })} /></label></div><label>Reason<input value={schedule.reason} onChange={(e) => setSchedule({ ...schedule, reason: e.target.value })} /></label><div className="workspace-filter-row"><button className="workspace-button primary" disabled={saving !== null} onClick={() => saveSchedule(subject)}>Save appointment</button><button className="workspace-button subtle" onClick={() => setSchedule(null)}>Close</button></div></section> : null; })() : null}
+      {showAppointments && schedule ? (() => { const subject = center.setupSubjects.find((item) => key(item) === schedule.subjectKey); return subject ? <section className="workspace-panel workspace-form-stack"><div className="workspace-panel-heading"><div><h3>{schedule.appointmentId ? 'Reschedule' : 'Schedule'} {subject.branchName}</h3><p>Capacity and travel-buffer conflicts are checked transactionally when saved.</p></div></div><div className="workspace-field-grid two"><label>Service area<select value={schedule.serviceAreaId} onChange={(e) => setSchedule({ ...schedule, serviceAreaId: e.target.value, workerId: '' })}><option value="">Choose area</option>{activeAreas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}</select></label><label>Setup worker<select value={schedule.workerId} onChange={(e) => setSchedule({ ...schedule, workerId: e.target.value })}><option value="">Choose worker</option>{activeWorkers.filter((worker) => !schedule.serviceAreaId || worker.serviceAreaIds.includes(schedule.serviceAreaId)).map((worker) => <option key={worker.id} value={worker.id}>{worker.name} · capacity {worker.maxConcurrentSetups}</option>)}</select></label><label>Starts<input type="datetime-local" value={schedule.startLocal} onChange={(e) => setSchedule({ ...schedule, startLocal: e.target.value })} /></label><label>Ends<input type="datetime-local" value={schedule.endLocal} onChange={(e) => setSchedule({ ...schedule, endLocal: e.target.value })} /></label><label>Merchant-visible note<textarea value={schedule.merchantNote} onChange={(e) => setSchedule({ ...schedule, merchantNote: e.target.value })} /></label><label>ProcessEdge internal note<textarea value={schedule.internalNote} onChange={(e) => setSchedule({ ...schedule, internalNote: e.target.value })} /></label></div><label>Reason<input value={schedule.reason} onChange={(e) => setSchedule({ ...schedule, reason: e.target.value })} /></label><div className="workspace-filter-row"><button className="workspace-button primary" disabled={saving !== null} onClick={() => saveSchedule(subject)}>Save appointment</button><button className="workspace-button subtle" onClick={() => setSchedule(null)}>Close</button></div></section> : null; })() : null}
 
-      {center.pendingRequests.length ? <section className="workspace-panel"><div className="workspace-panel-heading"><div><h3>Merchant reschedule requests</h3><p>Requests never alter the appointment directly. ProcessEdge accepts them only through a governed reschedule.</p></div></div>{center.pendingRequests.map((request) => { const appointment = center.appointments.find((item) => item.id === request.appointmentId); const subject = appointment ? center.setupSubjects.find((item) => item.branchId === appointment.branchId && item.commercialOrderId === appointment.commercialOrderId) : undefined; return <article className="workspace-operation-action" key={request.id}><div><strong>{appointment?.branchName ?? 'Branch setup'}</strong><p>{request.merchantNote}</p><small>{request.requestedStartAt ? `${formatDate(request.requestedStartAt)} → ${formatDate(request.requestedEndAt)}` : 'Merchant requested a new appointment time.'}</small></div><div className="workspace-filter-row">{appointment && subject ? <button className="workspace-button primary compact" onClick={() => openSchedule(subject, appointment, request)}>Review & reschedule</button> : null}<button className="workspace-button subtle compact" onClick={() => declineRequest(request)}>Decline</button></div></article>; })}</section> : null}
+      {showAppointments && center.pendingRequests.length ? <section className="workspace-panel"><div className="workspace-panel-heading"><div><h3>Merchant reschedule requests</h3><p>Requests never alter the appointment directly. ProcessEdge accepts them only through a governed reschedule.</p></div></div>{center.pendingRequests.map((request) => { const appointment = center.appointments.find((item) => item.id === request.appointmentId); const subject = appointment ? center.setupSubjects.find((item) => item.branchId === appointment.branchId && item.commercialOrderId === appointment.commercialOrderId) : undefined; return <article className="workspace-operation-action" key={request.id}><div><strong>{appointment?.branchName ?? 'Branch setup'}</strong><p>{request.merchantNote}</p><small>{request.requestedStartAt ? `${formatDate(request.requestedStartAt)} → ${formatDate(request.requestedEndAt)}` : 'Merchant requested a new appointment time.'}</small></div><div className="workspace-filter-row">{appointment && subject ? <button className="workspace-button primary compact" onClick={() => openSchedule(subject, appointment, request)}>Review & reschedule</button> : null}<button className="workspace-button subtle compact" onClick={() => declineRequest(request)}>Decline</button></div></article>; })}</section> : null}
     </> : null}
   </div>;
+}
+
+function ResourceTabs({ value, onChange }: { value: ResourceTab; onChange: (value: ResourceTab) => void }) {
+  const tabs: readonly (readonly [ResourceTab, string])[] = [['list', 'Resource List'], ['area', 'Add Service Area'], ['worker', 'Add Worker']];
+  return <nav className="workspace-panel" aria-label="Setup resource views" style={{ padding: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>{tabs.map(([id, label]) => <button key={id} type="button" className={`workspace-button ${value === id ? 'primary' : 'secondary'}`} aria-current={value === id ? 'page' : undefined} onClick={() => onChange(id)}>{label}</button>)}</nav>;
 }
 
 function parseCenter(value: unknown): Center {
