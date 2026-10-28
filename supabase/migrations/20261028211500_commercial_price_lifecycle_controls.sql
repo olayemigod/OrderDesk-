@@ -24,7 +24,7 @@ create index if not exists sellertray_commercial_price_version_controls_state_id
   on public.sellertray_commercial_price_version_controls(price_version_id,effective_at desc,created_at desc);
 
 alter table public.sellertray_commercial_price_version_controls enable row level security;
-revoke all on table public.sellertray_commercial_price_version_controls from public,anon,authenticated;
+revoke all on table public.sellertray_commercial_price_version_controls from public,anon,authenticated,service_role;
 grant select,insert on table public.sellertray_commercial_price_version_controls to service_role;
 
 create trigger prevent_sellertray_commercial_price_version_control_mutation
