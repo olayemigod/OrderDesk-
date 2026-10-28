@@ -4,7 +4,7 @@ description: "Normative commercial extension for SellerTray subscriptions, setup
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.0"
+  version: "0.1.1"
   status: governing-extension
 ---
 
@@ -129,7 +129,7 @@ The final entitlement is one 12-month term measured from the original activation
 
 ## Three installments — 60:20:20
 
-- First installment: **60%**.
+- First installment: **60%** of the governed first-purchase total.
 - Second installment: **20%**.
 - Third installment: **20%**.
 - After the qualifying first installment and required agreement/setup conditions are satisfied, the merchant receives **3 months of provisional subscription entitlement**.
@@ -200,6 +200,36 @@ Commercial pricing records should preserve at minimum:
 A completed commercial order, invoice or accepted agreement must snapshot the prices and tax treatment that applied at that time. Later price or tax changes must not rewrite historical purchases.
 
 Merchant-specific negotiated pricing must be represented as an auditable commercial override with effective dates and reason. Do not overwrite the standard plan price merely to give one merchant a different deal.
+
+## Price lifecycle controls
+
+A published standard price or merchant-specific price override is immutable commercial history. Do not UPDATE or DELETE a published price row to change its operational availability. Lifecycle changes must be represented by append-only, auditable control evidence.
+
+Approved price lifecycle actions are:
+
+- **Pause** — temporarily exclude the price from new commercial price resolution while preserving the published row and every historical order snapshot. A paused price may later be resumed.
+- **Resume** — return a paused price to active resolution. Resume is valid only from the paused state.
+- **Deactivate** — permanently retire the price from new resolution. Deactivation is terminal; do not reactivate the same published version after deactivation. Publish a new governed price version instead if pricing must return.
+- **Void** — cancel an erroneous future publication before it ever becomes effective. Void is terminal and is allowed only while the price is still future-dated and unused. A price already snapshotted into an order or already used as the source authority for a merchant-specific override must not be voided.
+
+Lifecycle controls apply to both standard platform pricing and merchant-specific overrides through the same governed pricing core. Authority must remain scope-aware: platform-wide price control requires platform pricing authority; merchant-specific override control requires authority for that Business.
+
+Subscription monthly/yearly price versions are one governed commercial pair and must move through Pause, Resume, Deactivate or Void together so the annual 10-for-12 relationship cannot diverge. A Branch setup price is controlled as its own governed version.
+
+Only prices whose current lifecycle state is **active** are eligible for new price resolution. When a price is paused, deactivated or voided, the resolver may fall back only to another active governed price that is otherwise eligible. If no valid active price exists, fail closed rather than fabricating or locally deriving a replacement amount.
+
+Every lifecycle control must preserve at minimum:
+
+- exact price-version identity or subscription-pair identities;
+- lifecycle action;
+- idempotency command ID;
+- authorised actor;
+- immutable timestamp;
+- reason;
+- pricing scope/Business context;
+- privileged audit evidence.
+
+Admin Web owns operational price lifecycle control. These actions require the same governed server boundary and MFA/AAL2 protection used for sensitive commercial pricing. Admin UI must show the current lifecycle state and must not expose destructive row deletion as a substitute for Pause, Deactivate or Void.
 
 # 8. Promotions
 
@@ -425,7 +455,7 @@ These names are conceptual. Inspect existing schema before choosing actual table
 Critical invariants:
 
 1. Merchant isolation is mandatory.
-2. Commercial price history is immutable/effective-dated.
+2. Commercial price history and lifecycle-control evidence are immutable/effective-dated.
 3. Accepted agreements are immutable.
 4. Payment and entitlement updates are idempotent.
 5. Entitlement is derived only through governed commands/events, never browser arithmetic.
@@ -436,6 +466,7 @@ Critical invariants:
 10. Admin overrides require reason and audit.
 11. Mobile, Merchant Web and Admin Web read the same commercial truth.
 12. No trial-oriented UI or authority may be added as a new long-term path.
+13. Pause/Resume/Deactivate/Void must never rewrite a published price row or an order price snapshot.
 
 # 16. Commercial implementation sequence
 
@@ -471,7 +502,7 @@ Cross-tenant operational/commercial visibility using governed paginated/filterab
 
 ## A3 — Admin Plans, Pricing, Promotions & Agreements
 
-Manage effective pricing, VAT-inclusive commercial presentation, governed promotions, agreement templates/versions and acceptance visibility.
+Manage effective pricing, VAT-inclusive commercial presentation, governed price lifecycle controls, governed promotions, agreement templates/versions and acceptance visibility.
 
 ## A4 — Admin Merchant Commercial Workspace
 
@@ -519,6 +550,10 @@ Any slice touching this extension must verify the relevant subset of:
 - VAT-inclusive display and audited tax snapshot;
 - promotion eligibility and non-destructive history;
 - merchant-specific override audit;
+- Pause/Resume lifecycle behavior and active-price fallback;
+- Deactivate terminal behavior without destructive history edits;
+- Void restricted to future, unused price versions;
+- monthly/yearly subscription price pairs moving through lifecycle controls together;
 - first-purchase setup + subscription line integrity;
 - per-Branch setup status;
 - agreement version/snapshot integrity;
