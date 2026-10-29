@@ -116,7 +116,12 @@ if (!printerModule.includes('00001101-0000-1000-8000-00805F9B34FB')) throw new E
 
 const provisionedApp = fs.readFileSync(provisionedAppPath, 'utf8');
 if (!provisionedApp.includes("import RedesignWorkspace from './redesign/RedesignWorkspace';")) throw new Error('SellerTray merchant runtime must import RedesignWorkspace');
-if (!provisionedApp.includes('return <RedesignWorkspace />;')) throw new Error('SellerTray merchant runtime must launch RedesignWorkspace by default');
+if (
+  !provisionedApp.includes("import { BusinessContextSelectionProvider } from './redesign/BusinessContextSelection';") ||
+  !provisionedApp.includes('<BusinessContextSelectionProvider') ||
+  !provisionedApp.includes('<RedesignWorkspace key={activeBusiness.id} />') ||
+  !provisionedApp.includes('return workspace;')
+) throw new Error('SellerTray merchant runtime must launch the tenant-keyed RedesignWorkspace through the governed Business-context selector');
 if (provisionedApp.includes("import SaasApp from './SaasApp';") || provisionedApp.includes('<SaasApp')) throw new Error('Redesign QA must not retain a merchant-runtime fallback to legacy SaasApp');
 if (provisionedApp.includes('EXPO_PUBLIC_SELLERTRAY_MOBILE_REDESIGN')) throw new Error('Redesign QA must not depend on an environment flag to select the new SellerTray runtime');
 
