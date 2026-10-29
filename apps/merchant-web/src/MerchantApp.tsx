@@ -16,7 +16,9 @@ import ReportCenter from './ReportCenter';
 import ReturnsManagement from './ReturnsManagement';
 import SalesManagement from './SalesManagement';
 import SellerTrayBillingManagement from './SellerTrayBillingManagement';
+import SetupSchedulingManagement from './SetupSchedulingManagement';
 import WhatsAppManagement from './WhatsAppManagement';
+import type { MerchantHandoffTarget } from './merchantHandoff';
 import { SellerTrayBrand, SellerTrayMark, NavIcon, ShellIcon } from './merchantShell';
 import { SellerTrayInput, SellerTraySelect } from './SellerTrayElements';
 import { AVAILABLE_MERCHANT_PORTAL_NAVIGATION, MERCHANT_PORTAL_SECTIONS, type MerchantPortalPage, type MerchantPortalSection } from './portalNavigation';
@@ -31,14 +33,18 @@ type Branch = { id: string; code: string; name: string; isDefault: boolean };
 const MANAGEMENT_ROLES: MerchantRole[] = ['owner', 'manager'];
 const NAV = AVAILABLE_MERCHANT_PORTAL_NAVIGATION;
 
-export default function MerchantApp() {
+type MerchantAppProps = {
+  handoffTarget?: MerchantHandoffTarget | null;
+};
+
+export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) {
   const [booting, setBooting] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
   const [businesses, setBusinesses] = useState<Business[]>([]);
-  const [businessId, setBusinessId] = useState('');
+  const [businessId, setBusinessId] = useState(handoffTarget?.businessId ?? '');
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchId, setBranchId] = useState('');
-  const [page, setPage] = useState<Page>('overview');
+  const [page, setPage] = useState<Page>(handoffTarget?.page ?? 'overview');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -59,7 +65,6 @@ export default function MerchantApp() {
   useEffect(() => {
     if (businessId) {
       void loadWorkspace(businessId);
-
     } else {
       setUnreadCount(0);
     }
@@ -83,6 +88,11 @@ export default function MerchantApp() {
       const next = ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id ?? ''), name: String(row.name ?? 'SellerTray business'), merchantCode: String(row.merchant_code ?? ''), role: merchantRole(row.role), currency: String(row.currency ?? 'NGN'), subscriptionStatus: String(row.subscription_status ?? 'unknown'), whatsappConnectionStatus: String(row.whatsapp_connection_status ?? 'not_connected') } satisfies Business));
       setBusinesses(next);
       const manageable = next.filter((row) => MANAGEMENT_ROLES.includes(row.role));
+      if (handoffTarget?.businessId && !manageable.some((row) => row.id === handoffTarget.businessId)) {
+        setBusinessId('');
+        setError('This SellerTray continuation is no longer authorized for the selected Business. Return to SellerTray mobile and try again.');
+        return;
+      }
       setBusinessId((current) => manageable.some((row) => row.id === current) ? current : manageable[0]?.id ?? '');
     } catch (cause) { setError(errorMessage(cause, 'Unable to load your SellerTray businesses.')); } finally { setLoading(false); }
   }
@@ -200,6 +210,7 @@ export default function MerchantApp() {
       {page === 'ai' && <AiInsights tenantId={business.id} />}
       {page === 'purchasing' && <PurchasingManagement tenantId={business.id} currency={business.currency} />}
       {page === 'agreements' && <CommercialAgreementsManagement tenantId={business.id} />}
+      {page === 'setup' && <SetupSchedulingManagement key={business.id} tenantId={business.id} />}
       {managementPage && <ManagementPage page={page} tenantId={business.id} currency={business.currency} onBranchesChanged={refresh} />}
     </main>
   </div>;
