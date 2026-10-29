@@ -13,6 +13,7 @@ import TeamPermissionsManagement from './TeamPermissionsManagement';
 import { errorMessage, supabase } from './supabase';
 
 type ManagementPageId = 'products' | 'categories' | 'units' | 'suppliers' | 'branches' | 'team' | 'devices' | 'feedback' | 'setup_activation' | 'settings';
+type CommercialJourneyPage = 'agreements' | 'sellertray_billing';
 type Branch = { id: string; name: string; isDefault: boolean };
 
 export default function ManagementPage({
@@ -20,11 +21,13 @@ export default function ManagementPage({
   tenantId,
   currency,
   onBranchesChanged,
+  onNavigate,
 }: {
   page: ManagementPageId;
   tenantId: string;
   currency: string;
   onBranchesChanged?: () => void | Promise<void>;
+  onNavigate?: (page: CommercialJourneyPage) => void;
 }) {
   if (page === 'products') return <ProductsManagement tenantId={tenantId} currency={currency} />;
   if (page === 'categories') return <CatalogueMasterManagement tenantId={tenantId} kind="category" />;
@@ -34,7 +37,7 @@ export default function ManagementPage({
   if (page === 'team') return <TeamPermissionsManagement tenantId={tenantId} />;
   if (page === 'devices') return <DeviceManagement tenantId={tenantId} />;
   if (page === 'feedback') return <FeedbackDashboard tenantId={tenantId} />;
-  if (page === 'setup_activation') return <SetupSchedulingManagement tenantId={tenantId} />;
+  if (page === 'setup_activation') return <SetupSchedulingManagement tenantId={tenantId} onNavigate={onNavigate} />;
   if (page === 'settings') return <div className="page-stack">
     <SettingsManagement tenantId={tenantId} />
     <section className="page-stack settings-payment-availability" aria-label="Payment configuration">

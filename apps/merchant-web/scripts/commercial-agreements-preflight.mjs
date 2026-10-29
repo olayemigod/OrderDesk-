@@ -4,10 +4,12 @@ import { resolve } from 'node:path';
 const root = process.cwd();
 const read = (path) => readFileSync(resolve(root, path), 'utf8');
 const management = read('src/ManagementPage.tsx');
+const setup = read('src/SetupSchedulingManagement.tsx');
 const merchantApp = read('src/MerchantApp.tsx');
 const navigation = read('src/portalNavigation.ts');
 const agreements = read('src/CommercialAgreementsManagement.tsx');
 const billing = read('src/SellerTrayBillingManagement.tsx');
+const main = read('src/main.tsx');
 const failures = [];
 const requireValue = (condition, message) => { if (!condition) failures.push(message); };
 const excludes = (source, values) => values.every((value) => !source.includes(value));
@@ -18,54 +20,95 @@ requireValue(
     && navigation.includes("section: 'Business'")
     && navigation.includes("id: 'agreements'")
     && navigation.includes("label: 'Agreements'")
+    && navigation.includes("id: 'setup_activation'")
+    && navigation.includes("label: 'Setup & Activation'")
     && navigation.includes("id: 'payments'")
     && navigation.includes("label: 'Payments & Receivables'"),
-  'Merchant navigation must keep Billing, Agreements, and customer Payments & Receivables as separate governed surfaces.',
+  'Merchant navigation must keep Agreements, Billing, Setup & Activation, and customer Payments & Receivables as distinct governed surfaces.',
+);
+
+requireValue(
+  merchantApp.includes("COMMERCIAL_JOURNEY_PAGES: Page[] = ['agreements', 'sellertray_billing', 'setup_activation']")
+    && merchantApp.includes('<CommercialJourneyNavigation activePage={page} onNavigate={navigate} />')
+    && merchantApp.includes('Agreement acceptance, payment and Branch setup remain separate governed steps.'),
+  'Merchant Web must present Agreements, Billing, and Setup & Activation as one coherent activation journey without conflating their authority.',
 );
 
 requireValue(
   merchantApp.includes("page === 'sellertray_billing'")
     && merchantApp.includes('<SellerTrayBillingManagement tenantId={business.id} />')
     && merchantApp.includes("page === 'agreements'")
-    && merchantApp.includes('<CommercialAgreementsManagement tenantId={business.id} />'),
-  'Merchant App must route Billing and Agreements to their dedicated surfaces.',
+    && merchantApp.includes('<CommercialAgreementsManagement tenantId={business.id} />')
+    && merchantApp.includes('onNavigate={navigate}'),
+  'Merchant App must route Billing, Agreements, and governed Setup next actions through the shared management shell.',
 );
 
 requireValue(
-  !management.includes('CommercialAgreementsManagement'),
-  'Merchant Settings must remain settings-only and must not embed commercial agreements.',
+  !management.includes('CommercialAgreementsManagement')
+    && management.includes('<SetupSchedulingManagement tenantId={tenantId} onNavigate={onNavigate} />'),
+  'Merchant Settings must remain settings-only while Setup & Activation receives only navigation support, not duplicated commercial authority.',
 );
 
 requireValue(
-  agreements.includes("functions.invoke('commercial-agreements'")
-    && agreements.includes("action: 'merchant_list'")
-    && agreements.includes("action: 'merchant_accept'"),
-  'Agreements must use the governed commercial-agreements runtime for reads and acceptance.',
+  agreements.includes("functions.invoke('master-agreements'")
+    && agreements.includes("action: 'merchant_get'")
+    && agreements.includes("action: 'merchant_get_document'")
+    && agreements.includes("action: 'merchant_confirm_package'")
+    && !agreements.includes("action: 'merchant_accept'"),
+  'Agreements must use the governed Master Agreement + exact Order Form package authority and must not use direct Master-only or legacy agreement acceptance.',
 );
 
 requireValue(
-  agreements.includes('authorityConfirmed: true')
-    && agreements.includes('I confirm I am authorised to act for this business and accept this agreement.'),
-  'Commercial agreement acceptance must carry the explicit merchant authority confirmation shown in the UI.',
+  agreements.includes("center.masterAcceptanceRequired ? 'Accept & Continue' : 'Confirm Purchase'")
+    && agreements.includes("'I accept the Master Agreement, confirm this purchase and confirm my authority to continue.'")
+    && agreements.includes("'I confirm this purchase under the accepted Master Agreement and confirm my authority to continue.'"),
+  'Merchant CTA must distinguish first Master acceptance from later purchase confirmation under an unchanged Master.',
 );
 
 requireValue(
-  agreements.includes('acceptanceCommandIds.current.get(selected.id)')
-    && agreements.includes('acceptanceCommandIds.current.set(selected.id, commandId)')
-    && agreements.includes('acceptanceCommandIds.current.delete(selected.id)'),
-  'Commercial agreement acceptance must preserve one command identity across failed retries and clear it only after success.',
+  agreements.includes('`${selected.id}:${center.masterAgreement.id}:${reviewDocument.packageFingerprint}`')
+    && agreements.includes('confirmationCommandIds.current.set(commandKey, commandId)')
+    && agreements.includes('confirmationCommandIds.current.delete(commandKey)')
+    && agreements.includes('expectedPackageId: reviewDocument.packageId')
+    && agreements.includes('expectedPackageFingerprint: reviewDocument.packageFingerprint'),
+  'Agreement Package confirmation must preserve command idempotency and exact reviewed-package binding.',
+);
+
+requireValue(
+  agreements.includes('Review agreement')
+    && agreements.includes('Agreement opened for review. You can continue below when ready.')
+    && agreements.includes('Open signed copy')
+    && agreements.includes('Agreement is being prepared automatically')
+    && excludes(agreements, ['No commercial agreements issued', 'Prepare Agreement PDF', 'Package fingerprint', 'PDF SHA-256', 'deterministic package fingerprint']),
+  'Merchant Agreements must expose the current package lifecycle and must not regress to the retired no-commercial-agreement experience or internal integrity vocabulary.',
+);
+
+requireValue(
+  setup.includes("nextActionCode === 'review_master_agreement'")
+    && setup.includes("onNavigate('agreements')")
+    && setup.includes("nextActionCode === 'pay_outstanding'")
+    && setup.includes("onNavigate('sellertray_billing')"),
+  'Setup & Activation must turn governed onboarding nextAction codes into direct merchant actions for Agreements and Billing.',
+);
+
+requireValue(
+  main.includes("import './agreement-documents.css';"),
+  'Merchant Web must load the responsive Agreement Package and activation-journey styles.',
 );
 
 requireValue(
   excludes(agreements, [
+    "functions.invoke('commercial-agreements'",
     "functions.invoke('billing-checkout'",
     "from('sellertray_commercial_agreements')",
     "from('sellertray_commercial_agreement_acceptances')",
     "from('sellertray_commercial_agreement_template_versions')",
     'SERVICE_ROLE',
     'SUPABASE_SECRET',
+    'pdf-lib',
+    'jsPDF',
   ]),
-  'Agreements must remain legal-only and must not bypass authority or own SellerTray payment checkout.',
+  'Agreement Package UI must remain server-governed and separate from payment and canonical PDF authority.',
 );
 
 requireValue(
@@ -75,18 +118,24 @@ requireValue(
     && billing.includes('nextPayableAmount')
     && billing.includes("response.status === 'retry_required'")
     && billing.includes('response.needsNewCommand === true'),
-  'Billing must read server-owned settlement state and preserve governed checkout retry semantics.',
+  'Billing must continue using server-owned settlement state and governed checkout retry semantics; agreement acceptance must not be fabricated as a payment gate.',
 );
 
 requireValue(
-  excludes(billing, ['SERVICE_ROLE', 'SUPABASE_SECRET', "from('sellertray_commercial_payment_confirmations')"]),
-  'Billing must not bypass the governed commercial billing and checkout authorities.',
+  excludes(billing, [
+    'SERVICE_ROLE',
+    'SUPABASE_SECRET',
+    "from('sellertray_commercial_payment_confirmations')",
+    'This value is resolved by the server after all approved adjustments and confirmed payments.',
+    'Discounts, direct ProcessEdge payments and provider payments are separate immutable settlement facts.',
+  ]),
+  'Billing must preserve authority separation and the approved merchant-facing copy removals.',
 );
 
 if (failures.length) {
-  console.error('SellerTray commercial agreement and billing preflight failed:');
+  console.error('SellerTray Agreement Package, Billing and activation-journey preflight failed:');
   for (const failure of failures) console.error('- ' + failure);
   process.exit(1);
 }
 
-console.log('SellerTray commercial agreement and billing preflight passed.');
+console.log('SellerTray Agreement Package, Billing and activation-journey preflight passed.');
