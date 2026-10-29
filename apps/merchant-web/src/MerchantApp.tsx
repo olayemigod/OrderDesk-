@@ -29,6 +29,7 @@ type Branch = { id: string; code: string; name: string; isDefault: boolean };
 
 const MANAGEMENT_ROLES: MerchantRole[] = ['owner', 'manager'];
 const NAV = AVAILABLE_MERCHANT_PORTAL_NAVIGATION;
+const COMMERCIAL_JOURNEY_PAGES: Page[] = ['agreements', 'sellertray_billing', 'setup_activation'];
 
 export default function MerchantApp() {
   const [booting, setBooting] = useState(true);
@@ -132,6 +133,7 @@ export default function MerchantApp() {
 
       {error ? <div className="error-banner">{error}<button onClick={() => setError(null)}>Dismiss</button></div> : null}
       <section className="context-bar" aria-label="Current business context"><Context label="Business code" value={business.merchantCode || '—'} /><Context label="Subscription" value={statusText(business.subscriptionStatus)} /><Context label="Active Branch" value={branch?.name ?? 'No active Branch'} /></section>
+      {COMMERCIAL_JOURNEY_PAGES.includes(page) ? <CommercialJourneyNavigation activePage={page} onNavigate={navigate} /> : null}
       {page === 'overview' && <DashboardOverview tenantId={business.id} currency={business.currency} go={navigate} openBranch={openBranchPage} />}
       {page === 'sales' && branch && <SalesManagement tenantId={business.id} branchId={branch.id} />}
       {page === 'sales' && !branch && <PageTable eyebrow="Sales" title="Choose a Branch" note="Select a Branch to review completed sales."><Empty title="No active Branch" body="Sales are reviewed within a Branch so transaction and stock context remain clear." /></PageTable>}
@@ -150,7 +152,7 @@ export default function MerchantApp() {
       {page === 'ai' && <AiInsights tenantId={business.id} />}
       {page === 'purchasing' && <PurchasingManagement tenantId={business.id} currency={business.currency} />}
       {page === 'agreements' && <CommercialAgreementsManagement tenantId={business.id} />}
-      {managementPage && <ManagementPage page={page} tenantId={business.id} currency={business.currency} onBranchesChanged={refresh} />}
+      {managementPage && <ManagementPage page={page} tenantId={business.id} currency={business.currency} onBranchesChanged={refresh} onNavigate={navigate} />}
     </main>
   </div>;
 }
@@ -159,6 +161,17 @@ function Login() {
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [busy, setBusy] = useState(false); const [message, setMessage] = useState('');
   async function submit(event: FormEvent) { event.preventDefault(); setBusy(true); setMessage(''); try { const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password }); if (error) throw error; } catch (cause) { setMessage(errorMessage(cause, 'Unable to sign in.')); } finally { setBusy(false); } }
   return <div className="login-shell"><section className="login-brand"><SellerTrayMark large /><p className="eyebrow">SellerTray</p><h1>Manage the business. Keep selling on mobile.</h1><p>Review sales, products, stock, purchasing, money, channels and Branch performance from one governed merchant workspace.</p></section><form className="login-card" onSubmit={submit}><div><p className="eyebrow">Merchant Web</p><h2>Sign in</h2><p className="muted">Use the same SellerTray account you use for your business.</p></div><label>Email<SellerTrayInput type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label><label>Password<SellerTrayInput type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} /></label>{message ? <div className="error-banner compact">{message}</div> : null}<button className="primary-button" disabled={busy}>{busy ? 'Signing in' : 'Continue'}</button></form></div>;
+}
+function CommercialJourneyNavigation({ activePage, onNavigate }: { activePage: Page; onNavigate: (page: Page) => void }) {
+  const steps: Array<{ page: Page; label: string }> = [
+    { page: 'agreements', label: '1. Agreements' },
+    { page: 'sellertray_billing', label: '2. Billing' },
+    { page: 'setup_activation', label: '3. Setup & Activation' },
+  ];
+  return <section className="commercial-journey" aria-label="SellerTray activation journey">
+    <div className="commercial-journey-copy"><p className="eyebrow">SellerTray setup</p><strong>Complete the requirements for activation</strong><span>Agreement acceptance, payment and Branch setup remain separate governed steps. Complete each required step before SellerTray can activate.</span></div>
+    <div className="commercial-journey-actions">{steps.map((step) => <button key={step.page} type="button" className={activePage === step.page ? 'secondary-button active' : 'secondary-button'} aria-current={activePage === step.page ? 'step' : undefined} onClick={() => onNavigate(step.page)}>{step.label}</button>)}</div>
+  </section>;
 }
 function Select({ label, value, onChange, disabled, children }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean; children: ReactNode }) { return <label className="select-field"><span>{label}</span><SellerTraySelect value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled}>{children}</SellerTraySelect></label>; }
 function Context({ label, value }: { label: string; value: string }) { return <div><span>{label}</span><strong>{value}</strong></div>; }

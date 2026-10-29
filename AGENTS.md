@@ -20,6 +20,12 @@ For **every SellerTray task**, also read and follow:
 
 `INTELLIGENT_IMPLEMENTATION.md` is a universal normative extension that requires 360-degree lifecycle reasoning from source of truth through create/update, validation, list/detail, state transitions, payments/receivables, history, print/export, reporting, reversals, reconciliation, permissions/audit, offline/replay and every necessarily affected SellerTray surface. It also requires edge-value, migration-order and no-dead-end-state checks before work may be declared complete.
 
+For any task touching Master Agreement publication, Order Forms, Agreement Packages, merchant agreement review/acceptance/confirmation, agreement documents or agreement-gated service delivery, also read and follow:
+
+`.agents/skills/sellertray-project-implementation/AGREEMENTS.md`
+
+`AGREEMENTS.md` records the later approved universal Master Agreement -> immutable Order Form -> deterministic Agreement Package authority and overrides older order-bound agreement wording where they conflict.
+
 For any task touching SellerTray Mobile UI/UX, responsive layout, phones, foldables, mini tablets, tablets, large screens, orientation, resizing, navigation layout, split panes, master-detail views, or device-form-factor QA, also read and follow:
 
 `.agents/skills/sellertray-project-implementation/ADAPTIVE.md`
