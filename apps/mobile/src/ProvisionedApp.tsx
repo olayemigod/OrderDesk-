@@ -15,6 +15,7 @@ import {
 import { useBusinesses } from './hooks/useBusinesses';
 import { usePlatformAdmin } from './hooks/usePlatformAdmin';
 import { supabase } from './lib/supabase';
+import { BusinessContextSelectionProvider } from './redesign/BusinessContextSelection';
 import RedesignWorkspace from './redesign/RedesignWorkspace';
 
 export default function ProvisionedApp() {
@@ -29,10 +30,12 @@ export default function ProvisionedApp() {
 
 function ProvisioningGate() {
   const {
+    businesses,
     activeBusiness,
     loading,
     error,
     refresh,
+    selectBusiness,
     createBusiness,
   } = useBusinesses();
   const platformAdmin = usePlatformAdmin();
@@ -145,6 +148,16 @@ function ProvisioningGate() {
     );
   }
 
+  const workspace = (
+    <BusinessContextSelectionProvider
+      businesses={businesses}
+      activeBusinessId={activeBusiness.id}
+      onSelectBusiness={selectBusiness}
+    >
+      <RedesignWorkspace key={activeBusiness.id} />
+    </BusinessContextSelectionProvider>
+  );
+
   if (invitations.length > 0 || invitationError) {
     return (
       <View style={styles.workspaceShell}>
@@ -159,14 +172,12 @@ function ProvisioningGate() {
             onRetry={() => void refreshInvitations()}
           />
         </SafeAreaView>
-        <View style={styles.workspaceContent}>
-          <RedesignWorkspace />
-        </View>
+        <View style={styles.workspaceContent}>{workspace}</View>
       </View>
     );
   }
 
-  return <RedesignWorkspace />;
+  return workspace;
 }
 
 type PendingInvitationsPanelProps = {
