@@ -15,6 +15,7 @@ import {
 import { SellerTrayBrand } from '../components/SellerTrayBrand';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
+import { useBusinessContextSelection } from './BusinessContextSelection';
 
 export type SellerTrayPrimaryTab = 'home' | 'sell' | 'orders' | 'inventory' | 'more';
 export type SellerTraySyncState = 'online' | 'syncing' | 'offline';
@@ -61,6 +62,7 @@ export function MobileShell({
   children,
 }: Props) {
   const appearance = useSellerTrayAppearance();
+  const businessContext = useBusinessContextSelection();
   const dark = appearance.dark;
   const [refreshing, setRefreshing] = useState(false);
 
@@ -105,7 +107,21 @@ export function MobileShell({
 
         <View style={[styles.contextBar, dark && darkStyles.contextBar]}>
           <View style={styles.contextCopy}>
-            <Text numberOfLines={1} style={[styles.businessName, dark && darkStyles.titleText]}>{businessName}</Text>
+            <Text style={[styles.contextLabel, dark && darkStyles.bodyText]}>BUSINESS</Text>
+            {businessContext.canSwitchBusiness ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Switch Business. Current Business ${businessName}`}
+                hitSlop={8}
+                onPress={businessContext.openBusinessSwitcher}
+                style={({ pressed }) => [styles.businessSelectorTrigger, pressed && styles.pressed]}
+              >
+                <Text numberOfLines={1} style={[styles.businessName, dark && darkStyles.titleText]}>{businessName}</Text>
+                <Ionicons name="chevron-down" size={17} color={dark ? theme.dark.accentText : theme.colors.greenDark} />
+              </Pressable>
+            ) : (
+              <Text numberOfLines={1} style={[styles.businessName, dark && darkStyles.titleText]}>{businessName}</Text>
+            )}
             <View style={styles.branchRow}>
               <Ionicons name="location-outline" size={15} color={dark ? theme.dark.textMuted : theme.colors.muted} />
               <Text numberOfLines={1} style={[styles.branchName, dark && darkStyles.bodyText]}>{branchName?.trim() || 'Business-wide'}</Text>
@@ -114,10 +130,12 @@ export function MobileShell({
 
           {canSwitchBranch && onOpenBranchSwitcher ? (
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Switch Branch"
               onPress={onOpenBranchSwitcher}
               style={({ pressed }) => [styles.branchButton, dark && darkStyles.outlineButton, pressed && styles.pressed]}
             >
-              <Text style={[styles.branchButtonText, dark && darkStyles.greenText]}>Switch</Text>
+              <Text style={[styles.branchButtonText, dark && darkStyles.greenText]}>Branch</Text>
               <Ionicons name="chevron-down" size={16} color={dark ? theme.dark.accentText : theme.colors.greenDark} />
             </Pressable>
           ) : null}
@@ -223,12 +241,14 @@ const styles = StyleSheet.create({
   iconButton: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, alignItems: 'center', justifyContent: 'center', position: 'relative' },
   notificationBadge: { position: 'absolute', right: 2, top: 2, minWidth: 17, height: 17, borderRadius: 9, backgroundColor: theme.colors.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
   notificationBadgeText: { color: theme.colors.white, fontSize: 10, fontWeight: '900' },
-  contextBar: { minHeight: 68, paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.colors.white, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  contextCopy: { flex: 1, minWidth: 0, gap: 4 },
-  businessName: { color: theme.colors.navy, fontSize: 16, fontWeight: '900' },
+  contextBar: { minHeight: 76, paddingHorizontal: 16, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.colors.white, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  contextCopy: { flex: 1, minWidth: 0, gap: 2 },
+  contextLabel: { color: theme.colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 0.9 },
+  businessSelectorTrigger: { minHeight: 30, maxWidth: '100%', flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 5 },
+  businessName: { flexShrink: 1, color: theme.colors.navy, fontSize: 16, fontWeight: '900' },
   branchRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   branchName: { flex: 1, color: theme.colors.muted, fontSize: 12, fontWeight: '700' },
-  branchButton: { minHeight: 36, borderRadius: 11, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.mintSoft, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  branchButton: { minHeight: 40, borderRadius: 11, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.mintSoft, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 4 },
   branchButtonText: { color: theme.colors.greenDark, fontSize: 12, fontWeight: '900' },
   content: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 },
   bottomNav: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: theme.colors.border, backgroundColor: theme.colors.white, paddingHorizontal: 4, paddingTop: 7, paddingBottom: Platform.OS === 'android' ? 14 : 10, gap: 1 },
