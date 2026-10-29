@@ -3,11 +3,15 @@ import { fileURLToPath } from 'node:url';
 
 const src = fileURLToPath(new URL('../src/', import.meta.url));
 const navigation = await readFile(new URL('../src/portalNavigation.ts', import.meta.url), 'utf8');
+const routeState = await readFile(new URL('../src/merchantRouteState.ts', import.meta.url), 'utf8');
+const profileEvents = await readFile(new URL('../src/businessProfileEvents.ts', import.meta.url), 'utf8');
 const merchantApp = await readFile(new URL('../src/MerchantApp.tsx', import.meta.url), 'utf8');
 const managementPage = await readFile(new URL('../src/ManagementPage.tsx', import.meta.url), 'utf8');
+const settings = await readFile(new URL('../src/SettingsManagement.tsx', import.meta.url), 'utf8');
 const setup = await readFile(new URL('../src/SetupSchedulingManagement.tsx', import.meta.url), 'utf8');
 const shell = await readFile(new URL('../src/merchantShell.tsx', import.meta.url), 'utf8');
 const billing = await readFile(new URL('../src/SellerTrayBillingManagement.tsx', import.meta.url), 'utf8');
+const vercel = await readFile(new URL('../vercel.json', import.meta.url), 'utf8');
 
 const requiredNavigation = [
   "{ id: 'sellertray_billing', label: 'Billing', section: 'Business', available: true }",
@@ -22,6 +26,13 @@ if (!navigation.includes("{ id: 'payments', label: 'Payments & Receivables', sec
 
 const businessEntries = [...navigation.matchAll(/\{ id: '([^']+)', label: '([^']+)', section: 'Business', available: true \}/g)].map((match) => match[1]);
 if (businessEntries.at(-1) !== 'settings') fail('Settings must remain the last Business navigation entry.');
+if (!navigation.includes('AVAILABLE_MERCHANT_PORTAL_PAGE_IDS')) fail('Available Merchant navigation must expose the page-ID allow-list used by durable route state.');
+if (!routeState.includes('AVAILABLE_MERCHANT_PORTAL_PAGE_IDS') || !routeState.includes("new URLSearchParams(window.location.search).get(PAGE_QUERY_KEY)") || !routeState.includes("sellertray.merchant.lastPage.") || !routeState.includes('window.history.pushState') || !routeState.includes('window.history.replaceState')) fail('Merchant route state must validate URL pages, persist per-Business fallback state, and support browser history.');
+if (!merchantApp.includes("readMerchantPageFromLocation() ?? 'overview'") || merchantApp.includes("useState<Page>('overview')")) fail('MerchantApp must restore a valid page from route state instead of resetting every entry to Dashboard.');
+if (!merchantApp.includes("window.addEventListener('popstate', handlePopState)") || !merchantApp.includes("syncMerchantPageUrl(businessId, next, 'push')")) fail('MerchantApp must keep explicit navigation and browser Back/Forward synchronized with URL route state.');
+if (!merchantApp.includes("rpc('get_sellertray_business_profile'") || !merchantApp.includes('<BusinessAvatar logoUrl={businessIdentity?.logoUrl ?? \'\'}') || !merchantApp.includes('BUSINESS_PROFILE_UPDATED_EVENT')) fail('Merchant shell must consume the governed Business Profile identity and react to profile updates.');
+if (!profileEvents.includes("sellertray:business-profile-updated") || !settings.includes('publishBusinessProfileUpdated({ tenantId, name: savedProfile.name, logoUrl: savedProfile.logoUrl, currency: savedProfile.currency })')) fail('Saving Business Profile must publish the canonical saved identity to the active Merchant shell immediately.');
+if (!vercel.includes("img-src 'self' data: https://*.supabase.co")) fail('Merchant Web CSP must allow governed Supabase-hosted Business logo images.');
 if (!merchantApp.includes("page === 'setup_activation'")) fail('MerchantApp must route Setup & Activation through the management page boundary.');
 if (!merchantApp.includes('<CommercialJourneyNavigation activePage={page} onNavigate={navigate} />')) fail('MerchantApp must keep Agreements, Billing and Setup & Activation visibly connected in the activation journey.');
 if (!managementPage.includes("if (page === 'setup_activation') return <SetupSchedulingManagement tenantId={tenantId} onNavigate={onNavigate} />;")) fail('Setup & Activation must reuse the governed SetupSchedulingManagement flow with direct Merchant navigation support.');
@@ -39,7 +50,7 @@ for (const phrase of forbiddenBillingCopy) {
 }
 if (!billing.includes('<h2>Billing</h2>')) fail('Billing page must use the merchant-facing Billing label.');
 
-console.log(`Merchant Web navigation, activation journey and billing-copy guard passed for ${src}.`);
+console.log(`Merchant Web navigation, durable routing, Business identity, activation journey and billing-copy guard passed for ${src}.`);
 
 function fail(message) {
   console.error(message);

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { publishBusinessProfileUpdated } from './businessProfileEvents';
 import { errorMessage, supabase } from './supabase';
 import { PosPolicySettings } from './PosPolicySettings';
 import { SellerTrayInput, SellerTraySelect, SellerTrayTextarea } from './SellerTrayElements';
@@ -196,6 +197,7 @@ export default function SettingsManagement({ tenantId }: { tenantId: string }) {
       setRemoveBusinessLogo(false);
       setLogoInputKey((current) => current + 1);
       setMessage('Business profile saved.');
+      publishBusinessProfileUpdated({ tenantId, name: savedProfile.name, logoUrl: savedProfile.logoUrl, currency: savedProfile.currency });
 
       if (previousLogoPath && previousLogoUrl !== nextLogoUrl && previousLogoPath !== uploadedLogoPath) {
         const { error: cleanupError } = await supabase.storage.from(BUSINESS_LOGO_BUCKET).remove([previousLogoPath]);

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import AiInsights from './AiInsights';
 import BusinessExpensesManagement from './BusinessExpensesManagement';
@@ -16,7 +16,9 @@ import ReturnsManagement from './ReturnsManagement';
 import SalesManagement from './SalesManagement';
 import SellerTrayBillingManagement from './SellerTrayBillingManagement';
 import WhatsAppManagement from './WhatsAppManagement';
+import { BUSINESS_PROFILE_UPDATED_EVENT, type BusinessProfileUpdatedDetail } from './businessProfileEvents';
 import { SellerTrayBrand, SellerTrayMark, NavIcon, ShellIcon } from './merchantShell';
+import { readMerchantPageFromLocation, rememberMerchantPage, resolveMerchantPage, syncMerchantPageUrl } from './merchantRouteState';
 import { SellerTrayInput, SellerTraySelect } from './SellerTrayElements';
 import { AVAILABLE_MERCHANT_PORTAL_NAVIGATION, MERCHANT_PORTAL_SECTIONS, type MerchantPortalPage, type MerchantPortalSection } from './portalNavigation';
 import { errorMessage, supabase } from './supabase';
@@ -25,6 +27,7 @@ type MerchantRole = 'owner' | 'manager' | 'staff';
 type ManagementRole = 'owner' | 'manager';
 type Page = MerchantPortalPage;
 type Business = { id: string; name: string; merchantCode: string; role: MerchantRole; currency: string; subscriptionStatus: string; whatsappConnectionStatus: string };
+type BusinessIdentity = { name: string; logoUrl: string; currency: string };
 type Branch = { id: string; code: string; name: string; isDefault: boolean };
 
 const MANAGEMENT_ROLES: MerchantRole[] = ['owner', 'manager'];
@@ -36,24 +39,59 @@ export default function MerchantApp() {
   const [session, setSession] = useState<Session | null>(null);
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [businessId, setBusinessId] = useState('');
+  const [businessIdentity, setBusinessIdentity] = useState<BusinessIdentity | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchId, setBranchId] = useState('');
-  const [page, setPage] = useState<Page>('overview');
+  const [page, setPage] = useState<Page>(() => readMerchantPageFromLocation() ?? 'overview');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dark, setDark] = useState(() => localStorage.getItem('sellertray.merchant.theme') === 'dark');
   const [navOpen, setNavOpen] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Set<MerchantPortalSection>>(() => new Set());
+  const workspaceRequestRef = useRef(0);
 
   useEffect(() => {
     let mounted = true;
     void supabase.auth.getSession().then(({ data }) => { if (mounted) { setSession(data.session); setBooting(false); } });
-    const { data } = supabase.auth.onAuthStateChange((_event, next) => { setSession(next); if (!next) { setBusinesses([]); setBusinessId(''); setBranches([]); setBranchId(''); } });
+    const { data } = supabase.auth.onAuthStateChange((_event, next) => {
+      setSession(next);
+      if (!next) { workspaceRequestRef.current += 1; setBusinesses([]); setBusinessId(''); setBusinessIdentity(null); setBranches([]); setBranchId(''); }
+    });
     return () => { mounted = false; data.subscription.unsubscribe(); };
   }, []);
   useEffect(() => { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; localStorage.setItem('sellertray.merchant.theme', dark ? 'dark' : 'light'); }, [dark]);
   useEffect(() => { if (session) void loadBusinesses(); }, [session?.access_token]);
-  useEffect(() => { if (businessId) void loadWorkspace(businessId); }, [businessId]);
+  useEffect(() => {
+    if (!businessId) return;
+    setBusinessIdentity(null);
+    setBranches([]);
+    setBranchId('');
+    const restoredPage = resolveMerchantPage(businessId);
+    setPage(restoredPage);
+    syncMerchantPageUrl(businessId, restoredPage, 'replace');
+    void loadWorkspace(businessId);
+  }, [businessId]);
+  useEffect(() => {
+    const handlePopState = () => {
+      if (!businessId) return;
+      const restoredPage = resolveMerchantPage(businessId);
+      setPage(restoredPage);
+      rememberMerchantPage(businessId, restoredPage);
+      if (!readMerchantPageFromLocation()) syncMerchantPageUrl(businessId, restoredPage, 'replace');
+      setNavOpen(false);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [businessId]);
+  useEffect(() => {
+    const handleBusinessProfileUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<BusinessProfileUpdatedDetail>).detail;
+      if (!detail || detail.tenantId !== businessId) return;
+      applyBusinessIdentity(detail.tenantId, detail);
+    };
+    window.addEventListener(BUSINESS_PROFILE_UPDATED_EVENT, handleBusinessProfileUpdated);
+    return () => window.removeEventListener(BUSINESS_PROFILE_UPDATED_EVENT, handleBusinessProfileUpdated);
+  }, [businessId]);
   useEffect(() => {
     if (!navOpen) return;
     const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setNavOpen(false); };
@@ -78,19 +116,35 @@ export default function MerchantApp() {
   }
 
   async function loadWorkspace(tenantId: string) {
+    const requestId = ++workspaceRequestRef.current;
     setLoading(true); setError(null);
     try {
-      const branchResult = await supabase.rpc('get_sellertray_accessible_branches', { p_tenant_id: tenantId });
+      const [branchResult, profileResult] = await Promise.all([
+        supabase.rpc('get_sellertray_accessible_branches', { p_tenant_id: tenantId }),
+        supabase.rpc('get_sellertray_business_profile', { p_tenant_id: tenantId }),
+      ]);
+      if (requestId !== workspaceRequestRef.current) return;
       if (branchResult.error) throw branchResult.error;
+      if (profileResult.error) throw profileResult.error;
       const nextBranches = ((branchResult.data ?? []) as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id ?? ''), code: String(row.code ?? ''), name: String(row.name ?? 'Branch'), isDefault: row.is_default === true } satisfies Branch));
       const chosen = nextBranches.find((row) => row.id === branchId)?.id ?? nextBranches.find((row) => row.isDefault)?.id ?? nextBranches[0]?.id ?? '';
+      const profileRow = Array.isArray(profileResult.data) ? profileResult.data[0] : profileResult.data;
+      applyBusinessIdentity(tenantId, parseBusinessIdentity(profileRow));
       setBranches(nextBranches); setBranchId(chosen);
-    } catch (cause) { setError(errorMessage(cause, 'Unable to load SellerTray management data.')); } finally { setLoading(false); }
+    } catch (cause) {
+      if (requestId === workspaceRequestRef.current) setError(errorMessage(cause, 'Unable to load SellerTray management data.'));
+    } finally {
+      if (requestId === workspaceRequestRef.current) setLoading(false);
+    }
   }
 
+  function applyBusinessIdentity(tenantId: string, identity: BusinessIdentity) {
+    setBusinessIdentity(identity);
+    setBusinesses((current) => current.map((row) => row.id === tenantId ? { ...row, name: identity.name || row.name, currency: identity.currency || row.currency } : row));
+  }
   async function refresh() { if (businessId) await loadWorkspace(businessId); }
   async function signOut() { await supabase.auth.signOut(); }
-  function navigate(next: Page) { setPage(next); setNavOpen(false); }
+  function navigate(next: Page) { setPage(next); if (businessId) syncMerchantPageUrl(businessId, next, 'push'); setNavOpen(false); }
   function openBranchPage(next: Page, nextBranchId: string) { setBranchId(nextBranchId); navigate(next); }
   function toggleSection(section: MerchantPortalSection) {
     setCollapsedSections((current) => { const next = new Set(current); if (next.has(section)) next.delete(section); else next.add(section); return next; });
@@ -105,6 +159,7 @@ export default function MerchantApp() {
   const managementRole = business.role as ManagementRole;
   const currentNav = NAV.find((item) => item.id === page);
   const managementPage = page === 'products' || page === 'categories' || page === 'units' || page === 'suppliers' || page === 'branches' || page === 'team' || page === 'devices' || page === 'feedback' || page === 'setup_activation' || page === 'settings';
+  const displayBusinessName = businessIdentity?.name || business.name;
 
   return <div className={navOpen ? 'app-shell nav-open' : 'app-shell'}>
     <button className="nav-backdrop" aria-label="Close navigation" onClick={() => setNavOpen(false)} />
@@ -122,12 +177,12 @@ export default function MerchantApp() {
           return <div key={section} className="nav-group"><button className="nav-section-button" aria-expanded={!collapsed} onClick={() => toggleSection(section)}><span>{section}</span><span className={collapsed ? 'nav-chevron collapsed' : 'nav-chevron'}><ShellIcon name="chevron" /></span></button><div className={collapsed ? 'nav-group-items collapsed' : 'nav-group-items'}>{items.map((item) => <button key={item.id} aria-current={page === item.id ? 'page' : undefined} className={page === item.id ? 'nav-button active' : 'nav-button'} onClick={() => navigate(item.id)}><span className="nav-button-icon"><NavIcon name={item.id} /></span><span className="nav-button-label">{item.label}</span></button>)}</div></div>;
         })}
       </nav>
-      <div className="sidebar-foot"><div className="account-summary"><span className="account-avatar">{accountInitial(session.user.email)}</span><div><strong>{session.user.email ?? 'SellerTray account'}</strong><span>{title(business.role)}</span></div></div><button className="text-button" onClick={() => void signOut()}>Sign out</button></div>
+      <div className="sidebar-foot"><div className="account-summary"><BusinessAvatar logoUrl={businessIdentity?.logoUrl ?? ''} fallback={accountInitial(session.user.email)} businessName={displayBusinessName} /><div><strong>{displayBusinessName}</strong><span>{title(business.role)} · {session.user.email ?? 'SellerTray account'}</span></div></div><button className="text-button" onClick={() => void signOut()}>Sign out</button></div>
     </aside>
 
     <main className="workspace">
       <header className="topbar">
-        <div className="topbar-heading"><button className="mobile-menu-button" type="button" aria-label="Open navigation" aria-controls="merchant-navigation" aria-expanded={navOpen} onClick={() => setNavOpen(true)}><ShellIcon name="menu" /></button><div><p className="eyebrow">{business.name}</p><h1>{currentNav?.label ?? 'Dashboard'}</h1><p className="topbar-context"><span className="context-dot" />{branch?.name ?? 'No active Branch'} <span aria-hidden="true">·</span> {title(business.role)}</p></div></div>
+        <div className="topbar-heading"><button className="mobile-menu-button" type="button" aria-label="Open navigation" aria-controls="merchant-navigation" aria-expanded={navOpen} onClick={() => setNavOpen(true)}><ShellIcon name="menu" /></button><div><p className="eyebrow">{displayBusinessName}</p><h1>{currentNav?.label ?? 'Dashboard'}</h1><p className="topbar-context"><span className="context-dot" />{branch?.name ?? 'No active Branch'} <span aria-hidden="true">·</span> {title(business.role)}</p></div></div>
         <div className="topbar-actions"><Select label="Business" value={businessId} onChange={setBusinessId}>{managementBusinesses.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</Select><Select label="Branch" value={branchId} onChange={setBranchId} disabled={!branches.length}>{branches.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</Select><button className="icon-button compact-icon-button" aria-label={dark ? 'Use light theme' : 'Use dark theme'} title={dark ? 'Use light theme' : 'Use dark theme'} onClick={() => setDark((value) => !value)}><ShellIcon name={dark ? 'sun' : 'moon'} /></button><button className="secondary-button refresh-button" disabled={loading} onClick={() => void refresh()}><ShellIcon name="refresh" />{loading ? 'Refreshing' : 'Refresh'}</button></div>
       </header>
 
@@ -162,6 +217,12 @@ function Login() {
   async function submit(event: FormEvent) { event.preventDefault(); setBusy(true); setMessage(''); try { const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password }); if (error) throw error; } catch (cause) { setMessage(errorMessage(cause, 'Unable to sign in.')); } finally { setBusy(false); } }
   return <div className="login-shell"><section className="login-brand"><SellerTrayMark large /><p className="eyebrow">SellerTray</p><h1>Manage the business. Keep selling on mobile.</h1><p>Review sales, products, stock, purchasing, money, channels and Branch performance from one governed merchant workspace.</p></section><form className="login-card" onSubmit={submit}><div><p className="eyebrow">Merchant Web</p><h2>Sign in</h2><p className="muted">Use the same SellerTray account you use for your business.</p></div><label>Email<SellerTrayInput type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label><label>Password<SellerTrayInput type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} /></label>{message ? <div className="error-banner compact">{message}</div> : null}<button className="primary-button" disabled={busy}>{busy ? 'Signing in' : 'Continue'}</button></form></div>;
 }
+function BusinessAvatar({ logoUrl, fallback, businessName }: { logoUrl: string; fallback: string; businessName: string }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setFailed(false); }, [logoUrl]);
+  if (!logoUrl || failed) return <span className="account-avatar">{fallback}</span>;
+  return <span className="account-avatar"><img src={logoUrl} alt={`${businessName} logo`} onError={() => setFailed(true)} style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 'inherit' }} /></span>;
+}
 function CommercialJourneyNavigation({ activePage, onNavigate }: { activePage: Page; onNavigate: (page: Page) => void }) {
   const steps: Array<{ page: Page; label: string }> = [
     { page: 'agreements', label: '1. Agreements' },
@@ -181,5 +242,10 @@ function Empty({ title: heading, body }: { title: string; body: string }) { retu
 function Status({ title: heading, body, action }: { title: string; body: string; action?: ReactNode }) { return <div className="status-page"><div className="status-card"><SellerTrayMark large /><p className="eyebrow">SellerTray</p><h1>{heading}</h1><p>{body}</p>{action}</div></div>; }
 function merchantRole(value: unknown): MerchantRole { return value === 'owner' || value === 'manager' || value === 'staff' ? value : 'staff'; }
 function accountInitial(value: string | undefined): string { return value?.trim().charAt(0).toUpperCase() || 'S'; }
+function parseBusinessIdentity(value: unknown): BusinessIdentity {
+  const row = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  return { name: String(row.name ?? ''), logoUrl: optionalText(row.logoUrl ?? row.logo_url), currency: String(row.currency ?? 'NGN') };
+}
+function optionalText(value: unknown): string { return typeof value === 'string' ? value : ''; }
 function title(value: string): string { return value ? value[0].toUpperCase() + value.slice(1) : value; }
 function statusText(value: string): string { return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()); }
