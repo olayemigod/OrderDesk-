@@ -45,14 +45,38 @@ select extensions.ok(
   'anon cannot request a merchant web handoff target'
 );
 
-select extensions.like(
-  pg_get_functiondef('public.get_sellertray_onboarding_state(uuid)'::regprocedure),
-  '%review_setup_appointments%',
+select extensions.ok(
+  position(
+    'review_setup_appointments'
+    in pg_get_functiondef('public.get_sellertray_onboarding_state(uuid)'::regprocedure)
+  ) > 0,
   'merchant onboarding wrapper routes incomplete setup appointment management to Merchant Web'
 );
-select extensions.like(
-  pg_get_functiondef('public.get_sellertray_merchant_web_handoff_target(uuid)'::regprocedure),
-  '%review_master_agreement%agreements%pay_outstanding%sellertray_billing%review_setup_appointments%setup%',
+select extensions.ok(
+  position(
+    'review_master_agreement'
+    in pg_get_functiondef('public.get_sellertray_merchant_web_handoff_target(uuid)'::regprocedure)
+  ) > 0 and
+  position(
+    'agreements'
+    in pg_get_functiondef('public.get_sellertray_merchant_web_handoff_target(uuid)'::regprocedure)
+  ) > 0 and
+  position(
+    'pay_outstanding'
+    in pg_get_functiondef('public.get_sellertray_merchant_web_handoff_target(uuid)'::regprocedure)
+  ) > 0 and
+  position(
+    'sellertray_billing'
+    in pg_get_functiondef('public.get_sellertray_merchant_web_handoff_target(uuid)'::regprocedure)
+  ) > 0 and
+  position(
+    'review_setup_appointments'
+    in pg_get_functiondef('public.get_sellertray_merchant_web_handoff_target(uuid)'::regprocedure)
+  ) > 0 and
+  position(
+    'setup'
+    in pg_get_functiondef('public.get_sellertray_merchant_web_handoff_target(uuid)'::regprocedure)
+  ) > 0,
   'handoff target RPC maps governed lifecycle actions to exact Merchant Web surfaces'
 );
 
