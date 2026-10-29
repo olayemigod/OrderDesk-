@@ -117,7 +117,7 @@ export function MobileShell({
                 style={({ pressed }) => [styles.businessSelectorTrigger, pressed && styles.pressed]}
               >
                 <Text numberOfLines={1} style={[styles.businessName, dark && darkStyles.titleText]}>{businessName}</Text>
-                <Ionicons name="chevron-down" size={17} color={dark ? theme.dark.accentText : theme.colors.greenDark} />
+                <Ionicons name="chevron-down" size={18} color={dark ? theme.dark.accentText : theme.colors.greenDark} />
               </Pressable>
             ) : (
               <Text numberOfLines={1} style={[styles.businessName, dark && darkStyles.titleText]}>{businessName}</Text>
@@ -241,14 +241,14 @@ const styles = StyleSheet.create({
   iconButton: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.white, alignItems: 'center', justifyContent: 'center', position: 'relative' },
   notificationBadge: { position: 'absolute', right: 2, top: 2, minWidth: 17, height: 17, borderRadius: 9, backgroundColor: theme.colors.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
   notificationBadgeText: { color: theme.colors.white, fontSize: 10, fontWeight: '900' },
-  contextBar: { minHeight: 76, paddingHorizontal: 16, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.colors.white, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  contextCopy: { flex: 1, minWidth: 0, gap: 2 },
+  contextBar: { minHeight: 84, paddingHorizontal: 16, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.colors.white, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  contextCopy: { flex: 1, minWidth: 0, gap: 1 },
   contextLabel: { color: theme.colors.muted, fontSize: 10, fontWeight: '900', letterSpacing: 0.9 },
-  businessSelectorTrigger: { minHeight: 30, maxWidth: '100%', flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 5 },
+  businessSelectorTrigger: { minHeight: 44, maxWidth: '100%', flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6 },
   businessName: { flexShrink: 1, color: theme.colors.navy, fontSize: 16, fontWeight: '900' },
   branchRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   branchName: { flex: 1, color: theme.colors.muted, fontSize: 12, fontWeight: '700' },
-  branchButton: { minHeight: 40, borderRadius: 11, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.mintSoft, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  branchButton: { minHeight: 44, borderRadius: 11, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.mintSoft, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 4 },
   branchButtonText: { color: theme.colors.greenDark, fontSize: 12, fontWeight: '900' },
   content: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 },
   bottomNav: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: theme.colors.border, backgroundColor: theme.colors.white, paddingHorizontal: 4, paddingTop: 7, paddingBottom: Platform.OS === 'android' ? 14 : 10, gap: 1 },
