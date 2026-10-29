@@ -10,8 +10,10 @@ const merchantApp = read('src/MerchantApp.tsx');
 const navigation = read('src/portalNavigation.ts');
 const agreements = read('src/CommercialAgreementsManagement.tsx');
 const documentRequestGateSource = read('src/agreement-document-request.ts');
+const agreementStyles = read('src/agreement-documents.css');
 const billing = read('src/SellerTrayBillingManagement.tsx');
 const main = read('src/main.tsx');
+const vercel = read('vercel.json');
 const failures = [];
 const requireValue = (condition, message) => { if (!condition) failures.push(message); };
 const excludes = (source, values) => values.every((value) => !source.includes(value));
@@ -96,12 +98,15 @@ requireValue(
   'Changing tenant with the same Order Form identity must invalidate the old tenant document request.',
 );
 requireValue(
-  agreements.includes("import { AgreementDocumentRequestGate } from './agreement-document-request';")
+  documentRequestGateSource.includes('request.generation === this.#generation')
+    && documentRequestGateSource.includes('request.tenantId === this.#context.tenantId')
+    && documentRequestGateSource.includes('request.orderFormId === this.#context.orderFormId')
+    && agreements.includes("import { AgreementDocumentRequestGate } from './agreement-document-request';")
     && agreements.includes('documentRequestGate.current.invalidate(tenantId, orderFormId)')
     && (agreements.match(/documentRequestGate\.current\.isCurrent\(request\)/g)?.length ?? 0) >= 3
-    && agreements.includes('reviewDocumentState.request.tenantId === tenantId')
-    && agreements.includes('reviewDocumentState.request.orderFormId === selected.id'),
-  'Merchant Agreements must guard success, error, and finally state with both request generation and tenant/Order Form context.',
+    && agreements.includes('state.request.tenantId === tenantId')
+    && agreements.includes('state.request.orderFormId === selected.id'),
+  'Merchant Agreements must guard success, error, finally and rendered-document state with request generation plus tenant/Order Form context.',
 );
 
 requireValue(
@@ -118,6 +123,31 @@ requireValue(
     && agreements.includes('expectedPackageId: reviewDocument.packageId')
     && agreements.includes('expectedPackageFingerprint: reviewDocument.packageFingerprint'),
   'Agreement Package confirmation must preserve command idempotency and exact reviewed-package binding.',
+);
+
+requireValue(
+  agreements.includes('const reviewReady = Boolean(reviewDocument && reviewedFingerprint === reviewDocument.packageFingerprint)')
+    && agreements.includes("disabled={busy || !confirmed || !legalName.trim() || !reviewReady}")
+    && agreements.includes('onLoad={() => markReviewOpened(viewerDocument)}')
+    && agreements.includes('onClick={() => markReviewOpened(viewerDocument)}')
+    && agreements.includes('className="agreement-viewer-frame"')
+    && excludes(agreements, ["window.open('about:blank'", 'documentPopup']),
+  'Acceptance must unlock only after the exact PDF has loaded or been explicitly opened, without the fragile about:blank popup path.',
+);
+
+requireValue(
+  excludes(agreements, ['contentBody:', 'renderedContent:', 'Read Master Agreement text', 'Read Order Form text'])
+    && agreements.includes('Loading the current agreement summary')
+    && agreements.includes('The approval button unlocks after the exact Agreement Package opens successfully.'),
+  'Initial Merchant agreement rendering must consume a compact summary rather than transferring and rendering full legal text outside the governed PDF review.',
+);
+
+requireValue(
+  vercel.includes("frame-src 'self' https://*.supabase.co")
+    && vercel.includes("frame-ancestors 'none'")
+    && agreementStyles.includes('.agreement-viewer-frame')
+    && agreementStyles.includes('.agreement-viewer-backdrop'),
+  'Merchant Web CSP and styles must support the governed inline Supabase PDF viewer without weakening frame-ancestor protection.',
 );
 
 requireValue(
@@ -184,4 +214,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('SellerTray Agreement Package, Billing and activation-journey preflight passed.');
+console.log('SellerTray Agreement Package, inline review, Billing and activation-journey preflight passed.');

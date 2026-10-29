@@ -50,6 +50,9 @@ jobs:
         with:
           node-version: '24'
 
+      - name: Verify Merchant Agreement review/performance contract
+        run: node supabase/functions/master-agreements/merchant-review-contract.mjs
+
       - name: Verify financial document tax rendering contract
         run: node supabase/functions/financial-document/tax-contract.mjs
 
