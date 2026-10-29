@@ -13,8 +13,7 @@ create temp table c1b_reconcile_fixture (
   broken_order_id uuid,
   broken_obligation_id uuid,
   broken_schedule_1_id uuid,
-  broken_template_id uuid,
-  broken_agreement_id uuid,
+  master_agreement_id uuid,
   broken_checkout_id uuid,
   valid_order_id uuid,
   valid_obligation_id uuid
@@ -56,8 +55,7 @@ with inserted as (
   )
   select 'subscription','business','monthly','NGN',80,now()-interval '1 day',
          'C1B reconciliation monthly anchor',admin_user_id,admin_user_id,now()
-  from c1b_reconcile_fixture
-  returning id
+  from c1b_reconcile_fixture returning id
 )
 update c1b_reconcile_fixture set monthly_price_id=(select id from inserted);
 
@@ -68,8 +66,7 @@ with inserted as (
   )
   select 'subscription','business','yearly','NGN',800,now()-interval '1 day',
          'C1B reconciliation annual price',admin_user_id,admin_user_id,now()
-  from c1b_reconcile_fixture
-  returning id
+  from c1b_reconcile_fixture returning id
 )
 update c1b_reconcile_fixture set yearly_price_id=(select id from inserted);
 
@@ -80,22 +77,17 @@ with inserted as (
   )
   select 'branch_setup','NGN',200,now()-interval '1 day',
          'C1B reconciliation Branch setup',admin_user_id,admin_user_id,now()
-  from c1b_reconcile_fixture
-  returning id
+  from c1b_reconcile_fixture returning id
 )
 update c1b_reconcile_fixture set setup_price_id=(select id from inserted);
 
--- First obligation is fully valid commercial truth. Its later failure is caused
--- only by an unrelated populated runtime period, which reconciliation must not
--- overwrite. This exercises failure isolation without inserting invalid C1 data.
 with inserted as (
   insert into public.sellertray_commercial_orders(
     tenant_id,order_reference,currency,total_gross_amount,ordered_at,created_by_user_id
   )
   select tenant_id,'C1B-REC-BROKEN-'||upper(substr(tenant_id::text,1,6)),
          'NGN',1000,now()-interval '1 minute',admin_user_id
-  from c1b_reconcile_fixture
-  returning id
+  from c1b_reconcile_fixture returning id
 )
 update c1b_reconcile_fixture set broken_order_id=(select id from inserted);
 
@@ -116,8 +108,7 @@ with inserted as (
     tenant_id,commercial_order_id,structure_code,currency,obligated_amount,created_by_user_id
   )
   select tenant_id,broken_order_id,'two_installment_70_30','NGN',1000,admin_user_id
-  from c1b_reconcile_fixture
-  returning id
+  from c1b_reconcile_fixture returning id
 )
 update c1b_reconcile_fixture set broken_obligation_id=(select id from inserted);
 
@@ -125,8 +116,7 @@ with inserted as (
   insert into public.sellertray_commercial_installment_schedule(
     tenant_id,installment_obligation_id,sequence_no,percentage,amount_due
   )
-  select tenant_id,broken_obligation_id,1,70,700 from c1b_reconcile_fixture
-  returning id
+  select tenant_id,broken_obligation_id,1,70,700 from c1b_reconcile_fixture returning id
 )
 update c1b_reconcile_fixture set broken_schedule_1_id=(select id from inserted);
 
@@ -136,22 +126,16 @@ insert into public.sellertray_commercial_installment_schedule(
 select tenant_id,broken_obligation_id,2,30,300 from c1b_reconcile_fixture;
 set constraints all immediate;
 
--- SET CONSTRAINTS ALL IMMEDIATE persists for the transaction. Re-defer the C1
--- order validators before constructing a second order so its header is not
--- validated before the matching immutable subscription snapshot is inserted.
 set constraints validate_sellertray_commercial_order_amounts_header deferred;
 set constraints validate_sellertray_commercial_order_amounts_snapshot deferred;
 
--- Second obligation is also valid annual commercial truth. It intentionally has
--- no agreement or payment yet, so a successful reconciliation remains pending.
 with inserted as (
   insert into public.sellertray_commercial_orders(
     tenant_id,order_reference,currency,total_gross_amount,ordered_at,created_by_user_id
   )
   select tenant_id,'C1B-REC-VALID-'||upper(substr(tenant_id::text,1,6)),
          'NGN',800,now(),admin_user_id
-  from c1b_reconcile_fixture
-  returning id
+  from c1b_reconcile_fixture returning id
 )
 update c1b_reconcile_fixture set valid_order_id=(select id from inserted);
 
@@ -169,8 +153,7 @@ with inserted as (
     tenant_id,commercial_order_id,structure_code,currency,obligated_amount,created_by_user_id
   )
   select tenant_id,valid_order_id,'two_installment_70_30','NGN',800,admin_user_id
-  from c1b_reconcile_fixture
-  returning id
+  from c1b_reconcile_fixture returning id
 )
 update c1b_reconcile_fixture set valid_obligation_id=(select id from inserted);
 
@@ -183,20 +166,17 @@ select tenant_id,valid_obligation_id,2,30,240 from c1b_reconcile_fixture;
 set constraints all immediate;
 
 update c1b_reconcile_fixture f
-set broken_template_id=public.publish_sellertray_commercial_agreement_template_version(
-  'installment_agreement','c1b-reconcile-2026.1','SellerTray Reconciliation Installment Agreement',
-  'C1B reconciliation recovery test agreement',now()-interval '1 minute',f.admin_user_id
+set master_agreement_id=public.publish_sellertray_master_agreement_admin(
+  'test-'||substr(f.tenant_id::text,1,8),
+  'SellerTray Master Agreement',
+  'Universal C1B reconciliation recovery agreement',
+  now()-interval '1 minute',
+  'C1B reconciliation test publication',
+  f.admin_user_id
 );
 
-update c1b_reconcile_fixture f
-set broken_agreement_id=public.issue_sellertray_commercial_agreement(
-  f.tenant_id,f.broken_order_id,f.broken_obligation_id,f.broken_template_id,
-  'AGR-C1B-REC-'||upper(substr(f.tenant_id::text,1,8)),
-  'Merchant-specific reconciliation recovery installment agreement',null,f.admin_user_id
-);
-
-select public.accept_sellertray_commercial_agreement(
-  f.tenant_id,f.broken_agreement_id,'C1B Reconciliation Owner',
+select public.accept_sellertray_master_agreement(
+  f.tenant_id,f.master_agreement_id,'C1B Reconciliation Owner',
   jsonb_build_object('channel','merchant_web','authority_confirmed',true),
   gen_random_uuid(),f.owner_user_id
 ) from c1b_reconcile_fixture f;
@@ -211,8 +191,7 @@ with reserved as (
   select f.*,public.reserve_sellertray_installment_checkout(
     f.tenant_id,f.broken_schedule_1_id,gen_random_uuid(),f.owner_user_id,
     'reconcile-owner@example.com'
-  ) as result
-  from c1b_reconcile_fixture f
+  ) as result from c1b_reconcile_fixture f
 )
 update c1b_reconcile_fixture
 set broken_checkout_id=(reserved.result->>'sessionId')::uuid
@@ -233,8 +212,6 @@ select public.confirm_sellertray_installment_payment_from_checkout(
 from c1b_reconcile_fixture f
 join public.billing_checkout_sessions s on s.id=f.broken_checkout_id;
 
--- Simulate a populated legacy runtime period that is not owned by this C1B
--- order. Reconciliation must fail closed instead of overwriting it.
 update public.tenant_subscriptions s
 set plan_code='business',status='active',
     current_period_start=now()-interval '10 days',
@@ -284,9 +261,9 @@ select extensions.ok(
     join c1b_reconcile_fixture f on true
     where item->>'installmentObligationId'=f.valid_obligation_id::text
       and item->>'ok'='true'
-      and item#>>'{billingState,entitlementState}'='pending_agreement'
+      and item#>>'{billingState,entitlementState}'='pending_setup'
   ),
-  'a later valid obligation still reconciles after another obligation fails'
+  'a later valid obligation still reconciles after another obligation fails and reuses the Business-level Master Agreement acceptance'
 );
 
 select * from extensions.finish();

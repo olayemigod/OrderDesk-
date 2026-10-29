@@ -1,72 +1,36 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(5);
+select extensions.plan(6);
 
-create temp table c1b_initial_purchase_fixture (
+create temp table c1b_checkout_fixture (
   admin_user_id uuid not null,
-  initial_owner_id uuid not null,
-  legacy_owner_id uuid not null,
-  initial_tenant_id uuid not null,
-  legacy_tenant_id uuid not null,
+  owner_user_id uuid not null,
+  tenant_id uuid not null,
   monthly_price_id uuid,
   yearly_price_id uuid,
-  initial_order_id uuid,
-  initial_obligation_id uuid,
-  initial_schedule_1_id uuid,
-  initial_schedule_2_id uuid,
-  later_order_id uuid,
-  later_obligation_id uuid,
-  later_schedule_1_id uuid,
-  later_schedule_2_id uuid,
-  legacy_order_id uuid,
-  legacy_obligation_id uuid,
-  legacy_schedule_1_id uuid,
-  legacy_schedule_2_id uuid,
-  later_order_rejected boolean not null default false,
-  legacy_active_rejected boolean not null default false
+  order_id uuid,
+  obligation_id uuid,
+  schedule_1_id uuid,
+  schedule_2_id uuid,
+  checkout_id uuid
 ) on commit drop;
 
-insert into c1b_initial_purchase_fixture(
-  admin_user_id,initial_owner_id,legacy_owner_id,initial_tenant_id,legacy_tenant_id
-) values (
-  gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid()
-);
+insert into c1b_checkout_fixture(admin_user_id,owner_user_id,tenant_id)
+values(gen_random_uuid(),gen_random_uuid(),gen_random_uuid());
 
 insert into auth.users(id,email,aud,role,created_at,updated_at)
-select admin_user_id,'c1b-initial-admin-'||substr(admin_user_id::text,1,8)||'@example.com','authenticated','authenticated',now(),now()
-from c1b_initial_purchase_fixture
+select admin_user_id,'checkout-admin-'||substr(admin_user_id::text,1,8)||'@example.com','authenticated','authenticated',now(),now()
+from c1b_checkout_fixture
 union all
-select initial_owner_id,'c1b-initial-owner-'||substr(initial_owner_id::text,1,8)||'@example.com','authenticated','authenticated',now(),now()
-from c1b_initial_purchase_fixture
-union all
-select legacy_owner_id,'c1b-legacy-owner-'||substr(legacy_owner_id::text,1,8)||'@example.com','authenticated','authenticated',now(),now()
-from c1b_initial_purchase_fixture;
-
+select owner_user_id,'checkout-owner-'||substr(owner_user_id::text,1,8)||'@example.com','authenticated','authenticated',now(),now()
+from c1b_checkout_fixture;
 insert into public.platform_admins(user_id,role)
-select admin_user_id,'admin' from c1b_initial_purchase_fixture;
-
+select admin_user_id,'admin' from c1b_checkout_fixture;
 insert into public.tenants(id,name,slug,merchant_code,subscription_status)
-select initial_tenant_id,'C1B Initial Purchase Tenant',
-       'c1b-initial-'||substr(initial_tenant_id::text,1,8),
-       'C1I','trial'
-from c1b_initial_purchase_fixture
-union all
-select legacy_tenant_id,'C1B Legacy Active Purchase Tenant',
-       'c1b-legacy-purchase-'||substr(legacy_tenant_id::text,1,8),
-       'C1L','active'
-from c1b_initial_purchase_fixture;
-
+select tenant_id,'Checkout Independence Tenant','checkout-independent-'||substr(tenant_id::text,1,8),'CIT','trial'
+from c1b_checkout_fixture;
 insert into public.tenant_members(tenant_id,user_id,role)
-select initial_tenant_id,initial_owner_id,'owner' from c1b_initial_purchase_fixture
-union all
-select legacy_tenant_id,legacy_owner_id,'owner' from c1b_initial_purchase_fixture;
-
--- Keep the legacy Business explicitly active without a governed C1B period.
-update public.tenant_subscriptions s
-set plan_code='business',status='active',current_period_start=null,current_period_end=null,
-    trial_ends_at=null,grace_ends_at=null,updated_at=now()
-from c1b_initial_purchase_fixture f
-where s.tenant_id=f.legacy_tenant_id;
+select tenant_id,owner_user_id,'owner' from c1b_checkout_fixture;
 
 with inserted as (
   insert into public.sellertray_commercial_price_versions(
@@ -74,11 +38,10 @@ with inserted as (
     change_reason,created_by_user_id,approved_by_user_id,approved_at
   )
   select 'subscription','business','monthly','NGN',80,now()-interval '1 day',
-         'C1B initial-purchase monthly anchor',admin_user_id,admin_user_id,now()
-  from c1b_initial_purchase_fixture
-  returning id
+         'Checkout independence monthly anchor',admin_user_id,admin_user_id,now()
+  from c1b_checkout_fixture returning id
 )
-update c1b_initial_purchase_fixture set monthly_price_id=(select id from inserted);
+update c1b_checkout_fixture set monthly_price_id=(select id from inserted);
 
 with inserted as (
   insert into public.sellertray_commercial_price_versions(
@@ -86,209 +49,110 @@ with inserted as (
     change_reason,created_by_user_id,approved_by_user_id,approved_at
   )
   select 'subscription','business','yearly','NGN',800,now()-interval '1 day',
-         'C1B initial-purchase annual price',admin_user_id,admin_user_id,now()
-  from c1b_initial_purchase_fixture
-  returning id
+         'Checkout independence annual price',admin_user_id,admin_user_id,now()
+  from c1b_checkout_fixture returning id
 )
-update c1b_initial_purchase_fixture set yearly_price_id=(select id from inserted);
+update c1b_checkout_fixture set yearly_price_id=(select id from inserted);
 
 with inserted as (
   insert into public.sellertray_commercial_orders(
     tenant_id,order_reference,currency,total_gross_amount,ordered_at,created_by_user_id
   )
-  select initial_tenant_id,'C1B-INITIAL-'||upper(substr(initial_tenant_id::text,1,6)),
-         'NGN',800,now(),admin_user_id
-  from c1b_initial_purchase_fixture
-  returning id
+  select tenant_id,'CHECKOUT-'||upper(substr(tenant_id::text,1,6)),'NGN',800,now(),admin_user_id
+  from c1b_checkout_fixture returning id
 )
-update c1b_initial_purchase_fixture set initial_order_id=(select id from inserted);
+update c1b_checkout_fixture set order_id=(select id from inserted);
 
 insert into public.sellertray_commercial_order_price_snapshots(
   tenant_id,commercial_order_id,line_no,line_type,source_price_version_id,description_snapshot
 )
-select initial_tenant_id,initial_order_id,1,'subscription',yearly_price_id,'Initial annual SellerTray subscription'
-from c1b_initial_purchase_fixture;
+select tenant_id,order_id,1,'subscription',yearly_price_id,'Annual SellerTray subscription'
+from c1b_checkout_fixture;
+set constraints all immediate;
+set constraints validate_sellertray_commercial_installment_obligation deferred;
+set constraints validate_sellertray_commercial_installment_schedule_line deferred;
 
 with inserted as (
   insert into public.sellertray_commercial_installment_obligations(
     tenant_id,commercial_order_id,structure_code,currency,obligated_amount,created_by_user_id
   )
-  select initial_tenant_id,initial_order_id,'two_installment_70_30','NGN',800,admin_user_id
-  from c1b_initial_purchase_fixture
-  returning id
+  select tenant_id,order_id,'two_installment_70_30','NGN',800,admin_user_id
+  from c1b_checkout_fixture returning id
 )
-update c1b_initial_purchase_fixture set initial_obligation_id=(select id from inserted);
+update c1b_checkout_fixture set obligation_id=(select id from inserted);
 
 with inserted as (
   insert into public.sellertray_commercial_installment_schedule(
     tenant_id,installment_obligation_id,sequence_no,percentage,amount_due
   )
-  select initial_tenant_id,initial_obligation_id,1,70,560 from c1b_initial_purchase_fixture
-  returning id
+  select tenant_id,obligation_id,1,70,560 from c1b_checkout_fixture returning id
 )
-update c1b_initial_purchase_fixture set initial_schedule_1_id=(select id from inserted);
+update c1b_checkout_fixture set schedule_1_id=(select id from inserted);
 with inserted as (
   insert into public.sellertray_commercial_installment_schedule(
     tenant_id,installment_obligation_id,sequence_no,percentage,amount_due
   )
-  select initial_tenant_id,initial_obligation_id,2,30,240 from c1b_initial_purchase_fixture
-  returning id
+  select tenant_id,obligation_id,2,30,240 from c1b_checkout_fixture returning id
 )
-update c1b_initial_purchase_fixture set initial_schedule_2_id=(select id from inserted);
-
--- A later annual order for the same Business is a renewal/later purchase and is
--- therefore not eligible for the initial-purchase installment facility.
-with inserted as (
-  insert into public.sellertray_commercial_orders(
-    tenant_id,order_reference,currency,total_gross_amount,ordered_at,created_by_user_id
-  )
-  select initial_tenant_id,'C1B-LATER-'||upper(substr(initial_tenant_id::text,1,6)),
-         'NGN',800,now()+interval '1 second',admin_user_id
-  from c1b_initial_purchase_fixture
-  returning id
-)
-update c1b_initial_purchase_fixture set later_order_id=(select id from inserted);
-
-insert into public.sellertray_commercial_order_price_snapshots(
-  tenant_id,commercial_order_id,line_no,line_type,source_price_version_id,description_snapshot
-)
-select initial_tenant_id,later_order_id,1,'subscription',yearly_price_id,'Later annual SellerTray subscription'
-from c1b_initial_purchase_fixture;
-
-with inserted as (
-  insert into public.sellertray_commercial_installment_obligations(
-    tenant_id,commercial_order_id,structure_code,currency,obligated_amount,created_by_user_id
-  )
-  select initial_tenant_id,later_order_id,'two_installment_70_30','NGN',800,admin_user_id
-  from c1b_initial_purchase_fixture
-  returning id
-)
-update c1b_initial_purchase_fixture set later_obligation_id=(select id from inserted);
-
-with inserted as (
-  insert into public.sellertray_commercial_installment_schedule(
-    tenant_id,installment_obligation_id,sequence_no,percentage,amount_due
-  )
-  select initial_tenant_id,later_obligation_id,1,70,560 from c1b_initial_purchase_fixture
-  returning id
-)
-update c1b_initial_purchase_fixture set later_schedule_1_id=(select id from inserted);
-with inserted as (
-  insert into public.sellertray_commercial_installment_schedule(
-    tenant_id,installment_obligation_id,sequence_no,percentage,amount_due
-  )
-  select initial_tenant_id,later_obligation_id,2,30,240 from c1b_initial_purchase_fixture
-  returning id
-)
-update c1b_initial_purchase_fixture set later_schedule_2_id=(select id from inserted);
-
--- A legacy-active Business with no same-order C1B entitlement evidence is also
--- not an initial SellerTray purchase merely because a new annual order exists.
-with inserted as (
-  insert into public.sellertray_commercial_orders(
-    tenant_id,order_reference,currency,total_gross_amount,ordered_at,created_by_user_id
-  )
-  select legacy_tenant_id,'C1B-LEGACY-'||upper(substr(legacy_tenant_id::text,1,6)),
-         'NGN',800,now(),admin_user_id
-  from c1b_initial_purchase_fixture
-  returning id
-)
-update c1b_initial_purchase_fixture set legacy_order_id=(select id from inserted);
-
-insert into public.sellertray_commercial_order_price_snapshots(
-  tenant_id,commercial_order_id,line_no,line_type,source_price_version_id,description_snapshot
-)
-select legacy_tenant_id,legacy_order_id,1,'subscription',yearly_price_id,'Legacy active annual SellerTray subscription'
-from c1b_initial_purchase_fixture;
-
-with inserted as (
-  insert into public.sellertray_commercial_installment_obligations(
-    tenant_id,commercial_order_id,structure_code,currency,obligated_amount,created_by_user_id
-  )
-  select legacy_tenant_id,legacy_order_id,'two_installment_70_30','NGN',800,admin_user_id
-  from c1b_initial_purchase_fixture
-  returning id
-)
-update c1b_initial_purchase_fixture set legacy_obligation_id=(select id from inserted);
-
-with inserted as (
-  insert into public.sellertray_commercial_installment_schedule(
-    tenant_id,installment_obligation_id,sequence_no,percentage,amount_due
-  )
-  select legacy_tenant_id,legacy_obligation_id,1,70,560 from c1b_initial_purchase_fixture
-  returning id
-)
-update c1b_initial_purchase_fixture set legacy_schedule_1_id=(select id from inserted);
-with inserted as (
-  insert into public.sellertray_commercial_installment_schedule(
-    tenant_id,installment_obligation_id,sequence_no,percentage,amount_due
-  )
-  select legacy_tenant_id,legacy_obligation_id,2,30,240 from c1b_initial_purchase_fixture
-  returning id
-)
-update c1b_initial_purchase_fixture set legacy_schedule_2_id=(select id from inserted);
-
+update c1b_checkout_fixture set schedule_2_id=(select id from inserted);
 set constraints all immediate;
 
 select extensions.ok(
   to_regprocedure('public.guard_sellertray_initial_purchase_installment_checkout()') is not null
-  and exists (
+  and exists(
     select 1 from pg_trigger
     where tgrelid='public.billing_checkout_sessions'::regclass
       and tgname='guard_sellertray_initial_purchase_installment_checkout'
       and not tgisinternal
   ),
-  'C1B initial-purchase installment guard is installed on shared checkout persistence'
-);
-
--- OA2 policy supersedes the initial/annual restriction, but never removes
--- the current accepted-agreement prerequisite.
-select extensions.throws_ok(
-  format('select public.reserve_sellertray_installment_checkout(%L,%L,%L,%L,%L)',
-    f.initial_tenant_id,f.initial_schedule_1_id,gen_random_uuid(),f.initial_owner_id,'initial-owner@example.com'),
-  '23514','The current installment agreement must be accepted before checkout',
-  'even the initial purchase requires an accepted governed agreement'
-) from c1b_initial_purchase_fixture f;
-
-do $$
-begin
-  begin
-    perform public.reserve_sellertray_installment_checkout(
-      f.initial_tenant_id,f.later_schedule_1_id,gen_random_uuid(),f.initial_owner_id,
-      'initial-owner@example.com'
-    ) from c1b_initial_purchase_fixture f;
-  exception when sqlstate '23514' then
-    update c1b_initial_purchase_fixture set later_order_rejected=true;
-  end;
-end
-$$;
-select extensions.ok(
-  (select later_order_rejected from c1b_initial_purchase_fixture),
-  'later order without accepted terms cannot use installment billing'
-);
-
-do $$
-begin
-  begin
-    perform public.reserve_sellertray_installment_checkout(
-      f.legacy_tenant_id,f.legacy_schedule_1_id,gen_random_uuid(),f.legacy_owner_id,
-      'legacy-owner@example.com'
-    ) from c1b_initial_purchase_fixture f;
-  exception when sqlstate '23514' then
-    update c1b_initial_purchase_fixture set legacy_active_rejected=true;
-  end;
-end
-$$;
-select extensions.ok(
-  (select legacy_active_rejected from c1b_initial_purchase_fixture),
-  'legacy active Business cannot use an unsigned installment agreement'
+  'installment checkout persistence guard remains installed'
 );
 
 select extensions.ok(
-  (public.get_sellertray_installment_contract_checkout_policy(f.initial_tenant_id,f.initial_obligation_id)->>'draftEligible')::boolean
-  and not (public.get_sellertray_installment_contract_checkout_policy(f.initial_tenant_id,f.initial_obligation_id)->>'checkoutEligible')::boolean,
-  'current policy eligibility does not substitute for accepted contract authority'
-) from c1b_initial_purchase_fixture f;
+  position('agreementaccepted' in lower(pg_get_functiondef('public.reserve_sellertray_installment_checkout(uuid,uuid,uuid,uuid,text)'::regprocedure)))=0
+  and position('master_agreement' in lower(pg_get_functiondef('public.reserve_sellertray_installment_checkout(uuid,uuid,uuid,uuid,text)'::regprocedure)))=0,
+  'checkout reservation has no Master Agreement dependency'
+);
+
+select extensions.ok(
+  position('agreementaccepted' in lower(pg_get_functiondef('public.guard_sellertray_initial_purchase_installment_checkout()'::regprocedure)))=0
+  and position('master_agreement' in lower(pg_get_functiondef('public.guard_sellertray_initial_purchase_installment_checkout()'::regprocedure)))=0,
+  'checkout persistence guard has no Master Agreement dependency'
+);
+
+select extensions.ok(
+  (public.get_sellertray_installment_contract_checkout_policy(tenant_id,obligation_id)->>'checkoutEligible')::boolean
+  and not (public.get_sellertray_installment_contract_checkout_policy(tenant_id,obligation_id)->>'masterAgreementPublished')::boolean
+  and not (public.get_sellertray_installment_contract_checkout_policy(tenant_id,obligation_id)->>'masterAgreementAccepted')::boolean,
+  'commercial checkout stays eligible while Master Agreement service-delivery acceptance is still absent'
+) from c1b_checkout_fixture;
+
+with reserved as (
+  select f.*,public.reserve_sellertray_installment_checkout(
+    f.tenant_id,f.schedule_1_id,gen_random_uuid(),f.owner_user_id,'owner@example.com'
+  ) as result from c1b_checkout_fixture f
+)
+update c1b_checkout_fixture set checkout_id=(reserved.result->>'sessionId')::uuid from reserved;
+
+select extensions.ok(
+  exists(
+    select 1 from public.billing_checkout_sessions s
+    join c1b_checkout_fixture f on s.id=f.checkout_id
+    where s.status='preparing' and s.checkout_kind='installment' and s.amount=560
+  ),
+  'Owner may reserve the authoritative installment payment before Master Agreement acceptance'
+);
+
+select public.reconcile_sellertray_installment_entitlement(tenant_id,obligation_id)
+from c1b_checkout_fixture;
+select extensions.ok(
+  public.get_sellertray_installment_billing_state(tenant_id,obligation_id)->>'entitlementState'='pending_agreement'
+  and not exists(
+    select 1 from public.sellertray_commercial_entitlement_events e
+    join c1b_checkout_fixture f on e.installment_obligation_id=f.obligation_id
+  ),
+  'missing Master Agreement acceptance blocks service delivery/activation without blocking payment'
+) from c1b_checkout_fixture;
 
 select * from extensions.finish();
 rollback;

@@ -14,23 +14,14 @@ create temp table sellertray_c1b_fixture (
   installment_obligation_id uuid,
   schedule_1_id uuid,
   schedule_2_id uuid,
-  template_id uuid,
   agreement_id uuid,
-  checkout_1_command uuid not null,
-  checkout_2_command uuid not null,
-  checkout_1_id uuid,
-  checkout_2_id uuid,
-  payment_1_id uuid,
-  payment_2_id uuid,
-  first_paid_at timestamptz,
-  second_paid_at timestamptz,
-  second_before_first_rejected boolean not null default false
+  checkout_1_command uuid not null
 ) on commit drop;
 
 insert into sellertray_c1b_fixture(
-  admin_user_id,owner_user_id,tenant_id,branch_id,checkout_1_command,checkout_2_command
+  admin_user_id,owner_user_id,tenant_id,branch_id,checkout_1_command
 ) values (
-  gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid()
+  gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid()
 );
 
 insert into auth.users(id,email,aud,role,created_at,updated_at)
@@ -107,9 +98,6 @@ select tenant_id,commercial_order_id,2,'branch_setup',setup_price_id,branch_id,'
 from sellertray_c1b_fixture;
 set constraints all immediate;
 
--- SET CONSTRAINTS ALL IMMEDIATE persists for the transaction. Re-defer both
--- installment validators before creating the obligation so validation sees the
--- complete governed 70:30 schedule rather than the empty/partial fixture state.
 set constraints validate_sellertray_commercial_installment_obligation deferred;
 set constraints validate_sellertray_commercial_installment_schedule_line deferred;
 
@@ -140,30 +128,65 @@ update sellertray_c1b_fixture set schedule_2_id=(select id from inserted);
 set constraints all immediate;
 
 update sellertray_c1b_fixture f
-set template_id=public.publish_sellertray_commercial_agreement_template_version(
-  'installment_agreement','c1b-2026.1','SellerTray Installment Agreement',
-  'C1B test agreement content',now()-interval '1 minute',f.admin_user_id
+set agreement_id=public.publish_sellertray_master_agreement_admin(
+  'test-'||substr(f.tenant_id::text,1,8),
+  'SellerTray Master Agreement',
+  'Universal zero-payable test agreement content',
+  now()-interval '1 minute',
+  'Test universal agreement publication',
+  f.admin_user_id
 );
-
-update sellertray_c1b_fixture f
-set agreement_id=public.issue_sellertray_commercial_agreement(
-  f.tenant_id,f.commercial_order_id,f.installment_obligation_id,f.template_id,
-  'AGR-C1B-'||upper(substr(f.tenant_id::text,1,8)),
-  'Merchant-specific C1B installment agreement',null,f.admin_user_id
-);
-
-
 
 select set_config('request.jwt.claim.role','service_role',true);
-select public.platform_admin_record_commercial_adjustment(f.admin_user_id,f.tenant_id,f.commercial_order_id,gen_random_uuid(),1000,'Approved full discount','{}') from sellertray_c1b_fixture f;
-update sellertray_c1b_fixture f set agreement_id=public.issue_sellertray_commercial_agreement(f.tenant_id,f.commercial_order_id,f.installment_obligation_id,f.template_id,'AGR-FULL-DISCOUNT','Full discount replacement agreement',f.agreement_id,f.admin_user_id);
-select public.accept_sellertray_commercial_agreement(f.tenant_id,f.agreement_id,'Full Discount Owner','{}',f.checkout_1_command,f.owner_user_id) from sellertray_c1b_fixture f;
-select public.mark_sellertray_commercial_branch_setup_ready(f.tenant_id,f.commercial_order_id,f.branch_id,gen_random_uuid(),'{}','Setup verified',now(),f.admin_user_id) from sellertray_c1b_fixture f;
-select public.reconcile_sellertray_installment_entitlement(tenant_id,installment_obligation_id) from sellertray_c1b_fixture;
-select extensions.is(public.get_sellertray_onboarding_state_core(tenant_id)->'settlement'->>'qualifyingSettlementSatisfied','true','100 percent discount satisfies settlement without a payment') from sellertray_c1b_fixture;
-select extensions.is(public.get_sellertray_onboarding_state_core(tenant_id)->'activation'->>'entitlementState','full','zero payable activates only after replacement acceptance and required setup') from sellertray_c1b_fixture;
-select extensions.is((select count(*)::integer from public.sellertray_commercial_direct_payment_confirmations p join sellertray_c1b_fixture f on p.commercial_order_id=f.commercial_order_id),0,'full discount creates no direct payment');
-select extensions.is((select count(*)::integer from public.sellertray_commercial_installment_payment_confirmations p join sellertray_c1b_fixture f on p.commercial_order_id=f.commercial_order_id),0,'full discount creates no provider payment');
-select extensions.is((public.get_sellertray_commercial_settlement_state(tenant_id,commercial_order_id)->>'nextPayableAmount')::numeric,0::numeric,'zero payable never creates a checkout amount') from sellertray_c1b_fixture;
-select extensions.is(public.accept_sellertray_commercial_agreement(f.tenant_id,f.agreement_id,'Full Discount Owner','{}',f.checkout_1_command,f.owner_user_id),(select ac.id from public.sellertray_commercial_agreement_acceptances ac where ac.agreement_id=f.agreement_id),'exact committed acceptance replay remains stable') from sellertray_c1b_fixture f;
-select * from extensions.finish(); rollback;
+select public.platform_admin_record_commercial_adjustment(
+  f.admin_user_id,f.tenant_id,f.commercial_order_id,gen_random_uuid(),1000,
+  'Approved full discount','{}'
+) from sellertray_c1b_fixture f;
+
+select extensions.is(
+  public.get_sellertray_onboarding_state_core(tenant_id)->>'currentStage',
+  'agreement',
+  'zero payable still waits for the current Master Agreement before service delivery'
+) from sellertray_c1b_fixture;
+
+select public.accept_sellertray_master_agreement(
+  f.tenant_id,f.agreement_id,'Full Discount Owner','{}',f.checkout_1_command,f.owner_user_id
+) from sellertray_c1b_fixture f;
+select public.mark_sellertray_commercial_branch_setup_ready(
+  f.tenant_id,f.commercial_order_id,f.branch_id,gen_random_uuid(),'{}','Setup verified',now(),f.admin_user_id
+) from sellertray_c1b_fixture f;
+select public.reconcile_sellertray_installment_entitlement(tenant_id,installment_obligation_id)
+from sellertray_c1b_fixture;
+
+select extensions.is(
+  public.get_sellertray_onboarding_state_core(tenant_id)->'settlement'->>'qualifyingSettlementSatisfied',
+  'true',
+  '100 percent discount satisfies settlement without a payment'
+) from sellertray_c1b_fixture;
+select extensions.is(
+  public.get_sellertray_onboarding_state_core(tenant_id)->'activation'->>'entitlementState',
+  'full',
+  'zero payable activates only after current Master Agreement acceptance and required setup'
+) from sellertray_c1b_fixture;
+select extensions.is(
+  (select count(*)::integer from public.sellertray_commercial_direct_payment_confirmations p join sellertray_c1b_fixture f on p.commercial_order_id=f.commercial_order_id),
+  0,
+  'full discount creates no direct payment'
+);
+select extensions.is(
+  (select count(*)::integer from public.sellertray_commercial_installment_payment_confirmations p join sellertray_c1b_fixture f on p.commercial_order_id=f.commercial_order_id),
+  0,
+  'full discount creates no provider payment'
+);
+select extensions.is(
+  (public.get_sellertray_commercial_settlement_state(tenant_id,commercial_order_id)->>'nextPayableAmount')::numeric,
+  0::numeric,
+  'zero payable never creates a checkout amount'
+) from sellertray_c1b_fixture;
+select extensions.is(
+  public.accept_sellertray_master_agreement(f.tenant_id,f.agreement_id,'Full Discount Owner','{}',f.checkout_1_command,f.owner_user_id),
+  (select ac.id from public.sellertray_master_agreement_acceptances ac where ac.tenant_id=f.tenant_id and ac.agreement_version_id=f.agreement_id),
+  'exact committed Master Agreement acceptance replay remains stable'
+) from sellertray_c1b_fixture f;
+select * from extensions.finish();
+rollback;

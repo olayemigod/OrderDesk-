@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const root = process.cwd();
 const read = (path) => readFileSync(resolve(root, path), 'utf8');
@@ -8,6 +9,7 @@ const setup = read('src/SetupSchedulingManagement.tsx');
 const merchantApp = read('src/MerchantApp.tsx');
 const navigation = read('src/portalNavigation.ts');
 const agreements = read('src/CommercialAgreementsManagement.tsx');
+const documentRequestGateSource = read('src/agreement-document-request.ts');
 const billing = read('src/SellerTrayBillingManagement.tsx');
 const main = read('src/main.tsx');
 const failures = [];
@@ -56,6 +58,50 @@ requireValue(
     && agreements.includes("action: 'merchant_confirm_package'")
     && !agreements.includes("action: 'merchant_accept'"),
   'Agreements must use the governed Master Agreement + exact Order Form package authority and must not use direct Master-only or legacy agreement acceptance.',
+);
+
+const documentRequestGateModule = await import(pathToFileURL(resolve(root, 'src/agreement-document-request.ts')).href);
+const documentRequestGate = new documentRequestGateModule.AgreementDocumentRequestGate();
+const documentRaceState = { document: null, error: null, reviewReady: false, busy: null };
+const settleDocumentRequest = (request, result) => {
+  if (!documentRequestGate.isCurrent(request)) return;
+  documentRaceState.document = result.document;
+  documentRaceState.error = result.error;
+  documentRaceState.reviewReady = result.reviewReady;
+  documentRaceState.busy = null;
+};
+const orderFormARequest = documentRequestGate.begin('merchant-1', 'order-form-a');
+documentRaceState.busy = 'review_pdf';
+documentRequestGate.invalidate('merchant-1', 'order-form-b');
+documentRaceState.document = null;
+documentRaceState.error = null;
+documentRaceState.reviewReady = false;
+const orderFormBRequest = documentRequestGate.begin('merchant-1', 'order-form-b');
+documentRaceState.busy = 'review_pdf';
+settleDocumentRequest(orderFormARequest, { document: 'A', error: 'stale A error', reviewReady: true });
+requireValue(
+  documentRaceState.busy === 'review_pdf' && documentRaceState.document === null && documentRaceState.error === null && documentRaceState.reviewReady === false,
+  'A stale Order Form A response must not close Order Form B loading or mutate B document/error/review state.',
+);
+settleDocumentRequest(orderFormBRequest, { document: 'B', error: null, reviewReady: true });
+settleDocumentRequest(orderFormARequest, { document: 'A', error: 'late A error', reviewReady: false });
+requireValue(
+  documentRaceState.busy === null && documentRaceState.document === 'B' && documentRaceState.error === null && documentRaceState.reviewReady === true,
+  'After B completes, a late A response must not overwrite B or change B readiness/error/loading state.',
+);
+const oldTenantRequest = documentRequestGate.begin('merchant-1', 'order-form-b');
+documentRequestGate.invalidate('merchant-2', 'order-form-b');
+requireValue(
+  !documentRequestGate.isCurrent(oldTenantRequest),
+  'Changing tenant with the same Order Form identity must invalidate the old tenant document request.',
+);
+requireValue(
+  agreements.includes("import { AgreementDocumentRequestGate } from './agreement-document-request';")
+    && agreements.includes('documentRequestGate.current.invalidate(tenantId, orderFormId)')
+    && (agreements.match(/documentRequestGate\.current\.isCurrent\(request\)/g)?.length ?? 0) >= 3
+    && agreements.includes('reviewDocumentState.request.tenantId === tenantId')
+    && agreements.includes('reviewDocumentState.request.orderFormId === selected.id'),
+  'Merchant Agreements must guard success, error, and finally state with both request generation and tenant/Order Form context.',
 );
 
 requireValue(

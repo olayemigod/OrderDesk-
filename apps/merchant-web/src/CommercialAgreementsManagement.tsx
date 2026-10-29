@@ -1,5 +1,6 @@
 import { SellerTrayInput } from './SellerTrayElements';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { AgreementDocumentRequestGate } from './agreement-document-request';
 import { errorMessage, supabase } from './supabase';
 
 type MasterAcceptance = { id: string; acceptedAt: string; acceptedLegalName: string; acceptedRole: 'owner' | 'manager' };
@@ -24,14 +25,16 @@ type AgreementDocument = {
   artifactId: string; artifactKind: 'review_pdf' | 'executed_pdf'; packageId: string; packageFingerprint: string;
   pdfSha256: string; byteSize: number; generatedAt: string; fileName: string; signedUrl: string; expiresInSeconds: number;
 };
+type AgreementDocumentRequest = ReturnType<AgreementDocumentRequestGate['begin']>;
+type AgreementDocumentState = { request: AgreementDocumentRequest; document: AgreementDocument };
 
 export default function CommercialAgreementsManagement({ tenantId }: { tenantId: string }) {
   const [center, setCenter] = useState<AgreementCenter | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [legalName, setLegalName] = useState('');
   const [confirmed, setConfirmed] = useState(false);
-  const [reviewDocument, setReviewDocument] = useState<AgreementDocument | null>(null);
-  const [executedDocument, setExecutedDocument] = useState<AgreementDocument | null>(null);
+  const [reviewDocumentState, setReviewDocumentState] = useState<AgreementDocumentState | null>(null);
+  const [executedDocumentState, setExecutedDocumentState] = useState<AgreementDocumentState | null>(null);
   const [reviewedFingerprint, setReviewedFingerprint] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -39,55 +42,108 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const confirmationCommandIds = useRef(new Map<string, string>());
+  const documentRequestGate = useRef(new AgreementDocumentRequestGate());
+  const documentPopup = useRef<Window | null>(null);
+  const activeTenantId = useRef(tenantId);
+  const loadRequestGeneration = useRef(0);
 
-  useEffect(() => { void load(); }, [tenantId]);
+  if (activeTenantId.current !== tenantId) {
+    activeTenantId.current = tenantId;
+    loadRequestGeneration.current += 1;
+    documentRequestGate.current.invalidate(tenantId, null);
+  }
+
+  useEffect(() => {
+    setCenter(null);
+    setSelectedId(null);
+    invalidateDocumentRequest(null);
+    void load();
+    return () => {
+      loadRequestGeneration.current += 1;
+      documentRequestGate.current.invalidate(tenantId, null);
+      documentPopup.current?.close();
+      documentPopup.current = null;
+    };
+  }, [tenantId]);
 
   const orderForms = center?.orderForms ?? [];
   const current = useMemo(() => orderForms.filter((form) => form.isCurrent), [orderForms]);
   const history = useMemo(() => orderForms.filter((form) => !form.isCurrent), [orderForms]);
   const selected = orderForms.find((form) => form.id === selectedId) ?? current[0] ?? orderForms[0] ?? null;
   const actionRequired = Boolean(selected?.isCurrent && (center?.masterAcceptanceRequired || !selected.confirmation));
+  const reviewDocument = reviewDocumentState
+    && selected
+    && reviewDocumentState.request.tenantId === tenantId
+    && reviewDocumentState.request.orderFormId === selected.id
+    && documentRequestGate.current.isCurrent(reviewDocumentState.request)
+    ? reviewDocumentState.document
+    : null;
+  const executedDocument = executedDocumentState
+    && selected
+    && executedDocumentState.request.tenantId === tenantId
+    && executedDocumentState.request.orderFormId === selected.id
+    && documentRequestGate.current.isCurrent(executedDocumentState.request)
+    ? executedDocumentState.document
+    : null;
   const reviewReady = Boolean(reviewDocument && reviewedFingerprint === reviewDocument.packageFingerprint);
 
   async function load(preferredId?: string | null) {
+    const requestTenantId = tenantId;
+    const requestGeneration = ++loadRequestGeneration.current;
     setLoading(true); setError(null);
     try {
-      const { data, error: functionError } = await supabase.functions.invoke('master-agreements', { body: { action: 'merchant_get', tenantId } });
+      const { data, error: functionError } = await supabase.functions.invoke('master-agreements', { body: { action: 'merchant_get', tenantId: requestTenantId } });
+      if (requestGeneration !== loadRequestGeneration.current || activeTenantId.current !== requestTenantId) return;
       if (functionError) throw functionError;
       const next = parseCenter(record(data).center);
-      setCenter(next);
       const wanted = preferredId ?? selectedId;
-      setSelectedId(wanted && next.orderForms.some((form) => form.id === wanted)
+      const nextSelectedId = wanted && next.orderForms.some((form) => form.id === wanted)
         ? wanted
         : next.orderForms.find((form) => form.isCurrent && !form.confirmation)?.id
           ?? next.orderForms.find((form) => form.isCurrent)?.id
-          ?? next.orderForms[0]?.id ?? null);
-    } catch (cause) { setError(errorMessage(cause, 'Unable to load SellerTray agreements.')); }
-    finally { setLoading(false); }
+          ?? next.orderForms[0]?.id ?? null;
+      setCenter(next);
+      replaceSelection(nextSelectedId);
+    } catch (cause) {
+      if (requestGeneration === loadRequestGeneration.current && activeTenantId.current === requestTenantId) {
+        setError(errorMessage(cause, 'Unable to load SellerTray agreements.'));
+      }
+    } finally {
+      if (requestGeneration === loadRequestGeneration.current && activeTenantId.current === requestTenantId) setLoading(false);
+    }
   }
 
   async function openDocument(artifactKind: 'review_pdf' | 'executed_pdf') {
     if (!selected || documentBusy) return;
+    const request = documentRequestGate.current.begin(tenantId, selected.id);
     const popup = window.open('about:blank', '_blank');
     if (popup) popup.opener = null;
+    documentPopup.current = popup;
     setDocumentBusy(artifactKind); setError(null);
     try {
       const { data, error: functionError } = await supabase.functions.invoke('master-agreements', {
-        body: { action: 'merchant_get_document', tenantId, orderFormId: selected.id, artifactKind },
+        body: { action: 'merchant_get_document', tenantId: request.tenantId, orderFormId: request.orderFormId, artifactKind },
       });
+      if (!documentRequestGate.current.isCurrent(request)) { popup?.close(); return; }
       if (functionError) throw functionError;
       const document = parseDocument(record(data).document);
       if (artifactKind === 'review_pdf') {
-        setReviewDocument(document);
+        setReviewDocumentState({ request, document });
         if (popup) setReviewedFingerprint(document.packageFingerprint);
       } else {
-        setExecutedDocument(document);
+        setExecutedDocumentState({ request, document });
       }
       if (popup) popup.location.href = document.signedUrl;
     } catch (cause) {
+      if (!documentRequestGate.current.isCurrent(request)) { popup?.close(); return; }
       if (popup) popup.close();
       setError(errorMessage(cause, artifactKind === 'review_pdf' ? 'Unable to open this SellerTray Agreement Package.' : 'Unable to open the signed SellerTray Agreement Package.'));
-    } finally { setDocumentBusy(null); }
+    } finally {
+      if (documentRequestGate.current.isCurrent(request)) {
+        setDocumentBusy(null);
+        if (documentPopup.current === popup) documentPopup.current = null;
+      }
+    }
   }
 
   async function confirmPackage(event: FormEvent) {
@@ -116,7 +172,7 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
       const next = parseCenter(response.center);
       confirmationCommandIds.current.delete(commandKey);
       setCenter(next); setSelectedId(selected.id); setLegalName(''); setConfirmed(false);
-      setReviewDocument(null); setReviewedFingerprint(null); setExecutedDocument(null);
+      setReviewDocumentState(null); setReviewedFingerprint(null); setExecutedDocumentState(null);
       setMessage(result.masterAcceptanceCreated
         ? selected.confirmation
           ? 'Current Master Agreement accepted. Your purchase confirmation remains valid.'
@@ -212,8 +268,20 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
   </section>;
 
   function selectForm(id: string) {
+    replaceSelection(id);
+  }
+
+  function replaceSelection(id: string | null) {
+    invalidateDocumentRequest(id);
     setSelectedId(id); setLegalName(''); setConfirmed(false); setError(null); setMessage(null);
-    setReviewDocument(null); setExecutedDocument(null); setReviewedFingerprint(null);
+  }
+
+  function invalidateDocumentRequest(orderFormId: string | null) {
+    documentRequestGate.current.invalidate(tenantId, orderFormId);
+    documentPopup.current?.close();
+    documentPopup.current = null;
+    setReviewDocumentState(null); setExecutedDocumentState(null); setReviewedFingerprint(null);
+    setDocumentBusy(null);
   }
 }
 
