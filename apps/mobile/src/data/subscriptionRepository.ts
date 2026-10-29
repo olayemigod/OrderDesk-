@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { cacheOperationalAccess } from './operationalAccessCache';
 
 export type SubscriptionBaseStatus =
   | 'trial'
@@ -8,7 +9,7 @@ export type SubscriptionBaseStatus =
   | 'suspended'
   | 'cancelled';
 
-export type SubscriptionEffectiveStatus = SubscriptionBaseStatus | 'trial_expired' | 'grace_expired';
+export type SubscriptionEffectiveStatus = SubscriptionBaseStatus | 'trial_expired' | 'grace_expired' | 'pending_setup';
 export type SubscriptionAccessMode = 'full' | 'read_only';
 
 export type SubscriptionAccess = {
@@ -46,12 +47,19 @@ export async function loadSubscriptionAccess(tenantId: string): Promise<Subscrip
   }
 
   const value = data as Record<string, unknown>;
+  const { data: identity } = await supabase.auth.getSession();
+  if (identity.session?.user.id) {
+    await cacheOperationalAccess(tenantId, identity.session.user.id, {
+      canWrite: value.accessMode === 'full',
+      validUntil: optionalString(value.offlineWriteAllowedUntil),
+    });
+  }
   return {
     planCode: stringValue(value.planCode, 'business'),
     planName: stringValue(value.planName, 'SellerTray Business'),
     baseStatus: baseStatus(value.baseStatus),
     effectiveStatus: effectiveStatus(value.effectiveStatus),
-    accessMode: value.accessMode === 'read_only' ? 'read_only' : 'full',
+    accessMode: value.accessMode === 'full' ? 'full' : 'read_only',
     trialStartedAt: optionalString(value.trialStartedAt),
     trialEndsAt: optionalString(value.trialEndsAt),
     currentPeriodStart: optionalString(value.currentPeriodStart),
@@ -105,6 +113,7 @@ function effectiveStatus(value: unknown): SubscriptionEffectiveStatus {
     'cancelled',
     'trial_expired',
     'grace_expired',
+    'pending_setup',
   ];
   return supported.includes(value as SubscriptionEffectiveStatus)
     ? value as SubscriptionEffectiveStatus

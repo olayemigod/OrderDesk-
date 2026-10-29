@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const read = (path) => readFileSync(new URL(path, import.meta.url));
+const shell = read('../src/merchantShell.tsx').toString();
+const html = read('../index.html').toString();
+assert.deepEqual(read('../public/brand/sellertray-v2-mark-128.png'), read('../../mobile/assets/sellertray-v2-mark-128.png'), 'Merchant must render the exact approved Mobile mark');
+assert.ok(shell.includes("const SELLERTRAY_LOGO = '/brand/sellertray-v2-mark-128.png'"));
+assert.ok(shell.includes('sellertray-wordmark'));
+assert.ok(html.includes('href="/brand/sellertray-app-icon-v2.png"'));
+assert.ok(!shell.includes('sellertray-logo-v2.svg'), 'Do not restore the blank embedded SVG');
+console.log('SellerTray Merchant brand parity passed.');

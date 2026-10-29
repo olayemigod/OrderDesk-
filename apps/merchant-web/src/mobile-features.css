@@ -1,0 +1,182 @@
+/* Feature-level phone readability overrides.
+ * Structural feature CSS remains authoritative on desktop. These rules only
+ * lift micro-typography and collapse remaining dense rows at narrow widths.
+ */
+
+@media (max-width: 760px) {
+  .team-summary .muted,
+  .governance-note,
+  .access-mode-note,
+  .mobile-operation-note p,
+  .warning-box,
+  .device-help,
+  .whatsapp-number > div:last-child > p:last-child,
+  .readiness-reason,
+  .channel-rule span,
+  .ai-generated,
+  .dashboard-heading-copy,
+  .product-stock-callout span,
+  .uom-panel .panel-head .muted,
+  .report-attention > div:first-child .muted {
+    font-size: .88rem;
+    line-height: 1.5;
+  }
+
+  .branch-row small,
+  .member-row small,
+  .invitation-row small,
+  .access-card small,
+  .device-row small,
+  .readiness-row,
+  .detail-row,
+  .last-check,
+  .dashboard-quick-action span,
+  .dashboard-list-row > div span,
+  .dashboard-empty p,
+  .dashboard-branch-card span,
+  .product-name-button small,
+  .product-card > span,
+  .product-card-meta span,
+  .product-pagination span,
+  .product-audit-meta,
+  .uom-row small,
+  .product-price-summary span,
+  .report-subline,
+  .purchase-line-total span,
+  .read-value span {
+    font-size: .82rem;
+    line-height: 1.4;
+  }
+
+  .branch-tags em,
+  .member-row em,
+  .device-row-badges em,
+  .uom-badges em,
+  .status-pill {
+    font-size: .76rem;
+    line-height: 1.25;
+  }
+
+  .capability-card span,
+  .capability-groups h4,
+  .dashboard-quick-action strong,
+  .dashboard-list-row > div strong,
+  .dashboard-list-row > strong,
+  .dashboard-branch-card strong,
+  .product-card-meta b,
+  .uom-row b,
+  .purchase-line-total strong,
+  .read-value strong {
+    font-size: .9rem;
+    line-height: 1.35;
+  }
+
+  .dashboard-periods button,
+  .purchasing-tabs button,
+  .product-tabs button,
+  .settings-tab {
+    min-height: 44px;
+    font-size: .88rem;
+  }
+
+  .management-heading,
+  .whatsapp-status-stack,
+  .dashboard-list-row,
+  .branch-row,
+  .invitation-row {
+    min-width: 0;
+  }
+
+  .readiness-row,
+  .detail-row {
+    align-items: flex-start;
+  }
+
+  .detail-row strong {
+    max-width: 60%;
+    overflow-wrap: anywhere;
+  }
+
+  .dashboard-quick-action {
+    min-height: 86px;
+  }
+
+  .dashboard-branch-card > div,
+  .dashboard-branch-card-head {
+    align-items: flex-start;
+  }
+
+  .device-form label {
+    font-size: .88rem;
+  }
+
+  .device-form input:not([type="checkbox"]),
+  .device-form select,
+  .invite-form select,
+  .role-field select,
+  .route-field select,
+  .field input,
+  .field select,
+  .field textarea,
+  .purchase-field input,
+  .purchase-field select,
+  .purchase-field textarea,
+  .settings-field input,
+  .settings-field select,
+  .settings-field textarea {
+    min-height: 48px;
+    max-width: 100%;
+    min-width: 0;
+    font-size: 16px;
+  }
+
+  .field textarea,
+  .purchase-field textarea,
+  .settings-field textarea {
+    min-height: 112px;
+    padding-top: 11px;
+    padding-bottom: 11px;
+  }
+}
+
+@media (max-width: 520px) {
+  .branch-row,
+  .device-row,
+  .invitation-row,
+  .whatsapp-status-stack {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .branch-tags,
+  .device-row-badges {
+    justify-content: flex-start;
+    align-items: flex-start;
+  }
+
+  .management-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .management-heading > button,
+  .whatsapp-status-stack > button {
+    width: 100%;
+  }
+
+  .detail-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .detail-row strong {
+    max-width: none;
+    text-align: left;
+  }
+
+  .dashboard-list-row {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+}

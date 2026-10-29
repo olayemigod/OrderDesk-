@@ -1,8 +1,8 @@
-# SellerTray Meta App Review Submission Packet
+﻿# SellerTray Meta App Review Submission Packet
 
-**Status:** READY TO COMPLETE WITH META-SUPPLIED IDS / REVIEW MEDIA  
-**Product:** SellerTray  
-**Company:** ProcessEdge Solutions Limited  
+**Status:** READY TO COMPLETE WITH META-SUPPLIED IDS / REVIEW MEDIA
+**Product:** SellerTray
+**Company:** ProcessEdge Solutions Limited
 **Prepared:** 2026-09-13
 
 This document contains reviewer-facing draft text. Replace bracketed placeholders with the values shown in Meta before submission. Never paste access tokens, app secret, service-role credentials or encrypted credential material into App Review fields or videos.
@@ -42,7 +42,7 @@ SellerTray does not use this permission to take ownership of the merchant's busi
 Record one focused video showing:
 
 1. Sign in to SellerTray as the Owner of the review business.
-2. Open More → WhatsApp connection.
+2. Open More â†’ WhatsApp connection.
 3. Show the SellerTray processing authorization and billing disclosure.
 4. Tap Connect WhatsApp.
 5. Complete Meta Embedded Signup.
@@ -117,7 +117,7 @@ Do not commit credentials to GitHub or this document.
 
 Recommended review data:
 
-- 2–4 simple catalogue items;
+- 2â€“4 simple catalogue items;
 - deterministic NGN prices;
 - one customer test number;
 - no real customer personal data;
@@ -127,11 +127,11 @@ Recommended review data:
 
 1. Sign in.
 2. Select the review business if prompted.
-3. More → WhatsApp connection.
+3. More â†’ WhatsApp connection.
 4. Verify Owner processing authorization.
 5. Connect WhatsApp / inspect Connected state.
 6. Send order from the separate customer phone.
-7. Orders → open the new order.
+7. Orders â†’ open the new order.
 8. Accept/update order.
 9. Verify WhatsApp progress update on the customer phone.
 

@@ -1,4 +1,4 @@
-import type { RealtimeChannel } from '@supabase/supabase-js';
+﻿import type { RealtimeChannel } from '@supabase/supabase-js';
 
 import { supabase } from '../lib/supabase';
 
@@ -16,12 +16,14 @@ type ConversationUnreadRow = {
 
 export async function loadConversationUnreadCounts(
   tenantId: string,
+  branchId?: string | null,
 ): Promise<ConversationUnreadState[]> {
   if (!tenantId) return [];
 
-  const { data, error } = await supabase.rpc('sellertray_conversation_unread_counts', {
-    p_tenant_id: tenantId,
-  });
+  const args = branchId
+    ? { p_tenant_id: tenantId, p_branch_id: branchId }
+    : { p_tenant_id: tenantId };
+  const { data, error } = await supabase.rpc('sellertray_conversation_unread_counts', args);
   if (error) throw error;
 
   return ((data ?? []) as ConversationUnreadRow[]).map((row) => ({
@@ -35,24 +37,36 @@ export async function markConversationRead(
   tenantId: string,
   customerId: string,
   through: string | null,
+  branchId?: string | null,
 ): Promise<void> {
-  const { error } = await supabase.rpc('sellertray_mark_conversation_read', {
-    p_tenant_id: tenantId,
-    p_customer_id: customerId,
-    p_through: through ?? new Date().toISOString(),
-  });
+  const args = branchId
+    ? {
+        p_tenant_id: tenantId,
+        p_branch_id: branchId,
+        p_customer_id: customerId,
+        p_through: through ?? new Date().toISOString(),
+      }
+    : {
+        p_tenant_id: tenantId,
+        p_customer_id: customerId,
+        p_through: through ?? new Date().toISOString(),
+      };
+  const { error } = await supabase.rpc('sellertray_mark_conversation_read', args);
   if (error) throw error;
 }
 
 export function subscribeToConversationActivity(
   tenantId: string,
   onChange: () => void,
+  branchId?: string | null,
 ): RealtimeChannel {
+  const channelKey = branchId ? `${tenantId}-${branchId}` : tenantId;
+  const filter = branchId ? `branch_id=eq.${branchId}` : `tenant_id=eq.${tenantId}`;
   return supabase
-    .channel(`merchant-conversation-unread-${tenantId}`)
+    .channel(`merchant-conversation-unread-${channelKey}`)
     .on(
       'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'inbound_messages', filter: `tenant_id=eq.${tenantId}` },
+      { event: 'INSERT', schema: 'public', table: 'inbound_messages', filter },
       onChange,
     )
     .subscribe();

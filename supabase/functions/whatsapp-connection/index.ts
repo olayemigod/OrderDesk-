@@ -1,11 +1,12 @@
-type J = Record<string, unknown>;
+﻿type J = Record<string, unknown>;
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const META_APP_ID = Deno.env.get('META_APP_ID')?.trim() ?? '';
 const META_APP_SECRET = Deno.env.get('META_APP_SECRET')?.trim() ?? '';
 const META_ACCESS_TOKEN = Deno.env.get('META_ACCESS_TOKEN')?.trim() ?? '';
-const META_GRAPH_API_VERSION = Deno.env.get('META_GRAPH_API_VERSION')?.trim() ?? '';
+const META_GRAPH_API_VERSION =
+  Deno.env.get('META_GRAPH_API_VERSION')?.trim() || 'v26.0';
 const META_EMBEDDED_SIGNUP_REDIRECT_URI = Deno.env.get('META_EMBEDDED_SIGNUP_REDIRECT_URI')?.trim() ?? '';
 const WHATSAPP_ENCRYPTION_KEY = Deno.env.get('SELLERTRAY_WHATSAPP_ENCRYPTION_KEY')?.trim() ?? '';
 const enc = new TextEncoder();
@@ -179,9 +180,12 @@ async function loadSafeConnection(tenantId: string): Promise<J | null> {
 
 async function connectionStatusPayload(tenantId: string): Promise<J> {
   const connection = await loadSafeConnection(tenantId);
+  const readiness = await messagingReadiness(connection);
+  const managementReadiness = await whatsappManagementReadiness(connection);
   return {
     connection,
-    readiness: await messagingReadiness(connection),
+    readiness,
+    managementReadiness,
   };
 }
 
@@ -198,6 +202,9 @@ async function messagingReadiness(connection: J | null): Promise<J> {
   const webhookReady = connection?.webhook_subscription_status === 'subscribed';
   const phoneNumberId = typeof connection?.phone_number_id === 'string'
     ? connection.phone_number_id
+    : '';
+  const tenantId = typeof connection?.tenant_id === 'string'
+    ? connection.tenant_id
     : '';
   const inboundReady = Boolean(connected && webhookReady && phoneNumberId);
 
@@ -234,8 +241,26 @@ async function messagingReadiness(connection: J | null): Promise<J> {
       credentialReady: true,
       reason: null,
       checkedAt: new Date().toISOString(),
+      readinessEvidence: 'credential_probe',
     };
   } catch (error) {
+    const lastOutboundSuccessAt = tenantId
+      ? await latestSuccessfulOutbound(tenantId, phoneNumberId)
+      : null;
+
+    if (lastOutboundSuccessAt) {
+      return {
+        inboundReady,
+        outboundReady: true,
+        messagingReady: inboundReady,
+        webhookReady: true,
+        credentialReady: true,
+        reason: null,
+        checkedAt: new Date().toISOString(),
+        lastOutboundSuccessAt,
+        readinessEvidence: 'live_delivery',
+      };
+    }
     return {
       inboundReady,
       outboundReady: false,
@@ -244,10 +269,195 @@ async function messagingReadiness(connection: J | null): Promise<J> {
       credentialReady: false,
       reason: sanitizeReadinessError(error),
       checkedAt: new Date().toISOString(),
+      readinessEvidence: 'credential_probe_failed',
     };
   }
 }
 
+async function whatsappManagementReadiness(connection: J | null): Promise<J> {
+  const connected = connection?.connection_status === 'connected';
+  const phoneNumberId = typeof connection?.phone_number_id === 'string'
+    ? connection.phone_number_id
+    : '';
+  const wabaId = typeof connection?.waba_id === 'string'
+    ? connection.waba_id
+    : '';
+  const tenantId = typeof connection?.tenant_id === 'string'
+    ? connection.tenant_id
+    : '';
+
+  if (!connected || !phoneNumberId || !wabaId) {
+    return {
+      managementApiReady: false,
+      reason: 'Connected WABA and phone number are required for management API verification.',
+    };
+  }
+
+  try {
+    const accessToken = await runtimeAccessToken(connection as J, phoneNumberId);
+    const phoneCount = await verifyWabaManagementAccess(accessToken, wabaId, phoneNumberId);
+
+    console.info(JSON.stringify({
+      ts: new Date().toISOString(),
+      service: 'whatsapp-connection',
+      event: 'whatsapp_business_management_probe_succeeded',
+      tenant_id: tenantId,
+      waba_id: wabaId,
+      phone_number_id: phoneNumberId,
+      phone_count: phoneCount,
+    }));
+
+    await recordManagementProbe({
+      tenantId,
+      wabaId,
+      phoneNumberId,
+      succeeded: true,
+      evidence: 'waba_phone_numbers_read',
+      errorMessage: null,
+      phoneCount,
+    });
+
+    return {
+      managementApiReady: true,
+      reason: null,
+      checkedAt: new Date().toISOString(),
+      evidence: 'waba_phone_numbers_read',
+      phoneCount,
+    };
+  } catch (error) {
+    const reason = sanitizeReadinessError(error);
+    console.warn(JSON.stringify({
+      ts: new Date().toISOString(),
+      service: 'whatsapp-connection',
+      event: 'whatsapp_business_management_probe_failed',
+      tenant_id: tenantId,
+      waba_id: wabaId,
+      phone_number_id: phoneNumberId,
+      error: reason,
+    }));
+
+    await recordManagementProbe({
+      tenantId,
+      wabaId,
+      phoneNumberId,
+      succeeded: false,
+      evidence: 'waba_phone_numbers_read_failed',
+      errorMessage: reason,
+      phoneCount: null,
+    });
+
+    return {
+      managementApiReady: false,
+      reason,
+      checkedAt: new Date().toISOString(),
+      evidence: 'waba_phone_numbers_read_failed',
+    };
+  }
+}
+
+async function verifyWabaManagementAccess(
+  accessToken: string,
+  wabaId: string,
+  expectedPhoneNumberId: string,
+): Promise<number> {
+  if (!META_GRAPH_API_VERSION) {
+    throw new Error('Meta Graph API version is not configured.');
+  }
+
+  const url = new URL(
+    'https://graph.facebook.com/' + encodeURIComponent(META_GRAPH_API_VERSION) +
+      '/' + encodeURIComponent(wabaId) + '/phone_numbers',
+  );
+  url.searchParams.set('fields', 'id,display_phone_number,verified_name,status');
+  url.searchParams.set('limit', '100');
+
+  const response = await fetch(url, {
+    headers: { authorization: 'Bearer ' + accessToken },
+    signal: AbortSignal.timeout(12000),
+  });
+  const payload = await safeJson(response);
+  if (!response.ok) {
+    throw new Error(
+      metaError(payload, 'Meta rejected the WhatsApp Business management credential.'),
+    );
+  }
+
+  const data = isRecord(payload) && Array.isArray(payload.data)
+    ? payload.data.filter(isRecord)
+    : [];
+
+  if (!data.some((value) => value.id === expectedPhoneNumberId)) {
+    throw new Error(
+      'Meta management API did not return the connected WhatsApp phone number for this WABA.',
+    );
+  }
+
+  return data.length;
+}
+
+async function recordManagementProbe(input: {
+  tenantId: string;
+  wabaId: string;
+  phoneNumberId: string;
+  succeeded: boolean;
+  evidence: string;
+  errorMessage: string | null;
+  phoneCount: number | null;
+}): Promise<void> {
+  try {
+    const response = await fetch(
+      SUPABASE_URL + '/rest/v1/whatsapp_management_probe_events',
+      {
+        method: 'POST',
+        headers: {
+          apikey: SERVICE_ROLE_KEY,
+          authorization: 'Bearer ' + SERVICE_ROLE_KEY,
+          'content-type': 'application/json',
+          Prefer: 'return=minimal',
+        },
+        body: JSON.stringify({
+          tenant_id: input.tenantId,
+          waba_id: input.wabaId,
+          phone_number_id: input.phoneNumberId,
+          succeeded: input.succeeded,
+          evidence: input.evidence,
+          error_message: input.errorMessage,
+          phone_count: input.phoneCount,
+        }),
+        signal: AbortSignal.timeout(10000),
+      },
+    );
+    if (!response.ok) {
+      console.warn(JSON.stringify({
+        ts: new Date().toISOString(),
+        service: 'whatsapp-connection',
+        event: 'management_probe_evidence_persist_failed',
+        tenant_id: input.tenantId,
+        status: response.status,
+      }));
+    }
+  } catch {
+    // Probe evidence persistence must never break merchant connection status.
+  }
+}
+
+async function latestSuccessfulOutbound(tenantId: string, phoneNumberId: string): Promise<string | null> {
+  try {
+    const rows = await rest<Array<{ sent_at: string | null }>>(
+      '/rest/v1/outbound_notifications?select=sent_at' +
+        '&tenant_id=eq.' + encodeURIComponent(tenantId) +
+        '&from_phone_number_id=eq.' + encodeURIComponent(phoneNumberId) +
+        '&delivery_status=eq.sent' +
+        '&sent_at=not.is.null' +
+        '&order=sent_at.desc' +
+        '&limit=1',
+    );
+    const sentAt = rows[0]?.sent_at ?? null;
+    return typeof sentAt === 'string' && sentAt ? sentAt : null;
+  } catch {
+    return null;
+  }
+}
 async function runtimeAccessToken(connection: J, phoneNumberId: string): Promise<string> {
   const mode = connection.credential_mode;
   if (mode === 'platform_system_user') {

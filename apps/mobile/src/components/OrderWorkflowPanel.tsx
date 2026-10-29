@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import type { GateDecision } from '../data/orderGateRepository';
 import type { MerchantOrder, OrderStatus } from '../domain/order';
+import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
 type WorkflowAction = 'reject' | 'accept' | 'start' | 'ready' | 'cancel';
 type ExceptionMode = 'reject' | 'cancel' | null;
@@ -13,6 +15,8 @@ type Props = {
   onStart: () => Promise<void>;
   onReady: () => Promise<void>;
   onCancel: (reason: string) => Promise<void>;
+  processingGate?: GateDecision | null;
+  readyGate?: GateDecision | null;
 };
 
 const actionSuccess: Record<WorkflowAction, string> = {
@@ -30,7 +34,10 @@ export function OrderWorkflowPanel({
   onStart,
   onReady,
   onCancel,
+  processingGate = null,
+  readyGate = null,
 }: Props) {
+  const appearance = useSellerTrayAppearance();
   const [pending, setPending] = useState<WorkflowAction | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +56,12 @@ export function OrderWorkflowPanel({
   const editable = order.status === 'needs_review' || order.status === 'draft';
   const active = ['accepted', 'processing', 'ready'].includes(order.status);
   const canAccept = editable && blockers.length === 0;
+  const paymentGateBlock =
+    order.status === 'accepted' && processingGate && !processingGate.allowed
+      ? processingGate.reason ?? 'Payment policy blocks processing.'
+      : order.status === 'processing' && readyGate && !readyGate.allowed
+        ? readyGate.reason ?? 'Payment policy blocks ready status.'
+        : null;
 
   async function run(action: WorkflowAction, operation: () => Promise<void>) {
     if (pending) return;
@@ -83,35 +96,43 @@ export function OrderWorkflowPanel({
     <View style={styles.wrap}>
       {editable ? (
         blockers.length > 0 ? (
-          <View style={styles.blockerCard}>
-            <Text style={styles.blockerTitle}>Resolve before accepting</Text>
+          <View style={[styles.blockerCard, appearance.dark && darkStyles.warningCard]}>
+            <Text style={[styles.blockerTitle, appearance.dark && darkStyles.warningTitle]}>Resolve before accepting</Text>
             {blockers.map((blocker) => (
-              <Text key={blocker} style={styles.blockerText}>• {blocker}</Text>
+              <Text key={blocker} style={[styles.blockerText, appearance.dark && darkStyles.warningText]}>• {blocker}</Text>
             ))}
           </View>
         ) : (
-          <View style={styles.readyCard}>
-            <Text style={styles.readyTitle}>Ready to accept</Text>
-            <Text style={styles.readyText}>The order currently has at least one item and every line has a selling price.</Text>
+          <View style={[styles.readyCard, appearance.dark && darkStyles.successCard]}>
+            <Text style={[styles.readyTitle, appearance.dark && darkStyles.successTitle]}>Ready to accept</Text>
+            <Text style={[styles.readyText, appearance.dark && darkStyles.successText]}>Every line is priced and all unmatched catalogue items have been explicitly resolved.</Text>
           </View>
         )
       ) : (
-        <View style={styles.progressCard}>
-          <Text style={styles.progressEyebrow}>WORKFLOW</Text>
-          <Text style={styles.progressTitle}>{workflowHeadline(order.status)}</Text>
-          <Text style={styles.progressText}>{workflowHelper(order.status)}</Text>
-          {order.statusReason ? <Text style={styles.closureReason}>Reason: {order.statusReason}</Text> : null}
+        <View style={[styles.progressCard, appearance.dark && darkStyles.card]}>
+          <Text style={[styles.progressEyebrow, appearance.dark && darkStyles.bodyText]}>WORKFLOW</Text>
+          <Text style={[styles.progressTitle, appearance.dark && darkStyles.titleText]}>{workflowHeadline(order.status)}</Text>
+          <Text style={[styles.progressText, appearance.dark && darkStyles.bodyText]}>{workflowHelper(order.status)}</Text>
+          {order.statusReason ? <Text style={[styles.closureReason, appearance.dark && darkStyles.bodyText]}>Reason: {order.statusReason}</Text> : null}
         </View>
       )}
 
+      {paymentGateBlock ? (
+        <View style={[styles.blockerCard, appearance.dark && darkStyles.warningCard]}>
+          <Text style={[styles.blockerTitle, appearance.dark && darkStyles.warningTitle]}>Payment gate active</Text>
+          <Text style={[styles.blockerText, appearance.dark && darkStyles.warningText]}>{paymentGateBlock}</Text>
+          <Text style={[styles.gateHelp, appearance.dark && darkStyles.bodyText]}>Review the payment section above before continuing.</Text>
+        </View>
+      ) : null}
+
       {success ? (
-        <View style={styles.successCard}>
-          <Text style={styles.successText}>{success}</Text>
+        <View style={[styles.successCard, appearance.dark && darkStyles.successCard]}>
+          <Text style={[styles.successText, appearance.dark && darkStyles.successText]}>{success}</Text>
         </View>
       ) : null}
 
       {error ? (
-        <View style={styles.errorCard}>
+        <View style={[styles.errorCard, appearance.dark && darkStyles.errorCard]}>
           <Text style={styles.errorTitle}>Action failed</Text>
           <Text style={styles.errorText}>{error}</Text>
           <Text style={styles.errorHint}>The order was not intentionally advanced. Check the message above and retry.</Text>
@@ -145,6 +166,8 @@ export function OrderWorkflowPanel({
           onAccept={() => void run('accept', onAccept)}
           onStart={() => void run('start', onStart)}
           onReady={() => void run('ready', onReady)}
+          startAllowed={!processingGate || processingGate.allowed}
+          readyAllowed={!readyGate || readyGate.allowed}
           onRequestCancel={() => {
             setSuccess(null);
             setError(null);
@@ -166,6 +189,15 @@ function currentBlockers(order: MerchantOrder): string[] {
     blockers.push(`Set a selling price for ${missingPriceCount} line${missingPriceCount === 1 ? '' : 's'}.`);
   }
 
+  const unmatchedCount = order.items.filter(
+    (item) => item.catalogItemId === null && item.matchSource === 'unmatched',
+  ).length;
+  if (unmatchedCount > 0) {
+    blockers.push(
+      `Resolve ${unmatchedCount} unmatched catalogue item${unmatchedCount === 1 ? '' : 's'} or explicitly keep ${unmatchedCount === 1 ? 'it' : 'them'} as one-off.`,
+    );
+  }
+
   return blockers;
 }
 
@@ -184,22 +216,23 @@ function ExceptionReasonForm({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const appearance = useSellerTrayAppearance();
   const reject = mode === 'reject';
   const canConfirm = Boolean(reason.trim()) && !pending;
 
   return (
-    <View style={styles.reasonCard}>
+    <View style={[styles.reasonCard, appearance.dark && darkStyles.errorCard]}>
       <Text style={styles.reasonTitle}>{reject ? 'Why are you rejecting this order?' : 'Why are you cancelling this order?'}</Text>
-      <Text style={styles.reasonHelp}>This reason is saved to the order history for accountability.</Text>
+      <Text style={[styles.reasonHelp, appearance.dark && darkStyles.bodyText]}>This reason is saved to the order history for accountability.</Text>
       <TextInput
         value={reason}
         onChangeText={onChangeReason}
         placeholder={reject ? 'e.g. Product unavailable' : 'e.g. Customer cancelled after confirmation'}
         maxLength={500}
         multiline
-        style={styles.reasonInput}
+        style={[styles.reasonInput, appearance.dark && darkStyles.input]}
       />
-      <Text style={styles.reasonCount}>{reason.length}/500</Text>
+      <Text style={[styles.reasonCount, appearance.dark && darkStyles.bodyText]}>{reason.length}/500</Text>
       <View style={styles.actionRow}>
         <ActionButton label="Back" secondary disabled={pending} onPress={onCancel} />
         <ActionButton
@@ -224,6 +257,8 @@ function WorkflowActions({
   onReady,
   onRequestCancel,
   showCancel,
+  startAllowed,
+  readyAllowed,
 }: {
   status: OrderStatus;
   canAccept: boolean;
@@ -234,6 +269,8 @@ function WorkflowActions({
   onReady: () => void;
   onRequestCancel: () => void;
   showCancel: boolean;
+  startAllowed: boolean;
+  readyAllowed: boolean;
 }) {
   const busy = pending !== null;
 
@@ -254,7 +291,7 @@ function WorkflowActions({
   if (status === 'accepted') {
     return (
       <View style={styles.stackActions}>
-        <ActionButton label={pending === 'start' ? 'Starting…' : 'Start processing'} disabled={busy} loading={pending === 'start'} onPress={onStart} />
+        <ActionButton label={pending === 'start' ? 'Starting…' : 'Start processing'} disabled={busy || !startAllowed} loading={pending === 'start'} onPress={onStart} />
         {showCancel ? <ActionButton label="Cancel order" secondary disabled={busy} onPress={onRequestCancel} /> : null}
       </View>
     );
@@ -263,7 +300,7 @@ function WorkflowActions({
   if (status === 'processing') {
     return (
       <View style={styles.stackActions}>
-        <ActionButton label={pending === 'ready' ? 'Updating…' : 'Mark ready'} disabled={busy} loading={pending === 'ready'} onPress={onReady} />
+        <ActionButton label={pending === 'ready' ? 'Updating…' : 'Mark ready'} disabled={busy || !readyAllowed} loading={pending === 'ready'} onPress={onReady} />
         {showCancel ? <ActionButton label="Cancel order" secondary disabled={busy} onPress={onRequestCancel} /> : null}
       </View>
     );
@@ -295,6 +332,7 @@ function ActionButton({
   disabled?: boolean;
   loading?: boolean;
 }) {
+  const appearance = useSellerTrayAppearance();
   return (
     <Pressable
       disabled={disabled}
@@ -302,13 +340,14 @@ function ActionButton({
       style={({ pressed }) => [
         styles.actionButton,
         secondary && styles.actionButtonSecondary,
+        secondary && appearance.dark && darkStyles.secondaryButton,
         destructive && styles.actionButtonDestructive,
         disabled && styles.disabled,
         pressed && !disabled && styles.pressed,
       ]}
     >
       {loading ? <ActivityIndicator size="small" /> : null}
-      <Text style={[styles.actionButtonText, secondary && styles.actionButtonSecondaryText]}>{label}</Text>
+      <Text style={[styles.actionButtonText, secondary && styles.actionButtonSecondaryText, secondary && appearance.dark && darkStyles.titleText]}>{label}</Text>
     </Pressable>
   );
 }
@@ -337,33 +376,49 @@ const styles = StyleSheet.create({
   wrap: { gap: 10 },
   blockerCard: { backgroundColor: '#FFF8E7', borderRadius: 12, padding: 12, gap: 4 },
   blockerTitle: { color: '#7A2E0E', fontSize: 12, fontWeight: '900' },
-  blockerText: { color: '#854A0E', fontSize: 11, lineHeight: 17 },
+  blockerText: { color: '#854A0E', fontSize: 13, lineHeight: 19 },
+  gateHelp: { color: '#667085', fontSize: 12, lineHeight: 18, marginTop: 3 },
   readyCard: { backgroundColor: '#ECFDF3', borderRadius: 12, padding: 12, gap: 3 },
   readyTitle: { color: '#027A48', fontSize: 12, fontWeight: '900' },
-  readyText: { color: '#05603A', fontSize: 11, lineHeight: 17 },
+  readyText: { color: '#05603A', fontSize: 13, lineHeight: 17 },
   progressCard: { backgroundColor: '#F9FAFB', borderRadius: 12, padding: 12 },
-  progressEyebrow: { color: '#98A2B3', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
-  progressTitle: { color: '#101828', fontSize: 14, fontWeight: '900', marginTop: 3 },
-  progressText: { color: '#667085', fontSize: 11, lineHeight: 17, marginTop: 3 },
-  closureReason: { color: '#344054', fontSize: 11, lineHeight: 17, marginTop: 7, fontWeight: '700' },
+  progressEyebrow: { color: '#667085', fontSize: 13, fontWeight: '900', letterSpacing: 1 },
+  progressTitle: { color: '#102A43', fontSize: 14, fontWeight: '900', marginTop: 3 },
+  progressText: { color: '#667085', fontSize: 13, lineHeight: 17, marginTop: 3 },
+  closureReason: { color: '#344054', fontSize: 13, lineHeight: 17, marginTop: 7, fontWeight: '700' },
   successCard: { backgroundColor: '#ECFDF3', borderRadius: 12, padding: 11 },
-  successText: { color: '#027A48', fontSize: 11, fontWeight: '800', lineHeight: 17 },
+  successText: { color: '#027A48', fontSize: 13, fontWeight: '800', lineHeight: 17 },
   errorCard: { backgroundColor: '#FEF3F2', borderRadius: 12, padding: 12 },
   errorTitle: { color: '#B42318', fontSize: 12, fontWeight: '900' },
-  errorText: { color: '#912018', fontSize: 11, lineHeight: 17, marginTop: 3 },
-  errorHint: { color: '#B54708', fontSize: 10, lineHeight: 15, marginTop: 4 },
+  errorText: { color: '#912018', fontSize: 13, lineHeight: 17, marginTop: 3 },
+  errorHint: { color: '#B54708', fontSize: 12, lineHeight: 15, marginTop: 4 },
   reasonCard: { borderWidth: 1, borderColor: '#FDA29B', borderRadius: 12, padding: 12, gap: 8, backgroundColor: '#FFFBFA' },
   reasonTitle: { color: '#912018', fontSize: 13, fontWeight: '900' },
-  reasonHelp: { color: '#667085', fontSize: 11, lineHeight: 16 },
-  reasonInput: { minHeight: 76, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 10, padding: 10, backgroundColor: '#FFFFFF', color: '#101828', textAlignVertical: 'top' },
-  reasonCount: { color: '#98A2B3', fontSize: 9, textAlign: 'right' },
+  reasonHelp: { color: '#667085', fontSize: 13, lineHeight: 16 },
+  reasonInput: { minHeight: 76, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 10, padding: 10, backgroundColor: '#FFFFFF', color: '#102A43', textAlignVertical: 'top' },
+  reasonCount: { color: '#667085', fontSize: 13, textAlign: 'right' },
   actionRow: { flexDirection: 'row', gap: 9 },
   stackActions: { gap: 8 },
-  actionButton: { minHeight: 46, backgroundColor: '#246BFD', borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7, paddingHorizontal: 12, flex: 1 },
+  actionButton: { minHeight: 46, backgroundColor: '#12B76A', borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 7, paddingHorizontal: 12, flex: 1 },
   actionButtonSecondary: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D0D5DD' },
   actionButtonDestructive: { backgroundColor: '#D92D20' },
   actionButtonText: { color: '#FFFFFF', fontWeight: '900', fontSize: 13 },
   actionButtonSecondaryText: { color: '#344054' },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.4 },
+});
+
+const darkStyles = StyleSheet.create({
+  card: { backgroundColor: '#162F46' },
+  titleText: { color: '#F8FAFC' },
+  bodyText: { color: '#D0D5DD' },
+  warningCard: { backgroundColor: '#3D2A12' },
+  warningTitle: { color: '#FEDF89' },
+  warningText: { color: '#FEC84B' },
+  successCard: { backgroundColor: '#12372C' },
+  successTitle: { color: '#6CE9A6' },
+  successText: { color: '#ABEFC6' },
+  errorCard: { backgroundColor: '#3A1717', borderColor: '#7A271A' },
+  input: { backgroundColor: '#F8FAFC', borderColor: '#98A2B3', color: '#102A43' },
+  secondaryButton: { backgroundColor: '#162F46', borderColor: '#667085' },
 });

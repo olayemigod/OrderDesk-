@@ -1,0 +1,27 @@
+{
+  "framework": "vite",
+  "ignoreCommand": "b=$VERCEL_GIT_PREVIOUS_SHA; [ -n \"$b\" ]||exit 1; git cat-file -e \"$b\" 2>/dev/null||git fetch -q --depth=1 origin \"$b\" 2>/dev/null||exit 1; git diff --quiet \"$b\" HEAD -- ':(top)apps/admin-web' ':(top)package.json' ':(top)package-lock.json'",
+  "installCommand": "npm --prefix . install --no-audit --no-fund",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "redirects": [
+    {
+      "source": "/brand/sellertray-admin-logo.webp",
+      "destination": "/brand/sellertray-admin-icon.png",
+      "permanent": false
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "same-origin" },
+        { "key": "Cache-Control", "value": "no-store" },
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" },
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://sellertray.vercel.app; connect-src 'self' https://*.supabase.co wss://*.supabase.co; upgrade-insecure-requests" }
+      ]
+    }
+  ]
+}

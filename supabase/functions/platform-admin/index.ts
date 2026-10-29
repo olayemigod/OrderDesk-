@@ -1,5 +1,10 @@
 type JsonRecord = Record<string, unknown>;
 type AdminAction =
+  | 'bootstrap'
+  | 'operations_summary'
+  | 'business_dashboard'
+  | 'merchant_portfolio'
+  | 'merchant_detail'
   | 'overview'
   | 'audit'
   | 'ai_parser_readiness'
@@ -50,6 +55,62 @@ Deno.serve(withObservability('platform-admin', async (request) => {
   if (!action) return json({ error: 'Unsupported platform admin action' }, 400);
 
   try {
+    if (action === 'bootstrap') {
+      const bootstrap = await rpc<JsonRecord>('platform_admin_bootstrap', {
+        p_actor_user_id: userId,
+      });
+      return json({ bootstrap });
+    }
+
+    if (action === 'operations_summary') {
+      const summary = await rpc<JsonRecord>('platform_admin_operations_summary', {
+        p_actor_user_id: userId,
+      });
+      return json({ summary, readiness: buildAiParserReadiness(summary) });
+    }
+
+    if (action === 'business_dashboard') {
+      const days = body.days ?? 30;
+      if (typeof days !== 'number' || ![7, 30, 90].includes(days)) return json({ error: 'Business period must be 7, 30 or 90 days' }, 400);
+      const [summary, attention] = await Promise.all([
+        rpc<JsonRecord>('platform_admin_business_summary', { p_actor_user_id: userId, p_days: days }),
+        rpc<JsonRecord>('platform_admin_business_attention', { p_actor_user_id: userId }),
+      ]);
+      return json({ summary, attention });
+    }
+
+    if (action === 'merchant_portfolio') {
+      const search = cleanOptionalText(body.search, 120);
+      if (search === undefined) return json({ error: 'Merchant search must be text up to 120 characters' }, 400);
+      const filter = cleanEnum(body.filter ?? 'all', ['all', 'attention', 'connected', 'restricted']);
+      if (!filter) return json({ error: 'Unsupported merchant filter' }, 400);
+      const afterName = cleanOptionalText(body.afterName, 200);
+      const afterId = body.afterId === null || body.afterId === undefined ? null : cleanUuid(body.afterId);
+      if (afterName === undefined || (body.afterId !== null && body.afterId !== undefined && !afterId)) return json({ error: 'Invalid merchant cursor' }, 400);
+      if ((afterName === null) !== (afterId === null)) return json({ error: 'Merchant cursor is incomplete' }, 400);
+      const requestedLimit = Number(body.limit ?? 25);
+      if (!Number.isInteger(requestedLimit) || requestedLimit < 1 || requestedLimit > 50) return json({ error: 'Merchant page size must be between 1 and 50' }, 400);
+      const portfolio = await rpc<JsonRecord>('platform_admin_merchant_portfolio', {
+        p_actor_user_id: userId,
+        p_search: search,
+        p_filter: filter,
+        p_after_name: afterName,
+        p_after_id: afterId,
+        p_limit: requestedLimit,
+      });
+      return json({ portfolio });
+    }
+
+    if (action === 'merchant_detail') {
+      const tenantId = cleanUuid(body.tenantId);
+      if (!tenantId) return json({ error: 'A valid merchant is required' }, 400);
+      const detail = await rpc<JsonRecord>('platform_admin_merchant_detail', {
+        p_actor_user_id: userId,
+        p_tenant_id: tenantId,
+      });
+      return json({ detail });
+    }
+
     if (action === 'overview') {
       const overview = await rpc<JsonRecord>('platform_admin_overview', {
         p_actor_user_id: userId,
@@ -58,17 +119,17 @@ Deno.serve(withObservability('platform-admin', async (request) => {
     }
 
     if (action === 'ai_parser_readiness') {
-      const overview = await rpc<JsonRecord>('platform_admin_overview', {
+      const summary = await rpc<JsonRecord>('platform_admin_operations_summary', {
         p_actor_user_id: userId,
       });
-      return json({ readiness: buildAiParserReadiness(overview) });
+      return json({ readiness: buildAiParserReadiness(summary) });
     }
 
     if (action === 'ai_parser_probe') {
-      const overview = await rpc<JsonRecord>('platform_admin_overview', {
+      const bootstrap = await rpc<JsonRecord>('platform_admin_bootstrap', {
         p_actor_user_id: userId,
       });
-      if (overview.actorRole !== 'admin') {
+      if (bootstrap.actorRole !== 'admin') {
         return json({ error: 'ProcessEdge platform Admin role required for AI smoke test' }, 403);
       }
       return json({ probe: await runAiParserProbe() });
@@ -200,6 +261,11 @@ function getJwtAal(token: string): 'aal1' | 'aal2' | null {
 
 function cleanAction(value: unknown): AdminAction | null {
   const supported: AdminAction[] = [
+    'bootstrap',
+    'operations_summary',
+    'business_dashboard',
+    'merchant_portfolio',
+    'merchant_detail',
     'overview',
     'audit',
     'ai_parser_readiness',
@@ -323,55 +389,17 @@ function safeIntegerHeader(headers: Headers, name: string): number | null {
   return Number.isInteger(value) && value >= 0 ? value : null;
 }
 
-function buildAiParserReadiness(overview: JsonRecord): JsonRecord {
-  const tenants = Array.isArray(overview.tenants)
-    ? overview.tenants.filter(isRecord)
-    : [];
-
-  let attempts = 0;
-  let successes = 0;
-  let nonSuccess = 0;
-  let inputTokens = 0;
-  let cachedInputTokens = 0;
-  let outputTokens = 0;
-  let reasoningTokens = 0;
-  let totalTokens = 0;
-  let meteredExternalOrderUnits = 0;
-  let catalogueItemsTotalMax = 0;
-  let catalogueItemsSentWeighted = 0;
-  let catalogueAliasesSentWeighted = 0;
-  let tenantsWithAttempts = 0;
-  let latestModel: string | null = null;
-
-  for (const tenant of tenants) {
-    const tenantAttempts = nonNegativeNumber(tenant.aiParserAttemptsPeriod);
-    const tenantSuccesses = nonNegativeNumber(tenant.aiParserSuccessesPeriod);
-    const tenantNonSuccess = nonNegativeNumber(tenant.aiParserNonSuccessPeriod);
-    attempts += tenantAttempts;
-    successes += tenantSuccesses;
-    nonSuccess += tenantNonSuccess;
-    inputTokens += nonNegativeNumber(tenant.aiInputTokensPeriod);
-    cachedInputTokens += nonNegativeNumber(tenant.aiCachedInputTokensPeriod);
-    outputTokens += nonNegativeNumber(tenant.aiOutputTokensPeriod);
-    reasoningTokens += nonNegativeNumber(tenant.aiReasoningTokensPeriod);
-    totalTokens += nonNegativeNumber(tenant.aiTotalTokensPeriod);
-    meteredExternalOrderUnits += nonNegativeNumber(tenant.usageUnitsPeriod);
-    catalogueItemsTotalMax = Math.max(
-      catalogueItemsTotalMax,
-      nonNegativeNumber(tenant.aiCatalogueItemsTotalMax),
-    );
-
-    if (tenantAttempts > 0) {
-      tenantsWithAttempts += 1;
-      catalogueItemsSentWeighted +=
-        nonNegativeNumber(tenant.aiCatalogueItemsSentAvg) * tenantAttempts;
-      catalogueAliasesSentWeighted +=
-        nonNegativeNumber(tenant.aiCatalogueAliasesSentAvg) * tenantAttempts;
-      if (!latestModel && typeof tenant.aiParserModel === 'string' && tenant.aiParserModel.trim()) {
-        latestModel = tenant.aiParserModel.trim().slice(0, 120);
-      }
-    }
-  }
+function buildAiParserReadiness(summary: JsonRecord): JsonRecord {
+  const ai = isRecord(summary.ai) ? summary.ai : {};
+  const attempts = nonNegativeNumber(ai.attempts);
+  const successes = nonNegativeNumber(ai.successes);
+  const nonSuccess = nonNegativeNumber(ai.nonSuccess);
+  const inputTokens = nonNegativeNumber(ai.inputTokens);
+  const cachedInputTokens = nonNegativeNumber(ai.cachedInputTokens);
+  const outputTokens = nonNegativeNumber(ai.outputTokens);
+  const reasoningTokens = nonNegativeNumber(ai.reasoningTokens);
+  const totalTokens = nonNegativeNumber(ai.totalTokens);
+  const meteredExternalOrderUnits = nonNegativeNumber(ai.meteredExternalOrderUnits);
 
   const configured = OPENAI_API_KEY_CONFIGURED && ORDER_PARSER_TOKEN_CONFIGURED;
   const hasLiveAttempt = attempts > 0;
@@ -386,8 +414,8 @@ function buildAiParserReadiness(overview: JsonRecord): JsonRecord {
       configuredModel: OPENAI_PARSER_MODEL,
     },
     currentPeriod: {
-      tenants: tenants.length,
-      tenantsWithAttempts,
+      tenants: nonNegativeNumber(summary.merchantCount),
+      tenantsWithAttempts: nonNegativeNumber(ai.tenantsWithAttempts),
       attempts,
       successes,
       nonSuccess,
@@ -397,14 +425,12 @@ function buildAiParserReadiness(overview: JsonRecord): JsonRecord {
       reasoningTokens,
       totalTokens,
       meteredExternalOrderUnits,
-      catalogueItemsTotalMax,
-      catalogueItemsSentAvg: attempts > 0
-        ? Math.round((catalogueItemsSentWeighted / attempts) * 10) / 10
-        : 0,
-      catalogueAliasesSentAvg: attempts > 0
-        ? Math.round((catalogueAliasesSentWeighted / attempts) * 10) / 10
-        : 0,
-      latestObservedModel: latestModel,
+      catalogueItemsTotalMax: nonNegativeNumber(ai.catalogueItemsTotalMax),
+      catalogueItemsSentAvg: nonNegativeNumber(ai.catalogueItemsSentAvg),
+      catalogueAliasesSentAvg: nonNegativeNumber(ai.catalogueAliasesSentAvg),
+      latestObservedModel: typeof ai.latestObservedModel === 'string'
+        ? ai.latestObservedModel.trim().slice(0, 120)
+        : null,
     },
     acceptanceEvidence: {
       hasLiveAttempt,
@@ -420,8 +446,8 @@ function buildAiParserReadiness(overview: JsonRecord): JsonRecord {
         attempts === successes + nonSuccess &&
         meteredExternalOrderUnits <= successes,
     },
-    generatedAt: typeof overview.generatedAt === 'string'
-      ? overview.generatedAt
+    generatedAt: typeof summary.generatedAt === 'string'
+      ? summary.generatedAt
       : new Date().toISOString(),
   };
 }
@@ -449,6 +475,14 @@ function cleanUuid(value: unknown): string | null {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clean)
     ? clean
     : null;
+}
+
+function cleanOptionalText(value: unknown, maxLength: number): string | null | undefined {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value !== 'string') return undefined;
+  const clean = value.trim();
+  if (!clean) return null;
+  return clean.length <= maxLength ? clean : undefined;
 }
 
 function json(payload: JsonRecord, status = 200): Response {

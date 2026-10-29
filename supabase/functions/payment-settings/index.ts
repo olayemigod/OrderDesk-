@@ -35,9 +35,7 @@ Deno.serve(async (req: Request) => {
     if (action === 'save_method') {
       const methodType = paymentType(body.methodType);
       const displayName = bounded(body.displayName, 80);
-      if (!methodType || !displayName) {
-        return reply({ error: 'Valid methodType and displayName are required' }, 400, requestId);
-      }
+      if (!methodType || !displayName) return reply({ error: 'Valid methodType and displayName are required' }, 400, requestId);
 
       const method = await rpc<J>('upsert_sellertray_payment_method', {
         p_tenant_id: tenantId,
@@ -61,6 +59,18 @@ Deno.serve(async (req: Request) => {
     const methodId = uuid(body.methodId);
     if (!methodId) return reply({ error: 'methodId is required' }, 400, requestId);
 
+    if (action === 'assign_branches') {
+      const branchIds = uuidArray(body.branchIds, 250);
+      if (branchIds === null) return reply({ error: 'branchIds must contain valid branch identifiers' }, 400, requestId);
+      await rpc('set_sellertray_payment_method_branches', {
+        p_tenant_id: tenantId,
+        p_payment_method_id: methodId,
+        p_branch_ids: branchIds,
+        p_actor_user_id: userId,
+      });
+      return reply({ ok: true, branchIds }, 200, requestId);
+    }
+
     if (action === 'disconnect_gateway') {
       await rpc('clear_sellertray_gateway_credentials', {
         p_tenant_id: tenantId,
@@ -70,36 +80,24 @@ Deno.serve(async (req: Request) => {
       return reply({ ok: true }, 200, requestId);
     }
 
-    if (action !== 'connect_gateway') {
-      return reply({ error: 'Unsupported payment settings action' }, 400, requestId);
-    }
+    if (action !== 'connect_gateway') return reply({ error: 'Unsupported payment settings action' }, 400, requestId);
 
-    const provider = body.provider === 'paystack' || body.provider === 'flutterwave'
-      ? String(body.provider)
-      : null;
+    const provider = body.provider === 'paystack' || body.provider === 'flutterwave' ? String(body.provider) : null;
     if (!provider) return reply({ error: 'provider must be paystack or flutterwave' }, 400, requestId);
-    if (!ENCRYPTION_KEY) {
-      return reply({ error: 'Gateway credential storage is not activated yet' }, 503, requestId);
-    }
+    if (!ENCRYPTION_KEY) return reply({ error: 'Gateway credential storage is not activated yet' }, 503, requestId);
 
     const method = await loadPaymentMethod(tenantId, methodId);
-    if (!method || method.method_type !== provider) {
-      return reply({ error: 'SellerTray gateway payment method mismatch' }, 409, requestId);
-    }
+    if (!method || method.method_type !== provider) return reply({ error: 'SellerTray gateway payment method mismatch' }, 409, requestId);
     const mode = method.mode === 'test' ? 'test' : 'live';
 
     const secretKey = secret(body.secretKey);
     if (!secretKey) return reply({ error: 'A valid gateway secret key is required' }, 400, requestId);
-    if (!gatewayKeyMatchesMode(provider, secretKey, mode)) {
-      return reply({ error: provider + ' secret key does not match the SellerTray ' + mode + ' payment mode' }, 409, requestId);
-    }
+    if (!gatewayKeyMatchesMode(provider, secretKey, mode)) return reply({ error: provider + ' secret key does not match the SellerTray ' + mode + ' payment mode' }, 409, requestId);
 
     const credentials: J = { secretKey, mode };
     if (provider === 'flutterwave') {
       const secretHash = secret(body.secretHash);
-      if (!secretHash) {
-        return reply({ error: 'Flutterwave webhook secret hash is required' }, 400, requestId);
-      }
+      if (!secretHash) return reply({ error: 'Flutterwave webhook secret hash is required' }, 400, requestId);
       credentials.secretHash = secretHash;
     }
 
@@ -119,63 +117,40 @@ Deno.serve(async (req: Request) => {
     return reply({ ok: true, provider, mode, fingerprint }, 200, requestId);
   } catch (e) {
     const message = sanitize(e instanceof Error ? e.message : 'Payment settings request failed');
-    const status = /only the business Owner|Owner or Manager|read-only|not a member/i.test(message)
+    const status = /only the business Owner|Owner or Manager|permission|read-only|not a member|access/i.test(message)
       ? 403
       : /not found/i.test(message)
         ? 404
-        : /unique|already/i.test(message)
+        : /unique|already|assigned/i.test(message)
           ? 409
           : 400;
-    console.error(JSON.stringify({
-      ts: new Date().toISOString(),
-      service: 'payment-settings',
-      event: 'request_failed',
-      request_id: requestId,
-      error: message,
-    }));
+    console.error(JSON.stringify({ ts: new Date().toISOString(), service: 'payment-settings', event: 'request_failed', request_id: requestId, error: message }));
     return reply({ error: message }, status, requestId);
   }
 });
 
 async function verifiedUser(auth: string): Promise<string | null> {
   if (!auth.startsWith('Bearer ')) return null;
-  const r = await fetch(SUPABASE_URL + '/auth/v1/user', {
-    headers: { apikey: SERVICE_KEY, authorization: auth },
-  });
+  const r = await fetch(SUPABASE_URL + '/auth/v1/user', { headers: { apikey: SERVICE_KEY, authorization: auth } });
   if (!r.ok) return null;
-  try {
-    const user = await r.json() as J;
-    return typeof user.id === 'string' && user.id ? user.id : null;
-  } catch { return null; }
+  try { const user = await r.json() as J; return typeof user.id === 'string' && user.id ? user.id : null; }
+  catch { return null; }
 }
 
 async function loadPaymentMethod(tenantId: string, methodId: string): Promise<J | null> {
-  const r = await fetch(
-    SUPABASE_URL + '/rest/v1/merchant_payment_methods?select=id,method_type,mode' +
-      '&tenant_id=eq.' + encodeURIComponent(tenantId) +
-      '&id=eq.' + encodeURIComponent(methodId) +
-      '&limit=1',
-    {
-      headers: {
-        apikey: SERVICE_KEY,
-        authorization: 'Bearer ' + SERVICE_KEY,
-      },
-    },
-  );
+  const r = await fetch(SUPABASE_URL + '/rest/v1/merchant_payment_methods?select=id,method_type,mode&tenant_id=eq.' + encodeURIComponent(tenantId) + '&id=eq.' + encodeURIComponent(methodId) + '&limit=1', {
+    headers: { apikey: SERVICE_KEY, authorization: 'Bearer ' + SERVICE_KEY },
+  });
   if (!r.ok) throw new Error('Unable to verify SellerTray payment method mode');
   const rows = await r.json() as J[];
   return rows[0] ?? null;
 }
 
 function gatewayKeyMatchesMode(provider: string, secretKey: string, mode: 'test' | 'live'): boolean {
-  if (provider === 'paystack') {
-    return mode === 'test' ? secretKey.startsWith('sk_test_') : secretKey.startsWith('sk_live_');
-  }
+  if (provider === 'paystack') return mode === 'test' ? secretKey.startsWith('sk_test_') : secretKey.startsWith('sk_live_');
   if (provider === 'flutterwave') {
     const upper = secretKey.toUpperCase();
-    return mode === 'test'
-      ? upper.startsWith('FLWSECK_TEST-')
-      : upper.startsWith('FLWSECK-') && !upper.startsWith('FLWSECK_TEST-');
+    return mode === 'test' ? upper.startsWith('FLWSECK_TEST-') : upper.startsWith('FLWSECK-') && !upper.startsWith('FLWSECK_TEST-');
   }
   return false;
 }
@@ -183,21 +158,13 @@ function gatewayKeyMatchesMode(provider: string, secretKey: string, mode: 'test'
 async function rpc<T = unknown>(name: string, body: J): Promise<T> {
   const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/' + encodeURIComponent(name), {
     method: 'POST',
-    headers: {
-      apikey: SERVICE_KEY,
-      authorization: 'Bearer ' + SERVICE_KEY,
-      'content-type': 'application/json',
-    },
+    headers: { apikey: SERVICE_KEY, authorization: 'Bearer ' + SERVICE_KEY, 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
   if (!r.ok) {
     let payload: J = {};
     try { payload = await r.json() as J; } catch {}
-    const message = typeof payload.message === 'string'
-      ? payload.message
-      : typeof payload.error === 'string'
-        ? payload.error
-        : 'Payment settings RPC failed with HTTP ' + r.status;
+    const message = typeof payload.message === 'string' ? payload.message : typeof payload.error === 'string' ? payload.error : 'Payment settings RPC failed with HTTP ' + r.status;
     throw new Error(message);
   }
   const value = await r.text();
@@ -219,77 +186,25 @@ async function fingerprintOf(value: string): Promise<string> {
 }
 
 function paymentType(v: unknown): string | null {
-  return typeof v === 'string' && [
-    'bank_transfer', 'paystack', 'flutterwave', 'cash_on_delivery', 'pay_on_pickup',
-  ].includes(v) ? v : null;
+  return typeof v === 'string' && ['bank_transfer', 'card_terminal', 'paystack', 'flutterwave', 'cash_on_delivery', 'pay_on_pickup'].includes(v) ? v : null;
 }
-function uuid(v: unknown): string | null {
-  if (typeof v !== 'string') return null;
-  const x = v.trim();
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(x) ? x : null;
-}
+function uuid(v: unknown): string | null { if (typeof v !== 'string') return null; const x = v.trim(); return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(x) ? x : null; }
+function uuidArray(v: unknown, max: number): string[] | null { if (!Array.isArray(v) || v.length > max) return null; const ids = v.map(uuid); return ids.every((id): id is string => Boolean(id)) ? Array.from(new Set(ids)) : null; }
 function text(v: unknown): string | null { return typeof v === 'string' && v.trim() ? v.trim() : null; }
-function bounded(v: unknown, max: number): string | null {
-  const x = text(v);
-  return x && x.length <= max ? x : null;
-}
-function optional(v: unknown, max: number): string | null {
-  return v === null || v === undefined || v === '' ? null : bounded(v, max);
-}
-function secret(v: unknown): string | null {
-  const x = text(v);
-  return x && x.length >= 12 && x.length <= 512 ? x : null;
-}
-function integer(v: unknown, min: number, max: number): number | null {
-  return typeof v === 'number' && Number.isInteger(v) && v >= min && v <= max ? v : null;
-}
-function safeRequestId(v: string | null): string {
-  const x = v?.trim() || '';
-  return /^[A-Za-z0-9._:-]{1,128}$/.test(x) ? x : crypto.randomUUID();
-}
-function sanitize(v: string): string {
-  return v
-    .replace(/\b(?:sk|FLWSECK|sb_secret)[-_][A-Za-z0-9_-]+\b/gi, '[redacted]')
-    .replace(/\s+/g, ' ')
-    .slice(0, 300);
-}
-function fromBase64(v: string): Uint8Array {
-  try { return Uint8Array.from(atob(v), (c) => c.charCodeAt(0)); }
-  catch { return new Uint8Array(); }
-}
-function toBase64(v: Uint8Array): string {
-  let raw = '';
-  for (const b of v) raw += String.fromCharCode(b);
-  return btoa(raw);
-}
+function bounded(v: unknown, max: number): string | null { const x = text(v); return x && x.length <= max ? x : null; }
+function optional(v: unknown, max: number): string | null { return v === null || v === undefined || v === '' ? null : bounded(v, max); }
+function secret(v: unknown): string | null { const x = text(v); return x && x.length >= 12 && x.length <= 512 ? x : null; }
+function integer(v: unknown, min: number, max: number): number | null { return typeof v === 'number' && Number.isInteger(v) && v >= min && v <= max ? v : null; }
+function safeRequestId(v: string | null): string { const x = v?.trim() || ''; return /^[A-Za-z0-9._:-]{1,128}$/.test(x) ? x : crypto.randomUUID(); }
+function sanitize(v: string): string { return v.replace(/\b(?:sk|FLWSECK|sb_secret)[-_][A-Za-z0-9_-]+\b/gi, '[redacted]').replace(/\s+/g, ' ').slice(0, 300); }
+function fromBase64(v: string): Uint8Array { try { return Uint8Array.from(atob(v), (c) => c.charCodeAt(0)); } catch { return new Uint8Array(); } }
+function toBase64(v: Uint8Array): string { let raw = ''; for (const b of v) raw += String.fromCharCode(b); return btoa(raw); }
 async function limitedBody(req: Request, max: number): Promise<string | null> {
   const declared = Number(req.headers.get('content-length') || '0');
   if (Number.isFinite(declared) && declared > max) return null;
   if (!req.body) return '';
-  const reader = req.body.getReader();
-  const decoder = new TextDecoder();
-  const chunks: string[] = [];
-  let total = 0;
-  try {
-    while (true) {
-      const result = await reader.read();
-      if (result.done) break;
-      total += result.value.byteLength;
-      if (total > max) { await reader.cancel(); return null; }
-      chunks.push(decoder.decode(result.value, { stream: true }));
-    }
-    chunks.push(decoder.decode());
-    return chunks.join('');
-  } finally {
-    try { reader.releaseLock(); } catch {}
-  }
+  const reader = req.body.getReader(); const decoder = new TextDecoder(); const chunks: string[] = []; let total = 0;
+  try { while (true) { const result = await reader.read(); if (result.done) break; total += result.value.byteLength; if (total > max) { await reader.cancel(); return null; } chunks.push(decoder.decode(result.value, { stream: true })); } chunks.push(decoder.decode()); return chunks.join(''); }
+  finally { try { reader.releaseLock(); } catch {} }
 }
-function reply(payload: J, status = 200, requestId?: string): Response {
-  const headers: Record<string, string> = {
-    ...cors,
-    'content-type': 'application/json; charset=utf-8',
-    'cache-control': 'no-store',
-  };
-  if (requestId) headers['x-orderdesk-request-id'] = requestId;
-  return new Response(JSON.stringify(payload), { status, headers });
-}
+function reply(payload: J, status = 200, requestId?: string): Response { const headers: Record<string, string> = { ...cors, 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }; if (requestId) headers['x-orderdesk-request-id'] = requestId; return new Response(JSON.stringify(payload), { status, headers }); }

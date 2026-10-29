@@ -3,6 +3,9 @@ type JsonRecord = Record<string, unknown>;
 type ClaimedNotification = {
   id: string;
   tenant_id: string;
+  order_id: string | null;
+  source_inbound_message_id: string | null;
+  event_key: string;
   delivery_status: string;
   from_phone_number_id: string;
   to_wa_id: string;
@@ -143,12 +146,15 @@ async function deliver(notification: ClaimedNotification): Promise<string> {
     }
 
     const providerMessageId = extractProviderMessageId(payload);
+    const sentAt = new Date().toISOString();
     await finish(notification.id, {
       delivery_status: 'sent',
       provider_message_id: providerMessageId,
       last_error: null,
-      sent_at: new Date().toISOString(),
+      sent_at: sentAt,
     });
+
+    await markConversationReplyState(notification, sentAt);
     return 'sent';
   } catch (error) {
     if (error instanceof TemplateConfigurationError) {
@@ -497,6 +503,37 @@ async function decryptCredential(ciphertext: string, ivValue: string): Promise<J
 function fromBase64(value: string): Uint8Array {
   try { return Uint8Array.from(atob(value), (char) => char.charCodeAt(0)); }
   catch { return new Uint8Array(); }
+}
+
+async function markConversationReplyState(
+  notification: ClaimedNotification,
+  sentAt: string,
+): Promise<void> {
+  if (
+    notification.event_key !== 'customer_enquiry_reply' ||
+    !notification.source_inbound_message_id
+  ) {
+    return;
+  }
+
+  try {
+    await rest(
+      '/rest/v1/customer_enquiries' +
+        '?tenant_id=eq.' + encodeURIComponent(notification.tenant_id) +
+        '&source_inbound_message_id=eq.' + encodeURIComponent(notification.source_inbound_message_id),
+      {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({
+          status: 'replied',
+          replied_at: sentAt,
+          updated_at: sentAt,
+        }),
+      },
+    );
+  } catch (error) {
+    console.warn('SellerTray could not reconcile enquiry reply state after WhatsApp accepted the message.', error);
+  }
 }
 
 async function finish(id: string, patch: JsonRecord): Promise<void> {

@@ -1,0 +1,11 @@
+{
+  "name": "sellertray-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/admin-web",
+    "apps/merchant-web",
+    "apps/mobile",
+    "supabase"
+  ]
+}

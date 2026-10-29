@@ -1,0 +1,91 @@
+name: Mobile Native CI
+
+concurrency:
+  group: mobile-native-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    paths:
+      - 'package.json'
+      - 'apps/mobile/modules/**'
+      - 'apps/mobile/app.json'
+      - 'apps/mobile/package.json'
+      - 'apps/mobile/package-lock.json'
+      - '.github/workflows/mobile-native-ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'package.json'
+      - 'apps/mobile/modules/**'
+      - 'apps/mobile/app.json'
+      - 'apps/mobile/package.json'
+      - 'apps/mobile/package-lock.json'
+      - '.github/workflows/mobile-native-ci.yml'
+
+jobs:
+  android-native-compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - name: Checkout exact candidate source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact candidate checkout
+        run: |
+          expected="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected"
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install locked dependencies
+        run: npm --prefix . ci --no-audit --no-fund
+
+      - name: Generate Android project
+        env:
+          EXPO_NO_TELEMETRY: '1'
+        run: npx expo prebuild --platform android --no-install --clean
+
+      - name: Verify barcode camera permission
+        run: |
+          manifest="android/app/src/main/AndroidManifest.xml"
+          camera_line="$(grep 'android.permission.CAMERA' "$manifest" || true)"
+          if [ -z "$camera_line" ]; then
+            echo "SellerTray barcode scanner is missing android.permission.CAMERA" >&2
+            exit 1
+          fi
+          if printf '%s\n' "$camera_line" | grep -q 'tools:node="remove"'; then
+            echo "SellerTray barcode scanner CAMERA permission is marked for removal" >&2
+            exit 1
+          fi
+          active_audio="$(grep 'android.permission.RECORD_AUDIO' "$manifest" | grep -v 'tools:node="remove"' || true)"
+          if [ -n "$active_audio" ]; then
+            echo "SellerTray barcode scanning must not request active RECORD_AUDIO permission" >&2
+            printf '%s\n' "$active_audio" >&2
+            exit 1
+          fi
+
+      - name: Compile Android Kotlin
+        run: |
+          chmod +x android/gradlew
+          cd android
+          ./gradlew :app:compileDebugKotlin --no-daemon --stacktrace

@@ -2,23 +2,19 @@
   "expo": {
     "name": "SellerTray",
     "slug": "sellertray",
-    "scheme": [
-      "sellertray",
-      "orderdesk"
-    ],
+    "scheme": ["sellertray", "orderdesk"],
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "android": {
       "package": "ng.processedge.sellertray",
-      "versionCode": 7,
+      "versionCode": 42,
       "blockedPermissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_BACKGROUND_LOCATION",
         "android.permission.READ_CONTACTS",
         "android.permission.WRITE_CONTACTS",
-        "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
         "android.permission.READ_CALENDAR",
         "android.permission.WRITE_CALENDAR",
@@ -38,7 +34,6 @@
         "android.permission.BODY_SENSORS_BACKGROUND",
         "android.permission.ACTIVITY_RECOGNITION",
         "android.permission.BLUETOOTH_SCAN",
-        "android.permission.BLUETOOTH_CONNECT",
         "android.permission.SCHEDULE_EXACT_ALARM",
         "android.permission.USE_EXACT_ALARM",
         "android.permission.MANAGE_EXTERNAL_STORAGE",
@@ -47,6 +42,10 @@
         "com.google.android.gms.permission.AD_ID"
       ],
       "allowBackup": false,
+      "adaptiveIcon": {
+        "foregroundImage": "https://sellertray.vercel.app/brand/sellertray-app-icon-v2.png",
+        "backgroundColor": "#F8FAFC"
+      },
       "googleServicesFile": "./google-services.json"
     },
     "ios": {
@@ -61,6 +60,22 @@
         }
       ],
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow SellerTray to scan product barcodes during selling and product setup.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow SellerTray to select product images from your photo library.",
+          "cameraPermission": "Allow SellerTray to scan product barcodes during selling and product setup.",
+          "microphonePermission": false
+        }
+      ],
+      [
         "expo-notifications",
         {
           "color": "#12B76A",
@@ -68,6 +83,12 @@
         }
       ]
     ],
+    "icon": "https://sellertray.vercel.app/brand/sellertray-app-icon-v2.png",
+    "splash": {
+      "image": "https://sellertray.vercel.app/brand/sellertray-app-icon-v2.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#102A43"
+    },
     "extra": {
       "eas": {
         "projectId": "e6f57a2d-6db7-4972-b4ed-410df0495485"

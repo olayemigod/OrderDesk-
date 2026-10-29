@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
   loadConversationUnreadCounts,
@@ -8,7 +8,7 @@ import {
   type ConversationUnreadState,
 } from '../data/conversationUnreadRepository';
 
-export function useConversationUnreadCounts(tenantId: string | null) {
+export function useConversationUnreadCounts(tenantId: string | null, branchId?: string | null) {
   const [rows, setRows] = useState<ConversationUnreadState[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,12 +20,12 @@ export function useConversationUnreadCounts(tenantId: string | null) {
     }
 
     try {
-      setRows(await loadConversationUnreadCounts(tenantId));
+      setRows(await loadConversationUnreadCounts(tenantId, branchId));
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load conversation unread counts.');
     }
-  }, [tenantId]);
+  }, [tenantId, branchId]);
 
   useEffect(() => {
     void refresh();
@@ -33,12 +33,12 @@ export function useConversationUnreadCounts(tenantId: string | null) {
 
     const channel = subscribeToConversationActivity(tenantId, () => {
       void refresh();
-    });
+    }, branchId);
 
     return () => {
       void unsubscribeFromConversationActivity(channel);
     };
-  }, [refresh, tenantId]);
+  }, [refresh, tenantId, branchId]);
 
   const unreadByCustomer = useMemo(
     () => new Map(rows.map((row) => [row.customerId, row])),
@@ -53,7 +53,7 @@ export function useConversationUnreadCounts(tenantId: string | null) {
   const markRead = useCallback(
     async (customerId: string, through: string | null) => {
       if (!tenantId || !customerId) return;
-      await markConversationRead(tenantId, customerId, through);
+      await markConversationRead(tenantId, customerId, through, branchId);
       setRows((current) =>
         current.map((row) =>
           row.customerId === customerId
@@ -62,7 +62,7 @@ export function useConversationUnreadCounts(tenantId: string | null) {
         ),
       );
     },
-    [tenantId],
+    [tenantId, branchId],
   );
 
   return { rows, unreadByCustomer, unreadCount, error, refresh, markRead };
