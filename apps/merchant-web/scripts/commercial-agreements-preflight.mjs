@@ -77,8 +77,11 @@ requireValue(
   agreements.includes('currentOrderFormConfirmed')
     && agreements.includes("agreementsComplete && (!hasOrderForms || currentOrderFormConfirmed)")
     && agreements.includes('Purchase confirmed. Continue to Billing to complete the amount due.')
-    && agreements.includes('onClick={onContinueToBilling}'),
-  'Agreements must expose Billing after Master acceptance and again after current Order Form confirmation, without a dead end.',
+    && agreements.includes('onClick={onContinueToBilling}')
+    && agreements.includes('<CommercialAgreementPackageManagement tenantId={tenantId} onChanged={load} />')
+    && packageAgreements.includes('onChanged?: () => void | Promise<void>')
+    && packageAgreements.includes('await onChanged?.()'),
+  'Order Form confirmation must refresh the workflow immediately and expose Billing without a page reload.',
 );
 
 requireValue(
@@ -115,10 +118,11 @@ const orderFormGateIndex = checkoutGate.indexOf('select f.id into v_order_form_i
 requireValue(
   checkoutGate.includes('Review and confirm this SellerTray Order Form before payment')
     && checkoutGate.includes('sellertray_order_form_confirmations')
-    && checkoutGate.includes('sellertray_agreement_package_processing')
+    && checkoutGate.includes("to_regclass('public.sellertray_agreement_package_processing')")
+    && checkoutGate.includes('execute $sql$')
     && checkoutReplayIndex >= 0 && activeCheckoutIndex >= 0 && orderFormGateIndex >= 0
     && checkoutReplayIndex < orderFormGateIndex && activeCheckoutIndex < orderFormGateIndex,
-  'Checkout authority must preserve committed checkout facts before enforcing confirmation on a new governed checkout.',
+  'Checkout authority must preserve committed checkout facts and optional pre-C2 schemas before enforcing confirmation on a new governed checkout.',
 );
 requireValue(excludes(billing, ['SERVICE_ROLE', 'SUPABASE_SECRET', "from('sellertray_commercial_payment_confirmations')"]), 'Billing must not bypass governed commercial authorities.');
 
