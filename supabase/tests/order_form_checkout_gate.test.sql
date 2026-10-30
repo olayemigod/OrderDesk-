@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(8);
+select extensions.plan(9);
 
 select extensions.ok(
   to_regprocedure('public.reserve_sellertray_installment_checkout(uuid,uuid,uuid,uuid,text)') is not null,
@@ -18,6 +18,10 @@ select extensions.ok(
 select extensions.ok(
   position('sellertray_agreement_package_processing' in lower(pg_get_functiondef('public.reserve_sellertray_installment_checkout(uuid,uuid,uuid,uuid,text)'::regprocedure))) > 0,
   'checkout fails closed while Order Form orchestration is in progress'
+);
+select extensions.ok(
+  position('to_regclass(''public.sellertray_agreement_package_processing'')' in lower(pg_get_functiondef('public.reserve_sellertray_installment_checkout(uuid,uuid,uuid,uuid,text)'::regprocedure))) > 0,
+  'checkout checks optional agreement-processing authority before dynamic access for pre-C2 compatibility'
 );
 select extensions.ok(
   position('review and confirm this sellertray order form before payment' in lower(pg_get_functiondef('public.reserve_sellertray_installment_checkout(uuid,uuid,uuid,uuid,text)'::regprocedure))) > 0,
