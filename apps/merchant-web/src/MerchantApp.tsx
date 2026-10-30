@@ -209,7 +209,7 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
       {page === 'reports' && <ReportCenter tenantId={business.id} currency={business.currency} branches={branches} go={navigate} openBranch={openBranchPage} />}
       {page === 'ai' && <AiInsights tenantId={business.id} />}
       {page === 'purchasing' && <PurchasingManagement tenantId={business.id} currency={business.currency} />}
-      {page === 'agreements' && <CommercialAgreementsManagement tenantId={business.id} />}
+      {page === 'agreements' && <CommercialAgreementsManagement tenantId={business.id} onContinueToBilling={() => navigate('sellertray_billing')} />}
       {page === 'setup' && <SetupSchedulingManagement key={business.id} tenantId={business.id} />}
       {managementPage && <ManagementPage page={page} tenantId={business.id} currency={business.currency} onBranchesChanged={refresh} />}
     </main>
