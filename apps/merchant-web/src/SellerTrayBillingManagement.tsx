@@ -119,20 +119,29 @@ export default function SellerTrayBillingManagement({ tenantId }: { tenantId: st
     } finally { setPayingOrderId(null); }
   }
 
-  if (loading && !center) return <article className="panel"><p className="muted">Loading SellerTray billing…</p></article>;
+  if (loading && !center) return <article className="panel"><p className="muted">Loading billing…</p></article>;
 
   return <section className="page-stack">
     <div className="section-heading">
-      <div><p className="eyebrow">ProcessEdge commercial account</p><h2>SellerTray Billing</h2></div>
-      <p className="muted">Choose the first governed SellerTray plan when required, then review what your business owes ProcessEdge. Customer receivables remain under Payments & Receivables.</p>
+      <div><p className="eyebrow">ProcessEdge commercial account</p><h2>Billing</h2></div>
+      <p className="muted">Choose the governed SellerTray plan when required, review your commercial purchase, and settle what your Business owes ProcessEdge. Customer receivables remain under Payments & Receivables.</p>
     </div>
+    <article className="panel" aria-label="Commercial onboarding workflow">
+      <div className="section-heading"><div><p className="eyebrow">Commercial onboarding</p><h3>Step 2 of 3 · Billing</h3></div><span className="status-chip">Current step</span></div>
+      <div className="settings-grid two">
+        <Fact label="Step 1" value="Agreements" />
+        <Fact label="Step 2" value="Billing" />
+        <Fact label="Step 3" value="Setup & Activation" />
+      </div>
+      <p className="muted">Complete Agreements first. Billing then creates and settles the governed purchase before the workflow advances to Setup & Activation.</p>
+    </article>
     <div className="governance-note">Plan and Branch setup prices are resolved by SellerTray’s server authority. Discounts, direct ProcessEdge payments and provider payments remain separate immutable settlement facts.</div>
     {error ? <div className="error-banner">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div> : null}
     {message ? <div className="success-banner">{message}<button type="button" onClick={() => setMessage(null)}>Dismiss</button></div> : null}
 
     <SellerTrayInitialPurchase tenantId={tenantId} onChanged={load} />
 
-    {!center?.orders.length ? <article className="panel empty-state"><strong>No SellerTray commercial order yet</strong><p>If the Business Owner has purchase authority, choose a governed plan above. Otherwise SellerTray will show the next available commercial action when authority becomes available.</p></article> : center.orders.map((order) => {
+    {!center?.orders.length ? <article className="panel empty-state"><strong>No commercial order yet</strong><p>If the Business Owner has purchase authority, choose a governed plan above. Otherwise SellerTray will show the next available commercial action when authority becomes available.</p></article> : center.orders.map((order) => {
       const state = order.settlement;
       const canPay = center.canPay && state.outstandingAmount >= 0.005 && Boolean(state.nextInstallmentScheduleId);
       return <article className="panel" key={order.commercialOrderId}>
