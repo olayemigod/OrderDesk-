@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import CommercialAgreementPackageManagement from './CommercialAgreementPackageManagement';
+import {
+  MerchantEmptyState,
+  MerchantFact,
+  MerchantFactGrid,
+  MerchantLoadingState,
+  MerchantNotice,
+  MerchantPageHeader,
+  MerchantStatusBadge,
+} from './MerchantPagePrimitives';
 import { SellerTrayInput } from './SellerTrayElements';
 import { errorMessage, supabase } from './supabase';
 import './agreement-documents.css';
@@ -95,41 +104,35 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
     }
   }
 
-  if (loading && !center) return <article className="panel"><p className="muted">Loading agreements…</p></article>;
+  if (loading && !center) return <MerchantLoadingState label="Loading agreements…" />;
   if (center?.orderForms.length) return <CommercialAgreementPackageManagement tenantId={tenantId} />;
 
   const master = center?.masterAgreement ?? null;
   return <section className="page-stack">
-    <div className="section-heading">
-      <div><p className="eyebrow">Legal</p><h2>Agreements</h2></div>
-      <p className="muted">Review and accept the current SellerTray Master Agreement before choosing your first plan. Your purchase terms will be shown in an Order Form after you confirm your subscription.</p>
-    </div>
+    <MerchantPageHeader eyebrow="Legal" title="Agreements" description="Review and accept the current SellerTray Master Agreement before choosing your first plan. Your purchase terms will be shown in an Order Form after you confirm your subscription." />
 
-    {error ? <div className="error-banner">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div> : null}
-    {message ? <div className="success-banner">{message}<button type="button" onClick={() => setMessage(null)}>Dismiss</button></div> : null}
+    {error ? <MerchantNotice tone="error" onDismiss={() => setError(null)}>{error}</MerchantNotice> : null}
+    {message ? <MerchantNotice tone="success" onDismiss={() => setMessage(null)}>{message}</MerchantNotice> : null}
 
-    {!master ? <article className="panel empty-state">
-      <strong>Master Agreement not yet published</strong>
-      <p>ProcessEdge must publish the current SellerTray Master Agreement before the first subscription purchase can begin.</p>
-    </article> : <article className="panel agreement-brand-panel">
+    {!master ? <MerchantEmptyState title="Master Agreement not yet published" body="ProcessEdge must publish the current SellerTray Master Agreement before the first subscription purchase can begin." /> : <article className="panel agreement-brand-panel">
       <div className="agreement-brand-heading">
         <img className="agreement-brand-logo" src="/brand/sellertray-logo-v2.svg" alt="SellerTray" />
         <div><p className="eyebrow">Master Agreement</p><h3>{master.title}</h3><p className="muted">Version {master.versionCode} · Effective {formatDate(master.effectiveFrom)}</p></div>
-        <span className="role-pill">{center?.masterAcceptanceRequired ? 'Acceptance required' : 'Accepted'}</span>
+        <MerchantStatusBadge tone={center?.masterAcceptanceRequired ? 'warning' : 'success'}>{center?.masterAcceptanceRequired ? 'Acceptance required' : 'Accepted'}</MerchantStatusBadge>
       </div>
 
-      <div className="settings-grid two">
-        <Fact label="Version" value={master.versionCode} />
-        <Fact label="Status" value={center?.masterAcceptanceRequired ? 'Acceptance required' : 'Accepted'} />
-        <Fact label="Accepted by" value={master.acceptance?.acceptedLegalName ?? '—'} />
-        <Fact label="Accepted at" value={master.acceptance?.acceptedAt ? formatDate(master.acceptance.acceptedAt) : '—'} />
-      </div>
+      <MerchantFactGrid>
+        <MerchantFact label="Version" value={master.versionCode} />
+        <MerchantFact label="Status" value={center?.masterAcceptanceRequired ? 'Acceptance required' : 'Accepted'} />
+        <MerchantFact label="Accepted by" value={master.acceptance?.acceptedLegalName ?? '—'} />
+        <MerchantFact label="Accepted at" value={master.acceptance?.acceptedAt ? formatDate(master.acceptance.acceptedAt) : '—'} />
+      </MerchantFactGrid>
 
-      <div className="governance-note">The Master Agreement applies to your use of SellerTray. After accepting it, continue to Billing to choose your plan and Branches. Your purchase terms will then be shown in an Order Form for review and confirmation.</div>
+      <MerchantNotice tone="info">The Master Agreement applies to your use of SellerTray. After accepting it, continue to Billing to choose your plan and Branches. Your purchase terms will then be shown in an Order Form for review and confirmation.</MerchantNotice>
       <details className="agreement-transcript" open><summary>Read Master Agreement text</summary><div className="panel agreement-document"><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: 'inherit', margin: 0 }}>{master.contentBody}</pre></div></details>
 
-      {!center?.masterAcceptanceRequired ? <div className="success-banner">Master Agreement accepted. Continue to SellerTray Billing to choose your plan and complete your first purchase.</div> : null}
-      {center?.masterAcceptanceRequired && !center.canAccept ? <div className="warning-banner">Your current role cannot accept this Master Agreement. Use an authorised Business representative before the first purchase can proceed.</div> : null}
+      {!center?.masterAcceptanceRequired ? <MerchantNotice tone="success">Master Agreement accepted. Continue to SellerTray Billing to choose your plan and complete your first purchase.</MerchantNotice> : null}
+      {center?.masterAcceptanceRequired && !center.canAccept ? <MerchantNotice tone="warning">Your current role cannot accept this Master Agreement. Use an authorised Business representative before the first purchase can proceed.</MerchantNotice> : null}
 
       {center?.masterAcceptanceRequired && center.canAccept ? <form className="settings-form agreement-signature-form" onSubmit={acceptPrepurchaseMaster}>
         <label className="field"><span>Authorised representative legal name</span><SellerTrayInput maxLength={200} required value={legalName} onChange={(event) => setLegalName(event.target.value)} placeholder="Full legal name" /></label>
@@ -140,7 +143,6 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
   </section>;
 }
 
-function Fact({ label, value }: { label: string; value: string }) { return <div className="role-lock"><span>{label}</span><strong>{value}</strong></div>; }
 function formatDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(date); }
 function record(value: unknown): Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 function parseAcceptance(value: unknown): MasterAcceptance | null { const row = record(value); if (typeof row.id !== 'string') return null; return { id: row.id, acceptedAt: String(row.acceptedAt ?? ''), acceptedLegalName: String(row.acceptedLegalName ?? ''), acceptedRole: row.acceptedRole === 'manager' ? 'manager' : 'owner' }; }

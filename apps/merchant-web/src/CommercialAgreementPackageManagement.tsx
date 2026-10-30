@@ -1,3 +1,13 @@
+import {
+  MerchantEmptyState,
+  MerchantFact,
+  MerchantFactGrid,
+  MerchantLoadingState,
+  MerchantNotice,
+  MerchantPageHeader,
+  MerchantPanelHeader,
+  MerchantStatusBadge,
+} from './MerchantPagePrimitives';
 import { SellerTrayInput } from './SellerTrayElements';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { errorMessage, supabase } from './supabase';
@@ -126,36 +136,30 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
     finally { setBusy(false); }
   }
 
-  if (loading && !center) return <article className="panel"><p className="muted">Loading agreements…</p></article>;
+  if (loading && !center) return <MerchantLoadingState label="Loading agreements…" />;
 
   return <section className="page-stack">
-    <div className="section-heading">
-      <div><p className="eyebrow">Business</p><h2>Agreements</h2></div>
-      <p className="muted">Review the agreement for your purchase, then accept or confirm it when required.</p>
-    </div>
+    <MerchantPageHeader eyebrow="Legal" title="Agreements" description="Review the agreement for your purchase, then accept or confirm it when required." />
 
-    {error ? <div className="error-banner">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div> : null}
-    {message ? <div className="success-banner">{message}<button type="button" onClick={() => setMessage(null)}>Dismiss</button></div> : null}
+    {error ? <MerchantNotice tone="error" onDismiss={() => setError(null)}>{error}</MerchantNotice> : null}
+    {message ? <MerchantNotice tone="success" onDismiss={() => setMessage(null)}>{message}</MerchantNotice> : null}
 
     {center?.masterAgreement ? <article className="panel agreement-brand-panel">
       <div className="agreement-brand-heading">
         <img className="agreement-brand-logo" src="/brand/sellertray-logo-v2.svg" alt="SellerTray" />
         <div><p className="eyebrow">Master Agreement</p><h3>{center.masterAgreement.title}</h3><p className="muted">Version {center.masterAgreement.versionCode} · Effective {formatDate(center.masterAgreement.effectiveFrom)}</p></div>
-        <span className="role-pill">{center.masterAcceptanceRequired ? 'Acceptance required' : 'Accepted'}</span>
+        <MerchantStatusBadge tone={center.masterAcceptanceRequired ? 'warning' : 'success'}>{center.masterAcceptanceRequired ? 'Acceptance required' : 'Accepted'}</MerchantStatusBadge>
       </div>
-      <div className="settings-grid two">
-        <Fact label="Version" value={center.masterAgreement.versionCode} />
-        <Fact label="Status" value={center.masterAcceptanceRequired ? 'Acceptance required' : 'Accepted'} />
-        <Fact label="Accepted by" value={center.masterAgreement.acceptance?.acceptedLegalName ?? '—'} />
-        <Fact label="Accepted at" value={center.masterAgreement.acceptance?.acceptedAt ? formatDate(center.masterAgreement.acceptance.acceptedAt) : '—'} />
-      </div>
+      <MerchantFactGrid>
+        <MerchantFact label="Version" value={center.masterAgreement.versionCode} />
+        <MerchantFact label="Status" value={center.masterAcceptanceRequired ? 'Acceptance required' : 'Accepted'} />
+        <MerchantFact label="Accepted by" value={center.masterAgreement.acceptance?.acceptedLegalName ?? '—'} />
+        <MerchantFact label="Accepted at" value={center.masterAgreement.acceptance?.acceptedAt ? formatDate(center.masterAgreement.acceptance.acceptedAt) : '—'} />
+      </MerchantFactGrid>
       <details className="agreement-transcript"><summary>Read Master Agreement text</summary><div className="panel agreement-document"><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: 'inherit', margin: 0 }}>{center.masterAgreement.contentBody}</pre></div></details>
-    </article> : <div className="warning-banner">The current SellerTray Master Agreement is not available yet. Your purchase details are safe, but activation cannot continue until the agreement is available.</div>}
+    </article> : <MerchantNotice tone="warning">The current SellerTray Master Agreement is not available yet. Your purchase details are safe, but activation cannot continue until the agreement is available.</MerchantNotice>}
 
-    {!orderForms.length ? <article className="panel empty-state">
-      <strong>Preparing your agreement</strong>
-      <p>SellerTray is preparing the Order Form for this purchase. If it remains unavailable, contact SellerTray Support; you do not need to recreate the purchase.</p>
-    </article> : <div className="team-management-grid">
+    {!orderForms.length ? <MerchantEmptyState title="Preparing your agreement" body="SellerTray is preparing the Order Form for this purchase. If it remains unavailable, contact SellerTray Support; you do not need to recreate the purchase." /> : <div className="team-management-grid">
       <div className="panel member-list">
         {current.map((form) => <OrderFormButton key={form.id} form={form} selected={selected?.id === form.id} onSelect={() => selectForm(form.id)} />)}
         {history.length ? <div className="nav-section">Order Form history</div> : null}
@@ -163,14 +167,11 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
       </div>
 
       {selected ? <article className="panel member-editor">
-        <div className="panel-head">
-          <div><p className="eyebrow">Order Form</p><h3>{selected.title}</h3><p className="muted">Reference {selected.reference} · Version {selected.templateVersion}</p></div>
-          <Status form={selected} masterAcceptanceRequired={center?.masterAcceptanceRequired === true} />
-        </div>
-        <div className="settings-grid two">
-          <Fact label="Created" value={formatDate(selected.issuedAt)} />
-          <Fact label="Order reference" value={selected.commercialSnapshot.orderReference || selected.reference} />
-        </div>
+        <MerchantPanelHeader eyebrow="Order Form" title={selected.title} description={`Reference ${selected.reference} · Version ${selected.templateVersion}`} status={<OrderFormStatus form={selected} masterAcceptanceRequired={center?.masterAcceptanceRequired === true} />} />
+        <MerchantFactGrid>
+          <MerchantFact label="Created" value={formatDate(selected.issuedAt)} />
+          <MerchantFact label="Order reference" value={selected.commercialSnapshot.orderReference || selected.reference} />
+        </MerchantFactGrid>
 
         <CommercialFacts snapshot={selected.commercialSnapshot} />
         <details className="agreement-transcript"><summary>Read Order Form text</summary><div className="panel agreement-document"><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: 'inherit', margin: 0 }}>{selected.renderedContent}</pre></div></details>
@@ -189,12 +190,12 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
           </div>
         </div>
 
-        {selected.confirmation ? <div className="success-banner">Purchase confirmed {formatDate(selected.confirmation.confirmedAt)} by {selected.confirmation.confirmedLegalName} ({roleLabel(selected.confirmation.confirmedRole)}).</div> : null}
-        {!selected.isCurrent ? <div className="warning-banner">This Order Form has been replaced. Review the current replacement instead.</div> : null}
-        {selected.isCurrent && actionRequired && !center?.canAccept ? <div className="warning-banner">Only the Business Owner or a Manager explicitly authorised by the Owner can accept or confirm SellerTray agreements.</div> : null}
+        {selected.confirmation ? <MerchantNotice tone="success">Purchase confirmed {formatDate(selected.confirmation.confirmedAt)} by {selected.confirmation.confirmedLegalName} ({roleLabel(selected.confirmation.confirmedRole)}).</MerchantNotice> : null}
+        {!selected.isCurrent ? <MerchantNotice tone="warning">This Order Form has been replaced. Review the current replacement instead.</MerchantNotice> : null}
+        {selected.isCurrent && actionRequired && !center?.canAccept ? <MerchantNotice tone="warning">Only the Business Owner or a Manager explicitly authorised by the Owner can accept or confirm SellerTray agreements.</MerchantNotice> : null}
 
         {selected.isCurrent && actionRequired && center?.canAccept && center.masterAgreement ? <form className="settings-form agreement-signature-form" onSubmit={confirmPackage}>
-          <div className={`agreement-review-status ${reviewReady ? 'ready' : ''}`}><strong>{reviewReady ? 'Agreement reviewed and ready to confirm' : 'Review the Agreement Package before continuing'}</strong><span>{reviewReady ? 'SellerTray will record your approval against the exact agreement you reviewed.' : 'Use Review agreement above to open the exact agreement for this purchase.'}</span></div>
+          <MerchantNotice tone={reviewReady ? 'success' : 'warning'}><div><strong>{reviewReady ? 'Agreement reviewed and ready to confirm' : 'Review the Agreement Package before continuing'}</strong><br /><span>{reviewReady ? 'SellerTray will record your approval against the exact agreement you reviewed.' : 'Use Review agreement above to open the exact agreement for this purchase.'}</span></div></MerchantNotice>
           <label className="field"><span>Authorised representative legal name</span><SellerTrayInput maxLength={200} required value={legalName} onChange={(event) => setLegalName(event.target.value)} placeholder="Full legal name" /></label>
           <label className="access-card">
             <SellerTrayInput type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
@@ -219,15 +220,14 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
 
 function CommercialFacts({ snapshot }: { snapshot: CommercialSnapshot }) {
   return <div className="page-stack">
-    <article className="panel"><div className="panel-head"><div><p className="eyebrow">Purchase summary</p><h3>{snapshot.businessName || 'SellerTray purchase'}</h3></div></div><div className="settings-grid two"><Fact label="Business" value={snapshot.businessName || '—'} /><Fact label="Order reference" value={snapshot.orderReference || '—'} /><Fact label="Order total" value={money(snapshot.totalGrossAmount, snapshot.currency)} /><Fact label="Current amount due" value={money(snapshot.netAmountDue, snapshot.currency)} /><Fact label="Discounts & credits" value={money(snapshot.approvedAdjustmentAmount, snapshot.currency)} /><Fact label="Order date" value={snapshot.orderedAt ? formatDate(snapshot.orderedAt) : '—'} /></div>{snapshot.businessEmail || snapshot.businessPhone ? <p className="muted">Business contact: {[snapshot.businessEmail, snapshot.businessPhone].filter(Boolean).join(' · ')}</p> : null}</article>
-    {snapshot.priceLines.length ? <article className="panel"><div className="panel-head"><div><p className="eyebrow">Purchase lines</p><h3>Subscription & setup</h3></div></div><div className="table-wrap"><table><thead><tr><th>Description</th><th>Qty</th><th>Amount</th><th>Tax</th></tr></thead><tbody>{snapshot.priceLines.map((line) => <tr key={line.lineNo}><td>{line.description || `Line ${line.lineNo}`}</td><td>{line.quantity}</td><td>{money(line.grossAmount, line.currency || snapshot.currency)}</td><td>{line.taxRatePercent === null ? 'Included / not separately stated' : `${line.taxRatePercent}% (${money(line.taxAmount, line.currency || snapshot.currency)})`}</td></tr>)}</tbody></table></div></article> : null}
-    {snapshot.installmentStructure ? <article className="panel"><div className="panel-head"><div><p className="eyebrow">Payment schedule</p><h3>{structureLabel(snapshot.installmentStructure)}</h3></div><span className="role-pill">{snapshot.installmentAmount === null ? 'Installment purchase' : money(snapshot.installmentAmount, snapshot.currency)}</span></div><div className="table-wrap"><table><thead><tr><th>Installment</th><th>Share</th><th>Amount</th><th>Due</th></tr></thead><tbody>{snapshot.installmentSchedule.map((line) => <tr key={line.sequenceNo}><td>{line.sequenceNo}</td><td>{line.percentage}%</td><td>{money(line.amountDue, snapshot.currency)}</td><td>{line.dueAt ? formatDate(line.dueAt) : 'Not scheduled'}</td></tr>)}</tbody></table></div></article> : null}
+    <article className="panel"><MerchantPanelHeader eyebrow="Purchase summary" title={snapshot.businessName || 'SellerTray purchase'} /><MerchantFactGrid><MerchantFact label="Business" value={snapshot.businessName || '—'} /><MerchantFact label="Order reference" value={snapshot.orderReference || '—'} /><MerchantFact label="Order total" value={money(snapshot.totalGrossAmount, snapshot.currency)} /><MerchantFact label="Current amount due" value={money(snapshot.netAmountDue, snapshot.currency)} /><MerchantFact label="Discounts & credits" value={money(snapshot.approvedAdjustmentAmount, snapshot.currency)} /><MerchantFact label="Order date" value={snapshot.orderedAt ? formatDate(snapshot.orderedAt) : '—'} /></MerchantFactGrid>{snapshot.businessEmail || snapshot.businessPhone ? <p className="muted">Business contact: {[snapshot.businessEmail, snapshot.businessPhone].filter(Boolean).join(' · ')}</p> : null}</article>
+    {snapshot.priceLines.length ? <article className="panel"><MerchantPanelHeader eyebrow="Purchase lines" title="Subscription & setup" /><div className="table-wrap"><table><thead><tr><th>Description</th><th>Qty</th><th>Amount</th><th>Tax</th></tr></thead><tbody>{snapshot.priceLines.map((line) => <tr key={line.lineNo}><td>{line.description || `Line ${line.lineNo}`}</td><td>{line.quantity}</td><td>{money(line.grossAmount, line.currency || snapshot.currency)}</td><td>{line.taxRatePercent === null ? 'Included / not separately stated' : `${line.taxRatePercent}% (${money(line.taxAmount, line.currency || snapshot.currency)})`}</td></tr>)}</tbody></table></div></article> : null}
+    {snapshot.installmentStructure ? <article className="panel"><MerchantPanelHeader eyebrow="Payment schedule" title={structureLabel(snapshot.installmentStructure)} status={<MerchantStatusBadge>{snapshot.installmentAmount === null ? 'Installment purchase' : money(snapshot.installmentAmount, snapshot.currency)}</MerchantStatusBadge>} /><div className="table-wrap"><table><thead><tr><th>Installment</th><th>Share</th><th>Amount</th><th>Due</th></tr></thead><tbody>{snapshot.installmentSchedule.map((line) => <tr key={line.sequenceNo}><td>{line.sequenceNo}</td><td>{line.percentage}%</td><td>{money(line.amountDue, snapshot.currency)}</td><td>{line.dueAt ? formatDate(line.dueAt) : 'Not scheduled'}</td></tr>)}</tbody></table></div></article> : null}
   </div>;
 }
 
 function OrderFormButton({ form, selected, onSelect }: { form: OrderForm; selected: boolean; onSelect: () => void }) { return <button type="button" className={selected ? 'member-row active' : 'member-row'} onClick={onSelect}><span className="member-avatar">O</span><span><strong>{form.reference}</strong><small>{form.isCurrent ? form.confirmation ? 'Confirmed' : 'Action required' : 'Replaced'} · {formatDate(form.issuedAt)}</small></span></button>; }
-function Status({ form, masterAcceptanceRequired }: { form: OrderForm; masterAcceptanceRequired: boolean }) { const label = !form.isCurrent ? 'Replaced' : masterAcceptanceRequired ? 'Action required' : form.confirmation ? 'Confirmed' : 'Action required'; return <span className="role-pill">{label}</span>; }
-function Fact({ label, value }: { label: string; value: string }) { return <div className="role-lock"><span>{label}</span><strong>{value}</strong></div>; }
+function OrderFormStatus({ form, masterAcceptanceRequired }: { form: OrderForm; masterAcceptanceRequired: boolean }) { const label = !form.isCurrent ? 'Replaced' : masterAcceptanceRequired ? 'Action required' : form.confirmation ? 'Confirmed' : 'Action required'; const tone = !form.isCurrent ? 'neutral' : label === 'Confirmed' ? 'success' : 'warning'; return <MerchantStatusBadge tone={tone}>{label}</MerchantStatusBadge>; }
 function roleLabel(value: string) { return value === 'owner' ? 'Owner' : value === 'manager' ? 'Manager' : value; }
 function structureLabel(value: string) { return value === 'two_installment_70_30' ? '70% + 30%' : value === 'three_installment_60_20_20' ? '60% + 20% + 20%' : value.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()); }
 function money(value: number, currency: string) { try { return new Intl.NumberFormat('en-NG', { style: 'currency', currency: currency || 'NGN', maximumFractionDigits: 2 }).format(value); } catch { return `${currency || 'NGN'} ${value.toFixed(2)}`; } }

@@ -40,7 +40,7 @@ requireValue(
 
 requireValue(
   app.includes("import OrdersManagement from './OrdersManagement'") &&
-    navigation.includes("{ id: 'orders', label: 'Orders', section: 'Sales', available: true }") &&
+    navigation.includes("{ id: 'orders', label: 'Orders', section: 'Sales', available: true, requiresBranch: true }") &&
     app.includes("page === 'orders' && branch && <OrdersManagement tenantId={business.id} branchId={branch.id} currency={business.currency}") &&
     orders.includes("functions.invoke('order-draft-action'") &&
     orders.includes("rpc('get_sellertray_order_management_list'") &&
@@ -50,7 +50,7 @@ requireValue(
     orders.includes("selected?.source === 'pos'") &&
     orders.includes("selected.status === 'draft'") &&
     orders.includes("selected.paymentStatus === 'unpaid'"),
-  'Merchant Web Orders must use governed reads, the authenticated draft-action boundary and exclude deleted drafts.',
+  'Merchant Web Orders must use governed reads, the authenticated draft-action boundary, Branch-aware navigation and exclude deleted drafts.',
 );
 
 requireValue(

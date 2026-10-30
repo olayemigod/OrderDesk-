@@ -17,12 +17,12 @@ const excludes = (source, values) => values.every((value) => !source.includes(va
 
 requireValue(
   navigation.includes("id: 'sellertray_billing'")
-    && navigation.includes("label: 'SellerTray Billing'")
+    && navigation.includes("label: 'Subscription & Billing'")
     && navigation.includes("id: 'agreements'")
-    && navigation.includes("label: 'Master Agreement'")
+    && navigation.includes("label: 'Agreements'")
     && navigation.includes("id: 'payments'")
     && navigation.includes("label: 'Payments & Receivables'"),
-  'Merchant navigation must keep SellerTray Billing, Master Agreement, and customer Payments & Receivables as separate surfaces.',
+  'Merchant navigation must keep Subscription & Billing, Agreements, and customer Payments & Receivables as separate surfaces.',
 );
 
 requireValue(
@@ -30,7 +30,7 @@ requireValue(
     && merchantApp.includes('<SellerTrayBillingManagement tenantId={business.id} />')
     && merchantApp.includes("page === 'agreements'")
     && merchantApp.includes('<CommercialAgreementsManagement tenantId={business.id} />'),
-  'Merchant App must route SellerTray Billing and Master Agreement to their dedicated surfaces.',
+  'Merchant App must route Subscription & Billing and Agreements to their dedicated surfaces.',
 );
 
 requireValue(
@@ -70,11 +70,11 @@ requireValue(
 );
 
 requireValue(
-  agreements.includes('This universal Master Agreement is accepted separately from your commercial purchase.')
-    && agreements.includes('This does not confirm a purchase.')
-    && agreements.includes('purchase-specific Order Form')
-    && agreements.includes('CommercialAgreementPackageManagement'),
-  'Merchant Master Agreement UI must keep universal legal acceptance independent of purchase/payment truth and hand off to the governed package after purchase.',
+  agreements.includes('This does not confirm a purchase.')
+    && agreements.includes('Order Form')
+    && agreements.includes('CommercialAgreementPackageManagement')
+    && !agreements.includes("functions.invoke('billing-checkout'"),
+  'Merchant Agreements must keep universal legal acceptance independent of purchase/payment authority and hand off to the Order Form package after purchase.',
 );
 
 requireValue(

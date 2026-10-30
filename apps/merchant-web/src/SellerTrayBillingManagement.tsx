@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
-import { errorMessage, supabase } from './supabase';
+import {
+  MerchantEmptyState,
+  MerchantFact,
+  MerchantFactGrid,
+  MerchantLoadingState,
+  MerchantNotice,
+  MerchantPageHeader,
+  MerchantPanelHeader,
+  MerchantSectionHeader,
+  MerchantStatusBadge,
+} from './MerchantPagePrimitives';
 import SellerTrayInitialPurchase from './SellerTrayInitialPurchase';
+import { errorMessage, supabase } from './supabase';
 
 type SettlementState = {
   grossAmount: number;
@@ -119,40 +130,39 @@ export default function SellerTrayBillingManagement({ tenantId }: { tenantId: st
     } finally { setPayingOrderId(null); }
   }
 
-  if (loading && !center) return <article className="panel"><p className="muted">Loading SellerTray billing…</p></article>;
+  if (loading && !center) return <MerchantLoadingState label="Loading subscription and billing…" />;
 
   return <section className="page-stack">
-    <div className="section-heading">
-      <div><p className="eyebrow">Subscription & payments</p><h2>SellerTray Billing</h2></div>
-      <p className="muted">Choose your first SellerTray plan when required, review your subscription charges and pay any outstanding SellerTray balance. Customer balances remain under Payments & Receivables.</p>
-    </div>
-    <div className="governance-note">Prices and Branch setup charges shown here come from your current SellerTray subscription offer. Discounts, direct payments and online payments remain visible in your billing history.</div>
-    {error ? <div className="error-banner">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div> : null}
-    {message ? <div className="success-banner">{message}<button type="button" onClick={() => setMessage(null)}>Dismiss</button></div> : null}
+    <MerchantPageHeader eyebrow="Subscription & payments" title="SellerTray Billing" description="Choose your first SellerTray plan when required, review your subscription charges and pay any outstanding SellerTray balance. Customer balances remain under Payments & Receivables." />
+    <MerchantNotice tone="info">Prices and Branch setup charges shown here come from your current SellerTray subscription offer. Discounts, direct payments and online payments remain visible in your billing history.</MerchantNotice>
+    {error ? <MerchantNotice tone="error" onDismiss={() => setError(null)}>{error}</MerchantNotice> : null}
+    {message ? <MerchantNotice tone="success" onDismiss={() => setMessage(null)}>{message}</MerchantNotice> : null}
 
     <SellerTrayInitialPurchase tenantId={tenantId} onChanged={load} />
 
-    {!center?.orders.length ? <article className="panel empty-state"><strong>No SellerTray subscription order yet</strong><p>If you are the Business Owner, choose a plan above to start your subscription. If you do not have purchase permission, SellerTray will show the next action when the Owner completes it.</p></article> : center.orders.map((order) => {
+    {!center?.orders.length ? <MerchantEmptyState title="No SellerTray subscription order yet" body="If you are the Business Owner, choose a plan above to start your subscription. If you do not have purchase permission, SellerTray will show the next action when the Owner completes it." /> : center.orders.map((order) => {
       const state = order.settlement;
       const canPay = center.canPay && state.outstandingAmount >= 0.005 && Boolean(state.nextInstallmentScheduleId);
       return <article className="panel" key={order.commercialOrderId}>
-        <div className="panel-head">
-          <div><p className="eyebrow">{order.orderReference || 'Subscription order'}</p><h3>{order.planCode ? `${title(order.planCode)} SellerTray` : 'SellerTray subscription'}</h3><p className="muted">Ordered {formatDate(order.orderedAt)}{order.billingCycle ? ` · ${title(order.billingCycle)} billing` : ''}</p></div>
-          <span className="role-pill">{title(state.settlementStatus.replaceAll('_', ' '))}</span>
-        </div>
-        <div className="settings-grid two">
-          <Fact label="Order total" value={money(state.grossAmount || order.grossAmount, order.currency)} />
-          <Fact label="Discounts & credits" value={money(state.approvedAdjustmentAmount, order.currency)} />
-          <Fact label="Payments received" value={money(state.totalConfirmedPaymentAmount, order.currency)} />
-          <Fact label="Amount outstanding" value={money(state.outstandingAmount, order.currency)} />
-          <Fact label="Direct payments" value={money(state.directPaymentAmount, order.currency)} />
-          <Fact label="Online payments" value={money(state.gatewayPaymentAmount, order.currency)} />
-        </div>
+        <MerchantPanelHeader
+          eyebrow={order.orderReference || 'Subscription order'}
+          title={order.planCode ? `${title(order.planCode)} SellerTray` : 'SellerTray subscription'}
+          description={`Ordered ${formatDate(order.orderedAt)}${order.billingCycle ? ` · ${title(order.billingCycle)} billing` : ''}`}
+          status={<MerchantStatusBadge tone={settlementTone(state.settlementStatus)}>{title(state.settlementStatus.replaceAll('_', ' '))}</MerchantStatusBadge>}
+        />
+        <MerchantFactGrid>
+          <MerchantFact label="Order total" value={money(state.grossAmount || order.grossAmount, order.currency)} />
+          <MerchantFact label="Discounts & credits" value={money(state.approvedAdjustmentAmount, order.currency)} />
+          <MerchantFact label="Payments received" value={money(state.totalConfirmedPaymentAmount, order.currency)} />
+          <MerchantFact label="Amount outstanding" value={money(state.outstandingAmount, order.currency)} />
+          <MerchantFact label="Direct payments" value={money(state.directPaymentAmount, order.currency)} />
+          <MerchantFact label="Online payments" value={money(state.gatewayPaymentAmount, order.currency)} />
+        </MerchantFactGrid>
 
         {state.outstandingAmount >= 0.005 ? <div className="access-card">
           <span style={{ flex: 1 }}><strong>Next payment: {money(state.nextPayableAmount, order.currency)}</strong><small>Your amount due reflects confirmed payments and approved discounts or credits.</small></span>
-          {canPay ? <button type="button" className="primary-button" disabled={payingOrderId !== null} onClick={() => void pay(order)}>{payingOrderId === order.commercialOrderId ? 'Opening secure payment…' : 'Pay SellerTray'}</button> : center.canPay ? <span className="role-pill">Nothing due now</span> : <span className="role-pill">Owner approval required</span>}
-        </div> : <div className="success-banner">This subscription order is fully paid.</div>}
+          {canPay ? <button type="button" className="primary-button" disabled={payingOrderId !== null} onClick={() => void pay(order)}>{payingOrderId === order.commercialOrderId ? 'Opening secure payment…' : 'Pay SellerTray'}</button> : center.canPay ? <MerchantStatusBadge>Nothing due now</MerchantStatusBadge> : <MerchantStatusBadge tone="warning">Owner approval required</MerchantStatusBadge>}
+        </div> : <MerchantNotice tone="success">This subscription order is fully paid.</MerchantNotice>}
 
         <HistorySection title="Discounts & credits" empty="No discounts or credits have been applied." rows={order.adjustments} currency={order.currency} kind="adjustment" />
         <HistorySection title="Direct payments" empty="No direct payment has been confirmed." rows={order.directPayments} currency={order.currency} kind="direct" />
@@ -164,17 +174,16 @@ export default function SellerTrayBillingManagement({ tenantId }: { tenantId: st
 
 function HistorySection({ title: heading, empty, rows, currency, kind }: { title: string; empty: string; rows: HistoryRow[]; currency: string; kind: 'adjustment' | 'direct' | 'gateway' }) {
   return <div className="page-stack">
-    <div className="section-heading"><div><h3>{heading}</h3></div></div>
-    {!rows.length ? <div className="empty-state"><p>{empty}</p></div> : rows.map((row) => <div className="access-card" key={row.id}>
+    <MerchantSectionHeader title={heading} />
+    {!rows.length ? <MerchantEmptyState title={empty} body="Billing history will appear here when there is activity." surface={false} /> : rows.map((row) => <div className="access-card" key={row.id}>
       <span style={{ flex: 1 }}>
         <strong>{money(row.amount, currency)}</strong>
         <small>{kind === 'adjustment' ? row.reason || 'Approved discount' : kind === 'direct' ? `${row.paymentMethod ? title(row.paymentMethod.replaceAll('_', ' ')) : 'Direct payment'}${row.paymentReference ? ` · ${row.paymentReference}` : ''}` : `${row.provider ? title(row.provider) : 'Online payment'}${row.providerReference ? ` · ${row.providerReference}` : ''}`}</small>
       </span>
-      <span className="role-pill">{formatDate(row.paidAt || row.approvedAt || row.recordedAt || '')}</span>
+      <MerchantStatusBadge>{formatDate(row.paidAt || row.approvedAt || row.recordedAt || '')}</MerchantStatusBadge>
     </div>)}
   </div>;
 }
-function Fact({ label, value }: { label: string; value: string }) { return <div className="role-lock"><span>{label}</span><strong>{value}</strong></div>; }
 function record(value: unknown): Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 function stringOrNull(value: unknown): string | null { return typeof value === 'string' && value ? value : null; }
 function numberValue(value: unknown): number { const parsed = typeof value === 'number' ? value : Number(value ?? 0); return Number.isFinite(parsed) ? parsed : 0; }
@@ -233,3 +242,10 @@ function isUuid(value: string | null): value is string { return typeof value ===
 function money(value: number, currency: string) { try { return new Intl.NumberFormat('en-NG', { style: 'currency', currency: currency || 'NGN' }).format(value); } catch { return `${currency || 'NGN'} ${value.toLocaleString()}`; } }
 function formatDate(value: string) { if (!value) return '—'; const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(date); }
 function title(value: string) { return value ? value.replace(/\b\w/g, (letter) => letter.toUpperCase()) : value; }
+function settlementTone(value: string): 'neutral' | 'success' | 'warning' | 'danger' {
+  const normalized = value.toLowerCase();
+  if (normalized.includes('paid') || normalized.includes('settled') || normalized.includes('complete')) return 'success';
+  if (normalized.includes('overdue') || normalized.includes('failed')) return 'danger';
+  if (normalized.includes('partial') || normalized.includes('due') || normalized.includes('unsettled') || normalized.includes('pending')) return 'warning';
+  return 'neutral';
+}
