@@ -78,8 +78,13 @@ export default function SetupSchedulingManagement({ tenantId }: { tenantId: stri
     finally { setSaving(false); }
   }
 
-  return <section className="page-stack" aria-label="Setup scheduling">
-    <div className="section-heading"><div><p className="eyebrow">Business setup</p><h2>Setup appointments</h2></div><p className="muted">View the ProcessEdge setup appointment for each Branch. Appointment completion automatically feeds the existing Branch readiness and activation process.</p></div>
+  return <section className="page-stack" aria-label="Setup and activation">
+    <div className="section-heading"><div><p className="eyebrow">Business onboarding</p><h2>Setup & Activation</h2></div><p className="muted">Finalise the purchased Branch setup with ProcessEdge and track readiness through activation.</p></div>
+    <article className="panel" aria-label="Commercial onboarding workflow">
+      <div className="section-heading"><div><p className="eyebrow">Commercial onboarding</p><h3>Step 3 of 3 · Setup & Activation</h3></div><span className="status-chip">Current step</span></div>
+      <div className="summary-grid"><Summary label="Step 1" value="Agreements" /><Summary label="Step 2" value="Billing" /><Summary label="Step 3" value="Setup & Activation" /></div>
+      <p className="muted">Agreements establish the legal framework. Billing confirms the commercial purchase and settlement. Setup & Activation completes the operational readiness workflow.</p>
+    </article>
     {error ? <div className="error-banner compact">{error}</div> : null}
     <button className="secondary-button" disabled={loading} onClick={() => void load()}>Refresh setup status</button>
     {onboarding ? <article className="panel" aria-label="Activation status"><h3>{record(onboarding.activation).operationallyActive === true ? 'SellerTray is ready' : 'Setup & activation'}</h3>
@@ -110,6 +115,6 @@ function array(value: unknown): unknown[] { return Array.isArray(value) ? value 
 function text(value: unknown): string { return typeof value === 'string' ? value : ''; }
 function nullableText(value: unknown): string | null { return typeof value === 'string' && value ? value : null; }
 function statusLabel(value: string): string { return ({ scheduled: 'Scheduled', in_progress: 'Setup in progress', completed: 'Setup complete', cancelled: 'Cancelled', no_show: 'Needs rescheduling' } as Record<string,string>)[value] ?? 'Pending'; }
-function formatDate(value: string | null | undefined): string { if (!value) return '—'; const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString(); }
+function formatDate(value: string | null | undefined) { if (!value) return '—'; const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString(); }
 function toLocal(value: string): string { const date = new Date(value); const offset = date.getTimezoneOffset() * 60_000; return new Date(date.getTime() - offset).toISOString().slice(0,16); }
 function fromLocal(value: string): string | null { const date = new Date(value); return Number.isNaN(date.getTime()) ? null : date.toISOString(); }
