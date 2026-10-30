@@ -43,7 +43,12 @@ type AgreementCenter = {
   orderForms: unknown[];
 };
 
-export default function CommercialAgreementsManagement({ tenantId }: { tenantId: string }) {
+type CommercialAgreementsManagementProps = {
+  tenantId: string;
+  onContinueToBilling: () => void;
+};
+
+export default function CommercialAgreementsManagement({ tenantId, onContinueToBilling }: CommercialAgreementsManagementProps) {
   const [center, setCenter] = useState<AgreementCenter | null>(null);
   const [reviewDocument, setReviewDocument] = useState<MasterReviewDocument | null>(null);
   const [reviewedPdfSha256, setReviewedPdfSha256] = useState<string | null>(null);
@@ -187,19 +192,21 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
 
   const master = center?.masterAgreement ?? null;
   const reviewReady = Boolean(reviewDocument && previewObjectUrl && reviewedPdfSha256 === reviewDocument.pdfSha256);
+  const agreementsComplete = Boolean(master?.acceptance && !center?.masterAcceptanceRequired);
   return <section className="page-stack">
     <div className="section-heading">
       <div><p className="eyebrow">Commercial onboarding</p><h2>Agreements</h2></div>
       <p className="muted">Review and accept the current SellerTray Master Agreement once for this Business. Purchase-specific Order Forms are created and confirmed separately for each governed commercial purchase or change.</p>
     </div>
     <article className="panel" aria-label="Commercial onboarding workflow">
-      <div className="section-heading"><div><p className="eyebrow">Commercial onboarding</p><h3>Step 1 of 3 · Agreements</h3></div><span className="status-chip">Current step</span></div>
+      <div className="section-heading"><div><p className="eyebrow">Commercial onboarding</p><h3>{agreementsComplete ? 'Agreements complete' : 'Step 1 of 3 · Agreements'}</h3></div><span className={`status-chip ${agreementsComplete ? 'success' : ''}`}>{agreementsComplete ? 'Completed' : 'Current step'}</span></div>
       <div className="settings-grid two">
-        <Fact label="Step 1" value="Agreements" />
-        <Fact label="Step 2" value="Billing" />
+        <Fact label="Step 1" value={agreementsComplete ? 'Agreements ✓' : 'Agreements'} />
+        <Fact label="Step 2" value={agreementsComplete ? 'Billing · Next' : 'Billing'} />
         <Fact label="Step 3" value="Setup & Activation" />
       </div>
-      <p className="muted">Complete the required agreement review first. SellerTray then advances the Business to Billing, followed by Setup & Activation.</p>
+      <p className="muted">{agreementsComplete ? 'Agreement requirements are complete. Continue to Billing for the governed plan/purchase and settlement step.' : 'Complete the required agreement review first. SellerTray then advances the Business to Billing, followed by Setup & Activation.'}</p>
+      {agreementsComplete ? <div className="settings-actions"><button type="button" className="primary-button" onClick={onContinueToBilling}>Continue to Billing</button></div> : null}
     </article>
 
     {error ? <div className="error-banner">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div> : null}
@@ -236,7 +243,7 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
         </div>
       </div> : null}
 
-      {!center?.masterAcceptanceRequired ? <div className="success-banner">Master Agreement accepted. Continue to Billing or the applicable commercial workflow. Each new governed commitment will have its own Order Form.</div> : null}
+      {!center?.masterAcceptanceRequired ? <div className="success-banner"><span>Master Agreement accepted. Billing is the next governed onboarding step.</span><button type="button" className="primary-button" onClick={onContinueToBilling}>Continue to Billing</button></div> : null}
       {center?.masterAcceptanceRequired && !center.canAccept ? <div className="warning-banner">Your current role cannot accept this Master Agreement. Use an authorised Business representative before the governed commercial action can proceed.</div> : null}
 
       {center?.masterAcceptanceRequired && center.canAccept ? <form className="settings-form agreement-signature-form" onSubmit={acceptMaster}>
