@@ -42,8 +42,10 @@ requireValue(
   merchantApp.includes("page === 'sellertray_billing'")
     && merchantApp.includes('<SellerTrayBillingManagement tenantId={business.id} />')
     && merchantApp.includes("page === 'agreements'")
-    && merchantApp.includes('<CommercialAgreementsManagement tenantId={business.id} />'),
-  'Merchant App must route Billing and Agreements to their dedicated surfaces.',
+    && merchantApp.includes("onContinueToBilling={() => navigate('sellertray_billing')}")
+    && agreements.includes('onContinueToBilling: () => void')
+    && agreements.includes('Continue to Billing'),
+  'Merchant App must route Agreements completion into the existing Billing page without a second navigation mechanism.',
 );
 
 requireValue(!management.includes('CommercialAgreementsManagement'), 'Merchant Settings must remain settings-only and must not embed legal agreement authority.');
@@ -80,12 +82,14 @@ requireValue(
   agreements.includes('role="dialog"')
     && agreements.includes('aria-modal="true"')
     && agreements.includes('className="agreement-preview-frame"')
-    && agreements.includes('src={reviewDocument.signedUrl}')
+    && agreements.includes('src={previewObjectUrl}')
+    && agreements.includes('URL.createObjectURL')
+    && agreements.includes('sha256Hex(bytes)')
     && agreements.includes('onLoad={markPreviewLoaded}')
     && agreements.includes('Close preview & continue')
     && agreementStyles.includes('.agreement-preview-modal')
     && agreementStyles.includes('height: 100dvh'),
-  'Master Agreement review must use a responsive in-page PDF preview modal and mark review only after the governed PDF frame loads.',
+  'Master Agreement review must use a responsive in-page verified PDF preview modal and mark review only after the governed PDF frame loads.',
 );
 
 requireValue(
@@ -102,6 +106,13 @@ requireValue(
   agreements.includes('This accepts only the current Master Agreement. It does not confirm any purchase, plan or Order Form.')
     && agreements.includes('Each initial purchase, plan change or other governed commercial commitment uses its own Order Form'),
   'Merchant Master Agreement copy must clearly separate legal acceptance from purchase-specific Order Form confirmation.',
+);
+
+requireValue(
+  agreements.includes("value={agreementsComplete ? 'Agreements ✓' : 'Agreements'}")
+    && agreements.includes("value={agreementsComplete ? 'Billing · Next' : 'Billing'}")
+    && agreements.includes('onClick={onContinueToBilling}'),
+  'Accepted Master Agreement state must visibly complete Agreements and expose an explicit Continue to Billing action.',
 );
 
 requireValue(
