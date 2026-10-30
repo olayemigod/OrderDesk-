@@ -73,7 +73,13 @@ requireValue(
 requireValue(excludes(agreements, ["window.open(", "target=\"_blank\"", "popup.location.href"]), 'Master Agreement review must not depend on a new tab or popup.');
 requireValue(excludes(agreements, ['<pre', '{master.contentBody}', 'Read Master Agreement text']), 'Master Agreement acceptance must remain PDF-first.');
 requireValue(agreements.includes('This accepts only the current Master Agreement. It does not confirm any purchase, plan or Order Form.'), 'Master acceptance copy must remain separate from purchase confirmation.');
-requireValue(agreements.includes("agreementsComplete && !hasOrderForms") && agreements.includes('onClick={onContinueToBilling}'), 'Agreements must expose exactly the relevant next action instead of a duplicate Billing CTA after an Order Form exists.');
+requireValue(
+  agreements.includes('currentOrderFormConfirmed')
+    && agreements.includes("agreementsComplete && (!hasOrderForms || currentOrderFormConfirmed)")
+    && agreements.includes('Purchase confirmed. Continue to Billing to complete the amount due.')
+    && agreements.includes('onClick={onContinueToBilling}'),
+  'Agreements must expose Billing after Master acceptance and again after current Order Form confirmation, without a dead end.',
+);
 
 requireValue(
   packageAgreements.includes("action: 'merchant_confirm_package'") && packageAgreements.includes("action: 'merchant_get_document'")
