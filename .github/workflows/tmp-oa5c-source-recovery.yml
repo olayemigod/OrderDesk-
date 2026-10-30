@@ -87,7 +87,32 @@ jobs:
       - name: Replay all migrations from clean schema
         run: supabase db reset
 
-      - name: Run SellerTray database tests
+      - name: Run restored Agreement and OA5C tests individually
+        shell: bash
+        run: |
+          set +e
+          failures=0
+          for test in \
+            supabase/tests/master_agreement_quarantine_authority.test.sql \
+            supabase/tests/oa5c_production_test_business_proof_verifier.test.sql \
+            supabase/tests/order_form_production_authority.test.sql \
+            supabase/tests/sellertray_agreement_activation_provenance_convergence.test.sql \
+            supabase/tests/sellertray_agreement_package_no_master_read.test.sql \
+            supabase/tests/sellertray_agreement_processing_self_healing.test.sql \
+            supabase/tests/sellertray_agreement_zero_touch_orchestration.test.sql \
+            supabase/tests/sellertray_master_order_form_packages.test.sql
+          do
+            echo "========== $test =========="
+            supabase test db "$test"
+            rc=$?
+            if [ "$rc" -ne 0 ]; then
+              echo "FAILED: $test (exit $rc)"
+              failures=1
+            fi
+          done
+          exit "$failures"
+
+      - name: Run complete SellerTray database test suite
         run: supabase test db
 
       - name: Commit only after clean-schema validation
