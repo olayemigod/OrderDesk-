@@ -84,9 +84,9 @@ export async function inspectUploadedMasterPdf(bytes: Uint8Array): Promise<{ tex
 
 export async function buildAgreementPackagePdf(input: AgreementPdfInput): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
-  doc.setTitle(`${input.masterAgreement.title} — ${input.orderForm.reference}`);
+  doc.setTitle(pdfSafeText(`${input.masterAgreement.title} - ${input.orderForm.reference}`));
   doc.setAuthor('ProcessEdge Solutions Limited');
-  doc.setSubject(`SellerTray Agreement Package ${input.orderForm.reference}`);
+  doc.setSubject(pdfSafeText(`SellerTray Agreement Package ${input.orderForm.reference}`));
   doc.setCreator('SellerTray governed agreement service');
   doc.setProducer('SellerTray governed agreement service');
   doc.setCreationDate(new Date(input.generatedAt));
@@ -145,7 +145,7 @@ function drawCover(page: PDFPage, regular: PDFFont, bold: PDFFont, input: Agreem
   });
 
   let y = height - 238;
-  page.drawText(input.masterAgreement.title, { x: 55, y, size: 21, font: bold, color: NAVY, maxWidth: width - 110 });
+  page.drawText(pdfSafeText(input.masterAgreement.title), { x: 55, y, size: 21, font: bold, color: NAVY, maxWidth: width - 110 });
   y -= 44;
   const merchant = record(input.orderForm.commercialSnapshot.merchant);
   const facts = [
@@ -157,7 +157,7 @@ function drawCover(page: PDFPage, regular: PDFFont, bold: PDFFont, input: Agreem
   ] as const;
   for (const [label, value] of facts) {
     page.drawText(label.toUpperCase(), { x: 55, y, size: 8, font: bold, color: GREEN });
-    page.drawText(value, { x: 175, y: y - 1, size: 11, font: regular, color: SLATE, maxWidth: width - 230 });
+    page.drawText(pdfSafeText(value), { x: 175, y: y - 1, size: 11, font: regular, color: SLATE, maxWidth: width - 230 });
     y -= 31;
   }
 
@@ -209,7 +209,7 @@ function drawOrderForm(doc: PDFDocument, regular: PDFFont, bold: PDFFont, input:
   for (const [label, value] of facts) {
     if (y < 92) { page = doc.addPage(A4); y = drawSectionHeader(page, bold, 'MERCHANT ORDER FORM', 'Commercial particulars (continued)'); }
     page.drawText(label, { x: 55, y, size: 8.5, font: bold, color: GREEN });
-    page.drawText(value, { x: 205, y: y - 1, size: 10, font: regular, color: SLATE, maxWidth: 335 });
+    page.drawText(pdfSafeText(value), { x: 205, y: y - 1, size: 10, font: regular, color: SLATE, maxWidth: 335 });
     y -= 24;
   }
 
@@ -298,10 +298,10 @@ function drawExecutionCertificate(doc: PDFDocument, page: PDFPage, regular: PDFF
 
   y -= 22;
   page.drawRectangle({ x: 55, y: y - 104, width: 485, height: 104, color: LIGHT, borderColor: LINE, borderWidth: 1 });
-  page.drawText(confirmation.confirmedLegalName, { x: 74, y: y - 39, size: 18, font: italic, color: NAVY, maxWidth: 440 });
+  page.drawText(pdfSafeText(confirmation.confirmedLegalName), { x: 74, y: y - 39, size: 18, font: italic, color: NAVY, maxWidth: 440 });
   page.drawLine({ start: { x: 74, y: y - 58 }, end: { x: 315, y: y - 58 }, thickness: 1, color: SLATE });
   page.drawText('Authenticated electronic signature', { x: 74, y: y - 76, size: 8.5, font: regular, color: SLATE });
-  page.drawText(formatDate(confirmation.confirmedAt), { x: 74, y: y - 91, size: 8.5, font: regular, color: SLATE });
+  page.drawText(pdfSafeText(formatDate(confirmation.confirmedAt)), { x: 74, y: y - 91, size: 8.5, font: regular, color: SLATE });
 
   page.drawText('The typed signature is presentation. Legal evidence is the authenticated identity, merchant authority, immutable hashes, package fingerprint, command evidence and server timestamps.', {
     x: 55, y: 52, size: 8.2, font: regular, color: SLATE, maxWidth: 485, lineHeight: 11,
@@ -312,8 +312,8 @@ function drawSectionHeader(page: PDFPage, bold: PDFFont, eyebrow: string, title:
   const { height, width } = page.getSize();
   page.drawRectangle({ x: 0, y: height - 10, width, height: 10, color: GREEN });
   page.drawText('SellerTray', { x: 55, y: height - 52, size: 15, font: bold, color: NAVY });
-  page.drawText(eyebrow, { x: 55, y: height - 88, size: 8.5, font: bold, color: GREEN });
-  page.drawText(title, { x: 55, y: height - 116, size: 18, font: bold, color: NAVY, maxWidth: width - 110 });
+  page.drawText(pdfSafeText(eyebrow), { x: 55, y: height - 88, size: 8.5, font: bold, color: GREEN });
+  page.drawText(pdfSafeText(title), { x: 55, y: height - 116, size: 18, font: bold, color: NAVY, maxWidth: width - 110 });
   page.drawLine({ start: { x: 55, y: height - 138 }, end: { x: width - 55, y: height - 138 }, thickness: 1, color: LINE });
   return height - 166;
 }
@@ -321,7 +321,7 @@ function drawSectionHeader(page: PDFPage, bold: PDFFont, eyebrow: string, title:
 function drawWrappedText(doc: PDFDocument, page: PDFPage, font: PDFFont, text: string, x: number, y: number, maxWidth: number, size: number, lineHeight: number, color: ReturnType<typeof rgb>): { page: PDFPage; y: number } {
   let currentPage = page;
   let currentY = y;
-  const lines = wrapText(font, text, maxWidth, size);
+  const lines = wrapText(font, pdfSafeText(text), maxWidth, size);
   for (const line of lines) {
     if (currentY < 62) {
       currentPage = doc.addPage(A4);
@@ -357,6 +357,19 @@ function wrapText(font: PDFFont, text: string, maxWidth: number, size: number): 
   return output;
 }
 
+function pdfSafeText(value: string): string {
+  return value
+    .replace(/₦/g, 'NGN ')
+    .replace(/[–—−]/g, '-')
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/…/g, '...')
+    .replace(/\u00a0/g, ' ')
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .replace(/[^\x20-\x7e]/g, '?');
+}
+
 function record(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -370,6 +383,7 @@ function formatDate(value: string) {
   return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Africa/Lagos' }).format(date);
 }
 function money(value: number, currency: string) {
-  try { return new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 2 }).format(value); }
-  catch { return `${currency} ${value.toFixed(2)}`; }
+  const code = (currency || 'NGN').trim().toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) || 'NGN';
+  const amount = new Intl.NumberFormat('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+  return `${code} ${amount}`;
 }
