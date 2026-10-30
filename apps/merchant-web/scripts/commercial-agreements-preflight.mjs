@@ -85,6 +85,14 @@ requireValue(
     && agreementStyles.includes('.verified-pdf-viewer') && agreementStyles.includes('.verified-pdf-canvas') && agreementStyles.includes('height: 100dvh'),
   'Master Agreement review must remain a responsive verified in-page PDF preview whose actual render unlocks acceptance.',
 );
+requireValue(
+  agreementStyles.includes(':root[data-theme="dark"] .agreement-package-card')
+    && agreementStyles.includes(':root[data-theme="dark"] .agreement-review-status')
+    && agreementStyles.includes(':root[data-theme="dark"] .verified-pdf-toolbar')
+    && agreementStyles.includes('color: var(--navy, #102a43);')
+    && excludes(agreementStyles, ['color: var(--ink, #102a43);']),
+  'Agreement cards, review states and PDF controls must preserve readable theme-aware contrast in dark mode.',
+);
 requireValue(excludes(agreements, ['<iframe', 'onLoad={markPreviewLoaded}', 'src={previewObjectUrl}', "window.open(", "target=\"_blank\""]), 'Master Agreement review must not depend on a browser PDF iframe, popup or frame-load event.');
 requireValue(excludes(agreements, ['<pre', '{master.contentBody}', 'Read Master Agreement text']), 'Master Agreement acceptance must remain PDF-first.');
 requireValue(agreements.includes('This accepts only the current Master Agreement. It does not confirm any purchase, plan or Order Form.'), 'Master acceptance copy must remain separate from purchase confirmation.');
