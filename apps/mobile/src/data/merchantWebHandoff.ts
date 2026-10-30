@@ -7,6 +7,13 @@ export type SellerTrayMerchantWebHandoff = {
   actionLabel: string;
 };
 
+export class SellerTrayMerchantWebHandoffError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SellerTrayMerchantWebHandoffError';
+  }
+}
+
 export async function createSellerTrayMerchantWebHandoff(
   tenantId: string,
 ): Promise<SellerTrayMerchantWebHandoff> {
@@ -14,7 +21,11 @@ export async function createSellerTrayMerchantWebHandoff(
     body: { action: 'create', tenantId },
   });
 
-  if (error) throw error;
+  if (error) {
+    const safeMessage = await readSafeHandoffError(error);
+    if (safeMessage) throw new SellerTrayMerchantWebHandoffError(safeMessage);
+    throw error;
+  }
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     throw new Error('SellerTray could not prepare Merchant Web continuation.');
   }
@@ -30,6 +41,28 @@ export async function createSellerTrayMerchantWebHandoff(
   }
 
   return { url, expiresAt, actionCode, actionLabel };
+}
+
+async function readSafeHandoffError(error: unknown): Promise<string | null> {
+  const context = error && typeof error === 'object' && 'context' in error
+    ? (error as { context?: unknown }).context
+    : null;
+  if (!(context instanceof Response)) return null;
+
+  try {
+    const payload = await context.clone().json() as unknown;
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+    const message = (payload as Record<string, unknown>).error;
+    return isSafeServerMessage(message) ? message.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+function isSafeServerMessage(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  const message = value.trim();
+  return message.length > 0 && message.length <= 180 && !/[\r\n]/.test(message);
 }
 
 function isSecureMerchantWebUrl(value: string): boolean {
