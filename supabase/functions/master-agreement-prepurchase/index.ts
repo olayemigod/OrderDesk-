@@ -43,13 +43,22 @@ Deno.serve(async (request) => {
     });
     const orderForms = Array.isArray(center.orderForms) ? center.orderForms : [];
     const master = record(center.masterAgreement);
-    if (center.masterAcceptanceRequired !== true || master.id !== agreementVersionId) {
-      throw new Error('The current Master Agreement does not require acceptance for this Business');
+    if (master.id !== agreementVersionId) {
+      throw new Error('The requested Master Agreement is not the current agreement for this Business');
     }
 
-    let onboarding: JsonRecord | null = null;
+    // Viewing the exact current Master remains available after acceptance. The
+    // acceptance gate below is deliberately separate so read-only history never
+    // creates or changes legal evidence.
+    const document = await ensureMasterReviewDocument(agreementVersionId);
+    if (action === 'merchant_get_document') return json({ ok: true, document });
+
+    if (center.masterAcceptanceRequired !== true) {
+      throw new Error('The current Master Agreement is already accepted for this Business');
+    }
+
     if (orderForms.length === 0) {
-      onboarding = await rpc<JsonRecord>('get_sellertray_onboarding_state_core', { p_tenant_id: tenantId });
+      const onboarding = await rpc<JsonRecord>('get_sellertray_onboarding_state_core', { p_tenant_id: tenantId });
       if (record(onboarding.nextAction).code !== 'review_master_agreement') {
         throw new Error('Master Agreement acceptance is not the current onboarding action for this Business');
       }
@@ -57,9 +66,6 @@ Deno.serve(async (request) => {
         throw new Error('Master Agreement acceptance is not available on Merchant Web for this Business');
       }
     }
-
-    const document = await ensureMasterReviewDocument(agreementVersionId);
-    if (action === 'merchant_get_document') return json({ ok: true, document });
 
     const commandId = uuid(body.commandId);
     const legalName = text(body.legalName, 200);
@@ -99,7 +105,7 @@ Deno.serve(async (request) => {
     if (orderForms.length === 0) {
       const nextOnboarding = await rpc<JsonRecord>('get_sellertray_onboarding_state_core', { p_tenant_id: tenantId });
       if (record(nextOnboarding.nextAction).code !== 'select_plan') {
-        throw new Error('Master Agreement acceptance was recorded but SellerTray Billing is not yet the governed next step');
+        throw new Error('Master Agreement acceptance was recorded but Billing is not yet the next step');
       }
       nextAction = nextOnboarding.nextAction;
     }
@@ -107,7 +113,7 @@ Deno.serve(async (request) => {
     return json({ ok: true, acceptanceId, center: nextCenter, nextAction });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Master Agreement request failed';
-    return json({ error: message }, /access|required|authori[sz]ed|owner|manager|available/i.test(message) ? 403 : /exists|current|changed|next step/i.test(message) ? 409 : 400);
+    return json({ error: message }, /access|required|authori[sz]ed|owner|manager|available/i.test(message) ? 403 : /exists|current|changed|next step|already accepted/i.test(message) ? 409 : 400);
   }
 });
 
@@ -132,36 +138,55 @@ async function ensureMasterReviewDocument(agreementVersionId: string): Promise<J
     };
   }
 
+  const storagePath = `master-review/${agreementVersionId}/${master.content_sha256}.pdf`;
+  const persisted = await readStoredPdf(storagePath);
+  if (persisted) return fallbackDocument(master, agreementVersionId, storagePath, persisted);
+
   const pdfBytes = await buildMasterPdf({
     title: master.title, versionCode: master.version_code, contentBody: master.content_body,
     effectiveFrom: master.effective_from, contentSha256: master.content_sha256,
   });
-  const pdfSha256 = await sha256Hex(pdfBytes);
-  const storagePath = `master-review/${agreementVersionId}/${master.content_sha256}.pdf`;
   const upload = await admin.storage.from(AGREEMENT_BUCKET).upload(storagePath, pdfBytes, {
     contentType: 'application/pdf', cacheControl: '0', upsert: false,
   });
   if (upload.error && !/already exists|duplicate/i.test(upload.error.message)) throw new Error(upload.error.message);
-  if (upload.error) {
-    const existing = await admin.storage.from(AGREEMENT_BUCKET).download(storagePath);
-    if (existing.error || !existing.data) throw new Error('Unable to verify the governed Master Agreement PDF');
-    const existingHash = await sha256Hex(new Uint8Array(await existing.data.arrayBuffer()));
-    if (existingHash !== pdfSha256) throw new Error('Stored Master Agreement PDF does not match the current published content');
-  }
+
+  // A concurrent request may win the insert. Always use the persisted bytes as
+  // the durable fallback identity instead of comparing them with a fresh PDF.
+  const durable = await readStoredPdf(storagePath);
+  if (!durable) throw new Error('Unable to verify the governed Master Agreement PDF');
+  return fallbackDocument(master, agreementVersionId, storagePath, durable);
+}
+
+async function readStoredPdf(storagePath: string): Promise<Uint8Array | null> {
+  if (!admin) throw new Error('Server configuration error');
+  const existing = await admin.storage.from(AGREEMENT_BUCKET).download(storagePath);
+  if (!existing.error && existing.data) return new Uint8Array(await existing.data.arrayBuffer());
+  if (existing.error && !/not found|object not found|does not exist/i.test(existing.error.message)) throw new Error(existing.error.message);
+  return null;
+}
+
+async function fallbackDocument(master: JsonRecord, agreementVersionId: string, storagePath: string, bytes: Uint8Array): Promise<JsonRecord> {
+  if (!admin) throw new Error('Server configuration error');
+  const pdfSha256 = await sha256Hex(bytes);
   const signed = await admin.storage.from(AGREEMENT_BUCKET).createSignedUrl(storagePath, 600);
   if (signed.error || !signed.data?.signedUrl) throw new Error(signed.error?.message ?? 'Unable to open the Master Agreement PDF');
   return {
-    documentKind: 'master_agreement_pdf', agreementVersionId, versionCode: master.version_code, title: master.title,
-    contentSha256: master.content_sha256, pdfSha256, byteSize: pdfBytes.byteLength,
-    fileName: `SellerTray-Master-Agreement-${safeFilePart(master.version_code)}.pdf`, signedUrl: signed.data.signedUrl, expiresInSeconds: 600,
+    documentKind: 'master_agreement_pdf', agreementVersionId, versionCode: String(master.version_code ?? ''), title: String(master.title ?? 'SellerTray Master Agreement'),
+    contentSha256: String(master.content_sha256 ?? ''), pdfSha256, byteSize: bytes.byteLength,
+    fileName: `SellerTray-Master-Agreement-${safeFilePart(String(master.version_code ?? 'Current'))}.pdf`, signedUrl: signed.data.signedUrl, expiresInSeconds: 600,
   };
 }
 
 async function buildMasterPdf(input: { title: string; versionCode: string; contentBody: string; effectiveFrom: string; contentSha256: string }): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
+  const effectiveDate = new Date(input.effectiveFrom);
+  const documentDate = Number.isNaN(effectiveDate.getTime()) ? new Date('2000-01-01T00:00:00.000Z') : effectiveDate;
   doc.setTitle(input.title);
   doc.setAuthor('ProcessEdge Solutions Limited');
   doc.setSubject(`SellerTray Master Agreement ${input.versionCode}`);
+  doc.setCreationDate(documentDate);
+  doc.setModificationDate(documentDate);
   const regular = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
   const navy = rgb(16 / 255, 42 / 255, 67 / 255);
