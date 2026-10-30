@@ -9,6 +9,7 @@ const commercial = read('admin-web/src/CommercialAdminWorkspaces.tsx');
 const lifecycle = read('admin-web/src/AgreementLifecycleManagement.tsx');
 const masterGateway = read('../supabase/functions/master-agreements/index.ts');
 const masterAuthority = read('../supabase/migrations/20261026060117_universal_master_agreement_authority.sql');
+const pdfOnlyPublication = read('../supabase/migrations/20261030233000_master_agreement_pdf_only_publication.sql');
 
 test('focused Agreements workspace exposes universal governance after explicit merchant scope', () => {
   assert.match(commercial, /import AgreementLifecycleManagement/);
@@ -17,14 +18,20 @@ test('focused Agreements workspace exposes universal governance after explicit m
   assert.doesNotMatch(selector, /showCommercialPortfolio \?\? mode === 'single'/);
 });
 
-test('Agreements workspace publishes one universal version and reviews Business acceptance only', () => {
+test('Agreements workspace publishes one reviewed universal PDF and reviews Business acceptance only', () => {
   assert.match(lifecycle, /'master-agreements'/);
   assert.match(lifecycle, /action: 'admin_get'/);
-  assert.match(lifecycle, /action: 'admin_publish'/);
+  assert.match(lifecycle, /action: 'admin_publish_pdf'/);
+  assert.match(lifecycle, /sourceFileName: sourcePdf\.name/);
+  assert.match(lifecycle, /sourcePdfBase64/);
+  assert.match(lifecycle, /commandId: crypto\.randomUUID\(\)/);
+  assert.match(lifecycle, /accept="application\/pdf,\.pdf"/);
+  assert.match(lifecycle, /MAX_MASTER_PDF_BYTES = 8 \* 1024 \* 1024/);
   assert.match(lifecycle, /state\?\.canPublish/);
   assert.match(lifecycle, /All SellerTray Businesses/);
-  assert.match(lifecycle, /Merchant-specific issuance and order-specific agreement replacement are retired/);
-  assert.match(lifecycle, /not tied to a commercial order, installment, Branch or payment/);
+  assert.match(lifecycle, /Merchant-specific commercial terms remain in governed Order Forms/);
+  assert.match(lifecycle, /not tied to a commercial order, installment, Branch, Order Form confirmation or payment/);
+  assert.doesNotMatch(lifecycle, /action: 'admin_publish'/);
   assert.doesNotMatch(lifecycle, /action: 'admin_issue'/);
   assert.doesNotMatch(lifecycle, /supersedesAgreementId|commercialOrderId|installmentObligationId/);
   assert.doesNotMatch(lifecycle, /accept_sellertray_commercial_agreement/);
@@ -41,18 +48,27 @@ test('shared Master Agreement authority is platform-wide and retires current-pat
   assert.match(masterAuthority, /prevent_sellertray_master_agreement_acceptance_mutation/);
 });
 
-test('Master Agreement Admin gateway enforces verified publication authority', () => {
+test('Master Agreement Admin gateway enforces verified reviewed-PDF publication authority', () => {
   assert.match(masterGateway, /action === 'admin_get'/);
   assert.match(masterGateway, /jwtAal\(token\) !== 'aal2'/);
-  assert.match(masterGateway, /publish_sellertray_master_agreement_admin/);
-  assert.match(masterGateway, /get_sellertray_master_agreement_admin/);
+  assert.match(masterGateway, /action === 'admin_publish_pdf'/);
+  assert.match(masterGateway, /inspectUploadedMasterPdf/);
+  assert.match(masterGateway, /publish_sellertray_master_agreement_pdf_admin/);
+  assert.match(masterGateway, /master-sources\/\$\{commandId\}\/source\.pdf/);
   assert.doesNotMatch(masterGateway, /issue_sellertray_commercial_agreement_admin/);
   assert.doesNotMatch(masterGateway, /accept_sellertray_commercial_agreement/);
+});
+
+test('legacy text-only publication is no longer directly executable by service_role', () => {
+  assert.match(pdfOnlyPublication, /revoke execute on function public\.publish_sellertray_master_agreement_admin/);
+  assert.match(pdfOnlyPublication, /from service_role/);
+  assert.match(pdfOnlyPublication, /grant execute on function public\.publish_sellertray_master_agreement_pdf_admin/);
+  assert.match(pdfOnlyPublication, /to service_role/);
 });
 
 test('agreement lifecycle does not invent commercial, refund, guarantee or entitlement policy', () => {
   assert.doesNotMatch(lifecycle, /dueAt|past_due|grace|refundAmount|guaranteeStatus|current_period_end|tenant_subscriptions/);
   assert.match(lifecycle, /Published versions are immutable and remain available for legal history/);
-  assert.match(lifecycle, /Publish one immutable agreement version for the entire SellerTray platform/);
+  assert.match(lifecycle, /Publish one reviewed, immutable Master Agreement PDF for the entire SellerTray platform/);
   assert.match(lifecycle, /review-only for Master Agreement publication/);
 });
