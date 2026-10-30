@@ -18,7 +18,7 @@ It records the later approved execution order for the remaining SellerTray onboa
 
 The required sequence is:
 
-> **OA4 acceptance/closure -> OA5 lifecycle notifications/reporting + controlled real-merchant proof -> C2 Commercial V2 cutover/legacy runtime retirement -> later commercial/operations maturity -> launch acceptance**
+> **OA4 acceptance/closure -> OA5 lifecycle notifications/reporting + controlled production-test Business proof -> C2 Commercial V2 cutover/legacy runtime retirement -> later commercial/operations maturity -> launch acceptance**
 
 Do not skip OA5 evidence merely because static CI is green.
 
@@ -106,21 +106,22 @@ Admin reporting should distinguish merchant onboarding funnel/operations from Pr
 
 Do not reconstruct commercial or onboarding truth in browser code when a governed server read model can provide it.
 
-# 5. OA5C — Controlled real-merchant lifecycle proof
+# 5. OA5C — Controlled production-test Business lifecycle proof
 
-Before C2 retires the legacy runtime model, at least one controlled real Business must complete the governed lifecycle without synthetic payment, fake setup readiness or manual entitlement mutation.
+Before C2 retires the legacy runtime model, one explicitly designated **disposable production-test SellerTray Business** must complete the genuine governed production lifecycle. Disposability applies only to the Business used for controlled acceptance; it never permits synthetic payment, fabricated agreement/setup/readiness evidence, direct entitlement mutation, or a manually edited subscription period.
 
 Use a controlled **single-Branch** lifecycle for this proof unless a later explicit decision changes the acceptance design.
 
 Required proof sequence:
 
-> governed commercial order -> required current agreement acceptance -> qualifying confirmed settlement -> governed setup appointment -> structured setup completion -> Branch readiness -> entitlement reconciliation -> operational activation
+> current universal Master Agreement acceptance -> governed plan/purchase -> exact purchase-specific Order Form and Agreement Package confirmation -> qualifying genuine confirmed settlement -> governed setup appointment -> structured setup completion -> Branch readiness -> entitlement reconciliation -> operational activation
 
 Verify at minimum:
 
 - commercial prices/tax came from governed authority;
-- adjustment/direct-payment behavior, if used, preserved immutable evidence;
-- required agreement acceptance is authorised and immutable;
+- the current universal Master Agreement was accepted by the authorised merchant identity before the first purchase;
+- the exact current Order Form and deterministic Agreement Package fingerprint were confirmed for the exact commercial order;
+- adjustment/direct-payment behavior, if used, preserved immutable evidence and at least one qualifying genuine payment fact exists;
 - setup completion has genuine required evidence;
 - readiness is derived, not manually invented;
 - reconciliation is retry-idempotent;
@@ -129,6 +130,8 @@ Verify at minimum:
 - notification/reporting evidence exists for the lifecycle;
 - audit actor/reason/evidence exists for privileged Admin actions;
 - no duplicate entitlement/payment/setup effects occur on retry.
+
+The canonical automated proof entrypoint is `platform_admin_verify_oa5c_production_test_business_proof(actor_user_id, tenant_id, commercial_order_id)`. The older `platform_admin_verify_oa5c_real_merchant_proof(...)` remains compatibility evidence and is not sufficient for OA5C acceptance because it predates the exact Order Form/Agreement Package confirmation gate.
 
 C2 may begin only after this proof is accepted or the user explicitly changes the gate.
 

@@ -522,7 +522,7 @@ Admin Overview is the ProcessEdge Business Dashboard; Platform Operations owns t
 
 Keep ProcessEdge collections, commercial order value, recognised revenue, merchant GMV and platform usage distinct. Never aggregate currencies without approved FX authority. Completed, non-deleted orders measure merchant sales; identify the period timestamp and disclose gross/tax/return treatment. Activation uses governed activation events, not registration or legacy trial dates. Disclose incomplete legacy coverage rather than label partial collections as total revenue. Run-rate, profit, guarantee/refund exposure and installment aging require their own approved authority; do not invent policy.
 
-The bounded dashboard foundation may precede trial-compatibility retirement as an additive read-only slice. Preserve the controlled real commercial lifecycle acceptance gate before retiring compatibility. Keep legacy trial UI unreachable and remove internal phase terminology from active Admin copy. Drill-down should lead to Merchants and governed Billing & Commercial, without creating a second commercial or access engine.
+The bounded dashboard foundation may precede trial-compatibility retirement as an additive read-only slice. Preserve the controlled production-test Business lifecycle acceptance gate before retiring compatibility; the proof must use the genuine production path and include exact purchase-specific Order Form/Agreement Package confirmation. Keep legacy trial UI unreachable and remove internal phase terminology from active Admin copy. Drill-down should lead to Merchants and governed Billing & Commercial, without creating a second commercial or access engine.
 
 # 12. AI governance
 
