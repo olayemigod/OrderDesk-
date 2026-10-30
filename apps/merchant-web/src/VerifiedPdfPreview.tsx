@@ -19,6 +19,8 @@ export default function VerifiedPdfPreview({ bytes, fileName, title, onFirstPage
   const loadingTaskRef = useRef<ReturnType<typeof getDocument> | null>(null);
   const renderTaskRef = useRef<{ cancel: () => void } | null>(null);
   const firstPageReportedRef = useRef(false);
+  const renderedCallbackRef = useRef(onFirstPageRendered);
+  const errorCallbackRef = useRef(onRenderError);
   const [documentRevision, setDocumentRevision] = useState(0);
   const [pageNumber, setPageNumber] = useState(1);
   const [pageCount, setPageCount] = useState(0);
@@ -26,6 +28,9 @@ export default function VerifiedPdfPreview({ bytes, fileName, title, onFirstPage
   const [documentBusy, setDocumentBusy] = useState(true);
   const [pageBusy, setPageBusy] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
+
+  useEffect(() => { renderedCallbackRef.current = onFirstPageRendered; }, [onFirstPageRendered]);
+  useEffect(() => { errorCallbackRef.current = onRenderError; }, [onRenderError]);
 
   useEffect(() => {
     const element = viewportRef.current;
@@ -64,7 +69,7 @@ export default function VerifiedPdfPreview({ bytes, fileName, title, onFirstPage
       const message = pdfErrorMessage(cause, 'Unable to parse this governed PDF.');
       setRenderError(message);
       setDocumentBusy(false);
-      onRenderError?.(message);
+      errorCallbackRef.current?.(message);
     });
 
     return () => {
@@ -76,7 +81,7 @@ export default function VerifiedPdfPreview({ bytes, fileName, title, onFirstPage
       pdfRef.current = null;
       if (current) void current.destroy();
     };
-  }, [bytes, onRenderError]);
+  }, [bytes]);
 
   useEffect(() => {
     const pdf = pdfRef.current;
@@ -117,14 +122,14 @@ export default function VerifiedPdfPreview({ bytes, fileName, title, onFirstPage
       setPageBusy(false);
       if (pageNumber === 1 && !firstPageReportedRef.current) {
         firstPageReportedRef.current = true;
-        onFirstPageRendered?.();
+        renderedCallbackRef.current?.();
       }
     }).catch((cause: unknown) => {
       if (disposed || isCancelledRender(cause)) return;
       const message = pdfErrorMessage(cause, 'Unable to render this governed PDF.');
       setRenderError(message);
       setPageBusy(false);
-      onRenderError?.(message);
+      errorCallbackRef.current?.(message);
     });
 
     return () => {
@@ -132,7 +137,7 @@ export default function VerifiedPdfPreview({ bytes, fileName, title, onFirstPage
       renderTaskRef.current?.cancel();
       renderTaskRef.current = null;
     };
-  }, [containerWidth, documentRevision, onFirstPageRendered, onRenderError, pageNumber]);
+  }, [containerWidth, documentRevision, pageNumber]);
 
   function downloadPdf() {
     const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
