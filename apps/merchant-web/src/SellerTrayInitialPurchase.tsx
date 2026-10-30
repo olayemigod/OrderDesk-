@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { errorMessage, supabase } from './supabase';
+import { SellerTrayInput, SellerTraySelect } from './SellerTrayElements';
 
 type PurchasePlan = {
   code: string;
@@ -103,7 +104,7 @@ export default function SellerTrayInitialPurchase({ tenantId, onChanged }: { ten
     {!center.availablePlans.length ? <div className="empty-state"><strong>No governed plan is currently purchasable</strong><p>A published and effective yearly subscription price and Branch setup price are required before SellerTray can create the first commercial order.</p></div> : <>
       <div className="settings-grid two">
         {center.availablePlans.map((option) => <label className="role-lock" key={`${option.code}:${option.currency}`}>
-          <span><input type="radio" name="sellertray-plan" checked={selectedPlan === option.code} disabled={!center.canPurchaseInitial || submitting} onChange={() => setSelectedPlan(option.code)} /> {option.name}</span>
+          <span><SellerTrayInput type="radio" name="sellertray-plan" checked={selectedPlan === option.code} disabled={!center.canPurchaseInitial || submitting} onChange={() => setSelectedPlan(option.code)} /> {option.name}</span>
           <strong>{money(option.subscriptionGrossAmount, option.currency)} / year</strong>
           <small>Branch setup: {money(option.branchSetupGrossAmount, option.currency)} per selected Branch</small>
         </label>)}
@@ -112,15 +113,15 @@ export default function SellerTrayInitialPurchase({ tenantId, onChanged }: { ten
       <div className="section-heading"><div><h3>Branches included in setup</h3><p className="muted">Every selected Branch is validated by the server as active and owned by this Business.</p></div></div>
       <div className="settings-grid two">
         {center.activeBranches.map((branch) => <label className="role-lock" key={branch.id}>
-          <span><input type="checkbox" checked={selectedBranches.includes(branch.id)} disabled={!center.canPurchaseInitial || submitting} onChange={() => setSelectedBranches((current) => current.includes(branch.id) ? current.filter((id) => id !== branch.id) : [...current, branch.id])} /> {branch.name}</span>
+          <span><SellerTrayInput type="checkbox" checked={selectedBranches.includes(branch.id)} disabled={!center.canPurchaseInitial || submitting} onChange={() => setSelectedBranches((current) => current.includes(branch.id) ? current.filter((id) => id !== branch.id) : [...current, branch.id])} /> {branch.name}</span>
           <small>{branch.code}{branch.isDefault ? ' · Default Branch' : ''}</small>
         </label>)}
       </div>
 
       <label className="field-label">Installment option
-        <select value={structure} disabled={!center.canPurchaseInitial || submitting} onChange={(event) => setStructure(event.target.value)}>
+        <SellerTraySelect value={structure} disabled={!center.canPurchaseInitial || submitting} onChange={(event) => setStructure(event.target.value)}>
           {center.supportedInstallmentStructures.map((value) => <option key={value} value={value}>{installmentLabel(value)}</option>)}
-        </select>
+        </SellerTraySelect>
       </label>
 
       <div className="access-card">
