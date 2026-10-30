@@ -140,16 +140,29 @@ begin
         using errcode='23514';
     end if;
   else
-    select exists(
-      select 1
-      from public.sellertray_agreement_package_processing p
-      where p.tenant_id=p_tenant_id
-        and (
-          p.commercial_order_id=v_order.id
-          or p.installment_obligation_id=v_obligation.id
-          or (p.subject_kind='installment_obligation' and p.subject_id=v_obligation.id)
+    -- The package-processing table belongs to the new agreement runtime. Some
+    -- pre-C2 compatibility fixtures and genuinely old schemas do not have it.
+    -- Resolve it dynamically only when present so the legacy exception remains
+    -- executable without creating a static relation dependency.
+    if to_regclass('public.sellertray_agreement_package_processing') is not null then
+      execute $sql$
+        select exists(
+          select 1
+          from public.sellertray_agreement_package_processing p
+          where p.tenant_id=$1
+            and (
+              p.commercial_order_id=$2
+              or p.installment_obligation_id=$3
+              or (p.subject_kind='installment_obligation' and p.subject_id=$3)
+            )
         )
-    ) into v_agreement_processing_exists;
+      $sql$
+      into v_agreement_processing_exists
+      using p_tenant_id, v_order.id, v_obligation.id;
+    else
+      v_agreement_processing_exists := false;
+    end if;
+
     if v_agreement_processing_exists then
       raise exception 'SellerTray is preparing the Order Form for this purchase. Review and confirm it before payment'
         using errcode='23514';
