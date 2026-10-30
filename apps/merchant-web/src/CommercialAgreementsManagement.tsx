@@ -140,7 +140,7 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
       setConfirmed(false);
       setMessage(hadOrderForms
         ? 'Master Agreement accepted. Your historical Order Forms remain unchanged; continue with the current commercial action when required.'
-        : 'Master Agreement accepted. SellerTray Billing is now the governed next step for the Business Owner.');
+        : 'Master Agreement accepted. Billing is now the governed next step for the Business Owner.');
     } catch (cause) {
       setError(errorMessage(cause, 'Unable to accept the SellerTray Master Agreement.'));
     } finally {
@@ -155,9 +155,18 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
   const reviewReady = Boolean(reviewDocument && reviewedPdfSha256 === reviewDocument.pdfSha256);
   return <section className="page-stack">
     <div className="section-heading">
-      <div><p className="eyebrow">Commercial</p><h2>Agreements</h2></div>
+      <div><p className="eyebrow">Commercial onboarding</p><h2>Agreements</h2></div>
       <p className="muted">Review and accept the current SellerTray Master Agreement once for this Business. Purchase-specific Order Forms are created and confirmed separately for each governed commercial purchase or change.</p>
     </div>
+    <article className="panel" aria-label="Commercial onboarding workflow">
+      <div className="section-heading"><div><p className="eyebrow">Commercial onboarding</p><h3>Step 1 of 3 · Agreements</h3></div><span className="status-chip">Current step</span></div>
+      <div className="settings-grid two">
+        <Fact label="Step 1" value="Agreements" />
+        <Fact label="Step 2" value="Billing" />
+        <Fact label="Step 3" value="Setup & Activation" />
+      </div>
+      <p className="muted">Complete the required agreement review first. SellerTray then advances the Business to Billing, followed by Setup & Activation.</p>
+    </article>
 
     {error ? <div className="error-banner">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div> : null}
     {message ? <div className="success-banner">{message}<button type="button" onClick={() => setMessage(null)}>Dismiss</button></div> : null}
@@ -194,7 +203,7 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
         </div>
       </div> : null}
 
-      {!center?.masterAcceptanceRequired ? <div className="success-banner">Master Agreement accepted. Continue to SellerTray Billing or the applicable commercial workflow. Each new governed commitment will have its own Order Form.</div> : null}
+      {!center?.masterAcceptanceRequired ? <div className="success-banner">Master Agreement accepted. Continue to Billing or the applicable commercial workflow. Each new governed commitment will have its own Order Form.</div> : null}
       {center?.masterAcceptanceRequired && !center.canAccept ? <div className="warning-banner">Your current role cannot accept this Master Agreement. Use an authorised Business representative before the governed commercial action can proceed.</div> : null}
 
       {center?.masterAcceptanceRequired && center.canAccept ? <form className="settings-form agreement-signature-form" onSubmit={acceptMaster}>
