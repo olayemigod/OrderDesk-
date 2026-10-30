@@ -56,10 +56,7 @@ export default function VerifiedPdfPreview({ bytes, fileName, title, onFirstPage
     const loadingTask = getDocument({ data: bytes.slice() });
     loadingTaskRef.current = loadingTask;
     void loadingTask.promise.then((pdf) => {
-      if (disposed) {
-        void pdf.destroy();
-        return;
-      }
+      if (disposed) return;
       pdfRef.current = pdf;
       setPageCount(pdf.numPages);
       setDocumentRevision((value) => value + 1);
@@ -110,6 +107,7 @@ export default function VerifiedPdfPreview({ bytes, fileName, title, onFirstPage
       canvas.style.height = `${Math.floor(viewport.height)}px`;
 
       const renderTask = page.render({
+        canvas,
         canvasContext: context,
         viewport,
         transform: outputScale === 1 ? undefined : [outputScale, 0, 0, outputScale, 0, 0],
@@ -140,7 +138,9 @@ export default function VerifiedPdfPreview({ bytes, fileName, title, onFirstPage
   }, [containerWidth, documentRevision, pageNumber]);
 
   function downloadPdf() {
-    const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+    const blobBytes = new Uint8Array(bytes.byteLength);
+    blobBytes.set(bytes);
+    const url = URL.createObjectURL(new Blob([blobBytes.buffer], { type: 'application/pdf' }));
     const link = document.createElement('a');
     link.href = url;
     link.download = fileName || 'SellerTray-Agreement.pdf';
