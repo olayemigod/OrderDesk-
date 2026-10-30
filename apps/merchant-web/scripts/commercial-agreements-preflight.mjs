@@ -47,11 +47,12 @@ requireValue(
 
 requireValue(
   prepurchaseAuthority.includes("rpc<string>('accept_sellertray_master_agreement'")
-    && prepurchaseAuthority.includes("flow: 'prepurchase_master_pdf_acceptance'")
+    && prepurchaseAuthority.includes("'prepurchase_master_pdf_acceptance'")
+    && prepurchaseAuthority.includes("'master_version_pdf_acceptance'")
     && prepurchaseAuthority.includes('reviewed_pdf_sha256')
     && prepurchaseAuthority.includes('reviewed_content_sha256')
     && prepurchaseAuthority.includes("documentKind: 'master_agreement_pdf'"),
-  'Master acceptance must bind immutable Business/version authority to the exact reviewed Master PDF and content integrity.',
+  'Master acceptance must bind immutable Business/version authority to the exact reviewed Master PDF and content integrity for both first-purchase and later-version acceptance.',
 );
 
 requireValue(
