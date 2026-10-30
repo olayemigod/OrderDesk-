@@ -7,6 +7,7 @@ const management = read('src/ManagementPage.tsx');
 const merchantApp = read('src/MerchantApp.tsx');
 const navigation = read('src/portalNavigation.ts');
 const agreements = read('src/CommercialAgreementsManagement.tsx');
+const agreementStyles = read('src/agreement-documents.css');
 const packageAgreements = read('src/CommercialAgreementPackageManagement.tsx');
 const billing = read('src/SellerTrayBillingManagement.tsx');
 const setup = read('src/SetupSchedulingManagement.tsx');
@@ -72,7 +73,24 @@ requireValue(
     && agreements.includes('reviewDocument.pdfSha256')
     && agreements.includes('reviewDocument.contentSha256')
     && agreements.includes("disabled={busy || !confirmed || !legalName.trim() || !reviewReady}"),
-  'Master acceptance UI must require the exact governed PDF to be opened before Accept & Continue is enabled.',
+  'Master acceptance UI must require the exact governed PDF to be reviewed before Accept & Continue is enabled.',
+);
+
+requireValue(
+  agreements.includes('role="dialog"')
+    && agreements.includes('aria-modal="true"')
+    && agreements.includes('className="agreement-preview-frame"')
+    && agreements.includes('src={reviewDocument.signedUrl}')
+    && agreements.includes('onLoad={markPreviewLoaded}')
+    && agreements.includes('Close preview & continue')
+    && agreementStyles.includes('.agreement-preview-modal')
+    && agreementStyles.includes('height: 100dvh'),
+  'Master Agreement review must use a responsive in-page PDF preview modal and mark review only after the governed PDF frame loads.',
+);
+
+requireValue(
+  excludes(agreements, ["window.open(", "target=\"_blank\"", "popup.location.href"]),
+  'Master Agreement review must not depend on a blank/new browser tab or popup window.',
 );
 
 requireValue(
