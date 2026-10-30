@@ -7,7 +7,9 @@ const management = read('src/ManagementPage.tsx');
 const merchantApp = read('src/MerchantApp.tsx');
 const navigation = read('src/portalNavigation.ts');
 const agreements = read('src/CommercialAgreementsManagement.tsx');
+const packageAgreements = read('src/CommercialAgreementPackageManagement.tsx');
 const billing = read('src/SellerTrayBillingManagement.tsx');
+const prepurchaseAuthority = read('../../supabase/functions/master-agreement-prepurchase/index.ts');
 const legacyAgreementApi = read('../../supabase/functions/commercial-agreements/index.ts');
 const failures = [];
 const requireValue = (condition, message) => { if (!condition) failures.push(message); };
@@ -39,28 +41,47 @@ requireValue(
 requireValue(
   agreements.includes("functions.invoke('master-agreements'")
     && agreements.includes("action: 'merchant_get'")
-    && agreements.includes("action: 'merchant_accept'"),
-  'Master Agreement must use the governed master-agreements runtime for reads and acceptance.',
+    && agreements.includes("functions.invoke('master-agreement-prepurchase'"),
+  'Pre-purchase Master Agreement must use the governed agreement read runtime and the dedicated authenticated pre-purchase acceptance boundary.',
+);
+
+requireValue(
+  prepurchaseAuthority.includes("rpc<string>('accept_sellertray_master_agreement'")
+    && prepurchaseAuthority.includes("rpc<JsonRecord>('get_sellertray_onboarding_state_core'")
+    && prepurchaseAuthority.includes("code !== 'review_master_agreement'")
+    && prepurchaseAuthority.includes("code !== 'select_plan'")
+    && prepurchaseAuthority.includes('orderForms.length !== 0')
+    && prepurchaseAuthority.includes("flow: 'prepurchase_master_acceptance'")
+    && prepurchaseAuthority.includes('authority_confirmed: true'),
+  'Pre-purchase Master acceptance must remain bound to the universal acceptance RPC, no-Order-Form state, current onboarding action, and post-acceptance select_plan transition.',
 );
 
 requireValue(
   agreements.includes('authorityConfirmed: true')
-    && agreements.includes('I confirm I am authorised to act for this Business and accept this SellerTray Master Agreement version.'),
+    && agreements.includes('I confirm I am authorised to act for this Business and accept this current SellerTray Master Agreement.'),
   'Master Agreement acceptance must carry the explicit merchant authority confirmation shown in the UI.',
 );
 
 requireValue(
-  agreements.includes('acceptanceCommandIds.current.get(versionId)')
-    && agreements.includes('acceptanceCommandIds.current.set(versionId, commandId)')
-    && agreements.includes('acceptanceCommandIds.current.delete(versionId)'),
+  agreements.includes('commandIds.current.get(master.id)')
+    && agreements.includes('commandIds.current.set(master.id, commandId)')
+    && agreements.includes('commandIds.current.delete(master.id)'),
   'Master Agreement acceptance must preserve one command identity per current version across failed retries and clear it only after success.',
 );
 
 requireValue(
-  agreements.includes('new orders do not require the same agreement again')
-    && agreements.includes('Commercial orders and payments remain separate')
-    && agreements.includes('independent of your commercial orders, plans, Branches and payment schedule'),
-  'Merchant Master Agreement UI must keep universal legal acceptance independent of orders and payment.',
+  agreements.includes('This universal Master Agreement is accepted separately from your commercial purchase.')
+    && agreements.includes('This does not confirm a purchase.')
+    && agreements.includes('purchase-specific Order Form')
+    && agreements.includes('CommercialAgreementPackageManagement'),
+  'Merchant Master Agreement UI must keep universal legal acceptance independent of purchase/payment truth and hand off to the governed package after purchase.',
+);
+
+requireValue(
+  agreements.includes('<pre')
+    && agreements.includes('{master.contentBody}')
+    && agreements.includes("open><summary>Read Master Agreement text"),
+  'Pre-purchase Agreements must display the exact published Master Agreement text instead of an Order Form preparation placeholder.',
 );
 
 requireValue(
@@ -75,7 +96,15 @@ requireValue(
     'SERVICE_ROLE',
     'SUPABASE_SECRET',
   ]),
-  'Master Agreement surface must remain universal/legal-only and must not revive order-bound agreement or payment authority.',
+  'Pre-purchase Master Agreement surface must remain universal/legal-only and must not revive order-bound agreement or payment authority.',
+);
+
+requireValue(
+  packageAgreements.includes("action: 'merchant_confirm_package'")
+    && packageAgreements.includes("action: 'merchant_get_document'")
+    && packageAgreements.includes('expectedPackageFingerprint')
+    && packageAgreements.includes('orderFormId'),
+  'Post-purchase Agreement Package must retain exact Order Form/document review and fingerprint-bound confirmation authority.',
 );
 
 const retiredGuardIndex = legacyAgreementApi.indexOf('if (RETIRED_AGREEMENT_MUTATIONS.has(action))');
