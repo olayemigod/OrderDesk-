@@ -70,13 +70,15 @@ The Merchant Web Master Agreement screen should show a concise professional summ
 
 When acceptance is required:
 
-1. **Review Master Agreement** opens the exact governed Master Agreement PDF in a new browser tab/window or approved professional PDF viewer.
-2. The authoritative acceptance action remains disabled until the exact current PDF has been opened successfully for review.
-3. SellerTray binds acceptance evidence to the current Master Agreement version/content hash and the exact reviewed PDF hash/evidence.
-4. The merchant provides the authorised representative legal name and confirms authority.
-5. The affirmative button is **Accept & Continue**.
-6. This action accepts only the current Master Agreement. It must not confirm a purchase, plan or Order Form.
-7. The long `content_body` may remain available to the system for indexing, audit, accessibility, search, version integrity and PDF fallback generation, but it is not the primary Merchant Web reading surface.
+1. **Review Master Agreement** opens the exact governed Master Agreement PDF in a responsive **in-page modal preview**. Do not rely on a new browser tab/window as the primary review interaction.
+2. The preview is full-screen or otherwise comfortably readable on narrow/mobile web and modal-sized on larger screens.
+3. The authoritative acceptance action remains disabled until the exact current PDF preview has loaded successfully in the modal.
+4. Loading the modal shell alone is not sufficient review evidence; the governed PDF itself must reach the preview load event before the session is marked reviewed.
+5. SellerTray binds acceptance evidence to the current Master Agreement version/content hash and the exact reviewed PDF hash/evidence.
+6. The merchant provides the authorised representative legal name and confirms authority.
+7. The affirmative button is **Accept & Continue**.
+8. This action accepts only the current Master Agreement. It must not confirm a purchase, plan or Order Form.
+9. The long `content_body` may remain available to the system for indexing, audit, accessibility, search, version integrity and PDF fallback generation, but it is not the primary Merchant Web reading surface.
 
 If ProcessEdge published a reviewed source PDF for the Master version, Merchant Web should present that exact reviewed PDF. If a historical/text-published version has no stored source PDF, SellerTray may generate a deterministic professional PDF from the immutable published content and bind acceptance to that generated document hash.
 
@@ -262,22 +264,24 @@ Verify at minimum:
 7. exact Master acceptance replay is duplicate-safe;
 8. first purchase is blocked until current Master acceptance is valid;
 9. Merchant Web presents the Master as a professional PDF-first review rather than a long inline text wall;
-10. **Accept & Continue** is disabled until the exact current Master PDF is opened;
-11. acceptance evidence contains/binds the reviewed Master PDF/content integrity evidence;
-12. accepting Master advances first-purchase onboarding to governed plan selection;
-13. initial purchase creates its own Order Form;
-14. confirming the Order Form does not create another Master acceptance when the current Master is already accepted;
-15. a later plan change/other governed purchase creates a new Order Form where confirmation is required;
-16. historical Order Forms remain immutable and auditable after later plan changes;
-17. a new required Master version can be accepted even when historical Order Forms already exist;
-18. accepting the new Master does not rewrite or re-confirm historical Order Forms;
-19. Order Form confirmation uses **Confirm Purchase/Confirm Order Form**, not misleading Master-acceptance wording;
-20. payment/installment truth remains independent;
-21. activation/service-delivery fails closed when required current Master acceptance is missing;
-22. legacy agreement history remains unchanged;
-23. cross-tenant and capability boundaries are enforced;
-24. generated/reviewed PDFs preserve deterministic integrity evidence;
-25. exact Order Form confirmation replay remains duplicate-safe.
+10. **Review Master Agreement** opens the PDF in a responsive in-page modal rather than depending on a new tab/window;
+11. **Accept & Continue** remains disabled until the exact current governed PDF has successfully loaded in that modal;
+12. closing the modal before the governed PDF loads does not mark the agreement reviewed;
+13. acceptance evidence contains/binds the reviewed Master PDF/content integrity evidence;
+14. accepting Master advances first-purchase onboarding to governed plan selection;
+15. initial purchase creates its own Order Form;
+16. confirming the Order Form does not create another Master acceptance when the current Master is already accepted;
+17. a later plan change/other governed purchase creates a new Order Form where confirmation is required;
+18. historical Order Forms remain immutable and auditable after later plan changes;
+19. a new required Master version can be accepted even when historical Order Forms already exist;
+20. accepting the new Master does not rewrite or re-confirm historical Order Forms;
+21. Order Form confirmation uses **Confirm Purchase/Confirm Order Form**, not misleading Master-acceptance wording;
+22. payment/installment truth remains independent;
+23. activation/service-delivery fails closed when required current Master acceptance is missing;
+24. legacy agreement history remains unchanged;
+25. cross-tenant and capability boundaries are enforced;
+26. generated/reviewed PDFs preserve deterministic integrity evidence;
+27. exact Order Form confirmation replay remains duplicate-safe.
 
 ## Precedence
 
@@ -288,6 +292,7 @@ It supersedes older wording that required or implied:
 - one combined Master + Order Form affirmative acceptance transaction;
 - re-acceptance of an unchanged Master Agreement on every purchase;
 - long inline Master Agreement text as the primary Merchant Web review UX;
+- new-tab/window-only Master Agreement review as the primary Merchant Web interaction;
 - Order Form confirmation simultaneously creating Master acceptance in the normal current path;
 - treating the Master Agreement and Order Form as one persistence identity.
 
