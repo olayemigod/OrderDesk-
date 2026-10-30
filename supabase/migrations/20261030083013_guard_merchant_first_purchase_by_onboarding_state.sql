@@ -1,0 +1,12 @@
+-- Source-history reconciliation marker.
+--
+-- Production applied this migration version before the merchant first-purchase
+-- authority was committed to source. Replaying its original body at this
+-- timestamp would fail on a clean database because the merchant purchase RPC is
+-- introduced later by 20261030090000_merchant_first_purchase_authority.sql.
+--
+-- The replay-safe source equivalent is intentionally applied after that
+-- authority in 20261030091000_guard_merchant_first_purchase_by_onboarding_state_source_replay.sql.
+-- Keep this marker so local migration history remains compatible with the
+-- already-applied production migration version.
+select 1;
