@@ -2,32 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { errorMessage, supabase } from './supabase';
 import { SellerTrayInput, SellerTraySelect } from './SellerTrayElements';
 
-type PurchasePlan = {
-  code: string;
-  name: string;
-  billingCycle: string;
-  currency: string;
-  subscriptionGrossAmount: number;
-  branchSetupGrossAmount: number;
-};
+type PurchasePlan = { code: string; name: string; billingCycle: string; currency: string; subscriptionGrossAmount: number; branchSetupGrossAmount: number };
+type PurchaseBranch = { id: string; code: string; name: string; isDefault: boolean };
+type PurchaseCenter = { actorRole: 'owner' | 'manager'; canPurchaseInitial: boolean; availablePlans: PurchasePlan[]; activeBranches: PurchaseBranch[]; supportedInstallmentStructures: string[]; orders: unknown[] };
+type InitialPurchaseProps = { tenantId: string; onChanged: () => void | Promise<void>; onContinueToOrderForm: () => void };
 
-type PurchaseBranch = {
-  id: string;
-  code: string;
-  name: string;
-  isDefault: boolean;
-};
-
-type PurchaseCenter = {
-  actorRole: 'owner' | 'manager';
-  canPurchaseInitial: boolean;
-  availablePlans: PurchasePlan[];
-  activeBranches: PurchaseBranch[];
-  supportedInstallmentStructures: string[];
-  orders: unknown[];
-};
-
-export default function SellerTrayInitialPurchase({ tenantId, onChanged }: { tenantId: string; onChanged: () => void | Promise<void> }) {
+export default function SellerTrayInitialPurchase({ tenantId, onChanged, onContinueToOrderForm }: InitialPurchaseProps) {
   const [center, setCenter] = useState<PurchaseCenter | null>(null);
   const [selectedPlan, setSelectedPlan] = useState('');
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
@@ -41,9 +21,7 @@ export default function SellerTrayInitialPurchase({ tenantId, onChanged }: { ten
   async function load() {
     setLoading(true); setError(null);
     try {
-      const { data, error: functionError } = await supabase.functions.invoke('commercial-billing', {
-        body: { action: 'center', tenantId },
-      });
+      const { data, error: functionError } = await supabase.functions.invoke('commercial-billing', { body: { action: 'center', tenantId } });
       if (functionError) throw functionError;
       const next = parseCenter(record(data).center);
       setCenter(next);
@@ -60,6 +38,8 @@ export default function SellerTrayInitialPurchase({ tenantId, onChanged }: { ten
   }
 
   const plan = useMemo(() => center?.availablePlans.find((row) => row.code === selectedPlan) ?? null, [center, selectedPlan]);
+  const branchSetupTotal = plan ? plan.branchSetupGrossAmount * selectedBranches.length : 0;
+  const purchaseTotal = plan ? plan.subscriptionGrossAmount + branchSetupTotal : 0;
 
   async function purchase() {
     if (!center?.canPurchaseInitial || !plan || !selectedBranches.length || submitting) return;
@@ -70,24 +50,16 @@ export default function SellerTrayInitialPurchase({ tenantId, onChanged }: { ten
     setSubmitting(true); setError(null);
     try {
       const { data, error: functionError } = await supabase.functions.invoke('commercial-billing', {
-        body: {
-          action: 'create_initial_purchase',
-          tenantId,
-          planCode: plan.code,
-          currency: plan.currency,
-          branchIds: selectedBranches,
-          structureCode: structure,
-          commandId,
-        },
+        body: { action: 'create_initial_purchase', tenantId, planCode: plan.code, currency: plan.currency, branchIds: selectedBranches, structureCode: structure, commandId },
       });
       if (functionError) throw functionError;
       const payload = record(data);
-      if (payload.ok !== true) throw new Error('SellerTray could not create the governed purchase.');
+      if (payload.ok !== true) throw new Error('SellerTray could not prepare the purchase.');
       safeSessionStorageRemove(storageKey);
       await onChanged();
-      await load();
+      onContinueToOrderForm();
     } catch (cause) {
-      setError(errorMessage(cause, 'Unable to create the SellerTray purchase. Retry to continue the same purchase command.'));
+      setError(errorMessage(cause, 'Unable to prepare the SellerTray purchase. Retry to continue the same purchase request.'));
     } finally { setSubmitting(false); }
   }
 
@@ -96,12 +68,12 @@ export default function SellerTrayInitialPurchase({ tenantId, onChanged }: { ten
 
   return <article className="panel">
     <div className="panel-head">
-      <div><p className="eyebrow">First SellerTray purchase</p><h3>Choose your governed plan</h3><p className="muted">SellerTray resolves the commercial prices on the server. The amounts below are the currently effective governed prices for this Business.</p></div>
-      <span className="role-pill">{center.actorRole === 'owner' ? 'Owner purchase' : 'Owner approval required'}</span>
+      <div><p className="eyebrow">First SellerTray purchase</p><h3>Choose your SellerTray plan</h3><p className="muted">Review your subscription, Branch setup charges and payment option before SellerTray prepares the Order Form.</p></div>
+      <span className="role-pill">{center.actorRole === 'owner' ? 'Business Owner' : 'Owner approval required'}</span>
     </div>
     {error ? <div className="error-banner">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div> : null}
 
-    {!center.availablePlans.length ? <div className="empty-state"><strong>No governed plan is currently purchasable</strong><p>A published and effective yearly subscription price and Branch setup price are required before SellerTray can create the first commercial order.</p></div> : <>
+    {!center.availablePlans.length ? <div className="empty-state"><strong>No SellerTray plan is currently available</strong><p>Subscription and Branch setup prices must be published before the first purchase can be prepared.</p></div> : <>
       <div className="settings-grid two">
         {center.availablePlans.map((option) => <label className="role-lock" key={`${option.code}:${option.currency}`}>
           <span><SellerTrayInput type="radio" name="sellertray-plan" checked={selectedPlan === option.code} disabled={!center.canPurchaseInitial || submitting} onChange={() => setSelectedPlan(option.code)} /> {option.name}</span>
@@ -110,7 +82,7 @@ export default function SellerTrayInitialPurchase({ tenantId, onChanged }: { ten
         </label>)}
       </div>
 
-      <div className="section-heading"><div><h3>Branches included in setup</h3><p className="muted">Every selected Branch is validated by the server as active and owned by this Business.</p></div></div>
+      <div className="section-heading"><div><h3>Branches included in setup</h3><p className="muted">Choose the Branches included in this first SellerTray purchase.</p></div></div>
       <div className="settings-grid two">
         {center.activeBranches.map((branch) => <label className="role-lock" key={branch.id}>
           <span><SellerTrayInput type="checkbox" checked={selectedBranches.includes(branch.id)} disabled={!center.canPurchaseInitial || submitting} onChange={() => setSelectedBranches((current) => current.includes(branch.id) ? current.filter((id) => id !== branch.id) : [...current, branch.id])} /> {branch.name}</span>
@@ -118,37 +90,34 @@ export default function SellerTrayInitialPurchase({ tenantId, onChanged }: { ten
         </label>)}
       </div>
 
-      <label className="field-label">Installment option
+      <label className="field-label">Payment option
         <SellerTraySelect value={structure} disabled={!center.canPurchaseInitial || submitting} onChange={(event) => setStructure(event.target.value)}>
           {center.supportedInstallmentStructures.map((value) => <option key={value} value={value}>{installmentLabel(value)}</option>)}
         </SellerTraySelect>
       </label>
 
+      {plan ? <div className="settings-grid two">
+        <Fact label="Subscription" value={money(plan.subscriptionGrossAmount, plan.currency)} />
+        <Fact label={`Branch setup · ${selectedBranches.length}`} value={money(branchSetupTotal, plan.currency)} />
+        <Fact label="Purchase total" value={money(purchaseTotal, plan.currency)} />
+        <Fact label="Payment option" value={installmentLabel(structure)} />
+      </div> : null}
+
       <div className="access-card">
-        <span style={{ flex: 1 }}><strong>Create governed commercial order</strong><small>No amount is submitted by this page. SellerTray snapshots the effective governed subscription and Branch setup price versions when the order is created.</small></span>
-        {center.canPurchaseInitial ? <button type="button" className="primary-button" disabled={!plan || !selectedBranches.length || submitting} onClick={() => void purchase()}>{submitting ? 'Creating purchase…' : 'Confirm Purchase'}</button> : <span className="role-pill">Business Owner only</span>}
+        <span style={{ flex: 1 }}><strong>Prepare your Order Form</strong><small>Your Order Form will show the exact plan, Branches, prices and payment schedule for review before you confirm the purchase or make payment.</small></span>
+        {center.canPurchaseInitial ? <button type="button" className="primary-button" disabled={!plan || !selectedBranches.length || submitting} onClick={() => void purchase()}>{submitting ? 'Preparing Order Form…' : 'Continue to Order Form'}</button> : <span className="role-pill">Business Owner only</span>}
       </div>
     </>}
   </article>;
 }
 
+function Fact({ label, value }: { label: string; value: string }) { return <div className="role-lock"><span>{label}</span><strong>{value}</strong></div>; }
 function parseCenter(value: unknown): PurchaseCenter {
   const root = record(value);
   return {
-    actorRole: root.actorRole === 'owner' ? 'owner' : 'manager',
-    canPurchaseInitial: root.canPurchaseInitial === true,
-    orders: Array.isArray(root.orders) ? root.orders : [],
-    availablePlans: Array.isArray(root.availablePlans) ? root.availablePlans.flatMap((raw) => {
-      const row = record(raw);
-      const code = text(row.code); const name = text(row.name); const currency = text(row.currency);
-      if (!code || !name || !currency) return [];
-      return [{ code, name, currency, billingCycle: text(row.billingCycle) || 'yearly', subscriptionGrossAmount: numberValue(row.subscriptionGrossAmount), branchSetupGrossAmount: numberValue(row.branchSetupGrossAmount) }];
-    }) : [],
-    activeBranches: Array.isArray(root.activeBranches) ? root.activeBranches.flatMap((raw) => {
-      const row = record(raw); const id = text(row.id); const name = text(row.name);
-      if (!isUuid(id) || !name) return [];
-      return [{ id, name, code: text(row.code), isDefault: row.isDefault === true }];
-    }) : [],
+    actorRole: root.actorRole === 'owner' ? 'owner' : 'manager', canPurchaseInitial: root.canPurchaseInitial === true, orders: Array.isArray(root.orders) ? root.orders : [],
+    availablePlans: Array.isArray(root.availablePlans) ? root.availablePlans.flatMap((raw) => { const row = record(raw); const code = text(row.code); const name = text(row.name); const currency = text(row.currency); if (!code || !name || !currency) return []; return [{ code, name, currency, billingCycle: text(row.billingCycle) || 'yearly', subscriptionGrossAmount: numberValue(row.subscriptionGrossAmount), branchSetupGrossAmount: numberValue(row.branchSetupGrossAmount) }]; }) : [],
+    activeBranches: Array.isArray(root.activeBranches) ? root.activeBranches.flatMap((raw) => { const row = record(raw); const id = text(row.id); const name = text(row.name); if (!isUuid(id) || !name) return []; return [{ id, name, code: text(row.code), isDefault: row.isDefault === true }]; }) : [],
     supportedInstallmentStructures: Array.isArray(root.supportedInstallmentStructures) ? root.supportedInstallmentStructures.filter((value): value is string => typeof value === 'string') : [],
   };
 }

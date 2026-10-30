@@ -1,5 +1,7 @@
 type JsonRecord = Record<string, unknown>;
 
+type OrderFormState = 'confirmed' | 'ready_for_review' | 'preparing' | 'legacy';
+
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const MAX_BODY_BYTES = 16_384;
@@ -45,7 +47,7 @@ Deno.serve(async (request) => {
       const commandId = cleanUuid(body.commandId);
       const branchIds = cleanUuidArray(body.branchIds, 100);
       if (!planCode) return json({ error: 'Select a SellerTray plan' }, 400);
-      if (!currency) return json({ error: 'Select a governed purchase currency' }, 400);
+      if (!currency) return json({ error: 'Select a purchase currency' }, 400);
       if (!structureCode) return json({ error: 'Select a supported installment option' }, 400);
       if (!commandId) return json({ error: 'Purchase command is required' }, 400);
       if (!branchIds?.length) return json({ error: 'Select at least one active Branch' }, 400);
@@ -77,22 +79,63 @@ Deno.serve(async (request) => {
   }
 });
 
-function billingCenter(tenantId: string, userId: string) {
-  return rpc<JsonRecord>('get_sellertray_commercial_billing_center', {
-    p_tenant_id: tenantId,
-    p_actor_user_id: userId,
-  });
+async function billingCenter(tenantId: string, userId: string): Promise<JsonRecord> {
+  const [billing, agreements, processing] = await Promise.all([
+    rpc<JsonRecord>('get_sellertray_commercial_billing_center', {
+      p_tenant_id: tenantId,
+      p_actor_user_id: userId,
+    }),
+    rpc<JsonRecord>('get_sellertray_agreement_package_center', {
+      p_tenant_id: tenantId,
+      p_actor_user_id: userId,
+    }),
+    rest<Array<JsonRecord>>(`/rest/v1/sellertray_agreement_package_processing?select=commercial_order_id,installment_obligation_id,status&tenant_id=eq.${encodeURIComponent(tenantId)}&limit=200`),
+  ]);
+
+  const forms = Array.isArray(agreements.orderForms) ? agreements.orderForms.map(record) : [];
+  const processingRows = Array.isArray(processing) ? processing.map(record) : [];
+  const orders = Array.isArray(billing.orders) ? billing.orders.map((raw) => {
+    const order = record(raw);
+    const commercialOrderId = stringValue(order.commercialOrderId);
+    const installmentObligationId = stringValue(order.installmentObligationId);
+    const form = forms
+      .filter((candidate) => stringValue(candidate.commercialOrderId) === commercialOrderId)
+      .sort((a, b) => String(b.issuedAt ?? '').localeCompare(String(a.issuedAt ?? '')))[0] ?? null;
+    const hasProcessing = processingRows.some((candidate) =>
+      stringValue(candidate.commercial_order_id) === commercialOrderId
+      || (installmentObligationId && stringValue(candidate.installment_obligation_id) === installmentObligationId));
+    const confirmation = form ? record(form.confirmation) : {};
+    const orderFormState: OrderFormState = form
+      ? (stringValue(confirmation.id) ? 'confirmed' : 'ready_for_review')
+      : hasProcessing ? 'preparing' : 'legacy';
+    return {
+      ...order,
+      orderFormId: form ? stringValue(form.id) : null,
+      orderFormReference: form ? stringValue(form.orderFormReference) : null,
+      orderFormState,
+    };
+  }) : [];
+
+  return { ...billing, orders };
 }
 
 async function rpc<T>(name: string, body: JsonRecord): Promise<T> {
-  const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${encodeURIComponent(name)}`, {
+  return await rest<T>(`/rest/v1/rpc/${encodeURIComponent(name)}`, {
     method: 'POST',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify(body),
+  });
+}
+
+async function rest<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(`${SUPABASE_URL}${path}`, {
+    ...init,
     headers: {
       apikey: SERVICE_ROLE_KEY,
       authorization: `Bearer ${SERVICE_ROLE_KEY}`,
       'content-type': 'application/json',
+      ...(init.headers ?? {}),
     },
-    body: JSON.stringify(body),
   });
   if (!response.ok) {
     let message = `SellerTray billing RPC failed with HTTP ${response.status}`;
@@ -159,6 +202,8 @@ function cleanCurrency(value: unknown): string | null {
   const clean = value.trim().toUpperCase();
   return /^[A-Z]{3}$/.test(clean) ? clean : null;
 }
+function record(value: unknown): JsonRecord { return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as JsonRecord : {}; }
+function stringValue(value: unknown): string { return typeof value === 'string' ? value : ''; }
 async function readRequestTextLimited(request: Request, maxBytes: number): Promise<{ ok: true; text: string } | { ok: false }> {
   const declared = Number(request.headers.get('content-length') ?? 0);
   if (Number.isFinite(declared) && declared > maxBytes) return { ok: false };
