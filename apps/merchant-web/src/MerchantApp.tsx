@@ -17,6 +17,7 @@ import SalesManagement from './SalesManagement';
 import SellerTrayBillingManagement from './SellerTrayBillingManagement';
 import WhatsAppManagement from './WhatsAppManagement';
 import { BUSINESS_PROFILE_UPDATED_EVENT, type BusinessProfileUpdatedDetail } from './businessProfileEvents';
+import type { MerchantHandoffTarget } from './merchantHandoff';
 import { SellerTrayBrand, SellerTrayMark, NavIcon, ShellIcon } from './merchantShell';
 import { readMerchantPageFromLocation, rememberMerchantPage, resolveMerchantPage, syncMerchantPageUrl } from './merchantRouteState';
 import { SellerTrayInput, SellerTraySelect } from './SellerTrayElements';
@@ -29,26 +30,28 @@ type Page = MerchantPortalPage;
 type Business = { id: string; name: string; merchantCode: string; role: MerchantRole; currency: string; subscriptionStatus: string; whatsappConnectionStatus: string };
 type BusinessIdentity = { name: string; logoUrl: string; currency: string };
 type Branch = { id: string; code: string; name: string; isDefault: boolean };
+type MerchantAppProps = { handoffTarget?: MerchantHandoffTarget | null };
 
 const MANAGEMENT_ROLES: MerchantRole[] = ['owner', 'manager'];
 const NAV = AVAILABLE_MERCHANT_PORTAL_NAVIGATION;
 const COMMERCIAL_JOURNEY_PAGES: Page[] = ['agreements', 'sellertray_billing', 'setup_activation'];
 
-export default function MerchantApp() {
+export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) {
   const [booting, setBooting] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
   const [businesses, setBusinesses] = useState<Business[]>([]);
-  const [businessId, setBusinessId] = useState('');
+  const [businessId, setBusinessId] = useState(handoffTarget?.businessId ?? '');
   const [businessIdentity, setBusinessIdentity] = useState<BusinessIdentity | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchId, setBranchId] = useState('');
-  const [page, setPage] = useState<Page>(() => readMerchantPageFromLocation() ?? 'overview');
+  const [page, setPage] = useState<Page>(() => handoffTarget?.page ?? readMerchantPageFromLocation() ?? 'overview');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dark, setDark] = useState(() => localStorage.getItem('sellertray.merchant.theme') === 'dark');
   const [navOpen, setNavOpen] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Set<MerchantPortalSection>>(() => new Set());
   const workspaceRequestRef = useRef(0);
+  const pendingHandoffRef = useRef<MerchantHandoffTarget | null>(handoffTarget);
 
   useEffect(() => {
     let mounted = true;
@@ -66,7 +69,9 @@ export default function MerchantApp() {
     setBusinessIdentity(null);
     setBranches([]);
     setBranchId('');
-    const restoredPage = resolveMerchantPage(businessId);
+    const pendingHandoff = pendingHandoffRef.current;
+    const restoredPage = pendingHandoff?.businessId === businessId ? pendingHandoff.page : resolveMerchantPage(businessId);
+    if (pendingHandoff?.businessId === businessId) pendingHandoffRef.current = null;
     setPage(restoredPage);
     syncMerchantPageUrl(businessId, restoredPage, 'replace');
     void loadWorkspace(businessId);
@@ -111,7 +116,13 @@ export default function MerchantApp() {
       const next = ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id ?? ''), name: String(row.name ?? 'SellerTray business'), merchantCode: String(row.merchant_code ?? ''), role: merchantRole(row.role), currency: String(row.currency ?? 'NGN'), subscriptionStatus: String(row.subscription_status ?? 'unknown'), whatsappConnectionStatus: String(row.whatsapp_connection_status ?? 'not_connected') } satisfies Business));
       setBusinesses(next);
       const manageable = next.filter((row) => MANAGEMENT_ROLES.includes(row.role));
-      setBusinessId((current) => manageable.some((row) => row.id === current) ? current : manageable[0]?.id ?? '');
+      const requestedBusinessId = pendingHandoffRef.current?.businessId ?? handoffTarget?.businessId ?? '';
+      if (requestedBusinessId && !manageable.some((row) => row.id === requestedBusinessId)) {
+        setBusinessId('');
+        setError('This SellerTray continuation is no longer authorised for the selected Business. Return to SellerTray mobile and try again.');
+        return;
+      }
+      setBusinessId((current) => manageable.some((row) => row.id === current) ? current : requestedBusinessId || manageable[0]?.id || '');
     } catch (cause) { setError(errorMessage(cause, 'Unable to load your SellerTray businesses.')); } finally { setLoading(false); }
   }
 
