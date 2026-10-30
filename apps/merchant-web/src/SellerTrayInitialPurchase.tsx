@@ -82,12 +82,12 @@ export default function SellerTrayInitialPurchase({ tenantId, onChanged }: { ten
       });
       if (functionError) throw functionError;
       const payload = record(data);
-      if (payload.ok !== true) throw new Error('SellerTray could not create the governed purchase.');
+      if (payload.ok !== true) throw new Error('SellerTray could not create your subscription order.');
       safeSessionStorageRemove(storageKey);
       await onChanged();
       await load();
     } catch (cause) {
-      setError(errorMessage(cause, 'Unable to create the SellerTray purchase. Retry to continue the same purchase command.'));
+      setError(errorMessage(cause, 'Unable to create your SellerTray subscription order. Retry to continue the same purchase.'));
     } finally { setSubmitting(false); }
   }
 
@@ -96,12 +96,12 @@ export default function SellerTrayInitialPurchase({ tenantId, onChanged }: { ten
 
   return <article className="panel">
     <div className="panel-head">
-      <div><p className="eyebrow">First SellerTray purchase</p><h3>Choose your governed plan</h3><p className="muted">SellerTray resolves the commercial prices on the server. The amounts below are the currently effective governed prices for this Business.</p></div>
-      <span className="role-pill">{center.actorRole === 'owner' ? 'Owner purchase' : 'Owner approval required'}</span>
+      <div><p className="eyebrow">SellerTray subscription</p><h3>Choose your plan</h3><p className="muted">The prices below are the current SellerTray subscription and Branch setup prices available to your Business.</p></div>
+      <span className="role-pill">{center.actorRole === 'owner' ? 'Owner can purchase' : 'Owner approval required'}</span>
     </div>
     {error ? <div className="error-banner">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div> : null}
 
-    {!center.availablePlans.length ? <div className="empty-state"><strong>No governed plan is currently purchasable</strong><p>A published and effective yearly subscription price and Branch setup price are required before SellerTray can create the first commercial order.</p></div> : <>
+    {!center.availablePlans.length ? <div className="empty-state"><strong>No subscription plan is currently available</strong><p>A current subscription price and Branch setup price are required before the first SellerTray subscription order can be created.</p></div> : <>
       <div className="settings-grid two">
         {center.availablePlans.map((option) => <label className="role-lock" key={`${option.code}:${option.currency}`}>
           <span><SellerTrayInput type="radio" name="sellertray-plan" checked={selectedPlan === option.code} disabled={!center.canPurchaseInitial || submitting} onChange={() => setSelectedPlan(option.code)} /> {option.name}</span>
@@ -110,7 +110,7 @@ export default function SellerTrayInitialPurchase({ tenantId, onChanged }: { ten
         </label>)}
       </div>
 
-      <div className="section-heading"><div><h3>Branches included in setup</h3><p className="muted">Every selected Branch is validated by the server as active and owned by this Business.</p></div></div>
+      <div className="section-heading"><div><h3>Branches included in setup</h3><p className="muted">Select the active Branches you want included in this first SellerTray setup.</p></div></div>
       <div className="settings-grid two">
         {center.activeBranches.map((branch) => <label className="role-lock" key={branch.id}>
           <span><SellerTrayInput type="checkbox" checked={selectedBranches.includes(branch.id)} disabled={!center.canPurchaseInitial || submitting} onChange={() => setSelectedBranches((current) => current.includes(branch.id) ? current.filter((id) => id !== branch.id) : [...current, branch.id])} /> {branch.name}</span>
@@ -118,15 +118,15 @@ export default function SellerTrayInitialPurchase({ tenantId, onChanged }: { ten
         </label>)}
       </div>
 
-      <label className="field-label">Installment option
+      <label className="field-label">Payment option
         <SellerTraySelect value={structure} disabled={!center.canPurchaseInitial || submitting} onChange={(event) => setStructure(event.target.value)}>
           {center.supportedInstallmentStructures.map((value) => <option key={value} value={value}>{installmentLabel(value)}</option>)}
         </SellerTraySelect>
       </label>
 
       <div className="access-card">
-        <span style={{ flex: 1 }}><strong>Create governed commercial order</strong><small>No amount is submitted by this page. SellerTray snapshots the effective governed subscription and Branch setup price versions when the order is created.</small></span>
-        {center.canPurchaseInitial ? <button type="button" className="primary-button" disabled={!plan || !selectedBranches.length || submitting} onClick={() => void purchase()}>{submitting ? 'Creating purchase…' : 'Confirm Purchase'}</button> : <span className="role-pill">Business Owner only</span>}
+        <span style={{ flex: 1 }}><strong>Review and confirm your subscription</strong><small>Your order will use the current subscription and Branch setup prices shown above. You will be able to review the resulting Order Form and payment amount before activation.</small></span>
+        {center.canPurchaseInitial ? <button type="button" className="primary-button" disabled={!plan || !selectedBranches.length || submitting} onClick={() => void purchase()}>{submitting ? 'Creating order…' : 'Confirm Purchase'}</button> : <span className="role-pill">Business Owner only</span>}
       </div>
     </>}
   </article>;

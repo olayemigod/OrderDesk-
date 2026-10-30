@@ -87,7 +87,7 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
       setCenter(next);
       setLegalName('');
       setConfirmed(false);
-      setMessage('Master Agreement accepted. SellerTray Billing is now the governed next step for the Business Owner.');
+      setMessage('Master Agreement accepted. Continue to SellerTray Billing to choose your plan.');
     } catch (cause) {
       setError(errorMessage(cause, 'Unable to accept the SellerTray Master Agreement.'));
     } finally {
@@ -101,8 +101,8 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
   const master = center?.masterAgreement ?? null;
   return <section className="page-stack">
     <div className="section-heading">
-      <div><p className="eyebrow">Commercial</p><h2>Agreements</h2></div>
-      <p className="muted">Accept the current SellerTray Master Agreement before choosing the first plan. Your purchase-specific Order Form is created only after the governed purchase exists.</p>
+      <div><p className="eyebrow">Legal</p><h2>Agreements</h2></div>
+      <p className="muted">Review and accept the current SellerTray Master Agreement before choosing your first plan. Your purchase terms will be shown in an Order Form after you confirm your subscription.</p>
     </div>
 
     {error ? <div className="error-banner">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div> : null}
@@ -110,7 +110,7 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
 
     {!master ? <article className="panel empty-state">
       <strong>Master Agreement not yet published</strong>
-      <p>ProcessEdge must publish the current SellerTray Master Agreement before the first commercial purchase can begin.</p>
+      <p>ProcessEdge must publish the current SellerTray Master Agreement before the first subscription purchase can begin.</p>
     </article> : <article className="panel agreement-brand-panel">
       <div className="agreement-brand-heading">
         <img className="agreement-brand-logo" src="/brand/sellertray-logo-v2.svg" alt="SellerTray" />
@@ -125,15 +125,15 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
         <Fact label="Accepted at" value={master.acceptance?.acceptedAt ? formatDate(master.acceptance.acceptedAt) : '—'} />
       </div>
 
-      <div className="governance-note">This universal Master Agreement is accepted separately from your commercial purchase. After acceptance, SellerTray Billing resolves the governed plan, Branch setup charges and installment structure. The resulting purchase then creates the immutable Order Form and Agreement Package for separate confirmation.</div>
+      <div className="governance-note">The Master Agreement applies to your use of SellerTray. After accepting it, continue to Billing to choose your plan and Branches. Your purchase terms will then be shown in an Order Form for review and confirmation.</div>
       <details className="agreement-transcript" open><summary>Read Master Agreement text</summary><div className="panel agreement-document"><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: 'inherit', margin: 0 }}>{master.contentBody}</pre></div></details>
 
-      {!center?.masterAcceptanceRequired ? <div className="success-banner">Master Agreement accepted. Continue to SellerTray Billing to choose the governed plan and create the first purchase.</div> : null}
+      {!center?.masterAcceptanceRequired ? <div className="success-banner">Master Agreement accepted. Continue to SellerTray Billing to choose your plan and complete your first purchase.</div> : null}
       {center?.masterAcceptanceRequired && !center.canAccept ? <div className="warning-banner">Your current role cannot accept this Master Agreement. Use an authorised Business representative before the first purchase can proceed.</div> : null}
 
       {center?.masterAcceptanceRequired && center.canAccept ? <form className="settings-form agreement-signature-form" onSubmit={acceptPrepurchaseMaster}>
         <label className="field"><span>Authorised representative legal name</span><SellerTrayInput maxLength={200} required value={legalName} onChange={(event) => setLegalName(event.target.value)} placeholder="Full legal name" /></label>
-        <label className="access-card"><SellerTrayInput type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span><strong>I confirm I am authorised to act for this Business and accept this current SellerTray Master Agreement.</strong><small>The authenticated identity, authority, exact published version, content integrity, command evidence and server timestamp are recorded. This does not confirm a purchase.</small></span></label>
+        <label className="access-card"><SellerTrayInput type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span><strong>I confirm I am authorised to act for this Business and accept this current SellerTray Master Agreement.</strong><small>Your signed-in SellerTray account, legal name, agreement version and acceptance time are recorded. This does not confirm a purchase.</small></span></label>
         <div className="settings-actions"><button className="primary-button" disabled={busy || !confirmed || !legalName.trim()}>{busy ? 'Recording acceptance…' : 'Accept & Continue'}</button></div>
       </form> : null}
     </article>}
