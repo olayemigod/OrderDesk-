@@ -27,10 +27,11 @@ void start();
 async function start() {
   try {
     const handoffTarget = await consumeMerchantWebHandoff();
+    const merchantApp = handoffTarget ? <MerchantApp handoffTarget={handoffTarget} /> : <MerchantApp />;
     createRoot(root!).render(
       <StrictMode>
         <MerchantPortalRoot>
-          <MerchantApp handoffTarget={handoffTarget} />
+          {merchantApp}
         </MerchantPortalRoot>
       </StrictMode>,
     );
