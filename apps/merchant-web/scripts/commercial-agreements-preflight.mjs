@@ -33,55 +33,44 @@ requireValue(
   'Merchant App must route SellerTray Billing and Master Agreement to their dedicated surfaces.',
 );
 
-requireValue(
-  !management.includes('CommercialAgreementsManagement'),
-  'Merchant Settings must remain settings-only and must not embed legal agreement authority.',
-);
+requireValue(!management.includes('CommercialAgreementsManagement'), 'Merchant Settings must remain settings-only and must not embed legal agreement authority.');
 
 requireValue(
   agreements.includes("functions.invoke('master-agreements'")
     && agreements.includes("action: 'merchant_get'")
-    && agreements.includes("functions.invoke('master-agreement-prepurchase'"),
-  'Pre-purchase Master Agreement must use the governed agreement read runtime and the dedicated authenticated pre-purchase acceptance boundary.',
+    && agreements.includes("functions.invoke('master-agreement-prepurchase'")
+    && agreements.includes("action: 'merchant_get_document'")
+    && agreements.includes("action: 'merchant_accept'"),
+  'Master Agreement review and acceptance must use governed read plus dedicated PDF-review/acceptance authority.',
 );
 
 requireValue(
   prepurchaseAuthority.includes("rpc<string>('accept_sellertray_master_agreement'")
-    && prepurchaseAuthority.includes("rpc<JsonRecord>('get_sellertray_onboarding_state_core'")
-    && prepurchaseAuthority.includes("code !== 'review_master_agreement'")
-    && prepurchaseAuthority.includes("code !== 'select_plan'")
-    && prepurchaseAuthority.includes('orderForms.length !== 0')
-    && prepurchaseAuthority.includes("flow: 'prepurchase_master_acceptance'")
-    && prepurchaseAuthority.includes('authority_confirmed: true'),
-  'Pre-purchase Master acceptance must remain bound to the universal acceptance RPC, no-Order-Form state, current onboarding action, and post-acceptance select_plan transition.',
+    && prepurchaseAuthority.includes("flow: 'prepurchase_master_pdf_acceptance'")
+    && prepurchaseAuthority.includes('reviewed_pdf_sha256')
+    && prepurchaseAuthority.includes('reviewed_content_sha256')
+    && prepurchaseAuthority.includes("documentKind: 'master_agreement_pdf'"),
+  'Master acceptance must bind immutable Business/version authority to the exact reviewed Master PDF and content integrity.',
 );
 
 requireValue(
-  agreements.includes('authorityConfirmed: true')
-    && agreements.includes('I confirm I am authorised to act for this Business and accept this current SellerTray Master Agreement.'),
-  'Master Agreement acceptance must carry the explicit merchant authority confirmation shown in the UI.',
+  agreements.includes('Review Master Agreement')
+    && agreements.includes('reviewedPdfSha256')
+    && agreements.includes('reviewDocument.pdfSha256')
+    && agreements.includes('reviewDocument.contentSha256')
+    && agreements.includes("disabled={busy || !confirmed || !legalName.trim() || !reviewReady}"),
+  'Master acceptance UI must require the exact governed PDF to be opened before Accept & Continue is enabled.',
 );
 
 requireValue(
-  agreements.includes('commandIds.current.get(master.id)')
-    && agreements.includes('commandIds.current.set(master.id, commandId)')
-    && agreements.includes('commandIds.current.delete(master.id)'),
-  'Master Agreement acceptance must preserve one command identity per current version across failed retries and clear it only after success.',
+  excludes(agreements, ['<pre', '{master.contentBody}', 'Read Master Agreement text']),
+  'Master Agreement acceptance must be PDF-first and must not present the long inline legal text as the primary review surface.',
 );
 
 requireValue(
-  agreements.includes('This universal Master Agreement is accepted separately from your commercial purchase.')
-    && agreements.includes('This does not confirm a purchase.')
-    && agreements.includes('purchase-specific Order Form')
-    && agreements.includes('CommercialAgreementPackageManagement'),
-  'Merchant Master Agreement UI must keep universal legal acceptance independent of purchase/payment truth and hand off to the governed package after purchase.',
-);
-
-requireValue(
-  agreements.includes('<pre')
-    && agreements.includes('{master.contentBody}')
-    && agreements.includes("open><summary>Read Master Agreement text"),
-  'Pre-purchase Agreements must display the exact published Master Agreement text instead of an Order Form preparation placeholder.',
+  agreements.includes('This accepts only the current Master Agreement. It does not confirm any purchase, plan or Order Form.')
+    && agreements.includes('Each initial purchase, plan change or other governed commercial commitment uses its own Order Form'),
+  'Merchant Master Agreement copy must clearly separate legal acceptance from purchase-specific Order Form confirmation.',
 );
 
 requireValue(
@@ -96,15 +85,16 @@ requireValue(
     'SERVICE_ROLE',
     'SUPABASE_SECRET',
   ]),
-  'Pre-purchase Master Agreement surface must remain universal/legal-only and must not revive order-bound agreement or payment authority.',
+  'Master Agreement surface must remain universal/legal-only and must not revive order-bound agreement or payment authority.',
 );
 
 requireValue(
   packageAgreements.includes("action: 'merchant_confirm_package'")
     && packageAgreements.includes("action: 'merchant_get_document'")
     && packageAgreements.includes('expectedPackageFingerprint')
-    && packageAgreements.includes('orderFormId'),
-  'Post-purchase Agreement Package must retain exact Order Form/document review and fingerprint-bound confirmation authority.',
+    && packageAgreements.includes('orderFormId')
+    && packageAgreements.includes("'Confirm Purchase'"),
+  'Purchase-specific Order Form must retain exact PDF/fingerprint-bound confirmation using Confirm Purchase.',
 );
 
 const retiredGuardIndex = legacyAgreementApi.indexOf('if (RETIRED_AGREEMENT_MUTATIONS.has(action))');
@@ -133,10 +123,7 @@ requireValue(
   'SellerTray Billing must read server-owned settlement state and preserve governed checkout retry semantics.',
 );
 
-requireValue(
-  excludes(billing, ['SERVICE_ROLE', 'SUPABASE_SECRET', "from('sellertray_commercial_payment_confirmations')"]),
-  'SellerTray Billing must not bypass the governed commercial billing and checkout authorities.',
-);
+requireValue(excludes(billing, ['SERVICE_ROLE', 'SUPABASE_SECRET', "from('sellertray_commercial_payment_confirmations')"]), 'SellerTray Billing must not bypass governed commercial billing and checkout authorities.');
 
 if (failures.length) {
   console.error('SellerTray Master Agreement and billing preflight failed:');
@@ -144,4 +131,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log('SellerTray Master Agreement and billing preflight passed.');
+console.log('SellerTray separated Master Agreement and Order Form preflight passed.');
