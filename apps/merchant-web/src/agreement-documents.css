@@ -20,7 +20,7 @@
 .agreement-transcript > summary {
   cursor: pointer;
   font-weight: 700;
-  color: var(--ink, #102a43);
+  color: var(--navy, #102a43);
   padding: 10px 0;
 }
 .agreement-package-card {
@@ -36,6 +36,7 @@
 }
 .agreement-package-card-copy h3 {
   margin: 4px 0 8px;
+  color: var(--navy-strong, #0b2235);
 }
 .agreement-package-card-copy p {
   margin: 0;
@@ -60,7 +61,7 @@
 }
 .agreement-signature-form {
   margin-top: 18px;
-  border-top: 1px solid rgba(71, 84, 103, 0.16);
+  border-top: 1px solid var(--border, rgba(71, 84, 103, 0.16));
   padding-top: 18px;
 }
 .agreement-review-status {
@@ -68,9 +69,10 @@
   flex-direction: column;
   gap: 5px;
   padding: 14px 16px;
-  border: 1px solid rgba(71, 84, 103, 0.18);
+  border: 1px solid var(--border, rgba(71, 84, 103, 0.18));
   border-radius: 14px;
-  background: rgba(248, 250, 252, 0.96);
+  color: var(--navy, #102a43);
+  background: var(--surface-alt, #f8fafc);
 }
 .agreement-review-status.ready {
   border-color: rgba(18, 183, 106, 0.4);
@@ -98,7 +100,7 @@
   height: min(92vh, 980px);
   min-height: 560px;
   overflow: hidden;
-  border: 1px solid rgba(71, 84, 103, 0.2);
+  border: 1px solid var(--border, rgba(71, 84, 103, 0.2));
   border-radius: 20px;
   background: var(--surface, #fff);
   box-shadow: 0 28px 80px rgba(8, 27, 44, 0.34);
@@ -113,7 +115,7 @@
   background: var(--surface, #fff);
 }
 .agreement-preview-header {
-  border-bottom: 1px solid rgba(71, 84, 103, 0.16);
+  border-bottom: 1px solid var(--border, rgba(71, 84, 103, 0.16));
 }
 .agreement-preview-header h2 {
   margin: 2px 0 4px;
@@ -128,14 +130,14 @@
 .agreement-preview-frame-wrap {
   min-height: 0;
   overflow: hidden;
-  background: #e9eef3;
+  background: var(--surface-alt, #e9eef3);
 }
 .verified-pdf-viewer {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
   min-height: 0;
-  background: #dfe6ec;
+  background: var(--surface-alt, #dfe6ec);
 }
 .verified-pdf-toolbar {
   z-index: 2;
@@ -144,8 +146,8 @@
   justify-content: space-between;
   gap: 12px;
   padding: 10px 14px;
-  border-bottom: 1px solid rgba(71, 84, 103, 0.18);
-  background: rgba(248, 250, 252, 0.98);
+  border-bottom: 1px solid var(--border, rgba(71, 84, 103, 0.18));
+  background: var(--surface, #f8fafc);
 }
 .verified-pdf-page-controls {
   display: flex;
@@ -156,7 +158,7 @@
   min-width: 110px;
   text-align: center;
   font-weight: 700;
-  color: var(--ink, #102a43);
+  color: var(--navy, #102a43);
 }
 .verified-pdf-viewport {
   position: relative;
@@ -187,17 +189,18 @@
   gap: 8px;
   min-height: 220px;
   padding: 20px;
-  border: 1px solid rgba(71, 84, 103, 0.16);
+  border: 1px solid var(--border, rgba(71, 84, 103, 0.16));
   border-radius: 14px;
-  background: rgba(248, 250, 252, 0.94);
-  color: var(--ink, #102a43);
+  background: var(--surface, #f8fafc);
+  color: var(--navy, #102a43);
 }
 .verified-pdf-state span {
   color: var(--muted, #475467);
 }
 .verified-pdf-state.error {
   border-color: rgba(190, 18, 60, 0.24);
-  background: rgba(255, 241, 242, 0.96);
+  background: var(--danger-bg, rgba(255, 241, 242, 0.96));
+  color: var(--danger, #b42318);
 }
 .verified-pdf-rendering {
   position: sticky;
@@ -214,7 +217,7 @@
 }
 .agreement-preview-footer {
   align-items: stretch;
-  border-top: 1px solid rgba(71, 84, 103, 0.16);
+  border-top: 1px solid var(--border, rgba(71, 84, 103, 0.16));
 }
 .agreement-preview-footer .agreement-review-status {
   flex: 1 1 auto;
@@ -222,6 +225,45 @@
 .agreement-preview-footer > .primary-button {
   align-self: center;
   flex: 0 0 auto;
+}
+
+:root[data-theme="dark"] .agreement-package-card {
+  border-color: rgba(80, 216, 155, 0.34);
+  background: linear-gradient(135deg, rgba(18, 56, 41, 0.82), rgba(16, 36, 54, 0.98));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+:root[data-theme="dark"] .agreement-package-card-copy h3 {
+  color: var(--navy-strong);
+}
+:root[data-theme="dark"] .agreement-package-card-copy p,
+:root[data-theme="dark"] .agreement-package-actions small {
+  color: var(--muted);
+}
+:root[data-theme="dark"] .agreement-review-status {
+  border-color: var(--border);
+  color: var(--navy);
+  background: #0c1d2d;
+}
+:root[data-theme="dark"] .agreement-review-status.ready {
+  border-color: #246646;
+  background: #123829;
+}
+:root[data-theme="dark"] .agreement-preview-modal {
+  border-color: var(--border);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.52);
+}
+:root[data-theme="dark"] .agreement-preview-frame-wrap,
+:root[data-theme="dark"] .verified-pdf-viewer {
+  background: #081725;
+}
+:root[data-theme="dark"] .verified-pdf-toolbar,
+:root[data-theme="dark"] .verified-pdf-state {
+  border-color: var(--border);
+  background: #0c1d2d;
+}
+:root[data-theme="dark"] .verified-pdf-rendering {
+  background: rgba(8, 23, 37, 0.92);
+  color: #f5f8fb;
 }
 
 @media (max-width: 860px) {
