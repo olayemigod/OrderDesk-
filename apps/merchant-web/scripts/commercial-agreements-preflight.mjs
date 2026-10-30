@@ -9,6 +9,7 @@ const navigation = read('src/portalNavigation.ts');
 const agreements = read('src/CommercialAgreementsManagement.tsx');
 const packageAgreements = read('src/CommercialAgreementPackageManagement.tsx');
 const billing = read('src/SellerTrayBillingManagement.tsx');
+const setup = read('src/SetupSchedulingManagement.tsx');
 const prepurchaseAuthority = read('../../supabase/functions/master-agreement-prepurchase/index.ts');
 const separationMigration = read('../../supabase/migrations/20261030173500_separate_master_agreement_order_form_confirmation.sql');
 const legacyAgreementApi = read('../../supabase/functions/commercial-agreements/index.ts');
@@ -18,12 +19,22 @@ const excludes = (source, values) => values.every((value) => !source.includes(va
 
 requireValue(
   navigation.includes("id: 'sellertray_billing'")
-    && navigation.includes("label: 'SellerTray Billing'")
+    && navigation.includes("label: 'Billing'")
+    && navigation.includes("section: 'Business'")
     && navigation.includes("id: 'agreements'")
-    && navigation.includes("label: 'Master Agreement'")
+    && navigation.includes("label: 'Agreements'")
+    && navigation.includes("id: 'setup'")
+    && navigation.includes("label: 'Setup & Activation'")
+    && navigation.indexOf("id: 'agreements'") < navigation.indexOf("id: 'sellertray_billing'")
+    && navigation.indexOf("id: 'sellertray_billing'") < navigation.indexOf("id: 'setup'")
     && navigation.includes("id: 'payments'")
     && navigation.includes("label: 'Payments & Receivables'"),
-  'Merchant navigation must keep SellerTray Billing, Master Agreement, and customer Payments & Receivables as separate surfaces.',
+  'Merchant navigation must preserve the approved Agreements -> Billing -> Setup & Activation Business workflow while keeping customer Payments & Receivables separate.',
+);
+
+requireValue(
+  excludes(navigation, ["label: 'SellerTray Billing'", "label: 'Master Agreement'", "label: 'Setup appointments'"]),
+  'Merchant navigation must not regress approved merchant-facing labels back to internal commercial/legal names.',
 );
 
 requireValue(
@@ -31,7 +42,7 @@ requireValue(
     && merchantApp.includes('<SellerTrayBillingManagement tenantId={business.id} />')
     && merchantApp.includes("page === 'agreements'")
     && merchantApp.includes('<CommercialAgreementsManagement tenantId={business.id} />'),
-  'Merchant App must route SellerTray Billing and Master Agreement to their dedicated surfaces.',
+  'Merchant App must route Billing and Agreements to their dedicated surfaces.',
 );
 
 requireValue(!management.includes('CommercialAgreementsManagement'), 'Merchant Settings must remain settings-only and must not embed legal agreement authority.');
@@ -114,6 +125,13 @@ requireValue(
   'Database Order Form confirmation must require an existing Master acceptance and must never manufacture one.',
 );
 
+requireValue(
+  billing.includes('<h2>Billing</h2>')
+    && setup.includes('<h2>Setup & Activation</h2>')
+    && agreements.includes('<h2>Agreements</h2>'),
+  'Commercial onboarding page headings must match the approved Agreements -> Billing -> Setup & Activation workflow labels.',
+);
+
 const retiredGuardIndex = legacyAgreementApi.indexOf('if (RETIRED_AGREEMENT_MUTATIONS.has(action))');
 const legacyAcceptIndex = legacyAgreementApi.indexOf("if (action === 'merchant_accept')");
 const legacyPublishIndex = legacyAgreementApi.indexOf("if (action === 'admin_publish_template')");
@@ -137,10 +155,10 @@ requireValue(
     && billing.includes('nextPayableAmount')
     && billing.includes("response.status === 'retry_required'")
     && billing.includes('response.needsNewCommand === true'),
-  'SellerTray Billing must read server-owned settlement state and preserve governed checkout retry semantics.',
+  'Billing must read server-owned settlement state and preserve governed checkout retry semantics.',
 );
 
-requireValue(excludes(billing, ['SERVICE_ROLE', 'SUPABASE_SECRET', "from('sellertray_commercial_payment_confirmations')"]), 'SellerTray Billing must not bypass governed commercial billing and checkout authorities.');
+requireValue(excludes(billing, ['SERVICE_ROLE', 'SUPABASE_SECRET', "from('sellertray_commercial_payment_confirmations')"]), 'Billing must not bypass governed commercial billing and checkout authorities.');
 
 if (failures.length) {
   console.error('SellerTray Master Agreement and billing preflight failed:');
