@@ -24,8 +24,9 @@ type AgreementDocument = {
   artifactId: string; artifactKind: 'review_pdf' | 'executed_pdf'; packageId: string; packageFingerprint: string;
   pdfSha256: string; byteSize: number; generatedAt: string; fileName: string; signedUrl: string; expiresInSeconds: number;
 };
+type Props = { tenantId: string; onChanged?: () => void | Promise<void> };
 
-export default function CommercialAgreementPackageManagement({ tenantId }: { tenantId: string }) {
+export default function CommercialAgreementPackageManagement({ tenantId, onChanged }: Props) {
   const [center, setCenter] = useState<AgreementCenter | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [legalName, setLegalName] = useState('');
@@ -120,6 +121,7 @@ export default function CommercialAgreementPackageManagement({ tenantId }: { ten
       setCenter(next); setSelectedId(selected.id); setLegalName(''); setConfirmed(false);
       setReviewDocument(null); setReviewedFingerprint(null); setExecutedDocument(null);
       setMessage('Purchase confirmed under your accepted Master Agreement.');
+      await onChanged?.();
     } catch (cause) { setError(errorMessage(cause, 'Unable to confirm this SellerTray Order Form.')); }
     finally { setBusy(false); }
   }
