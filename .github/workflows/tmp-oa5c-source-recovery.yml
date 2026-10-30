@@ -1,0 +1,134 @@
+name: Temporary OA5C source recovery validation
+
+on:
+  push:
+    branches:
+      - tmp/oa5c-source-recovery
+
+permissions:
+  contents: write
+
+jobs:
+  validate-and-integrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact temporary branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch and verify sandbox-tested recovery patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL 'https://sb-54cs4y1tuc46.vercel.run/oa5c-recovery.patch' -o /tmp/oa5c-recovery.patch
+          echo '68fdae25efd7c7880184a4757a1d3d78ff5b40e9b7bb8d8f116a29f1e3cf4972  /tmp/oa5c-recovery.patch' | sha256sum -c -
+          git apply --check /tmp/oa5c-recovery.patch
+          git apply /tmp/oa5c-recovery.patch
+          git diff --check
+
+      - name: Enforce bounded recovery scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          allowed='^(\.agents/skills/sellertray-project-implementation/(OA5_C2_SEQUENCE\.md|SKILL\.md)|\.github/workflows/database-ci\.yml|docs/oa5c-controlled-real-merchant-proof\.md|supabase/functions/master-agreements/(agreement-pdf\.ts|merchant-review-contract\.mjs)|supabase/migrations/(20261027100000_master_order_form_package_oa5c_convergence|20261027100100_order_form_admin_boundary_and_legacy_retirement|20261027100200_agreement_package_no_master_read_hardening|20261027100300_agreement_package_retry_response_hardening|20261027100400_agreement_package_activation_compatibility|20261027100500_agreement_package_fk_index_hardening|20261027123000_master_agreement_publication_quarantine|20261027170000_agreement_document_artifacts|20261027170100_agreement_document_admin_projection_convergence|20261027173000_agreement_package_zero_touch_orchestration|20261027224913_agreement_package_processing_self_healing|20261028052000_agreement_package_activation_compatibility_forward_convergence|20261028170000_oa5c_production_test_business_proof_convergence|20261028180000_order_form_production_authority|20261029060000_merchant_agreement_review_performance_hardening)\.sql|supabase/tests/(master_agreement_quarantine_authority|oa5c_production_test_business_proof_verifier|order_form_production_authority|sellertray_agreement_activation_provenance_convergence|sellertray_agreement_package_no_master_read|sellertray_agreement_processing_self_healing|sellertray_agreement_zero_touch_orchestration|sellertray_master_order_form_packages)\.test\.sql)$'
+          unexpected="$(git diff --name-only | grep -Ev "$allowed" || true)"
+          if [ -n "$unexpected" ]; then
+            echo "Unexpected recovery paths:" >&2
+            printf '%s\n' "$unexpected" >&2
+            exit 1
+          fi
+          test "$(git diff --name-only | wc -l)" -eq 29
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Verify Merchant Agreement renderer/review contract
+        run: node supabase/functions/master-agreements/merchant-review-contract.mjs
+
+      - name: Verify existing static database contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node supabase/functions/financial-document/tax-contract.mjs
+          node supabase/tests/tax-backfill-generated-line-contract.mjs
+          node supabase/functions/paystack-webhook/c1b-contract.mjs
+          node supabase/functions/billing-checkout/c1b-contract.mjs
+          node --test supabase/functions/billing-checkout/oa2-retry.test.mjs
+          node supabase/functions/commercial-agreements/c1b-contract.mjs
+          node --test supabase/functions/platform-admin-setup-scheduling/oa4.test.mjs
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.117.0
+
+      - name: Initialize local Supabase config
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f supabase/config.toml ]; then
+            supabase init
+          fi
+          sed -i -E 's/^project_id = ".*"$/project_id = "sellertray-ci"/' supabase/config.toml
+          grep -q '^project_id = "sellertray-ci"$' supabase/config.toml
+
+      - name: Start database-only Supabase stack
+        run: >-
+          supabase start --debug
+          -x gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+
+      - name: Replay all migrations from clean schema
+        run: supabase db reset
+
+      - name: Run SellerTray database tests
+        run: supabase test db
+
+      - name: Commit only after clean-schema validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f package-lock.json apps/merchant-web/package-lock.json
+          git add \
+            .agents/skills/sellertray-project-implementation/OA5_C2_SEQUENCE.md \
+            .agents/skills/sellertray-project-implementation/SKILL.md \
+            .github/workflows/database-ci.yml \
+            docs/oa5c-controlled-real-merchant-proof.md \
+            supabase/functions/master-agreements/agreement-pdf.ts \
+            supabase/functions/master-agreements/merchant-review-contract.mjs \
+            supabase/migrations/20261027100000_master_order_form_package_oa5c_convergence.sql \
+            supabase/migrations/20261027100100_order_form_admin_boundary_and_legacy_retirement.sql \
+            supabase/migrations/20261027100200_agreement_package_no_master_read_hardening.sql \
+            supabase/migrations/20261027100300_agreement_package_retry_response_hardening.sql \
+            supabase/migrations/20261027100400_agreement_package_activation_compatibility.sql \
+            supabase/migrations/20261027100500_agreement_package_fk_index_hardening.sql \
+            supabase/migrations/20261027123000_master_agreement_publication_quarantine.sql \
+            supabase/migrations/20261027170000_agreement_document_artifacts.sql \
+            supabase/migrations/20261027170100_agreement_document_admin_projection_convergence.sql \
+            supabase/migrations/20261027173000_agreement_package_zero_touch_orchestration.sql \
+            supabase/migrations/20261027224913_agreement_package_processing_self_healing.sql \
+            supabase/migrations/20261028052000_agreement_package_activation_compatibility_forward_convergence.sql \
+            supabase/migrations/20261028170000_oa5c_production_test_business_proof_convergence.sql \
+            supabase/migrations/20261028180000_order_form_production_authority.sql \
+            supabase/migrations/20261029060000_merchant_agreement_review_performance_hardening.sql \
+            supabase/tests/master_agreement_quarantine_authority.test.sql \
+            supabase/tests/oa5c_production_test_business_proof_verifier.test.sql \
+            supabase/tests/order_form_production_authority.test.sql \
+            supabase/tests/sellertray_agreement_activation_provenance_convergence.test.sql \
+            supabase/tests/sellertray_agreement_package_no_master_read.test.sql \
+            supabase/tests/sellertray_agreement_processing_self_healing.test.sql \
+            supabase/tests/sellertray_agreement_zero_touch_orchestration.test.sql \
+            supabase/tests/sellertray_master_order_form_packages.test.sql
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'OA5C: restore agreement proof source authority'
+          git push origin HEAD:${GITHUB_REF_NAME}
+
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup
