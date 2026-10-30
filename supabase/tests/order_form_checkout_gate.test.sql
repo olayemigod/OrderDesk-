@@ -30,7 +30,7 @@ select extensions.ok(
   'exact checkout command replay is evaluated before the new Order Form gate'
 );
 select extensions.ok(
-  position("s.status in ('preparing','initialized','paid')" in lower(pg_get_functiondef('public.reserve_sellertray_installment_checkout(uuid,uuid,uuid,uuid,text)'::regprocedure)))
+  position('s.status in (''preparing'',''initialized'',''paid'')' in lower(pg_get_functiondef('public.reserve_sellertray_installment_checkout(uuid,uuid,uuid,uuid,text)'::regprocedure)))
     < position('sellertray_commercial_order_forms' in lower(pg_get_functiondef('public.reserve_sellertray_installment_checkout(uuid,uuid,uuid,uuid,text)'::regprocedure))),
   'existing active checkout sessions remain reusable before the new Order Form gate'
 );
