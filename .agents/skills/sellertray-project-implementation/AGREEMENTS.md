@@ -1,258 +1,294 @@
-# SellerTray Master Agreement Governance
+# SellerTray Agreement Governance
 
-Status: **Normative extension of `SKILL.md` for SellerTray legal agreement publication, merchant acceptance and service-delivery gating.**
+Status: **Normative extension of `SKILL.md` for SellerTray legal agreement publication, merchant acceptance, Order Forms, agreement evidence and service-delivery gating.**
 
-This file records the later explicit product decision that replaces the older order-bound C1A agreement model for all current and future SellerTray behavior.
+This file records the latest explicit SellerTray agreement decision and controls wherever older agreement, commercial, onboarding, C1/C1A, Merchant Web or repository wording conflicts.
 
-## Governing rule
+## Governing legal/commercial model
 
-> SellerTray uses one universal, platform-wide, versioned Master Agreement. A Business accepts the current required version once. Agreement acceptance is never repeated merely because another commercial order is created.
+SellerTray maintains two separate governed instruments:
 
-The Master Agreement is legal/governance authority. Commercial orders, pricing, installments, discounts, payments and setup obligations remain independent governed commercial facts even when they are presented to the Merchant as part of one consolidated Agreement Package and one acceptance experience.
+1. **Universal Master Agreement** — the continuing legal framework between ProcessEdge Solutions Limited and a SellerTray Business.
+2. **Merchant Order Form** — the purchase-specific commercial instrument for an initial purchase or later governed commercial commitment/change.
 
-## Build 43 first-purchase sequencing decision
+These instruments must remain separate in authority, persistence, acceptance/confirmation evidence and lifecycle.
 
-The later approved first-purchase lifecycle for a new Business is:
+> **Accept the Master Agreement once per Business/current required version. Confirm an Order Form for each governed commercial commitment that requires merchant confirmation.**
 
-> **Business/Branch preparation -> current Master Agreement review and acceptance -> initial plan selection/purchase -> purchase-specific Order Form/confirmation where required -> payment/settlement -> setup/readiness -> entitlement reconciliation/activation.**
+Do not require a merchant to re-accept an unchanged Master Agreement merely because the merchant buys again, changes plan, adds a Branch, renews on materially changed commercial terms, buys equipment, or enters another separately governed commercial commitment.
 
-This is a narrow first-purchase entry rule and must not be broadened into a new dependency between Master acceptance and already-created commercial/payment truth.
+Do not treat Order Form confirmation as Master Agreement acceptance. Do not treat Master Agreement acceptance as Order Form confirmation or payment.
 
-1. Branch preparation remains first when the Business has no eligible active Branch.
-2. Once Branch preparation is sufficient and no governed initial commercial order exists, the current required Master Agreement must be published and accepted before Merchant Web exposes `select_plan` or allows the Owner to create the first governed purchase.
-3. The first-purchase command and Billing read model must enforce this server-side. Hiding the plan selector in a client is not sufficient authority.
-4. After the first governed purchase exists, its commercial order, installment obligation, payment checkout, payment history and settlement truth remain independently governed. Pending or later-required Master acceptance must not rewrite, fabricate, cancel or erase those facts.
-5. A later order, renewal or Branch purchase under the same unchanged required Master version must reuse the existing Business/version acceptance and must not request another Master acceptance merely because new commercial facts exist.
-6. Any purchase-specific Order Form/confirmation required after the governed purchase is a separate commercial instrument. Its existence or confirmation must not create a new universal Master version or duplicate Master acceptance.
-7. Payment or settlement evidence never counts as Master Agreement acceptance. Likewise, Master acceptance never counts as payment.
-8. Existing checkout compatibility tests that prove an already-created governed order can preserve its independent payment lifecycle remain valid; they do not authorize bypassing the pre-order first-purchase gate.
+## Approved lifecycle
 
-This section is the later explicit product decision and controls wherever older language in this file, `ONBOARDING_ACTIVATION.md`, `COMMERCIAL.md`, C1/C1B tests, or repository instructions could otherwise be read to permit a new Business to enter its first purchase before accepting the current Master Agreement.
+For a new Business, the approved first-purchase lifecycle is:
 
-## Consolidated Agreement Package and acceptance UX
+> **Business/Branch preparation -> review current Master Agreement PDF -> accept current Master Agreement -> select plan/create first purchase -> generate purchase-specific Order Form -> review Order Form PDF -> confirm purchase/Order Form -> payment/settlement -> setup/readiness -> entitlement reconciliation/activation.**
 
-SellerTray deliberately avoids a cumbersome experience in which a Merchant is asked to separately accept the Master Agreement, each incorporated Schedule, the Data Processing Addendum, Acceptable Use Policy, commercial terms, equipment terms and Merchant Order Form through multiple checkboxes or signing steps.
+For a later commercial change under an unchanged Master Agreement:
 
-The approved Merchant experience is:
+> **Select/change commercial commitment -> generate a new Order Form -> review the new Order Form PDF -> confirm the new Order Form -> settle any resulting obligation -> reconcile entitlements.**
 
-> **One Agreement Package. One review experience. One affirmative acceptance action. Multiple governed and versioned components behind it.**
+Examples include, where governed confirmation is required:
 
-Rules:
+- initial subscription purchase;
+- plan upgrade;
+- plan downgrade where commercial acknowledgement is required;
+- Branch subscription/addition;
+- equipment purchase;
+- separately priced add-on;
+- renewal with materially changed commercial terms;
+- another governed purchase that creates new merchant-specific commercial obligations.
 
-1. The consolidated package may present the universal Master Agreement, incorporated Schedules and the applicable Merchant Order Form together as one coherent contractual package.
-2. The Merchant must not be forced through separate acceptance controls for every incorporated Schedule merely because the documents are independently governed or versioned internally.
-3. Schedule 9 / the Merchant Order Form may contain Merchant-specific commercial facts such as Plan, price, Branches, Equipment, discounts, renewal terms and other approved purchase particulars and may be included in the consolidated acceptance presentation.
-4. Including the Merchant Order Form in the consolidated presentation does **not** make the universal Master Agreement merchant-specific and does **not** require ProcessEdge to create a new copy or new version of the universal Master Agreement for that order.
-5. The persistence identity and lifecycle of the universal Master Agreement, incorporated Schedules, commercial Order Form and their evidence may remain distinct even though the Merchant experiences one consolidated review/acceptance transaction.
-6. A later commercial order, Branch purchase, installment schedule or renewal under an unchanged required Master Agreement version must not require the Merchant to re-accept that unchanged Master Agreement merely because new commercial facts exist. Any affirmative acceptance required for the new commercial instrument is governed separately while the existing universal Master Agreement acceptance remains valid.
-7. When a new Master Agreement version requiring re-acceptance becomes effective, SellerTray may again present the required legal package and relevant commercial context in one consolidated acceptance experience.
-8. Acceptance evidence must make it possible to determine exactly which universal legal version(s) and which applicable Merchant-specific commercial instrument were presented/accepted, without conflating their underlying authorities.
+A later purchase must create or resolve its own Order Form. It must not mutate a historical Order Form in place.
 
-## Current approved legal draft baseline
+## Universal Master Agreement contract
 
-The current ProcessEdge-approved drafting baseline is the **SellerTray Master Services and Subscription Agreement — Consolidated Counsel Review Copy v0.9**, including the Master Agreement and Schedules 1–9 as drafted and consolidated in the approved legal workstream.
+1. There is one platform-wide SellerTray Master Agreement content/version in force at a time, subject to effective-date/version governance.
+2. The same exact published Master version applies to every merchant. Do not create merchant-specific Master Agreement wording in the normal SellerTray contract path.
+3. Merchant-specific facts such as plan, price, Branch, equipment, discounts, installment schedule, renewal particulars and commercial order identity belong in the Order Form/commercial record, not in Master Agreement version identity.
+4. A Business accepts a required Master Agreement version once.
+5. Acceptance remains valid for that immutable version until a newer required version becomes effective and requires re-acceptance.
+6. Acceptance of version N never counts as acceptance of version N+1 when N+1 requires re-acceptance.
+7. Acceptance for one Business never counts for another Business.
+8. Publishing a new Master version must not rewrite historical Master acceptance or historical Order Forms.
+9. Already-earned entitlement periods are not silently deleted or shortened merely because a new Master version is published.
+10. If no required Master version is published, the governed first-purchase/service-delivery boundary fails closed.
 
-ProcessEdge has explicitly decided to proceed with **v0.9 without waiting for external counsel review**. This is a product/commercial approval decision and must not be misrepresented as external legal advice or external counsel approval.
+## Master Agreement presentation and acceptance UX
 
-Rules for this baseline:
+The approved Merchant Web presentation is **PDF-first**, not a long inline legal-text page.
 
-1. Preserve v0.9 as the current approved baseline unless ProcessEdge expressly approves a later version.
-2. If a later external legal review produces significant changes, create and govern a new version rather than silently rewriting the accepted v0.9 text or its historical acceptance evidence.
-3. Minor drafting or formatting corrections must still follow the governed publication/versioning rules once v0.9 has been published; published content is immutable.
-4. The v0.9 commercial positions include the approved 30-calendar-day Money-Back Guarantee from Activation Date, no defect requirement for a qualifying suitability claim, no deduction for reasonable included usage, Qualifying Initial Purchase scope, required ProcessEdge-supplied Equipment returned in Good Condition, refund initiation within 10 Business Days after eligibility verification and required receipt/inspection, and the approved return-transport allocation.
-5. Customer payment method, payment transaction value and payment transaction count are not standard SellerTray Subscription meters.
-6. Planned features are not current contractual Entitlements.
-7. Payment and fulfilment remain separate business facts.
-8. SellerTray AI assists and does not acquire independent authority to bypass governed permissions or make unauthorised material financial commitments.
-9. ProcessEdge remains the contracting legal entity; SellerTray is the product/service.
+The Merchant Web Master Agreement screen should show a concise professional summary containing at minimum:
 
-## Universal agreement contract
+- agreement title;
+- version;
+- effective date;
+- acceptance status;
+- accepted-by/accepted-at evidence when already accepted;
+- a clear **Review Master Agreement** action.
 
-1. There is one SellerTray Master Agreement content/version in force platform-wide at a time.
-2. The same published universal Master Agreement version and exact universal content applies to every merchant. Do not generate merchant-specific Master Agreement wording or Business-specific variants in the normal SellerTray contract path. Merchant-specific commercial particulars belong in the governed Order Form/commercial instrument.
-3. A Business accepts a required Master Agreement version once. Creating another commercial order, Branch purchase, installment schedule or renewal under the same required version must not require the Business to re-accept that unchanged Master Agreement.
-4. Acceptance remains valid for that exact immutable published version until a newer required version becomes effective and re-acceptance is required by the governed change classification.
-5. When a newer version requiring re-acceptance becomes effective, a Business that has accepted only an older version has not accepted the new version and must accept it before the next governed service-delivery commitment that requires the current Master Agreement.
-6. Publishing a new version must not rewrite or invalidate historical acceptance evidence and must not retroactively erase already-earned entitlement periods.
-7. If no effective Master Agreement version has been published, a new first purchase or later service-delivery/activation commitment that requires the current Master Agreement fails closed. Do not silently treat a QA template, legacy order agreement or user Terms/Privacy consent as the Master Agreement.
+When acceptance is required:
 
-## Relationship to the commercial order process
+1. **Review Master Agreement** opens the exact governed Master Agreement PDF in a new browser tab/window or approved professional PDF viewer.
+2. The authoritative acceptance action remains disabled until the exact current PDF has been opened successfully for review.
+3. SellerTray binds acceptance evidence to the current Master Agreement version/content hash and the exact reviewed PDF hash/evidence.
+4. The merchant provides the authorised representative legal name and confirms authority.
+5. The affirmative button is **Accept & Continue**.
+6. This action accepts only the current Master Agreement. It must not confirm a purchase, plan or Order Form.
+7. The long `content_body` may remain available to the system for indexing, audit, accessibility, search, version integrity and PDF fallback generation, but it is not the primary Merchant Web reading surface.
 
-Master Agreement authority remains distinguishable from commercial-order truth even when the UI presents them together.
+If ProcessEdge published a reviewed source PDF for the Master version, Merchant Web should present that exact reviewed PDF. If a historical/text-published version has no stored source PDF, SellerTray may generate a deterministic professional PDF from the immutable published content and bind acceptance to that generated document hash.
 
-- A merchant may create or receive a commercial order without generating a new universal Master Agreement; however, SellerTray's governed **new-Business first-purchase** workflow requires current Master acceptance before `select_plan` and first purchase creation as defined above.
-- Payment or settlement progression does not itself create or prove Master Agreement acceptance.
-- Installment checkout for an already-created governed order must not require a separate copy/version of the universal Master Agreement.
-- The first-subscription experience reviews and accepts the current Master before initial plan/purchase; the resulting Merchant Order Form/commercial instrument is then generated and confirmed separately where required.
-- A later commercial order under an unchanged Master Agreement version uses the existing Master Agreement acceptance and separately captures any required commercial-order acceptance/evidence.
-- Service delivery/activation checks the current effective Master Agreement acceptance in addition to independent settlement/setup/entitlement prerequisites.
+## Master Agreement acceptance authority
 
-Do not make `commercial_order_id`, `installment_obligation_id`, Branch ID, plan, price or payment terms part of the **universal Master Agreement version identity**. Those facts may be associated with the consolidated acceptance evidence through the applicable Order Form/commercial instrument without changing the universal Master Agreement itself.
+Master Agreement acceptance is Business-scoped and version-scoped.
 
-## Version authority
-
-Each published Master Agreement version is immutable and must include at minimum:
-
-- stable version identity/code;
-- title;
-- exact content body;
-- content hash;
-- effective timestamp;
-- publishing ProcessEdge actor;
-- publication reason;
-- publication/audit timestamp.
-
-A later version is a new immutable record. Do not edit an already published version in place.
-
-The current required version at a point in time is the latest published Master Agreement whose `effective_from` is not later than that point in time, subject to the governed change/re-acceptance classification.
-
-Future-dated publication is permitted so ProcessEdge can prepare a new version before it becomes required.
-
-## Merchant acceptance authority
-
-Master Agreement acceptance is Business-scoped and version-scoped. Consolidated package evidence may additionally associate the applicable Merchant Order Form/commercial instrument presented in the same acceptance experience.
-
-Required evidence includes:
+Required evidence includes at minimum:
 
 - Business/tenant ID;
-- Master Agreement version ID/code and content-hash snapshot;
+- Master Agreement version ID/code;
+- immutable Master content hash;
+- reviewed Master PDF hash/evidence;
 - accepting authenticated user;
 - accepted legal name;
 - merchant role/authority at acceptance time;
 - acceptance method/channel;
-- request evidence appropriate to the channel;
 - idempotency command ID;
 - server acceptance timestamp;
-- where applicable, the exact incorporated Schedule versions and Merchant Order Form/commercial instrument identifier/version presented in the consolidated package.
+- appropriate request evidence.
+
+Authority rules:
+
+1. Business Owner may accept.
+2. A Manager may accept only when the existing explicit commercial-agreement capability authorises that Manager.
+3. Staff/Cashier cannot accept.
+4. One Business/version has at most one authoritative Master Agreement acceptance record.
+5. Exact command replay must be duplicate-safe.
+6. Acceptance history remains immutable after later role/staff changes.
+
+## Merchant Order Form contract
+
+The Merchant Order Form is a separate merchant-specific commercial instrument.
+
+Each governed commercial commitment that requires merchant confirmation must have its own immutable Order Form identity and commercial snapshot.
+
+An Order Form should preserve, as applicable:
+
+- Business identity;
+- commercial order/reference;
+- plan/profile and applicable version;
+- Branch scope;
+- price lines;
+- discounts/approved adjustments;
+- tax/VAT presentation;
+- installment/payment schedule where applicable;
+- equipment/add-ons where applicable;
+- effective/start/renewal particulars;
+- Order Form template/version;
+- rendered Order Form content;
+- commercial snapshot hash;
+- Order Form content hash;
+- issued timestamp;
+- supersession/replacement relationship where applicable.
 
 Rules:
 
-1. Business Owner may accept.
-2. A Manager may accept only when the existing explicit `can_accept_commercial_agreements` merchant capability authorises that Manager.
-3. Staff/Cashier cannot accept.
-4. One Business/version has at most one authoritative Master Agreement acceptance record, while separate commercial instruments retain their own governed evidence.
-5. Exact command replay must be duplicate-safe and must never create duplicate acceptance effects.
-6. Acceptance history is immutable even when the accepting user later changes role or leaves the Business.
-7. Acceptance of version N never counts as acceptance of version N+1 when N+1 requires re-acceptance.
-8. Acceptance for one Business never counts for another Business, even when the same user owns both.
+1. Initial purchase creates a purchase-specific Order Form.
+2. A later plan change or other separately governed commercial commitment creates a new Order Form where confirmation is required.
+3. Never overwrite a historical confirmed Order Form to represent later terms.
+4. A replacement/amendment Order Form must preserve the superseded instrument for history/audit.
+5. The Order Form references or operates under the accepted Master Agreement; it does not create a new universal Master Agreement version.
+6. Confirming a new Order Form under an unchanged Master Agreement must not create another Master acceptance.
 
-## First-purchase, service-delivery and entitlement gates
+## Order Form review and confirmation UX
 
-The Master Agreement participates in two distinct governed boundaries:
+Order Form confirmation is distinct from Master Agreement acceptance.
 
-1. **Initial first-purchase entry:** after Branch preparation and before a new Business may enter `select_plan`/create its first governed purchase, the current Master version must be published and accepted.
-2. **Service delivery/entitlement:** before a new entitlement or activation effect is released, the current required Master acceptance is independently reconciled with commercial settlement and Branch setup/readiness.
+The purchase/change flow should present:
 
-For a new onboarding activation or another new entitlement/term commitment:
+- concise commercial summary;
+- purchase/Order Form reference;
+- plan and price details;
+- governed Order Form PDF review action;
+- authorised representative details where required;
+- a final **Confirm Purchase** or **Confirm Order Form** action.
 
-1. resolve the current effective Master Agreement version;
-2. verify that the Business has immutable acceptance for that exact required version;
-3. independently verify the applicable commercial settlement prerequisites;
-4. independently verify Branch setup/readiness prerequisites where applicable;
-5. only then allow the governed entitlement/service-delivery reconciliation to create the new entitlement effect.
+The final action must not be labelled **Accept & Continue** when the Master Agreement is already accepted.
 
-The first-purchase entry gate does not make Master acceptance a substitute for payment, and it does not invalidate the independent checkout/payment lifecycle of a governed order that already exists.
+The Order Form confirmation button remains disabled until the exact governed Order Form/review PDF has been opened and the merchant completes the required authority/confirmation controls.
 
-Already-earned active entitlement must not be deleted, shortened or rewritten merely because a newer Master Agreement version is published. A newer version requiring re-acceptance becomes the acceptance requirement for the next new governed service-delivery commitment after its effective date.
+Order Form confirmation evidence must bind to the exact Order Form/commercial snapshot/package fingerprint or equivalent immutable evidence used by the implementation.
+
+## Agreement Package PDF
+
+SellerTray may generate an Agreement Package PDF for convenience, audit, download or execution evidence. Packaging documents together does **not** merge their legal authorities.
+
+A package may contain:
+
+- a cover page;
+- the governing Master Agreement for reference;
+- the purchase-specific Order Form;
+- integrity/fingerprint evidence;
+- an electronic execution certificate after confirmation.
+
+However:
+
+1. Master Agreement acceptance remains its own Business/version fact.
+2. Order Form confirmation remains its own purchase-specific fact.
+3. An unchanged Master Agreement included in a later package is reference material and is not re-accepted by confirming the new Order Form.
+4. The package UI must not imply that the merchant is accepting the Master Agreement twice.
+5. Where clearer UX is achieved by presenting a Master-only PDF first and an Order-Form-focused PDF later, prefer that separation.
+
+## Current approved legal draft baseline
+
+The current ProcessEdge-approved drafting baseline remains the **SellerTray Master Services and Subscription Agreement — Consolidated Counsel Review Copy v0.9**, including its approved incorporated Schedules.
+
+ProcessEdge has approved proceeding with v0.9 without waiting for external counsel review. Do not represent this as external counsel approval.
+
+Preserve the approved v0.9 positions, including the approved 30-calendar-day Money-Back Guarantee and the previously approved eligibility/return/refund conditions, unless ProcessEdge explicitly approves a later legal version.
+
+Published Master content is immutable. A material later legal change creates a new governed version rather than rewriting accepted v0.9 history.
+
+## First-purchase and service-delivery gates
+
+The Master Agreement participates in two independent governed boundaries:
+
+1. **Initial first-purchase entry:** after required Business/Branch preparation and before first plan selection/purchase creation, the current required Master Agreement must be published and accepted.
+2. **Service delivery/entitlement:** before a new governed entitlement/activation effect is released, SellerTray independently reconciles current Master acceptance, commercial confirmation/settlement and setup/readiness prerequisites.
+
+Master acceptance is not payment. Payment is not Master acceptance. Order Form confirmation is not payment.
+
+An already-created governed commercial/payment obligation must retain its independent truth; do not fabricate, erase or rewrite payment facts because agreement state changes.
+
+## New Master version while a Business already has Order Forms
+
+Historical Order Forms must never block a required new Master-version acceptance.
+
+When a new required Master version becomes effective:
+
+1. Merchant Web must surface the Master Agreement review/acceptance flow independently of historical Order Forms.
+2. The merchant reviews the new Master PDF and accepts that version once.
+3. Existing historical Order Form confirmations remain intact.
+4. SellerTray must not require a historical purchase to be re-confirmed solely because the Master version changed.
+5. A subsequent new commercial commitment receives its own new Order Form under the then-current accepted Master version.
 
 ## Admin Web
 
-The **Agreements** workspace is platform-scoped legal publication/governance. Commercial Order Forms remain governed commercial records even when their content participates in a consolidated Merchant acceptance experience.
-
 ProcessEdge Admin may:
 
-- review current and historical Master Agreement versions;
-- publish a new immutable universal version through the governed capability;
-- inspect Business acceptance status/history when a Merchant context is selected;
-- audit who published and who accepted each version;
-- inspect the commercial instrument associated with a consolidated acceptance where authorised.
+- review current/historical Master Agreement versions;
+- publish a new immutable Master version;
+- publish a reviewed Master PDF;
+- review Business acceptance status/history;
+- inspect Order Forms and their confirmation evidence;
+- inspect package/document integrity evidence;
+- reconcile approved Order Form/package generation where authorised.
 
 ProcessEdge Admin must not:
 
-- create a bespoke universal Master Agreement version for a selected merchant merely to represent commercial particulars;
-- replace the universal Master Agreement for only one merchant;
-- edit published content in place;
-- mark acceptance on behalf of a merchant by direct database write.
+- create merchant-specific variants of the universal Master Agreement merely to hold commercial particulars;
+- edit a published Master version in place;
+- mark merchant acceptance by direct database write;
+- silently rewrite confirmed Order Forms.
 
-Use a semantic publication capability such as `admin.agreements.publish`; read authority remains separately governed.
+## Legacy agreement evidence
 
-## Merchant Web
+Legacy `sellertray_commercial_agreements` and `sellertray_commercial_agreement_acceptances` remain historical evidence from the older order-bound design.
 
-Merchant Web provides the governed legal/commercial review experience.
-
-Before the first purchase exists, it must show the exact current published Master Agreement body and the authorised acceptance action when acceptance is required. It must not show an Order-Form placeholder as though the Master itself were still being prepared.
-
-After a governed purchase exists, Merchant Web may show the purchase-specific Order Form/Agreement Package, including review/executed documents and the applicable confirmation action, while reusing any already-valid unchanged Master acceptance.
-
-It may show:
-
-- current effective Master Agreement version;
-- exact incorporated legal content and Schedules;
-- applicable Merchant Order Form/commercial particulars where part of the current transaction;
-- whether this Business has accepted the current required Master Agreement version;
-- accepted-by/accepted-at evidence where applicable;
-- version history;
-- one affirmative acceptance/confirmation action appropriate to the current governed stage and signed-in user's authority.
-
-Do not require a Merchant to separately accept every incorporated Schedule. Do not create a new universal Master Agreement version merely because an Order Form changes.
-
-## Legacy C1A order-bound agreements
-
-The existing `sellertray_commercial_agreements` and `sellertray_commercial_agreement_acceptances` records are legacy historical evidence from the earlier C1A design.
-
-They must remain immutable and readable for audit/history, but they are not current universal Master Agreement authority and must not be used as the sole proof of current Master Agreement acceptance for new SellerTray service delivery.
-
-Current-path code must not create merchant-specific copies/versions of the universal Master Agreement. Legacy issue/accept commands should fail closed or be retired while preserving historical reads. This does not prohibit governed Merchant Order Forms or consolidated acceptance evidence under the approved model.
+Preserve them for audit/history. They are not current universal Master Agreement authority for new SellerTray service delivery.
 
 ## Cross-surface effects
 
-- **Shared Core:** owns version resolution, immutable Business/version Master Agreement acceptance, first-purchase entry gating, commercial-instrument association and service-delivery checks.
-- **Merchant Web:** provides pre-purchase Master review/acceptance and the governed purchase-specific package/confirmation experience after purchase.
-- **Admin Web:** publishes universal legal versions, manages legal governance and reviews acceptance/commercial association; it does not create merchant-specific Master Agreement variants.
-- **Mobile:** surfaces the shared acceptance-required status/deep link when relevant but must not create separate agreement truth or first-purchase arithmetic.
-- **WhatsApp:** may notify or deep-link a merchant to the governed acceptance surface; WhatsApp chat text is not acceptance truth unless a later explicitly approved authenticated signing flow is designed.
-- **AI:** may explain status/terms from the governed version but cannot accept on behalf of a merchant.
-- **Reporting/audit:** version publication, Business acceptance and applicable commercial association are auditable immutable facts.
-- **Offline:** agreement acceptance is not an offline authoritative write; first-purchase entry and service-delivery reconciliation fail closed until the server has the required acceptance fact.
+- **Shared Core:** owns version resolution, Master acceptance, Order Form identity/snapshots, idempotency, agreement/payment/entitlement boundaries and audit evidence.
+- **Merchant Web:** provides Master PDF review/acceptance and separate Order Form review/confirmation.
+- **Admin Web:** publishes legal versions and operates authorised commercial/legal administration without impersonating merchant acceptance.
+- **Mobile:** may show agreement/Order Form status and hand off to Merchant Web; it does not create separate agreement truth.
+- **WhatsApp:** may notify/deep-link; chat text is not acceptance truth unless a later approved authenticated signing flow is created.
+- **AI:** may explain status/terms but cannot accept or confirm on behalf of the merchant.
+- **Reporting/Audit:** must distinguish Master acceptance from Order Form confirmation and payment.
+- **Offline:** authoritative legal acceptance/Order Form confirmation remains server-governed unless a later explicit offline signing design is approved.
 
-## QA gate
+## Required QA gate
 
 Verify at minimum:
 
-1. same current universal Master Agreement version/content is returned for different Businesses;
-2. Merchant-specific Order Form particulars do not mutate the universal Master Agreement content/version;
-3. Business A acceptance does not satisfy Business B;
-4. Owner acceptance succeeds;
+1. different Businesses resolve the same current universal Master version/content;
+2. merchant-specific commercial particulars do not mutate Master content/version;
+3. Business A Master acceptance does not satisfy Business B;
+4. Owner Master acceptance succeeds;
 5. explicitly authorised Manager acceptance succeeds;
-6. Staff acceptance fails;
-7. exact command replay does not duplicate acceptance effects;
-8. before a first purchase exists, Branch preparation outranks Master review when no eligible active Branch exists;
-9. after Branch preparation, published-but-unaccepted current Master resolves to `review_master_agreement`, not `select_plan`;
-10. the initial first-purchase command and Billing authority reject/disable purchase before current Master acceptance;
-11. accepting the current Master advances the no-order lifecycle to Merchant Web `select_plan`;
-12. the Merchant can review the exact published Master text and authorised acceptance action before the first purchase;
-13. after purchase, the Merchant can review the purchase-specific package/Order Form and required confirmation without losing the prior Master acceptance;
-14. a second commercial order under an unchanged Master Agreement version does not require re-acceptance of that unchanged Master Agreement;
-15. any required new-order commercial acceptance is captured without manufacturing a new Master Agreement version;
-16. payment/installment checkout for an already-created governed order is not falsely treated as Master Agreement acceptance and retains its independent authority;
-17. new activation/service-delivery commitment is blocked when no current required Master Agreement version exists;
-18. new activation/service-delivery commitment is blocked when the required current version is unaccepted;
-19. publishing version N+1 with re-acceptance required makes N-only acceptance insufficient for the next governed service-delivery commitment after N+1 becomes effective;
-20. accepting N+1 satisfies that requirement;
-21. legacy order-bound agreement history is unchanged;
-22. current-path APIs/UI cannot create merchant-specific variants of the universal Master Agreement;
-23. publication and acceptance write immutable audit/evidence;
-24. consolidated evidence can identify the exact legal version(s) and applicable Order Form/commercial instrument presented;
-25. cross-tenant and capability boundaries are enforced;
-26. no-order JSON `null` is treated as absence of a commercial order so the pre-purchase gate cannot be bypassed;
-27. exact first-purchase command replay remains duplicate-safe after an order has already been created.
+6. Staff/Cashier Master acceptance fails;
+7. exact Master acceptance replay is duplicate-safe;
+8. first purchase is blocked until current Master acceptance is valid;
+9. Merchant Web presents the Master as a professional PDF-first review rather than a long inline text wall;
+10. **Accept & Continue** is disabled until the exact current Master PDF is opened;
+11. acceptance evidence contains/binds the reviewed Master PDF/content integrity evidence;
+12. accepting Master advances first-purchase onboarding to governed plan selection;
+13. initial purchase creates its own Order Form;
+14. confirming the Order Form does not create another Master acceptance when the current Master is already accepted;
+15. a later plan change/other governed purchase creates a new Order Form where confirmation is required;
+16. historical Order Forms remain immutable and auditable after later plan changes;
+17. a new required Master version can be accepted even when historical Order Forms already exist;
+18. accepting the new Master does not rewrite or re-confirm historical Order Forms;
+19. Order Form confirmation uses **Confirm Purchase/Confirm Order Form**, not misleading Master-acceptance wording;
+20. payment/installment truth remains independent;
+21. activation/service-delivery fails closed when required current Master acceptance is missing;
+22. legacy agreement history remains unchanged;
+23. cross-tenant and capability boundaries are enforced;
+24. generated/reviewed PDFs preserve deterministic integrity evidence;
+25. exact Order Form confirmation replay remains duplicate-safe.
 
 ## Precedence
 
-This file records the latest explicit product decisions and therefore controls wherever older `COMMERCIAL.md`, `COMMERCIAL_C1.md`, `COMMERCIAL_V2.md`, `ONBOARDING_ACTIVATION.md`, Admin agreement wording, migrations, repository guidance or implementation comments conflict with:
+This file is the latest SellerTray agreement decision.
 
-- the universal Master Agreement authority;
-- the Build 43 first-purchase sequencing rule;
-- the consolidated one-review/one-acceptance Merchant UX;
-- the distinction between universal legal version identity and Merchant-specific commercial facts;
-- the approved v0.9 baseline and its later-version rule.
+It supersedes older wording that required or implied:
+
+- one combined Master + Order Form affirmative acceptance transaction;
+- re-acceptance of an unchanged Master Agreement on every purchase;
+- long inline Master Agreement text as the primary Merchant Web review UX;
+- Order Form confirmation simultaneously creating Master acceptance in the normal current path;
+- treating the Master Agreement and Order Form as one persistence identity.
+
+Where older `AGENTS.md`, `COMMERCIAL.md`, `COMMERCIAL_C1.md`, `COMMERCIAL_V2.md`, `ONBOARDING_ACTIVATION.md`, migrations, comments, UI copy or tests conflict with this separation, **this `AGREEMENTS.md` decision controls**.
