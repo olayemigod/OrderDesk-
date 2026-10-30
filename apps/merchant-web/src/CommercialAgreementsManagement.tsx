@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import CommercialAgreementPackageManagement from './CommercialAgreementPackageManagement';
 import { SellerTrayInput } from './SellerTrayElements';
+import VerifiedPdfPreview from './VerifiedPdfPreview';
+import { fetchVerifiedPdf } from './agreementPdf';
 import { errorMessage, supabase } from './supabase';
 import './agreement-documents.css';
 
@@ -14,7 +16,7 @@ export default function CommercialAgreementsManagement({ tenantId, onContinueToB
   const [center, setCenter] = useState<AgreementCenter | null>(null);
   const [reviewDocument, setReviewDocument] = useState<MasterReviewDocument | null>(null);
   const [reviewedPdfSha256, setReviewedPdfSha256] = useState<string | null>(null);
-  const [previewObjectUrl, setPreviewObjectUrl] = useState<string | null>(null);
+  const [previewBytes, setPreviewBytes] = useState<Uint8Array | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [legalName, setLegalName] = useState('');
   const [confirmed, setConfirmed] = useState(false);
@@ -34,7 +36,6 @@ export default function CommercialAgreementsManagement({ tenantId, onContinueToB
     window.addEventListener('keydown', closeOnEscape);
     return () => { document.body.style.overflow = previousOverflow; window.removeEventListener('keydown', closeOnEscape); };
   }, [previewOpen]);
-  useEffect(() => () => { if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl); }, [previewObjectUrl]);
 
   async function load() {
     setLoading(true); setError(null);
@@ -48,8 +49,7 @@ export default function CommercialAgreementsManagement({ tenantId, onContinueToB
   }
 
   function clearPreview() {
-    if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
-    setReviewDocument(null); setReviewedPdfSha256(null); setPreviewObjectUrl(null); setPreviewOpen(false);
+    setReviewDocument(null); setReviewedPdfSha256(null); setPreviewBytes(null); setPreviewOpen(false);
   }
 
   async function openMasterAgreement() {
@@ -60,15 +60,10 @@ export default function CommercialAgreementsManagement({ tenantId, onContinueToB
       const { data, error: functionError } = await supabase.functions.invoke('master-agreement-prepurchase', { body: { action: 'merchant_get_document', tenantId, agreementVersionId: master.id } });
       if (functionError) throw functionError;
       const document = parseReviewDocument(record(data).document);
-      const response = await fetch(document.signedUrl, { cache: 'no-store' });
-      if (!response.ok) throw new Error(`Master Agreement PDF download failed (${response.status}).`);
-      const bytes = await response.arrayBuffer();
-      if (!looksLikePdf(bytes)) throw new Error('SellerTray received an invalid Master Agreement PDF response.');
-      if (document.byteSize > 0 && bytes.byteLength !== document.byteSize) throw new Error('Master Agreement PDF size did not match the published document.');
-      if (await sha256Hex(bytes) !== document.pdfSha256.toLowerCase()) throw new Error('Master Agreement PDF integrity verification failed.');
-      if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
-      setReviewDocument(document); setReviewedPdfSha256(null);
-      setPreviewObjectUrl(URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' })));
+      const bytes = await fetchVerifiedPdf(document);
+      setReviewDocument(document);
+      setReviewedPdfSha256(null);
+      setPreviewBytes(bytes);
       setPreviewOpen(true);
     } catch (cause) {
       clearPreview();
@@ -76,14 +71,19 @@ export default function CommercialAgreementsManagement({ tenantId, onContinueToB
     } finally { setDocumentBusy(false); }
   }
 
-  function markPreviewLoaded() {
-    if (reviewDocument && previewObjectUrl && center?.masterAcceptanceRequired) setReviewedPdfSha256(reviewDocument.pdfSha256);
+  function markPreviewRendered() {
+    if (reviewDocument && previewBytes && center?.masterAcceptanceRequired) setReviewedPdfSha256(reviewDocument.pdfSha256);
+  }
+
+  function handlePreviewError(message: string) {
+    setReviewedPdfSha256(null);
+    setError(`Master Agreement preview failed: ${message}`);
   }
 
   async function acceptMaster(event: FormEvent) {
     event.preventDefault();
     const master = center?.masterAgreement;
-    const reviewReady = Boolean(reviewDocument && previewObjectUrl && reviewedPdfSha256 === reviewDocument.pdfSha256);
+    const reviewReady = Boolean(reviewDocument && previewBytes && reviewedPdfSha256 === reviewDocument.pdfSha256);
     if (!master || !center?.canAccept || !center.masterAcceptanceRequired || !reviewDocument || !reviewReady) return;
     const name = legalName.trim().replace(/\s+/g, ' ');
     if (!name) { setError('Enter the authorised representative legal name.'); return; }
@@ -105,13 +105,14 @@ export default function CommercialAgreementsManagement({ tenantId, onContinueToB
   if (loading && !center) return <article className="panel"><p className="muted">Loading agreements…</p></article>;
 
   const master = center?.masterAgreement ?? null;
-  const reviewReady = Boolean(reviewDocument && previewObjectUrl && reviewedPdfSha256 === reviewDocument.pdfSha256);
+  const reviewReady = Boolean(reviewDocument && previewBytes && reviewedPdfSha256 === reviewDocument.pdfSha256);
   const agreementsComplete = Boolean(master?.acceptance && !center?.masterAcceptanceRequired);
   const hasOrderForms = Boolean(center?.orderForms.length);
   const currentOrderFormConfirmed = Boolean(center?.orderForms.some((value) => {
     const form = record(value);
     return form.isCurrent === true && typeof record(form.confirmation).id === 'string';
   }));
+
   return <section className="page-stack">
     <div className="section-heading"><div><p className="eyebrow">Commercial onboarding</p><h2>Agreements</h2></div><p className="muted">The Master Agreement is accepted once per required version. Each SellerTray purchase has its own Order Form for review and confirmation.</p></div>
     <article className="panel" aria-label="Commercial onboarding workflow">
@@ -128,11 +129,11 @@ export default function CommercialAgreementsManagement({ tenantId, onContinueToB
       <div className="agreement-brand-heading"><img className="agreement-brand-logo" src="/brand/sellertray-logo-v2.svg" alt="SellerTray" /><div><p className="eyebrow">Master Agreement</p><h3>{master.title}</h3><p className="muted">Version {master.versionCode} · Effective {formatDate(master.effectiveFrom)}</p></div><span className="role-pill">{center?.masterAcceptanceRequired ? 'Acceptance required' : 'Accepted'}</span></div>
       <div className="settings-grid two"><Fact label="Version" value={master.versionCode} /><Fact label="Status" value={center?.masterAcceptanceRequired ? 'Acceptance required' : 'Accepted'} /><Fact label="Accepted by" value={master.acceptance?.acceptedLegalName ?? '—'} /><Fact label="Accepted at" value={master.acceptance?.acceptedAt ? formatDate(master.acceptance.acceptedAt) : '—'} /></div>
       <div className="governance-note">The Master Agreement is the continuing legal framework for this Business. Purchase details such as plan, Branches, prices and installments belong to the separate Order Form.</div>
-      <div className="agreement-package-card"><div className="agreement-package-card-copy"><p className="eyebrow">Agreement document</p><h3>{center?.masterAcceptanceRequired ? 'Review Master Agreement PDF' : 'View Master Agreement'}</h3><p>{center?.masterAcceptanceRequired ? 'Preview the exact current Master Agreement before accepting.' : 'The accepted Master Agreement remains available for reference without changing your acceptance record.'}</p></div><div className="agreement-package-actions"><button type="button" className={center?.masterAcceptanceRequired ? 'primary-button' : 'secondary-button'} disabled={documentBusy} onClick={() => void openMasterAgreement()}>{documentBusy ? 'Preparing preview…' : center?.masterAcceptanceRequired ? (reviewReady ? 'Review agreement again' : 'Review Master Agreement') : 'View Master Agreement'}</button>{center?.masterAcceptanceRequired && reviewReady ? <small>Preview loaded successfully. Complete the representative details below.</small> : null}</div></div>
+      <div className="agreement-package-card"><div className="agreement-package-card-copy"><p className="eyebrow">Agreement document</p><h3>{center?.masterAcceptanceRequired ? 'Review Master Agreement PDF' : 'View Master Agreement'}</h3><p>{center?.masterAcceptanceRequired ? 'Preview the exact current Master Agreement before accepting.' : 'The accepted Master Agreement remains available for reference without changing your acceptance record.'}</p></div><div className="agreement-package-actions"><button type="button" className={center?.masterAcceptanceRequired ? 'primary-button' : 'secondary-button'} disabled={documentBusy} onClick={() => void openMasterAgreement()}>{documentBusy ? 'Preparing preview…' : center?.masterAcceptanceRequired ? (reviewReady ? 'Review agreement again' : 'Review Master Agreement') : 'View Master Agreement'}</button>{center?.masterAcceptanceRequired && reviewReady ? <small>Verified PDF rendered successfully. Complete the representative details below.</small> : null}</div></div>
       {!center?.masterAcceptanceRequired ? <div className="success-banner">Master Agreement accepted. This document remains available here for reference.</div> : null}
       {center?.masterAcceptanceRequired && !center.canAccept ? <div className="warning-banner">Your current role cannot accept this Master Agreement. Use an authorised Business representative to continue.</div> : null}
       {center?.masterAcceptanceRequired && center.canAccept ? <form className="settings-form agreement-signature-form" onSubmit={acceptMaster}>
-        <div className={`agreement-review-status ${reviewReady ? 'ready' : ''}`}><strong>{reviewReady ? 'Master Agreement reviewed and ready to accept' : 'Review the Master Agreement PDF before continuing'}</strong><span>{reviewReady ? 'SellerTray will bind acceptance to the exact PDF shown above.' : 'Accept & Continue remains unavailable until the verified PDF preview loads successfully.'}</span></div>
+        <div className={`agreement-review-status ${reviewReady ? 'ready' : ''}`}><strong>{reviewReady ? 'Master Agreement rendered and ready to accept' : 'Review the Master Agreement PDF before continuing'}</strong><span>{reviewReady ? 'SellerTray will bind acceptance to the exact verified PDF rendered in the preview.' : 'Accept & Continue remains unavailable until SellerTray successfully renders the verified PDF.'}</span></div>
         <label className="field"><span>Authorised representative legal name</span><SellerTrayInput maxLength={200} required value={legalName} onChange={(event) => setLegalName(event.target.value)} placeholder="Full legal name" /></label>
         <label className="access-card"><SellerTrayInput type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span><strong>I confirm I am authorised to act for this Business and accept this current SellerTray Master Agreement.</strong><small>This accepts only the current Master Agreement. It does not confirm any purchase, plan or Order Form.</small></span></label>
         <div className="settings-actions"><button className="primary-button" disabled={busy || !confirmed || !legalName.trim() || !reviewReady}>{busy ? 'Recording acceptance…' : 'Accept & Continue'}</button></div>
@@ -141,7 +142,7 @@ export default function CommercialAgreementsManagement({ tenantId, onContinueToB
 
     {hasOrderForms ? <CommercialAgreementPackageManagement tenantId={tenantId} onChanged={load} /> : null}
 
-    {previewOpen && reviewDocument && previewObjectUrl ? <div className="agreement-preview-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewOpen(false); }}><section className="agreement-preview-modal" role="dialog" aria-modal="true" aria-labelledby="master-agreement-preview-title"><header className="agreement-preview-header"><div><p className="eyebrow">Master Agreement preview</p><h2 id="master-agreement-preview-title">{reviewDocument.title}</h2><p className="muted">Version {reviewDocument.versionCode}</p></div><button type="button" className="secondary-button agreement-preview-close" onClick={() => setPreviewOpen(false)} aria-label="Close Master Agreement preview">Close</button></header><div className="agreement-preview-frame-wrap"><iframe className="agreement-preview-frame" title={`${reviewDocument.title} PDF preview`} src={previewObjectUrl} onLoad={markPreviewLoaded} /></div><footer className="agreement-preview-footer"><div className={`agreement-review-status ${reviewReady ? 'ready' : ''}`}><strong>{center?.masterAcceptanceRequired ? (reviewReady ? 'Agreement preview loaded' : 'Loading agreement preview…') : 'Master Agreement ready to view'}</strong><span>{center?.masterAcceptanceRequired ? (reviewReady ? 'The exact PDF is marked as reviewed for this acceptance session.' : 'Accept & Continue remains locked until the verified PDF is displayed successfully.') : 'Closing this preview does not change your existing acceptance record.'}</span></div><button type="button" className="primary-button" disabled={Boolean(center?.masterAcceptanceRequired) && !reviewReady} onClick={() => setPreviewOpen(false)}>{center?.masterAcceptanceRequired ? (reviewReady ? 'Close preview & continue' : 'Loading preview…') : 'Close preview'}</button></footer></section></div> : null}
+    {previewOpen && reviewDocument && previewBytes ? <div className="agreement-preview-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewOpen(false); }}><section className="agreement-preview-modal" role="dialog" aria-modal="true" aria-labelledby="master-agreement-preview-title"><header className="agreement-preview-header"><div><p className="eyebrow">Master Agreement preview</p><h2 id="master-agreement-preview-title">{reviewDocument.title}</h2><p className="muted">Version {reviewDocument.versionCode}</p></div><button type="button" className="secondary-button agreement-preview-close" onClick={() => setPreviewOpen(false)} aria-label="Close Master Agreement preview">Close</button></header><div className="agreement-preview-frame-wrap"><VerifiedPdfPreview bytes={previewBytes} fileName={reviewDocument.fileName} title={reviewDocument.title} onFirstPageRendered={markPreviewRendered} onRenderError={handlePreviewError} /></div><footer className="agreement-preview-footer"><div className={`agreement-review-status ${reviewReady ? 'ready' : ''}`}><strong>{center?.masterAcceptanceRequired ? (reviewReady ? 'Agreement PDF rendered successfully' : 'Rendering agreement PDF…') : 'Master Agreement ready to view'}</strong><span>{center?.masterAcceptanceRequired ? (reviewReady ? 'The exact verified PDF is marked as reviewed for this acceptance session.' : 'Accept & Continue remains locked until the first page is actually rendered.') : 'Closing this preview does not change your existing acceptance record.'}</span></div><button type="button" className="primary-button" disabled={Boolean(center?.masterAcceptanceRequired) && !reviewReady} onClick={() => setPreviewOpen(false)}>{center?.masterAcceptanceRequired ? (reviewReady ? 'Close preview & continue' : 'Rendering preview…') : 'Close preview'}</button></footer></section></div> : null}
   </section>;
 }
 
@@ -152,5 +153,3 @@ function parseAcceptance(value: unknown): MasterAcceptance | null { const row = 
 function parseMaster(value: unknown): MasterAgreement | null { const row = record(value); if (typeof row.id !== 'string') return null; return { id: row.id, versionCode: String(row.versionCode ?? ''), title: String(row.title ?? 'SellerTray Master Agreement'), contentBody: String(row.contentBody ?? ''), contentSha256: String(row.contentSha256 ?? ''), effectiveFrom: String(row.effectiveFrom ?? ''), acceptance: parseAcceptance(row.acceptance) }; }
 function parseReviewDocument(value: unknown): MasterReviewDocument { const row = record(value); const result: MasterReviewDocument = { documentKind: 'master_agreement_pdf', agreementVersionId: String(row.agreementVersionId ?? ''), versionCode: String(row.versionCode ?? ''), title: String(row.title ?? 'SellerTray Master Agreement'), contentSha256: String(row.contentSha256 ?? ''), pdfSha256: String(row.pdfSha256 ?? '').toLowerCase(), byteSize: Number(row.byteSize ?? 0), fileName: String(row.fileName ?? 'SellerTray-Master-Agreement.pdf'), signedUrl: String(row.signedUrl ?? ''), expiresInSeconds: Number(row.expiresInSeconds ?? 0) }; if (!result.agreementVersionId || !result.contentSha256 || !result.pdfSha256 || !result.signedUrl) throw new Error('Master Agreement PDF response is incomplete.'); return result; }
 function parseCenter(value: unknown): AgreementCenter { const root = record(value); return { tenantId: String(root.tenantId ?? ''), actorRole: root.actorRole === 'manager' ? 'manager' : 'owner', canAccept: root.canAccept === true, masterAgreement: parseMaster(root.masterAgreement), masterAcceptanceRequired: root.masterAcceptanceRequired === true, orderForms: Array.isArray(root.orderForms) ? root.orderForms : [] }; }
-function looksLikePdf(bytes: ArrayBuffer): boolean { if (bytes.byteLength < 5) return false; return String.fromCharCode(...new Uint8Array(bytes, 0, 5)) === '%PDF-'; }
-async function sha256Hex(bytes: ArrayBuffer): Promise<string> { const digest = await crypto.subtle.digest('SHA-256', bytes); return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, '0')).join(''); }
