@@ -33,9 +33,7 @@ type Branch = { id: string; code: string; name: string; isDefault: boolean };
 const MANAGEMENT_ROLES: MerchantRole[] = ['owner', 'manager'];
 const NAV = AVAILABLE_MERCHANT_PORTAL_NAVIGATION;
 
-type MerchantAppProps = {
-  handoffTarget?: MerchantHandoffTarget | null;
-};
+type MerchantAppProps = { handoffTarget?: MerchantHandoffTarget | null };
 
 export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) {
   const [booting, setBooting] = useState(true);
@@ -62,13 +60,7 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
   }, []);
   useEffect(() => { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; localStorage.setItem('sellertray.merchant.theme', dark ? 'dark' : 'light'); }, [dark]);
   useEffect(() => { if (session) void loadBusinesses(); }, [session?.access_token]);
-  useEffect(() => {
-    if (businessId) {
-      void loadWorkspace(businessId);
-    } else {
-      setUnreadCount(0);
-    }
-  }, [businessId]);
+  useEffect(() => { if (businessId) void loadWorkspace(businessId); else setUnreadCount(0); }, [businessId]);
   useEffect(() => {
     if (!navOpen) return;
     const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setNavOpen(false); };
@@ -118,9 +110,7 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
       const count = Number(data ?? 0);
       setUnreadCount(Number.isFinite(count) && count > 0 ? Math.floor(count) : 0);
     } catch (cause) {
-      if (notificationScope.current === tenantId && notificationRequest.current === revision) {
-        setError(errorMessage(cause, 'Unable to load SellerTray notification status.'));
-      }
+      if (notificationScope.current === tenantId && notificationRequest.current === revision) setError(errorMessage(cause, 'Unable to load SellerTray notification status.'));
     }
   }, []);
 
@@ -149,9 +139,7 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
   async function signOut() { await supabase.auth.signOut(); }
   function navigate(next: Page) { setPage(next); setNavOpen(false); }
   function openBranchPage(next: Page, nextBranchId: string) { setBranchId(nextBranchId); navigate(next); }
-  function toggleSection(section: MerchantPortalSection) {
-    setCollapsedSections((current) => { const next = new Set(current); if (next.has(section)) next.delete(section); else next.add(section); return next; });
-  }
+  function toggleSection(section: MerchantPortalSection) { setCollapsedSections((current) => { const next = new Set(current); if (next.has(section)) next.delete(section); else next.add(section); return next; }); }
 
   if (booting) return <Status title="Opening SellerTray" body="Checking your merchant session." />;
   if (!session) return <Login />;
@@ -172,10 +160,7 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
         {MERCHANT_PORTAL_SECTIONS.map((section) => {
           const items = NAV.filter((item) => item.section === section);
           if (!items.length) return null;
-          if (section === 'Dashboard') {
-            const item = items[0];
-            return <div key={section} className="nav-dashboard-link"><button aria-current={page === item.id ? 'page' : undefined} className={page === item.id ? 'nav-button active' : 'nav-button'} onClick={() => navigate(item.id)}><span className="nav-button-icon"><NavIcon name={item.id} /></span><span className="nav-button-label">{item.label}</span></button></div>;
-          }
+          if (section === 'Dashboard') { const item = items[0]; return <div key={section} className="nav-dashboard-link"><button aria-current={page === item.id ? 'page' : undefined} className={page === item.id ? 'nav-button active' : 'nav-button'} onClick={() => navigate(item.id)}><span className="nav-button-icon"><NavIcon name={item.id} /></span><span className="nav-button-label">{item.label}</span></button></div>; }
           const collapsed = collapsedSections.has(section);
           return <div key={section} className="nav-group"><button className="nav-section-button" aria-expanded={!collapsed} onClick={() => toggleSection(section)}><span>{section}</span><span className={collapsed ? 'nav-chevron collapsed' : 'nav-chevron'}><ShellIcon name="chevron" /></span></button><div className={collapsed ? 'nav-group-items collapsed' : 'nav-group-items'}>{items.map((item) => <button key={item.id} aria-current={page === item.id ? 'page' : undefined} className={page === item.id ? 'nav-button active' : 'nav-button'} onClick={() => navigate(item.id)}><span className="nav-button-icon"><NavIcon name={item.id} /></span><span className="nav-button-label">{item.label}</span></button>)}</div></div>;
         })}
@@ -202,7 +187,7 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
       {page === 'returns' && !branch && <PageTable eyebrow="Returns" title="Choose a Branch" note="Select a Branch to review completed returns."><Empty title="No active Branch" body="Returns are reviewed within a Branch so refund, UOM and restored-stock context remain clear." /></PageTable>}
       {page === 'inventory' && <InventoryManagement tenantId={business.id} branch={branch} branches={branches} />}
       {page === 'payments' && <PaymentsManagement tenantId={business.id} />}
-      {page === 'sellertray_billing' && <SellerTrayBillingManagement tenantId={business.id} />}
+      {page === 'sellertray_billing' && <SellerTrayBillingManagement tenantId={business.id} onReviewOrderForm={() => navigate('agreements')} />}
       {page === 'cash' && <CashShiftsManagement tenantId={business.id} currency={business.currency} branches={branches} initialBranchId={branchId} />}
       {page === 'expenses' && <BusinessExpensesManagement tenantId={business.id} currency={business.currency} branches={branches} initialBranchId={branchId} />}
       {page === 'whatsapp' && <WhatsAppManagement tenantId={business.id} role={managementRole} branches={branches} connectionStatusHint={business.whatsappConnectionStatus} />}
