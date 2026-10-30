@@ -34,13 +34,15 @@ jobs:
         run: |
           set -euo pipefail
           allowed='^(\.agents/skills/sellertray-project-implementation/(OA5_C2_SEQUENCE\.md|SKILL\.md)|\.github/workflows/database-ci\.yml|docs/oa5c-controlled-real-merchant-proof\.md|supabase/functions/master-agreements/(agreement-pdf\.ts|merchant-review-contract\.mjs)|supabase/migrations/(20261027100000_master_order_form_package_oa5c_convergence|20261027100100_order_form_admin_boundary_and_legacy_retirement|20261027100200_agreement_package_no_master_read_hardening|20261027100300_agreement_package_retry_response_hardening|20261027100400_agreement_package_activation_compatibility|20261027100500_agreement_package_fk_index_hardening|20261027123000_master_agreement_publication_quarantine|20261027170000_agreement_document_artifacts|20261027170100_agreement_document_admin_projection_convergence|20261027173000_agreement_package_zero_touch_orchestration|20261027224913_agreement_package_processing_self_healing|20261028052000_agreement_package_activation_compatibility_forward_convergence|20261028170000_oa5c_production_test_business_proof_convergence|20261028180000_order_form_production_authority|20261029060000_merchant_agreement_review_performance_hardening)\.sql|supabase/tests/(master_agreement_quarantine_authority|oa5c_production_test_business_proof_verifier|order_form_production_authority|sellertray_agreement_activation_provenance_convergence|sellertray_agreement_package_no_master_read|sellertray_agreement_processing_self_healing|sellertray_agreement_zero_touch_orchestration|sellertray_master_order_form_packages)\.test\.sql)$'
-          unexpected="$(git diff --name-only | grep -Ev "$allowed" || true)"
+          paths="$({ git diff --name-only; git ls-files --others --exclude-standard; } | sort -u)"
+          unexpected="$(printf '%s\n' "$paths" | grep -Ev "$allowed" || true)"
           if [ -n "$unexpected" ]; then
             echo "Unexpected recovery paths:" >&2
             printf '%s\n' "$unexpected" >&2
             exit 1
           fi
-          test "$(git diff --name-only | wc -l)" -eq 29
+          printf '%s\n' "$paths"
+          test "$(printf '%s\n' "$paths" | sed '/^$/d' | wc -l)" -eq 29
 
       - name: Use Node 24
         uses: actions/setup-node@v4
@@ -131,4 +133,8 @@ jobs:
 
       - name: Stop local Supabase
         if: always()
-        run: supabase stop --no-backup
+        shell: bash
+        run: |
+          if command -v supabase >/dev/null 2>&1; then
+            supabase stop --no-backup
+          fi
