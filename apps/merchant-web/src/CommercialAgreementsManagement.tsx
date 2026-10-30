@@ -47,6 +47,7 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
   const [center, setCenter] = useState<AgreementCenter | null>(null);
   const [reviewDocument, setReviewDocument] = useState<MasterReviewDocument | null>(null);
   const [reviewedPdfSha256, setReviewedPdfSha256] = useState<string | null>(null);
+  const [previewObjectUrl, setPreviewObjectUrl] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [legalName, setLegalName] = useState('');
   const [confirmed, setConfirmed] = useState(false);
@@ -69,6 +70,9 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
       window.removeEventListener('keydown', closeOnEscape);
     };
   }, [previewOpen]);
+  useEffect(() => () => {
+    if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+  }, [previewObjectUrl]);
 
   async function load() {
     setLoading(true);
@@ -81,6 +85,7 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
       setCenter(parseCenter(record(data).center));
       setReviewDocument(null);
       setReviewedPdfSha256(null);
+      setPreviewObjectUrl(null);
       setPreviewOpen(false);
     } catch (cause) {
       setError(errorMessage(cause, 'Unable to load SellerTray agreements.'));
@@ -100,10 +105,24 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
       });
       if (functionError) throw functionError;
       const document = parseReviewDocument(record(data).document);
+
+      const response = await fetch(document.signedUrl, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`Master Agreement PDF download failed (${response.status}).`);
+      const bytes = await response.arrayBuffer();
+      if (!looksLikePdf(bytes)) throw new Error('SellerTray received an invalid Master Agreement PDF response.');
+      if (document.byteSize > 0 && bytes.byteLength !== document.byteSize) throw new Error('Master Agreement PDF size did not match the governed document.');
+      const downloadedSha256 = await sha256Hex(bytes);
+      if (downloadedSha256 !== document.pdfSha256.toLowerCase()) throw new Error('Master Agreement PDF integrity verification failed.');
+
       setReviewDocument(document);
       setReviewedPdfSha256(null);
+      setPreviewObjectUrl(URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' })));
       setPreviewOpen(true);
     } catch (cause) {
+      setPreviewOpen(false);
+      setReviewDocument(null);
+      setReviewedPdfSha256(null);
+      setPreviewObjectUrl(null);
       setError(errorMessage(cause, 'Unable to load the current SellerTray Master Agreement PDF preview.'));
     } finally {
       setDocumentBusy(false);
@@ -111,14 +130,14 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
   }
 
   function markPreviewLoaded() {
-    if (!reviewDocument) return;
+    if (!reviewDocument || !previewObjectUrl) return;
     setReviewedPdfSha256(reviewDocument.pdfSha256);
   }
 
   async function acceptMaster(event: FormEvent) {
     event.preventDefault();
     const master = center?.masterAgreement;
-    const reviewReady = Boolean(reviewDocument && reviewedPdfSha256 === reviewDocument.pdfSha256);
+    const reviewReady = Boolean(reviewDocument && previewObjectUrl && reviewedPdfSha256 === reviewDocument.pdfSha256);
     if (!master || !center?.canAccept || !center.masterAcceptanceRequired || !reviewDocument || !reviewReady) return;
     const name = legalName.trim().replace(/\s+/g, ' ');
     if (!name) { setError('Enter the authorised representative legal name.'); return; }
@@ -149,6 +168,7 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
       setCenter(next);
       setReviewDocument(null);
       setReviewedPdfSha256(null);
+      setPreviewObjectUrl(null);
       setPreviewOpen(false);
       setLegalName('');
       setConfirmed(false);
@@ -166,7 +186,7 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
   if (center?.orderForms.length && !center.masterAcceptanceRequired) return <CommercialAgreementPackageManagement tenantId={tenantId} />;
 
   const master = center?.masterAgreement ?? null;
-  const reviewReady = Boolean(reviewDocument && reviewedPdfSha256 === reviewDocument.pdfSha256);
+  const reviewReady = Boolean(reviewDocument && previewObjectUrl && reviewedPdfSha256 === reviewDocument.pdfSha256);
   return <section className="page-stack">
     <div className="section-heading">
       <div><p className="eyebrow">Commercial onboarding</p><h2>Agreements</h2></div>
@@ -208,10 +228,10 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
         <div className="agreement-package-card-copy">
           <p className="eyebrow">Agreement document</p>
           <h3>Review Master Agreement PDF</h3>
-          <p>Preview the professionally formatted, exact current Master Agreement here before accepting. SellerTray records the document integrity that was successfully displayed.</p>
+          <p>Preview the professionally formatted, exact current Master Agreement here before accepting. SellerTray verifies the PDF bytes and document integrity before displaying it.</p>
         </div>
         <div className="agreement-package-actions">
-          <button type="button" className="primary-button" disabled={documentBusy} onClick={() => void openMasterAgreement()}>{documentBusy ? 'Loading preview…' : reviewReady ? 'Review agreement again' : 'Review Master Agreement'}</button>
+          <button type="button" className="primary-button" disabled={documentBusy} onClick={() => void openMasterAgreement()}>{documentBusy ? 'Preparing preview…' : reviewReady ? 'Review agreement again' : 'Review Master Agreement'}</button>
           {reviewReady ? <small>Master Agreement preview loaded successfully. Complete the authorised representative details below to continue.</small> : null}
         </div>
       </div> : null}
@@ -227,7 +247,7 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
       </form> : null}
     </article>}
 
-    {previewOpen && reviewDocument ? <div className="agreement-preview-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewOpen(false); }}>
+    {previewOpen && reviewDocument && previewObjectUrl ? <div className="agreement-preview-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewOpen(false); }}>
       <section className="agreement-preview-modal" role="dialog" aria-modal="true" aria-labelledby="master-agreement-preview-title">
         <header className="agreement-preview-header">
           <div><p className="eyebrow">Master Agreement preview</p><h2 id="master-agreement-preview-title">{reviewDocument.title}</h2><p className="muted">Version {reviewDocument.versionCode}</p></div>
@@ -237,14 +257,14 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
           <iframe
             className="agreement-preview-frame"
             title={`${reviewDocument.title} PDF preview`}
-            src={reviewDocument.signedUrl}
+            src={previewObjectUrl}
             onLoad={markPreviewLoaded}
           />
         </div>
         <footer className="agreement-preview-footer">
           <div className={`agreement-review-status ${reviewReady ? 'ready' : ''}`}>
             <strong>{reviewReady ? 'Agreement preview loaded' : 'Loading agreement preview…'}</strong>
-            <span>{reviewReady ? 'The exact governed PDF is now marked as reviewed for this acceptance session.' : 'Accept & Continue remains locked until the governed PDF is displayed successfully.'}</span>
+            <span>{reviewReady ? 'The exact governed PDF is now marked as reviewed for this acceptance session.' : 'Accept & Continue remains locked until the verified PDF is displayed successfully.'}</span>
           </div>
           <button type="button" className="primary-button" disabled={!reviewReady} onClick={() => setPreviewOpen(false)}>{reviewReady ? 'Close preview & continue' : 'Loading preview…'}</button>
         </footer>
@@ -266,7 +286,7 @@ function parseReviewDocument(value: unknown): MasterReviewDocument {
     versionCode: String(row.versionCode ?? ''),
     title: String(row.title ?? 'SellerTray Master Agreement'),
     contentSha256: String(row.contentSha256 ?? ''),
-    pdfSha256: String(row.pdfSha256 ?? ''),
+    pdfSha256: String(row.pdfSha256 ?? '').toLowerCase(),
     byteSize: Number(row.byteSize ?? 0),
     fileName: String(row.fileName ?? 'SellerTray-Master-Agreement.pdf'),
     signedUrl: String(row.signedUrl ?? ''),
@@ -285,4 +305,13 @@ function parseCenter(value: unknown): AgreementCenter {
     masterAcceptanceRequired: root.masterAcceptanceRequired === true,
     orderForms: Array.isArray(root.orderForms) ? root.orderForms : [],
   };
+}
+function looksLikePdf(bytes: ArrayBuffer): boolean {
+  if (bytes.byteLength < 5) return false;
+  const header = new Uint8Array(bytes, 0, 5);
+  return String.fromCharCode(...header) === '%PDF-';
+}
+async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, '0')).join('');
 }
