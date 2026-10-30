@@ -97,6 +97,10 @@ export function OrdersWorkspace({
     setExpandedOrderIds((current) => ({ ...current, [orderId]: !current[orderId] }));
   }
 
+  function showDocuments(orderId: string) {
+    setExpandedOrderIds((current) => ({ ...current, [orderId]: true }));
+  }
+
   function beginDraftEdit(order: MerchantOrder) {
     setEditingOrderId(order.id);
     setDraftQuantities(Object.fromEntries(order.items.map((item) => [item.id, formatQuantity(item.quantity)])));
@@ -202,7 +206,8 @@ export function OrdersWorkspace({
         const total = orderTotal(order);
         const paymentLabel = orderPaymentLabel(order);
         const canManageDraft = order.source === 'pos' && order.status === 'draft' && order.paymentStatus === 'unpaid' && order.amountPaid === 0;
-        const canPrepareReturn = order.source === 'pos' && order.status === 'completed' && order.fulfillmentStatus === 'collected' && (order.returnStatus === 'none' || order.returnStatus === 'partial');
+        const canOpenDocuments = order.source === 'pos' && order.status === 'completed';
+        const canPrepareReturn = canOpenDocuments && order.fulfillmentStatus === 'collected' && (order.returnStatus === 'none' || order.returnStatus === 'partial');
         const action = pending?.orderId === order.id ? pending.action : null;
         const loadingReturn = returnLoadingOrderId === order.id;
         const expanded = expandedOrderIds[order.id] === true;
@@ -226,6 +231,13 @@ export function OrdersWorkspace({
               <StatePill label={`Payment: ${paymentLabel}`} positive={order.paymentStatus === 'paid'} />
               <StatePill label={`Fulfilment: ${titleCase(order.fulfillmentStatus)}`} positive={order.fulfillmentStatus === 'delivered' || order.fulfillmentStatus === 'collected'} />
             </View>
+
+            {canOpenDocuments ? <View style={styles.actionRow}>
+              <Pressable accessibilityRole="button" accessibilityLabel={`Documents and print for ${order.publicOrderId}`} onPress={() => showDocuments(order.id)} style={[styles.outlineAction, styles.returnAction, dark && darkStyles.outlineButton]}>
+                <Ionicons name="print-outline" size={17} color={theme.colors.greenDark} />
+                <Text style={styles.returnActionText}>Documents / Print</Text>
+              </Pressable>
+            </View> : null}
 
             <OrderBalanceCollection tenantId={tenantId} order={order} currency={businessCurrency} onChanged={onChanged} />
 
