@@ -34,9 +34,7 @@ Deno.serve(async (request) => {
   const action: Action = body.action === 'merchant_get_document' ? 'merchant_get_document' : 'merchant_accept';
   const tenantId = uuid(body.tenantId);
   const agreementVersionId = uuid(body.agreementVersionId);
-  if (!tenantId || !agreementVersionId) {
-    return json({ error: 'Business and current Master Agreement are required' }, 400);
-  }
+  if (!tenantId || !agreementVersionId) return json({ error: 'Business and current Master Agreement are required' }, 400);
 
   try {
     const center = await rpc<JsonRecord>('get_sellertray_agreement_package_center', {
@@ -45,25 +43,23 @@ Deno.serve(async (request) => {
     });
     const orderForms = Array.isArray(center.orderForms) ? center.orderForms : [];
     const master = record(center.masterAgreement);
-    if (orderForms.length !== 0) {
-      throw new Error('A purchase-specific Order Form now exists. Review and confirm that Order Form instead.');
-    }
     if (center.masterAcceptanceRequired !== true || master.id !== agreementVersionId) {
-      throw new Error('The current Master Agreement does not require pre-purchase acceptance for this Business');
+      throw new Error('The current Master Agreement does not require acceptance for this Business');
     }
 
-    const onboarding = await rpc<JsonRecord>('get_sellertray_onboarding_state_core', { p_tenant_id: tenantId });
-    if (record(onboarding.nextAction).code !== 'review_master_agreement') {
-      throw new Error('Master Agreement acceptance is not the current onboarding action for this Business');
-    }
-    if (record(onboarding.nextAction).surface !== 'merchant_web') {
-      throw new Error('Master Agreement acceptance is not available on Merchant Web for this Business');
+    let onboarding: JsonRecord | null = null;
+    if (orderForms.length === 0) {
+      onboarding = await rpc<JsonRecord>('get_sellertray_onboarding_state_core', { p_tenant_id: tenantId });
+      if (record(onboarding.nextAction).code !== 'review_master_agreement') {
+        throw new Error('Master Agreement acceptance is not the current onboarding action for this Business');
+      }
+      if (record(onboarding.nextAction).surface !== 'merchant_web') {
+        throw new Error('Master Agreement acceptance is not available on Merchant Web for this Business');
+      }
     }
 
-    const document = await ensureMasterReviewDocument(tenantId, agreementVersionId);
-    if (action === 'merchant_get_document') {
-      return json({ ok: true, document });
-    }
+    const document = await ensureMasterReviewDocument(agreementVersionId);
+    if (action === 'merchant_get_document') return json({ ok: true, document });
 
     const commandId = uuid(body.commandId);
     const legalName = text(body.legalName, 200);
@@ -72,9 +68,7 @@ Deno.serve(async (request) => {
     if (!commandId || !legalName || !reviewedPdfSha256 || !reviewedContentSha256) {
       return json({ error: 'Legal name, reviewed Master Agreement PDF and command are required' }, 400);
     }
-    if (body.authorityConfirmed !== true) {
-      return json({ error: 'Confirm your authority and Master Agreement acceptance before continuing' }, 400);
-    }
+    if (body.authorityConfirmed !== true) return json({ error: 'Confirm your authority and Master Agreement acceptance before continuing' }, 400);
     if (reviewedPdfSha256 !== document.pdfSha256 || reviewedContentSha256 !== document.contentSha256) {
       throw new Error('The Master Agreement changed or the reviewed PDF is no longer current. Open the current Master Agreement PDF again before accepting.');
     }
@@ -86,7 +80,7 @@ Deno.serve(async (request) => {
       p_accepted_legal_name: legalName,
       p_request_evidence: {
         channel: 'merchant_web',
-        flow: 'prepurchase_master_pdf_acceptance',
+        flow: orderForms.length === 0 ? 'prepurchase_master_pdf_acceptance' : 'master_version_pdf_acceptance',
         authority_confirmed: true,
         reviewed_pdf_sha256: document.pdfSha256,
         reviewed_content_sha256: document.contentSha256,
@@ -101,19 +95,23 @@ Deno.serve(async (request) => {
       p_tenant_id: tenantId,
       p_actor_user_id: userId,
     });
-    const nextOnboarding = await rpc<JsonRecord>('get_sellertray_onboarding_state_core', { p_tenant_id: tenantId });
-    if (record(nextOnboarding.nextAction).code !== 'select_plan') {
-      throw new Error('Master Agreement acceptance was recorded but SellerTray Billing is not yet the governed next step');
+    let nextAction: unknown = null;
+    if (orderForms.length === 0) {
+      const nextOnboarding = await rpc<JsonRecord>('get_sellertray_onboarding_state_core', { p_tenant_id: tenantId });
+      if (record(nextOnboarding.nextAction).code !== 'select_plan') {
+        throw new Error('Master Agreement acceptance was recorded but SellerTray Billing is not yet the governed next step');
+      }
+      nextAction = nextOnboarding.nextAction;
     }
 
-    return json({ ok: true, acceptanceId, center: nextCenter, nextAction: nextOnboarding.nextAction });
+    return json({ ok: true, acceptanceId, center: nextCenter, nextAction });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Master Agreement request failed';
-    return json({ error: message }, /access|required|authori[sz]ed|owner|manager|available/i.test(message) ? 403 : /exists|current|Order Form|changed|next step/i.test(message) ? 409 : 400);
+    return json({ error: message }, /access|required|authori[sz]ed|owner|manager|available/i.test(message) ? 403 : /exists|current|changed|next step/i.test(message) ? 409 : 400);
   }
 });
 
-async function ensureMasterReviewDocument(tenantId: string, agreementVersionId: string): Promise<JsonRecord> {
+async function ensureMasterReviewDocument(agreementVersionId: string): Promise<JsonRecord> {
   if (!admin) throw new Error('Server configuration error');
   const { data: master, error: masterError } = await admin.from('sellertray_master_agreement_versions')
     .select('id,version_code,title,content_body,content_sha256,effective_from')
@@ -127,25 +125,16 @@ async function ensureMasterReviewDocument(tenantId: string, agreementVersionId: 
     const signed = await admin.storage.from(source.storage_bucket).createSignedUrl(source.storage_path, 600);
     if (signed.error || !signed.data?.signedUrl) throw new Error(signed.error?.message ?? 'Unable to open the reviewed Master Agreement PDF');
     return {
-      documentKind: 'master_agreement_pdf',
-      agreementVersionId,
-      versionCode: master.version_code,
-      title: master.title,
-      contentSha256: master.content_sha256,
-      pdfSha256: source.pdf_sha256,
-      byteSize: Number(source.byte_size ?? 0),
+      documentKind: 'master_agreement_pdf', agreementVersionId, versionCode: master.version_code, title: master.title,
+      contentSha256: master.content_sha256, pdfSha256: source.pdf_sha256, byteSize: Number(source.byte_size ?? 0),
       fileName: source.original_filename || `SellerTray-Master-Agreement-${safeFilePart(master.version_code)}.pdf`,
-      signedUrl: signed.data.signedUrl,
-      expiresInSeconds: 600,
+      signedUrl: signed.data.signedUrl, expiresInSeconds: 600,
     };
   }
 
   const pdfBytes = await buildMasterPdf({
-    title: master.title,
-    versionCode: master.version_code,
-    contentBody: master.content_body,
-    effectiveFrom: master.effective_from,
-    contentSha256: master.content_sha256,
+    title: master.title, versionCode: master.version_code, contentBody: master.content_body,
+    effectiveFrom: master.effective_from, contentSha256: master.content_sha256,
   });
   const pdfSha256 = await sha256Hex(pdfBytes);
   const storagePath = `master-review/${agreementVersionId}/${master.content_sha256}.pdf`;
@@ -162,16 +151,9 @@ async function ensureMasterReviewDocument(tenantId: string, agreementVersionId: 
   const signed = await admin.storage.from(AGREEMENT_BUCKET).createSignedUrl(storagePath, 600);
   if (signed.error || !signed.data?.signedUrl) throw new Error(signed.error?.message ?? 'Unable to open the Master Agreement PDF');
   return {
-    documentKind: 'master_agreement_pdf',
-    agreementVersionId,
-    versionCode: master.version_code,
-    title: master.title,
-    contentSha256: master.content_sha256,
-    pdfSha256,
-    byteSize: pdfBytes.byteLength,
-    fileName: `SellerTray-Master-Agreement-${safeFilePart(master.version_code)}.pdf`,
-    signedUrl: signed.data.signedUrl,
-    expiresInSeconds: 600,
+    documentKind: 'master_agreement_pdf', agreementVersionId, versionCode: master.version_code, title: master.title,
+    contentSha256: master.content_sha256, pdfSha256, byteSize: pdfBytes.byteLength,
+    fileName: `SellerTray-Master-Agreement-${safeFilePart(master.version_code)}.pdf`, signedUrl: signed.data.signedUrl, expiresInSeconds: 600,
   };
 }
 
@@ -189,12 +171,12 @@ async function buildMasterPdf(input: { title: string; versionCode: string; conte
   let y = 785;
   page.drawText('SellerTray', { x: 54, y, size: 28, font: bold, color: navy });
   page.drawText('ProcessEdge Solutions Limited', { x: 54, y: y - 24, size: 10, font: regular, color: slate });
-  page.drawText(input.title, { x: 54, y: y - 72, size: 17, font: bold, color: navy, maxWidth: 485 });
-  page.drawText(`Version ${input.versionCode} · Effective ${formatDate(input.effectiveFrom)}`, { x: 54, y: y - 98, size: 9.5, font: regular, color: green });
+  page.drawText(pdfText(input.title), { x: 54, y: y - 72, size: 17, font: bold, color: navy, maxWidth: 485 });
+  page.drawText(pdfText(`Version ${input.versionCode} - Effective ${formatDate(input.effectiveFrom)}`), { x: 54, y: y - 98, size: 9.5, font: regular, color: green });
   y -= 138;
 
   for (const paragraph of input.contentBody.split(/\n\s*\n/)) {
-    const lines = wrap(paragraph.replace(/\s+/g, ' ').trim(), regular, 10, 487);
+    const lines = wrap(pdfText(paragraph.replace(/\s+/g, ' ').trim()), regular, 10, 487);
     if (!lines.length) continue;
     for (const line of lines) {
       if (y < 70) { page = doc.addPage([595.28, 841.89]); y = 785; }
@@ -221,6 +203,16 @@ function wrap(value: string, font: PDFFont, size: number, maxWidth: number): str
   }
   if (line) lines.push(line);
   return lines;
+}
+
+function pdfText(value: string): string {
+  return value
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, '-')
+    .replace(/\u2026/g, '...')
+    .replace(/\u2022/g, '*')
+    .replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, '?');
 }
 
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
