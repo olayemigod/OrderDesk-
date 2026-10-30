@@ -10,6 +10,7 @@ const agreements = read('src/CommercialAgreementsManagement.tsx');
 const packageAgreements = read('src/CommercialAgreementPackageManagement.tsx');
 const billing = read('src/SellerTrayBillingManagement.tsx');
 const prepurchaseAuthority = read('../../supabase/functions/master-agreement-prepurchase/index.ts');
+const separationMigration = read('../../supabase/migrations/20261030173500_separate_master_agreement_order_form_confirmation.sql');
 const legacyAgreementApi = read('../../supabase/functions/commercial-agreements/index.ts');
 const failures = [];
 const requireValue = (condition, message) => { if (!condition) failures.push(message); };
@@ -93,8 +94,23 @@ requireValue(
     && packageAgreements.includes("action: 'merchant_get_document'")
     && packageAgreements.includes('expectedPackageFingerprint')
     && packageAgreements.includes('orderFormId')
-    && packageAgreements.includes("'Confirm Purchase'"),
-  'Purchase-specific Order Form must retain exact PDF/fingerprint-bound confirmation using Confirm Purchase.',
+    && packageAgreements.includes("'Confirm Purchase'")
+    && packageAgreements.includes('center.masterAcceptanceRequired || !actionRequired')
+    && packageAgreements.includes('This confirms only this Order Form and purchase. It does not create or replace Master Agreement acceptance.'),
+  'Purchase-specific Order Form must retain exact PDF/fingerprint-bound confirmation and require prior Master acceptance.',
+);
+
+requireValue(
+  excludes(packageAgreements, ['masterAcceptanceCreated', "'Accept & Continue'", 'I accept the Master Agreement, confirm this purchase']),
+  'Order Form confirmation UI must never double as Master Agreement acceptance.',
+);
+
+requireValue(
+  separationMigration.includes('Accept the current SellerTray Master Agreement separately before confirming this Order Form')
+    && separationMigration.includes("'masterAcceptanceCreated',false")
+    && separationMigration.includes("'master_acceptance_id',v_master_acceptance.id")
+    && !separationMigration.includes('perform public.accept_sellertray_master_agreement'),
+  'Database Order Form confirmation must require an existing Master acceptance and must never manufacture one.',
 );
 
 const retiredGuardIndex = legacyAgreementApi.indexOf('if (RETIRED_AGREEMENT_MUTATIONS.has(action))');
