@@ -78,7 +78,7 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
 
   async function openMasterAgreement() {
     const master = center?.masterAgreement;
-    if (!master || !center?.masterAcceptanceRequired || center.orderForms.length || documentBusy) return;
+    if (!master || !center?.masterAcceptanceRequired || documentBusy) return;
     const popup = window.open('about:blank', '_blank');
     if (popup) popup.opener = null;
     setDocumentBusy(true);
@@ -102,15 +102,16 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
     }
   }
 
-  async function acceptPrepurchaseMaster(event: FormEvent) {
+  async function acceptMaster(event: FormEvent) {
     event.preventDefault();
     const master = center?.masterAgreement;
     const reviewReady = Boolean(reviewDocument && reviewedPdfSha256 === reviewDocument.pdfSha256);
-    if (!master || !center?.canAccept || !center.masterAcceptanceRequired || center.orderForms.length || !reviewDocument || !reviewReady) return;
+    if (!master || !center?.canAccept || !center.masterAcceptanceRequired || !reviewDocument || !reviewReady) return;
     const name = legalName.trim().replace(/\s+/g, ' ');
     if (!name) { setError('Enter the authorised representative legal name.'); return; }
     if (!confirmed) { setError('Confirm that you are authorised and accept the current Master Agreement before continuing.'); return; }
 
+    const hadOrderForms = center.orderForms.length > 0;
     const commandId = commandIds.current.get(master.id) ?? crypto.randomUUID();
     commandIds.current.set(master.id, commandId);
     setBusy(true);
@@ -137,7 +138,9 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
       setReviewedPdfSha256(null);
       setLegalName('');
       setConfirmed(false);
-      setMessage('Master Agreement accepted. SellerTray Billing is now the governed next step for the Business Owner.');
+      setMessage(hadOrderForms
+        ? 'Master Agreement accepted. Your historical Order Forms remain unchanged; continue with the current commercial action when required.'
+        : 'Master Agreement accepted. SellerTray Billing is now the governed next step for the Business Owner.');
     } catch (cause) {
       setError(errorMessage(cause, 'Unable to accept the SellerTray Master Agreement.'));
     } finally {
@@ -146,7 +149,7 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
   }
 
   if (loading && !center) return <article className="panel"><p className="muted">Loading agreements…</p></article>;
-  if (center?.orderForms.length) return <CommercialAgreementPackageManagement tenantId={tenantId} />;
+  if (center?.orderForms.length && !center.masterAcceptanceRequired) return <CommercialAgreementPackageManagement tenantId={tenantId} />;
 
   const master = center?.masterAgreement ?? null;
   const reviewReady = Boolean(reviewDocument && reviewedPdfSha256 === reviewDocument.pdfSha256);
@@ -161,7 +164,7 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
 
     {!master ? <article className="panel empty-state">
       <strong>Master Agreement not yet published</strong>
-      <p>ProcessEdge must publish the current SellerTray Master Agreement before the first commercial purchase can begin.</p>
+      <p>ProcessEdge must publish the current SellerTray Master Agreement before the next governed commercial commitment can proceed.</p>
     </article> : <article className="panel agreement-brand-panel">
       <div className="agreement-brand-heading">
         <img className="agreement-brand-logo" src="/brand/sellertray-logo-v2.svg" alt="SellerTray" />
@@ -191,10 +194,10 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
         </div>
       </div> : null}
 
-      {!center?.masterAcceptanceRequired ? <div className="success-banner">Master Agreement accepted. Continue to SellerTray Billing to choose or change the governed plan. The resulting commercial commitment will have its own Order Form.</div> : null}
-      {center?.masterAcceptanceRequired && !center.canAccept ? <div className="warning-banner">Your current role cannot accept this Master Agreement. Use an authorised Business representative before the first purchase can proceed.</div> : null}
+      {!center?.masterAcceptanceRequired ? <div className="success-banner">Master Agreement accepted. Continue to SellerTray Billing or the applicable commercial workflow. Each new governed commitment will have its own Order Form.</div> : null}
+      {center?.masterAcceptanceRequired && !center.canAccept ? <div className="warning-banner">Your current role cannot accept this Master Agreement. Use an authorised Business representative before the governed commercial action can proceed.</div> : null}
 
-      {center?.masterAcceptanceRequired && center.canAccept ? <form className="settings-form agreement-signature-form" onSubmit={acceptPrepurchaseMaster}>
+      {center?.masterAcceptanceRequired && center.canAccept ? <form className="settings-form agreement-signature-form" onSubmit={acceptMaster}>
         <div className={`agreement-review-status ${reviewReady ? 'ready' : ''}`}><strong>{reviewReady ? 'Master Agreement reviewed and ready to accept' : 'Review the Master Agreement PDF before continuing'}</strong><span>{reviewReady ? 'SellerTray will record your authenticated acceptance against the exact Master Agreement PDF you opened.' : 'Use Review Master Agreement above to open the exact current document.'}</span></div>
         <label className="field"><span>Authorised representative legal name</span><SellerTrayInput maxLength={200} required value={legalName} onChange={(event) => setLegalName(event.target.value)} placeholder="Full legal name" /></label>
         <label className="access-card"><SellerTrayInput type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span><strong>I confirm I am authorised to act for this Business and accept this current SellerTray Master Agreement.</strong><small>This accepts only the current Master Agreement. It does not confirm any purchase, plan or Order Form.</small></span></label>
