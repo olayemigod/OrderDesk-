@@ -68,7 +68,13 @@ requireValue(
   'Orders UI must support quantity-level returns, receivable-first settlement, explicit Cash/Bank payout selection and Manager/Owner payout completion',
 );
 requireValue(
-  ordersWorkspace.includes("const canPrepareReturn = order.source === 'pos'")
+  (
+    ordersWorkspace.includes("const canPrepareReturn = order.source === 'pos'")
+      || (
+        ordersWorkspace.includes("const canOpenDocuments = order.source === 'pos' && order.status === 'completed'")
+        && ordersWorkspace.includes('const canPrepareReturn = canOpenDocuments')
+      )
+  )
     && ordersWorkspace.includes("order.status === 'completed'")
     && ordersWorkspace.includes("order.fulfillmentStatus === 'collected'")
     && ordersWorkspace.includes("onPress={() => void beginReturn(order)}")

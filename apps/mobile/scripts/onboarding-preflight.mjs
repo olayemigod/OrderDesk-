@@ -14,11 +14,14 @@ function requireValue(condition, message) {
 }
 
 const migration = read(join(repoRoot, 'supabase/migrations/20261023124500_merchant_onboarding_read_model.sql'));
+const handoffMigration = read(join(repoRoot, 'supabase/migrations/20261029204500_mobile_merchant_web_onboarding_handoff.sql'));
+const handoffFunction = read(join(repoRoot, 'supabase/functions/merchant-web-handoff/index.ts'));
 const oa4 = read(join(repoRoot, 'supabase/migrations/20261024174609_oa4_setup_readiness_activation.sql'));
 const sell = read(join(mobileRoot, 'src/redesign/SellWorkspace.tsx'));
 const offline = read(join(mobileRoot, 'src/data/offlineSalesRepository.ts'));
 requireValue(oa4.includes("'governed_runtime'") && oa4.includes('assert_sellertray_setup_completion_evidence') && oa4.includes('sellertray_business_is_preparing') && sell.includes('confirmOperationalAccess') && offline.includes('assertCachedOperationalAccess'), 'OA4 must enforce one server runtime authority and fail closed for uncached offline selling while permitting bounded preparation');
 const repository = read(join(mobileRoot, 'src/data/onboardingRepository.ts'));
+const handoffClient = read(join(mobileRoot, 'src/data/merchantWebHandoff.ts'));
 const businessesHook = read(join(mobileRoot, 'src/hooks/useBusinesses.ts'));
 const hook = read(join(mobileRoot, 'src/hooks/useOnboardingState.ts'));
 const card = read(join(mobileRoot, 'src/redesign/OnboardingPreparationCard.tsx'));
@@ -66,8 +69,27 @@ requireValue(
 requireValue(
   card.includes('Preparation') &&
     card.includes('Current selling access remains available') &&
-    card.includes('Continue this step in Merchant Web'),
-  'The Mobile onboarding surface must explain preparation mode, legacy compatibility and Merchant Web ownership of commercial steps',
+    card.includes('Continue this step in Merchant Web') &&
+    card.includes('Continue in Merchant Web') &&
+    card.includes('Linking.openURL'),
+  'The Mobile onboarding surface must explain preparation mode and provide a usable Merchant Web continuation for server-owned commercial steps',
+);
+requireValue(
+  handoffClient.includes("supabase.functions.invoke('merchant-web-handoff'") &&
+    !handoffClient.includes('sellertray-merchant.vercel.app') &&
+    handoffClient.includes("url.protocol === 'https:'") &&
+    handoffClient.includes("url.hash.startsWith('#st_handoff=')"),
+  'Mobile Merchant Web continuation must use the governed handoff service rather than a hard-coded unauthenticated portal link',
+);
+requireValue(
+  handoffMigration.includes('sellertray_merchant_web_handoffs') &&
+    handoffMigration.includes("'review_master_agreement' then 'agreements'") &&
+    handoffMigration.includes("'pay_outstanding' then 'sellertray_billing'") &&
+    handoffMigration.includes("'review_setup_appointments' then 'setup'") &&
+    handoffMigration.includes("'surface','merchant_web'") &&
+    handoffFunction.includes('token_hash: tokenHash') &&
+    !handoffFunction.includes('access_token='),
+  'Merchant Web continuation must remain Business-bound, server-routed and one-time without placing SellerTray session tokens in the URL',
 );
 requireValue(
   home.includes('<OnboardingPreparationCard') &&

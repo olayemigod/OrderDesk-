@@ -59,13 +59,16 @@ export function useBusinesses() {
 
   const selectBusiness = useCallback(async (businessId: string) => {
     const selectedBusiness = businesses.find((business) => business.id === businessId) ?? null;
-    setActiveBusinessId(businessId);
-    await AsyncStorage.setItem(ACTIVE_BUSINESS_KEY, businessId);
-    if (selectedBusiness) {
-      await AsyncStorage.setItem(ACTIVE_BUSINESS_ROLE_HINT_KEY, selectedBusiness.role);
-    } else {
-      await AsyncStorage.removeItem(ACTIVE_BUSINESS_ROLE_HINT_KEY);
+    if (!selectedBusiness) {
+      throw new Error('This Business is no longer available to your account. Refresh SellerTray and try again.');
     }
+
+    // Persist the next tenant context before exposing it to mounted workspaces. This keeps
+    // remounted tenant-bound hooks from reading the previous Business during the switch.
+    await AsyncStorage.setItem(ACTIVE_BUSINESS_KEY, businessId);
+    await AsyncStorage.setItem(ACTIVE_BUSINESS_ROLE_HINT_KEY, selectedBusiness.role);
+    setActiveBusinessId(businessId);
+    setError(null);
   }, [businesses]);
 
   const createBusiness = useCallback(

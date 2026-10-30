@@ -22,6 +22,7 @@ export type MerchantPortalPage =
   | 'branches'
   | 'team'
   | 'agreements'
+  | 'setup'
   | 'feedback'
   | 'settings';
 
@@ -64,7 +65,8 @@ export const MERCHANT_PORTAL_NAVIGATION: MerchantPortalNavigationItem[] = [
   { id: 'ai', label: 'Ask SellerTray', section: 'Insights', available: true },
   { id: 'branches', label: 'Branches', section: 'Business', available: true },
   { id: 'team', label: 'Team & Permissions', section: 'Business', available: true },
-  { id: 'agreements', label: 'Agreements', section: 'Business', available: true },
+  { id: 'agreements', label: 'Master Agreement', section: 'Business', available: true },
+  { id: 'setup', label: 'Setup appointments', section: 'Business', available: true },
   { id: 'feedback', label: 'Feedback', section: 'Business', available: true },
   { id: 'settings', label: 'Settings', section: 'Business', available: true },
 ];

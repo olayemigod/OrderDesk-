@@ -1,7 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { SellerTrayText as Text } from '../components/SellerTrayText';
+import {
+  createSellerTrayMerchantWebHandoff,
+  SellerTrayMerchantWebHandoffError,
+} from '../data/merchantWebHandoff';
 import type { SellerTrayOnboardingState } from '../data/onboardingRepository';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
@@ -36,6 +41,26 @@ const STAGE_ORDER: SellerTrayOnboardingState['currentStage'][] = [
 export function OnboardingPreparationCard({ state, loading, error = null, onRefresh }: Props) {
   const appearance = useSellerTrayAppearance();
   const dark = appearance.dark;
+  const [continuing, setContinuing] = useState(false);
+  const [handoffError, setHandoffError] = useState<string | null>(null);
+
+  async function continueInMerchantWeb() {
+    if (!state || continuing || state.nextAction.surface !== 'merchant_web') return;
+    setContinuing(true);
+    setHandoffError(null);
+    try {
+      const handoff = await createSellerTrayMerchantWebHandoff(state.tenantId);
+      await Linking.openURL(handoff.url);
+    } catch (error) {
+      setHandoffError(
+        error instanceof SellerTrayMerchantWebHandoffError
+          ? error.message
+          : 'Unable to open Merchant Web securely. Check your connection and try again.',
+      );
+    } finally {
+      setContinuing(false);
+    }
+  }
 
   if (loading && !state) {
     return (
@@ -130,6 +155,21 @@ export function OnboardingPreparationCard({ state, loading, error = null, onRefr
                 ? 'SellerTray will check setup, agreement and payment automatically. Contact ProcessEdge if this status does not change.'
                 : 'Continue preparing the Business and Branch details in SellerTray mobile.'}
         </Text>
+        {merchantWebNext ? (
+          <>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Continue to Merchant Web: ${state.nextAction.label}`}
+              disabled={continuing}
+              onPress={() => void continueInMerchantWeb()}
+              style={({ pressed }) => [styles.continueButton, (pressed || continuing) && styles.pressed]}
+            >
+              <Text style={styles.continueText}>{continuing ? 'Opening Merchant Web…' : 'Continue in Merchant Web'}</Text>
+              <Ionicons name="arrow-forward-outline" size={18} color={theme.colors.white} />
+            </Pressable>
+            {handoffError ? <Text style={[styles.handoffError, dark && darkStyles.handoffError]}>{handoffError}</Text> : null}
+          </>
+        ) : null}
       </View>
 
       {state.commercialOrder ? (
@@ -213,10 +253,13 @@ const styles = StyleSheet.create({
   progressText: { color: theme.colors.muted, fontSize: 12, fontWeight: '800' },
   blockerBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 7, borderRadius: theme.radius.md, backgroundColor: '#FFFAEB', padding: 10 },
   blockerText: { flex: 1, color: '#7A2E0E', fontSize: 12, lineHeight: 18, fontWeight: '700' },
-  nextBox: { borderRadius: theme.radius.md, backgroundColor: theme.colors.white, borderWidth: 1, borderColor: theme.colors.border, padding: 11, gap: 3 },
+  nextBox: { borderRadius: theme.radius.md, backgroundColor: theme.colors.white, borderWidth: 1, borderColor: theme.colors.border, padding: 11, gap: 7 },
   nextLabel: { color: theme.colors.muted, fontSize: 11, fontWeight: '900', letterSpacing: 0.8 },
   nextTitle: { color: theme.colors.navy, fontSize: 14, fontWeight: '900' },
   nextHint: { color: theme.colors.slate, fontSize: 12, lineHeight: 18 },
+  continueButton: { width: '100%', minHeight: 48, borderRadius: 12, backgroundColor: theme.colors.green, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  continueText: { color: theme.colors.white, fontSize: 13, fontWeight: '900', textAlign: 'center' },
+  handoffError: { color: theme.colors.danger, fontSize: 12, lineHeight: 18, fontWeight: '700' },
   summaryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   summaryItem: { flexGrow: 1, flexBasis: '30%', minWidth: 96, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.72)', padding: 9, gap: 2 },
   summaryLabel: { color: theme.colors.muted, fontSize: 11, fontWeight: '800' },
@@ -238,6 +281,7 @@ const darkStyles = StyleSheet.create({
   blockerBox: { backgroundColor: theme.dark.warningSurface },
   blockerText: { color: theme.dark.warningText },
   nextBox: { backgroundColor: theme.dark.surfaceSubtle, borderColor: theme.dark.border },
+  handoffError: { color: theme.dark.warningText },
   summaryItem: { backgroundColor: theme.dark.surfaceSubtle },
   compatibilityNote: { backgroundColor: theme.dark.accentSoft },
 });

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { errorMessage, supabase } from './supabase';
+import SellerTrayInitialPurchase from './SellerTrayInitialPurchase';
 
 type SettlementState = {
   grossAmount: number;
@@ -123,13 +124,15 @@ export default function SellerTrayBillingManagement({ tenantId }: { tenantId: st
   return <section className="page-stack">
     <div className="section-heading">
       <div><p className="eyebrow">ProcessEdge commercial account</p><h2>SellerTray Billing</h2></div>
-      <p className="muted">Review what your business owes ProcessEdge for SellerTray. Customer receivables remain under Payments & Receivables.</p>
+      <p className="muted">Choose the first governed SellerTray plan when required, then review what your business owes ProcessEdge. Customer receivables remain under Payments & Receivables.</p>
     </div>
-    <div className="governance-note">Discounts, direct ProcessEdge payments and provider payments are separate immutable settlement facts. The balance and next payable amount shown here come from SellerTray’s server authority.</div>
+    <div className="governance-note">Plan and Branch setup prices are resolved by SellerTray’s server authority. Discounts, direct ProcessEdge payments and provider payments remain separate immutable settlement facts.</div>
     {error ? <div className="error-banner">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div> : null}
     {message ? <div className="success-banner">{message}<button type="button" onClick={() => setMessage(null)}>Dismiss</button></div> : null}
 
-    {!center?.orders.length ? <article className="panel empty-state"><strong>No SellerTray commercial order</strong><p>ProcessEdge commercial purchases for this business will appear here when issued.</p></article> : center.orders.map((order) => {
+    <SellerTrayInitialPurchase tenantId={tenantId} onChanged={load} />
+
+    {!center?.orders.length ? <article className="panel empty-state"><strong>No SellerTray commercial order yet</strong><p>If the Business Owner has purchase authority, choose a governed plan above. Otherwise SellerTray will show the next available commercial action when authority becomes available.</p></article> : center.orders.map((order) => {
       const state = order.settlement;
       const canPay = center.canPay && state.outstandingAmount >= 0.005 && Boolean(state.nextInstallmentScheduleId);
       return <article className="panel" key={order.commercialOrderId}>
