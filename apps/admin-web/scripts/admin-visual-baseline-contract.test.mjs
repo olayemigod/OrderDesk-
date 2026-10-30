@@ -36,7 +36,7 @@ test('redesigned shell preserves grouped desktop navigation, responsive Merchant
   assert.match(workspace, /admin-nav-group-button/);
   assert.match(workspace, /admin-nav-submenu-link/);
   assert.match(workspace, /mobileNavOpen/);
-  assert.match(workspace, /workspace-mobile-scrim/);
+  assert.match(workspace, /workspace-nav-backdrop/);
   assert.match(navigation, /@media \(max-width: 820px\)/);
   assert.match(navigation, /admin-merchant-context-popover/);
   assert.match(navigation, /position: fixed/);
