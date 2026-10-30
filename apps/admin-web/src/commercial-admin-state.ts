@@ -55,6 +55,8 @@ export type CommercialOverview = {
 
 export type OnboardingPlan = { code: string; name: string; currency: string; active: boolean };
 export type OnboardingBranch = { id: string; code: string; name: string; active: boolean; isDefault: boolean };
+export type PriceLifecycleState = 'active' | 'paused' | 'deactivated' | 'voided';
+export type PriceLifecycleAction = 'pause' | 'resume' | 'deactivate' | 'void';
 export type OnboardingPrice = {
   id: string;
   priceKind: 'subscription' | 'branch_setup';
@@ -69,6 +71,10 @@ export type OnboardingPrice = {
   priceScope: 'standard' | 'merchant_override';
   tenantId: string | null;
   sourceStandardPriceVersionId: string | null;
+  lifecycleState: PriceLifecycleState;
+  latestControlAction: PriceLifecycleAction | null;
+  latestControlAt: string | null;
+  latestControlReason: string | null;
 };
 export type OnboardingOrder = {
   id: string;
@@ -95,7 +101,7 @@ export type CommercialOnboarding = {
   agreements: OnboardingAgreement[];
 };
 
-type AdminResponse = { ok?: boolean; overview?: unknown; onboarding?: unknown };
+type AdminResponse = { ok?: boolean; overview?: unknown; onboarding?: unknown; result?: unknown };
 
 export async function loadCommercialOverview(session: Session, tenantId: string): Promise<CommercialOverview> {
   const response = await invokeCommercialAdmin(session, { action: 'admin_overview', tenantId });
@@ -109,6 +115,15 @@ export async function loadCommercialOnboarding(session: Session, tenantId: strin
 
 export async function invokeCommercialAdmin(session: Session, payload: Record<string, unknown>): Promise<AdminResponse> {
   return await invokeJson<AdminResponse>('commercial-agreements', payload, session);
+}
+
+export async function invokeCommercialPriceLifecycle(session: Session, payload: {
+  priceVersionId: string;
+  action: PriceLifecycleAction;
+  reason: string;
+  commandId: string;
+}): Promise<AdminResponse> {
+  return await invokeJson<AdminResponse>('commercial-price-controls', payload, session);
 }
 
 function parseOverview(value: unknown): CommercialOverview {
@@ -186,6 +201,8 @@ function parseOnboarding(value: unknown): CommercialOnboarding {
     }).filter((row) => row.id),
     prices: array(root.prices).map((value) => {
       const row = record(value);
+      const lifecycleState: PriceLifecycleState = row.lifecycleState === 'paused' || row.lifecycleState === 'deactivated' || row.lifecycleState === 'voided' ? row.lifecycleState : 'active';
+      const latestControlAction: PriceLifecycleAction | null = row.latestControlAction === 'pause' || row.latestControlAction === 'resume' || row.latestControlAction === 'deactivate' || row.latestControlAction === 'void' ? row.latestControlAction : null;
       return {
         id: stringValue(row.id),
         priceKind: row.priceKind === 'branch_setup' ? 'branch_setup' : 'subscription',
@@ -200,6 +217,10 @@ function parseOnboarding(value: unknown): CommercialOnboarding {
         priceScope: row.priceScope === 'merchant_override' ? 'merchant_override' : 'standard',
         tenantId: nullableString(row.tenantId),
         sourceStandardPriceVersionId: nullableString(row.sourceStandardPriceVersionId),
+        lifecycleState,
+        latestControlAction,
+        latestControlAt: nullableString(row.latestControlAt),
+        latestControlReason: nullableString(row.latestControlReason),
       } as OnboardingPrice;
     }).filter((row) => row.id),
     orders: array(root.orders).map((value) => {

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import {
   invokeCommercialAdmin,
+  invokeCommercialPriceLifecycle,
   loadCommercialOnboarding,
   loadCommercialOverview,
   type AdminRole,
@@ -10,17 +11,20 @@ import {
   type CommercialOverview,
   type OnboardingOrder,
   type OnboardingPrice,
+  type PriceLifecycleAction,
 } from './commercial-admin-state';
 
 type ListAddTab = 'list' | 'add';
+type PriceControlDraft = { price: OnboardingPrice; action: PriceLifecycleAction; reason: string; commandId: string };
 
 export function CommercialPricingAdministration({ session, tenantId }: { session: Session; actorRole: AdminRole; tenantId: string }) {
-  const { state, loading, error, message, saving, reload, mutate, setError } = useOnboardingWorkspace(session, tenantId);
+  const { state, loading, error, message, saving, reload, mutate, controlPriceLifecycle, setError } = useOnboardingWorkspace(session, tenantId);
   const [tab, setTab] = useState<ListAddTab>('list');
   const [subscriptionForm, setSubscriptionForm] = useState({ planCode: 'business', currency: 'NGN', monthlyGross: '', taxRate: '', effectiveFrom: nowLocal(), reason: '' });
   const [setupForm, setSetupForm] = useState({ currency: 'NGN', gross: '', taxRate: '', effectiveFrom: nowLocal(), reason: '' });
   const [subscriptionOverride, setSubscriptionOverride] = useState({ planCode: 'business', currency: 'NGN', monthlyGross: '', effectiveFrom: nowLocal(), effectiveUntil: tomorrowLocal(), reason: '' });
   const [setupOverride, setSetupOverride] = useState({ currency: 'NGN', gross: '', effectiveFrom: nowLocal(), effectiveUntil: tomorrowLocal(), reason: '' });
+  const [priceControl, setPriceControl] = useState<PriceControlDraft | null>(null);
   const canManageGlobalPricing = state?.canManageGlobalPricing === true;
   const canManageMerchantPricing = state?.canManageMerchantPricing === true;
 
@@ -102,11 +106,29 @@ export function CommercialPricingAdministration({ session, tenantId }: { session
     const ok = await mutate('setup-override', {
       action: 'admin_publish_setup_override', tenantId,
       currency: setupOverride.currency, grossAmount, effectiveFrom, effectiveUntil, reason: setupOverride.reason,
-    }, 'Business-specific Branch setup price override published.');
+    }, 'Business-specific Branch setup override published.');
     if (ok) {
       setSetupOverride((current) => ({ ...current, gross: '', effectiveFrom: nowLocal(), effectiveUntil: tomorrowLocal(), reason: '' }));
       setTab('list');
     }
+  }
+
+  function beginPriceControl(price: OnboardingPrice, action: PriceLifecycleAction) {
+    const canManage = price.priceScope === 'standard' ? canManageGlobalPricing : canManageMerchantPricing;
+    if (!canManage) return setError('Your current ProcessEdge authority cannot control this price version.');
+    setPriceControl({ price, action, reason: '', commandId: crypto.randomUUID() });
+  }
+
+  async function submitPriceControl() {
+    if (!priceControl) return;
+    const reason = priceControl.reason.trim();
+    if (reason.length < 6) return setError('Enter a lifecycle-control reason of at least 6 characters.');
+    const ok = await controlPriceLifecycle(
+      `price-control-${priceControl.price.id}`,
+      { priceVersionId: priceControl.price.id, action: priceControl.action, reason, commandId: priceControl.commandId },
+      `Price ${label(priceControl.action)} applied.`
+    );
+    if (ok) setPriceControl(null);
   }
 
   return <WorkspaceState loading={loading} error={error} message={message} onReload={reload}>
@@ -114,10 +136,33 @@ export function CommercialPricingAdministration({ session, tenantId }: { session
     {!canManageGlobalPricing && !canManageMerchantPricing ? <div className="workspace-banner info">Pricing is review-only for your current ProcessEdge authority.</div> : null}
     {!canManageGlobalPricing && canManageMerchantPricing ? <div className="workspace-banner info">You may publish pricing for this selected Business. Standard platform pricing remains review-only.</div> : null}
     {canManageGlobalPricing && !canManageMerchantPricing ? <div className="workspace-banner info">You may publish standard platform pricing. Business-specific pricing is not authorised for this selected Business.</div> : null}
-    {state && tab === 'list' ? <section className="workspace-panel">
-      <PanelHeading title="Effective price history" description="Standard platform prices and this Business's audited overrides are effective-dated. Historical orders retain the exact price version they used." />
-      <div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Scope</th><th>Price</th><th>Cycle</th><th>Gross</th><th>Tax</th><th>Effective</th><th>Until</th></tr></thead><tbody>{state.prices.map((price) => <tr key={price.id}><td><span className={`workspace-status ${price.priceScope === 'merchant_override' ? 'attention' : 'info'}`}>{price.priceScope === 'merchant_override' ? 'Business override' : 'Standard'}</span></td><td>{price.priceKind === 'branch_setup' ? 'Branch setup' : price.planCode ?? 'Subscription'}</td><td>{price.billingCycle ?? 'One-time'}</td><td>{money(price.grossAmount, price.currency)}</td><td>{price.taxRatePercent === null ? 'Not separately recorded' : `${price.taxRatePercent}%`}</td><td>{formatDate(price.effectiveFrom)}</td><td>{price.effectiveUntil ? formatDate(price.effectiveUntil) : 'Open-ended'}</td></tr>)}{!state.prices.length ? <tr><td colSpan={7}>No governed pricing has been published.</td></tr> : null}</tbody></table></div>
-    </section> : null}
+    {state && tab === 'list' ? <>
+      <section className="workspace-panel">
+        <PanelHeading title="Effective price history" description="Published prices remain immutable. Pause, Resume, Deactivate and Void are append-only lifecycle controls; historical orders retain the exact price version they used." />
+        <div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Scope</th><th>Price</th><th>Cycle</th><th>Gross</th><th>Tax</th><th>State</th><th>Effective</th><th>Until</th><th>Controls</th></tr></thead><tbody>{state.prices.map((price) => {
+          const canManage = price.priceScope === 'standard' ? canManageGlobalPricing : canManageMerchantPricing;
+          const actions = priceLifecycleActions(price);
+          const pairFollower = price.priceKind === 'subscription' && price.billingCycle === 'yearly';
+          return <tr key={price.id}>
+            <td><span className={`workspace-status ${price.priceScope === 'merchant_override' ? 'attention' : 'info'}`}>{price.priceScope === 'merchant_override' ? 'Business override' : 'Standard'}</span></td>
+            <td>{price.priceKind === 'branch_setup' ? 'Branch setup' : price.planCode ?? 'Subscription'}</td>
+            <td>{price.billingCycle ?? 'One-time'}</td>
+            <td>{money(price.grossAmount, price.currency)}</td>
+            <td>{price.taxRatePercent === null ? 'Not separately recorded' : `${price.taxRatePercent}%`}</td>
+            <td><span className={`workspace-status ${price.lifecycleState === 'active' ? 'success' : price.lifecycleState === 'paused' ? 'attention' : 'info'}`}>{label(price.lifecycleState)}</span></td>
+            <td>{formatDate(price.effectiveFrom)}</td>
+            <td>{price.effectiveUntil ? formatDate(price.effectiveUntil) : 'Open-ended'}</td>
+            <td>{pairFollower ? <small>Controlled with monthly pair</small> : canManage && actions.length ? <div className="workspace-filter-row">{actions.map((action) => <button key={action} type="button" className="workspace-button text compact" disabled={saving !== null} onClick={() => beginPriceControl(price, action)}>{label(action)}</button>)}</div> : <small>{canManage ? 'No further action' : 'Review only'}</small>}</td>
+          </tr>;
+        })}{!state.prices.length ? <tr><td colSpan={9}>No governed pricing has been published.</td></tr> : null}</tbody></table></div>
+      </section>
+      {priceControl ? <section className="workspace-panel workspace-form-stack">
+        <PanelHeading title={`${label(priceControl.action)} price version`} description={`${priceControl.price.priceKind === 'subscription' ? 'The governed monthly + annual subscription pair will move together.' : 'This Branch setup price version will be controlled independently.'} The original published price row remains immutable.`} />
+        {(priceControl.action === 'deactivate' || priceControl.action === 'void') ? <div className="workspace-banner warning">{priceControl.action === 'void' ? 'Void is terminal and is accepted only for a future, unused price version.' : 'Deactivate is terminal for this published version. Publish a new governed version if pricing must return later.'}</div> : null}
+        <label>Reason<input maxLength={1000} value={priceControl.reason} onChange={(event) => setPriceControl({ ...priceControl, reason: event.target.value })} placeholder="Explain why this lifecycle change is required" /></label>
+        <div className="workspace-filter-row"><button type="button" className="workspace-button primary" disabled={saving !== null} onClick={() => void submitPriceControl()}>{saving?.startsWith('price-control-') ? 'Applying…' : `Apply ${label(priceControl.action)}`}</button><button type="button" className="workspace-button secondary" disabled={saving !== null} onClick={() => setPriceControl(null)}>Cancel</button></div>
+      </section> : null}
+    </> : null}
     {state && tab === 'add' ? <>
       <div className="workspace-grid two">
         <section className="workspace-panel workspace-form-stack">
@@ -291,7 +336,15 @@ function useOnboardingWorkspace(session: Session, tenantId: string) {
     finally { setSaving(null); }
   }
 
-  return { state, loading, saving, error, message, reload, mutate, setError };
+  async function controlPriceLifecycle(key: string, payload: { priceVersionId: string; action: PriceLifecycleAction; reason: string; commandId: string }, success: string) {
+    if (saving) return false;
+    setSaving(key); setError(null); setMessage(null);
+    try { await invokeCommercialPriceLifecycle(session, payload); await reload(); setMessage(success); return true; }
+    catch (cause) { setError(messageFrom(cause, 'Unable to change the governed price lifecycle state.')); return false; }
+    finally { setSaving(null); }
+  }
+
+  return { state, loading, saving, error, message, reload, mutate, controlPriceLifecycle, setError };
 }
 
 function useOverviewWorkspace(session: Session, tenantId: string) {
@@ -332,8 +385,15 @@ function readinessKey(row: BranchSetupState) { return `${row.commercialOrderId}:
 function resolveEffectivePrice(prices: OnboardingPrice[], kind: OnboardingPrice['priceKind'], planCode: string | null, billingCycle: OnboardingPrice['billingCycle'], currency: string): OnboardingPrice | null {
   const now = Date.now();
   return prices
-    .filter((price) => price.priceKind === kind && price.planCode === planCode && price.billingCycle === billingCycle && price.currency === currency && new Date(price.effectiveFrom).getTime() <= now && (!price.effectiveUntil || new Date(price.effectiveUntil).getTime() > now))
+    .filter((price) => price.lifecycleState === 'active' && price.priceKind === kind && price.planCode === planCode && price.billingCycle === billingCycle && price.currency === currency && new Date(price.effectiveFrom).getTime() <= now && (!price.effectiveUntil || new Date(price.effectiveUntil).getTime() > now))
     .sort((a, b) => (a.priceScope === b.priceScope ? new Date(b.effectiveFrom).getTime() - new Date(a.effectiveFrom).getTime() : a.priceScope === 'merchant_override' ? -1 : 1))[0] ?? null;
+}
+function priceLifecycleActions(price: OnboardingPrice): PriceLifecycleAction[] {
+  if (price.priceKind === 'subscription' && price.billingCycle === 'yearly') return [];
+  const future = new Date(price.effectiveFrom).getTime() > Date.now();
+  if (price.lifecycleState === 'active') return future ? ['pause', 'deactivate', 'void'] : ['pause', 'deactivate'];
+  if (price.lifecycleState === 'paused') return future ? ['resume', 'deactivate', 'void'] : ['resume', 'deactivate'];
+  return [];
 }
 function positiveNumber(value: string): number | null { const parsed = Number(value); return Number.isFinite(parsed) && parsed > 0 ? Math.round((parsed + Number.EPSILON) * 100) / 100 : null; }
 function optionalPercent(value: string): number | null | undefined { if (!value.trim()) return null; const parsed = Number(value); return Number.isFinite(parsed) && parsed >= 0 && parsed <= 100 ? parsed : undefined; }
