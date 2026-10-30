@@ -95,10 +95,7 @@ requireValue(
     && !initialPurchase.includes('Choose your governed plan'),
   'Initial purchase must prepare the Order Form; Confirm Purchase is reserved for the Order Form itself.',
 );
-requireValue(
-  commercialBilling.includes("orderFormState: OrderFormState") || commercialBilling.includes('orderFormState,'),
-  'Commercial Billing must expose server-resolved Order Form readiness.',
-);
+requireValue(commercialBilling.includes('orderFormState,'), 'Commercial Billing must expose server-resolved Order Form readiness.');
 requireValue(
   billing.includes("order.orderFormState === 'ready_for_review'") && billing.includes('Review Order Form')
     && billing.includes("order.orderFormState === 'preparing'")
@@ -106,12 +103,15 @@ requireValue(
     && billing.includes("functions.invoke('billing-checkout'") && billing.includes("response.status === 'retry_required'"),
   'Billing must block new payment UX until governed Order Form confirmation while preserving legacy/retry handling.',
 );
+const checkoutReplayIndex = checkoutGate.indexOf("where s.tenant_id=p_tenant_id and s.checkout_kind='installment' and s.command_id=p_command_id");
+const activeCheckoutIndex = checkoutGate.indexOf("s.status in ('preparing','initialized','paid')");
+const orderFormGateIndex = checkoutGate.indexOf('select f.id into v_order_form_id');
 requireValue(
   checkoutGate.includes('Review and confirm this SellerTray Order Form before payment')
     && checkoutGate.includes('sellertray_order_form_confirmations')
     && checkoutGate.includes('sellertray_agreement_package_processing')
-    && checkoutGate.indexOf("command_id=p_command_id") < checkoutGate.indexOf('v_order_form_id')
-    && checkoutGate.indexOf("s.status in ('preparing','initialized','paid')") < checkoutGate.indexOf('v_order_form_id'),
+    && checkoutReplayIndex >= 0 && activeCheckoutIndex >= 0 && orderFormGateIndex >= 0
+    && checkoutReplayIndex < orderFormGateIndex && activeCheckoutIndex < orderFormGateIndex,
   'Checkout authority must preserve committed checkout facts before enforcing confirmation on a new governed checkout.',
 );
 requireValue(excludes(billing, ['SERVICE_ROLE', 'SUPABASE_SECRET', "from('sellertray_commercial_payment_confirmations')"]), 'Billing must not bypass governed commercial authorities.');
