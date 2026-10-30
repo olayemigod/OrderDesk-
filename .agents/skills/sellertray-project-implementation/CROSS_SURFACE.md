@@ -24,6 +24,14 @@ Do not interpret “same implementation sweep” as “copy the same UI everywhe
 
 The requirement is **one coherent business flow and one source of truth**, with the appropriate UX on each affected surface.
 
+## Mandatory Merchant Management extension
+
+For any task touching SellerTray Admin merchant estate, Merchant 360, merchant account restriction/suspension/closure/restoration, ownership transfer, merchant support intervention, exceptional merchant recovery, legacy Admin tenant mutations, or Commercial V2/C2 runtime access convergence, also read and follow:
+
+`.agents/skills/sellertray-project-implementation/MERCHANT_MANAGEMENT.md`
+
+`MERCHANT_MANAGEMENT.md` records the approved separation between automated subscription lifecycle, Merchant Web self-service and ProcessEdge Admin merchant management. It establishes Merchant Account Lifecycle as a separate governed dimension from Branch subscription state, requires audited intervention commands rather than direct state/date edits, and makes retirement of compatibility-era direct tenant mutations part of C2 convergence.
+
 ## Mandatory impact assessment before editing
 
 For every SellerTray change, the agent must first answer these questions from the current repository and governing skills:
@@ -78,6 +86,7 @@ Examples:
 - A new Mobile cashier action normally cascades to Merchant Web review/reporting if owners/managers must supervise it, but it does not automatically create a Merchant Web transaction-entry form.
 - A platform commercial rule created in Admin Web cascades to Merchant Web/Mobile only to the extent it changes merchant entitlement, setup, billing or runtime behaviour.
 - A new report-only filter does not require a Mobile change unless Mobile also exposes that report or depends on that dimension operationally.
+- A ProcessEdge merchant-account restriction introduced in Admin must cascade through the shared runtime authority to Merchant Web, Mobile and WhatsApp; it must not become an Admin-only label or a duplicate subscription state.
 
 The agent must report the decision, including explicit no-impact conclusions for closely related surfaces.
 
