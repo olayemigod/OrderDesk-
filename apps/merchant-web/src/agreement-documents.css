@@ -1,0 +1,215 @@
+/* Agreement Package and activation journey presentation. */
+.agreement-brand-panel {
+  overflow: hidden;
+}
+.agreement-brand-heading {
+  display: grid;
+  grid-template-columns: minmax(120px, 190px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+}
+.agreement-brand-logo {
+  display: block;
+  width: min(180px, 100%);
+  max-height: 44px;
+  object-fit: contain;
+  object-position: left center;
+}
+.agreement-loading-card {
+  display: grid;
+  gap: 4px;
+  min-height: 92px;
+  align-content: center;
+}
+.agreement-loading-card p {
+  margin: 0;
+}
+.agreement-package-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 20px;
+  align-items: center;
+  padding: 22px;
+  border: 1px solid rgba(18, 183, 106, 0.3);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(217, 251, 232, 0.72), rgba(248, 250, 252, 0.96));
+}
+.agreement-package-card-copy h3 {
+  margin: 4px 0 8px;
+}
+.agreement-package-card-copy p {
+  margin: 0;
+  max-width: 760px;
+  color: var(--muted, #475467);
+}
+.agreement-package-actions {
+  display: flex;
+  min-width: 220px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 9px;
+}
+.agreement-package-actions small {
+  max-width: 300px;
+  overflow-wrap: anywhere;
+  color: var(--muted, #475467);
+}
+.agreement-document-link {
+  text-decoration: none;
+  text-align: center;
+}
+.agreement-signature-form {
+  margin-top: 18px;
+  border-top: 1px solid rgba(71, 84, 103, 0.16);
+  padding-top: 18px;
+}
+.agreement-review-status {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 14px 16px;
+  border: 1px solid rgba(71, 84, 103, 0.18);
+  border-radius: 14px;
+  background: rgba(248, 250, 252, 0.96);
+}
+.agreement-review-status.ready {
+  border-color: rgba(18, 183, 106, 0.4);
+  background: rgba(217, 251, 232, 0.62);
+}
+.agreement-review-status span {
+  color: var(--muted, #475467);
+  font-size: 0.9rem;
+}
+.agreement-viewer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(16, 42, 67, 0.72);
+  backdrop-filter: blur(3px);
+}
+.agreement-viewer {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(1120px, 96vw);
+  height: min(900px, 92dvh);
+  overflow: hidden;
+  border: 1px solid rgba(71, 84, 103, 0.22);
+  border-radius: 20px;
+  background: var(--surface, #fff);
+  box-shadow: 0 28px 80px rgba(16, 42, 67, 0.28);
+}
+.agreement-viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(71, 84, 103, 0.18);
+  background: var(--surface, #fff);
+}
+.agreement-viewer-header .eyebrow,
+.agreement-viewer-header h3 {
+  margin: 0;
+}
+.agreement-viewer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.agreement-viewer-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  background: #fff;
+}
+.agreement-viewer-loading {
+  display: grid;
+  place-content: center;
+  gap: 6px;
+  padding: 28px;
+  text-align: center;
+}
+.agreement-viewer-loading p {
+  margin: 0;
+}
+.commercial-journey {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+  padding: 16px 18px;
+  border: 1px solid rgba(18, 183, 106, 0.24);
+  border-radius: 16px;
+  background: rgba(217, 251, 232, 0.36);
+}
+.commercial-journey-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+.commercial-journey-copy .eyebrow {
+  margin: 0;
+}
+.commercial-journey-copy span {
+  color: var(--muted, #475467);
+  font-size: 0.9rem;
+}
+.commercial-journey-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.commercial-journey-actions .active {
+  border-color: rgba(18, 183, 106, 0.62);
+  background: rgba(18, 183, 106, 0.12);
+}
+
+@media (max-width: 860px) {
+  .agreement-brand-heading {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+  .agreement-brand-heading .role-pill {
+    justify-self: start;
+  }
+  .agreement-package-card {
+    grid-template-columns: 1fr;
+  }
+  .agreement-package-actions {
+    min-width: 0;
+  }
+  .agreement-viewer-backdrop {
+    padding: 0;
+  }
+  .agreement-viewer {
+    width: 100vw;
+    height: 100dvh;
+    border: 0;
+    border-radius: 0;
+  }
+  .agreement-viewer-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .agreement-viewer-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .commercial-journey {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .commercial-journey-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}

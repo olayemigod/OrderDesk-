@@ -19,8 +19,9 @@ type Appointment = {
 
 type ScheduleState = { tenantId: string; appointments: Appointment[]; generatedAt: string };
 type RequestDraft = { appointmentId: string; startLocal: string; endLocal: string; note: string };
+type CommercialJourneyPage = 'agreements' | 'sellertray_billing';
 
-export default function SetupSchedulingManagement({ tenantId }: { tenantId: string }) {
+export default function SetupSchedulingManagement({ tenantId, onNavigate }: { tenantId: string; onNavigate?: (page: CommercialJourneyPage) => void }) {
   const [onboarding, setOnboarding] = useState<Record<string, unknown> | null>(null);
   const [state, setState] = useState<ScheduleState | null>(null);
   const [loading, setLoading] = useState(false);
@@ -78,6 +79,10 @@ export default function SetupSchedulingManagement({ tenantId }: { tenantId: stri
     finally { setSaving(false); }
   }
 
+  const nextAction = onboarding ? record(onboarding.nextAction) : {};
+  const nextActionCode = text(nextAction.code);
+  const nextActionLabel = text(nextAction.label);
+
   return <section className="page-stack" aria-label="Setup scheduling">
     <div className="section-heading"><div><p className="eyebrow">Business setup</p><h2>Setup appointments</h2></div><p className="muted">View the ProcessEdge setup appointment for each Branch. Appointment completion automatically feeds the existing Branch readiness and activation process.</p></div>
     {error ? <div className="error-banner compact">{error}</div> : null}
@@ -85,7 +90,9 @@ export default function SetupSchedulingManagement({ tenantId }: { tenantId: stri
     {onboarding ? <article className="panel" aria-label="Activation status"><h3>{record(onboarding.activation).operationallyActive === true ? 'SellerTray is ready' : 'Setup & activation'}</h3>
       {array(onboarding.blockers).map((b, i) => <p key={i}>{text(record(b).message)}</p>)}
       {array(record(onboarding.branchSetup).branches).map((b) => { const branch = record(b); return <p key={text(branch.branchId)}><strong>{text(branch.branchName)}</strong> — {text(branch.setupStatus)}</p>; })}
-      <p>{text(record(onboarding.nextAction).label)}</p>
+      {nextActionLabel ? <p>{nextActionLabel}</p> : null}
+      {onNavigate && nextActionCode === 'review_master_agreement' ? <button type="button" className="primary-button" onClick={() => onNavigate('agreements')}>Review agreement</button> : null}
+      {onNavigate && nextActionCode === 'pay_outstanding' ? <button type="button" className="primary-button" onClick={() => onNavigate('sellertray_billing')}>Go to Billing</button> : null}
       {record(onboarding.activation).guaranteeStart ? <p>One-month guarantee: {formatDate(text(record(onboarding.activation).guaranteeStart))} to {formatDate(text(record(onboarding.activation).guaranteeEnd))}</p> : null}
     </article> : null}
     {message ? <div className="success-banner compact">{message}</div> : null}

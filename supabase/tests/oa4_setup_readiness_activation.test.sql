@@ -20,7 +20,6 @@ create temp table sellertray_c1b_fixture (
   installment_obligation_id uuid,
   schedule_1_id uuid,
   schedule_2_id uuid,
-  template_id uuid,
   agreement_id uuid,
   checkout_1_command uuid not null,
   checkout_2_command uuid not null,
@@ -61,7 +60,12 @@ set branch_id=b.id
 from public.branches b
 where b.tenant_id=f.tenant_id and b.is_default=true;
 
-with branch as (insert into public.branches(tenant_id,code,name,is_default,is_active) select tenant_id,'LEKKI','Lekki',false,false from sellertray_c1b_fixture returning id) update sellertray_c1b_fixture set branch_2_id=(select id from branch);
+with branch as (
+  insert into public.branches(tenant_id,code,name,is_default,is_active)
+  select tenant_id,'LEKKI','Lekki',false,false from sellertray_c1b_fixture returning id
+)
+update sellertray_c1b_fixture set branch_2_id=(select id from branch);
+
 with inserted as (
   insert into public.sellertray_commercial_price_versions(
     price_kind,plan_code,billing_cycle,currency,gross_amount,effective_from,
@@ -112,12 +116,11 @@ from sellertray_c1b_fixture
 union all
 select tenant_id,commercial_order_id,2,'branch_setup',setup_price_id,branch_id,'SellerTray Branch setup'
 from sellertray_c1b_fixture
-union all select tenant_id,commercial_order_id,3,'branch_setup',setup_price_id,branch_2_id,'Second Branch setup' from sellertray_c1b_fixture;
+union all
+select tenant_id,commercial_order_id,3,'branch_setup',setup_price_id,branch_2_id,'Second Branch setup'
+from sellertray_c1b_fixture;
 set constraints all immediate;
 
--- SET CONSTRAINTS ALL IMMEDIATE persists for the transaction. Re-defer both
--- installment validators before creating the obligation so validation sees the
--- complete governed 70:30 schedule rather than the empty/partial fixture state.
 set constraints validate_sellertray_commercial_installment_obligation deferred;
 set constraints validate_sellertray_commercial_installment_schedule_line deferred;
 
@@ -148,18 +151,14 @@ update sellertray_c1b_fixture set schedule_2_id=(select id from inserted);
 set constraints all immediate;
 
 update sellertray_c1b_fixture f
-set template_id=public.publish_sellertray_commercial_agreement_template_version(
-  'installment_agreement','c1b-2026.1','SellerTray Installment Agreement',
-  'C1B test agreement content',now()-interval '1 minute',f.admin_user_id
+set agreement_id=public.publish_sellertray_master_agreement_admin(
+  'test-'||substr(f.tenant_id::text,1,8),
+  'SellerTray Master Agreement',
+  'Universal OA4 setup and activation agreement content',
+  now()-interval '1 minute',
+  'OA4 universal agreement publication',
+  f.admin_user_id
 );
-
-update sellertray_c1b_fixture f
-set agreement_id=public.issue_sellertray_commercial_agreement(
-  f.tenant_id,f.commercial_order_id,f.installment_obligation_id,f.template_id,
-  'AGR-C1B-'||upper(substr(f.tenant_id::text,1,8)),
-  'Merchant-specific C1B installment agreement',null,f.admin_user_id
-);
-
 
 create temp table oa4_evidence(e jsonb);
 insert into oa4_evidence values ('{"schemaVersion":1,"checklist":{"branchConfigured":true,"merchantWalkthrough":true},"equipment":[{"kind":"bluetooth_printer","provisioning":"supplied","identifier":"BT-123456","pairingTestResult":"passed","testReceiptPrinted":true,"handoverCondition":"New and undamaged"}],"receivedBy":"Merchant Owner","acknowledgement":"Signed handover receipt H123"}');
@@ -178,8 +177,7 @@ select extensions.lives_ok($test$select public.save_sellertray_branch(tenant_id,
 select extensions.lives_ok($test$select public.save_sellertray_business_profile(tenant_id,'Prepared Business',null,null,null,null,'NGN','Africa/Lagos') from sellertray_c1b_fixture$test$,'Owner can finish Business profile in preparation mode');
 select set_config('request.jwt.claim.role','service_role',true);
 select public.platform_admin_record_commercial_adjustment(f.admin_user_id,f.tenant_id,f.commercial_order_id,gen_random_uuid(),1200,'Approved full discount','{}') from sellertray_c1b_fixture f;
-update sellertray_c1b_fixture f set agreement_id=public.issue_sellertray_commercial_agreement(f.tenant_id,f.commercial_order_id,f.installment_obligation_id,f.template_id,'AGR-OA4','OA4 replacement agreement',f.agreement_id,f.admin_user_id);
-select public.accept_sellertray_commercial_agreement(f.tenant_id,f.agreement_id,'OA4 Owner','{}',f.checkout_1_command,f.owner_user_id) from sellertray_c1b_fixture f;
+select public.accept_sellertray_master_agreement(f.tenant_id,f.agreement_id,'OA4 Owner','{}',f.checkout_1_command,f.owner_user_id) from sellertray_c1b_fixture f;
 
 update sellertray_c1b_fixture set area_id=public.platform_admin_upsert_setup_service_area(admin_user_id,tenant_id,null,'OA4','Lagos',true,'Test coverage');
 update sellertray_c1b_fixture set worker_id=public.platform_admin_upsert_setup_worker(admin_user_id,tenant_id,null,'OA4-W','Installer One',true,1,0,array[area_id],'Test installer');
@@ -203,14 +201,12 @@ select extensions.ok(exists(select 1 from jsonb_array_elements(public.get_seller
 select extensions.is(public.get_sellertray_onboarding_state_core(tenant_id)#>>'{activation,entitlementState}','not_active','one ready Branch cannot activate a multi-Branch purchase') from sellertray_c1b_fixture;
 select extensions.ok(exists(select 1 from public.sellertray_commercial_setup_appointment_events a where a.command_id=completion_command and a.details->>'workerId'=worker_id::text and a.details->>'actorUserId'=admin_user_id::text and a.details->>'completedAt' is not null),'installer actor and server completion time are immutable evidence') from sellertray_c1b_fixture;
 
--- Simulate a pre-existing conflicting runtime period. Completion must survive.
 update public.tenant_subscriptions s set status='active',current_period_start=now()-interval '1 month',current_period_end=now()+interval '1 month' from sellertray_c1b_fixture f where f.tenant_id=s.tenant_id;
 select public.platform_admin_transition_branch_setup(admin_user_id,tenant_id,appointment_2_id,'completed',gen_random_uuid(),'Lekki setup complete',e) from sellertray_c1b_fixture,oa4_evidence;
 select extensions.is(public.get_sellertray_onboarding_state_core(tenant_id)#>>'{branchSetup,readyCount}','2','readiness persists even when entitlement reconciliation fails') from sellertray_c1b_fixture;
 select extensions.is((select count(*)::integer from public.sellertray_commercial_entitlement_events e join sellertray_c1b_fixture f on f.commercial_order_id=e.commercial_order_id),0,'runtime conflict cannot create entitlement');
 select extensions.ok(exists(select 1 from public.platform_admin_audit a where a.tenant_id=tenant_id and a.action='setup_activation_reconciliation_failed'),'reconciliation failure is audited') from sellertray_c1b_fixture;
 select extensions.is(public.platform_admin_retry_setup_activation(admin_user_id,tenant_id,installment_obligation_id,'Retry conflicting runtime')->>'retryRequired','true','unresolved recovery reports failure') from sellertray_c1b_fixture;
--- Test fixture restores its original compatibility row; no product edit command exists.
 update public.tenant_subscriptions s set status='trial',current_period_start=null,current_period_end=null from sellertray_c1b_fixture f where f.tenant_id=s.tenant_id;
 select extensions.throws_ok($test$select public.platform_admin_retry_setup_activation(owner_user_id,tenant_id,installment_obligation_id,'Unauthorized recovery') from sellertray_c1b_fixture$test$,'42501',null,'merchant cannot invoke Admin recovery');
 select public.platform_admin_retry_setup_activation(admin_user_id,tenant_id,installment_obligation_id,'Retry after prerequisite repair') from sellertray_c1b_fixture;
@@ -223,7 +219,6 @@ select extensions.is((public.get_sellertray_onboarding_state_core(tenant_id)#>>'
 select extensions.ok(not has_function_privilege('authenticated','public.platform_admin_retry_setup_activation(uuid,uuid,uuid,text)','execute'),'recovery has no direct client grant');
 select extensions.is((select count(*)::integer from public.sellertray_commercial_branch_setup_readiness r join sellertray_c1b_fixture f on f.tenant_id=r.tenant_id),2,'replay never duplicates Branch readiness');
 
--- Support authority must be explicit and Business scoped.
 create temp table oa4_support(id uuid default gen_random_uuid()); insert into oa4_support default values;
 insert into auth.users(id,email) select id,'oa4-support@example.com' from oa4_support;
 insert into public.platform_admins(user_id,role) select id,'support' from oa4_support;

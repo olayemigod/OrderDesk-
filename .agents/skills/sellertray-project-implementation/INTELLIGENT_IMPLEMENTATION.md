@@ -47,6 +47,18 @@ Do not solve layout overflow by shrinking important text below the SellerTray re
 3. Migration repair must preserve idempotency, tenant isolation, existing data and audit history.
 4. After deployment, verify both migration-ledger convergence and the actual function/table/constraint authority used by clients.
 
+## Merchant Web navigation override — 2026-10-28
+
+This later explicit product decision overrides the older Merchant Web navigation list in `SKILL.md` where they conflict.
+
+1. **Money** contains merchant operational money management only: Payments & Receivables, Cash & Shifts, and Business Expenses. SellerTray platform billing must not appear under Money.
+2. **Business** contains Branches, Team & Permissions, Agreements, Feedback, **Billing**, **Setup & Activation**, and **Settings**.
+3. Merchant-facing platform billing is labelled **Billing**, not **SellerTray Billing**.
+4. **Setup & Activation** is a separate Business navigation entry and must reuse the existing governed onboarding/setup scheduling authority; it must not be embedded inside Settings and must not create a second setup truth.
+5. **Settings** remains the final Business navigation entry and preserves its existing settings tabs/configuration responsibilities.
+6. This information-architecture decision applies to Merchant Web only. It does not move or rename Admin Web platform/commercial navigation.
+7. Merchant-facing Billing copy should explain merchant actions and commercial state in plain language. Do not expose implementation-oriented wording about server authority, immutable settlement facts, or other internal governance mechanics when those details do not help the merchant complete the task.
+
 ## Completion report requirement
 
 Every SellerTray completion report must state:

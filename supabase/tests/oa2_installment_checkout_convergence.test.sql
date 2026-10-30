@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(12);
+select extensions.plan(14);
 
 select extensions.ok(
   has_function_privilege('service_role','public.materialize_sellertray_installment_obligation_internal(uuid,uuid,uuid)','EXECUTE'),
@@ -12,11 +12,11 @@ select extensions.ok(
 );
 select extensions.ok(
   has_function_privilege('service_role','public.get_sellertray_installment_contract_checkout_policy(uuid,uuid,timestamptz)','EXECUTE'),
-  'service role can evaluate accepted-contract versus current-policy checkout authority'
+  'service role can evaluate governed installment checkout authority'
 );
 select extensions.ok(
   not has_function_privilege('authenticated','public.get_sellertray_installment_contract_checkout_policy(uuid,uuid,timestamptz)','EXECUTE'),
-  'merchant clients cannot bypass the governed contract checkout projection'
+  'merchant clients cannot bypass the governed checkout projection'
 );
 
 select extensions.ok(
@@ -35,10 +35,24 @@ select extensions.ok(
 );
 select extensions.ok(
   position(
-    'agreementaccepted' in
-    lower(pg_get_functiondef('public.reserve_sellertray_installment_checkout(uuid,uuid,uuid,uuid,text)'::regprocedure))
+    '''agreementaccepted'',true' in
+    replace(lower(pg_get_functiondef('public.get_sellertray_installment_contract_checkout_policy(uuid,uuid,timestamptz)'::regprocedure)),' ','')
   ) > 0,
-  'checkout reservation requires a current accepted installment agreement'
+  'checkout compatibility never gates payment on Master Agreement acceptance'
+);
+select extensions.ok(
+  position(
+    '''checkouteligible'',true' in
+    replace(lower(pg_get_functiondef('public.get_sellertray_installment_contract_checkout_policy(uuid,uuid,timestamptz)'::regprocedure)),' ','')
+  ) > 0,
+  'installment payment checkout remains eligible independently of Master Agreement state'
+);
+select extensions.ok(
+  position(
+    'masteragreementaccepted' in
+    lower(pg_get_functiondef('public.get_sellertray_installment_contract_checkout_policy(uuid,uuid,timestamptz)'::regprocedure))
+  ) > 0,
+  'checkout projection exposes Master Agreement state separately for UI/status use'
 );
 select extensions.ok(
   position(
