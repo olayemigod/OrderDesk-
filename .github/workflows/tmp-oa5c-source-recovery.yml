@@ -5,6 +5,10 @@ on:
     branches:
       - tmp/oa5c-source-recovery
 
+concurrency:
+  group: tmp-oa5c-source-recovery
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -23,8 +27,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsSL 'https://sb-54cs4y1tuc46.vercel.run/oa5c-recovery.patch' -o /tmp/oa5c-recovery.patch
-          echo '68fdae25efd7c7880184a4757a1d3d78ff5b40e9b7bb8d8f116a29f1e3cf4972  /tmp/oa5c-recovery.patch' | sha256sum -c -
+          curl -fsSL 'https://sb-x6buoxl1bvo8.vercel.run/oa5c-recovery-final.patch' -o /tmp/oa5c-recovery.patch
+          echo '77d10b5c0a2ad50d708ea582eae805ca13669086ff3c309a1690ad214ada5e82  /tmp/oa5c-recovery.patch' | sha256sum -c -
           git apply --check /tmp/oa5c-recovery.patch
           git apply /tmp/oa5c-recovery.patch
           git diff --check
