@@ -1,0 +1,98 @@
+.agreement-brand-panel {
+  overflow: hidden;
+}
+.agreement-brand-heading {
+  display: grid;
+  grid-template-columns: minmax(120px, 190px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+}
+.agreement-brand-logo {
+  display: block;
+  width: min(180px, 100%);
+  max-height: 44px;
+  object-fit: contain;
+  object-position: left center;
+}
+.agreement-transcript {
+  margin-top: 16px;
+}
+.agreement-transcript > summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--ink, #102a43);
+  padding: 10px 0;
+}
+.agreement-package-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 20px;
+  align-items: center;
+  padding: 22px;
+  border: 1px solid rgba(18, 183, 106, 0.3);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(217, 251, 232, 0.72), rgba(248, 250, 252, 0.96));
+}
+.agreement-package-card-copy h3 {
+  margin: 4px 0 8px;
+}
+.agreement-package-card-copy p {
+  margin: 0;
+  max-width: 760px;
+  color: var(--muted, #475467);
+}
+.agreement-package-actions {
+  display: flex;
+  min-width: 220px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 9px;
+}
+.agreement-package-actions small {
+  max-width: 300px;
+  overflow-wrap: anywhere;
+  color: var(--muted, #475467);
+}
+.agreement-document-link {
+  text-decoration: none;
+  text-align: center;
+}
+.agreement-signature-form {
+  margin-top: 18px;
+  border-top: 1px solid rgba(71, 84, 103, 0.16);
+  padding-top: 18px;
+}
+.agreement-review-status {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 14px 16px;
+  border: 1px solid rgba(71, 84, 103, 0.18);
+  border-radius: 14px;
+  background: rgba(248, 250, 252, 0.96);
+}
+.agreement-review-status.ready {
+  border-color: rgba(18, 183, 106, 0.4);
+  background: rgba(217, 251, 232, 0.62);
+}
+.agreement-review-status span {
+  color: var(--muted, #475467);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 860px) {
+  .agreement-brand-heading {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+  .agreement-brand-heading .role-pill {
+    justify-self: start;
+  }
+  .agreement-package-card {
+    grid-template-columns: 1fr;
+  }
+  .agreement-package-actions {
+    min-width: 0;
+  }
+}
