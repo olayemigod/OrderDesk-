@@ -44,15 +44,15 @@ type AdminResponse = { ok?: boolean; overview?: unknown };
 type PublishForm = {
   versionCode: string;
   title: string;
-  contentBody: string;
   effectiveFrom: string;
   reason: string;
 };
 
+const MAX_MASTER_PDF_BYTES = 8 * 1024 * 1024;
+
 const emptyForm = (): PublishForm => ({
   versionCode: '',
-  title: 'SellerTray Master Agreement',
-  contentBody: '',
+  title: 'SellerTray Master Services and Subscription Agreement',
   effectiveFrom: localDateTime(new Date()),
   reason: '',
 });
@@ -60,6 +60,8 @@ const emptyForm = (): PublishForm => ({
 export default function AgreementLifecycleManagement({ session, tenantId }: { session: Session; tenantId: string }) {
   const [state, setState] = useState<AgreementOverview | null>(null);
   const [form, setForm] = useState<PublishForm>(() => emptyForm());
+  const [sourcePdf, setSourcePdf] = useState<File | null>(null);
+  const [fileInputKey, setFileInputKey] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -99,8 +101,16 @@ export default function AgreementLifecycleManagement({ session, tenantId }: { se
     if (!state?.canPublish) return;
     const effective = new Date(form.effectiveFrom);
     if (Number.isNaN(effective.getTime())) { setError('Enter a valid effective date and time.'); return; }
-    if (!form.versionCode.trim() || !form.title.trim() || !form.contentBody.trim() || form.reason.trim().length < 6) {
-      setError('Version, title, agreement content and a publication reason are required.');
+    if (!form.versionCode.trim() || !form.title.trim() || form.reason.trim().length < 6 || !sourcePdf) {
+      setError('Version, title, reviewed PDF and a publication reason are required.');
+      return;
+    }
+    if (!isPdfFile(sourcePdf)) {
+      setError('Upload a PDF document for the reviewed Master Agreement.');
+      return;
+    }
+    if (sourcePdf.size < 1 || sourcePdf.size > MAX_MASTER_PDF_BYTES) {
+      setError('Reviewed Master Agreement PDF must be 8 MB or smaller.');
       return;
     }
 
@@ -108,22 +118,27 @@ export default function AgreementLifecycleManagement({ session, tenantId }: { se
     setError(null);
     setMessage(null);
     try {
-      const response = await invokeJson<AdminResponse & { agreementVersionId?: string }>('master-agreements', {
-        action: 'admin_publish',
+      const sourcePdfBase64 = await fileToBase64(sourcePdf);
+      const response = await invokeJson<AdminResponse & { agreementVersionId?: string; sourcePdfSha256?: string }>('master-agreements', {
+        action: 'admin_publish_pdf',
         tenantId,
         versionCode: form.versionCode.trim(),
         title: form.title.trim(),
-        contentBody: form.contentBody.trim(),
         effectiveFrom: effective.toISOString(),
         reason: form.reason.trim(),
+        sourceFileName: sourcePdf.name,
+        sourcePdfBase64,
+        commandId: crypto.randomUUID(),
       }, session);
       const next = parseOverview(response.overview);
       setState(next);
       setSelectedId(response.agreementVersionId ?? next.tenantState?.currentVersion?.id ?? next.versions[0]?.id ?? null);
       setForm(emptyForm());
-      setMessage('Universal Master Agreement version published. The same immutable content applies to every SellerTray Business when it becomes effective.');
+      setSourcePdf(null);
+      setFileInputKey((value) => value + 1);
+      setMessage('Reviewed Master Agreement PDF published as a new immutable universal version. Merchant acceptance will bind to this exact governed document.');
     } catch (cause) {
-      setError(messageFrom(cause, 'Unable to publish this Master Agreement version.'));
+      setError(messageFrom(cause, 'Unable to publish this reviewed Master Agreement PDF.'));
     } finally {
       setSaving(false);
     }
@@ -136,7 +151,7 @@ export default function AgreementLifecycleManagement({ session, tenantId }: { se
   return <section className="page-stack">
     <div className="section-heading">
       <div><p className="eyebrow">Platform legal governance</p><h2>SellerTray Master Agreement</h2></div>
-      <p className="muted">Publish one immutable agreement version for the entire SellerTray platform. Merchant-specific issuance and order-specific agreement replacement are retired.</p>
+      <p className="muted">Publish one reviewed, immutable Master Agreement PDF for the entire SellerTray platform. Merchant-specific commercial terms remain in governed Order Forms.</p>
     </div>
 
     {error ? <div className="error-banner">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div> : null}
@@ -150,14 +165,14 @@ export default function AgreementLifecycleManagement({ session, tenantId }: { se
         <Fact label="Accepted by" value={tenantState.acceptance?.acceptedLegalName ?? '—'} />
         <Fact label="Accepted at" value={tenantState.acceptance?.acceptedAt ? formatDate(tenantState.acceptance.acceptedAt) : '—'} />
       </div>
-      <div className="governance-note">This status is Business + Master Agreement version evidence. It is not tied to a commercial order, installment, Branch or payment.</div>
+      <div className="governance-note">This status is Business + Master Agreement version evidence. It is not tied to a commercial order, installment, Branch, Order Form confirmation or payment.</div>
     </article> : null}
 
     <div className="two-column">
       <article className="panel">
         <div className="panel-head"><div><p className="eyebrow">Version history</p><h3>Published Master Agreement versions</h3></div></div>
         {loading && !state ? <p className="muted">Loading agreement versions…</p> : null}
-        {!loading && !versions.length ? <div className="empty-state"><strong>No Master Agreement published</strong><p>Publish the reviewed universal legal text before a new SellerTray service-delivery activation is allowed.</p></div> : null}
+        {!loading && !versions.length ? <div className="empty-state"><strong>No Master Agreement published</strong><p>Publish the reviewed universal legal PDF before a new SellerTray service-delivery activation is allowed.</p></div> : null}
         {versions.map((version) => <button key={version.id} type="button" className={selected?.id === version.id ? 'member-row active' : 'member-row'} onClick={() => setSelectedId(version.id)}>
           <span className="member-avatar">V</span>
           <span><strong>{version.title}</strong><small>Version {version.versionCode} · Effective {formatDate(version.effectiveFrom)}</small></span>
@@ -180,17 +195,24 @@ export default function AgreementLifecycleManagement({ session, tenantId }: { se
     </div>
 
     <article className="panel">
-      <div className="panel-head"><div><p className="eyebrow">Publish version</p><h3>New universal Master Agreement</h3></div>{!state?.canPublish ? <span className="role-pill">Review only</span> : null}</div>
-      <div className="governance-note">Do not enter merchant-specific pricing, order IDs, Branch terms or bespoke merchant clauses here. The exact content published here applies to every SellerTray Business.</div>
+      <div className="panel-head"><div><p className="eyebrow">Publish reviewed version</p><h3>New universal Master Agreement</h3></div>{!state?.canPublish ? <span className="role-pill">Review only</span> : null}</div>
+      <div className="governance-note">Upload the exact reviewed text-based PDF approved for publication. SellerTray extracts and hashes its legal text, stores the source PDF immutably, and binds merchant acceptance to that governed document. Do not include merchant-specific pricing, order IDs, Branch terms or bespoke merchant clauses.</div>
       {state?.canPublish ? <form className="settings-form" onSubmit={publish}>
         <div className="settings-grid two">
-          <label className="field"><span>Version code</span><input maxLength={64} required value={form.versionCode} onChange={(event) => setForm((current) => ({ ...current, versionCode: event.target.value }))} placeholder="e.g. 2026.1" /></label>
+          <label className="field"><span>Version code</span><input maxLength={64} required value={form.versionCode} onChange={(event) => setForm((current) => ({ ...current, versionCode: event.target.value }))} placeholder="e.g. v1.0" /></label>
           <label className="field"><span>Title</span><input maxLength={200} required value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} /></label>
           <label className="field"><span>Effective from</span><input type="datetime-local" required value={form.effectiveFrom} onChange={(event) => setForm((current) => ({ ...current, effectiveFrom: event.target.value }))} /></label>
-          <label className="field"><span>Publication reason</span><input maxLength={1000} required value={form.reason} onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))} placeholder="Reviewed legal version publication" /></label>
+          <label className="field"><span>Publication reason</span><input maxLength={1000} required value={form.reason} onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))} placeholder="Reviewed legal successor publication" /></label>
         </div>
-        <label className="field"><span>Master Agreement content</span><textarea rows={18} maxLength={200000} required value={form.contentBody} onChange={(event) => setForm((current) => ({ ...current, contentBody: event.target.value }))} placeholder="Paste the reviewed universal SellerTray Master Agreement text here." /></label>
-        <div className="settings-actions"><button className="primary-button" disabled={saving}>{saving ? 'Publishing…' : 'Publish immutable version'}</button></div>
+        <label className="field"><span>Reviewed Master Agreement PDF</span><input key={fileInputKey} type="file" accept="application/pdf,.pdf" required onChange={(event) => {
+          const file = event.target.files?.[0] ?? null;
+          setSourcePdf(file);
+          if (!file) return;
+          if (!isPdfFile(file)) setError('Upload a PDF document for the reviewed Master Agreement.');
+          else if (file.size < 1 || file.size > MAX_MASTER_PDF_BYTES) setError('Reviewed Master Agreement PDF must be 8 MB or smaller.');
+          else setError(null);
+        }} />{sourcePdf ? <small>{sourcePdf.name} · {formatFileSize(sourcePdf.size)}</small> : <small>Text-based PDF only · maximum 8 MB</small>}</label>
+        <div className="settings-actions"><button className="primary-button" disabled={saving}>{saving ? 'Publishing reviewed PDF…' : 'Publish reviewed PDF version'}</button></div>
       </form> : <p className="muted">Your ProcessEdge access is review-only for Master Agreement publication.</p>}
     </article>
   </section>;
@@ -201,6 +223,22 @@ function record(value: unknown): Record<string, unknown> { return typeof value =
 function formatDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(date); }
 function localDateTime(date: Date) { const offset = date.getTimezoneOffset(); return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 16); }
 function messageFrom(value: unknown, fallback: string) { return value instanceof Error && value.message ? value.message : fallback; }
+function isPdfFile(file: File) { return file.name.toLowerCase().endsWith('.pdf') && (!file.type || file.type === 'application/pdf'); }
+function formatFileSize(bytes: number) { return bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`; }
+async function fileToBase64(file: File): Promise<string> {
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Unable to read the selected Master Agreement PDF.'));
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      const separator = result.indexOf(',');
+      const encoded = separator >= 0 ? result.slice(separator + 1) : '';
+      if (!encoded) reject(new Error('Unable to encode the selected Master Agreement PDF.'));
+      else resolve(encoded);
+    };
+    reader.readAsDataURL(file);
+  });
+}
 function parseVersion(value: unknown): AgreementVersion | null {
   const row = record(value);
   if (typeof row.id !== 'string') return null;
