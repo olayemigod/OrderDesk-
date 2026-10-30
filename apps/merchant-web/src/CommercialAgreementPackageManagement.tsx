@@ -130,7 +130,7 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
 
   return <section className="page-stack">
     <div className="section-heading">
-      <div><p className="eyebrow">Commercial</p><h2>Agreements</h2></div>
+      <div><p className="eyebrow">Business</p><h2>Agreements</h2></div>
       <p className="muted">Review the agreement for your purchase, then accept or confirm it when required.</p>
     </div>
 
@@ -150,11 +150,11 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
         <Fact label="Accepted at" value={center.masterAgreement.acceptance?.acceptedAt ? formatDate(center.masterAgreement.acceptance.acceptedAt) : '—'} />
       </div>
       <details className="agreement-transcript"><summary>Read Master Agreement text</summary><div className="panel agreement-document"><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: 'inherit', margin: 0 }}>{center.masterAgreement.contentBody}</pre></div></details>
-    </article> : <div className="warning-banner">The current SellerTray Master Agreement is not available yet. You can keep your commercial record, but activation cannot proceed until the approved agreement is available.</div>}
+    </article> : <div className="warning-banner">The current SellerTray Master Agreement is not available yet. Your purchase details are safe, but activation cannot continue until the agreement is available.</div>}
 
     {!orderForms.length ? <article className="panel empty-state">
-      <strong>Agreement is being prepared automatically</strong>
-      <p>SellerTray creates the purchase-specific Order Form from the governed commercial order. If this status persists, ProcessEdge can reconcile the configuration without recreating your purchase.</p>
+      <strong>Preparing your agreement</strong>
+      <p>SellerTray is preparing the Order Form for this purchase. If it remains unavailable, contact SellerTray Support; you do not need to recreate the purchase.</p>
     </article> : <div className="team-management-grid">
       <div className="panel member-list">
         {current.map((form) => <OrderFormButton key={form.id} form={form} selected={selected?.id === form.id} onSelect={() => selectForm(form.id)} />)}
@@ -178,7 +178,7 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
         <div className="agreement-package-card">
           <div className="agreement-package-card-copy">
             <p className="eyebrow">Agreement document</p><h3>SellerTray Agreement Package</h3>
-            <p>Review the Master Agreement and the exact purchase terms together in one professional document.</p>
+            <p>Review the Master Agreement and the exact purchase terms together in one document.</p>
           </div>
           <div className="agreement-package-actions">
             <button type="button" className="primary-button" disabled={documentBusy !== null || !selected.isCurrent} onClick={() => void openDocument('review_pdf')}>{documentBusy === 'review_pdf' ? 'Opening agreement…' : reviewReady ? 'Review agreement again' : 'Review agreement'}</button>
@@ -194,7 +194,7 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
         {selected.isCurrent && actionRequired && !center?.canAccept ? <div className="warning-banner">Only the Business Owner or a Manager explicitly authorised by the Owner can accept or confirm SellerTray agreements.</div> : null}
 
         {selected.isCurrent && actionRequired && center?.canAccept && center.masterAgreement ? <form className="settings-form agreement-signature-form" onSubmit={confirmPackage}>
-          <div className={`agreement-review-status ${reviewReady ? 'ready' : ''}`}><strong>{reviewReady ? 'Agreement reviewed and ready to confirm' : 'Review the Agreement Package before continuing'}</strong><span>{reviewReady ? 'SellerTray will record your authenticated approval against the exact agreement you opened.' : 'Use Review agreement above to open the exact agreement for this purchase.'}</span></div>
+          <div className={`agreement-review-status ${reviewReady ? 'ready' : ''}`}><strong>{reviewReady ? 'Agreement reviewed and ready to confirm' : 'Review the Agreement Package before continuing'}</strong><span>{reviewReady ? 'SellerTray will record your approval against the exact agreement you reviewed.' : 'Use Review agreement above to open the exact agreement for this purchase.'}</span></div>
           <label className="field"><span>Authorised representative legal name</span><SellerTrayInput maxLength={200} required value={legalName} onChange={(event) => setLegalName(event.target.value)} placeholder="Full legal name" /></label>
           <label className="access-card">
             <SellerTrayInput type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
@@ -203,7 +203,7 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
                 ? 'I accept the current Master Agreement and confirm my authority to continue.'
                 : 'I accept the Master Agreement, confirm this purchase and confirm my authority to continue.'
               : 'I confirm this purchase under the accepted Master Agreement and confirm my authority to continue.'}</strong>
-            <small>Your authenticated SellerTray identity, authority and the exact agreement reviewed are recorded as acceptance evidence.</small></span>
+            <small>SellerTray securely records who approved the agreement, when it was approved and the exact agreement version reviewed.</small></span>
           </label>
           <div className="settings-actions"><button className="primary-button" disabled={busy || !confirmed || !legalName.trim() || !reviewReady}>{busy ? 'Recording approval…' : center.masterAcceptanceRequired ? 'Accept & Continue' : 'Confirm Purchase'}</button></div>
         </form> : null}
@@ -219,8 +219,8 @@ export default function CommercialAgreementsManagement({ tenantId }: { tenantId:
 
 function CommercialFacts({ snapshot }: { snapshot: CommercialSnapshot }) {
   return <div className="page-stack">
-    <article className="panel"><div className="panel-head"><div><p className="eyebrow">Purchase summary</p><h3>{snapshot.businessName || 'SellerTray purchase'}</h3></div></div><div className="settings-grid two"><Fact label="Business" value={snapshot.businessName || '—'} /><Fact label="Order reference" value={snapshot.orderReference || '—'} /><Fact label="Order total" value={money(snapshot.totalGrossAmount, snapshot.currency)} /><Fact label="Current amount due" value={money(snapshot.netAmountDue, snapshot.currency)} /><Fact label="Approved adjustments" value={money(snapshot.approvedAdjustmentAmount, snapshot.currency)} /><Fact label="Order date" value={snapshot.orderedAt ? formatDate(snapshot.orderedAt) : '—'} /></div>{snapshot.businessEmail || snapshot.businessPhone ? <p className="muted">Business contact: {[snapshot.businessEmail, snapshot.businessPhone].filter(Boolean).join(' · ')}</p> : null}</article>
-    {snapshot.priceLines.length ? <article className="panel"><div className="panel-head"><div><p className="eyebrow">Purchase lines</p><h3>Commercial items</h3></div></div><div className="table-wrap"><table><thead><tr><th>Description</th><th>Qty</th><th>Gross</th><th>Tax</th></tr></thead><tbody>{snapshot.priceLines.map((line) => <tr key={line.lineNo}><td>{line.description || `Line ${line.lineNo}`}</td><td>{line.quantity}</td><td>{money(line.grossAmount, line.currency || snapshot.currency)}</td><td>{line.taxRatePercent === null ? 'Included / not separately stated' : `${line.taxRatePercent}% (${money(line.taxAmount, line.currency || snapshot.currency)})`}</td></tr>)}</tbody></table></div></article> : null}
+    <article className="panel"><div className="panel-head"><div><p className="eyebrow">Purchase summary</p><h3>{snapshot.businessName || 'SellerTray purchase'}</h3></div></div><div className="settings-grid two"><Fact label="Business" value={snapshot.businessName || '—'} /><Fact label="Order reference" value={snapshot.orderReference || '—'} /><Fact label="Order total" value={money(snapshot.totalGrossAmount, snapshot.currency)} /><Fact label="Current amount due" value={money(snapshot.netAmountDue, snapshot.currency)} /><Fact label="Discounts & credits" value={money(snapshot.approvedAdjustmentAmount, snapshot.currency)} /><Fact label="Order date" value={snapshot.orderedAt ? formatDate(snapshot.orderedAt) : '—'} /></div>{snapshot.businessEmail || snapshot.businessPhone ? <p className="muted">Business contact: {[snapshot.businessEmail, snapshot.businessPhone].filter(Boolean).join(' · ')}</p> : null}</article>
+    {snapshot.priceLines.length ? <article className="panel"><div className="panel-head"><div><p className="eyebrow">Purchase lines</p><h3>Subscription & setup</h3></div></div><div className="table-wrap"><table><thead><tr><th>Description</th><th>Qty</th><th>Amount</th><th>Tax</th></tr></thead><tbody>{snapshot.priceLines.map((line) => <tr key={line.lineNo}><td>{line.description || `Line ${line.lineNo}`}</td><td>{line.quantity}</td><td>{money(line.grossAmount, line.currency || snapshot.currency)}</td><td>{line.taxRatePercent === null ? 'Included / not separately stated' : `${line.taxRatePercent}% (${money(line.taxAmount, line.currency || snapshot.currency)})`}</td></tr>)}</tbody></table></div></article> : null}
     {snapshot.installmentStructure ? <article className="panel"><div className="panel-head"><div><p className="eyebrow">Payment schedule</p><h3>{structureLabel(snapshot.installmentStructure)}</h3></div><span className="role-pill">{snapshot.installmentAmount === null ? 'Installment purchase' : money(snapshot.installmentAmount, snapshot.currency)}</span></div><div className="table-wrap"><table><thead><tr><th>Installment</th><th>Share</th><th>Amount</th><th>Due</th></tr></thead><tbody>{snapshot.installmentSchedule.map((line) => <tr key={line.sequenceNo}><td>{line.sequenceNo}</td><td>{line.percentage}%</td><td>{money(line.amountDue, snapshot.currency)}</td><td>{line.dueAt ? formatDate(line.dueAt) : 'Not scheduled'}</td></tr>)}</tbody></table></div></article> : null}
   </div>;
 }

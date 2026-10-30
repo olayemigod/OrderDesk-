@@ -21,7 +21,7 @@ import WhatsAppManagement from './WhatsAppManagement';
 import type { MerchantHandoffTarget } from './merchantHandoff';
 import { SellerTrayBrand, SellerTrayMark, NavIcon, ShellIcon } from './merchantShell';
 import { SellerTrayInput, SellerTraySelect } from './SellerTrayElements';
-import { AVAILABLE_MERCHANT_PORTAL_NAVIGATION, MERCHANT_PORTAL_SECTIONS, type MerchantPortalPage, type MerchantPortalSection } from './portalNavigation';
+import { AVAILABLE_MERCHANT_PORTAL_NAVIGATION, MERCHANT_PORTAL_SECTIONS, merchantPortalNavigationForContext, type MerchantPortalPage, type MerchantPortalSection } from './portalNavigation';
 import { errorMessage, supabase } from './supabase';
 
 type MerchantRole = 'owner' | 'manager' | 'staff';
@@ -79,6 +79,7 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
   const managementBusinesses = useMemo(() => businesses.filter((row) => MANAGEMENT_ROLES.includes(row.role)), [businesses]);
   const business = managementBusinesses.find((row) => row.id === businessId) ?? null;
   const branch = branches.find((row) => row.id === branchId) ?? null;
+  const visibleNavigation = useMemo(() => merchantPortalNavigationForContext({ hasBranch: branches.length > 0 }), [branches.length]);
 
   async function loadBusinesses() {
     setLoading(true); setError(null);
@@ -170,7 +171,7 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
       <div className="sidebar-brand-row"><SellerTrayBrand /><button className="sidebar-close" type="button" aria-label="Close navigation" onClick={() => setNavOpen(false)}><ShellIcon name="close" /></button></div>
       <nav className="side-nav" aria-label="SellerTray management">
         {MERCHANT_PORTAL_SECTIONS.map((section) => {
-          const items = NAV.filter((item) => item.section === section);
+          const items = visibleNavigation.filter((item) => item.section === section);
           if (!items.length) return null;
           if (section === 'Dashboard') {
             const item = items[0];
@@ -219,7 +220,7 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
 function Login() {
   const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [busy, setBusy] = useState(false); const [message, setMessage] = useState('');
   async function submit(event: FormEvent) { event.preventDefault(); setBusy(true); setMessage(''); try { const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password }); if (error) throw error; } catch (cause) { setMessage(errorMessage(cause, 'Unable to sign in.')); } finally { setBusy(false); } }
-  return <div className="login-shell"><section className="login-brand"><SellerTrayMark large /><p className="eyebrow">SellerTray</p><h1>Manage the business. Keep selling on mobile.</h1><p>Review sales, products, stock, purchasing, money, channels and Branch performance from one governed merchant workspace.</p></section><form className="login-card" onSubmit={submit}><div><p className="eyebrow">Merchant Web</p><h2>Sign in</h2><p className="muted">Use the same SellerTray account you use for your business.</p></div><label>Email<SellerTrayInput type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label><label>Password<SellerTrayInput type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} /></label>{message ? <div className="error-banner compact">{message}</div> : null}<button className="primary-button" disabled={busy}>{busy ? 'Signing in' : 'Continue'}</button></form></div>;
+  return <div className="login-shell"><section className="login-brand"><SellerTrayMark large /><p className="eyebrow">SellerTray</p><h1>Manage the business. Keep selling on mobile.</h1><p>Review sales, products, stock, purchasing, money, channels and Branch performance from one SellerTray workspace.</p></section><form className="login-card" onSubmit={submit}><div><p className="eyebrow">Merchant Web</p><h2>Sign in</h2><p className="muted">Use the same SellerTray account you use for your business.</p></div><label>Email<SellerTrayInput type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label><label>Password<SellerTrayInput type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} /></label>{message ? <div className="error-banner compact">{message}</div> : null}<button className="primary-button" disabled={busy}>{busy ? 'Signing in' : 'Continue'}</button></form></div>;
 }
 function Select({ label, value, onChange, disabled, children }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean; children: ReactNode }) { return <label className="select-field"><span>{label}</span><SellerTraySelect value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled}>{children}</SellerTraySelect></label>; }
 function Context({ label, value }: { label: string; value: string }) { return <div><span>{label}</span><strong>{value}</strong></div>; }

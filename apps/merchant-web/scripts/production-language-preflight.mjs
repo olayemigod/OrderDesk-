@@ -7,6 +7,9 @@ const targets = [
   'src/SellerTrayBillingManagement.tsx',
   'src/SellerTrayInitialPurchase.tsx',
   'src/CommercialAgreementsManagement.tsx',
+  'src/CommercialAgreementPackageManagement.tsx',
+  'src/MerchantApp.tsx',
+  'src/portalNavigation.ts',
 ];
 
 const forbiddenMerchantPhrases = [
@@ -16,6 +19,9 @@ const forbiddenMerchantPhrases = [
   'server authority',
   'immutable settlement facts',
   'commercial balance',
+  'commercial record',
+  'commercial items',
+  'governed merchant workspace',
   'runtime authority',
   'legacy runtime',
   'OA5',
@@ -37,4 +43,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`SellerTray production-language preflight passed for ${targets.length} merchant-facing commercial surfaces.`);
+console.log(`SellerTray production-language preflight passed for ${targets.length} merchant-facing commercial and shell surfaces.`);
