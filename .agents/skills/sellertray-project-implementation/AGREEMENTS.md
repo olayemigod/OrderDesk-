@@ -182,15 +182,27 @@ However:
 4. The package UI must not imply that the merchant is accepting the Master Agreement twice.
 5. Where clearer UX is achieved by presenting a Master-only PDF first and an Order-Form-focused PDF later, prefer that separation.
 
-## Current approved legal draft baseline
+## Current approved legal version
 
-The current ProcessEdge-approved drafting baseline remains the **SellerTray Master Services and Subscription Agreement — Consolidated Counsel Review Copy v0.9**, including its approved incorporated Schedules.
+The current ProcessEdge-approved successor is **SellerTray Master Services and Subscription Agreement v1.0**. This version supersedes v0.9 only after v1.0 is published through the governed Admin publication authority and becomes effective.
 
-ProcessEdge has approved proceeding with v0.9 without waiting for external counsel review. Do not represent this as external counsel approval.
+ProcessEdge explicitly approved v1.0 on 30 October 2026 to align the operative legal wording with the already-approved separated Master Agreement and Merchant Order Form authority. Do not represent this as external counsel approval.
 
-Preserve the approved v0.9 positions, including the approved 30-calendar-day Money-Back Guarantee and the previously approved eligibility/return/refund conditions, unless ProcessEdge explicitly approves a later legal version.
+**v0.9 remains immutable historical legal evidence.** Do not edit, replace, delete, backfill or re-label the published v0.9 content, reviewed PDF, acceptance records, Order Forms or package evidence. Existing v0.9 acceptance never counts as acceptance of v1.0.
 
-Published Master content is immutable. A material later legal change creates a new governed version rather than rewriting accepted v0.9 history.
+The v1.0 legal content is the approved v0.9 content and incorporated Schedules unchanged except for these two explicitly approved replacements:
+
+### Master Agreement §2.2 — approved v1.0 replacement
+
+> **First Purchase.** For a Business entering its first governed purchase, SellerTray presents the current required Master Agreement and incorporated Schedules for review and acceptance before the first governed commercial purchase is created. After the Business accepts that Master Agreement version and selects its commercial plan, SellerTray generates the applicable Merchant Order Form as a separate purchase-specific commercial instrument. The Merchant reviews and confirms that exact Order Form separately. Master Agreement acceptance does not confirm an Order Form, and Order Form confirmation does not constitute Master Agreement acceptance. Payment or settlement does not itself constitute acceptance or confirmation of either instrument.
+
+### Schedule 9 §14 — approved v1.0 replacement
+
+> **Agreement Package and Separate Confirmation.** For the first purchase, the Order Form is generated after the Business has reviewed and accepted the then-current required Master Agreement and selected its commercial plan. The Order Form may be associated with the same governed Agreement Package for evidence and retrieval, but its authority remains separate. The Merchant must review and confirm the exact Order Form through the governed Order Form confirmation action. That confirmation does not create or repeat Master Agreement acceptance.
+
+Preserve every other approved v0.9 legal position in v1.0, including the approved 30-calendar-day Money-Back Guarantee and the previously approved eligibility/return/refund conditions, unless ProcessEdge explicitly approves another change.
+
+Published Master content is immutable. Any material legal change after v1.0 creates another governed version rather than rewriting accepted v1.0 history.
 
 ## First-purchase and service-delivery gates
 
@@ -281,7 +293,10 @@ Verify at minimum:
 24. legacy agreement history remains unchanged;
 25. cross-tenant and capability boundaries are enforced;
 26. generated/reviewed PDFs preserve deterministic integrity evidence;
-27. exact Order Form confirmation replay remains duplicate-safe.
+27. exact Order Form confirmation replay remains duplicate-safe;
+28. v0.9 remains immutable after v1.0 publication;
+29. v0.9 acceptance does not satisfy required v1.0 acceptance;
+30. v1.0 §2.2 and Schedule 9 §14 match the approved separated-authority wording exactly while all other v0.9 legal positions remain unchanged.
 
 ## Precedence
 
@@ -294,6 +309,7 @@ It supersedes older wording that required or implied:
 - long inline Master Agreement text as the primary Merchant Web review UX;
 - new-tab/window-only Master Agreement review as the primary Merchant Web interaction;
 - Order Form confirmation simultaneously creating Master acceptance in the normal current path;
-- treating the Master Agreement and Order Form as one persistence identity.
+- treating the Master Agreement and Order Form as one persistence identity;
+- treating the published v0.9 wording in Master §2.2 or Schedule 9 §14 as current authority after v1.0 becomes effective.
 
-Where older `AGENTS.md`, `COMMERCIAL.md`, `COMMERCIAL_C1.md`, `COMMERCIAL_V2.md`, `ONBOARDING_ACTIVATION.md`, migrations, comments, UI copy or tests conflict with this separation, **this `AGREEMENTS.md` decision controls**.
+Where older `AGENTS.md`, `COMMERCIAL.md`, `COMMERCIAL_C1.md`, `COMMERCIAL_V2.md`, `ONBOARDING_ACTIVATION.md`, migrations, comments, UI copy, legal draft notes or tests conflict with this separation or the approved v1.0 successor decision, **this `AGREEMENTS.md` decision controls**.
