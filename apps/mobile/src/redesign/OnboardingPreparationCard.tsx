@@ -3,7 +3,10 @@ import { useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { SellerTrayText as Text } from '../components/SellerTrayText';
-import { createSellerTrayMerchantWebHandoff } from '../data/merchantWebHandoff';
+import {
+  createSellerTrayMerchantWebHandoff,
+  SellerTrayMerchantWebHandoffError,
+} from '../data/merchantWebHandoff';
 import type { SellerTrayOnboardingState } from '../data/onboardingRepository';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
@@ -48,8 +51,12 @@ export function OnboardingPreparationCard({ state, loading, error = null, onRefr
     try {
       const handoff = await createSellerTrayMerchantWebHandoff(state.tenantId);
       await Linking.openURL(handoff.url);
-    } catch {
-      setHandoffError('Unable to open Merchant Web securely. Check your connection and try again.');
+    } catch (error) {
+      setHandoffError(
+        error instanceof SellerTrayMerchantWebHandoffError
+          ? error.message
+          : 'Unable to open Merchant Web securely. Check your connection and try again.',
+      );
     } finally {
       setContinuing(false);
     }
