@@ -108,13 +108,17 @@ export default function CommercialAgreementsManagement({ tenantId, onContinueToB
   const reviewReady = Boolean(reviewDocument && previewObjectUrl && reviewedPdfSha256 === reviewDocument.pdfSha256);
   const agreementsComplete = Boolean(master?.acceptance && !center?.masterAcceptanceRequired);
   const hasOrderForms = Boolean(center?.orderForms.length);
+  const currentOrderFormConfirmed = Boolean(center?.orderForms.some((value) => {
+    const form = record(value);
+    return form.isCurrent === true && typeof record(form.confirmation).id === 'string';
+  }));
   return <section className="page-stack">
     <div className="section-heading"><div><p className="eyebrow">Commercial onboarding</p><h2>Agreements</h2></div><p className="muted">The Master Agreement is accepted once per required version. Each SellerTray purchase has its own Order Form for review and confirmation.</p></div>
     <article className="panel" aria-label="Commercial onboarding workflow">
-      <div className="section-heading"><div><p className="eyebrow">Commercial onboarding</p><h3>{!agreementsComplete ? 'Step 1 of 3 · Agreements' : hasOrderForms ? 'Step 2 of 3 · Billing' : 'Agreements complete'}</h3></div><span className={`status-chip ${agreementsComplete && !hasOrderForms ? 'success' : ''}`}>{!agreementsComplete ? 'Current step' : hasOrderForms ? 'Purchase review' : 'Completed'}</span></div>
+      <div className="section-heading"><div><p className="eyebrow">Commercial onboarding</p><h3>{!agreementsComplete ? 'Step 1 of 3 · Agreements' : hasOrderForms ? 'Step 2 of 3 · Billing' : 'Agreements complete'}</h3></div><span className={`status-chip ${agreementsComplete && !hasOrderForms ? 'success' : ''}`}>{!agreementsComplete ? 'Current step' : currentOrderFormConfirmed ? 'Order Form confirmed' : hasOrderForms ? 'Purchase review' : 'Completed'}</span></div>
       <div className="settings-grid two"><Fact label="Step 1" value={agreementsComplete ? 'Agreements ✓' : 'Agreements'} /><Fact label="Step 2" value={hasOrderForms ? 'Billing · Current' : agreementsComplete ? 'Billing · Next' : 'Billing'} /><Fact label="Step 3" value="Setup & Activation" /></div>
-      <p className="muted">{!agreementsComplete ? 'Review and accept the current Master Agreement to continue.' : hasOrderForms ? 'Review and confirm the purchase-specific Order Form below. Payment remains in Billing.' : 'Continue to Billing to choose your plan and prepare the Order Form.'}</p>
-      {agreementsComplete && !hasOrderForms ? <div className="settings-actions"><button type="button" className="primary-button" onClick={onContinueToBilling}>Continue to Billing</button></div> : null}
+      <p className="muted">{!agreementsComplete ? 'Review and accept the current Master Agreement to continue.' : currentOrderFormConfirmed ? 'Purchase confirmed. Continue to Billing to complete the amount due.' : hasOrderForms ? 'Review and confirm the purchase-specific Order Form below. Payment remains in Billing.' : 'Continue to Billing to choose your plan and prepare the Order Form.'}</p>
+      {agreementsComplete && (!hasOrderForms || currentOrderFormConfirmed) ? <div className="settings-actions"><button type="button" className="primary-button" onClick={onContinueToBilling}>Continue to Billing</button></div> : null}
     </article>
 
     {error ? <div className="error-banner">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div> : null}
