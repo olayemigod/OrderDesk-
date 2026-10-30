@@ -2,16 +2,16 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 import type { Session } from '@supabase/supabase-js';
 import BusinessDashboard from './BusinessDashboard';
 import RevenueDashboard from './RevenueDashboard';
+import AgreementLifecycleManagement from './AgreementLifecycleManagement';
 import {
   BranchReadinessAdministration,
-  CommercialAgreementAdministration,
   CommercialOrdersAdministration,
   CommercialPricingAdministration,
   InstallmentEntitlementAdministration,
 } from './CommercialAdminWorkspaces';
 import CommercialSettlementAdministration from './CommercialSettlementAdministration';
 import { CampaignHistory, MerchantMessageComposer, type AdminAuditEvent } from './AdminCommunicationsWorkspaces';
-import { AiOperations, WhatsAppOperations } from './AdminOperationsWorkspaces';
+import { AiOperations, PaymentInfrastructure, WhatsAppOperations } from './AdminOperationsWorkspaces';
 import MerchantPortfolio from './MerchantPortfolio';
 import MerchantSelector from './MerchantSelector';
 import SetupSchedulingAdministration from './SetupSchedulingAdministration';
@@ -37,6 +37,7 @@ type AdminRoute =
   | 'communications/history'
   | 'operations/whatsapp'
   | 'operations/ai'
+  | 'operations/payments'
   | 'reports/revenue'
   | 'governance/audit';
 type IconName = 'overview' | 'merchants' | 'commercial' | 'setup' | 'communications' | 'operations' | 'reports' | 'governance' | 'menu' | 'close' | 'refresh' | 'search' | 'chevron';
@@ -60,7 +61,7 @@ const NAV_GROUPS: NavGroup[] = [
     { id: 'commercial/pricing', label: 'Plans & Pricing', description: 'Subscription and Branch setup pricing', merchantScoped: true },
     { id: 'commercial/settlement', label: 'Payments & Settlement', description: 'Discounts, direct payments and balances', merchantScoped: true },
     { id: 'commercial/installments', label: 'Installments', description: 'Installment and entitlement review', merchantScoped: true },
-    { id: 'commercial/agreements', label: 'Agreements', description: 'Templates, issuance, acceptance and replacement', merchantScoped: true },
+    { id: 'commercial/agreements', label: 'Agreements', description: 'Master Agreement publication and Business acceptance history' },
   ] },
   { id: 'setup', label: 'Onboarding & Setup', icon: 'setup', items: [
     { id: 'setup/appointments', label: 'Setup Appointments', description: 'Scheduling and rescheduling', merchantScoped: true },
@@ -76,6 +77,7 @@ const NAV_GROUPS: NavGroup[] = [
   { id: 'operations', label: 'Platform Operations', icon: 'operations', items: [
     { id: 'operations/whatsapp', label: 'WhatsApp Operations', description: 'Cross-merchant connection health' },
     { id: 'operations/ai', label: 'AI Operations', description: 'Parser readiness and diagnostics' },
+    { id: 'operations/payments', label: 'Payment Infrastructure', description: 'ProcessEdge collection readiness' },
   ] },
   { id: 'reports', label: 'Insights & Reports', icon: 'reports', items: [
     { id: 'reports/revenue', label: 'Revenue Dashboard', description: 'Collections, commercial value and installment exposure' },
@@ -248,7 +250,7 @@ function WorkspaceShell({ session, bootstrap, audit, onReload, onAuditRefresh, o
       case 'commercial/pricing': return <MerchantScopedPage eyebrow="Commercial" title="Plans & pricing" description="Manage effective SellerTray subscription and Branch setup pricing as a focused commercial job." tenantId={tenantId} choose={chooseMerchant}>{tenantId ? <CommercialPricingAdministration session={session} actorRole={bootstrap.actorRole} tenantId={tenantId} /> : null}</MerchantScopedPage>;
       case 'commercial/settlement': return <MerchantScopedPage eyebrow="Commercial" title="Payments & settlement" description="Review authoritative order balances, ProcessEdge direct payments, discounts and installment-policy overrides without mixing them with setup scheduling." tenantId={tenantId} choose={chooseMerchant}>{tenantId ? <div className="admin-context-bound admin-hide-first-scope-card"><CommercialSettlementAdministration key={tenantId} session={session} initialTenantId={tenantId} /></div> : null}</MerchantScopedPage>;
       case 'commercial/installments': return <MerchantScopedPage eyebrow="Commercial" title="Installments" description="Review installment progress and entitlement state without placing payment corrections or setup actions on the same page." tenantId={tenantId} choose={chooseMerchant}>{tenantId ? <InstallmentEntitlementAdministration session={session} tenantId={tenantId} /> : null}</MerchantScopedPage>;
-      case 'commercial/agreements': return <MerchantScopedPage eyebrow="Commercial" title="Agreements" description="Publish governed templates, issue merchant agreements and review immutable acceptance/replacement history." tenantId={tenantId} choose={chooseMerchant}>{tenantId ? <CommercialAgreementAdministration session={session} actorRole={bootstrap.actorRole} tenantId={tenantId} /> : null}</MerchantScopedPage>;
+      case 'commercial/agreements': return <PageFrame eyebrow="Commercial" title="Agreements" description="Publish one universal SellerTray Master Agreement for the platform. Select a Merchant context only when you need to review that Business's acceptance status."><AgreementLifecycleManagement session={session} tenantId={tenantId ?? undefined} /></PageFrame>;
       case 'setup/appointments': return <MerchantScopedPage eyebrow="Onboarding & Setup" title="Setup appointments" description="Schedule and reschedule ProcessEdge Branch setup work against exact purchased setup obligations." tenantId={tenantId} choose={chooseMerchant}>{tenantId ? <SetupSchedulingAdministration session={session} initialTenantId={tenantId} view="appointments" showMerchantSelector={false} /> : null}</MerchantScopedPage>;
       case 'setup/resources': return <MerchantScopedPage eyebrow="Onboarding & Setup" title="Setup resources" description="Manage ProcessEdge setup service areas, workforce coverage and capacity separately from merchant appointment work." tenantId={tenantId} choose={chooseMerchant}>{tenantId ? <SetupSchedulingAdministration session={session} initialTenantId={tenantId} view="resources" showMerchantSelector={false} /> : null}</MerchantScopedPage>;
       case 'setup/completion': return <MerchantScopedPage eyebrow="Onboarding & Setup" title="Setup completion" description="Record the structured equipment, pairing/test, handover and merchant acknowledgement evidence required before Branch readiness can converge." tenantId={tenantId} choose={chooseMerchant}>{tenantId ? <SetupSchedulingAdministration session={session} initialTenantId={tenantId} view="completion" showMerchantSelector={false} /> : null}</MerchantScopedPage>;
@@ -258,6 +260,7 @@ function WorkspaceShell({ session, bootstrap, audit, onReload, onAuditRefresh, o
       case 'communications/history': return <PageFrame eyebrow="Communications" title="Campaign history" description="Review audited merchant-message publications independently from message composition."><CampaignHistory audit={audit} /></PageFrame>;
       case 'operations/whatsapp': return <PageFrame eyebrow="Platform Operations" title="WhatsApp operations" description="Monitor cross-merchant WhatsApp connection health without mixing AI diagnostics into the same page."><WhatsAppOperations session={session} /></PageFrame>;
       case 'operations/ai': return <PageFrame eyebrow="Platform Operations" title="AI operations" description="Review server-side parser readiness and run controlled diagnostics within ProcessEdge authority."><AiOperations session={session} actorRole={bootstrap.actorRole} /></PageFrame>;
+      case 'operations/payments': return <PageFrame eyebrow="Platform Operations" title="Payment infrastructure" description="Review server-side ProcessEdge/SellerTray collection readiness without exposing or storing raw gateway credentials in Admin Web."><PaymentInfrastructure session={session} /></PageFrame>;
       case 'reports/revenue': return <RevenueDashboard session={session} refreshKey={bootstrap.generatedAt} />;
       case 'governance/audit': return <AuditPage audit={audit} onRefresh={onAuditRefresh} />;
     }
@@ -358,6 +361,7 @@ function routeFromHash(hash = window.location.hash): AdminRoute {
     'communications/messages': 'communications/compose',
     operations: 'operations/whatsapp',
     'operations/health': 'operations/whatsapp',
+    'payment-infrastructure': 'operations/payments',
     revenue: 'reports/revenue',
     reports: 'reports/revenue',
     audit: 'governance/audit',

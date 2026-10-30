@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import MerchantApp from './MerchantApp';
+import MerchantPortalRoot from './MerchantPortalRoot';
 import './styles.css';
 import './products.css';
 import './team.css';
@@ -16,12 +17,15 @@ import './brand.css';
 import './qa-convergence.css';
 import './shell-layout.css';
 import './notifications.css';
+import './agreement-documents.css';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('SellerTray could not start.');
 
 createRoot(root).render(
   <StrictMode>
-    <MerchantApp />
+    <MerchantPortalRoot>
+      <MerchantApp />
+    </MerchantPortalRoot>
   </StrictMode>,
 );

@@ -4,7 +4,7 @@ description: "Normative Commercial V2 extension governing Branch-owned subscript
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.0"
+  version: "0.1.1"
   status: governing-extension
 ---
 
@@ -14,7 +14,7 @@ metadata:
 
 This file is a **normative extension** of `.agents/skills/sellertray-project-implementation/SKILL.md`, `COMMERCIAL.md`, `COMMERCIAL_C1.md`, `COMMERCIAL_FLEXIBILITY.md`, `ONBOARDING_ACTIVATION.md`, `ADMIN_CAPABILITIES.md`, `ADMIN_NAVIGATION.md`, `CROSS_SURFACE.md` and `INTELLIGENT_IMPLEMENTATION.md`.
 
-It records later explicit product decisions approved on 2026-10-25 and therefore controls where older commercial/onboarding wording conflicts.
+It records later explicit product decisions approved on 2026-10-25 and 2026-10-30 and therefore controls where older commercial/onboarding wording conflicts.
 
 The governing architecture remains:
 
@@ -230,6 +230,19 @@ Suggested launch pricing remains editable commercial configuration:
 | Scale | ₦25,000 | ₦250,000 |
 
 The yearly values preserve the currently approved 10-months-for-12-months pricing rule. These suggested prices are not immutable product truth.
+
+## 7.1 Approved legacy `business` -> Starter C2 migration
+
+The following migration decision was explicitly approved on 2026-10-30:
+
+1. The existing legacy subscription identity `business` / **SellerTray Business** is the compatibility source plan to be migrated to the **Starter** Plan Profile during C2.
+2. C2 must create/use the governed Starter Plan Profile Version and explicitly map eligible existing `business` subscriptions to that Starter version at **Branch** level.
+3. Historical C1/OA5 records keep their original `business` identity and immutable snapshots. Do not rewrite historical commercial orders, price snapshots, entitlement events, installment policies, checkout sessions, payments or subscription history to pretend they were created as `starter`.
+4. The migration mapping is semantic, not merely price-based. Before cutover, Starter's initial feature/capability/limit grants must be reconciled against the capabilities actually available under the legacy Business runtime so an existing valid subscriber does not silently lose access because of the migration.
+5. New post-cutover subscriptions use the Starter Plan Profile authority rather than creating new runtime dependence on the legacy `business` identity.
+6. Where a legacy Business has multiple Branches, migration to Starter still occurs through explicit governed Branch-subscription backfill. Do not create a permanent Business-wide Starter subscription.
+7. The currently governed standard Business price pair of **₦5,000 monthly / ₦50,000 yearly** is the intended commercial source for initial Starter pricing, but pricing remains a separate effective-dated authority. C2 must link/publish the Starter price relationship through governed migration rather than mutating historical Business price snapshots in place.
+8. The legacy `business` identity remains compatibility-only until Branch subscription migration, entitlement parity, cross-surface read/write parity and controlled C2 acceptance prove it is safe to retire from active runtime authority.
 
 Suggested differentiators may include configurable limits for active staff, active POS devices, products/SKUs, AI actions, WhatsApp governed usage, scheduled reports, automation and API/Webhook access. The exact seeded matrix must be reviewed against the real capability catalogue before migration is committed.
 
@@ -622,6 +635,8 @@ Migration must preserve:
 
 Do not rewrite historical Business-level records to pretend they were always Branch subscriptions.
 
+The approved compatibility mapping for the current legacy `business` subscription identity is **Starter**, subject to the explicit Branch-level migration and parity rules in section 7.1. This mapping does not authorise in-place rewriting of historical `business` records.
+
 Where one historical subscription covered multiple Branches, migration must use an explicit governed compatibility mapping/backfill policy and retain the original historical source linkage.
 
 C2 must prove the new Branch authority before old trial/Business runtime semantics are retired.
@@ -689,7 +704,8 @@ Before Commercial V2 can be called complete, verify at minimum:
 21. Merchant Web, Mobile, Admin Web, WhatsApp and AI expose one consistent entitlement state;
 22. reporting/audit preserve plan/version/Branch history;
 23. offline replay cannot duplicate entitlement/payment/stock effects;
-24. legacy Business/trial authority is retired only after controlled migration acceptance.
+24. legacy Business/trial authority is retired only after controlled migration acceptance;
+25. legacy `business` subscribers are mapped to Starter through governed Branch-level migration while historical `business` evidence remains immutable.
 
 # 26. Anti-patterns
 
@@ -707,4 +723,5 @@ Do not:
 - let a role grant a capability that the Branch plan has not purchased;
 - let a plan grant a sensitive user action to every role automatically;
 - expose Admin commercial mutations without AAL2/capability/scope/audit;
-- call a compatibility migration complete merely because new tables exist.
+- call a compatibility migration complete merely because new tables exist;
+- create a fourth active C2 Plan Profile named Business merely to preserve the legacy `business` code after migration.

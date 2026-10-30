@@ -106,7 +106,10 @@ Publishing authority and read/review authority remain capability-separated. Do n
 The converged first-class destinations are:
 
 - **WhatsApp Operations** — cross-merchant WhatsApp connection/service health;
-- **AI Operations** — parser readiness and controlled diagnostics.
+- **AI Operations** — parser readiness and controlled diagnostics;
+- **Payment Infrastructure** — ProcessEdge/SellerTray commercial collection readiness, including redacted provider mode, server-side credential presence, billing-authorization encryption readiness and the governed checkout/webhook/callback destinations.
+
+Payment Infrastructure is platform-scoped and read-only. It must never display, read back into the browser, or persist raw `PAYSTACK_SECRET_KEY`, `BILLING_AUTH_ENCRYPTION_KEY`, service-role credentials or equivalent provider secrets. Raw platform collection credentials remain in the authorised server-side secret store. Admin Web may report configured/not-configured/invalid readiness and endpoint destinations only.
 
 Future **Integrations** or additional service-health destinations should be exposed only when governed operational tooling exists. Platform Operations owns technical/service health, not ProcessEdge commercial performance.
 
@@ -149,6 +152,8 @@ Task pages should expose one clear primary job, its supporting context, prerequi
 
 For Agreements, the primary platform job is **publish/review Master Agreement versions**. Merchant context is secondary review of whether that Business accepted the current/historical version; it never changes the published content for that merchant.
 
+For Payment Infrastructure, the primary platform job is **read server-side commercial collection readiness**. It is not a payment entry form, merchant settlement screen or browser secret-management surface.
+
 ## 5. Capability and persona behavior
 
 1. Platform Admin and Platform Support remain responsibility bundles; explicit server capabilities remain authority.
@@ -156,6 +161,7 @@ For Agreements, the primary platform job is **publish/review Master Agreement ve
 3. Sensitive actions retain existing AAL2, capability, scope, reason/evidence and audit requirements from `ADMIN_CAPABILITIES.md`.
 4. Reorganising navigation must not broaden a role, bypass a governed command, move authority into the browser or weaken audit/idempotency.
 5. Publishing a Master Agreement version requires the platform-global publication capability; merchant-context selection does not grant or narrow that legal publication authority.
+6. Payment Infrastructure readiness requires authenticated ProcessEdge Admin access at AAL2 and a server-side platform membership/read boundary. Its read-only status does not permit browser retrieval or mutation of platform secrets.
 
 ## 6. Deep-link and routing contract
 
@@ -166,8 +172,9 @@ For Agreements, the primary platform job is **publish/review Master Agreement ve
 5. The legacy `billing` and `commercial/core` destinations resolve to **Commercial Orders**; they must not resurrect the retired commercial catch-all page.
 6. Legacy `communications` / `communications/messages` resolve to **Compose Message**.
 7. Legacy `operations` / `operations/health` resolve to **WhatsApp Operations** as the primary service-health landing page.
-8. `reports/revenue` is the stable Revenue Dashboard destination; short `revenue` / `reports` aliases may resolve to it without changing report authority.
-9. Any legacy merchant-specific agreement issuance/replacement route may resolve to **Agreements** for history/review, but it must not re-enable the retired mutation path.
+8. `operations/payments` is the stable **Payment Infrastructure** destination; the short `payment-infrastructure` alias may resolve to it.
+9. `reports/revenue` is the stable Revenue Dashboard destination; short `revenue` / `reports` aliases may resolve to it without changing report authority.
+10. Any legacy merchant-specific agreement issuance/replacement route may resolve to **Agreements** for history/review, but it must not re-enable the retired mutation path.
 
 ## 7. Migration discipline
 
@@ -205,9 +212,10 @@ For Admin navigation/process work verify at minimum:
 15. Setup Resources is not stacked into Setup Appointments;
 16. Campaign History is not stacked into Compose Message;
 17. WhatsApp Operations and AI Operations remain independent task pages even though they reuse the same governed platform summary authority;
-18. Revenue Dashboard reads governed server facts, keeps currencies separate, and does not label collections, order value, outstanding installments or merchant GMV as recognised revenue;
-19. Agreements publishes one universal immutable version, and merchant context is acceptance review only;
-20. no Admin route can issue/replace a bespoke merchant/order agreement or fabricate merchant acceptance.
+18. Payment Infrastructure never exposes raw provider/encryption credentials, requires AAL2 plus ProcessEdge platform membership server-side, and reports only redacted readiness/endpoint state;
+19. Revenue Dashboard reads governed server facts, keeps currencies separate, and does not label collections, order value, outstanding installments or merchant GMV as recognised revenue;
+20. Agreements publishes one universal immutable version, and merchant context is acceptance review only;
+21. no Admin route can issue/replace a bespoke merchant/order agreement or fabricate merchant acceptance.
 
 ## 9. Browser acceptance requirement
 
@@ -224,12 +232,15 @@ The Admin implementation sequence after the initial IA convergence is:
 3. extend **Onboarding & Setup** with OA4 structured Setup Completion/equipment evidence;
 4. add OA4 activation blockers and readiness/entitlement reconciliation recovery without creating another activation state machine;
 5. preserve **Agreements** as universal Master Agreement publication + acceptance review under `AGREEMENTS.md`;
-6. add later report destinations only as their governed read models become available.
+6. expose **Payment Infrastructure** as the read-only server readiness surface before the first controlled OA5C live commercial payment, without turning Admin Web into the platform secret store;
+7. add later report destinations only as their governed read models become available.
 
 This sequence is an implementation-order contract, not permission to skip the prerequisite authority, security, audit or cross-surface gates of the underlying capability.
 
 ## 11. Cross-surface impact rule
 
 Admin information-architecture-only work normally has no business-behavior impact outside Admin Web because shared authority is unchanged. Still report Shared Core, Merchant Web, Mobile, WhatsApp, AI, reporting/audit and offline/sync effects explicitly under `CROSS_SURFACE.md`.
+
+Payment Infrastructure readiness is an Admin/platform-operations view over the existing commercial payment authority. It does not create a second payment ledger, alter Merchant Web checkout, change Mobile/customer payments, or grant WhatsApp/AI payment authority.
 
 The universal Master Agreement correction is not IA-only: Admin publication, Merchant acceptance and Shared Core service-delivery gating must converge in the same governed business change while Mobile/WhatsApp/AI/offline remain consumers or no-impact surfaces as documented in `AGREEMENTS.md`.

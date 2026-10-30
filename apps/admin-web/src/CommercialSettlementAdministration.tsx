@@ -38,13 +38,14 @@ type SettlementOrder = {
 };
 type SettlementCenter = { actorRole: 'admin' | 'support'; tenantId: string; capabilities: CapabilitySet; templates: ScheduleTemplate[]; orders: SettlementOrder[]; generatedAt: string };
 type AdminResponse = { ok?: boolean; center?: unknown; order?: unknown };
-
 type CommandSlot = 'adjustment' | 'direct-payment' | 'installment-policy';
+type SettlementTab = 'overview' | 'payment' | 'adjustments' | 'policy' | 'history';
 
 export default function CommercialSettlementAdministration({ session, initialTenantId }: { session: Session; initialTenantId?: string | null }) {
   const [tenantId, setTenantId] = useState(initialTenantId ?? '');
   const [center, setCenter] = useState<SettlementCenter | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState('');
+  const [tab, setTab] = useState<SettlementTab>('overview');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState<CommandSlot | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +58,12 @@ export default function CommercialSettlementAdministration({ session, initialTen
   const [policy, setPolicy] = useState({ scopeKind: 'commercial_order' as 'tenant' | 'commercial_order', billingCycle: 'yearly' as 'monthly' | 'yearly', enabled: true, templateId: '', effectiveFrom: nowLocal(), effectiveUntil: '', reason: '' });
 
   const selectedOrder = useMemo(() => center?.orders.find((order) => order.commercialOrderId === selectedOrderId) ?? center?.orders[0] ?? null, [center, selectedOrderId]);
+
+  useEffect(() => {
+    if (initialTenantId === undefined) return;
+    setTenantId(initialTenantId ?? '');
+    setTab('overview');
+  }, [initialTenantId]);
 
   useEffect(() => {
     if (!tenantId) { setCenter(null); setSelectedOrderId(''); return; }
@@ -179,10 +186,15 @@ export default function CommercialSettlementAdministration({ session, initialTen
     finally { setSaving(null); }
   }
 
+  function chooseMerchant(next: Set<string>) {
+    const id = [...next][0] ?? '';
+    setTenantId(id); setCenter(null); setSelectedOrderId(''); setTab('overview'); commands.current.clear();
+  }
+
   return <div className="workspace-stack">
     <section className="workspace-card">
       <div className="workspace-card-heading"><div><p className="workspace-eyebrow">Business scope</p><h2>Select a SellerTray business</h2></div></div>
-      <MerchantSelector session={session} selectedIds={tenantId ? new Set([tenantId]) : new Set()} mode="single" showCommercialPortfolio={false} onChange={(next) => { const id = [...next][0] ?? ''; setTenantId(id); setCenter(null); setSelectedOrderId(''); commands.current.clear(); }} />
+      <MerchantSelector session={session} selectedIds={tenantId ? new Set([tenantId]) : new Set()} mode="single" showCommercialPortfolio={false} onChange={chooseMerchant} />
     </section>
 
     {loading ? <div className="workspace-banner info">Loading authoritative settlement state…</div> : null}
@@ -192,8 +204,8 @@ export default function CommercialSettlementAdministration({ session, initialTen
     {center ? <>
       <section className="workspace-card">
         <div className="workspace-card-heading"><div><p className="workspace-eyebrow">Settlement authority</p><h2>Commercial orders</h2><p className="workspace-muted">Discounts, direct payments and provider confirmations remain separate facts. All balances below are server-calculated.</p></div><button className="workspace-button subtle compact" type="button" onClick={() => void loadCenter()} disabled={loading}>Refresh settlement</button></div>
-        {!center.orders.length ? <div className="workspace-empty"><strong>No commercial orders</strong><p>Create the initial commercial purchase under Billing & Commercial first.</p></div> : <div className="workspace-tenant-list">
-          {center.orders.map((order) => <button type="button" key={order.commercialOrderId} className={selectedOrder?.commercialOrderId === order.commercialOrderId ? 'workspace-tenant-row selected' : 'workspace-tenant-row'} onClick={() => setSelectedOrderId(order.commercialOrderId)}>
+        {!center.orders.length ? <div className="workspace-empty"><strong>No commercial orders</strong><p>Create the initial commercial purchase under Commercial Orders first.</p></div> : <div className="workspace-tenant-list">
+          {center.orders.map((order) => <button type="button" key={order.commercialOrderId} className={selectedOrder?.commercialOrderId === order.commercialOrderId ? 'workspace-tenant-row selected' : 'workspace-tenant-row'} onClick={() => { setSelectedOrderId(order.commercialOrderId); setTab('overview'); }}>
             <span><strong>{order.orderReference || shortId(order.commercialOrderId)}</strong><small>{formatDate(order.orderedAt)} · {order.planCode ?? 'Commercial order'}</small></span>
             <span className="workspace-status-pill neutral">{money(order.settlement.outstandingAmount, order.currency)} due</span>
             <span className={`workspace-status-pill ${order.settlement.settlementStatus === 'settled' ? 'good' : order.settlement.settlementStatus === 'partially_settled' ? 'warn' : 'neutral'}`}>{friendly(order.settlement.settlementStatus)}</span>
@@ -202,8 +214,9 @@ export default function CommercialSettlementAdministration({ session, initialTen
       </section>
 
       {selectedOrder ? <>
-        <section className="workspace-card">
-          <div className="workspace-card-heading"><div><p className="workspace-eyebrow">{selectedOrder.orderReference || 'Commercial order'}</p><h2>Authoritative balance</h2></div><span className={`workspace-status-pill ${selectedOrder.settlement.settlementStatus === 'settled' ? 'good' : 'warn'}`}>{friendly(selectedOrder.settlement.settlementStatus)}</span></div>
+        <WorkspaceTabs value={tab} onChange={setTab} />
+        {tab === 'overview' ? <section className="workspace-card">
+          <div className="workspace-card-heading"><div><p className="workspace-eyebrow">{selectedOrder.orderReference || 'Commercial order'}</p><h2>Authoritative balance</h2><p className="workspace-muted">Settlement remains server-calculated from immutable order value, approved adjustments and confirmed payment facts.</p></div><span className={`workspace-status-pill ${selectedOrder.settlement.settlementStatus === 'settled' ? 'good' : 'warn'}`}>{friendly(selectedOrder.settlement.settlementStatus)}</span></div>
           <div className="workspace-stat-grid">
             <Stat label="Gross order" value={money(selectedOrder.settlement.grossAmount || selectedOrder.grossAmount, selectedOrder.currency)} />
             <Stat label="Approved discounts" value={money(selectedOrder.settlement.approvedAdjustmentAmount, selectedOrder.currency)} />
@@ -212,33 +225,30 @@ export default function CommercialSettlementAdministration({ session, initialTen
             <Stat label="Outstanding" value={money(selectedOrder.settlement.outstandingAmount, selectedOrder.currency)} />
             <Stat label="Next payable" value={money(selectedOrder.settlement.nextPayableAmount, selectedOrder.currency)} />
           </div>
-        </section>
+        </section> : null}
 
-        <section className="workspace-grid two-column">
-          <article className="workspace-card">
-            <div className="workspace-card-heading"><div><p className="workspace-eyebrow">Commercial adjustment</p><h3>Record discount</h3></div><Capability allowed={center.capabilities.canAdjust} /></div>
-            <p className="workspace-muted">Creates an audited discount fact against this order. It does not edit the immutable price snapshot.</p>
-            <label>Amount<input type="number" min="0.01" step="0.01" value={adjustment.amount} onChange={(event) => setAdjustment((current) => ({ ...current, amount: event.target.value }))} disabled={!center.capabilities.canAdjust} /></label>
-            <label>Reason<textarea value={adjustment.reason} maxLength={1000} onChange={(event) => setAdjustment((current) => ({ ...current, reason: event.target.value }))} disabled={!center.capabilities.canAdjust} /></label>
-            <label>Evidence reference<input value={adjustment.evidenceReference} maxLength={160} onChange={(event) => setAdjustment((current) => ({ ...current, evidenceReference: event.target.value }))} disabled={!center.capabilities.canAdjust} /></label>
-            <label>Evidence note<textarea value={adjustment.evidenceNote} maxLength={1000} onChange={(event) => setAdjustment((current) => ({ ...current, evidenceNote: event.target.value }))} disabled={!center.capabilities.canAdjust} /></label>
-            <button className="workspace-button primary" type="button" disabled={!center.capabilities.canAdjust || saving !== null} onClick={() => void recordAdjustment()}>{saving === 'adjustment' ? 'Recording…' : 'Record discount'}</button>
-          </article>
+        {tab === 'payment' ? <article className="workspace-card workspace-form-stack">
+          <div className="workspace-card-heading"><div><p className="workspace-eyebrow">ProcessEdge payment</p><h3>Confirm direct payment</h3></div><Capability allowed={center.capabilities.canConfirmDirectPayment} /></div>
+          <p className="workspace-muted">Records a separately governed direct payment. It never creates a Paystack transaction, provider confirmation or synthetic webhook.</p>
+          <label>Amount<input type="number" min="0.01" step="0.01" value={directPayment.amount} onChange={(event) => setDirectPayment((current) => ({ ...current, amount: event.target.value }))} disabled={!center.capabilities.canConfirmDirectPayment} /></label>
+          <div className="workspace-field-grid two"><label>Payment reference<input value={directPayment.reference} maxLength={160} onChange={(event) => setDirectPayment((current) => ({ ...current, reference: event.target.value }))} disabled={!center.capabilities.canConfirmDirectPayment} /></label><label>Payment method<input value={directPayment.method} maxLength={32} onChange={(event) => setDirectPayment((current) => ({ ...current, method: event.target.value }))} disabled={!center.capabilities.canConfirmDirectPayment} /></label></div>
+          <label>Paid at<input type="datetime-local" value={directPayment.paidAt} onChange={(event) => setDirectPayment((current) => ({ ...current, paidAt: event.target.value }))} disabled={!center.capabilities.canConfirmDirectPayment} /></label>
+          <label>Reason<textarea value={directPayment.reason} maxLength={1000} onChange={(event) => setDirectPayment((current) => ({ ...current, reason: event.target.value }))} disabled={!center.capabilities.canConfirmDirectPayment} /></label>
+          <label>Evidence note<textarea value={directPayment.evidenceNote} maxLength={1000} onChange={(event) => setDirectPayment((current) => ({ ...current, evidenceNote: event.target.value }))} disabled={!center.capabilities.canConfirmDirectPayment} /></label>
+          <button className="workspace-button primary" type="button" disabled={!center.capabilities.canConfirmDirectPayment || saving !== null} onClick={() => void recordDirectPayment()}>{saving === 'direct-payment' ? 'Confirming…' : 'Confirm direct payment'}</button>
+        </article> : null}
 
-          <article className="workspace-card">
-            <div className="workspace-card-heading"><div><p className="workspace-eyebrow">ProcessEdge payment</p><h3>Confirm direct payment</h3></div><Capability allowed={center.capabilities.canConfirmDirectPayment} /></div>
-            <p className="workspace-muted">Records a separately governed direct payment. It never creates a Paystack transaction, provider confirmation or synthetic webhook.</p>
-            <label>Amount<input type="number" min="0.01" step="0.01" value={directPayment.amount} onChange={(event) => setDirectPayment((current) => ({ ...current, amount: event.target.value }))} disabled={!center.capabilities.canConfirmDirectPayment} /></label>
-            <label>Payment reference<input value={directPayment.reference} maxLength={160} onChange={(event) => setDirectPayment((current) => ({ ...current, reference: event.target.value }))} disabled={!center.capabilities.canConfirmDirectPayment} /></label>
-            <label>Payment method<input value={directPayment.method} maxLength={32} onChange={(event) => setDirectPayment((current) => ({ ...current, method: event.target.value }))} disabled={!center.capabilities.canConfirmDirectPayment} /></label>
-            <label>Paid at<input type="datetime-local" value={directPayment.paidAt} onChange={(event) => setDirectPayment((current) => ({ ...current, paidAt: event.target.value }))} disabled={!center.capabilities.canConfirmDirectPayment} /></label>
-            <label>Reason<textarea value={directPayment.reason} maxLength={1000} onChange={(event) => setDirectPayment((current) => ({ ...current, reason: event.target.value }))} disabled={!center.capabilities.canConfirmDirectPayment} /></label>
-            <label>Evidence note<textarea value={directPayment.evidenceNote} maxLength={1000} onChange={(event) => setDirectPayment((current) => ({ ...current, evidenceNote: event.target.value }))} disabled={!center.capabilities.canConfirmDirectPayment} /></label>
-            <button className="workspace-button primary" type="button" disabled={!center.capabilities.canConfirmDirectPayment || saving !== null} onClick={() => void recordDirectPayment()}>{saving === 'direct-payment' ? 'Confirming…' : 'Confirm direct payment'}</button>
-          </article>
-        </section>
+        {tab === 'adjustments' ? <article className="workspace-card workspace-form-stack">
+          <div className="workspace-card-heading"><div><p className="workspace-eyebrow">Commercial adjustment</p><h3>Record discount</h3></div><Capability allowed={center.capabilities.canAdjust} /></div>
+          <p className="workspace-muted">Creates an audited discount fact against this order. It does not edit the immutable price snapshot.</p>
+          <label>Amount<input type="number" min="0.01" step="0.01" value={adjustment.amount} onChange={(event) => setAdjustment((current) => ({ ...current, amount: event.target.value }))} disabled={!center.capabilities.canAdjust} /></label>
+          <label>Reason<textarea value={adjustment.reason} maxLength={1000} onChange={(event) => setAdjustment((current) => ({ ...current, reason: event.target.value }))} disabled={!center.capabilities.canAdjust} /></label>
+          <label>Evidence reference<input value={adjustment.evidenceReference} maxLength={160} onChange={(event) => setAdjustment((current) => ({ ...current, evidenceReference: event.target.value }))} disabled={!center.capabilities.canAdjust} /></label>
+          <label>Evidence note<textarea value={adjustment.evidenceNote} maxLength={1000} onChange={(event) => setAdjustment((current) => ({ ...current, evidenceNote: event.target.value }))} disabled={!center.capabilities.canAdjust} /></label>
+          <button className="workspace-button primary" type="button" disabled={!center.capabilities.canAdjust || saving !== null} onClick={() => void recordAdjustment()}>{saving === 'adjustment' ? 'Recording…' : 'Record discount'}</button>
+        </article> : null}
 
-        <section className="workspace-card">
+        {tab === 'policy' ? <section className="workspace-card workspace-form-stack">
           <div className="workspace-card-heading"><div><p className="workspace-eyebrow">Installment policy</p><h3>Publish scoped override</h3></div><Capability allowed={center.capabilities.canManageInstallments} /></div>
           <p className="workspace-muted">Publish a new effective-dated policy version for this business or the selected commercial order. Existing contract snapshots and payment history remain immutable.</p>
           <div className="workspace-form-grid">
@@ -251,16 +261,21 @@ export default function CommercialSettlementAdministration({ session, initialTen
           </div>
           <label>Reason<textarea value={policy.reason} maxLength={1000} onChange={(event) => setPolicy((current) => ({ ...current, reason: event.target.value }))} disabled={!center.capabilities.canManageInstallments} /></label>
           <button className="workspace-button primary" type="button" disabled={!center.capabilities.canManageInstallments || saving !== null} onClick={() => void publishPolicy()}>{saving === 'installment-policy' ? 'Publishing…' : 'Publish installment override'}</button>
-        </section>
+        </section> : null}
 
-        <section className="workspace-grid three-column">
+        {tab === 'history' ? <section className="workspace-grid three-column">
           <HistoryCard title="Discounts & adjustments" rows={selectedOrder.adjustments} currency={selectedOrder.currency} kind="adjustment" />
           <HistoryCard title="Direct ProcessEdge payments" rows={selectedOrder.directPayments} currency={selectedOrder.currency} kind="direct" />
           <HistoryCard title="Gateway confirmations" rows={selectedOrder.gatewayPayments} currency={selectedOrder.currency} kind="gateway" />
-        </section>
+        </section> : null}
       </> : null}
     </> : null}
   </div>;
+}
+
+function WorkspaceTabs({ value, onChange }: { value: SettlementTab; onChange: (value: SettlementTab) => void }) {
+  const tabs: readonly (readonly [SettlementTab, string])[] = [['overview', 'Overview'], ['payment', 'Record Payment'], ['adjustments', 'Adjustments'], ['policy', 'Installment Policy'], ['history', 'History']];
+  return <nav className="workspace-panel" aria-label="Payments and settlement views" style={{ padding: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>{tabs.map(([id, text]) => <button key={id} type="button" className={`workspace-button ${value === id ? 'primary' : 'secondary'}`} aria-current={value === id ? 'page' : undefined} onClick={() => onChange(id)}>{text}</button>)}</nav>;
 }
 
 function HistoryCard({ title, rows, currency, kind }: { title: string; rows: History[]; currency: string; kind: 'adjustment' | 'direct' | 'gateway' }) {
