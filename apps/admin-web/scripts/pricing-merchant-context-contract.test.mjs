@@ -22,7 +22,9 @@ test('Business override actions route to the dedicated governed Edge boundary', 
   assert.match(state, /commercial-price-overrides/);
 });
 
-test('override Edge boundary delegates to capability-checked database publishers', () => {
+test('override Edge boundary enforces AAL2 and delegates to capability-checked database publishers', () => {
+  assert.match(edge, /jwtAal\(token\) !== 'aal2'/);
+  assert.match(edge, /MFA\/AAL2 required for Business-specific commercial pricing/);
   assert.match(edge, /publish_sellertray_merchant_subscription_price_override_admin/);
   assert.match(edge, /publish_sellertray_merchant_branch_setup_price_override_admin/);
   assert.match(edge, /p_actor_user_id: actorUserId/);
