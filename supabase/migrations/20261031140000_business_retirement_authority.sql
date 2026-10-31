@@ -156,7 +156,7 @@ begin
   )
   select
     tm.tenant_id,'member_removed',tm.user_id,u.email,tm.role,null,
-    p_actor_user_id,'platform_admin',v_reason,p_command_id,
+    p_actor_user_id,'platform_admin',v_reason,null,
     jsonb_build_object('source','business_retirement','retirementCommandId',p_command_id)
   from public.tenant_members tm
   left join auth.users u on u.id=tm.user_id
@@ -168,7 +168,7 @@ begin
   )
   select
     i.tenant_id,'invitation_cancelled',i.email,i.id,p_actor_user_id,'platform_admin',
-    v_reason,p_command_id,
+    v_reason,null,
     jsonb_build_object('source','business_retirement','retirementCommandId',p_command_id)
   from public.tenant_invitations i
   where i.tenant_id=p_tenant_id and i.status='pending';
@@ -274,129 +274,51 @@ returns void
 language plpgsql
 set search_path=''
 as $function$
-declare v_oid oid; v_def text; v_new text;
+declare
+  v_oid oid;
+  v_def text;
+  v_old text;
+  v_new_pattern text;
+  v_new_def text;
 begin
   v_oid:=to_regprocedure(p_signature);
   if v_oid is null then raise exception 'Required function missing: %',p_signature; end if;
   select pg_get_functiondef(v_oid) into v_def;
-  if position(p_old in v_def)=0 then
+  v_old:=replace(p_old,E'\\n',E'\n');
+  v_new_pattern:=replace(p_new,E'\\n',E'\n');
+  if position(v_old in v_def)=0 then
     raise exception 'Retirement convergence pattern missing in %',p_signature;
   end if;
-  v_new:=replace(v_def,p_old,p_new);
-  execute v_new;
+  v_new_def:=replace(v_def,v_old,v_new_pattern);
+  execute v_new_def;
 end;
 $function$;
 
 -- Active-estate reads.
-select sellertray_private._patch_retirement_filter(
-  'public.platform_admin_bootstrap(uuid)',
-  '(select count(*)::integer from public.tenants)',
-  '(select count(*)::integer from public.tenants where retired_at is null)'
-);
-select sellertray_private._patch_retirement_filter(
-  'public.platform_admin_bootstrap(uuid)',
-  'from public.tenants t',
-  'from (select * from public.tenants where retired_at is null) t'
-);
+select sellertray_private._patch_retirement_filter('public.platform_admin_bootstrap(uuid)','(select count(*)::integer from public.tenants)','(select count(*)::integer from public.tenants where retired_at is null)');
+select sellertray_private._patch_retirement_filter('public.platform_admin_bootstrap(uuid)','from public.tenants t','from (select * from public.tenants where retired_at is null) t');
+select sellertray_private._patch_retirement_filter('public.platform_admin_merchant_portfolio(uuid,text,text,text,uuid,integer)','from public.tenants t','from (select * from public.tenants where retired_at is null) t');
+select sellertray_private._patch_retirement_filter('public.platform_admin_overview(uuid)','from public.tenants t','from (select * from public.tenants where retired_at is null) t');
+select sellertray_private._patch_retirement_filter('public.platform_admin_operations_summary(uuid)','from public.tenants t','from (select * from public.tenants where retired_at is null) t');
+select sellertray_private._patch_retirement_filter('public.platform_admin_business_attention(uuid)','from public.tenants t','from (select * from public.tenants where retired_at is null) t');
+select sellertray_private._patch_retirement_filter('public.platform_admin_onboarding_commercial_report(uuid,integer)','from public.tenants t','from (select * from public.tenants where retired_at is null) t');
+select sellertray_private._patch_retirement_filter('public.platform_admin_commercial_agreement_portfolio(uuid,text,text,timestamp with time zone,uuid,integer)','join public.tenants t','join (select * from public.tenants where retired_at is null) t');
+select sellertray_private._patch_retirement_filter('public.platform_admin_commercial_installment_portfolio(uuid,text,text,timestamp with time zone,uuid,integer)','join public.tenants t','join (select * from public.tenants where retired_at is null) t');
 
-select sellertray_private._patch_retirement_filter(
-  'public.platform_admin_merchant_portfolio(uuid,text,text,text,uuid,integer)',
-  'from public.tenants t',
-  'from (select * from public.tenants where retired_at is null) t'
-);
-select sellertray_private._patch_retirement_filter(
-  'public.platform_admin_overview(uuid)',
-  'from public.tenants t',
-  'from (select * from public.tenants where retired_at is null) t'
-);
-select sellertray_private._patch_retirement_filter(
-  'public.platform_admin_operations_summary(uuid)',
-  'from public.tenants t',
-  'from (select * from public.tenants where retired_at is null) t'
-);
-select sellertray_private._patch_retirement_filter(
-  'public.platform_admin_business_attention(uuid)',
-  'from public.tenants t',
-  'from (select * from public.tenants where retired_at is null) t'
-);
-select sellertray_private._patch_retirement_filter(
-  'public.platform_admin_onboarding_commercial_report(uuid,integer)',
-  'from public.tenants t',
-  'from (select * from public.tenants where retired_at is null) t'
-);
-select sellertray_private._patch_retirement_filter(
-  'public.platform_admin_commercial_agreement_portfolio(uuid,text,text,timestamp with time zone,uuid,integer)',
-  'join public.tenants t',
-  'join (select * from public.tenants where retired_at is null) t'
-);
-select sellertray_private._patch_retirement_filter(
-  'public.platform_admin_commercial_installment_portfolio(uuid,text,text,timestamp with time zone,uuid,integer)',
-  'join public.tenants t',
-  'join (select * from public.tenants where retired_at is null) t'
-);
-
--- Revenue/business summary: remove retired tenants from both merchant activity and
--- ProcessEdge commercial amounts while retaining their immutable source rows.
-select sellertray_private._patch_retirement_filter(
-  'public.platform_admin_business_summary_pre_oa5b(uuid,integer)',
-  'from public.orders o where',
-  'from public.orders o join public.tenants rt_sales on rt_sales.id=o.tenant_id and rt_sales.retired_at is null where'
-);
-select sellertray_private._patch_retirement_filter(
-  'public.platform_admin_business_summary_pre_oa5b(uuid,integer)',
-  'from public.sellertray_commercial_entitlement_events\n    where',
-  'from public.sellertray_commercial_entitlement_events e\n    join public.tenants rt_activation on rt_activation.id=e.tenant_id and rt_activation.retired_at is null\n    where'
-);
-select sellertray_private._patch_retirement_filter(
-  'public.platform_admin_business_summary_pre_oa5b(uuid,integer)',
-  'from public.tenants t',
-  'from (select * from public.tenants where retired_at is null) t'
-);
-select sellertray_private._patch_retirement_filter(
-  'public.platform_admin_business_summary_pre_oa5b(uuid,integer)',
-  'select currency from public.sellertray_commercial_orders',
-  'select co_currency.currency from public.sellertray_commercial_orders co_currency join public.tenants rt_co_currency on rt_co_currency.id=co_currency.tenant_id and rt_co_currency.retired_at is null'
-);
-select sellertray_private._patch_retirement_filter(
-  'public.platform_admin_business_summary_pre_oa5b(uuid,integer)',
-  'union select currency from public.sellertray_commercial_installment_payment_confirmations',
-  'union select pc_currency.currency from public.sellertray_commercial_installment_payment_confirmations pc_currency join public.tenants rt_pc_currency on rt_pc_currency.id=pc_currency.tenant_id and rt_pc_currency.retired_at is null'
-);
-select sellertray_private._patch_retirement_filter(
-  'public.platform_admin_business_summary_pre_oa5b(uuid,integer)',
-  'union select currency from public.sale_returns where',
-  'union select r_currency.currency from public.sale_returns r_currency join public.tenants rt_r_currency on rt_r_currency.id=r_currency.tenant_id and rt_r_currency.retired_at is null where'
-);
-select sellertray_private._patch_retirement_filter(
-  'public.platform_admin_business_summary_pre_oa5b(uuid,integer)',
-  'from public.sale_returns r where',
-  'from public.sale_returns r join public.tenants rt_return on rt_return.id=r.tenant_id and rt_return.retired_at is null where'
-);
-select sellertray_private._patch_retirement_filter(
-  'public.platform_admin_business_summary_pre_oa5b(uuid,integer)',
-  'from public.sellertray_commercial_installment_payment_confirmations x where',
-  'from public.sellertray_commercial_installment_payment_confirmations x join public.tenants rt_pay on rt_pay.id=x.tenant_id and rt_pay.retired_at is null where'
-);
-select sellertray_private._patch_retirement_filter(
-  'public.platform_admin_business_summary_pre_oa5b(uuid,integer)',
-  'from public.sellertray_commercial_orders o where',
-  'from public.sellertray_commercial_orders o join public.tenants rt_order on rt_order.id=o.tenant_id and rt_order.retired_at is null where'
-);
-select sellertray_private._patch_retirement_filter(
-  'public.platform_admin_business_summary_pre_oa5b(uuid,integer)',
-  'from public.sellertray_commercial_installment_obligations o\n    left join',
-  'from public.sellertray_commercial_installment_obligations o\n    join public.tenants rt_obligation on rt_obligation.id=o.tenant_id and rt_obligation.retired_at is null\n    left join'
-);
-select sellertray_private._patch_retirement_filter(
-  'public.platform_admin_business_summary_pre_oa5b(uuid,integer)',
-  '''totalMerchants'',(select count(*) from public.tenants),',
-  '''totalMerchants'',(select count(*) from public.tenants where retired_at is null),'
-);
-select sellertray_private._patch_retirement_filter(
-  'public.platform_admin_business_summary_pre_oa5b(uuid,integer)',
-  '''whatsappConnected'',(select count(*) from public.tenants where whatsapp_connection_status=''connected''),',
-  '''whatsappConnected'',(select count(*) from public.tenants where retired_at is null and whatsapp_connection_status=''connected''),'
-);
+-- Revenue/business summary: remove retired tenants from merchant activity and
+-- ProcessEdge commercial amounts while retaining immutable source rows.
+select sellertray_private._patch_retirement_filter('public.platform_admin_business_summary_pre_oa5b(uuid,integer)','from public.orders o where','from public.orders o join public.tenants rt_sales on rt_sales.id=o.tenant_id and rt_sales.retired_at is null where');
+select sellertray_private._patch_retirement_filter('public.platform_admin_business_summary_pre_oa5b(uuid,integer)','from public.sellertray_commercial_entitlement_events\n    where','from public.sellertray_commercial_entitlement_events e\n    join public.tenants rt_activation on rt_activation.id=e.tenant_id and rt_activation.retired_at is null\n    where');
+select sellertray_private._patch_retirement_filter('public.platform_admin_business_summary_pre_oa5b(uuid,integer)','from public.tenants t','from (select * from public.tenants where retired_at is null) t');
+select sellertray_private._patch_retirement_filter('public.platform_admin_business_summary_pre_oa5b(uuid,integer)','select currency from public.sellertray_commercial_orders','select co_currency.currency from public.sellertray_commercial_orders co_currency join public.tenants rt_co_currency on rt_co_currency.id=co_currency.tenant_id and rt_co_currency.retired_at is null');
+select sellertray_private._patch_retirement_filter('public.platform_admin_business_summary_pre_oa5b(uuid,integer)','union select currency from public.sellertray_commercial_installment_payment_confirmations','union select pc_currency.currency from public.sellertray_commercial_installment_payment_confirmations pc_currency join public.tenants rt_pc_currency on rt_pc_currency.id=pc_currency.tenant_id and rt_pc_currency.retired_at is null');
+select sellertray_private._patch_retirement_filter('public.platform_admin_business_summary_pre_oa5b(uuid,integer)','union select currency from public.sale_returns where status=''completed'' and created_at>=v_previous and created_at<v_now','union select r_currency.currency from public.sale_returns r_currency join public.tenants rt_r_currency on rt_r_currency.id=r_currency.tenant_id and rt_r_currency.retired_at is null where r_currency.status=''completed'' and r_currency.created_at>=v_previous and r_currency.created_at<v_now');
+select sellertray_private._patch_retirement_filter('public.platform_admin_business_summary_pre_oa5b(uuid,integer)','from public.sale_returns r where','from public.sale_returns r join public.tenants rt_return on rt_return.id=r.tenant_id and rt_return.retired_at is null where');
+select sellertray_private._patch_retirement_filter('public.platform_admin_business_summary_pre_oa5b(uuid,integer)','from public.sellertray_commercial_installment_payment_confirmations x where','from public.sellertray_commercial_installment_payment_confirmations x join public.tenants rt_pay on rt_pay.id=x.tenant_id and rt_pay.retired_at is null where');
+select sellertray_private._patch_retirement_filter('public.platform_admin_business_summary_pre_oa5b(uuid,integer)','from public.sellertray_commercial_orders o where','from public.sellertray_commercial_orders o join public.tenants rt_order on rt_order.id=o.tenant_id and rt_order.retired_at is null where');
+select sellertray_private._patch_retirement_filter('public.platform_admin_business_summary_pre_oa5b(uuid,integer)','from public.sellertray_commercial_installment_obligations o\n    left join','from public.sellertray_commercial_installment_obligations o\n    join public.tenants rt_obligation on rt_obligation.id=o.tenant_id and rt_obligation.retired_at is null\n    left join');
+select sellertray_private._patch_retirement_filter('public.platform_admin_business_summary_pre_oa5b(uuid,integer)','''totalMerchants'',(select count(*) from public.tenants),','''totalMerchants'',(select count(*) from public.tenants where retired_at is null),');
+select sellertray_private._patch_retirement_filter('public.platform_admin_business_summary_pre_oa5b(uuid,integer)','''whatsappConnected'',(select count(*) from public.tenants where whatsapp_connection_status=''connected''),','''whatsappConnected'',(select count(*) from public.tenants where retired_at is null and whatsapp_connection_status=''connected''),');
 
 drop function sellertray_private._patch_retirement_filter(text,text,text);
 
