@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(12);
+select extensions.plan(13);
 
 select extensions.has_column('public','tenants','retired_at','Business retirement marker exists');
 select extensions.has_column('public','tenants','retirement_reason','Business retirement reason is retained');
@@ -14,6 +14,16 @@ select extensions.ok(position('retired_at is null' in pg_get_functiondef('public
 select extensions.ok(position('retired_at is null' in pg_get_functiondef('public.platform_admin_business_summary_pre_oa5b(uuid,integer)'::regprocedure))>0,'Business/Revenue summary excludes retired Businesses');
 select extensions.ok(position('retired_at is null' in pg_get_functiondef('public.platform_admin_onboarding_commercial_report(uuid,integer)'::regprocedure))>0,'Onboarding report excludes retired Businesses');
 select extensions.ok(exists(select 1 from pg_trigger where tgrelid='public.tenants'::regclass and tgname='guard_sellertray_tenant_retirement' and not tgisinternal),'retirement evidence is guarded against mutation');
+select extensions.ok(
+  exists(
+    select 1
+    from pg_constraint
+    where conname='platform_admin_capability_code_check'
+      and conrelid='public.platform_admin_capability_grant_versions'::regclass
+      and position('admin.merchants.retire' in pg_get_constraintdef(oid))>0
+  ),
+  'Business retirement capability is registrable for scoped grant or denial'
+);
 
 select * from extensions.finish();
 rollback;
