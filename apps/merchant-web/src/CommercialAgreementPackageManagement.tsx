@@ -1,5 +1,7 @@
-import { SellerTrayInput } from './SellerTrayElements';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { SellerTrayInput } from './SellerTrayElements';
+import VerifiedPdfPreview from './VerifiedPdfPreview';
+import { fetchVerifiedPdf } from './agreementPdf';
 import { errorMessage, supabase } from './supabase';
 
 type MasterAcceptance = { id: string; acceptedAt: string; acceptedLegalName: string; acceptedRole: 'owner' | 'manager' };
@@ -34,6 +36,9 @@ export default function CommercialAgreementPackageManagement({ tenantId, onChang
   const [reviewDocument, setReviewDocument] = useState<AgreementDocument | null>(null);
   const [executedDocument, setExecutedDocument] = useState<AgreementDocument | null>(null);
   const [reviewedFingerprint, setReviewedFingerprint] = useState<string | null>(null);
+  const [previewDocument, setPreviewDocument] = useState<AgreementDocument | null>(null);
+  const [previewBytes, setPreviewBytes] = useState<Uint8Array | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [documentBusy, setDocumentBusy] = useState<'review_pdf' | 'executed_pdf' | null>(null);
@@ -42,6 +47,14 @@ export default function CommercialAgreementPackageManagement({ tenantId, onChang
   const confirmationCommandIds = useRef(new Map<string, string>());
 
   useEffect(() => { void load(); }, [tenantId]);
+  useEffect(() => {
+    if (!previewOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setPreviewOpen(false); };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', closeOnEscape);
+    return () => { document.body.style.overflow = previousOverflow; window.removeEventListener('keydown', closeOnEscape); };
+  }, [previewOpen]);
 
   const orderForms = center?.orderForms ?? [];
   const current = useMemo(() => orderForms.filter((form) => form.isCurrent), [orderForms]);
@@ -49,6 +62,7 @@ export default function CommercialAgreementPackageManagement({ tenantId, onChang
   const selected = orderForms.find((form) => form.id === selectedId) ?? current[0] ?? orderForms[0] ?? null;
   const actionRequired = Boolean(selected?.isCurrent && !selected.confirmation);
   const reviewReady = Boolean(reviewDocument && reviewedFingerprint === reviewDocument.packageFingerprint);
+  const previewIsReview = previewDocument?.artifactKind === 'review_pdf';
 
   async function load(preferredId?: string | null) {
     setLoading(true); setError(null);
@@ -67,14 +81,16 @@ export default function CommercialAgreementPackageManagement({ tenantId, onChang
     finally { setLoading(false); }
   }
 
+  function clearPreview() {
+    setPreviewDocument(null); setPreviewBytes(null); setPreviewOpen(false);
+  }
+
   async function openDocument(artifactKind: 'review_pdf' | 'executed_pdf') {
     if (!selected || documentBusy) return;
     if (artifactKind === 'review_pdf' && center?.masterAcceptanceRequired) {
       setError('Accept the current Master Agreement separately before reviewing this Order Form.');
       return;
     }
-    const popup = window.open('about:blank', '_blank');
-    if (popup) popup.opener = null;
     setDocumentBusy(artifactKind); setError(null);
     try {
       const { data, error: functionError } = await supabase.functions.invoke('master-agreements', {
@@ -82,15 +98,31 @@ export default function CommercialAgreementPackageManagement({ tenantId, onChang
       });
       if (functionError) throw functionError;
       const document = parseDocument(record(data).document);
+      const bytes = await fetchVerifiedPdf(document);
       if (artifactKind === 'review_pdf') {
         setReviewDocument(document);
-        if (popup) setReviewedFingerprint(document.packageFingerprint);
-      } else setExecutedDocument(document);
-      if (popup) popup.location.href = document.signedUrl;
+        setReviewedFingerprint(null);
+      } else {
+        setExecutedDocument(document);
+      }
+      setPreviewDocument(document);
+      setPreviewBytes(bytes);
+      setPreviewOpen(true);
     } catch (cause) {
-      if (popup) popup.close();
+      clearPreview();
       setError(errorMessage(cause, artifactKind === 'review_pdf' ? 'Unable to open this SellerTray Order Form package.' : 'Unable to open the signed SellerTray Order Form package.'));
     } finally { setDocumentBusy(null); }
+  }
+
+  function markDocumentRendered() {
+    if (previewDocument?.artifactKind === 'review_pdf' && reviewDocument && previewDocument.packageFingerprint === reviewDocument.packageFingerprint) {
+      setReviewedFingerprint(reviewDocument.packageFingerprint);
+    }
+  }
+
+  function handlePreviewError(message: string) {
+    if (previewDocument?.artifactKind === 'review_pdf') setReviewedFingerprint(null);
+    setError(`Order Form preview failed: ${message}`);
   }
 
   async function confirmPackage(event: FormEvent) {
@@ -119,7 +151,7 @@ export default function CommercialAgreementPackageManagement({ tenantId, onChang
       const next = parseCenter(response.center);
       confirmationCommandIds.current.delete(commandKey);
       setCenter(next); setSelectedId(selected.id); setLegalName(''); setConfirmed(false);
-      setReviewDocument(null); setReviewedFingerprint(null); setExecutedDocument(null);
+      setReviewDocument(null); setReviewedFingerprint(null); setExecutedDocument(null); clearPreview();
       setMessage('Purchase confirmed under your accepted Master Agreement.');
       await onChanged?.();
     } catch (cause) { setError(errorMessage(cause, 'Unable to confirm this SellerTray Order Form.')); }
@@ -175,11 +207,9 @@ export default function CommercialAgreementPackageManagement({ tenantId, onChang
         <div className="agreement-package-card">
           <div className="agreement-package-card-copy"><p className="eyebrow">Purchase document</p><h3>Review Order Form PDF</h3><p>Review the exact purchase terms under the Master Agreement you already accepted. The package may include the governing Master Agreement for reference, but this action confirms only this Order Form.</p></div>
           <div className="agreement-package-actions">
-            <button type="button" className="primary-button" disabled={documentBusy !== null || !selected.isCurrent || center?.masterAcceptanceRequired === true} onClick={() => void openDocument('review_pdf')}>{documentBusy === 'review_pdf' ? 'Opening Order Form…' : reviewReady ? 'Review Order Form again' : 'Review Order Form'}</button>
-            {reviewDocument && !reviewReady ? <a className="primary-button agreement-document-link" href={reviewDocument.signedUrl} target="_blank" rel="noreferrer" onClick={() => setReviewedFingerprint(reviewDocument.packageFingerprint)}>Open Order Form</a> : null}
-            {reviewReady ? <small>Order Form opened for review. You can confirm this purchase below.</small> : null}
-            {selected.confirmation ? <button type="button" className="secondary-button" disabled={documentBusy !== null} onClick={() => void openDocument('executed_pdf')}>{documentBusy === 'executed_pdf' ? 'Opening signed copy…' : 'Open confirmed copy'}</button> : null}
-            {executedDocument ? <a className="secondary-button agreement-document-link" href={executedDocument.signedUrl} target="_blank" rel="noreferrer">Open confirmed copy again</a> : null}
+            <button type="button" className="primary-button" disabled={documentBusy !== null || !selected.isCurrent || center?.masterAcceptanceRequired === true} onClick={() => void openDocument('review_pdf')}>{documentBusy === 'review_pdf' ? 'Preparing Order Form…' : reviewReady ? 'Review Order Form again' : 'Review Order Form'}</button>
+            {reviewReady ? <small>Verified Order Form PDF rendered successfully. You can confirm this purchase below.</small> : null}
+            {selected.confirmation ? <button type="button" className="secondary-button" disabled={documentBusy !== null} onClick={() => void openDocument('executed_pdf')}>{documentBusy === 'executed_pdf' ? 'Preparing signed copy…' : executedDocument ? 'View confirmed copy again' : 'View confirmed copy'}</button> : null}
           </div>
         </div>
 
@@ -189,18 +219,20 @@ export default function CommercialAgreementPackageManagement({ tenantId, onChang
         {selected.isCurrent && actionRequired && !center?.masterAcceptanceRequired && !center?.canAccept ? <div className="warning-banner">Only the Business Owner or an explicitly authorised Manager can confirm this Order Form.</div> : null}
 
         {selected.isCurrent && actionRequired && !center?.masterAcceptanceRequired && center?.canAccept && center.masterAgreement ? <form className="settings-form agreement-signature-form" onSubmit={confirmPackage}>
-          <div className={`agreement-review-status ${reviewReady ? 'ready' : ''}`}><strong>{reviewReady ? 'Order Form reviewed and ready to confirm' : 'Review the Order Form PDF before continuing'}</strong><span>{reviewReady ? 'SellerTray will record your authenticated confirmation against the exact purchase document you opened.' : 'Use Review Order Form above to open the exact document for this purchase.'}</span></div>
+          <div className={`agreement-review-status ${reviewReady ? 'ready' : ''}`}><strong>{reviewReady ? 'Order Form rendered and ready to confirm' : 'Review the Order Form PDF before continuing'}</strong><span>{reviewReady ? 'SellerTray will record your authenticated confirmation against the exact verified purchase document rendered in the preview.' : 'Use Review Order Form above. Confirm Purchase remains locked until SellerTray renders the verified PDF.'}</span></div>
           <label className="field"><span>Authorised representative legal name</span><SellerTrayInput maxLength={200} required value={legalName} onChange={(event) => setLegalName(event.target.value)} placeholder="Full legal name" /></label>
           <label className="access-card"><SellerTrayInput type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span><strong>I confirm this purchase under the SellerTray Master Agreement already accepted by this Business and confirm my authority to continue.</strong><small>This confirms only this Order Form and purchase. It does not create or replace Master Agreement acceptance.</small></span></label>
           <div className="settings-actions"><button className="primary-button" disabled={busy || !confirmed || !legalName.trim() || !reviewReady}>{busy ? 'Recording confirmation…' : 'Confirm Purchase'}</button></div>
         </form> : null}
       </article> : null}
     </div>}
+
+    {previewOpen && previewDocument && previewBytes ? <div className="agreement-preview-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewOpen(false); }}><section className="agreement-preview-modal" role="dialog" aria-modal="true" aria-labelledby="order-form-preview-title"><header className="agreement-preview-header"><div><p className="eyebrow">{previewIsReview ? 'Order Form preview' : 'Confirmed Order Form'}</p><h2 id="order-form-preview-title">{selected?.title ?? 'SellerTray Order Form'}</h2><p className="muted">Reference {selected?.reference ?? '—'}</p></div><button type="button" className="secondary-button agreement-preview-close" onClick={() => setPreviewOpen(false)} aria-label="Close Order Form preview">Close</button></header><div className="agreement-preview-frame-wrap"><VerifiedPdfPreview bytes={previewBytes} fileName={previewDocument.fileName} title={selected?.title ?? 'SellerTray Order Form'} onFirstPageRendered={markDocumentRendered} onRenderError={handlePreviewError} /></div><footer className="agreement-preview-footer"><div className={`agreement-review-status ${previewIsReview && reviewReady ? 'ready' : ''}`}><strong>{previewIsReview ? (reviewReady ? 'Order Form PDF rendered successfully' : 'Rendering Order Form PDF…') : 'Confirmed PDF rendered for reference'}</strong><span>{previewIsReview ? (reviewReady ? 'The exact verified purchase PDF is marked as reviewed for this confirmation session.' : 'Confirm Purchase remains locked until the first page is actually rendered.') : 'Viewing this confirmed copy does not change its immutable confirmation evidence.'}</span></div><button type="button" className="primary-button" disabled={previewIsReview && !reviewReady} onClick={() => setPreviewOpen(false)}>{previewIsReview ? (reviewReady ? 'Close preview & continue' : 'Rendering preview…') : 'Close preview'}</button></footer></section></div> : null}
   </section>;
 
   function selectForm(id: string) {
     setSelectedId(id); setLegalName(''); setConfirmed(false); setError(null); setMessage(null);
-    setReviewDocument(null); setExecutedDocument(null); setReviewedFingerprint(null);
+    setReviewDocument(null); setExecutedDocument(null); setReviewedFingerprint(null); clearPreview();
   }
 }
 
@@ -240,7 +272,7 @@ function parseCenter(value: unknown): AgreementCenter { const root = record(valu
 function parseConfirmResult(value: unknown): ConfirmResult { const row = record(value); const result = { orderFormConfirmationCreated: row.orderFormConfirmationCreated === true, agreementPackageId: stringValue(row.agreementPackageId), packageFingerprint: stringValue(row.packageFingerprint) }; if (!result.agreementPackageId || !result.packageFingerprint) throw new Error('Order Form confirmation response is incomplete.'); return result; }
 function parseDocument(value: unknown): AgreementDocument {
   const row = record(value); const artifactKind: AgreementDocument['artifactKind'] = row.artifactKind === 'executed_pdf' ? 'executed_pdf' : 'review_pdf';
-  const result: AgreementDocument = { artifactId: stringValue(row.artifactId), artifactKind, packageId: stringValue(row.packageId), packageFingerprint: stringValue(row.packageFingerprint), pdfSha256: stringValue(row.pdfSha256), byteSize: numberValue(row.byteSize), generatedAt: stringValue(row.generatedAt), fileName: stringValue(row.fileName), signedUrl: stringValue(row.signedUrl), expiresInSeconds: numberValue(row.expiresInSeconds) };
-  if (!result.artifactId || !result.packageId || !result.packageFingerprint || !result.signedUrl) throw new Error('Order Form PDF response is incomplete.');
+  const result: AgreementDocument = { artifactId: stringValue(row.artifactId), artifactKind, packageId: stringValue(row.packageId), packageFingerprint: stringValue(row.packageFingerprint), pdfSha256: stringValue(row.pdfSha256).toLowerCase(), byteSize: numberValue(row.byteSize), generatedAt: stringValue(row.generatedAt), fileName: stringValue(row.fileName, 'SellerTray-Order-Form.pdf'), signedUrl: stringValue(row.signedUrl), expiresInSeconds: numberValue(row.expiresInSeconds) };
+  if (!result.artifactId || !result.packageId || !result.packageFingerprint || !result.pdfSha256 || !result.signedUrl) throw new Error('Order Form PDF response is incomplete.');
   return result;
 }

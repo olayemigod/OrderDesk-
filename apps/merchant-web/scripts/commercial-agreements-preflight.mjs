@@ -3,11 +3,14 @@ import { resolve } from 'node:path';
 
 const root = process.cwd();
 const read = (path) => readFileSync(resolve(root, path), 'utf8');
+const packageJson = JSON.parse(read('package.json'));
 const management = read('src/ManagementPage.tsx');
 const merchantApp = read('src/MerchantApp.tsx');
 const navigation = read('src/portalNavigation.ts');
 const agreements = read('src/CommercialAgreementsManagement.tsx');
 const agreementStyles = read('src/agreement-documents.css');
+const agreementPdf = read('src/agreementPdf.ts');
+const pdfPreview = read('src/VerifiedPdfPreview.tsx');
 const packageAgreements = read('src/CommercialAgreementPackageManagement.tsx');
 const billing = read('src/SellerTrayBillingManagement.tsx');
 const initialPurchase = read('src/SellerTrayInitialPurchase.tsx');
@@ -65,12 +68,32 @@ requireValue(
   'Accepted agreements must remain viewable while new acceptance stays locked to the exact reviewed PDF.',
 );
 requireValue(
-  agreements.includes('role="dialog"') && agreements.includes('aria-modal="true"') && agreements.includes('className="agreement-preview-frame"')
-    && agreements.includes('src={previewObjectUrl}') && agreements.includes('URL.createObjectURL') && agreements.includes('sha256Hex(bytes)')
-    && agreements.includes('onLoad={markPreviewLoaded}') && agreementStyles.includes('.agreement-preview-modal') && agreementStyles.includes('height: 100dvh'),
-  'Master Agreement review must remain a responsive verified in-page PDF preview.',
+  packageJson.dependencies?.['pdfjs-dist'] === '6.4.299'
+    && pdfPreview.includes("from 'pdfjs-dist'")
+    && pdfPreview.includes("pdf.worker.min.mjs?url")
+    && pdfPreview.includes('<canvas')
+    && pdfPreview.includes('await renderTask.promise')
+    && pdfPreview.includes('renderedCallbackRef.current?.()')
+    && agreementPdf.includes("crypto.subtle.digest('SHA-256'")
+    && agreementPdf.includes("String.fromCharCode(...new Uint8Array(bytes, 0, 5)) === '%PDF-'"),
+  'Agreement review must use the pinned in-app PDF.js renderer after byte-size, PDF signature and SHA-256 verification.',
 );
-requireValue(excludes(agreements, ["window.open(", "target=\"_blank\"", "popup.location.href"]), 'Master Agreement review must not depend on a new tab or popup.');
+requireValue(
+  agreements.includes('role="dialog"') && agreements.includes('aria-modal="true"')
+    && agreements.includes('<VerifiedPdfPreview') && agreements.includes('fetchVerifiedPdf(document)')
+    && agreements.includes('onFirstPageRendered={markPreviewRendered}')
+    && agreementStyles.includes('.verified-pdf-viewer') && agreementStyles.includes('.verified-pdf-canvas') && agreementStyles.includes('height: 100dvh'),
+  'Master Agreement review must remain a responsive verified in-page PDF preview whose actual render unlocks acceptance.',
+);
+requireValue(
+  agreementStyles.includes(':root[data-theme="dark"] .agreement-package-card')
+    && agreementStyles.includes(':root[data-theme="dark"] .agreement-review-status')
+    && agreementStyles.includes(':root[data-theme="dark"] .verified-pdf-toolbar')
+    && agreementStyles.includes('color: var(--navy, #102a43);')
+    && excludes(agreementStyles, ['color: var(--ink, #102a43);']),
+  'Agreement cards, review states and PDF controls must preserve readable theme-aware contrast in dark mode.',
+);
+requireValue(excludes(agreements, ['<iframe', 'onLoad={markPreviewLoaded}', 'src={previewObjectUrl}', "window.open(", "target=\"_blank\""]), 'Master Agreement review must not depend on a browser PDF iframe, popup or frame-load event.');
 requireValue(excludes(agreements, ['<pre', '{master.contentBody}', 'Read Master Agreement text']), 'Master Agreement acceptance must remain PDF-first.');
 requireValue(agreements.includes('This accepts only the current Master Agreement. It does not confirm any purchase, plan or Order Form.'), 'Master acceptance copy must remain separate from purchase confirmation.');
 requireValue(
@@ -90,6 +113,14 @@ requireValue(
     && packageAgreements.includes("'Confirm Purchase'")
     && packageAgreements.includes('This confirms only this Order Form and purchase. It does not create or replace Master Agreement acceptance.'),
   'Order Form confirmation must remain exact-PDF/fingerprint-bound and separate from Master acceptance.',
+);
+requireValue(
+  packageAgreements.includes('<VerifiedPdfPreview')
+    && packageAgreements.includes('fetchVerifiedPdf(document)')
+    && packageAgreements.includes('onFirstPageRendered={markDocumentRendered}')
+    && packageAgreements.includes('setReviewedFingerprint(reviewDocument.packageFingerprint)')
+    && excludes(packageAgreements, ["window.open(", "target=\"_blank\"", 'popup.location.href', '<iframe']),
+  'Order Form review must require the same verified in-app PDF render instead of popup creation or native-browser frame behavior.',
 );
 requireValue(excludes(packageAgreements, ['masterAcceptanceCreated', "'Accept & Continue'", 'I accept the Master Agreement, confirm this purchase']), 'Order Form confirmation must never double as Master acceptance.');
 requireValue(
@@ -137,4 +168,4 @@ if (failures.length) {
   for (const failure of failures) console.error('- ' + failure);
   process.exit(1);
 }
-console.log('SellerTray separated Master Agreement, Order Form and payment preflight passed.');
+console.log('SellerTray separated Master Agreement, Order Form, rendered PDF review and payment preflight passed.');
