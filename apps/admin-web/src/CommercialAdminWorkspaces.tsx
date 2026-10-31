@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import AgreementLifecycleManagement from './AgreementLifecycleManagement';
 import {
   invokeCommercialAdmin,
+  invokeCommercialPriceLifecycle,
   loadCommercialOnboarding,
   loadCommercialOverview,
   type AdminRole,
@@ -10,88 +10,226 @@ import {
   type CommercialOnboarding,
   type CommercialOverview,
   type OnboardingOrder,
+  type OnboardingPrice,
+  type PriceLifecycleAction,
 } from './commercial-admin-state';
 
-const AGREEMENT_FAMILIES = [
-  ['installment_agreement', 'Installment agreement'],
-  ['subscription_order', 'Subscription order'],
-  ['terms_of_service', 'Terms of service'],
-  ['money_back_guarantee_terms', 'Money-back guarantee terms'],
-  ['branch_setup_equipment_acknowledgement', 'Branch setup & equipment acknowledgement'],
-  ['privacy_data_terms', 'Privacy & data terms'],
-] as const;
+type ListAddTab = 'list' | 'add';
+type PriceControlDraft = { price: OnboardingPrice; action: PriceLifecycleAction; reason: string; commandId: string };
 
-export function CommercialPricingAdministration({ session, actorRole, tenantId }: { session: Session; actorRole: AdminRole; tenantId: string }) {
-  const { state, loading, error, message, saving, reload, mutate, setError } = useOnboardingWorkspace(session, tenantId);
+export function CommercialPricingAdministration({ session, tenantId }: { session: Session; actorRole: AdminRole; tenantId: string }) {
+  const { state, loading, error, message, saving, reload, mutate, controlPriceLifecycle, setError } = useOnboardingWorkspace(session, tenantId);
+  const [tab, setTab] = useState<ListAddTab>('list');
   const [subscriptionForm, setSubscriptionForm] = useState({ planCode: 'business', currency: 'NGN', monthlyGross: '', taxRate: '', effectiveFrom: nowLocal(), reason: '' });
   const [setupForm, setSetupForm] = useState({ currency: 'NGN', gross: '', taxRate: '', effectiveFrom: nowLocal(), reason: '' });
-  const canManage = actorRole === 'admin' && state?.canManage === true;
+  const [subscriptionOverride, setSubscriptionOverride] = useState({ planCode: 'business', currency: 'NGN', monthlyGross: '', effectiveFrom: nowLocal(), effectiveUntil: tomorrowLocal(), reason: '' });
+  const [setupOverride, setSetupOverride] = useState({ currency: 'NGN', gross: '', effectiveFrom: nowLocal(), effectiveUntil: tomorrowLocal(), reason: '' });
+  const [priceControl, setPriceControl] = useState<PriceControlDraft | null>(null);
+  const canManageGlobalPricing = state?.canManageGlobalPricing === true;
+  const canManageMerchantPricing = state?.canManageMerchantPricing === true;
 
   useEffect(() => {
-    if (!state?.plans[0] || state.plans.some((plan) => plan.code === subscriptionForm.planCode)) return;
-    setSubscriptionForm((current) => ({ ...current, planCode: state.plans[0].code, currency: state.plans[0].currency || current.currency }));
-  }, [state]);
+    setPriceControl(null);
+    setSubscriptionOverride((current) => ({ ...current, monthlyGross: '', effectiveFrom: nowLocal(), effectiveUntil: tomorrowLocal(), reason: '' }));
+    setSetupOverride((current) => ({ ...current, gross: '', effectiveFrom: nowLocal(), effectiveUntil: tomorrowLocal(), reason: '' }));
+  }, [tenantId]);
 
-  function publishSubscriptionPrice() {
-    if (!canManage) return;
+  useEffect(() => {
+    if (!state?.plans[0]) return;
+    const fallback = state.plans[0];
+    if (!state.plans.some((plan) => plan.code === subscriptionForm.planCode)) {
+      setSubscriptionForm((current) => ({ ...current, planCode: fallback.code, currency: fallback.currency || current.currency }));
+    }
+    if (!state.plans.some((plan) => plan.code === subscriptionOverride.planCode)) {
+      setSubscriptionOverride((current) => ({ ...current, planCode: fallback.code, currency: fallback.currency || current.currency }));
+    }
+  }, [state, subscriptionForm.planCode, subscriptionOverride.planCode]);
+
+  async function publishSubscriptionPrice() {
+    if (!canManageGlobalPricing) return;
     const monthlyGrossAmount = positiveNumber(subscriptionForm.monthlyGross);
     const taxRatePercent = optionalPercent(subscriptionForm.taxRate);
     const effectiveFrom = isoFromLocal(subscriptionForm.effectiveFrom);
     if (monthlyGrossAmount === null) return setError('Enter a positive VAT-inclusive monthly subscription price.');
     if (taxRatePercent === undefined) return setError('Tax rate must be blank or between 0 and 100%.');
     if (!effectiveFrom || subscriptionForm.reason.trim().length < 6) return setError('Enter a valid effective time and a reason of at least 6 characters.');
-    void mutate('subscription-price', {
+    const ok = await mutate('subscription-price', {
       action: 'admin_publish_subscription_price', tenantId,
       planCode: subscriptionForm.planCode, currency: subscriptionForm.currency,
       monthlyGrossAmount, taxRatePercent, effectiveFrom, reason: subscriptionForm.reason,
     }, 'Governed monthly and annual subscription prices published.');
+    if (ok) {
+      setSubscriptionForm((current) => ({ ...current, monthlyGross: '', taxRate: '', effectiveFrom: nowLocal(), reason: '' }));
+      setTab('list');
+    }
   }
 
-  function publishSetupPrice() {
-    if (!canManage) return;
+  async function publishSetupPrice() {
+    if (!canManageGlobalPricing) return;
     const grossAmount = positiveNumber(setupForm.gross);
     const taxRatePercent = optionalPercent(setupForm.taxRate);
     const effectiveFrom = isoFromLocal(setupForm.effectiveFrom);
     if (grossAmount === null) return setError('Enter a positive VAT-inclusive Branch setup price.');
     if (taxRatePercent === undefined) return setError('Tax rate must be blank or between 0 and 100%.');
     if (!effectiveFrom || setupForm.reason.trim().length < 6) return setError('Enter a valid effective time and a reason of at least 6 characters.');
-    void mutate('setup-price', {
+    const ok = await mutate('setup-price', {
       action: 'admin_publish_setup_price', tenantId,
       currency: setupForm.currency, grossAmount, taxRatePercent, effectiveFrom, reason: setupForm.reason,
     }, 'Governed Branch setup price published.');
+    if (ok) {
+      setSetupForm((current) => ({ ...current, gross: '', taxRate: '', effectiveFrom: nowLocal(), reason: '' }));
+      setTab('list');
+    }
+  }
+
+  async function publishSubscriptionOverride() {
+    if (!canManageMerchantPricing) return;
+    const monthlyGrossAmount = positiveNumber(subscriptionOverride.monthlyGross);
+    const effectiveFrom = isoFromLocal(subscriptionOverride.effectiveFrom);
+    const effectiveUntil = isoFromLocal(subscriptionOverride.effectiveUntil);
+    if (monthlyGrossAmount === null) return setError('Enter a positive VAT-inclusive monthly Business override.');
+    if (!effectiveFrom || !effectiveUntil || new Date(effectiveUntil) <= new Date(effectiveFrom)) return setError('Enter an override expiry after the effective time.');
+    if (subscriptionOverride.reason.trim().length < 6) return setError('Enter a reason of at least 6 characters.');
+    const ok = await mutate('subscription-override', {
+      action: 'admin_publish_subscription_override', tenantId,
+      planCode: subscriptionOverride.planCode, currency: subscriptionOverride.currency,
+      monthlyGrossAmount, effectiveFrom, effectiveUntil, reason: subscriptionOverride.reason,
+    }, 'Business-specific subscription price override published.');
+    if (ok) {
+      setSubscriptionOverride((current) => ({ ...current, monthlyGross: '', effectiveFrom: nowLocal(), effectiveUntil: tomorrowLocal(), reason: '' }));
+      setTab('list');
+    }
+  }
+
+  async function publishSetupOverride() {
+    if (!canManageMerchantPricing) return;
+    const grossAmount = positiveNumber(setupOverride.gross);
+    const effectiveFrom = isoFromLocal(setupOverride.effectiveFrom);
+    const effectiveUntil = isoFromLocal(setupOverride.effectiveUntil);
+    if (grossAmount === null) return setError('Enter a positive VAT-inclusive Branch setup override.');
+    if (!effectiveFrom || !effectiveUntil || new Date(effectiveUntil) <= new Date(effectiveFrom)) return setError('Enter an override expiry after the effective time.');
+    if (setupOverride.reason.trim().length < 6) return setError('Enter a reason of at least 6 characters.');
+    const ok = await mutate('setup-override', {
+      action: 'admin_publish_setup_override', tenantId,
+      currency: setupOverride.currency, grossAmount, effectiveFrom, effectiveUntil, reason: setupOverride.reason,
+    }, 'Business-specific Branch setup override published.');
+    if (ok) {
+      setSetupOverride((current) => ({ ...current, gross: '', effectiveFrom: nowLocal(), effectiveUntil: tomorrowLocal(), reason: '' }));
+      setTab('list');
+    }
+  }
+
+  function beginPriceControl(price: OnboardingPrice, action: PriceLifecycleAction) {
+    const canManage = price.priceScope === 'standard' ? canManageGlobalPricing : canManageMerchantPricing;
+    if (!canManage) return setError('Your current ProcessEdge authority cannot control this price version.');
+    if (price.priceScope === 'merchant_override' && price.tenantId !== tenantId) {
+      return setError('This Business-specific price does not belong to the selected Business. Reload pricing before continuing.');
+    }
+    setPriceControl({ price, action, reason: '', commandId: crypto.randomUUID() });
+  }
+
+  async function submitPriceControl() {
+    if (!priceControl) return;
+    const selectedPrice = state?.prices.find((price) => price.id === priceControl.price.id) ?? null;
+    if (!selectedPrice || (selectedPrice.priceScope === 'merchant_override' && selectedPrice.tenantId !== tenantId)) {
+      setPriceControl(null);
+      return setError('Business context changed. Select the price again for the current Business.');
+    }
+    const reason = priceControl.reason.trim();
+    if (reason.length < 6) return setError('Enter a lifecycle-control reason of at least 6 characters.');
+    const ok = await controlPriceLifecycle(
+      `price-control-${priceControl.price.id}`,
+      { priceVersionId: priceControl.price.id, action: priceControl.action, reason, commandId: priceControl.commandId },
+      `Price ${label(priceControl.action)} applied.`
+    );
+    if (ok) setPriceControl(null);
   }
 
   return <WorkspaceState loading={loading} error={error} message={message} onReload={reload}>
-    {!canManage ? <div className="workspace-banner info">Platform Support can review effective prices. Publishing price changes remains restricted to authorised Platform Admin authority.</div> : null}
-    {state ? <>
+    <WorkspaceTabs value={tab} onChange={setTab} tabs={[["list", "Price List"], ["add", "Add New"]]} label="Plans and pricing views" />
+    {!canManageGlobalPricing && !canManageMerchantPricing ? <div className="workspace-banner info">Pricing is review-only for your current ProcessEdge authority.</div> : null}
+    {!canManageGlobalPricing && canManageMerchantPricing ? <div className="workspace-banner info">You may publish pricing for this selected Business. Standard platform pricing remains review-only.</div> : null}
+    {canManageGlobalPricing && !canManageMerchantPricing ? <div className="workspace-banner info">You may publish standard platform pricing. Business-specific pricing is not authorised for this selected Business.</div> : null}
+    {state && tab === 'list' ? <>
+      <section className="workspace-panel">
+        <PanelHeading title="Effective price history" description="Published prices remain immutable. Pause, Resume, Deactivate and Void are append-only lifecycle controls; historical orders retain the exact price version they used." />
+        <div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Scope</th><th>Price</th><th>Cycle</th><th>Gross</th><th>Tax</th><th>State</th><th>Effective</th><th>Until</th><th>Controls</th></tr></thead><tbody>{state.prices.map((price) => {
+          const canManage = price.priceScope === 'standard' ? canManageGlobalPricing : canManageMerchantPricing;
+          const actions = priceLifecycleActions(price);
+          const pairFollower = price.priceKind === 'subscription' && price.billingCycle === 'yearly';
+          return <tr key={price.id}>
+            <td><span className={`workspace-status ${price.priceScope === 'merchant_override' ? 'attention' : 'info'}`}>{price.priceScope === 'merchant_override' ? 'Business override' : 'Standard'}</span></td>
+            <td>{price.priceKind === 'branch_setup' ? 'Branch setup' : price.planCode ?? 'Subscription'}</td>
+            <td>{price.billingCycle ?? 'One-time'}</td>
+            <td>{money(price.grossAmount, price.currency)}</td>
+            <td>{price.taxRatePercent === null ? 'Not separately recorded' : `${price.taxRatePercent}%`}</td>
+            <td><span className={`workspace-status ${price.lifecycleState === 'active' ? 'success' : price.lifecycleState === 'paused' ? 'attention' : 'info'}`}>{label(price.lifecycleState)}</span></td>
+            <td>{formatDate(price.effectiveFrom)}</td>
+            <td>{price.effectiveUntil ? formatDate(price.effectiveUntil) : 'Open-ended'}</td>
+            <td>{pairFollower ? <small>Controlled with monthly pair</small> : canManage && actions.length ? <div className="workspace-filter-row">{actions.map((action) => <button key={action} type="button" className="workspace-button text compact" disabled={saving !== null} onClick={() => beginPriceControl(price, action)}>{label(action)}</button>)}</div> : <small>{canManage ? 'No further action' : 'Review only'}</small>}</td>
+          </tr>;
+        })}{!state.prices.length ? <tr><td colSpan={9}>No governed pricing has been published.</td></tr> : null}</tbody></table></div>
+      </section>
+      {priceControl ? <section className="workspace-panel workspace-form-stack">
+        <PanelHeading title={`${label(priceControl.action)} price version`} description={`${priceControl.price.priceKind === 'subscription' ? 'The governed monthly + annual subscription pair will move together.' : 'This Branch setup price version will be controlled independently.'} The original published price row remains immutable.`} />
+        {(priceControl.action === 'deactivate' || priceControl.action === 'void') ? <div className="workspace-banner warning">{priceControl.action === 'void' ? 'Void is terminal and is accepted only for a future, unused price version.' : 'Deactivate is terminal for this published version. Publish a new governed version if pricing must return later.'}</div> : null}
+        <label>Reason<input maxLength={1000} value={priceControl.reason} onChange={(event) => setPriceControl({ ...priceControl, reason: event.target.value })} placeholder="Explain why this lifecycle change is required" /></label>
+        <div className="workspace-filter-row"><button type="button" className="workspace-button primary" disabled={saving !== null} onClick={() => void submitPriceControl()}>{saving?.startsWith('price-control-') ? 'Applying…' : `Apply ${label(priceControl.action)}`}</button><button type="button" className="workspace-button secondary" disabled={saving !== null} onClick={() => setPriceControl(null)}>Cancel</button></div>
+      </section> : null}
+    </> : null}
+    {state && tab === 'add' ? <>
       <div className="workspace-grid two">
         <section className="workspace-panel workspace-form-stack">
-          <PanelHeading title="Subscription pricing" description="Publish VAT-inclusive monthly pricing. The governed service derives the annual 10-for-12 price." />
-          <label>Plan<select value={subscriptionForm.planCode} onChange={(event) => setSubscriptionForm({ ...subscriptionForm, planCode: event.target.value })}>{state.plans.filter((plan) => plan.active).map((plan) => <option key={plan.code} value={plan.code}>{plan.name}</option>)}</select></label>
-          <div className="workspace-field-grid two"><label>Currency<input maxLength={3} value={subscriptionForm.currency} onChange={(event) => setSubscriptionForm({ ...subscriptionForm, currency: event.target.value.toUpperCase() })} /></label><label>Monthly VAT-inclusive price<input inputMode="decimal" value={subscriptionForm.monthlyGross} onChange={(event) => setSubscriptionForm({ ...subscriptionForm, monthlyGross: event.target.value })} /></label></div>
-          <div className="workspace-field-grid two"><label>Underlying tax rate % (optional)<input inputMode="decimal" value={subscriptionForm.taxRate} onChange={(event) => setSubscriptionForm({ ...subscriptionForm, taxRate: event.target.value })} /></label><label>Effective from<input type="datetime-local" value={subscriptionForm.effectiveFrom} onChange={(event) => setSubscriptionForm({ ...subscriptionForm, effectiveFrom: event.target.value })} /></label></div>
-          <label>Change reason<input maxLength={1000} value={subscriptionForm.reason} onChange={(event) => setSubscriptionForm({ ...subscriptionForm, reason: event.target.value })} /></label>
-          {positiveNumber(subscriptionForm.monthlyGross) !== null ? <small>Annual preview: {money((positiveNumber(subscriptionForm.monthlyGross) ?? 0) * 10, subscriptionForm.currency)} for 12 months.</small> : null}
-          <button type="button" className="workspace-button primary" disabled={!canManage || saving !== null} onClick={publishSubscriptionPrice}>{saving === 'subscription-price' ? 'Publishing…' : 'Publish subscription prices'}</button>
+          <PanelHeading title="Standard subscription pricing" description="Publish platform-wide VAT-inclusive monthly pricing. The governed service derives the annual 10-for-12 price." />
+          <fieldset disabled={!canManageGlobalPricing || saving !== null} style={{ border: 0, padding: 0, display: 'contents' }}>
+            <label>Plan<select value={subscriptionForm.planCode} onChange={(event) => setSubscriptionForm({ ...subscriptionForm, planCode: event.target.value })}>{state.plans.filter((plan) => plan.active).map((plan) => <option key={plan.code} value={plan.code}>{plan.name}</option>)}</select></label>
+            <div className="workspace-field-grid two"><label>Currency<input maxLength={3} value={subscriptionForm.currency} onChange={(event) => setSubscriptionForm({ ...subscriptionForm, currency: event.target.value.toUpperCase() })} /></label><label>Monthly VAT-inclusive price<input inputMode="decimal" value={subscriptionForm.monthlyGross} onChange={(event) => setSubscriptionForm({ ...subscriptionForm, monthlyGross: event.target.value })} /></label></div>
+            <div className="workspace-field-grid two"><label>Underlying tax rate % (optional)<input inputMode="decimal" value={subscriptionForm.taxRate} onChange={(event) => setSubscriptionForm({ ...subscriptionForm, taxRate: event.target.value })} /></label><label>Effective from<input type="datetime-local" value={subscriptionForm.effectiveFrom} onChange={(event) => setSubscriptionForm({ ...subscriptionForm, effectiveFrom: event.target.value })} /></label></div>
+            <label>Change reason<input maxLength={1000} value={subscriptionForm.reason} onChange={(event) => setSubscriptionForm({ ...subscriptionForm, reason: event.target.value })} /></label>
+            {positiveNumber(subscriptionForm.monthlyGross) !== null ? <small>Annual preview: {money((positiveNumber(subscriptionForm.monthlyGross) ?? 0) * 10, subscriptionForm.currency)} for 12 months.</small> : null}
+            <button type="button" className="workspace-button primary" onClick={() => void publishSubscriptionPrice()}>{saving === 'subscription-price' ? 'Publishing…' : 'Publish standard subscription prices'}</button>
+          </fieldset>
         </section>
         <section className="workspace-panel workspace-form-stack">
-          <PanelHeading title="Branch setup pricing" description="Publish the separate one-time setup price used for each purchased Branch setup obligation." />
-          <div className="workspace-field-grid two"><label>Currency<input maxLength={3} value={setupForm.currency} onChange={(event) => setSetupForm({ ...setupForm, currency: event.target.value.toUpperCase() })} /></label><label>VAT-inclusive setup price<input inputMode="decimal" value={setupForm.gross} onChange={(event) => setSetupForm({ ...setupForm, gross: event.target.value })} /></label></div>
-          <div className="workspace-field-grid two"><label>Underlying tax rate % (optional)<input inputMode="decimal" value={setupForm.taxRate} onChange={(event) => setSetupForm({ ...setupForm, taxRate: event.target.value })} /></label><label>Effective from<input type="datetime-local" value={setupForm.effectiveFrom} onChange={(event) => setSetupForm({ ...setupForm, effectiveFrom: event.target.value })} /></label></div>
-          <label>Change reason<input maxLength={1000} value={setupForm.reason} onChange={(event) => setSetupForm({ ...setupForm, reason: event.target.value })} /></label>
-          <button type="button" className="workspace-button primary" disabled={!canManage || saving !== null} onClick={publishSetupPrice}>{saving === 'setup-price' ? 'Publishing…' : 'Publish Branch setup price'}</button>
+          <PanelHeading title="Standard Branch setup pricing" description="Publish the platform-wide one-time setup price used for each purchased Branch setup obligation." />
+          <fieldset disabled={!canManageGlobalPricing || saving !== null} style={{ border: 0, padding: 0, display: 'contents' }}>
+            <div className="workspace-field-grid two"><label>Currency<input maxLength={3} value={setupForm.currency} onChange={(event) => setSetupForm({ ...setupForm, currency: event.target.value.toUpperCase() })} /></label><label>VAT-inclusive setup price<input inputMode="decimal" value={setupForm.gross} onChange={(event) => setSetupForm({ ...setupForm, gross: event.target.value })} /></label></div>
+            <div className="workspace-field-grid two"><label>Underlying tax rate % (optional)<input inputMode="decimal" value={setupForm.taxRate} onChange={(event) => setSetupForm({ ...setupForm, taxRate: event.target.value })} /></label><label>Effective from<input type="datetime-local" value={setupForm.effectiveFrom} onChange={(event) => setSetupForm({ ...setupForm, effectiveFrom: event.target.value })} /></label></div>
+            <label>Change reason<input maxLength={1000} value={setupForm.reason} onChange={(event) => setSetupForm({ ...setupForm, reason: event.target.value })} /></label>
+            <button type="button" className="workspace-button primary" onClick={() => void publishSetupPrice()}>{saving === 'setup-price' ? 'Publishing…' : 'Publish standard Branch setup price'}</button>
+          </fieldset>
         </section>
       </div>
-      <section className="workspace-panel">
-        <PanelHeading title="Effective price history" description="Published commercial pricing is effective-dated and historical orders remain snapshotted." />
-        <div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Price</th><th>Cycle</th><th>Gross</th><th>Tax</th><th>Effective</th></tr></thead><tbody>{state.prices.map((price) => <tr key={price.id}><td>{price.priceKind === 'branch_setup' ? 'Branch setup' : price.planCode ?? 'Subscription'}</td><td>{price.billingCycle ?? 'One-time'}</td><td>{money(price.grossAmount, price.currency)}</td><td>{price.taxRatePercent === null ? 'Not separately recorded' : `${price.taxRatePercent}%`}</td><td>{formatDate(price.effectiveFrom)}</td></tr>)}{!state.prices.length ? <tr><td colSpan={5}>No governed pricing has been published.</td></tr> : null}</tbody></table></div>
-      </section>
+      <div className="workspace-banner warning">Business-specific pricing changes only the selected Business. It does not change SellerTray's standard price. Publishing an override requires MFA/AAL2, <strong>Pricing management</strong> authority, an effective window and an audit reason. Tax treatment is inherited from the standard price.</div>
+      <div className="workspace-grid two">
+        <section className="workspace-panel workspace-form-stack">
+          <PanelHeading title="Business subscription override" description="Set a temporary negotiated monthly price for this Business; annual remains exactly 10× monthly for 12 months." />
+          <fieldset disabled={!canManageMerchantPricing || saving !== null} style={{ border: 0, padding: 0, display: 'contents' }}>
+            <label>Plan<select value={subscriptionOverride.planCode} onChange={(event) => setSubscriptionOverride({ ...subscriptionOverride, planCode: event.target.value })}>{state.plans.filter((plan) => plan.active).map((plan) => <option key={plan.code} value={plan.code}>{plan.name}</option>)}</select></label>
+            <div className="workspace-field-grid two"><label>Currency<input maxLength={3} value={subscriptionOverride.currency} onChange={(event) => setSubscriptionOverride({ ...subscriptionOverride, currency: event.target.value.toUpperCase() })} /></label><label>Monthly VAT-inclusive override<input inputMode="decimal" value={subscriptionOverride.monthlyGross} onChange={(event) => setSubscriptionOverride({ ...subscriptionOverride, monthlyGross: event.target.value })} /></label></div>
+            <div className="workspace-field-grid two"><label>Effective from<input type="datetime-local" value={subscriptionOverride.effectiveFrom} onChange={(event) => setSubscriptionOverride({ ...subscriptionOverride, effectiveFrom: event.target.value })} /></label><label>Effective until<input type="datetime-local" value={subscriptionOverride.effectiveUntil} onChange={(event) => setSubscriptionOverride({ ...subscriptionOverride, effectiveUntil: event.target.value })} /></label></div>
+            <label>Override reason<input maxLength={1000} value={subscriptionOverride.reason} onChange={(event) => setSubscriptionOverride({ ...subscriptionOverride, reason: event.target.value })} /></label>
+            {positiveNumber(subscriptionOverride.monthlyGross) !== null ? <small>Annual override preview: {money((positiveNumber(subscriptionOverride.monthlyGross) ?? 0) * 10, subscriptionOverride.currency)} for 12 months.</small> : null}
+            <button type="button" className="workspace-button primary" onClick={() => void publishSubscriptionOverride()}>{saving === 'subscription-override' ? 'Publishing…' : 'Publish Business subscription override'}</button>
+          </fieldset>
+        </section>
+        <section className="workspace-panel workspace-form-stack">
+          <PanelHeading title="Business Branch setup override" description="Set a temporary negotiated Branch setup price for this Business only." />
+          <fieldset disabled={!canManageMerchantPricing || saving !== null} style={{ border: 0, padding: 0, display: 'contents' }}>
+            <div className="workspace-field-grid two"><label>Currency<input maxLength={3} value={setupOverride.currency} onChange={(event) => setSetupOverride({ ...setupOverride, currency: event.target.value.toUpperCase() })} /></label><label>VAT-inclusive setup override<input inputMode="decimal" value={setupOverride.gross} onChange={(event) => setSetupOverride({ ...setupOverride, gross: event.target.value })} /></label></div>
+            <div className="workspace-field-grid two"><label>Effective from<input type="datetime-local" value={setupOverride.effectiveFrom} onChange={(event) => setSetupOverride({ ...setupOverride, effectiveFrom: event.target.value })} /></label><label>Effective until<input type="datetime-local" value={setupOverride.effectiveUntil} onChange={(event) => setSetupOverride({ ...setupOverride, effectiveUntil: event.target.value })} /></label></div>
+            <label>Override reason<input maxLength={1000} value={setupOverride.reason} onChange={(event) => setSetupOverride({ ...setupOverride, reason: event.target.value })} /></label>
+            <button type="button" className="workspace-button primary" onClick={() => void publishSetupOverride()}>{saving === 'setup-override' ? 'Publishing…' : 'Publish Business setup override'}</button>
+          </fieldset>
+        </section>
+      </div>
     </> : null}
   </WorkspaceState>;
 }
 
 export function CommercialOrdersAdministration({ session, actorRole, tenantId }: { session: Session; actorRole: AdminRole; tenantId: string }) {
   const { state, loading, error, message, saving, reload, mutate, setError } = useOnboardingWorkspace(session, tenantId);
+  const [tab, setTab] = useState<ListAddTab>('list');
   const [purchase, setPurchase] = useState({ branchIds: [] as string[], structureCode: 'two_installment_70_30', orderReference: '', reason: '' });
   const canManage = actorRole === 'admin' && state?.canManage === true;
 
@@ -109,101 +247,48 @@ export function CommercialOrdersAdministration({ session, actorRole, tenantId }:
     setPurchase((current) => ({ ...current, branchIds: current.branchIds.includes(branchId) ? current.branchIds.filter((id) => id !== branchId) : [...current.branchIds, branchId] }));
   }
 
-  function createInitialPurchase() {
+  async function createInitialPurchase() {
     if (!canManage || !state) return;
     if (!state.eligibleForInitialInstallment) return setError('This Business is not eligible for the initial installment purchase.');
     if (!purchase.branchIds.length) return setError('Select at least one active Branch.');
     if (!purchase.orderReference.trim() || purchase.reason.trim().length < 6) return setError('Enter an order reference and a reason of at least 6 characters.');
     const plan = state.plans.find((row) => row.code === state.planCode) ?? state.plans[0];
-    void mutate('purchase', {
+    const ok = await mutate('purchase', {
       action: 'admin_create_initial_purchase', tenantId,
       planCode: plan?.code ?? state.planCode ?? 'business', currency: plan?.currency ?? 'NGN',
       branchIds: purchase.branchIds, structureCode: purchase.structureCode,
       orderReference: purchase.orderReference, reason: purchase.reason,
-    }, 'Initial annual installment purchase created from governed prices.').then(() => setPurchase((current) => ({ ...current, orderReference: '', reason: '' })));
+    }, 'Initial annual installment purchase created from governed prices.');
+    if (ok) {
+      setPurchase((current) => ({ ...current, orderReference: '', reason: '' }));
+      setTab('list');
+    }
   }
 
+  const plan = state?.plans.find((row) => row.code === state.planCode) ?? state?.plans[0];
+  const previewCurrency = plan?.currency ?? 'NGN';
+  const subscriptionPrice = state && plan ? findProjectedPrice(state.effectivePrices, 'subscription', plan.code, 'yearly', previewCurrency) : null;
+  const setupPrice = state ? findProjectedPrice(state.effectivePrices, 'branch_setup', null, null, previewCurrency) : null;
+  const purchasePreview = subscriptionPrice && setupPrice ? subscriptionPrice.grossAmount + (setupPrice.grossAmount * purchase.branchIds.length) : null;
+
   return <WorkspaceState loading={loading} error={error} message={message} onReload={reload}>
+    <WorkspaceTabs value={tab} onChange={setTab} tabs={[["list", "List View"], ["add", "Add New"]]} label="Commercial order views" />
     {!canManage ? <div className="workspace-banner info">Platform Support can review commercial orders. New purchase creation remains restricted to authorised Platform Admin authority.</div> : null}
-    {state ? <>
-      <section className="workspace-panel workspace-form-stack">
-        <PanelHeading title="Create initial commercial order" description="Create one immutable annual purchase from governed prices and the selected active Branch setup obligations." />
-        {!state.eligibleForInitialInstallment ? <div className="workspace-banner warning">This Business is not currently eligible for the initial installment purchase flow.</div> : null}
+    {state && tab === 'list' ? <section className="workspace-panel">
+      <PanelHeading title="Commercial orders" description="Immutable order value remains separate from later discounts, direct payments and provider confirmations." />
+      <div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Reference</th><th>Ordered</th><th>Total</th><th>Installment structure</th><th>Obligation</th></tr></thead><tbody>{state.orders.map((order) => <OrderRow key={order.id} order={order} />)}{!state.orders.length ? <tr><td colSpan={5}>No commercial orders have been created for this Business.</td></tr> : null}</tbody></table></div>
+    </section> : null}
+    {state && tab === 'add' ? <section className="workspace-panel workspace-form-stack">
+      <PanelHeading title="Create initial commercial order" description="Create one immutable annual purchase from the effective governed prices for this Business and the selected active Branch setup obligations." />
+      {!state.eligibleForInitialInstallment ? <div className="workspace-banner warning">This Business is not currently eligible for the initial installment purchase flow.</div> : null}
+      {purchasePreview !== null ? <div className="workspace-banner info">Current governed purchase preview: <strong>{money(purchasePreview, previewCurrency)}</strong>. Subscription source: {subscriptionPrice?.priceScope === 'merchant_override' ? 'Business override' : 'standard'}; Branch setup source: {setupPrice?.priceScope === 'merchant_override' ? 'Business override' : 'standard'}.</div> : <div className="workspace-banner warning">A complete effective subscription + Branch setup price could not be resolved for this Business.</div>}
+      <fieldset disabled={!canManage || saving !== null || !state.eligibleForInitialInstallment || purchasePreview === null} style={{ border: 0, padding: 0, display: 'contents' }}>
         <div><strong>Branches</strong><div className="workspace-filter-row" style={{ marginTop: 8 }}>{state.branches.filter((branch) => branch.active).map((branch) => <label key={branch.id} className="workspace-check-pill"><input type="checkbox" checked={purchase.branchIds.includes(branch.id)} onChange={() => toggleBranch(branch.id)} />{branch.name}</label>)}</div></div>
         <div className="workspace-field-grid two"><label>Installment structure<select value={purchase.structureCode} onChange={(event) => setPurchase({ ...purchase, structureCode: event.target.value })}><option value="two_installment_70_30">70% + 30%</option><option value="three_installment_60_20_20">60% + 20% + 20%</option></select></label><label>Commercial order reference<input maxLength={128} value={purchase.orderReference} onChange={(event) => setPurchase({ ...purchase, orderReference: event.target.value })} placeholder="e.g. ST-2026-0001" /></label></div>
         <label>Creation reason<input maxLength={1000} value={purchase.reason} onChange={(event) => setPurchase({ ...purchase, reason: event.target.value })} /></label>
-        <button type="button" className="workspace-button primary" disabled={!canManage || saving !== null || !state.eligibleForInitialInstallment} onClick={createInitialPurchase}>{saving === 'purchase' ? 'Creating…' : 'Create governed purchase'}</button>
-      </section>
-      <section className="workspace-panel">
-        <PanelHeading title="Commercial orders" description="Immutable order value remains separate from later discounts, direct payments and provider confirmations." />
-        <div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Reference</th><th>Ordered</th><th>Total</th><th>Installment structure</th><th>Obligation</th></tr></thead><tbody>{state.orders.map((order) => <OrderRow key={order.id} order={order} />)}{!state.orders.length ? <tr><td colSpan={5}>No commercial orders have been created for this Business.</td></tr> : null}</tbody></table></div>
-      </section>
-    </> : null}
-  </WorkspaceState>;
-}
-
-export function CommercialAgreementAdministration({ session, actorRole, tenantId }: { session: Session; actorRole: AdminRole; tenantId: string }) {
-  const { state, loading, error, message, saving, reload, mutate, setError } = useOnboardingWorkspace(session, tenantId);
-  const [template, setTemplate] = useState({ family: 'installment_agreement', versionCode: '', title: '', contentBody: '', effectiveFrom: nowLocal(), reason: '' });
-  const [agreement, setAgreement] = useState({ commercialOrderId: '', templateVersionId: '', reference: '', renderedContent: '', reason: '' });
-  const canManage = actorRole === 'admin' && state?.canManage === true;
-  const selectedOrder = state?.orders.find((row) => row.id === agreement.commercialOrderId) ?? null;
-
-  useEffect(() => {
-    if (!state) return;
-    setAgreement((current) => ({
-      ...current,
-      commercialOrderId: state.orders.some((row) => row.id === current.commercialOrderId) ? current.commercialOrderId : state.orders[0]?.id ?? '',
-      templateVersionId: state.templates.some((row) => row.id === current.templateVersionId) ? current.templateVersionId : state.templates[0]?.id ?? '',
-    }));
-  }, [state?.orders, state?.templates]);
-
-  function publishTemplate() {
-    if (!canManage) return;
-    const effectiveFrom = isoFromLocal(template.effectiveFrom);
-    if (!template.versionCode.trim() || !template.title.trim() || !template.contentBody.trim()) return setError('Agreement version, title and content are required.');
-    if (!effectiveFrom || template.reason.trim().length < 6) return setError('Enter a valid effective time and a reason of at least 6 characters.');
-    void mutate('template', {
-      action: 'admin_publish_template', family: template.family, versionCode: template.versionCode,
-      title: template.title, contentBody: template.contentBody, effectiveFrom, reason: template.reason,
-    }, 'Governed agreement template published.').then(() => setTemplate((current) => ({ ...current, versionCode: '', title: '', contentBody: '', reason: '' })));
-  }
-
-  function issueAgreement() {
-    if (!canManage || !selectedOrder) return;
-    if (!agreement.templateVersionId || !agreement.reference.trim() || !agreement.renderedContent.trim()) return setError('Select an order and template, then enter agreement reference and rendered agreement content.');
-    if (agreement.reason.trim().length < 6) return setError('Enter an issuance reason of at least 6 characters.');
-    void mutate('agreement', {
-      action: 'admin_issue', tenantId,
-      commercialOrderId: selectedOrder.id, installmentObligationId: selectedOrder.installmentObligationId,
-      templateVersionId: agreement.templateVersionId, reference: agreement.reference,
-      supersedesAgreementId: null, renderedContent: agreement.renderedContent, reason: agreement.reason,
-    }, 'Merchant agreement issued from governed commercial facts.').then(() => setAgreement((current) => ({ ...current, reference: '', renderedContent: '', reason: '' })));
-  }
-
-  return <WorkspaceState loading={loading} error={error} message={message} onReload={reload}>
-    {!canManage ? <div className="workspace-banner info">Platform Support can review agreement authority and acceptance history. Publishing and issuance remain restricted.</div> : null}
-    {state ? <div className="workspace-grid two">
-      <section className="workspace-panel workspace-form-stack">
-        <PanelHeading title="Agreement templates" description="Publish immutable legal text. Existing accepted agreements are never rewritten." />
-        <label>Agreement family<select value={template.family} onChange={(event) => setTemplate({ ...template, family: event.target.value })}>{AGREEMENT_FAMILIES.map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></label>
-        <div className="workspace-field-grid two"><label>Version<input maxLength={64} value={template.versionCode} onChange={(event) => setTemplate({ ...template, versionCode: event.target.value })} /></label><label>Effective from<input type="datetime-local" value={template.effectiveFrom} onChange={(event) => setTemplate({ ...template, effectiveFrom: event.target.value })} /></label></div>
-        <label>Title<input maxLength={200} value={template.title} onChange={(event) => setTemplate({ ...template, title: event.target.value })} /></label>
-        <label>Template content<textarea rows={6} maxLength={200000} value={template.contentBody} onChange={(event) => setTemplate({ ...template, contentBody: event.target.value })} /></label>
-        <label>Publication reason<input maxLength={1000} value={template.reason} onChange={(event) => setTemplate({ ...template, reason: event.target.value })} /></label>
-        <button type="button" className="workspace-button primary" disabled={!canManage || saving !== null} onClick={publishTemplate}>{saving === 'template' ? 'Publishing…' : 'Publish agreement template'}</button>
-      </section>
-      <section className="workspace-panel workspace-form-stack">
-        <PanelHeading title="Issue merchant agreement" description="Issue against the exact immutable commercial order. Merchant acceptance remains a separate fact." />
-        <label>Commercial order<select value={agreement.commercialOrderId} onChange={(event) => setAgreement({ ...agreement, commercialOrderId: event.target.value })}><option value="">Select order</option>{state.orders.map((order) => <option key={order.id} value={order.id}>{order.reference} · {money(order.totalGrossAmount, order.currency)}</option>)}</select></label>
-        <label>Template<select value={agreement.templateVersionId} onChange={(event) => setAgreement({ ...agreement, templateVersionId: event.target.value })}><option value="">Select template</option>{state.templates.map((row) => <option key={row.id} value={row.id}>{row.title} · {row.versionCode}</option>)}</select></label>
-        <label>Agreement reference<input maxLength={128} value={agreement.reference} onChange={(event) => setAgreement({ ...agreement, reference: event.target.value })} /></label>
-        <label>Rendered agreement content<textarea rows={8} maxLength={300000} value={agreement.renderedContent} onChange={(event) => setAgreement({ ...agreement, renderedContent: event.target.value })} /></label>
-        <label>Issuance reason<input maxLength={1000} value={agreement.reason} onChange={(event) => setAgreement({ ...agreement, reason: event.target.value })} /></label>
-        <button type="button" className="workspace-button primary" disabled={!canManage || saving !== null || !selectedOrder || !agreement.templateVersionId} onClick={issueAgreement}>{saving === 'agreement' ? 'Issuing…' : 'Issue merchant agreement'}</button>
-      </section>
-    </div> : null}
-    <AgreementLifecycleManagement session={session} tenantId={tenantId} />
+        <button type="button" className="workspace-button primary" onClick={() => void createInitialPurchase()}>{saving === 'purchase' ? 'Creating…' : 'Create governed purchase'}</button>
+      </fieldset>
+    </section> : null}
   </WorkspaceState>;
 }
 
@@ -258,14 +343,22 @@ function useOnboardingWorkspace(session: Session, tenantId: string) {
   useEffect(() => { void reload(); }, [tenantId, session.access_token]);
 
   async function mutate(key: string, payload: Record<string, unknown>, success: string) {
-    if (saving) return;
+    if (saving) return false;
     setSaving(key); setError(null); setMessage(null);
-    try { await invokeCommercialAdmin(session, payload); await reload(); setMessage(success); }
-    catch (cause) { setError(messageFrom(cause, 'Unable to complete the governed commercial action.')); }
+    try { await invokeCommercialAdmin(session, payload); await reload(); setMessage(success); return true; }
+    catch (cause) { setError(messageFrom(cause, 'Unable to complete the governed commercial action.')); return false; }
     finally { setSaving(null); }
   }
 
-  return { state, loading, saving, error, message, reload, mutate, setError };
+  async function controlPriceLifecycle(key: string, payload: { priceVersionId: string; action: PriceLifecycleAction; reason: string; commandId: string }, success: string) {
+    if (saving) return false;
+    setSaving(key); setError(null); setMessage(null);
+    try { await invokeCommercialPriceLifecycle(session, payload); await reload(); setMessage(success); return true; }
+    catch (cause) { setError(messageFrom(cause, 'Unable to change the governed price lifecycle state.')); return false; }
+    finally { setSaving(null); }
+  }
+
+  return { state, loading, saving, error, message, reload, mutate, controlPriceLifecycle, setError };
 }
 
 function useOverviewWorkspace(session: Session, tenantId: string) {
@@ -284,7 +377,11 @@ function useOverviewWorkspace(session: Session, tenantId: string) {
   return { state, loading, error, reload };
 }
 
-function WorkspaceState({ loading, error, message, onReload, children }: { loading: boolean; error?: string | null; message?: string | null; onReload: () => Promise<void>; children: React.ReactNode }) {
+function WorkspaceTabs<T extends string>({ value, onChange, tabs, label: ariaLabel }: { value: T; onChange: (value: T) => void; tabs: readonly (readonly [T, string])[]; label: string }) {
+  return <nav className="workspace-panel" aria-label={ariaLabel} style={{ padding: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>{tabs.map(([id, text]) => <button key={id} type="button" className={`workspace-button ${value === id ? 'primary' : 'secondary'}`} aria-current={value === id ? 'page' : undefined} onClick={() => onChange(id)}>{text}</button>)}</nav>;
+}
+
+function WorkspaceState({ loading, error, message, onReload, children }: { loading: boolean; error?: string | null; message?: string | null; onReload: () => Promise<void>; children: ReactNode }) {
   return <div className="workspace-stack">
     {loading ? <div className="workspace-banner info">Loading governed state…</div> : null}
     {error ? <div className="workspace-banner error">{error} <button type="button" className="workspace-button text compact" onClick={() => void onReload()}>Retry</button></div> : null}
@@ -298,14 +395,25 @@ function Detail({ label: text, value }: { label: string; value: string }) { retu
 function Empty({ title, body }: { title: string; body: string }) { return <div className="workspace-empty"><strong>{title}</strong><p>{body}</p></div>; }
 function OrderRow({ order }: { order: OnboardingOrder }) { return <tr><td><strong>{order.reference || shortId(order.id)}</strong><small>{shortId(order.id)}</small></td><td>{formatDate(order.orderedAt)}</td><td>{money(order.totalGrossAmount, order.currency)}</td><td>{order.structureCode ? structureLabel(order.structureCode) : 'Not installment-linked'}</td><td>{order.installmentObligationId ? shortId(order.installmentObligationId) : '—'}</td></tr>; }
 function ReadinessRow({ row }: { row: BranchSetupState }) { return <tr><td><strong>{row.branchName}</strong><small>{row.branchCode}</small></td><td>{shortId(row.commercialOrderId)}</td><td>{row.description}</td><td>{money(row.grossAmount, row.currency)}</td><td><span className={`workspace-status ${row.ready ? 'success' : 'attention'}`}>{row.ready ? 'Ready' : 'Pending'}</span></td><td>{row.readyAt ? formatDate(row.readyAt) : '—'}</td></tr>; }
-function readinessKey(row: BranchSetupState) { return `${row.commercialOrderId}:${row.branchId}:${row.lineNo}`; }
-function positiveNumber(value: string): number | null { const result = Number(value); return Number.isFinite(result) && result > 0 ? Math.round(result * 100) / 100 : null; }
-function optionalPercent(value: string): number | null | undefined { if (!value.trim()) return null; const result = Number(value); return Number.isFinite(result) && result >= 0 && result <= 100 ? result : undefined; }
-function nowLocal() { const date = new Date(Date.now() - new Date().getTimezoneOffset() * 60000); return date.toISOString().slice(0, 16); }
+function readinessKey(row: BranchSetupState) { return `${row.commercialOrderId}:${row.lineNo}:${row.branchId}`; }
+function findProjectedPrice(prices: OnboardingPrice[], kind: OnboardingPrice['priceKind'], planCode: string | null, billingCycle: OnboardingPrice['billingCycle'], currency: string): OnboardingPrice | null {
+  return prices.find((price) => price.priceKind === kind && price.planCode === planCode && price.billingCycle === billingCycle && price.currency === currency) ?? null;
+}
+function priceLifecycleActions(price: OnboardingPrice): PriceLifecycleAction[] {
+  if (price.priceKind === 'subscription' && price.billingCycle === 'yearly') return [];
+  const future = new Date(price.effectiveFrom).getTime() > Date.now();
+  if (price.lifecycleState === 'active') return future ? ['pause', 'deactivate', 'void'] : ['pause', 'deactivate'];
+  if (price.lifecycleState === 'paused') return future ? ['resume', 'deactivate', 'void'] : ['resume', 'deactivate'];
+  return [];
+}
+function positiveNumber(value: string): number | null { const parsed = Number(value); return Number.isFinite(parsed) && parsed > 0 ? Math.round((parsed + Number.EPSILON) * 100) / 100 : null; }
+function optionalPercent(value: string): number | null | undefined { if (!value.trim()) return null; const parsed = Number(value); return Number.isFinite(parsed) && parsed >= 0 && parsed <= 100 ? parsed : undefined; }
 function isoFromLocal(value: string): string | null { const date = new Date(value); return Number.isNaN(date.getTime()) ? null : date.toISOString(); }
-function money(value: number, currency: string) { try { return new Intl.NumberFormat('en-NG', { style: 'currency', currency: currency || 'NGN', maximumFractionDigits: 2 }).format(value); } catch { return `${currency} ${value.toFixed(2)}`; } }
-function formatDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(date); }
+function nowLocal() { const date = new Date(Date.now() - new Date().getTimezoneOffset() * 60_000); return date.toISOString().slice(0, 16); }
+function tomorrowLocal() { const date = new Date(Date.now() + 24 * 60 * 60 * 1000 - new Date().getTimezoneOffset() * 60_000); return date.toISOString().slice(0, 16); }
+function money(value: number, currency: string) { try { return new Intl.NumberFormat('en-NG', { style: 'currency', currency: currency || 'NGN' }).format(value); } catch { return `${currency || 'NGN'} ${value.toLocaleString()}`; } }
+function formatDate(value: string) { if (!value) return '—'; const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(date); }
 function structureLabel(value: string) { return value === 'two_installment_70_30' ? '70% + 30%' : value === 'three_installment_60_20_20' ? '60% + 20% + 20%' : label(value); }
-function label(value: string) { return value.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()); }
+function label(value: string) { return value ? value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()) : '—'; }
 function shortId(value: string) { return value ? `${value.slice(0, 8)}…` : '—'; }
 function messageFrom(value: unknown, fallback: string) { return value instanceof Error && value.message ? value.message : fallback; }

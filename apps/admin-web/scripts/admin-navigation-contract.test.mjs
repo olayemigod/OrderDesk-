@@ -7,6 +7,7 @@ const selector = readFileSync(new URL('../src/MerchantSelector.tsx', import.meta
 const commercial = readFileSync(new URL('../src/CommercialAdminWorkspaces.tsx', import.meta.url), 'utf8');
 const communications = readFileSync(new URL('../src/AdminCommunicationsWorkspaces.tsx', import.meta.url), 'utf8');
 const operations = readFileSync(new URL('../src/AdminOperationsWorkspaces.tsx', import.meta.url), 'utf8');
+const paymentReadiness = readFileSync(new URL('../../../supabase/functions/platform-payment-readiness/index.ts', import.meta.url), 'utf8');
 const revenue = readFileSync(new URL('../src/RevenueDashboard.tsx', import.meta.url), 'utf8');
 const setup = readFileSync(new URL('../src/SetupSchedulingAdministration.tsx', import.meta.url), 'utf8');
 const entry = readFileSync(new URL('../src/main.tsx', import.meta.url), 'utf8');
@@ -47,17 +48,32 @@ test('Commercial and onboarding jobs have focused first-class destinations', () 
 });
 
 test('Communications and platform operations are split into task-specific destinations', () => {
-  for (const route of ['communications/compose', 'communications/history', 'operations/whatsapp', 'operations/ai']) {
+  for (const route of ['communications/compose', 'communications/history', 'operations/whatsapp', 'operations/ai', 'operations/payments']) {
     assert.match(workspace, new RegExp(route.replace('/', '\\/')));
   }
   assert.match(workspace, /MerchantMessageComposer/);
   assert.match(workspace, /CampaignHistory/);
   assert.match(workspace, /WhatsAppOperations/);
   assert.match(workspace, /AiOperations/);
+  assert.match(workspace, /PaymentInfrastructure/);
   assert.match(communications, /platform-merchant-message/);
   assert.match(communications, /merchant_message_published/);
   assert.match(operations, /operations_summary/);
   assert.match(operations, /ai_parser_probe/);
+});
+
+test('Payment Infrastructure is read-only, AAL2-bound and never exposes raw platform secrets', () => {
+  assert.match(workspace, /label: 'Payment Infrastructure'/);
+  assert.match(workspace, /ProcessEdge collection readiness/);
+  assert.match(paymentReadiness, /identity\.aal !== 'aal2'/);
+  assert.match(paymentReadiness, /platform_admin_bootstrap/);
+  assert.match(paymentReadiness, /PAYSTACK_SECRET_KEY/);
+  assert.match(paymentReadiness, /BILLING_AUTH_ENCRYPTION_KEY/);
+  assert.match(paymentReadiness, /readyForLiveCheckout/);
+  assert.doesNotMatch(paymentReadiness, /paystackSecret[^\n]*return json/);
+  assert.doesNotMatch(operations, /PAYSTACK_SECRET_KEY\s*=/);
+  assert.doesNotMatch(operations, /BILLING_AUTH_ENCRYPTION_KEY\s*=/);
+  assert.match(operations, /never displayed or stored by Admin Web/i);
 });
 
 test('Revenue Dashboard is a governed first-class Insights & Reports destination', () => {
@@ -102,10 +118,11 @@ test('Canonical Admin entrypoint is wired and retired shells stay retired', () =
   assert.match(governance, /Commercial Orders/);
   assert.match(governance, /Plans & Pricing/);
   assert.match(governance, /must not expose the legacy generic `Record ready` shortcut/);
+  assert.match(governance, /Payment Infrastructure/);
 });
 
 test('Legacy hashes remain recoverable after navigation convergence', () => {
-  for (const legacy of ['overview', 'merchants', 'billing', 'commercial/core', 'communications', 'communications/messages', 'operations', 'operations/health', 'revenue', 'reports', 'audit', 'settings']) {
+  for (const legacy of ['overview', 'merchants', 'billing', 'commercial/core', 'communications', 'communications/messages', 'operations', 'operations/health', 'payment-infrastructure', 'revenue', 'reports', 'audit', 'settings']) {
     assert.match(workspace, new RegExp(`['\"]?${legacy.replace('/', '\\/')}['\"]?:`));
   }
 });
