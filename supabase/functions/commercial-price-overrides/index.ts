@@ -23,6 +23,8 @@ Deno.serve(async (request) => {
   const authorization = request.headers.get('authorization') ?? '';
   const token = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
   if (!token) return json({ error: 'Authentication required' }, 401);
+  if (jwtAal(token) !== 'aal2') return json({ error: 'MFA/AAL2 required for Business-specific commercial pricing' }, 403);
+
   const { data: authData, error: authError } = await admin.auth.getUser(token);
   const actorUserId = authData.user?.id ?? null;
   if (authError || !actorUserId) return json({ error: 'Authentication required' }, 401);
@@ -125,8 +127,17 @@ function cleanIsoTimestamp(value: unknown): string | null {
   const parsed = Date.parse(clean);
   return clean && Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
 }
+function jwtAal(token: string): string | null {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return null;
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(payload.length / 4) * 4, '=');
+    const decoded = JSON.parse(atob(base64)) as JsonRecord;
+    return typeof decoded.aal === 'string' ? decoded.aal : null;
+  } catch { return null; }
+}
 function statusForError(message: string): number {
-  if (/access|required|authori[sz]ed|capability|platform admin|read-only/i.test(message)) return 403;
+  if (/access|required|authori[sz]ed|capability|platform admin|read-only|mfa|aal2/i.test(message)) return 403;
   if (/not found/i.test(message)) return 404;
   if (/already|conflict/i.test(message)) return 409;
   return 400;
