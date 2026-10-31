@@ -1,0 +1,39 @@
+/* SellerTray Admin single-context convergence.
+ * Merchant/Business context is owned by the shell top bar. Focused task pages
+ * must not render a second scope banner for the same selected Business.
+ */
+
+.workspace-content > .admin-context-strip {
+  display: none !important;
+}
+
+.admin-scope-required {
+  width: min(100%, 760px);
+  margin: 4px 0 0;
+  padding: 20px !important;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+}
+
+.admin-scope-required h2 {
+  margin: 4px 0 6px;
+}
+
+.admin-scope-required .workspace-button {
+  width: auto;
+  min-width: 150px;
+}
+
+@media (max-width: 820px) {
+  .admin-scope-required {
+    width: 100%;
+    grid-template-columns: 1fr;
+    padding: 16px !important;
+  }
+
+  .admin-scope-required .workspace-button {
+    width: 100%;
+  }
+}

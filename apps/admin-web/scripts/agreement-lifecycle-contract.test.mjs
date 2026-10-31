@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 const read = (path) => readFileSync(resolve(import.meta.dirname, '../..', path), 'utf8');
+const workspace = read('admin-web/src/AdminWorkspace.tsx');
 const selector = read('admin-web/src/MerchantSelector.tsx');
 const commercial = read('admin-web/src/CommercialAdminWorkspaces.tsx');
 const lifecycle = read('admin-web/src/AgreementLifecycleManagement.tsx');
@@ -11,9 +12,12 @@ const masterGateway = read('../supabase/functions/master-agreements/index.ts');
 const masterAuthority = read('../supabase/migrations/20261026060117_universal_master_agreement_authority.sql');
 const pdfOnlyPublication = read('../supabase/migrations/20261030233000_master_agreement_pdf_only_publication.sql');
 
-test('focused Agreements workspace exposes universal governance after explicit merchant scope', () => {
-  assert.match(commercial, /import AgreementLifecycleManagement/);
-  assert.match(commercial, /<AgreementLifecycleManagement session=\{session\} tenantId=\{tenantId\}/);
+test('focused Agreements destination owns universal governance while Merchant selectors stay pure', () => {
+  assert.match(workspace, /import AgreementLifecycleManagement/);
+  assert.match(workspace, /case 'commercial\/agreements'/);
+  assert.match(workspace, /<AgreementLifecycleManagement session=\{session\} tenantId=\{tenantId \?\? ''\}/);
+  assert.doesNotMatch(commercial, /import AgreementLifecycleManagement/);
+  assert.doesNotMatch(commercial, /<AgreementLifecycleManagement/);
   assert.match(selector, /showCommercialPortfolio === true/);
   assert.doesNotMatch(selector, /showCommercialPortfolio \?\? mode === 'single'/);
 });
