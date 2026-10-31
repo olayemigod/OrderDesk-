@@ -8,6 +8,19 @@ const workspace = readFileSync(new URL('../src/AdminWorkspace.tsx', import.meta.
 const boundary = readFileSync(new URL('../ADMIN_VISUAL_REDESIGN_BOUNDARY.md', import.meta.url), 'utf8');
 const governance = readFileSync(new URL('../../../.agents/skills/sellertray-project-implementation/ADMIN_VISUAL_DESIGN.md', import.meta.url), 'utf8');
 
+const redesignedStylesheets = [
+  './styles.css',
+  './brand.css',
+  './admin-workspace.css',
+  './admin-navigation.css',
+  './admin-redesign.css',
+  './admin-workspaces-redesign.css',
+  './admin-responsive-hardening.css',
+  './admin-portfolio-revenue-redesign.css',
+  './admin-workspace-composition-v2.css',
+  './admin-console-v3.css',
+];
+
 test('approved PR149/PR158 Admin presentation remains the active visual baseline', () => {
   assert.match(governance, /PR #149/);
   assert.match(governance, /PR #158/);
@@ -15,9 +28,10 @@ test('approved PR149/PR158 Admin presentation remains the active visual baseline
   assert.match(boundary, /must not restore a pre-redesign shell/i);
 });
 
-test('canonical Admin entrypoint keeps the complete redesigned stylesheet stack', () => {
-  for (const stylesheet of ['./styles.css', './brand.css', './admin-workspace.css', './admin-navigation.css']) {
+test('canonical Admin entrypoint keeps the complete PR149/PR158 redesigned stylesheet stack', () => {
+  for (const stylesheet of redesignedStylesheets) {
     assert.match(entry, new RegExp(`import ['\"]${stylesheet.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['\"]`));
+    readFileSync(new URL(`../src/${stylesheet.slice(2)}`, import.meta.url), 'utf8');
   }
 });
 
