@@ -96,6 +96,7 @@ export type CommercialOnboarding = {
   plans: OnboardingPlan[];
   branches: OnboardingBranch[];
   prices: OnboardingPrice[];
+  effectivePrices: OnboardingPrice[];
   orders: OnboardingOrder[];
   templates: OnboardingTemplate[];
   agreements: OnboardingAgreement[];
@@ -199,30 +200,8 @@ function parseOnboarding(value: unknown): CommercialOnboarding {
       const row = record(value);
       return { id: stringValue(row.id), code: stringValue(row.code), name: stringValue(row.name, 'Branch'), active: row.active === true, isDefault: row.isDefault === true };
     }).filter((row) => row.id),
-    prices: array(root.prices).map((value) => {
-      const row = record(value);
-      const lifecycleState: PriceLifecycleState = row.lifecycleState === 'paused' || row.lifecycleState === 'deactivated' || row.lifecycleState === 'voided' ? row.lifecycleState : 'active';
-      const latestControlAction: PriceLifecycleAction | null = row.latestControlAction === 'pause' || row.latestControlAction === 'resume' || row.latestControlAction === 'deactivate' || row.latestControlAction === 'void' ? row.latestControlAction : null;
-      return {
-        id: stringValue(row.id),
-        priceKind: row.priceKind === 'branch_setup' ? 'branch_setup' : 'subscription',
-        planCode: nullableString(row.planCode),
-        billingCycle: row.billingCycle === 'monthly' || row.billingCycle === 'yearly' ? row.billingCycle : null,
-        currency: stringValue(row.currency, 'NGN'),
-        grossAmount: numberValue(row.grossAmount),
-        taxRatePercent: nullableNumber(row.taxRatePercent),
-        effectiveFrom: stringValue(row.effectiveFrom),
-        effectiveUntil: nullableString(row.effectiveUntil),
-        changeReason: nullableString(row.changeReason),
-        priceScope: row.priceScope === 'merchant_override' ? 'merchant_override' : 'standard',
-        tenantId: nullableString(row.tenantId),
-        sourceStandardPriceVersionId: nullableString(row.sourceStandardPriceVersionId),
-        lifecycleState,
-        latestControlAction,
-        latestControlAt: nullableString(row.latestControlAt),
-        latestControlReason: nullableString(row.latestControlReason),
-      } as OnboardingPrice;
-    }).filter((row) => row.id),
+    prices: parsePrices(root.prices),
+    effectivePrices: parsePrices(root.effectivePrices),
     orders: array(root.orders).map((value) => {
       const row = record(value);
       return {
@@ -244,6 +223,33 @@ function parseOnboarding(value: unknown): CommercialOnboarding {
       return { id: stringValue(row.id), commercialOrderId: stringValue(row.commercialOrderId), reference: stringValue(row.reference), accepted: row.accepted === true };
     }).filter((row) => row.id),
   };
+}
+
+function parsePrices(value: unknown): OnboardingPrice[] {
+  return array(value).map((value) => {
+    const row = record(value);
+    const lifecycleState: PriceLifecycleState = row.lifecycleState === 'paused' || row.lifecycleState === 'deactivated' || row.lifecycleState === 'voided' ? row.lifecycleState : 'active';
+    const latestControlAction: PriceLifecycleAction | null = row.latestControlAction === 'pause' || row.latestControlAction === 'resume' || row.latestControlAction === 'deactivate' || row.latestControlAction === 'void' ? row.latestControlAction : null;
+    return {
+      id: stringValue(row.id),
+      priceKind: row.priceKind === 'branch_setup' ? 'branch_setup' : 'subscription',
+      planCode: nullableString(row.planCode),
+      billingCycle: row.billingCycle === 'monthly' || row.billingCycle === 'yearly' ? row.billingCycle : null,
+      currency: stringValue(row.currency, 'NGN'),
+      grossAmount: numberValue(row.grossAmount),
+      taxRatePercent: nullableNumber(row.taxRatePercent),
+      effectiveFrom: stringValue(row.effectiveFrom),
+      effectiveUntil: nullableString(row.effectiveUntil),
+      changeReason: nullableString(row.changeReason),
+      priceScope: row.priceScope === 'merchant_override' ? 'merchant_override' : 'standard',
+      tenantId: nullableString(row.tenantId),
+      sourceStandardPriceVersionId: nullableString(row.sourceStandardPriceVersionId),
+      lifecycleState,
+      latestControlAction,
+      latestControlAt: nullableString(row.latestControlAt),
+      latestControlReason: nullableString(row.latestControlReason),
+    } as OnboardingPrice;
+  }).filter((row) => row.id);
 }
 
 function record(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}; }

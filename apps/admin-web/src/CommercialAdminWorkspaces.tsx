@@ -253,8 +253,8 @@ export function CommercialOrdersAdministration({ session, actorRole, tenantId }:
 
   const plan = state?.plans.find((row) => row.code === state.planCode) ?? state?.plans[0];
   const previewCurrency = plan?.currency ?? 'NGN';
-  const subscriptionPrice = state && plan ? resolveEffectivePrice(state.prices, 'subscription', plan.code, 'yearly', previewCurrency) : null;
-  const setupPrice = state ? resolveEffectivePrice(state.prices, 'branch_setup', null, null, previewCurrency) : null;
+  const subscriptionPrice = state && plan ? findProjectedPrice(state.effectivePrices, 'subscription', plan.code, 'yearly', previewCurrency) : null;
+  const setupPrice = state ? findProjectedPrice(state.effectivePrices, 'branch_setup', null, null, previewCurrency) : null;
   const purchasePreview = subscriptionPrice && setupPrice ? subscriptionPrice.grossAmount + (setupPrice.grossAmount * purchase.branchIds.length) : null;
 
   return <WorkspaceState loading={loading} error={error} message={message} onReload={reload}>
@@ -382,11 +382,8 @@ function Empty({ title, body }: { title: string; body: string }) { return <div c
 function OrderRow({ order }: { order: OnboardingOrder }) { return <tr><td><strong>{order.reference || shortId(order.id)}</strong><small>{shortId(order.id)}</small></td><td>{formatDate(order.orderedAt)}</td><td>{money(order.totalGrossAmount, order.currency)}</td><td>{order.structureCode ? structureLabel(order.structureCode) : 'Not installment-linked'}</td><td>{order.installmentObligationId ? shortId(order.installmentObligationId) : '—'}</td></tr>; }
 function ReadinessRow({ row }: { row: BranchSetupState }) { return <tr><td><strong>{row.branchName}</strong><small>{row.branchCode}</small></td><td>{shortId(row.commercialOrderId)}</td><td>{row.description}</td><td>{money(row.grossAmount, row.currency)}</td><td><span className={`workspace-status ${row.ready ? 'success' : 'attention'}`}>{row.ready ? 'Ready' : 'Pending'}</span></td><td>{row.readyAt ? formatDate(row.readyAt) : '—'}</td></tr>; }
 function readinessKey(row: BranchSetupState) { return `${row.commercialOrderId}:${row.lineNo}:${row.branchId}`; }
-function resolveEffectivePrice(prices: OnboardingPrice[], kind: OnboardingPrice['priceKind'], planCode: string | null, billingCycle: OnboardingPrice['billingCycle'], currency: string): OnboardingPrice | null {
-  const now = Date.now();
-  return prices
-    .filter((price) => price.lifecycleState === 'active' && price.priceKind === kind && price.planCode === planCode && price.billingCycle === billingCycle && price.currency === currency && new Date(price.effectiveFrom).getTime() <= now && (!price.effectiveUntil || new Date(price.effectiveUntil).getTime() > now))
-    .sort((a, b) => (a.priceScope === b.priceScope ? new Date(b.effectiveFrom).getTime() - new Date(a.effectiveFrom).getTime() : a.priceScope === 'merchant_override' ? -1 : 1))[0] ?? null;
+function findProjectedPrice(prices: OnboardingPrice[], kind: OnboardingPrice['priceKind'], planCode: string | null, billingCycle: OnboardingPrice['billingCycle'], currency: string): OnboardingPrice | null {
+  return prices.find((price) => price.priceKind === kind && price.planCode === planCode && price.billingCycle === billingCycle && price.currency === currency) ?? null;
 }
 function priceLifecycleActions(price: OnboardingPrice): PriceLifecycleAction[] {
   if (price.priceKind === 'subscription' && price.billingCycle === 'yearly') return [];
