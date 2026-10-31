@@ -29,6 +29,12 @@ export function CommercialPricingAdministration({ session, tenantId }: { session
   const canManageMerchantPricing = state?.canManageMerchantPricing === true;
 
   useEffect(() => {
+    setPriceControl(null);
+    setSubscriptionOverride((current) => ({ ...current, monthlyGross: '', effectiveFrom: nowLocal(), effectiveUntil: tomorrowLocal(), reason: '' }));
+    setSetupOverride((current) => ({ ...current, gross: '', effectiveFrom: nowLocal(), effectiveUntil: tomorrowLocal(), reason: '' }));
+  }, [tenantId]);
+
+  useEffect(() => {
     if (!state?.plans[0]) return;
     const fallback = state.plans[0];
     if (!state.plans.some((plan) => plan.code === subscriptionForm.planCode)) {
@@ -116,11 +122,19 @@ export function CommercialPricingAdministration({ session, tenantId }: { session
   function beginPriceControl(price: OnboardingPrice, action: PriceLifecycleAction) {
     const canManage = price.priceScope === 'standard' ? canManageGlobalPricing : canManageMerchantPricing;
     if (!canManage) return setError('Your current ProcessEdge authority cannot control this price version.');
+    if (price.priceScope === 'merchant_override' && price.tenantId !== tenantId) {
+      return setError('This Business-specific price does not belong to the selected Business. Reload pricing before continuing.');
+    }
     setPriceControl({ price, action, reason: '', commandId: crypto.randomUUID() });
   }
 
   async function submitPriceControl() {
     if (!priceControl) return;
+    const selectedPrice = state?.prices.find((price) => price.id === priceControl.price.id) ?? null;
+    if (!selectedPrice || (selectedPrice.priceScope === 'merchant_override' && selectedPrice.tenantId !== tenantId)) {
+      setPriceControl(null);
+      return setError('Business context changed. Select the price again for the current Business.');
+    }
     const reason = priceControl.reason.trim();
     if (reason.length < 6) return setError('Enter a lifecycle-control reason of at least 6 characters.');
     const ok = await controlPriceLifecycle(
