@@ -115,7 +115,11 @@ export async function loadCommercialOnboarding(session: Session, tenantId: strin
 }
 
 export async function invokeCommercialAdmin(session: Session, payload: Record<string, unknown>): Promise<AdminResponse> {
-  return await invokeJson<AdminResponse>('commercial-agreements', payload, session);
+  const action = typeof payload.action === 'string' ? payload.action : '';
+  const endpoint = action === 'admin_publish_subscription_override' || action === 'admin_publish_setup_override'
+    ? 'commercial-price-overrides'
+    : 'commercial-agreements';
+  return await invokeJson<AdminResponse>(endpoint, payload, session);
 }
 
 export async function invokeCommercialPriceLifecycle(session: Session, payload: {
