@@ -16,3 +16,9 @@ test('narrow Admin tables preserve semantic column headers instead of ambiguous 
   assert.match(convergence, /\.workspace-table tr \{[\s\S]*display: table-row !important/);
   assert.match(convergence, /\.workspace-table tbody td \{[\s\S]*display: table-cell !important/);
 });
+
+test('settlement order rows do not inherit the Merchant-selector checkbox column on narrow screens', () => {
+  assert.match(convergence, /\.workspace-tenant-row:not\(:has\(\.workspace-tenant-check\)\) \{\s*grid-template-columns: minmax\(0, 1fr\) auto auto;/);
+  assert.match(convergence, /@media \(max-width: 680px\)[\s\S]*\.workspace-tenant-row:not\(:has\(\.workspace-tenant-check\)\) \{\s*grid-template-columns: minmax\(0, 1fr\) !important;/);
+  assert.match(convergence, /\.workspace-tenant-row:not\(:has\(\.workspace-tenant-check\)\) \.workspace-status-pill \{\s*display: inline-flex !important;\s*justify-self: start;/);
+});
