@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(10);
+select extensions.plan(11);
 
 create temp table oa5_review_fixture(
   actor uuid,
