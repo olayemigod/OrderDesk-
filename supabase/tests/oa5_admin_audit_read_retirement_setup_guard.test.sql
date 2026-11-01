@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(8);
+select extensions.plan(10);
 
 create temp table oa5_review_fixture(
   actor uuid,
@@ -29,7 +29,17 @@ select extensions.lives_ok(
     'select public.platform_admin_audit_explorer(%L::uuid,p_limit=>1)',
     actor
   ),
-  'existing Support audit read remains compatible when no explicit read assignment exists'
+  'existing Support audit explorer read remains compatible when no explicit read assignment exists'
+)
+from oa5_review_fixture;
+
+select extensions.lives_ok(
+  format(
+    'select public.platform_admin_audit_log(%L::uuid,%L::uuid,1)',
+    actor,
+    tenant
+  ),
+  'existing Support legacy audit feed remains compatible when no explicit read assignment exists'
 )
 from oa5_review_fixture;
 
@@ -61,7 +71,19 @@ select extensions.throws_ok(
   ),
   '42501',
   'Audit read capability required',
-  'explicit admin.audit.read denial fails closed server-side'
+  'explicit admin.audit.read denial fails closed in Audit Explorer'
+)
+from oa5_review_fixture;
+
+select extensions.throws_ok(
+  format(
+    'select public.platform_admin_audit_log(%L::uuid,%L::uuid,1)',
+    actor,
+    tenant
+  ),
+  '42501',
+  'Audit read capability required',
+  'explicit admin.audit.read denial fails closed in legacy audit feed'
 )
 from oa5_review_fixture;
 
@@ -75,6 +97,18 @@ select extensions.ok(
     )
   )>0,
   'audit explorer contains the governed read capability gate'
+);
+
+select extensions.ok(
+  position(
+    'admin.audit.read'
+    in lower(
+      pg_get_functiondef(
+        'public.platform_admin_audit_log(uuid,uuid,integer)'::regprocedure
+      )
+    )
+  )>0,
+  'legacy audit feed contains the governed read capability gate'
 );
 
 select extensions.ok(
