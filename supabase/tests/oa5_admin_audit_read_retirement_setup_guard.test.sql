@@ -35,11 +35,10 @@ from oa5_review_fixture;
 
 select extensions.lives_ok(
   format(
-    'select public.platform_admin_audit_log(%L::uuid,%L::uuid,1)',
-    actor,
-    tenant
+    'select public.platform_admin_audit_log(%L::uuid,null,1)',
+    actor
   ),
-  'existing Support legacy audit feed remains compatible when no explicit read assignment exists'
+  'existing Support unfiltered legacy audit feed remains compatible when no explicit read assignment exists'
 )
 from oa5_review_fixture;
 
@@ -77,13 +76,12 @@ from oa5_review_fixture;
 
 select extensions.throws_ok(
   format(
-    'select public.platform_admin_audit_log(%L::uuid,%L::uuid,1)',
-    actor,
-    tenant
+    'select public.platform_admin_audit_log(%L::uuid,null,1)',
+    actor
   ),
   '42501',
   'Audit read capability required',
-  'explicit admin.audit.read denial fails closed in legacy audit feed'
+  'explicit admin.audit.read denial fails closed in unfiltered legacy audit feed'
 )
 from oa5_review_fixture;
 
