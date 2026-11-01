@@ -4,6 +4,7 @@ import { test } from 'node:test';
 
 const entry = readFileSync(new URL('../src/main.tsx', import.meta.url), 'utf8');
 const baseWorkspace = readFileSync(new URL('../src/admin-workspace.css', import.meta.url), 'utf8');
+const navigation = readFileSync(new URL('../src/admin-navigation.css', import.meta.url), 'utf8');
 const convergence = readFileSync(new URL('../src/admin-context-convergence.css', import.meta.url), 'utf8');
 
 test('narrow Admin tables preserve semantic column headers instead of ambiguous unlabeled cards', () => {
@@ -24,4 +25,10 @@ test('settlement order rows do not inherit the Merchant-selector checkbox column
   assert.match(convergence, /\.workspace-tenant-row:not\(:has\(\.workspace-tenant-check\)\) \{\s*grid-template-columns: minmax\(0, 1fr\) auto auto;/);
   assert.match(convergence, /@media \(max-width: 680px\)[\s\S]*\.workspace-tenant-row:not\(:has\(\.workspace-tenant-check\)\) \{\s*grid-template-columns: minmax\(0, 1fr\) !important;/);
   assert.match(convergence, /\.workspace-tenant-row:not\(:has\(\.workspace-tenant-check\)\) \.workspace-status-pill \{\s*display: inline-flex !important;\s*justify-self: start;/);
+});
+
+test('narrow Merchant-context picker remains a viewport overlay instead of a backdrop-filter-contained popover', () => {
+  assert.match(navigation, /@media \(max-width: 820px\)[\s\S]*\.admin-merchant-context-popover \{[\s\S]*position: fixed;[\s\S]*top: 78px;[\s\S]*left: 12px;[\s\S]*right: 12px;/);
+  assert.match(convergence, /@media \(max-width: 820px\)[\s\S]*\.workspace-topbar\.admin-topbar \{[\s\S]*-webkit-backdrop-filter: none !important;[\s\S]*backdrop-filter: none !important;/);
+  assert.match(convergence, /@media \(max-width: 820px\)[\s\S]*\.admin-merchant-context-popover \{[\s\S]*max-height: calc\(100dvh - 90px\) !important;[\s\S]*overflow-y: auto !important;[\s\S]*overscroll-behavior: contain;/);
 });
