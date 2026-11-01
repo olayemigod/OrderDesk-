@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(9);
+select extensions.plan(8);
 
 create temp table oa5_review_fixture(
   actor uuid,
@@ -75,18 +75,6 @@ select extensions.ok(
     )
   )>0,
   'audit explorer contains the governed read capability gate'
-);
-
-select extensions.ok(
-  position(
-    'retired_at'
-    in lower(
-      pg_get_functiondef(
-        'public.assert_sellertray_setup_subject(uuid,uuid,uuid)'::regprocedure
-      )
-    )
-  )>0,
-  'setup subject rejects retired Businesses'
 );
 
 select extensions.ok(

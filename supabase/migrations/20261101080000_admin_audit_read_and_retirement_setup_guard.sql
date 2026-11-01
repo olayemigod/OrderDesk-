@@ -180,44 +180,10 @@ grant execute on function public.platform_admin_audit_explorer(uuid,text,text,te
 comment on function public.platform_admin_audit_explorer(uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,uuid,integer,boolean) is
   'Service-only bounded ProcessEdge Admin audit explorer. Existing Admin/Support reads remain compatible only when no explicit platform admin.audit.read assignment exists; explicit denial fails closed. CSV export separately requires admin.audit.export.';
 
-create or replace function public.assert_sellertray_setup_subject(
-  p_tenant_id uuid,
-  p_commercial_order_id uuid,
-  p_branch_id uuid
-)
-returns void
-language plpgsql
-stable
-security definer
-set search_path=''
-as $function$
-begin
-  if not exists (
-    select 1
-    from public.sellertray_commercial_order_price_snapshots s
-    join public.branches b
-      on b.id=s.branch_id
-     and b.tenant_id=s.tenant_id
-    join public.tenants t
-      on t.id=s.tenant_id
-     and t.retired_at is null
-    where s.tenant_id=p_tenant_id
-      and s.commercial_order_id=p_commercial_order_id
-      and s.line_type='branch_setup'
-      and s.branch_id=p_branch_id
-  ) then
-    raise exception 'Branch is not part of this governed SellerTray setup purchase' using errcode='23514';
-  end if;
-end;
-$function$;
-
-revoke all on function public.assert_sellertray_setup_subject(uuid,uuid,uuid)
-  from public, anon, authenticated;
-grant execute on function public.assert_sellertray_setup_subject(uuid,uuid,uuid)
-  to service_role;
-
-comment on function public.assert_sellertray_setup_subject(uuid,uuid,uuid) is
-  'Validates a purchased SellerTray Branch setup subject for a non-retired Business. Branch activation is intentionally not required because setup precedes activation.';
+-- Keep assert_sellertray_setup_subject unchanged: purchased setup may legitimately
+-- precede Branch activation, and existing readiness-command replay must not become
+-- dependent on current Business lifecycle state. The new-reservation guard belongs
+-- in platform_admin_schedule_branch_setup, where it can share the retirement lock.
 
 create or replace function public.platform_admin_schedule_branch_setup(
   p_actor_user_id uuid,
