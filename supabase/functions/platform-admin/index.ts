@@ -1,3 +1,5 @@
+import { auditCsv, auditParameters } from './audit-explorer.ts';
+
 type JsonRecord = Record<string, unknown>;
 type AdminAction =
   | 'bootstrap'
@@ -7,6 +9,8 @@ type AdminAction =
   | 'merchant_detail'
   | 'overview'
   | 'audit'
+  | 'audit_explorer'
+  | 'audit_export'
   | 'ai_parser_readiness'
   | 'ai_parser_probe'
   | 'set_subscription_status'
@@ -133,6 +137,20 @@ Deno.serve(withObservability('platform-admin', async (request) => {
         return json({ error: 'ProcessEdge platform Admin role required for AI smoke test' }, 403);
       }
       return json({ probe: await runAiParserProbe() });
+    }
+
+    if (action === 'audit_explorer' || action === 'audit_export') {
+      const parameters = auditParameters(body, userId, action === 'audit_export');
+      const explorer = await rpc<JsonRecord>('platform_admin_audit_explorer', parameters);
+      if (action === 'audit_export') {
+        const items = Array.isArray(explorer.items) ? explorer.items.filter(isRecord) : [];
+        return json({
+          csv: auditCsv(items),
+          count: Math.min(items.length, 1000),
+          truncated: explorer.hasMore === true,
+        });
+      }
+      return json({ explorer });
     }
 
     if (action === 'audit') {
@@ -268,6 +286,8 @@ function cleanAction(value: unknown): AdminAction | null {
     'merchant_detail',
     'overview',
     'audit',
+    'audit_explorer',
+    'audit_export',
     'ai_parser_readiness',
     'ai_parser_probe',
     'set_subscription_status',
@@ -650,4 +670,3 @@ async function readRequestTextLimited(
     }
   }
 }
-

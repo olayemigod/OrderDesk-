@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import AuditExplorer from './AuditExplorer';
 import AgreementLifecycleManagement from './AgreementLifecycleManagement';
 import BusinessDashboard from './BusinessDashboard';
 import RevenueDashboard from './RevenueDashboard';
@@ -262,7 +263,7 @@ function WorkspaceShell({ session, bootstrap, audit, onReload, onAuditRefresh, o
       case 'operations/ai': return <PageFrame eyebrow="Platform Operations" title="AI operations" description="Review server-side parser readiness and run controlled diagnostics within ProcessEdge authority."><AiOperations session={session} actorRole={bootstrap.actorRole} /></PageFrame>;
       case 'operations/payments': return <PageFrame eyebrow="Platform Operations" title="Payment infrastructure" description="Review server-side ProcessEdge/SellerTray collection readiness without exposing or storing raw gateway credentials in Admin Web."><PaymentInfrastructure session={session} /></PageFrame>;
       case 'reports/revenue': return <RevenueDashboard session={session} refreshKey={bootstrap.generatedAt} />;
-      case 'governance/audit': return <AuditPage audit={audit} onRefresh={onAuditRefresh} />;
+      case 'governance/audit': return <AuditExplorer session={session} />;
     }
   })();
 
