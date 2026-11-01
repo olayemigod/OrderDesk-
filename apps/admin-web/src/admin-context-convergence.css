@@ -41,6 +41,22 @@
 }
 
 @media (max-width: 820px) {
+  /* Chromium establishes a fixed-position containing block for descendants of
+   * a backdrop-filtered element. The Merchant-context picker becomes a fixed
+   * viewport overlay at this breakpoint, so keep the sticky top bar opaque but
+   * remove its blur/filter containment on narrow screens.
+   */
+  .workspace-topbar.admin-topbar {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .admin-merchant-context-popover {
+    max-height: calc(100dvh - 90px) !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+  }
+
   .admin-scope-required {
     width: 100%;
     grid-template-columns: 1fr;
