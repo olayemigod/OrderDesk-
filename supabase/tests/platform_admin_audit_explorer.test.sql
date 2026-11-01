@@ -66,10 +66,10 @@ select extensions.ok(
 );
 
 insert into public.platform_admin_capability_grant_versions(
-  platform_admin_user_id,capability_code,tenant_id,enabled,valid_from,version,reason,created_by_user_id
+  grantee_user_id,capability_code,scope_kind,tenant_id,enabled,effective_from,created_by_user_id,reason
 )
-select actor,'admin.audit.export',null,true,now()-interval '1 minute',1,
-       'Audit export regression grant',actor
+select actor,'admin.audit.export','platform',null,true,now()-interval '1 minute',actor,
+       'Audit export regression grant'
 from audit_fixture;
 
 create temp table audit_pages as

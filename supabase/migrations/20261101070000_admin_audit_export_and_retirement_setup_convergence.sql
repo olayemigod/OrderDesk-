@@ -3,11 +3,17 @@
 -- 2) Business retirement releases active setup capacity while retaining setup history.
 
 -- Keep the capability registry aligned with the governed Admin capability model.
+-- This is deliberately additive: preserve the pre-existing OA2/OA4 capabilities while
+-- registering the Admin read/action and audit capabilities introduced by this convergence.
 alter table public.platform_admin_capability_grant_versions
   drop constraint if exists platform_admin_capability_code_check;
 alter table public.platform_admin_capability_grant_versions
   add constraint platform_admin_capability_code_check check (
     capability_code in (
+      'admin.pricing.manage',
+      'admin.payments.reconcile',
+      'admin.installments.manage',
+      'admin.branch_setup.manage',
       'admin.agreements.publish',
       'admin.merchants.read',
       'admin.merchants.retire',

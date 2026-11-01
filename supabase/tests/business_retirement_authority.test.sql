@@ -51,9 +51,12 @@ select actor,'admin' from retirement_fixture;
 insert into public.tenants(id,name,slug,merchant_code,subscription_status)
 select tenant,'Retirement Setup Fixture','retirement-setup-'||tenant,'RTA','active'
 from retirement_fixture;
-insert into public.branches(id,tenant_id,code,name,is_default,is_active)
-select branch,tenant,'MAIN','Main Branch',true,true
-from retirement_fixture;
+update retirement_fixture f
+set branch=b.id
+from public.branches b
+where b.tenant_id=f.tenant
+  and b.is_default
+  and b.is_active;
 
 insert into public.sellertray_commercial_orders(
   id,tenant_id,order_reference,currency,total_gross_amount,created_by_user_id
