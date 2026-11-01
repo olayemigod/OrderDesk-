@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(23);
+select extensions.plan(25);
 
 select extensions.ok(
   not has_function_privilege('anon','public.platform_admin_audit_explorer(uuid,text,text,text,text,timestamptz,timestamptz,timestamptz,uuid,integer,boolean)','EXECUTE'),
@@ -42,6 +42,34 @@ from audit_fixture cross join generate_series(1,1005) i;
 insert into public.platform_admin_audit(actor_user_id,tenant_id,action,detail,created_at)
 select actor,retired_tenant,'retired_fixture','{"reason":"retained historical evidence"}',
        '2026-10-31T12:00:00Z'::timestamptz
+from audit_fixture;
+
+select extensions.throws_ok(
+  format(
+    'select public.platform_admin_audit_explorer(%L::uuid,p_business=>%L,p_export=>true)',
+    actor,'Audit Active Fixture'
+  ),
+  '42501','Audit export capability required',
+  'Support cannot export audit data without the separate export capability'
+) from audit_fixture;
+
+select extensions.ok(
+  exists(
+    select 1
+    from pg_constraint
+    where conname='platform_admin_capability_code_check'
+      and conrelid='public.platform_admin_capability_grant_versions'::regclass
+      and position('admin.audit.read' in pg_get_constraintdef(oid))>0
+      and position('admin.audit.export' in pg_get_constraintdef(oid))>0
+  ),
+  'Audit read and export capabilities are registrable'
+);
+
+insert into public.platform_admin_capability_grant_versions(
+  platform_admin_user_id,capability_code,tenant_id,enabled,valid_from,version,reason,created_by_user_id
+)
+select actor,'admin.audit.export',null,true,now()-interval '1 minute',1,
+       'Audit export regression grant',actor
 from audit_fixture;
 
 create temp table audit_pages as
