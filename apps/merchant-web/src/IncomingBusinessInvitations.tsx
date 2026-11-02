@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { errorMessage, supabase } from './supabase';
 
 type PendingInvitation = {
@@ -17,6 +17,18 @@ export default function IncomingBusinessInvitations({
   const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const focusedInvitationId = invitationIdFromLocation();
+  const orderedInvitations = useMemo(() => {
+    if (!focusedInvitationId) return invitations;
+    return [...invitations].sort((left, right) => {
+      if (left.id === focusedInvitationId) return -1;
+      if (right.id === focusedInvitationId) return 1;
+      return 0;
+    });
+  }, [focusedInvitationId, invitations]);
+  const focusedInvitationIsPending = Boolean(
+    focusedInvitationId && invitations.some((invitation) => invitation.id === focusedInvitationId),
+  );
 
   useEffect(() => {
     void load();
@@ -52,20 +64,32 @@ export default function IncomingBusinessInvitations({
     }
   }
 
-  if (!invitations.length && !error) return null;
+  if (!invitations.length && !error && !focusedInvitationId) return null;
 
   return <article className="panel invitation-panel">
     <div className="panel-head">
       <div>
         <p className="eyebrow">Business invitations</p>
-        <h3>Pending access</h3>
-        <p className="muted">A Business is added to your SellerTray account only after you accept its invitation.</p>
+        <h3>{focusedInvitationIsPending ? 'Review invitation' : 'Pending access'}</h3>
+        <p className="muted">
+          {focusedInvitationIsPending
+            ? 'Accepting adds this Business to your existing SellerTray account. Your other Businesses and sign-in stay unchanged.'
+            : 'A Business is added to your SellerTray account only after you accept its invitation.'}
+        </p>
       </div>
     </div>
     {error ? <div className="error-banner compact">{error}<button type="button" onClick={() => void load()}>Retry</button></div> : null}
-    {invitations.map((invitation) => {
+    {focusedInvitationId && !focusedInvitationIsPending && !error ? <div className="invitation-row">
+      <span>
+        <strong>This invitation is no longer pending</strong>
+        <small>It may already have been accepted, declined, expired or cancelled. Your current SellerTray access remains unchanged.</small>
+      </span>
+      <button type="button" className="secondary-button" onClick={clearInvitationFocus}>Continue</button>
+    </div> : null}
+    {orderedInvitations.map((invitation) => {
       const busy = busyId === invitation.id;
-      return <div className="invitation-row" key={invitation.id}>
+      const focused = focusedInvitationId === invitation.id;
+      return <div className={focused ? 'invitation-row invitation-row-focused' : 'invitation-row'} key={invitation.id}>
         <span>
           <strong>{invitation.tenantName}</strong>
           <small>{roleLabel(invitation.role)} · expires {dateOnly(invitation.expiresAt)}{invitation.invitedByEmail ? ` · invited by ${invitation.invitedByEmail}` : ''}</small>
@@ -77,6 +101,20 @@ export default function IncomingBusinessInvitations({
       </div>;
     })}
   </article>;
+}
+
+function invitationIdFromLocation(): string | null {
+  if (typeof window === 'undefined') return null;
+  const value = new URLSearchParams(window.location.search).get('invitation')?.trim().toLowerCase() ?? '';
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value) ? value : null;
+}
+
+function clearInvitationFocus() {
+  if (typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  url.searchParams.delete('invitation');
+  window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+  window.location.reload();
 }
 
 function parseInvitations(value: unknown): PendingInvitation[] {
