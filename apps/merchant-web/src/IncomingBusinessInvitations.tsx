@@ -9,6 +9,9 @@ type PendingInvitation = {
   expiresAt: string;
 };
 
+const PENDING_INVITATION_KEY = 'sellertray.pendingInvitationId';
+const INVITATION_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export default function IncomingBusinessInvitations({
   onMembershipChanged,
 }: {
@@ -17,7 +20,7 @@ export default function IncomingBusinessInvitations({
   const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const focusedInvitationId = invitationIdFromLocation();
+  const focusedInvitationId = invitationIdFromBrowser();
   const orderedInvitations = useMemo(() => {
     if (!focusedInvitationId) return invitations;
     return [...invitations].sort((left, right) => {
@@ -55,6 +58,7 @@ export default function IncomingBusinessInvitations({
         body: { action, invitationId },
       });
       if (invokeError) throw invokeError;
+      if (focusedInvitationId === invitationId) clearInvitationLocator(false);
       await load();
       if (action === 'accept_invite') await onMembershipChanged?.();
     } catch (cause) {
@@ -84,7 +88,7 @@ export default function IncomingBusinessInvitations({
         <strong>This invitation is no longer pending</strong>
         <small>It may already have been accepted, declined, expired or cancelled. Your current SellerTray access remains unchanged.</small>
       </span>
-      <button type="button" className="secondary-button" onClick={clearInvitationFocus}>Continue</button>
+      <button type="button" className="secondary-button" onClick={() => clearInvitationLocator(true)}>Continue</button>
     </div> : null}
     {orderedInvitations.map((invitation) => {
       const busy = busyId === invitation.id;
@@ -103,18 +107,41 @@ export default function IncomingBusinessInvitations({
   </article>;
 }
 
-function invitationIdFromLocation(): string | null {
+function invitationIdFromBrowser(): string | null {
   if (typeof window === 'undefined') return null;
-  const value = new URLSearchParams(window.location.search).get('invitation')?.trim().toLowerCase() ?? '';
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value) ? value : null;
+  const queryValue = new URLSearchParams(window.location.search).get('invitation')?.trim().toLowerCase() ?? '';
+  if (INVITATION_UUID_RE.test(queryValue)) {
+    rememberInvitationLocator(queryValue);
+    return queryValue;
+  }
+
+  try {
+    const storedValue = window.localStorage.getItem(PENDING_INVITATION_KEY)?.trim().toLowerCase() ?? '';
+    return INVITATION_UUID_RE.test(storedValue) ? storedValue : null;
+  } catch {
+    return null;
+  }
 }
 
-function clearInvitationFocus() {
+function rememberInvitationLocator(invitationId: string) {
+  try {
+    window.localStorage.setItem(PENDING_INVITATION_KEY, invitationId);
+  } catch {
+    // Query-string focus still works when browser storage is unavailable.
+  }
+}
+
+function clearInvitationLocator(reload: boolean) {
   if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(PENDING_INVITATION_KEY);
+  } catch {
+    // Storage may be unavailable in hardened browser modes.
+  }
   const url = new URL(window.location.href);
   url.searchParams.delete('invitation');
   window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
-  window.location.reload();
+  if (reload) window.location.reload();
 }
 
 function parseInvitations(value: unknown): PendingInvitation[] {
