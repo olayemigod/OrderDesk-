@@ -130,7 +130,7 @@ Deno.serve(withObservability('team-management', async (request) => {
       if (!role) return json({ error: 'Role must be Manager or Staff' }, 400);
       if (!RESEND_API_KEY || !TEAM_INVITE_EMAIL_FROM) {
         console.error(JSON.stringify({ event: 'team_invitation_email_not_configured' }));
-        return json({ error: 'Team invitation email is temporarily unavailable. No invitation was created. Try again later.' }, 503);
+        return json({ error: 'Team invitation email is temporarily unavailable. This request did not create or refresh an invitation. Try again later.' }, 503);
       }
 
       const businessName = await tenantDisplayName(tenantId);
@@ -155,8 +155,8 @@ Deno.serve(withObservability('team-management', async (request) => {
           error: sanitizeObservabilityError(error),
         }));
         return json({
-          error: 'Invitation was created, but the email could not be delivered. Send the invitation again to retry email delivery; the existing pending invitation will be reused.',
-          invitationCreated: true,
+          error: 'Invitation is pending, but the email could not be delivered. Send the invitation again to retry email delivery; the existing pending invitation will be reused.',
+          invitationPending: true,
         }, 503);
       }
 
@@ -277,6 +277,7 @@ async function sendTeamInvitationEmail({
   const safeBusinessName = escapeHtml(businessName);
   const safeRole = escapeHtml(roleLabel);
   const safeEmail = escapeHtml(to);
+  const subjectBusinessName = cleanEmailHeader(businessName) || 'A SellerTray business';
   const actionUrl = `${SELLERTRAY_MERCHANT_URL}/`;
   const html = `
     <!doctype html>
@@ -314,7 +315,7 @@ async function sendTeamInvitationEmail({
     body: JSON.stringify({
       from: TEAM_INVITE_EMAIL_FROM,
       to: [to],
-      subject: `${businessName} invited you to SellerTray`,
+      subject: `${subjectBusinessName} invited you to SellerTray`,
       html,
     }),
     signal: AbortSignal.timeout(3500),
@@ -342,6 +343,15 @@ function escapeHtml(value: string): string {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
+}
+
+function cleanEmailHeader(value: string): string {
+  return value
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 160);
 }
 
 async function verifiedIdentity(
