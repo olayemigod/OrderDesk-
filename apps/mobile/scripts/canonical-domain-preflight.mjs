@@ -6,11 +6,12 @@ import path from 'node:path';
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '../../..');
 
-const [mobileHandoff, serverHandoff, adminIndex, adminVercel] = await Promise.all([
+const [mobileHandoff, serverHandoff, adminIndex, adminVercel, adminNavigation] = await Promise.all([
   readFile(path.join(repoRoot, 'apps/mobile/src/data/merchantWebHandoff.ts'), 'utf8'),
   readFile(path.join(repoRoot, 'supabase/functions/merchant-web-handoff/index.ts'), 'utf8'),
   readFile(path.join(repoRoot, 'apps/admin-web/index.html'), 'utf8'),
   readFile(path.join(repoRoot, 'apps/admin-web/vercel.json'), 'utf8'),
+  readFile(path.join(repoRoot, 'apps/admin-web/src/admin-navigation.css'), 'utf8'),
 ]);
 
 const canonicalMerchantOrigin = 'https://app.sellertray.com';
@@ -31,12 +32,14 @@ assert.match(mobileHandoff, /url\.search === ''/);
 
 assert.match(adminIndex, /href="\/brand\/sellertray-admin-icon\.png"/);
 assert.doesNotMatch(adminVercel, /sellertray\.vercel\.app/);
+assert.match(adminNavigation, /url\('\/brand\/sellertray-admin-icon\.png'\)/);
 
 for (const alias of retiredAliases) {
   assert.equal(mobileHandoff.includes(alias), false, `Mobile handoff still references retired alias ${alias}`);
   assert.equal(serverHandoff.includes(alias), false, `Server handoff still references retired alias ${alias}`);
   assert.equal(adminIndex.includes(alias), false, `Admin shell still references retired alias ${alias}`);
   assert.equal(adminVercel.includes(alias), false, `Admin config still references retired alias ${alias}`);
+  assert.equal(adminNavigation.includes(alias), false, `Admin navigation still references retired alias ${alias}`);
 }
 
 assert.equal(canonicalMerchantOrigin, 'https://app.sellertray.com');
