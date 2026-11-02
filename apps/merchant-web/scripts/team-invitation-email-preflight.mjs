@@ -22,8 +22,10 @@ expect(configGuard >= 0 && inviteRpc >= 0 && configGuard < inviteRpc, 'known ema
 expect(inviteRpc >= 0 && emailSend > inviteRpc, 'the governed invitation record must be created before attempting external email delivery');
 expect(emailSend >= 0 && successResponse > emailSend, 'the API must report invitation success only after email delivery succeeds');
 expect(source.includes("fetch('https://api.resend.com/emails'"), 'team invitations must call the existing Resend transport');
-expect(source.includes('Invitation was created, but the email could not be delivered.'), 'post-create delivery failures must report the partial-success state explicitly');
-expect(source.includes('the existing pending invitation will be reused'), 'delivery failure copy must tell merchants that retry is idempotent at the invitation level');
+expect(source.includes('Invitation is pending, but the email could not be delivered.'), 'post-write delivery failures must report the pending invitation state explicitly');
+expect(source.includes('the existing pending invitation will be reused'), 'delivery failure copy must tell merchants that retry reuses the pending invitation');
+expect(source.includes("subject: `${subjectBusinessName} invited you to SellerTray`"), 'email subjects must use the normalized Business name');
+expect(source.includes('function cleanEmailHeader(value: string)'), 'merchant-controlled Business names must be normalized before entering email headers');
 expect(source.includes('Access starts only after you accept it.'), 'email copy must preserve explicit invitation acceptance');
 expect(source.includes('The invitation expires after 7 days.'), 'email copy must communicate the governed invitation expiry');
 expect(!source.includes('inviteUserByEmail'), 'business invitation delivery must not bypass SellerTray membership acceptance through Supabase Auth admin invites');
