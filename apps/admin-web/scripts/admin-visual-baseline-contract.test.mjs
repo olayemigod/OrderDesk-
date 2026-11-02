@@ -44,7 +44,8 @@ test('canonical Admin entrypoint keeps the complete redesigned stylesheet stack'
 
 test('redesigned sidebar keeps approved SellerTray identity and desktop sticky rail', () => {
   assert.ok(navigation.includes('workspace-sidebar .workspace-sidebar-brand::before'));
-  assert.ok(navigation.includes('sellertray-app-icon-v2.png'));
+  assert.ok(navigation.includes("url('/brand/sellertray-admin-icon.png')"));
+  assert.doesNotMatch(navigation, /sellertray(?:-admin|-merchant)?\.vercel\.app/);
   assert.ok(navigation.includes("content: 'Seller'"));
   assert.ok(navigation.includes("content: 'Tray'"));
   assert.ok(navigation.includes("content: 'Admin Web'"));
