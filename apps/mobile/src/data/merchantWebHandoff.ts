@@ -1,5 +1,7 @@
 import { supabase } from '../lib/supabase';
 
+const MERCHANT_WEB_ORIGIN = 'https://app.sellertray.com';
+
 export type SellerTrayMerchantWebHandoff = {
   url: string;
   expiresAt: string;
@@ -68,7 +70,10 @@ function isSafeServerMessage(value: unknown): value is string {
 function isSecureMerchantWebUrl(value: string): boolean {
   try {
     const url = new URL(value);
-    return url.protocol === 'https:' && url.hash.startsWith('#st_handoff=');
+    return url.origin === MERCHANT_WEB_ORIGIN
+      && url.pathname === '/'
+      && url.search === ''
+      && url.hash.startsWith('#st_handoff=');
   } catch {
     return false;
   }
