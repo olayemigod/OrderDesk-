@@ -56,8 +56,10 @@ type BillingProps = { tenantId: string; onReviewOrderForm: () => void };
 
 export default function SellerTrayBillingManagement({ tenantId, onReviewOrderForm }: BillingProps) {
   const [center, setCenter] = useState<BillingCenter | null>(null);
+  const [centerPayload, setCenterPayload] = useState<unknown | null>(null);
   const [loading, setLoading] = useState(true);
   const [payingOrderId, setPayingOrderId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const loadSequence = useRef(0);
@@ -66,16 +68,21 @@ export default function SellerTrayBillingManagement({ tenantId, onReviewOrderFor
 
   async function load() {
     const sequence = ++loadSequence.current;
-    setLoading(true); setError(null);
+    setLoading(true); setLoadError(null); setError(null);
     try {
       const { data, error: functionError } = await supabase.functions.invoke('commercial-billing', { body: { action: 'center', tenantId } });
       if (functionError) throw functionError;
       if (sequence !== loadSequence.current) return;
-      setCenter(parseCenter(record(data).center));
-    } catch (cause) {
+      const rawCenter = record(data).center;
+      const parsedCenter = parseCenter(rawCenter);
+      if (!parsedCenter.tenantId) throw new Error('SellerTray billing details were unavailable.');
+      setCenterPayload(rawCenter);
+      setCenter(parsedCenter);
+    } catch {
       if (sequence !== loadSequence.current) return;
       setCenter(null);
-      setError(errorMessage(cause, 'Unable to load SellerTray billing.'));
+      setCenterPayload(null);
+      setLoadError('SellerTray billing details could not be loaded. Refresh and try again.');
     } finally { if (sequence === loadSequence.current) setLoading(false); }
   }
 
@@ -127,12 +134,13 @@ export default function SellerTrayBillingManagement({ tenantId, onReviewOrderFor
       </div>
       <p className="muted">Choose the plan and Branches for this purchase. SellerTray then prepares an Order Form for your review before payment.</p>
     </article>
+    {loadError ? <div className="error-banner">{loadError}<button type="button" onClick={() => void load()}>Retry</button></div> : null}
     {error ? <div className="error-banner">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div> : null}
     {message ? <div className="success-banner">{message}<button type="button" onClick={() => setMessage(null)}>Dismiss</button></div> : null}
 
-    <SellerTrayInitialPurchase tenantId={tenantId} onChanged={load} onContinueToOrderForm={onReviewOrderForm} />
+    {center && centerPayload !== null && center.orders.length === 0 ? <SellerTrayInitialPurchase tenantId={tenantId} centerData={centerPayload} onChanged={load} onContinueToOrderForm={onReviewOrderForm} /> : null}
 
-    {!center?.orders.length ? <article className="panel empty-state"><strong>No SellerTray purchase yet</strong><p>The Business Owner can choose a plan above to prepare the first purchase and its Order Form.</p></article> : center.orders.map((order) => {
+    {center && center.orders.length === 0 ? <article className="panel empty-state"><strong>No SellerTray purchase yet</strong><p>The Business Owner can choose a plan above to prepare the first purchase and its Order Form.</p></article> : center?.orders.map((order) => {
       const state = order.settlement;
       const paymentReady = order.orderFormState === 'confirmed' || order.orderFormState === 'legacy';
       const canPay = paymentReady && center.canPay && state.outstandingAmount >= 0.005 && Boolean(state.nextInstallmentScheduleId);

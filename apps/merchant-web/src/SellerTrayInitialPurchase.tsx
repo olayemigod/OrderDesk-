@@ -5,44 +5,32 @@ import { SellerTrayInput, SellerTraySelect } from './SellerTrayElements';
 type PurchasePlan = { code: string; name: string; billingCycle: string; currency: string; subscriptionGrossAmount: number; branchSetupGrossAmount: number };
 type PurchaseBranch = { id: string; code: string; name: string; isDefault: boolean };
 type PurchaseCenter = { actorRole: 'owner' | 'manager'; canPurchaseInitial: boolean; availablePlans: PurchasePlan[]; activeBranches: PurchaseBranch[]; supportedInstallmentStructures: string[]; orders: unknown[] };
-type InitialPurchaseProps = { tenantId: string; onChanged: () => void | Promise<void>; onContinueToOrderForm: () => void };
+type InitialPurchaseProps = { tenantId: string; centerData: unknown; onChanged: () => void | Promise<void>; onContinueToOrderForm: () => void };
 
-export default function SellerTrayInitialPurchase({ tenantId, onChanged, onContinueToOrderForm }: InitialPurchaseProps) {
-  const [center, setCenter] = useState<PurchaseCenter | null>(null);
+export default function SellerTrayInitialPurchase({ tenantId, centerData, onChanged, onContinueToOrderForm }: InitialPurchaseProps) {
+  const center = useMemo(() => parseCenter(centerData), [centerData]);
   const [selectedPlan, setSelectedPlan] = useState('');
   const [selectedBranches, setSelectedBranches] = useState<string[]>([]);
   const [structure, setStructure] = useState('two_installment_70_30');
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => { void load(); }, [tenantId]);
+  useEffect(() => {
+    setError(null);
+    setSelectedPlan((current) => center.availablePlans.some((plan) => plan.code === current) ? current : center.availablePlans[0]?.code ?? '');
+    setSelectedBranches((current) => {
+      const valid = current.filter((id) => center.activeBranches.some((branch) => branch.id === id));
+      return valid.length ? valid : center.activeBranches.map((branch) => branch.id);
+    });
+    setStructure((current) => center.supportedInstallmentStructures.includes(current) ? current : center.supportedInstallmentStructures[0] ?? 'two_installment_70_30');
+  }, [center]);
 
-  async function load() {
-    setLoading(true); setError(null);
-    try {
-      const { data, error: functionError } = await supabase.functions.invoke('commercial-billing', { body: { action: 'center', tenantId } });
-      if (functionError) throw functionError;
-      const next = parseCenter(record(data).center);
-      setCenter(next);
-      setSelectedPlan((current) => next.availablePlans.some((plan) => plan.code === current) ? current : next.availablePlans[0]?.code ?? '');
-      setSelectedBranches((current) => {
-        const valid = current.filter((id) => next.activeBranches.some((branch) => branch.id === id));
-        return valid.length ? valid : next.activeBranches.map((branch) => branch.id);
-      });
-      setStructure((current) => next.supportedInstallmentStructures.includes(current) ? current : next.supportedInstallmentStructures[0] ?? 'two_installment_70_30');
-    } catch (cause) {
-      setCenter(null);
-      setError(errorMessage(cause, 'Unable to load SellerTray purchase options.'));
-    } finally { setLoading(false); }
-  }
-
-  const plan = useMemo(() => center?.availablePlans.find((row) => row.code === selectedPlan) ?? null, [center, selectedPlan]);
+  const plan = useMemo(() => center.availablePlans.find((row) => row.code === selectedPlan) ?? null, [center, selectedPlan]);
   const branchSetupTotal = plan ? plan.branchSetupGrossAmount * selectedBranches.length : 0;
   const purchaseTotal = plan ? plan.subscriptionGrossAmount + branchSetupTotal : 0;
 
   async function purchase() {
-    if (!center?.canPurchaseInitial || !plan || !selectedBranches.length || submitting) return;
+    if (!center.canPurchaseInitial || !plan || !selectedBranches.length || submitting) return;
     const storageKey = `sellertray:first-purchase:${tenantId}`;
     const stored = safeSessionStorageGet(storageKey);
     const commandId = isUuid(stored) ? stored : crypto.randomUUID();
@@ -63,8 +51,7 @@ export default function SellerTrayInitialPurchase({ tenantId, onChanged, onConti
     } finally { setSubmitting(false); }
   }
 
-  if (loading && !center) return <article className="panel"><p className="muted">Loading purchase options…</p></article>;
-  if (!center || center.orders.length > 0) return error ? <div className="error-banner">{error}</div> : null;
+  if (center.orders.length > 0) return null;
 
   return <article className="panel">
     <div className="panel-head">
