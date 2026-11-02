@@ -92,7 +92,7 @@ union all select plan_b_version_id,'reports.view',true from c2_branch_resolver_f
 
 insert into public.sellertray_plan_profile_limit_values(plan_profile_version_id,limit_code,limit_value,is_unlimited,enforcement_mode)
 select plan_a_version_id,'device_count',2,false,'hard' from c2_branch_resolver_fixture
-union all select plan_a_version_id,'staff_count',null,true,'hard' from c2_branch_resolver_fixture;
+union all select plan_a_version_id,'staff_seats',null,true,'hard' from c2_branch_resolver_fixture;
 
 update public.sellertray_plan_profile_versions v
 set status='published',effective_from='2026-01-01T00:00:00Z',published_by_user_id=f.actor_user_id,
@@ -225,7 +225,7 @@ select extensions.ok((select (x->>'configuredEnabled')::boolean and (x->>'effect
 select extensions.ok((select not (x->>'configuredEnabled')::boolean and (x->>'overridden')::boolean from c2_branch_resolver_fixture f cross join lateral jsonb_array_elements(f.a_oct15->'capabilities') x where x->>'code'='sales.return'),'Business capability override wins over the Plan Profile grant');
 select extensions.ok((select (x->>'configuredEnabled')::boolean and (x->>'effectiveEnabled')::boolean and (x->>'addonGranted')::boolean from c2_branch_resolver_fixture f cross join lateral jsonb_array_elements(f.a_oct15->'capabilities') x where x->>'code'='reports.view'),'Branch add-on contributes capability entitlement through the shared resolver');
 select extensions.ok((select (x->>'limitValue')::numeric=10 and x->>'usageState'='branch_meter_not_connected' and x->'usage'='null'::jsonb and x->'available'='null'::jsonb and not (x->>'enforcementReady')::boolean from c2_branch_resolver_fixture f cross join lateral jsonb_array_elements(f.a_oct15->'limits') x where x->>'code'='device_count'),'Finite Branch limit exposes governed configuration without fabricating usage or availability before a canonical Branch meter exists');
-select extensions.ok((select (x->>'isUnlimited')::boolean and (x->>'enforcementReady')::boolean and x->>'usageState'='unlimited' from c2_branch_resolver_fixture f cross join lateral jsonb_array_elements(f.a_oct15->'limits') x where x->>'code'='staff_count'),'Unlimited Branch limit is immediately resolvable without fabricated usage');
+select extensions.ok((select (x->>'isUnlimited')::boolean and (x->>'enforcementReady')::boolean and x->>'usageState'='unlimited' from c2_branch_resolver_fixture f cross join lateral jsonb_array_elements(f.a_oct15->'limits') x where x->>'code'='staff_seats'),'Unlimited Branch limit is immediately resolvable without fabricated usage');
 select extensions.ok((select d_oct15->>'resolutionMode'='legacy_compatibility_only' and d_oct15->>'subscriptionFound'='false' and jsonb_array_length(d_oct15->'features')=0 and (d_oct15->'legacyCompatibility'->>'canWrite')::boolean from c2_branch_resolver_fixture),'Legacy-only Branch exposes compatibility state but is not translated into speculative C2 entitlements');
 select extensions.ok((select a_oct15->>'nextRenewalAt'='2027-03-15T00:00:00+00:00' and b_oct15->>'nextRenewalAt'='2026-10-20T00:00:00+00:00' from c2_branch_resolver_fixture),'Branches preserve independent renewal anniversaries');
 select extensions.ok((select summary_oct15->>'isAggregateOnly'='true' and (summary_oct15->>'branchCount')::integer=3 and (summary_oct15->>'c2SubscriptionCount')::integer=2 and (summary_oct15->>'entitledBranchCount')::integer=2 and (summary_oct15->>'unprovisionedBranchCount')::integer=1 from c2_branch_resolver_fixture),'Business subscription view is aggregate-only across independent Branch states');
