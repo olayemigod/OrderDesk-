@@ -4,7 +4,7 @@ description: "C2-0/C2-1 current-state authority inventory and old-to-new migrati
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.0"
+  version: "0.1.1"
   status: governing-extension
   baseline_commit: "d8024c215850e0e9a3a0ce1496d1d0dd5d7cd150"
   inventory_date: "2026-11-02"
@@ -12,112 +12,99 @@ metadata:
 
 # SellerTray C2 Current-State Inventory and Migration Map
 
-## 1. Purpose and stage boundary
+## 1. Purpose and boundary
 
 This document is the governed output of **C2-0 Governance Reset + C2-1 Capability and Commercial Inventory**.
 
-It records what SellerTray actually supports before Commercial V2 schema work begins and maps current authorities to the approved Branch-owned destination.
+It is based on repository baseline `d8024c215850e0e9a3a0ce1496d1d0dd5d7cd150`, current migrations/server/client implementation, and read-only inspection of the live SellerTray schema on 2026-11-02.
 
-This inventory is based on:
+It authorises **no C2 schema, runtime cutover or production commercial mutation**. The legacy runtime remains intentionally active until C2-10 migration/parity evidence and controlled cutover.
 
-- repository baseline `d8024c215850e0e9a3a0ce1496d1d0dd5d7cd150`;
-- current repository migrations, server/RPC authorities and cross-surface clients;
-- read-only inspection of the live SellerTray production schema on 2026-11-02.
-
-**No C2 schema, entitlement-runtime cutover or production commercial mutation is authorised by this document.** The legacy runtime remains intentionally active until C2-10 parity and controlled cutover.
-
-The target remains:
+Target architecture:
 
 > **Business -> Branch -> Branch Subscription -> Plan Profile Version -> Resolved Entitlements -> SellerTray surfaces**
-
-Business-level subscription state becomes an aggregate/read model only.
 
 Effective operational authority is conceptually:
 
 > **Branch Plan Entitlement ∩ User Permission ∩ Branch Scope ∩ Business/transaction state ∩ Available quota/limit**
 
-The entitlement resolver must not replace user authorization, Branch scoping, transaction-state validation or quantitative usage checks. It intersects with them.
+The shared entitlement resolver must intersect with, not replace, authorization, Branch scope, transaction rules, payment/UOM/inventory correctness or quantitative usage checks.
 
-## 2. C2-0 governance decisions now locked
+The exact Branch-scope and command-family companion inventory is in `C2_CURRENT_STATE_INVENTORY_APPENDIX.md`.
 
-1. **Branch is the subscription owner.** Each Branch owns its own plan version, billing cycle, lifecycle, entitlement period and renewal anniversary.
-2. **Business subscription state is aggregate only.** There is no authoritative single Business plan or expiry after C2 cutover.
-3. **Plan names are configuration.** Starter, Growth and Scale may be seeded later, but code must not branch on those names.
-4. **Plan and price are separate authorities.** A Plan Profile Version describes features/capabilities/limits; effective-dated commercial masters determine price, tax and payment obligations.
-5. **Branch activation is independent.** A pending/new/failed Branch cannot block another Branch whose own prerequisites are satisfied.
-6. **No automatic co-termination or proration.** Independent Branch anniversaries remain independent unless a later explicit co-term policy is approved.
-7. **Universal Master Agreement + Merchant Order Form is the legal model.** The current required Master version is accepted once per Business; each governed commercial commitment gets its own immutable Order Form confirmation. An unchanged Master is not repeatedly accepted for another Branch, renewal or plan change.
-8. **Merchant Web manages commercial self-service.** Mobile exposes status/limits and performs secure handoff for complex billing flows.
-9. **WhatsApp sells; AI assists.** They consume shared entitlement facts and must never create subscription/commercial authority.
-10. **Legacy retirement is late.** `tenant_subscriptions` remains compatibility authority until C2-10 proves migration/read-write parity and the production cutover.
+## 2. C2-0 decisions locked
+
+1. **Branch owns subscription authority.** Each Branch owns Plan Profile Version, billing cycle, lifecycle, entitlement period and renewal anniversary.
+2. **Business subscription state becomes aggregate only.** There is no authoritative single Business plan/expiry after cutover.
+3. **Plan names are data.** Starter, Growth and Scale may be editable seeds later; code must not branch on their names.
+4. **Plan and price are separate authorities.** Plan Profile Version describes features/capabilities/limits; commercial masters determine price, tax and payment obligations.
+5. **Branch activation is independent.** A pending/new/failed Branch cannot block another qualified Branch.
+6. **No automatic co-termination or proration.** Independent Branch anniversaries remain independent unless a later explicit policy approves co-term behavior.
+7. **Legal authority is Universal Master Agreement + Merchant Order Form.** Current required Master is accepted once per Business/version; each governed commercial commitment gets immutable Order Form evidence. An unchanged Master is not repeatedly accepted for another Branch, renewal or plan change.
+8. **Merchant Web manages commercial self-service.** Mobile shows Branch plan/status/limits and hands detailed billing to Merchant Web securely.
+9. **WhatsApp sells; AI assists.** Both consume shared entitlement facts and never create subscription/commercial truth.
+10. **Legacy retirement is late.** `tenant_subscriptions` remains compatibility runtime until C2-10 proves the new authority.
 
 ## 3. Current subscription/runtime authority
 
 ### 3.1 `subscription_plans`
 
-Production currently contains the legacy `business` plan (`SellerTray Business`). The legacy table is not capable of representing Commercial V2 Plan Profiles:
+Production currently uses legacy plan code `business` (`SellerTray Business`). The table is not a Commercial V2 Plan Profile authority:
 
-- billing interval is constrained to `month`;
-- trial semantics remain part of the plan/runtime model;
-- usage fields are attached directly to the plan;
-- the current usage event is `AI_ORDER_ACTIVITY`;
+- billing interval is legacy monthly;
+- trial semantics are embedded;
+- usage pricing fields sit directly on the plan;
+- current usage event is `AI_ORDER_ACTIVITY`;
 - there is no versioned feature/capability/limit grant model.
 
-This table is therefore **legacy plan compatibility**, not the C2 Plan Profile authority.
+Treat `subscription_plans` as legacy compatibility/migration evidence, not the destination.
 
 ### 3.2 `tenant_subscriptions`
 
-`tenant_subscriptions` remains the operational compatibility authority today.
+`tenant_subscriptions` remains the operational compatibility authority:
 
-Key facts:
+- primary key is `tenant_id`, therefore one subscription row per Business;
+- states include `trial`, `active`, `past_due`, `grace`, `suspended`, `cancelled`;
+- trial/current-period/grace timing is Business-wide;
+- `orderdesk_subscription_can_write(tenant_id)` derives Business-wide write access from this row plus C1 entitlement-period state;
+- `get_orderdesk_subscription_access(tenant_id)` exposes that Business-wide state to clients.
 
-- primary key is `tenant_id`, therefore exactly one subscription row per Business;
-- current status vocabulary is `trial`, `active`, `past_due`, `grace`, `suspended`, `cancelled`;
-- the row owns trial/current-period/grace timing at Business level;
-- `orderdesk_subscription_can_write(tenant_id)` derives write access from this Business-wide row plus C1 entitlement-period state;
-- `get_orderdesk_subscription_access(tenant_id)` exposes the Business-wide subscription state to clients.
-
-The production population at inventory time contained a mixture of active, cancelled and trial `business` subscriptions. Historical rows must be migrated as evidence; they are not proof that each historical Branch independently owned a subscription.
+Production currently contains active, cancelled and trial `business` subscriptions. Historical rows are evidence to migrate; they do not prove historical Branch ownership that never existed.
 
 ### 3.3 C1 compatibility bridge
 
-C1 already has stronger commercial evidence around the legacy runtime:
+C1 already contains stronger immutable commercial evidence around the legacy runtime:
 
 - governed commercial orders;
 - immutable price snapshots;
 - installment obligations/contracts/payments;
-- setup readiness/scheduling;
-- Master Agreement and Order Form evidence;
+- setup/readiness/scheduling evidence;
+- Master Agreement + Merchant Order Form evidence;
 - entitlement events.
 
-The current entitlement reconciliation path appends the C1 commercial entitlement event and then projects the result back into `tenant_subscriptions` so the old runtime can continue granting access.
+Current reconciliation appends governed entitlement evidence and then projects the result back into `tenant_subscriptions` so the old runtime continues granting access.
 
-C2 must replace that projection **only after** Branch Subscription authority and shared entitlement resolution are proven. It must not create a second permanently competing subscription engine.
+C2 must replace that projection only after Branch Subscription authority and shared entitlement resolution are proven. Do not leave two permanent subscription engines.
 
-## 4. Current merchant roles and authorization
+## 4. Merchant roles, capabilities and Branch scope
 
-### 4.1 Governed role model
+### 4.1 Role naming compatibility
 
-SellerTray governance recognises:
+The governing SellerTray merchant-facing roles are:
 
-- Owner;
-- Manager;
-- Staff;
-- Cashier.
+- **Owner**;
+- **Manager**;
+- **Cashier**.
 
-### 4.2 Production runtime divergence
+The current internal/database compatibility value `staff` represents the merchant-facing **Cashier** role. It is **not a separate fourth merchant role**.
 
-Production `tenant_members.role` currently constrains rows to:
+Production `tenant_members.role` currently permits `owner`, `manager`, `staff`; that is compatible with the governing role model so long as user-facing surfaces label the operational role Cashier and server behavior continues to treat `staff` as its compatibility value.
 
-- `owner`;
-- `manager`;
-- `staff`.
+C2 must not create a new `cashier` database authority merely for naming consistency unless a later explicit migration decision requires it.
 
-`cashier` is therefore a governance/runtime divergence that C2 cataloguing must not accidentally preserve as the target role model.
+### 4.2 Current merchant capability codes
 
-### 4.3 Current named merchant capabilities
-
-The current server resolver `sellertray_user_has_capability(...)` recognises these capability codes:
+Current `sellertray_user_has_capability(...)` recognizes:
 
 - `can_receive_stock`
 - `can_adjust_stock`
@@ -140,18 +127,26 @@ The current server resolver `sellertray_user_has_capability(...)` recognises the
 - `can_refund_sale`
 - `can_accept_commercial_agreements`
 
-Current implicit behavior is role-driven:
+Current role behavior is role/capability driven:
 
 - Owner receives the current named merchant capabilities.
 - Manager receives the current set except commercial-agreement acceptance unless explicitly granted.
-- Staff receives a bounded default operational subset around shifts/cash/expense/printing.
-- Per-member capability overrides can alter allowed/denied behavior.
+- internal `staff` / merchant-facing Cashier receives the bounded operational default subset around shifts/cash/expense/printing.
+- per-member capability overrides can alter allowed/denied behavior.
 
-C2 Plan Entitlements must **not** replace this authorization model. A plan may permit a capability category while the user role/capability authority still denies the user.
+Plan entitlement must never replace this authorization model. A plan may permit returns while a particular Cashier remains unauthorized to return.
 
-## 5. Current ProcessEdge/Admin capabilities
+### 4.3 Branch scope
 
-Current server/admin authorities include these privileged capability codes:
+Branch authorization is already a separate server authority. Owner/Manager can operate active Business Branches. Internal `staff`/Cashier is either explicitly scoped through `branch_user_access` or, when no explicit Branch-access rows exist, falls back to the default Branch. Business-wide report scope differs from Cashier Branch report scope.
+
+C2 must preserve this separation: **Plan entitlement is not Branch assignment**.
+
+See `C2_CURRENT_STATE_INVENTORY_APPENDIX.md` for exact helper functions and compatibility semantics.
+
+## 5. ProcessEdge/Admin capabilities
+
+Current server/Admin privileged capability codes include:
 
 - `admin.agreements.publish`
 - `admin.agreements.recover`
@@ -166,421 +161,260 @@ Current server/admin authorities include these privileged capability codes:
 - `admin.payments.reconcile`
 - `admin.pricing.manage`
 
-These are ProcessEdge operational authorities. They must remain distinct from merchant Plan Profile capabilities. C2 must never turn an Admin capability into a commercial package entitlement.
+These are ProcessEdge operational/security authorities, not merchant Plan Profile entitlements. Preserve scope/AAL2/audit requirements for sensitive mutations.
 
-Sensitive Admin mutations continue to require the existing capability/scope/AAL2/audit discipline where applicable.
+## 6. Real product capability inventory
 
-## 6. Actual SellerTray product capability inventory
+This inventory is input to C2-2 classification; “packageable candidate” does not mean a capability is already approved for a specific plan.
 
-The catalogue below is the C2-1 implementation inventory. “Packageable candidate” means C2-2 may expose the capability/feature/limit in plan configuration after product review. It is **not** an instruction to disable it on lower plans yet.
+### Commerce/POS
 
-### 6.1 Commerce and POS
+Current behavior includes manual/WhatsApp-derived orders, POS selling, UOM-aware lines, customers, governed discounts/price effects, multi-method payment allocation, partial payment/outstanding receivables, receivable collection, fulfilment, returns/refunds, receipts/documents/printing and payment verification/reconciliation.
 
-Current supported behavior includes:
+Possible commercial candidates include advanced discounts, Pay Later/partial-payment policy, returns, receivable management and advanced payment integrations.
 
-- create/manual/WhatsApp-derived orders;
-- POS selling;
-- product/UOM-aware line entry;
-- customer selection;
-- governed discounts/price effects where implemented;
-- multi-method payment allocation;
-- partial payment / outstanding receivable behavior;
-- receivable collection;
-- order fulfilment/status transitions;
-- returns/refunds through governed return authority;
-- sale documents/receipts and printing;
-- payment verification/reconciliation paths.
+Never package away transaction arithmetic, UOM normalization, stock integrity, payment state correctness, idempotency, audit evidence or tenant/Branch isolation.
 
-**Packageable candidates:** advanced discount authority, partial-payment/Pay Later policy, returns, receivable-management features, advanced payment integrations.
+### Inventory/purchasing
 
-**Never package away:** transaction arithmetic correctness, UOM normalization, stock posting integrity, payment-state correctness, idempotency, audit/evidence, tenant/Branch isolation.
+Current behavior includes product/catalogue management, stock receive, adjustment, count/apply-count, transfer, low-stock reporting and purchasing/receiving with Branch attribution.
 
-### 6.2 Inventory and purchasing
+Possible candidates include advanced inventory/purchasing/reporting/automation. Stock ledger, UOM, Branch attribution and replay correctness remain invariants.
 
-Current supported behavior includes:
+### Cash/payments/receivables
 
-- product/catalogue management;
-- stock receive;
-- stock adjustment;
-- stock count and apply-count workflow;
-- stock transfer;
-- low-stock reporting;
-- purchasing/receiving;
-- Branch-scoped inventory operations.
+Current behavior includes shifts, cash movements, expenses/corrections, merchant customer-payment methods, Branch payment-method assignment, Paystack/Flutterwave/bank/terminal/cash operational paths where configured, and outstanding-balance collection.
 
-**Packageable candidates:** advanced stock operations, purchasing depth, advanced inventory reporting/automation.
+Merchant customer tender configuration is not ProcessEdge commercial subscription-payment configuration.
 
-**Never package away:** stock-ledger integrity, UOM conversion/normalization, Branch attribution and replay/idempotency correctness.
+### Team/Branch management
 
-### 6.3 Cash, payments and receivables
+Current behavior includes membership, role/capability administration, Branch assignment, Branch creation/management and Business/Branch context selection.
 
-Current supported behavior includes:
-
-- opening/closing/reviewing shifts;
-- cash movement and expenses;
-- correction/review controls;
-- merchant customer-payment methods;
-- Branch customer-payment method assignment;
-- Paystack/Flutterwave/bank/terminal/cash operational payment paths where configured;
-- outstanding-balance collection.
-
-Merchant customer tender configuration is **not** the same authority as ProcessEdge commercial subscription-payment methods.
-
-### 6.4 Team and Branch management
-
-Current supported behavior includes:
-
-- merchant team membership;
-- role/capability administration;
-- Branch assignment/scope;
-- Branch creation/management;
-- Business/Branch context selection.
-
-**Packageable candidates:** staff-seat limits, advanced role/capability features, additional Branch allowances/add-ons.
-
-Security isolation and minimum authorization controls are not commercial features and remain mandatory on every plan.
-
-### 6.5 WhatsApp
-
-Current supported behavior includes:
-
-- governed WhatsApp connection/consent;
-- tenant connection credentials;
-- Branch routing/selection;
-- catalogue mapping/sync support;
-- webhook message handling;
-- customer resolution;
-- order creation from WhatsApp;
-- payment/customer notification flows.
-
-**Packageable candidate:** WhatsApp selling/channel entitlement and channel-specific limits/add-ons.
-
-WhatsApp must consume Branch entitlement before performing gated selling behavior. It must not create a Branch Subscription or commercial state.
-
-### 6.6 AI
-
-Current Merchant AI:
-
-- is authenticated;
-- is read-only;
-- loads a governed server context;
-- currently restricts insight access to Owner/Manager;
-- is rate-limited;
-- records provider/usage telemetry;
-- cannot execute sales, stock, payment, purchasing, staff, WhatsApp, printer or settings changes.
-
-**Packageable candidates:** AI access, usage allowance/limit, premium insight depth if later approved.
-
-AI must consume resolved entitlement/usage facts and may explain them, but cannot create commercial authority.
-
-### 6.7 Reports and exports
-
-Current reporting includes merchant report-center/insight surfaces and Admin audit/commercial/onboarding portfolios. Report visibility already intersects role/capability/Branch scope in different places.
-
-**Packageable candidates:** report families, advanced analytics, export limits/features.
-
-Audit evidence and correctness/security logs must remain available to authorised operational/compliance authorities regardless of merchant plan packaging.
-
-### 6.8 Printing and devices
-
-Current behavior includes receipt/document printing and device/printer management.
-
-**Packageable candidates:** advanced device count, premium printing/device integrations if explicitly commercialised later.
-
-Basic transaction evidence must remain accessible even when a particular device integration is not included.
-
-## 7. Features versus capabilities versus limits
-
-C2-2 must keep three distinct catalogue concepts:
-
-### Feature
-A product/module availability concept, for example WhatsApp selling, AI insights, advanced reports, advanced inventory or integrations.
-
-### Capability
-An action that may be permitted by a plan but still requires user authorization, for example returns, stock transfer or advanced discounting.
-
-### Limit
-A quantitative threshold, for example Branch count, staff seats, AI usage, WhatsApp volume, export count or another metered allowance.
-
-A Feature is not automatically a user permission. A Capability is not automatically granted to every user. A Limit does not replace transaction validation.
-
-## 8. Current usage/quota authority
-
-There is no canonical general C2 limit/quota registry today.
-
-Existing usage infrastructure is legacy/specialised:
-
-- `usage_events` records tenant-level metered events;
-- `usage_settlements`/items settle legacy usage;
-- the existing default event code is `AI_ORDER_ACTIVITY`;
-- the current legacy plan directly stores usage pricing fields;
-- Merchant AI also has an operational per-minute rate limit, which is abuse protection rather than a merchant commercial entitlement limit.
-
-C2-2 must introduce canonical Limit definitions and authoritative usage bindings rather than reusing the legacy single event as a universal quota design.
-
-## 9. Current pricing and commercial masters
-
-### 9.1 Price versions
-
-C1 already has valuable immutable/effective-dated pricing authority:
-
-- `sellertray_commercial_price_versions`;
-- price lifecycle controls;
-- standard and merchant-override scopes;
-- tax snapshots;
-- effective windows;
-- immutable commercial-order price snapshots.
-
-Current `price_kind` is limited to:
-
-- `subscription`;
-- `branch_setup`.
-
-Current subscription pricing is still plan-based and Business-oriented. Admin UI also currently seeds `planCode: business`, publishes monthly pricing and derives annual pricing from the monthly amount.
-
-C2-3 should preserve the versioning/evidence model while generalising charge classes and binding subscription price to the appropriate Plan Profile Version/cycle/effective policy.
-
-### 9.2 Setup pricing
-
-Branch setup already has a separate one-time price class and Branch-attributed order snapshot lines. This is compatible with the C2 doctrine that setup pricing is separate from recurring Branch subscription pricing.
-
-### 9.3 Merchant overrides
-
-C1 already supports Business-specific price overrides with effective windows. C2 must decide whether recurring overrides bind at Business, Branch, Plan Profile/cycle or another explicit governed subject. Existing accepted snapshots remain immutable.
-
-## 10. Current installment authority
-
-Newer C1/OA2 work already provides versioned installment masters:
-
-- `sellertray_installment_schedule_templates`;
-- `sellertray_installment_schedule_template_lines`;
-- `sellertray_installment_policy_versions`;
-- policy change commands;
-- immutable installment contract snapshots.
-
-This foundation should be **reused and generalised**, not replaced.
-
-However, the current initial-purchase implementation still contains hard-coded compatibility assumptions for:
-
-- `two_installment_70_30`;
-- `three_installment_60_20_20`;
-- fixed percentage labeling in Merchant Web.
-
-C2-3 must make enabled structures and policy selection data-driven. A policy change must not mutate previously accepted installment contracts.
-
-## 11. Current tax authorities
-
-There are two distinct tax contexts that must remain separate:
-
-1. **Merchant operational tax** — `sellertray_tax_configurations` is tenant-revisioned operational sales tax configuration used by commerce/financial-document flows.
-2. **ProcessEdge commercial tax** — C1 commercial price versions carry tax snapshots for SellerTray subscription/setup purchases.
-
-C2-3 must introduce/normalise a governed **SellerTray Commercial Tax Profile/Master** for ProcessEdge charges. It must not silently reuse a merchant's customer-sales tax setting as SellerTray subscription tax authority.
-
-Historical order/price tax snapshots remain immutable.
-
-## 12. Current payment-method authorities
-
-Again, two contexts must remain separate:
-
-1. **Merchant customer tender methods** — `merchant_payment_methods`, `sellertray_branch_payment_methods` and related runtime/payment settings govern how a merchant receives money from customers.
-2. **ProcessEdge commercial payment methods** — SellerTray subscription/setup/installment settlement currently records payment evidence through C1 settlement/admin/payment paths but does not yet have the final configurable ProcessEdge Commercial Payment Method Master required by C2.
-
-C2-3 must create/configure the ProcessEdge commercial-payment authority without contaminating merchant customer tender configuration.
-
-## 13. Current commercial-order authority
-
-### 13.1 `sellertray_commercial_orders`
-
-C1 commercial orders preserve governed purchase state, settlement and lifecycle evidence.
-
-### 13.2 Price snapshots
-
-`sellertray_commercial_order_price_snapshots` currently distinguishes:
-
-- one `subscription` line that carries `plan_code` and **no Branch**;
-- `branch_setup` lines that carry Branch IDs.
-
-This is a central C2-6 migration point. The current model can represent one Business subscription plus multiple Branch setup obligations, but not independent Branch subscriptions with different plans/cycles.
-
-### 13.3 Initial purchase compatibility assumptions
-
-The current first-purchase command/UI assumes:
-
-- one selected plan for the Business;
-- selected Branches are setup subjects, not subscription owners;
-- an existing Business governed subscription order blocks another “initial” subscription purchase;
-- compatibility logic remains tied to trial/current Business runtime semantics;
-- fixed installment structure codes are still surfaced.
-
-C2-6 must replace this with commercial order subjects/lines that can bind each Branch to its own Plan Profile Version and cycle.
-
-## 14. Current legal authority
-
-The final approved legal model already exists and is the C2 legal target.
-
-### 14.1 Universal Master Agreement
-
-Canonical tables/functions include:
-
-- `sellertray_master_agreement_versions`;
-- source documents/quarantine authority;
-- `sellertray_master_agreement_acceptances`;
-- Master Agreement acceptance/read functions.
-
-A Business accepts the current required Master version once. The acceptance binds exact version/content evidence.
-
-### 14.2 Merchant Order Form
-
-`sellertray_commercial_order_forms` and related issue/review/confirmation paths preserve purchase-specific immutable commercial evidence.
-
-Every governed commercial commitment that requires confirmation gets its own Order Form snapshot/confirmation.
-
-### 14.3 Legacy agreement history
-
-Older `sellertray_commercial_agreements`, template versions and acceptances remain historical evidence only. They must not become a second general-agreement authority.
-
-### 14.4 C2-7 rule
-
-Adding a Branch, renewing or changing plan under the same required Master version must **not** force duplicate Master acceptance. A newly required Master version must be accepted before the next governed commitment requiring it can complete.
-
-## 15. Current setup/readiness/activation authority
-
-C1/OA3/OA4 already provides Branch-aware setup evidence:
-
-- Branch setup obligations/readiness;
-- setup appointments and events;
-- service-area/worker scheduling masters;
-- structured completion evidence;
-- reconciliation/activation event history.
-
-This is useful C2 input, but current activation ultimately projects into the Business-wide compatibility subscription row.
-
-C2-8 should preserve the Branch setup/readiness evidence while making each Branch Subscription's activation independent.
-
-## 16. Cross-surface inventory and required C2 convergence
-
-### Shared Core
-
-**Today:** Business-wide `tenant_subscriptions` + C1 commercial evidence around it.
-
-**C2:** Branch Subscription + Plan Profile Versions + catalogues + commercial masters + shared resolver become canonical.
-
-### Merchant Web
-
-**Today:** Billing Center shows Business commercial orders and one-plan initial purchase. Branches participate mainly as setup subjects. Pricing/settlement/legal/setup management already exists.
-
-**C2:** full Branch-by-Branch subscription management: buy, renew, change plan/cycle, usage/limits, Order Forms, setup and balances.
-
-### Mobile
-
-**Today:** `loadSubscriptionAccess(tenantId)` calls `get_orderdesk_subscription_access`, hardcodes legacy monthly/`AI_ORDER_ACTIVITY` response types and caches only tenant/user `canWrite + validUntil` for bounded offline access.
-
-**C2:** show active Branch plan/status/limits; cache a bounded/versioned Branch entitlement snapshot; secure handoff to Merchant Web for complex billing; replay always revalidates server authority.
-
-### Admin Web
-
-**Today:** strong pricing, agreements, settlement, setup, audit and portfolio surfaces exist, but pricing still carries legacy plan assumptions and Business overrides.
-
-**C2:** professional Plans & Pricing, Plan Profile/version management, commercial tax/payment/installment masters, Branch Subscription inspection/recovery and audit, retaining current capability/AAL2/audit controls.
+Possible limits/add-ons include staff seats, Branch allowances and approved advanced team features. Authentication/authorization/isolation are never plan switches.
 
 ### WhatsApp
 
-**Today:** connection, Branch routing, catalogue mapping, webhook order/payment flows exist. WhatsApp does not own subscription truth.
+Current behavior includes connection/consent, credentials, Branch routing, catalogue mapping/sync support, webhook handling, customer resolution, WhatsApp order creation and payment/customer notification flows.
 
-**C2:** resolve the relevant Branch and check shared Branch entitlement before gated channel behavior. Never mutate subscription truth from WhatsApp.
+WhatsApp selling/channel access is a valid Feature/add-on candidate. WhatsApp must consume Branch entitlement but never create Branch Subscription truth.
 
 ### AI
 
-**Today:** authenticated Owner/Manager read-only analysis over governed server context; no mutation authority.
+Merchant AI is authenticated, Owner/Manager-only today, read-only, server-context governed, rate-limited and telemetry-backed. It cannot execute sales, stock, payment, purchasing, staff, WhatsApp, printer or settings mutations.
 
-**C2:** include governed Branch plan/limit/usage facts and entitlement checks/explanations. AI still cannot create commercial state.
+AI access/usage may be commercialized; operational abuse rate limits are not the same as merchant plan limits. AI may explain entitlement facts but not create them.
 
-### Reporting/Audit
+### Reports/exports
 
-**Today:** merchant reports and Admin audit/commercial/onboarding reporting exist but subscription is still Business-oriented.
+Merchant report-center/insight surfaces and Admin audit/commercial/onboarding portfolios already exist with role/capability/Branch-scope intersections.
 
-**C2:** Branch plan mix, Plan Profile Version, periods, renewals, usage/limits, legal state, settlement and privileged interventions become reportable.
+Report families, advanced analytics and export limits are candidates. Historical audit/compliance evidence must remain available to authorized authorities regardless of merchant package.
 
-### Offline/Sync
+### Printing/devices
 
-**Today:** Business-level bounded write authority is cached and replayed through governed server commands.
+Receipt/document printing and device/printer management exist. Advanced device/integration limits may be candidates, while basic transaction evidence remains accessible.
 
-**C2:** cache Branch/version-scoped entitlement state; fail closed when stale/expired; replay revalidates current server entitlement, user permission, Branch scope and transaction rules.
+## 7. Feature vs Capability vs Limit
+
+C2-2 must preserve these distinct concepts:
+
+- **Feature** — module/product availability such as WhatsApp selling, AI insights, advanced reports or integrations.
+- **Capability** — an action a plan may permit but which still requires actor authorization, such as return, stock transfer or advanced discounting.
+- **Limit** — a quantitative threshold such as Branch count, staff seats, AI usage, WhatsApp volume or export count.
+
+A Feature is not a user permission. A Capability is not automatically granted to every user. A Limit does not replace transaction validation.
+
+## 8. Usage/quota authority
+
+There is no canonical general C2 limit registry today.
+
+Current usage infrastructure is specialized/legacy:
+
+- `usage_events` records tenant-level events;
+- `usage_settlements` and items settle current usage;
+- legacy default event is `AI_ORDER_ACTIVITY`;
+- legacy plan stores usage pricing fields;
+- AI has a per-minute operational rate limit that is abuse protection, not plan quota.
+
+C2-2 must introduce canonical Limit definitions and authoritative usage bindings instead of treating one legacy event as a universal quota design.
+
+## 9. Pricing and commercial masters
+
+### Price authority
+
+C1 already provides valuable immutable/effective-dated pricing via `sellertray_commercial_price_versions`, lifecycle controls, standard/merchant-override scopes, tax snapshots, effective windows and immutable order price snapshots.
+
+Current `price_kind` supports `subscription` and `branch_setup`. Current subscription pricing remains plan-code/Business-oriented; Admin UI still defaults to `business`, publishes monthly pricing and derives annual pricing from the current policy.
+
+C2-3 should preserve versioning/evidence while generalizing charge classes and binding recurring subscription prices to explicit Plan Profile Version/cycle/effective policy.
+
+### Setup pricing
+
+Branch setup is already a separate one-time Branch-attributed charge. Preserve that separation from recurring Branch subscription charges.
+
+### Merchant overrides
+
+C1 has effective-dated Business-specific overrides. C2-3 must explicitly define whether future recurring overrides bind at Business, Branch, Plan Profile/cycle or another governed subject. Historical accepted snapshots remain immutable.
+
+## 10. Installment authority
+
+Reusable versioned foundations already exist:
+
+- `sellertray_installment_schedule_templates`
+- `sellertray_installment_schedule_template_lines`
+- `sellertray_installment_policy_versions`
+- policy-change commands
+- immutable installment contract snapshots
+
+Reuse/generalize these rather than replacing them.
+
+Compatibility debt remains in initial purchase/UI through fixed `two_installment_70_30` and `three_installment_60_20_20` codes/labels. C2-3 must make availability/selection data-driven. Later policy changes cannot mutate accepted installment contracts.
+
+## 11. Tax authorities
+
+Keep two tax domains separate:
+
+1. **Merchant operational/customer-sales tax** — `sellertray_tax_configurations` governs merchant commerce tax.
+2. **ProcessEdge commercial tax** — C1 commercial price/order evidence captures tax for SellerTray subscription/setup charges.
+
+C2-3 needs a governed SellerTray Commercial Tax Profile/Master for ProcessEdge charges. Never reuse the merchant’s customer-sales tax configuration as subscription tax authority. Historical snapshots remain immutable.
+
+## 12. Payment-method authorities
+
+Keep two payment domains separate:
+
+1. **Merchant customer tender methods** — `merchant_payment_methods`, `sellertray_branch_payment_methods` and related runtime settings govern how merchants receive customer money.
+2. **ProcessEdge commercial payment methods** — C1 settlement/payment evidence records how SellerTray obligations are settled, but the final configurable ProcessEdge Commercial Payment Method Master is not yet present.
+
+C2-3 must create the ProcessEdge commercial-payment authority without contaminating merchant customer tender configuration.
+
+## 13. Commercial-order authority
+
+C1 `sellertray_commercial_orders` preserves governed purchase lifecycle/settlement evidence.
+
+Current price snapshots encode:
+
+- one `subscription` line carrying `plan_code` with `branch_id = null`;
+- Branch-specific `branch_setup` lines.
+
+Therefore current C1 can represent one Business subscription plus multiple Branch setup obligations, but not independent Branch subscriptions with different plans/cycles.
+
+Current first-purchase behavior also assumes one Business plan, Branches as setup subjects, one governed initial subscription purchase and legacy trial/runtime semantics.
+
+C2-6 must introduce Branch subscription subjects/lines without rewriting historical C1 orders.
+
+## 14. Legal authority
+
+The final legal target already exists and must be extended rather than replaced.
+
+### Universal Master Agreement
+
+Canonical authority includes versioned Master records/source governance and `sellertray_master_agreement_acceptances`. The current required Master is accepted once per Business/version with exact content/version evidence.
+
+### Merchant Order Form
+
+`sellertray_commercial_order_forms` and issue/review/confirmation paths preserve immutable purchase-specific commercial evidence. Each governed commercial commitment that requires confirmation gets its own Order Form.
+
+### Legacy agreement history
+
+Older `sellertray_commercial_agreements`, template versions and acceptances remain historical/audit evidence only.
+
+### C2-7 rule
+
+Adding a Branch, renewing or changing plan under the same required Master version must not force duplicate Master acceptance. A newly required Master version must be accepted before the next governed commitment that requires it completes.
+
+## 15. Setup/readiness/activation authority
+
+C1/OA3/OA4 already provide Branch-aware setup obligations/readiness, appointments/events, service-area/worker scheduling, structured completion evidence and reconciliation history.
+
+Preserve these facts. What changes in C2-8 is the lifecycle owner: each Branch Subscription activates independently instead of ultimately projecting all access into one Business subscription row.
+
+## 16. Cross-surface convergence map
+
+| Surface | Current authority | C2 destination |
+|---|---|---|
+| Shared Core | Business-wide `tenant_subscriptions` plus C1 evidence | Branch Subscription + Plan Profile Versions + catalogues + commercial masters + shared resolver |
+| Merchant Web | Business Billing Center / one-plan initial purchase; Branches mainly setup subjects | Branch-by-Branch buy/renew/change, usage/limits, Order Forms, setup, balances |
+| Mobile | `get_orderdesk_subscription_access`; legacy monthly/usage assumptions; tenant/user `canWrite + validUntil` cache | Branch plan/status/limit visibility; Branch/version bounded cache; secure billing handoff |
+| Admin Web | Strong pricing/agreement/settlement/setup/audit surfaces with legacy plan assumptions | Professional Plan Profiles, commercial masters, Branch Subscription review/recovery |
+| WhatsApp | Branch routing + channel/order/payment behavior; no subscription ownership | Resolve Branch and consume shared entitlement before gated behavior |
+| AI | Read-only governed Business analysis | Read/explain Branch plan/limit/usage facts; no commercial mutation |
+| Reporting/Audit | Merchant/Admin reporting with Business-oriented subscription semantics | Branch plan mix/version/period/renewal/usage/legal/settlement/intervention reporting |
+| Offline/Sync | Business-level bounded write cache + governed command replay | Branch/version entitlement snapshot; replay revalidates current server truth |
 
 ## 17. Exact old -> new authority map
 
-| Current authority | Current role | C2 destination | Migration/cutover treatment |
+| Current authority | Current role | C2 destination | Treatment |
 |---|---|---|---|
-| `subscription_plans` | Legacy Business plan/trial/usage configuration | Plan Profile + immutable Plan Profile Version + separate commercial pricing | Preserve legacy codes for migration evidence; do not make plan name/code a runtime conditional. |
-| `tenant_subscriptions` | One Business-wide runtime subscription row | Branch Subscriptions; Business aggregate projection only | Keep active through parallel implementation; map in C2-10; cut runtime reads/writes only after parity proof. |
-| `get_orderdesk_subscription_access` | Business-wide client subscription read | Shared Branch entitlement/subscription read model | Maintain compatibility adapter during transition, then retire stale Business semantics. |
-| `orderdesk_subscription_can_write` | Business-wide write gate | Branch resolver ∩ user permission ∩ Branch scope ∩ transaction state ∩ limits | Replace affected command checks in controlled C2-9/C2-10 migration, never with client logic. |
-| `sellertray_commercial_entitlement_events` | C1 immutable entitlement/reconciliation history | Branch Subscription/entitlement event history and migration provenance | Preserve event evidence; do not use as a competing permanent resolver. |
-| C1 reconciliation update of `tenant_subscriptions` | Projects C1 event into old runtime | Branch Subscription lifecycle mutation under canonical command | Retain until Branch runtime cutover, then stop compatibility mutation only after no supported flow depends on it. |
-| `sellertray_commercial_orders` | Governed Business commercial purchase container | Commercial order with Branch subscription subjects/lines | Reuse immutable order/evidence principles; extend subject model rather than overwrite historical orders. |
-| subscription price snapshot with `branch_id = null` | One Business subscription line | Branch-bound subscription order line tied to Plan Profile Version/cycle | Historical rows remain valid; new C2 orders use Branch subscription subjects. |
-| Branch setup snapshot lines | One-time Branch setup charge | Branch setup charge class | Reuse/preserve; keep separate from recurring subscription charge. |
-| `sellertray_commercial_price_versions` | Effective subscription/setup pricing | Versioned charge/pricing authority bound to explicit subject/cycle/tax | Reuse versioning/lifecycle/evidence; generalise charge types and Plan Profile bindings. |
-| Business merchant price override | Business-specific effective price | Explicit governed recurring override subject | Preserve historical snapshots; define Business/Branch/plan scope explicitly in C2-3. |
-| installment templates/policy versions/contracts | Versioned installment authority with some legacy hard-coded entry paths | Installment Structure/Policy Master | Reuse masters; remove hard-coded structure branching; accepted contracts immutable. |
-| `sellertray_tax_configurations` | Merchant operational/customer-sales tax | Merchant operational tax remains separate | Do not reuse as ProcessEdge subscription tax. |
-| commercial price tax snapshot | ProcessEdge charge tax evidence | Commercial Tax Profile/Master + immutable order snapshot | Normalise master in C2-3; preserve historical snapshots. |
-| merchant/Branch payment methods | Merchant customer tender authority | Merchant customer tender authority remains separate | Do not use as ProcessEdge commercial payment master. |
-| C1 commercial payment/settlement evidence | SellerTray subscription/setup settlement | ProcessEdge Commercial Payment Method Master + existing immutable settlement evidence | Add governed method master without rewriting past payments. |
+| `subscription_plans` | Legacy plan/trial/usage config | Plan Profile + immutable Plan Profile Version + separate pricing | Preserve legacy codes as migration evidence; no plan-name runtime branching. |
+| `tenant_subscriptions` | One Business-wide runtime row | Branch Subscriptions; Business aggregate only | Keep active through parallel build; migrate/cut over only in C2-10. |
+| `get_orderdesk_subscription_access` | Business-wide client read | Shared Branch subscription/entitlement read model | Compatibility adapter during transition; retire stale Business semantics after cutover. |
+| `orderdesk_subscription_can_write` | Business-wide write gate | Branch entitlement ∩ user permission ∩ Branch scope ∩ transaction state ∩ limits | Replace affected server checks deliberately in C2-9/C2-10, never with client-only logic. |
+| `sellertray_commercial_entitlement_events` | Immutable C1 entitlement history | Branch lifecycle/entitlement event history + migration provenance | Preserve evidence; do not make a competing resolver. |
+| C1 update of `tenant_subscriptions` | Projects C1 result into old runtime | Canonical Branch Subscription lifecycle mutation | Retain until cutover; stop only after no supported flow depends on it. |
+| `sellertray_commercial_orders` | Governed Business purchase container | Commercial order with Branch subscription subjects | Extend subject model; do not rewrite historical orders. |
+| subscription snapshot with `branch_id = null` | Business subscription line | Branch-bound subscription order line | Historical rows remain valid; new C2 commitments bind Branch. |
+| Branch setup snapshot | One-time Branch setup charge | Branch setup charge class | Reuse/preserve, separate from recurring subscription. |
+| commercial price versions | Subscription/setup pricing evidence | Versioned charge/pricing authority bound to explicit plan/cycle/tax subject | Reuse version lifecycle; generalize bindings. |
+| Business price override | Business-specific price | Explicit governed recurring override subject | Preserve historical snapshots; define future scope explicitly. |
+| installment templates/policies/contracts | Versioned installment authority | Installment Structure/Policy Master | Reuse; remove fixed branching; contracts immutable. |
+| merchant operational tax | Customer-sales tax | Remains merchant tax authority | Never use as SellerTray subscription tax. |
+| commercial tax snapshots | ProcessEdge charge evidence | Commercial Tax Profile/Master + immutable snapshots | Normalize master; preserve history. |
+| merchant/Branch payment methods | Customer tender authority | Remains merchant payment authority | Never use as ProcessEdge commercial payment master. |
+| C1 commercial payment/settlement | SellerTray obligation settlement evidence | ProcessEdge Commercial Payment Method Master + immutable settlement evidence | Add master without rewriting past payments. |
 | Master Agreement versions/acceptances | Universal legal authority | Same canonical Master authority | Preserve; accept once per Business/current required version. |
-| Commercial Order Forms | Purchase-specific immutable legal/commercial evidence | Same canonical Merchant Order Form authority, extended for Branch subscription subjects | Preserve; new immutable confirmation per governed commitment. |
-| legacy commercial agreement tables | Historical pre-separation legal evidence | Historical/audit only | Never reactivate as universal legal authority. |
-| Branch setup/readiness/appointment evidence | Branch-aware setup authority | Branch Subscription activation prerequisite | Reuse/relink; each Branch activates independently. |
-| `tenant_member_capabilities` + role logic | User authorization | User permission dimension intersected by plan entitlement | Preserve separation; reconcile Cashier role/runtime divergence. |
-| Admin capability framework | ProcessEdge privileged authorization | Same Admin security authority | Not merchant packageable; preserve AAL2/scope/audit discipline. |
-| `usage_events`/settlements | Legacy specialised usage billing | Canonical limit/usage bindings + commercial usage settlement where approved | Migrate/bridge event definitions deliberately; do not assume one event fits all limits. |
-| Mobile tenant/user operational-access cache | Bounded Business-level offline write flag | Bounded Branch/version entitlement snapshot | Version and scope by Branch/actor; replay revalidates server truth. |
-| WhatsApp Branch routing | Selects operational Branch | Input to shared Branch entitlement check | Keep routing separate; channel never owns subscription. |
-| AI governed context | Read-only Business operational analysis | Read-only governed context including Branch entitlement/usage facts | Add resolver consumption; no mutation authority. |
+| Merchant Order Forms | Purchase-specific evidence | Same authority extended to Branch subscription subjects | New immutable confirmation per governed commitment. |
+| legacy commercial agreements | Pre-separation history | Historical/audit only | Never reactivate as universal agreement authority. |
+| Branch setup/readiness/appointments | Branch setup authority | Branch Subscription activation prerequisite | Reuse/relink; each Branch activates independently. |
+| merchant role/capability + Branch access | User authorization/scope | Separate intersecting authorization dimensions | Preserve; internal `staff` remains merchant-facing Cashier compatibility unless explicitly changed. |
+| Admin capability framework | ProcessEdge privileged authorization | Same Admin security authority | Never merchant-package; preserve AAL2/scope/audit. |
+| usage events/settlements | Legacy specialized usage billing | Canonical Limit/usage bindings + approved usage settlement | Migrate deliberately; one event is not a universal quota model. |
+| Mobile tenant/user access cache | Bounded Business offline write flag | Bounded Branch/version entitlement snapshot | Scope/version by Branch/actor; replay revalidates. |
+| WhatsApp Branch routing | Operational Branch choice | Input to shared Branch entitlement check | Keep routing separate; channel never owns subscription. |
+| AI governed context | Read-only Business analysis | Read-only context with Branch entitlement/usage facts | Resolver consumption only; no mutation. |
 
-## 18. Hard-coded compatibility assumptions C2 must remove
+## 18. Verified compatibility assumptions C2 must remove
 
-These are verified migration targets, not invitations for isolated fixes before the new authority exists:
+These are migration targets, not isolated pre-C2 fixes:
 
 1. `business` as the effective legacy plan identity.
-2. Business-level `trial` semantics as a purchase/runtime gate.
-3. `tenant_subscriptions` one-row-per-Business authority.
-4. legacy monthly-only plan interval typing.
-5. `AI_ORDER_ACTIVITY` embedded as the legacy plan/usage event.
+2. Business-level `trial` semantics as purchase/runtime gate.
+3. one-row-per-Business `tenant_subscriptions` authority.
+4. legacy monthly-only subscription typing.
+5. `AI_ORDER_ACTIVITY` embedded as legacy plan/usage event.
 6. Mobile fallback `SellerTray Business` and monthly billing type.
 7. Mobile offline authority cached at tenant/user rather than Branch/version.
-8. first purchase assumes one Business plan with Branches as setup subjects.
-9. subscription price snapshot requires `branch_id IS NULL`.
-10. Business-level guard against a second governed subscription purchase.
-11. initial purchase hard-coded `70:30` and `60:20:20` structure codes/labels.
-12. Admin pricing form default `planCode: business`.
-13. current subscription pricing policy derives annual pricing from the monthly amount; future cycle pricing must be governed data/policy rather than a client assumption.
-14. Branch readiness currently ends by projecting into Business runtime rather than owning a Branch Subscription lifecycle.
+8. initial purchase assumes one Business plan and Branches only as setup subjects.
+9. subscription price snapshot requires no Branch.
+10. Business-level guard against another governed subscription purchase.
+11. fixed 70:30 and 60:20:20 initial-purchase compatibility choices.
+12. Admin pricing default `planCode: business`.
+13. current annual pricing derived from monthly policy instead of a future general cycle-pricing master.
+14. Branch readiness ultimately projects into Business runtime rather than owning Branch Subscription lifecycle.
 
-## 19. Fundamental controls that are not plan-entitlement switches
+The internal `staff` value is **not** on this removal list merely because merchant UI calls the role Cashier. Rename/migration is unnecessary unless a later explicit decision changes the compatibility model.
 
-The following are platform correctness/security properties and must not disappear because a plan does not list them:
+## 19. Always-on platform invariants
 
-- tenant isolation;
-- Branch isolation/scope enforcement;
-- user authentication and authorization;
-- UOM integrity and Stock UOM normalization;
+Do not turn these into plan entitlement switches:
+
+- tenant and Branch isolation;
+- authentication/authorization;
+- UOM/Stock UOM integrity;
 - inventory ledger integrity;
 - payment state-machine correctness;
 - tax arithmetic correctness;
 - command/payment idempotency;
 - immutable commercial/legal evidence;
-- privileged Admin audit/AAL2 controls;
+- Admin audit/AAL2 controls;
 - safe offline replay validation;
-- audit history required for governed actions;
+- required audit history;
 - server-authoritative transaction validation.
 
-Plan packaging may expose higher-level product features while these controls continue underneath every supported transaction.
+## 20. C2-2 classification input
 
-## 20. C2-2 catalogue design inputs
-
-C2-2 may now design the canonical catalogues from this inventory. The first design pass must explicitly classify each item as one of:
+Every candidate must be classified as one of:
 
 - always-on platform invariant;
 - Feature;
@@ -588,50 +422,45 @@ C2-2 may now design the canonical catalogues from this inventory. The first desi
 - Limit;
 - add-on candidate;
 - Admin-only operational capability;
-- non-commercial role/permission concept.
+- non-commercial role/permission/scope concept.
 
-Do not seed Starter/Growth/Scale until this classification is reviewed. The seed profiles remain editable configuration, not code constants.
+Only after this classification is reviewed should editable Starter/Growth/Scale seeds be created.
 
-## 21. Multi-Branch lifecycle acceptance contract
+## 21. Staggered multi-Branch acceptance contract
 
-The target must prove staggered independent lifecycle behavior, not merely multiple rows.
+C2 must prove real independent lifecycle, not merely multiple rows:
 
-Required scenario:
+- March: Branch A buys its plan/cycle, satisfies its own obligations and activates.
+- September: same Business adds Branch B; Branch B selects its own valid plan/cycle at then-current pricing, receives its own setup/payment/Order Form obligations and activates independently.
+- Branch A keeps operating while Branch B is pending.
+- Branch A renews in March; Branch B renews in September.
+- No automatic co-termination/proration unless later explicitly approved.
 
-- **March:** Branch A purchases a plan/cycle, completes its own obligations and activates.
-- **September:** the same Business adds Branch B; Branch B selects its own plan/cycle at then-current pricing, receives its own setup/payment/Order Form obligations and activates independently.
-- Branch A continues operating while Branch B is pending.
-- Branch A renews on its March anniversary.
-- Branch B renews on its September anniversary.
-- No automatic co-termination or proration occurs unless a later explicit policy is approved.
-
-Valid steady-state examples therefore include:
+A valid steady state can therefore include:
 
 - Ikeja — Growth / Yearly / Active / renews March;
 - Lekki — Starter / Monthly / Active / renews September;
 - Abuja — Scale / Setup scheduled.
 
-Business dashboards may aggregate this state but must not manufacture one Business plan or expiry.
+Business dashboards aggregate this state but do not manufacture one Business plan/expiry.
 
-## 22. C2 release-batch map
+## 22. Approved release batches
 
-The approved bounded release sequence is:
-
-1. **Batch 1 — C2-0 + C2-1:** governance reset, current-state inventory and exact migration map. **This document is the foundation output.**
-2. **Batch 2 — C2-2 + C2-3:** Plan Profile/catalogue and commercial-master foundations; no runtime cutover.
-3. **Batch 3 — C2-4 + C2-5:** Branch Subscription authority and shared entitlement resolver in parallel with legacy runtime.
-4. **Batch 4 — C2-6 + C2-7:** Branch-aware purchasing/settlement plus final Master Agreement/Order Form convergence.
-5. **Batch 5 — C2-8 + C2-9:** Branch activation and Merchant/Mobile/Admin/WhatsApp/AI/report/offline convergence.
-6. **Batch 6 — C2-10:** production migration, dual-read/parity evidence and controlled runtime cutover.
-7. **Batch 7 — C2-11:** automated/human multi-Branch acceptance, including staggered March/September lifecycle; only then retire legacy Business-wide runtime semantics.
+1. **Batch 1 — C2-0 + C2-1:** governance reset, inventory, exact migration map.
+2. **Batch 2 — C2-2 + C2-3:** Plan Profile/catalogue + commercial masters; no runtime cutover.
+3. **Batch 3 — C2-4 + C2-5:** Branch Subscription + shared resolver in parallel with legacy runtime.
+4. **Batch 4 — C2-6 + C2-7:** Branch-aware purchasing/settlement + Master/Order Form convergence.
+5. **Batch 5 — C2-8 + C2-9:** Branch activation + all surface convergence.
+6. **Batch 6 — C2-10:** production migration, parity evidence and controlled cutover.
+7. **Batch 7 — C2-11:** automated/human staggered multi-Branch acceptance, then legacy retirement.
 
 ## 23. Batch 1 exit condition
 
-C2-0/C2-1 is ready to close when:
+Batch 1 is ready to close when:
 
-- this inventory is reviewed and merged;
-- `OA5_C2_SEQUENCE.md` reflects the final Master Agreement + Merchant Order Form doctrine and staggered independent-Branch acceptance;
+- this inventory and its appendix are reviewed and merged;
+- `OA5_C2_SEQUENCE.md` reflects final Master + Order Form doctrine and independent Branch lifecycle;
 - no Commercial V2 schema/runtime mutation is mixed into the governance PR;
-- the next PR can derive C2-2/C2-3 catalogues/masters from this exact map rather than assumptions.
+- C2-2/C2-3 can derive its first catalogue/master schema from this evidence rather than assumptions.
 
 Until then, production continues using the legacy compatibility runtime intentionally.
