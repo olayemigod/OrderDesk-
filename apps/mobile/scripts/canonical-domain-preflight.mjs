@@ -56,7 +56,7 @@ assert.match(mobileAppConfig, /"pathPrefix": "\/invite"/);
 
 assert.match(mobileAuth, /const SELLERTRAY_PRIVACY_URL = 'https:\/\/sellertray\.com\/privacy';/);
 assert.match(mobileAuth, /const SELLERTRAY_TERMS_URL = 'https:\/\/sellertray\.com\/terms';/);
-assert.match(invitationLink, /app\\\.sellertray\\\.com/);
+assert.match(invitationLink, /parsed\.hostname\.toLowerCase\(\) !== 'app\.sellertray\.com'/);
 assert.match(teamManagement, /'https:\/\/app\.sellertray\.com'/);
 assert.match(teamManagement, /https:\/\/sellertray\.com\/privacy/);
 assert.match(teamManagement, /https:\/\/sellertray\.com\/terms/);
