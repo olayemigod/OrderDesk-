@@ -10,6 +10,7 @@ const corsHeaders = {
 const encoder = new TextEncoder();
 const HANDOFF_TTL_MS = 5 * 60 * 1000;
 const MAX_CREATES_PER_MINUTE = 5;
+const MERCHANT_WEB_ORIGIN = 'https://app.sellertray.com';
 
 type CreateBody = { action: 'create'; tenantId?: string };
 type ConsumeBody = { action: 'consume'; handoffToken?: string };
@@ -86,9 +87,8 @@ Deno.serve(async (request) => {
       });
       if (insertError) throw insertError;
 
-      const merchantWebUrl = (Deno.env.get('SELLERTRAY_MERCHANT_WEB_URL') || 'https://sellertray-merchant.vercel.app').replace(/\/+$/, '');
       return json({
-        url: `${merchantWebUrl}/#st_handoff=${encodeURIComponent(secret)}`,
+        url: `${MERCHANT_WEB_ORIGIN}/#st_handoff=${encodeURIComponent(secret)}`,
         expiresAt,
         actionCode: target.actionCode,
         actionLabel: target.actionLabel,
