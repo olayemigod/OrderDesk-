@@ -21,6 +21,18 @@ with verifier as (
   where n.nspname='public' and p.proname='platform_admin_verify_oa5c_production_test_business_proof'
 )
 select extensions.ok(
+  position('where p.id=v_confirmation.agreement_package_id' in definition)>0
+  and position('from public.sellertray_order_form_confirmations c' in definition)
+      < position('where p.id=v_confirmation.agreement_package_id' in definition),
+  'OA5C resolves the historical Agreement Package from the immutable Order Form confirmation rather than newest-package ordering'
+) from verifier;
+
+with verifier as (
+  select lower(pg_get_functiondef(p.oid)) as definition
+  from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+  where n.nspname='public' and p.proname='platform_admin_verify_oa5c_production_test_business_proof'
+)
+select extensions.ok(
   position('v_package.manifest#>>''{masteragreement,versionid}''=v_package.master_agreement_version_id::text' in definition)>0,
   'Agreement Package manifest is validated against its own immutable Master version'
 ) from verifier;
@@ -69,13 +81,9 @@ select extensions.ok(
 ) from verifier;
 
 select extensions.ok(
-  not has_function_privilege('anon','public.platform_admin_verify_oa5c_production_test_business_proof(uuid,uuid,uuid)','EXECUTE'),
-  'anonymous clients cannot execute the OA5C production proof verifier'
-);
-
-select extensions.ok(
-  not has_function_privilege('authenticated','public.platform_admin_verify_oa5c_production_test_business_proof(uuid,uuid,uuid)','EXECUTE'),
-  'merchant sessions cannot execute the platform OA5C production proof verifier directly'
+  not has_function_privilege('anon','public.platform_admin_verify_oa5c_production_test_business_proof(uuid,uuid,uuid)','EXECUTE')
+  and not has_function_privilege('authenticated','public.platform_admin_verify_oa5c_production_test_business_proof(uuid,uuid,uuid)','EXECUTE'),
+  'anonymous and merchant sessions cannot execute the platform OA5C production proof verifier directly'
 );
 
 select extensions.ok(
