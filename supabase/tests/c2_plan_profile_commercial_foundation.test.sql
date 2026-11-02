@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(42);
+select extensions.plan(47);
 
 select extensions.ok(to_regclass('public.sellertray_feature_catalogue') is not null,'C2 creates the canonical Feature catalogue');
 select extensions.ok(to_regclass('public.sellertray_capability_catalogue') is not null,'C2 creates the canonical Capability catalogue');
