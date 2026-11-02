@@ -22,7 +22,7 @@ select extensions.ok(
 );
 
 select extensions.ok(
-  position('sellertray-branch-subscription|' in pg_get_functiondef('public.register_sellertray_branch_subscription_addon(uuid,uuid,uuid,text,timestamptz,timestamptz,uuid,uuid,uuid,uuid,jsonb)'::regprocedure))
+  position('sellertray-branch-subscription|' in lower(pg_get_functiondef('public.register_sellertray_branch_subscription_addon(uuid,uuid,uuid,text,timestamptz,timestamptz,uuid,uuid,uuid,uuid,jsonb)'::regprocedure)))
   < position('select s.* into strict v_subscription' in lower(pg_get_functiondef('public.register_sellertray_branch_subscription_addon(uuid,uuid,uuid,text,timestamptz,timestamptz,uuid,uuid,uuid,uuid,jsonb)'::regprocedure))),
   'Add-on registration acquires Branch serialization before reading mutable subscription term state'
 );
