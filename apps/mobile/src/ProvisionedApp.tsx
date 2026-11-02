@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 
 import { AuthGate } from './components/AuthGate';
@@ -14,21 +14,36 @@ import {
 } from './data/teamRepository';
 import { useBusinesses } from './hooks/useBusinesses';
 import { usePlatformAdmin } from './hooks/usePlatformAdmin';
+import { useInvitationLink } from './lib/invitationLink';
 import { supabase } from './lib/supabase';
 import { BusinessContextSelectionProvider } from './redesign/BusinessContextSelection';
 import RedesignWorkspace from './redesign/RedesignWorkspace';
 
 export default function ProvisionedApp() {
+  const invitationLink = useInvitationLink();
+
   return (
     <AuthGate>
       <LegalAcceptanceGate>
-        <ProvisioningGate />
+        <ProvisioningGate
+          focusedInvitationId={invitationLink.invitationId}
+          invitationLinkReady={invitationLink.ready}
+          onResolveInvitation={invitationLink.clearInvitation}
+        />
       </LegalAcceptanceGate>
     </AuthGate>
   );
 }
 
-function ProvisioningGate() {
+function ProvisioningGate({
+  focusedInvitationId,
+  invitationLinkReady,
+  onResolveInvitation,
+}: {
+  focusedInvitationId: string | null;
+  invitationLinkReady: boolean;
+  onResolveInvitation: (invitationId?: string) => Promise<void>;
+}) {
   const {
     businesses,
     activeBusiness,
@@ -41,6 +56,7 @@ function ProvisioningGate() {
   const platformAdmin = usePlatformAdmin();
   const [invitations, setInvitations] = useState<PendingTeamInvitation[]>([]);
   const [invitationLoading, setInvitationLoading] = useState(true);
+  const [loadedFocusedInvitationId, setLoadedFocusedInvitationId] = useState<string | null>(null);
   const [invitationBusyId, setInvitationBusyId] = useState<string | null>(null);
   const [invitationError, setInvitationError] = useState<string | null>(null);
 
@@ -57,24 +73,41 @@ function ProvisioningGate() {
   }, []);
 
   useEffect(() => {
-    void refreshInvitations();
-  }, [refreshInvitations]);
+    let active = true;
+    setLoadedFocusedInvitationId(null);
+    void refreshInvitations().then(() => {
+      if (active) setLoadedFocusedInvitationId(focusedInvitationId);
+    });
+    return () => {
+      active = false;
+    };
+  }, [focusedInvitationId, refreshInvitations]);
 
   const handleInvitation = useCallback(async (invitationId: string, decision: 'accept' | 'decline') => {
+    const invitation = invitations.find((candidate) => candidate.id === invitationId) ?? null;
     setInvitationBusyId(invitationId);
     try {
       if (decision === 'accept') await acceptTeamInvitation(invitationId);
       else await declineTeamInvitation(invitationId);
-      await Promise.all([refreshInvitations(), refresh()]);
+
+      await Promise.all([
+        refreshInvitations(),
+        refresh(decision === 'accept' ? invitation?.tenantId : undefined),
+      ]);
+      if (focusedInvitationId === invitationId) await onResolveInvitation(invitationId);
       setInvitationError(null);
     } catch (nextError) {
       setInvitationError(errorMessage(nextError, `Unable to ${decision} the Business invitation.`));
     } finally {
       setInvitationBusyId(null);
     }
-  }, [refresh, refreshInvitations]);
+  }, [focusedInvitationId, invitations, onResolveInvitation, refresh, refreshInvitations]);
 
-  if ((loading || platformAdmin.loading || invitationLoading) && !activeBusiness && !platformAdmin.overview) {
+  const focusedInvitationRefreshing = Boolean(
+    focusedInvitationId && loadedFocusedInvitationId !== focusedInvitationId,
+  );
+
+  if ((!invitationLinkReady || loading || platformAdmin.loading || invitationLoading) && !activeBusiness && !platformAdmin.overview) {
     return <SellerTrayLoadingScreen message="Preparing your SellerTray account…" />;
   }
 
@@ -86,9 +119,12 @@ function ProvisioningGate() {
             invitations={invitations}
             busyId={invitationBusyId}
             error={invitationError}
+            focusedInvitationId={focusedInvitationId}
+            focusedInvitationRefreshing={focusedInvitationRefreshing}
             onAccept={(id) => void handleInvitation(id, 'accept')}
             onDecline={(id) => void handleInvitation(id, 'decline')}
             onRetry={() => void refreshInvitations()}
+            onDismissFocus={() => void onResolveInvitation()}
           />
           <PlatformAdminView
             overview={platformAdmin.overview}
@@ -132,11 +168,14 @@ function ProvisioningGate() {
                 invitations={invitations}
                 busyId={invitationBusyId}
                 error={null}
+                focusedInvitationId={focusedInvitationId}
+                focusedInvitationRefreshing={focusedInvitationRefreshing}
                 onAccept={(id) => void handleInvitation(id, 'accept')}
                 onDecline={(id) => void handleInvitation(id, 'decline')}
                 onRetry={() => void refreshInvitations()}
+                onDismissFocus={() => void onResolveInvitation()}
               />
-              {invitations.length === 0 ? <CreateBusinessView onCreate={createBusiness} /> : null}
+              {invitations.length === 0 && !focusedInvitationId ? <CreateBusinessView onCreate={createBusiness} /> : null}
             </>
           )}
 
@@ -158,7 +197,7 @@ function ProvisioningGate() {
     </BusinessContextSelectionProvider>
   );
 
-  if (invitations.length > 0 || invitationError) {
+  if (invitations.length > 0 || invitationError || focusedInvitationId) {
     return (
       <View style={styles.workspaceShell}>
         <SafeAreaView style={styles.invitationBannerArea}>
@@ -166,10 +205,13 @@ function ProvisioningGate() {
             invitations={invitations}
             busyId={invitationBusyId}
             error={invitationError}
+            focusedInvitationId={focusedInvitationId}
+            focusedInvitationRefreshing={focusedInvitationRefreshing}
             compact
             onAccept={(id) => void handleInvitation(id, 'accept')}
             onDecline={(id) => void handleInvitation(id, 'decline')}
             onRetry={() => void refreshInvitations()}
+            onDismissFocus={() => void onResolveInvitation()}
           />
         </SafeAreaView>
         <View style={styles.workspaceContent}>{workspace}</View>
@@ -184,27 +226,47 @@ type PendingInvitationsPanelProps = {
   invitations: PendingTeamInvitation[];
   busyId: string | null;
   error: string | null;
+  focusedInvitationId?: string | null;
+  focusedInvitationRefreshing?: boolean;
   compact?: boolean;
   onAccept: (invitationId: string) => void;
   onDecline: (invitationId: string) => void;
   onRetry: () => void;
+  onDismissFocus: () => void;
 };
 
 function PendingInvitationsPanel({
   invitations,
   busyId,
   error,
+  focusedInvitationId = null,
+  focusedInvitationRefreshing = false,
   compact = false,
   onAccept,
   onDecline,
   onRetry,
+  onDismissFocus,
 }: PendingInvitationsPanelProps) {
-  if (invitations.length === 0 && !error) return null;
+  const orderedInvitations = useMemo(() => {
+    if (!focusedInvitationId) return invitations;
+    return [...invitations].sort((left, right) => {
+      if (left.id === focusedInvitationId) return -1;
+      if (right.id === focusedInvitationId) return 1;
+      return 0;
+    });
+  }, [focusedInvitationId, invitations]);
+  const hasFocusedInvitation = Boolean(focusedInvitationId && invitations.some((invitation) => invitation.id === focusedInvitationId));
+
+  if (invitations.length === 0 && !error && !focusedInvitationId) return null;
 
   return (
     <View style={[styles.invitationPanel, compact && styles.invitationPanelCompact]}>
-      <Text style={styles.invitationTitle}>Business invitations</Text>
-      <Text style={styles.invitationHelp}>A Business is added to your SellerTray account only after you accept its invitation.</Text>
+      <Text style={styles.invitationTitle}>{hasFocusedInvitation ? 'Review invitation' : 'Business invitations'}</Text>
+      <Text style={styles.invitationHelp}>
+        {hasFocusedInvitation
+          ? 'Accepting adds this Business to your existing SellerTray account. Your other Businesses and sign-in stay unchanged.'
+          : 'A Business is added to your SellerTray account only after you accept its invitation.'}
+      </Text>
       {error ? (
         <View style={styles.invitationErrorRow}>
           <Text style={styles.invitationError}>{error}</Text>
@@ -213,13 +275,30 @@ function PendingInvitationsPanel({
           </Pressable>
         </View>
       ) : null}
-      {invitations.map((invitation) => {
+      {focusedInvitationRefreshing && !error ? (
+        <View style={styles.invitationResolvedCard}>
+          <Text style={styles.invitationBusiness}>Loading invitation…</Text>
+          <Text style={styles.invitationMeta}>Checking the latest invitation status for your SellerTray account.</Text>
+        </View>
+      ) : null}
+      {focusedInvitationId && !hasFocusedInvitation && !focusedInvitationRefreshing && !error ? (
+        <View style={styles.invitationResolvedCard}>
+          <Text style={styles.invitationBusiness}>This invitation is no longer pending</Text>
+          <Text style={styles.invitationMeta}>It may already have been accepted, declined, expired or cancelled. Your current SellerTray Business access remains unchanged.</Text>
+          <Pressable onPress={onDismissFocus} style={styles.resolvedButton}>
+            <Text style={styles.resolvedButtonText}>Continue to SellerTray</Text>
+          </Pressable>
+        </View>
+      ) : null}
+      {orderedInvitations.map((invitation) => {
         const busy = busyId === invitation.id;
+        const focused = invitation.id === focusedInvitationId;
         return (
-          <View key={invitation.id} style={styles.invitationCard}>
+          <View key={invitation.id} style={[styles.invitationCard, focused && styles.invitationCardFocused]}>
             <View style={styles.invitationCopy}>
               <Text style={styles.invitationBusiness}>{invitation.tenantName}</Text>
-              <Text style={styles.invitationMeta}>Role: {titleCase(invitation.role)}</Text>
+              <Text style={styles.invitationMeta}>Role: {roleLabel(invitation.role)}</Text>
+              <Text style={styles.invitationMeta}>Expires: {dateOnly(invitation.expiresAt)}</Text>
               {invitation.invitedByEmail ? (
                 <Text style={styles.invitationMeta}>Invited by {invitation.invitedByEmail}</Text>
               ) : null}
@@ -247,8 +326,13 @@ function PendingInvitationsPanel({
   );
 }
 
-function titleCase(value: string): string {
-  return value ? `${value.charAt(0).toUpperCase()}${value.slice(1)}` : value;
+function roleLabel(value: 'manager' | 'staff'): string {
+  return value === 'staff' ? 'Cashier' : 'Manager';
+}
+
+function dateOnly(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium' }).format(date);
 }
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -295,6 +379,8 @@ const styles = StyleSheet.create({
   invitationErrorRow: { gap: 6 },
   invitationError: { color: '#B42318', fontSize: 11, lineHeight: 16 },
   invitationCard: { borderTopWidth: 1, borderTopColor: '#EAECF0', paddingTop: 10, gap: 10 },
+  invitationCardFocused: { borderLeftWidth: 3, borderLeftColor: '#12B76A', paddingLeft: 10 },
+  invitationResolvedCard: { borderTopWidth: 1, borderTopColor: '#EAECF0', paddingTop: 10, gap: 8 },
   invitationCopy: { gap: 2 },
   invitationBusiness: { color: '#101828', fontSize: 13, fontWeight: '800' },
   invitationMeta: { color: '#667085', fontSize: 11, lineHeight: 16 },
@@ -303,6 +389,8 @@ const styles = StyleSheet.create({
   declineText: { color: '#344054', fontSize: 11, fontWeight: '800' },
   acceptButton: { backgroundColor: '#101828', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 14 },
   acceptText: { color: '#FFFFFF', fontSize: 11, fontWeight: '800' },
+  resolvedButton: { alignSelf: 'flex-start', borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12 },
+  resolvedButtonText: { color: '#344054', fontSize: 11, fontWeight: '800' },
   actionPressed: { opacity: 0.6 },
   signOutButton: { alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 14 },
   signOutText: { color: '#667085', fontSize: 12, fontWeight: '800' },
