@@ -30,9 +30,27 @@ function escapeHtml(value: string) {
     .replaceAll("'", '&#039;')
 }
 
+function cleanEmailHeader(value: string) {
+  return value
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 320)
+}
+
+function sellerTraySender(value: string) {
+  const clean = cleanEmailHeader(value)
+  if (!clean) return ''
+  const addressMatch = clean.match(/<([^<>]+)>\s*$/)
+  const address = (addressMatch?.[1] ?? clean).trim().toLowerCase()
+  if (!address || address.length > 320 || !address.includes('@')) return ''
+  return `SellerTray <${address}>`
+}
+
 function verifyUrl(data: EmailData, tokenHash?: string) {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')?.replace(/\/$/, '')
-  const redirectTo = data.redirect_to || data.site_url || 'https://processedge.com.ng/sellertray'
+  const redirectTo = data.redirect_to || data.site_url || 'https://app.sellertray.com'
   if (!supabaseUrl || !tokenHash || !data.email_action_type) return null
 
   const params = new URLSearchParams({
@@ -74,8 +92,8 @@ function emailCopy(action: string, data: EmailData, user: HookPayload['user']) {
         subject: "You're invited to SellerTray",
         html: `
           <h2>You're invited to SellerTray</h2>
-          <p>You have been invited to join a SellerTray business account.</p>
-          <p><a href="${safeLink}">Accept invitation</a></p>
+          <p>You have been invited to join a SellerTray account.</p>
+          <p><a href="${safeLink}">Review invitation</a></p>
         `,
       }
     case 'magiclink':
@@ -108,12 +126,12 @@ function emailCopy(action: string, data: EmailData, user: HookPayload['user']) {
     case 'password_changed_notification':
       return {
         subject: 'Your SellerTray password was changed',
-        html: '<h2>Password changed</h2><p>Your SellerTray password was recently changed. If this was not you, reset your password and contact ProcessEdge support immediately.</p>',
+        html: '<h2>Password changed</h2><p>Your SellerTray password was recently changed. If this was not you, reset your password and contact SellerTray support immediately.</p>',
       }
     case 'email_changed_notification':
       return {
         subject: 'Your SellerTray email was changed',
-        html: '<h2>Email changed</h2><p>The email address on your SellerTray account was recently changed. If this was not you, contact ProcessEdge support immediately.</p>',
+        html: '<h2>Email changed</h2><p>The email address on your SellerTray account was recently changed. If this was not you, contact SellerTray support immediately.</p>',
       }
     default:
       return {
@@ -130,7 +148,11 @@ Deno.serve(async (req) => {
 
   const hookSecret = Deno.env.get('SEND_EMAIL_HOOK_SECRET')
   const resendApiKey = Deno.env.get('RESEND_API_KEY')
-  const from = Deno.env.get('AUTH_EMAIL_FROM')
+  const from = sellerTraySender(
+    Deno.env.get('SELLERTRAY_EMAIL_FROM')
+      ?? Deno.env.get('AUTH_EMAIL_FROM')
+      ?? ''
+  )
 
   if (!hookSecret || !resendApiKey || !from) {
     return new Response(JSON.stringify({ error: 'email_hook_not_configured' }), { status: 503, headers: { ...jsonHeaders, 'retry-after': '5' } })
@@ -168,11 +190,12 @@ Deno.serve(async (req) => {
             <tr><td align="center">
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:32px">
                 <tr><td>
-                  <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#0056A6">SellerTray by ProcessEdge</p>
+                  <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#12B76A">SellerTray</p>
                   <div style="font-size:15px;line-height:1.65">${content}</div>
                   <p style="margin:28px 0 0;font-size:12px;line-height:1.6;color:#7b8794">
-                    <a href="https://processedge.com.ng/sellertray/privacy">Privacy</a> ·
-                    <a href="https://processedge.com.ng/sellertray/terms">Terms</a>
+                    <a href="https://sellertray.com/privacy">Privacy</a> ·
+                    <a href="https://sellertray.com/terms">Terms</a><br />
+                    SellerTray is a ProcessEdge product.
                   </p>
                 </td></tr>
               </table>
