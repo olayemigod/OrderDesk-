@@ -55,8 +55,8 @@ select extensions.ok(position('plan_profile_cycle' in (select pg_get_constraintd
 select extensions.ok(has_function_privilege('service_role','public.resolve_sellertray_installment_policy_v2(uuid,uuid,uuid,text,timestamptz)','EXECUTE'),'Plan-Profile-aware installment policy resolver is server-only');
 select extensions.ok(to_regprocedure('public.resolve_sellertray_installment_policy(uuid,uuid,text,text,timestamptz)') is not null,'Legacy installment resolver remains available during compatibility period');
 
-select extensions.ok(to_regclass('public.sellertray_branch_subscriptions') is null,'Batch 2 does not create Branch Subscription runtime authority early');
-select extensions.ok((select count(*)=0 from information_schema.columns where table_schema='public' and table_name='tenant_subscriptions' and column_name='branch_id'),'Legacy tenant_subscriptions remains Business-scoped during Batch 2');
+select extensions.ok(to_regclass('public.sellertray_branch_subscriptions') is not null,'C2-4 now adds the parallel Branch Subscription authority after the Batch 2 foundation');
+select extensions.ok((select count(*)=0 from information_schema.columns where table_schema='public' and table_name='tenant_subscriptions' and column_name='branch_id'),'Legacy tenant_subscriptions remains Business-scoped during the additive C2-4/C2-5 stage');
 
 select * from extensions.finish();
 rollback;
