@@ -28,6 +28,10 @@ expect(linkSource.includes("Linking.addEventListener('url'"), 'runtime invitatio
 expect(linkSource.includes("app.sellertray.com"), 'only the canonical Merchant Web production origin may be treated as an HTTPS invitation URL');
 expect(linkSource.includes("sellertray://") || linkSource.includes("sellertray|orderdesk"), 'custom SellerTray invitation links must be supported');
 expect(provisionedSource.includes('useInvitationLink'), 'ProvisionedApp must consume the invitation locator');
+expect(provisionedSource.includes("useEffect(() => {\n    let active = true;\n    setLoadedFocusedInvitationId(null);"), 'a newly focused runtime invitation must invalidate the previously loaded invitation snapshot');
+expect(provisionedSource.includes("}, [focusedInvitationId, refreshInvitations]);"), 'pending invitations must reload whenever the focused invitation link changes');
+expect(provisionedSource.includes('focusedInvitationRefreshing'), 'Mobile must distinguish invitation refresh from a resolved invitation');
+expect(provisionedSource.includes('Loading invitation…'), 'Mobile must not report a runtime invitation as resolved while its latest status is loading');
 expect(provisionedSource.includes("value === 'staff' ? 'Cashier' : 'Manager'"), 'internal staff role must remain merchant-facing Cashier');
 expect(provisionedSource.includes("refresh(decision === 'accept' ? invitation?.tenantId : undefined)"), 'accepted invitation must refresh and prefer the newly joined Business');
 expect(provisionedSource.includes('Your other Businesses and sign-in stay unchanged.'), 'multi-Business acceptance copy must preserve the one-identity model');
