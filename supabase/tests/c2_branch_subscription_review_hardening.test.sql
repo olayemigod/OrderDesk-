@@ -22,8 +22,9 @@ select extensions.ok(
 );
 
 select extensions.ok(
-  position('sellertray-branch-subscription|' in lower(pg_get_functiondef('public.register_sellertray_branch_subscription_addon(uuid,uuid,uuid,text,timestamptz,timestamptz,uuid,uuid,uuid,uuid,jsonb)'::regprocedure)))
-  < position('select s.* into strict v_subscription' in lower(pg_get_functiondef('public.register_sellertray_branch_subscription_addon(uuid,uuid,uuid,text,timestamptz,timestamptz,uuid,uuid,uuid,uuid,jsonb)'::regprocedure))),
+  position('sellertray-branch-subscription|' in lower(pg_get_functiondef('public.register_sellertray_branch_subscription_addon(uuid,uuid,uuid,text,timestamptz,timestamptz,uuid,uuid,uuid,uuid,jsonb)'::regprocedure))) > 0
+  and position('sellertray-branch-subscription|' in lower(pg_get_functiondef('public.register_sellertray_branch_subscription_addon(uuid,uuid,uuid,text,timestamptz,timestamptz,uuid,uuid,uuid,uuid,jsonb)'::regprocedure)))
+      < position('select s.* into strict v_subscription' in lower(pg_get_functiondef('public.register_sellertray_branch_subscription_addon(uuid,uuid,uuid,text,timestamptz,timestamptz,uuid,uuid,uuid,uuid,jsonb)'::regprocedure))),
   'Add-on registration acquires Branch serialization before reading mutable subscription term state'
 );
 
@@ -97,9 +98,6 @@ from c2_review_fixture;
 
 select set_config('request.jwt.claim.role','service_role',true);
 
--- Same transaction + same effective timestamp previously tied on recorded_at and
--- fell through to random UUID ordering. The insertion sequence must make the
--- activation event authoritative.
 update c2_review_fixture f
 set same_timestamp_id=public.register_sellertray_branch_subscription_term(
   f.tenant_id,f.branch_b_id,f.plan_version_id,'monthly','2026-10-05T00:00:00Z',
@@ -124,9 +122,6 @@ select extensions.is(
   'Same-timestamp creation then activation resolves deterministically to active'
 );
 
--- Branch A first receives a short provisional term. A later independent term can
--- start after that provisional end. Expanding the provisional term to full must
--- then fail because the resulting range would overlap the later term.
 update c2_review_fixture f
 set provisional_id=public.register_sellertray_branch_subscription_term(
       f.tenant_id,f.branch_a_id,f.plan_version_id,'monthly','2026-10-01T00:00:00Z',
@@ -178,8 +173,6 @@ select extensions.ok(
   'Rejected full-term extension leaves the provisional Branch term unchanged'
 );
 
--- The later term is already active. Add-on registration must re-read that current
--- term after Branch serialization and reject an entitlement extending past it.
 do $$
 begin
   begin
