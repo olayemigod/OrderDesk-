@@ -13,7 +13,7 @@ select extensions.ok(
   ))
   and position('array_agg(c.price_version_id' in pg_get_functiondef(
     'public.control_sellertray_commercial_v2_price_version_admin(uuid,text,text,uuid,uuid)'::regprocedure
-  )) < position("'sellertray-price-lifecycle-v1'" in pg_get_functiondef(
+  )) < position('sellertray-price-lifecycle-v1' in pg_get_functiondef(
     'public.control_sellertray_commercial_v2_price_version_admin(uuid,text,text,uuid,uuid)'::regprocedure
   )),
   'C2 lifecycle command identity is serialized and validated before per-price state serialization'
