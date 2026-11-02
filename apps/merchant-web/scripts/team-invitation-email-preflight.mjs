@@ -67,6 +67,12 @@ expect(incomingInvitationsSource.includes('window.localStorage.getItem(PENDING_I
 expect(incomingInvitationsSource.includes('window.localStorage.removeItem(PENDING_INVITATION_KEY)'), 'Merchant Web must clear the locator after resolution/dismissal');
 expect(incomingInvitationsSource.includes('focusedInvitationId === invitationId'), 'Merchant Web must clear only the focused resolved invitation locator');
 expect(incomingInvitationsSource.includes("value === 'staff' ? 'Cashier' : 'Manager'"), 'Merchant Web must keep internal staff merchant-facing as Cashier');
+expect(incomingInvitationsSource.includes('const [loading, setLoading] = useState(true)'), 'Merchant Web must start invitation review in a loading state');
+expect(incomingInvitationsSource.includes('setLoading(true);'), 'Merchant Web must mark every invitation reload as loading');
+expect(incomingInvitationsSource.includes('setLoading(false);'), 'Merchant Web must finish the invitation loading state after the server request settles');
+expect(incomingInvitationsSource.includes('loading && focusedInvitationId && !error'), 'focused browser invitation must show a loading state while server status is unresolved');
+expect(incomingInvitationsSource.includes('!focusedInvitationIsPending && !loading && !error'), 'resolved invitation copy must not appear before a successful invitation fetch completes');
+expect(incomingInvitationsSource.includes('Loading invitation…'), 'Merchant Web must explain that invitation status is still being checked');
 expect(!inviteHtml.includes('<script>'), 'browser fallback must not require inline script under Merchant Web CSP');
 expect(!inviteHtml.includes('<style>'), 'browser fallback must not require inline style under Merchant Web CSP');
 expect(inviteCss.length > 0, 'browser fallback must ship self-hosted styles');
