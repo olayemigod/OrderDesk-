@@ -19,13 +19,18 @@ export function useBusinesses() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (preferredBusinessId?: string) => {
     setLoading(true);
     try {
       const nextBusinesses = await loadBusinesses();
       const storedBusinessId = await AsyncStorage.getItem(ACTIVE_BUSINESS_KEY);
+      const preferredIsValid = Boolean(preferredBusinessId && nextBusinesses.some((business) => business.id === preferredBusinessId));
       const storedIsValid = nextBusinesses.some((business) => business.id === storedBusinessId);
-      const nextActiveId = storedIsValid ? storedBusinessId! : nextBusinesses[0]?.id ?? '';
+      const nextActiveId = preferredIsValid
+        ? preferredBusinessId!
+        : storedIsValid
+          ? storedBusinessId!
+          : nextBusinesses[0]?.id ?? '';
       const nextActiveBusiness = nextBusinesses.find((business) => business.id === nextActiveId) ?? null;
 
       setBusinesses(nextBusinesses);
@@ -76,7 +81,7 @@ export function useBusinesses() {
       try {
         const businessId = await createInitialBusiness(input);
         await AsyncStorage.setItem(ACTIVE_BUSINESS_KEY, businessId);
-        await refresh();
+        await refresh(businessId);
         setError(null);
         return businessId;
       } catch (err) {
@@ -91,7 +96,7 @@ export function useBusinesses() {
     async (businessId: string, input: BusinessProfileInput) => {
       try {
         await updateBusinessProfile(businessId, input);
-        await refresh();
+        await refresh(businessId);
         setError(null);
       } catch (err) {
         setError(errorMessage(err, 'Unable to update the business profile.'));
