@@ -26,6 +26,7 @@
 .role-lock strong { font-size: .8rem; }
 .invitation-panel { padding: 14px 18px; }
 .invitation-row { display: flex; justify-content: space-between; gap: 14px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.invitation-row-focused { margin: 4px -8px; padding: 12px 8px; border: 1px solid rgba(18,183,106,.5); border-radius: 10px; background: rgba(18,183,106,.08); }
 .invitation-row:last-child { border-bottom: 0; }
 .invitation-row strong, .invitation-row small { display: block; }
 .invitation-row small { margin-top: 3px; color: var(--muted); font-size: .7rem; }
@@ -61,4 +62,5 @@
   .invite-form { grid-template-columns: 1fr; }
   .access-grid, .capability-grid { grid-template-columns: 1fr; }
   .management-heading { align-items: flex-start; }
+  .invitation-row { align-items: flex-start; flex-direction: column; }
 }
