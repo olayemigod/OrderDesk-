@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(24);
+select extensions.plan(25);
 
 select extensions.ok(to_regclass('public.sellertray_branch_subscriptions') is not null,'C2-4 creates Branch Subscription authority');
 select extensions.ok(to_regclass('public.sellertray_branch_subscription_events') is not null,'C2-4 creates append-only Branch Subscription lifecycle evidence');
@@ -136,7 +136,7 @@ set subscription_a_id=public.register_sellertray_branch_subscription_term(
       gen_random_uuid(),'system',f.actor_user_id
     ),
     subscription_c_id=public.register_sellertray_branch_subscription_term(
-      f.tenant_id,f.branch_c_id,f.plan_b_version_id,'monthly','2027-01-01T00:00:00Z',
+      f.tenant_id,f.branch_c_id,f.plan_b_version_id,'monthly','2026-10-01T00:00:00Z',
       null,null,null,false,null,null,null,'legacy_compatibility',jsonb_build_object('test','branch_c'),
       gen_random_uuid(),'system',f.actor_user_id
     );
@@ -183,10 +183,14 @@ $$;
 
 select extensions.ok((select native_registration_rejected from c2_branch_subscription_fixture),'Native Branch Subscription registration fails closed before C2-6 supplies a Branch-bound commercial order line');
 
-select public.transition_sellertray_branch_subscription(
-  f.tenant_id,f.subscription_a_id,'active','2026-03-15T00:00:00Z','2027-03-15T00:00:00Z','2027-03-15T00:00:00Z',
-  f.activate_a_command,'Activate independent Branch A term','system',f.actor_user_id
-) from c2_branch_subscription_fixture f;
+do $$
+begin
+  perform public.transition_sellertray_branch_subscription(
+    f.tenant_id,f.subscription_a_id,'active','2026-03-15T00:00:00Z','2027-03-15T00:00:00Z','2027-03-15T00:00:00Z',
+    f.activate_a_command,'Activate independent Branch A term','system',f.actor_user_id
+  ) from c2_branch_subscription_fixture f;
+end
+$$;
 
 update c2_branch_subscription_fixture f
 set activate_retry=public.transition_sellertray_branch_subscription(
@@ -201,7 +205,7 @@ select extensions.ok((select count(*)=2 from public.sellertray_branch_subscripti
 
 update c2_branch_subscription_fixture f
 set renewal_a_id=public.register_sellertray_branch_subscription_term(
-  f.tenant_id,f.branch_a_id,f.plan_b_version_id,'monthly','2026-12-01T00:00:00Z',
+  f.tenant_id,f.branch_a_id,f.plan_b_version_id,'monthly','2026-10-15T00:00:00Z',
   null,null,null,false,null,null,f.subscription_a_id,'legacy_compatibility',jsonb_build_object('test','branch_a_renewal'),
   gen_random_uuid(),'system',f.actor_user_id
 );
@@ -210,7 +214,7 @@ do $$
 begin
   begin
     perform public.transition_sellertray_branch_subscription(
-      f.tenant_id,f.renewal_a_id,'active','2027-01-01T00:00:00Z','2027-02-01T00:00:00Z','2027-02-01T00:00:00Z',
+      f.tenant_id,f.renewal_a_id,'active','2026-11-01T00:00:00Z','2026-12-01T00:00:00Z','2026-12-01T00:00:00Z',
       gen_random_uuid(),'Reject overlapping Branch A renewal','system',f.actor_user_id
     ) from c2_branch_subscription_fixture f;
   exception when sqlstate '23P01' then
@@ -221,16 +225,20 @@ $$;
 
 select extensions.ok((select overlap_rejected from c2_branch_subscription_fixture),'A second entitlement term cannot overlap the active term for the same Branch');
 
-select public.register_sellertray_branch_subscription_addon(
-  f.tenant_id,f.subscription_c_id,f.addon_version_id,'monthly','2027-01-01T00:00:00Z','2027-04-01T00:00:00Z',
-  null,null,gen_random_uuid(),f.actor_user_id,jsonb_build_object('test','outside-term')
-) from c2_branch_subscription_fixture f;
+do $$
+begin
+  perform public.register_sellertray_branch_subscription_addon(
+    f.tenant_id,f.subscription_c_id,f.addon_version_id,'monthly','2026-10-01T00:00:00Z','2026-12-01T00:00:00Z',
+    null,null,gen_random_uuid(),f.actor_user_id,jsonb_build_object('test','outside-term')
+  ) from c2_branch_subscription_fixture f;
+end
+$$;
 
 do $$
 begin
   begin
     perform public.transition_sellertray_branch_subscription(
-      f.tenant_id,f.subscription_c_id,'active','2027-02-01T00:00:00Z','2027-03-01T00:00:00Z','2027-03-01T00:00:00Z',
+      f.tenant_id,f.subscription_c_id,'active','2026-10-15T00:00:00Z','2026-11-15T00:00:00Z','2026-11-15T00:00:00Z',
       gen_random_uuid(),'Reject add-on outside Branch term','system',f.actor_user_id
     ) from c2_branch_subscription_fixture f;
   exception when sqlstate '23514' then
