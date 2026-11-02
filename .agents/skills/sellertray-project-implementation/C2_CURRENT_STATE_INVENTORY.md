@@ -4,7 +4,7 @@ description: "C2-0/C2-1 current-state authority inventory and old-to-new migrati
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.1"
+  version: "0.1.2"
   status: governing-extension
   baseline_commit: "d8024c215850e0e9a3a0ce1496d1d0dd5d7cd150"
   inventory_date: "2026-11-02"
@@ -39,11 +39,12 @@ The exact Branch-scope and command-family companion inventory is in `C2_CURRENT_
 3. **Plan names are data.** Starter, Growth and Scale may be editable seeds later; code must not branch on their names.
 4. **Plan and price are separate authorities.** Plan Profile Version describes features/capabilities/limits; commercial masters determine price, tax and payment obligations.
 5. **Branch activation is independent.** A pending/new/failed Branch cannot block another qualified Branch.
-6. **No automatic co-termination or proration.** Independent Branch anniversaries remain independent unless a later explicit policy approves co-term behavior.
-7. **Legal authority is Universal Master Agreement + Merchant Order Form.** Current required Master is accepted once per Business/version; each governed commercial commitment gets immutable Order Form evidence. An unchanged Master is not repeatedly accepted for another Branch, renewal or plan change.
-8. **Merchant Web manages commercial self-service.** Mobile shows Branch plan/status/limits and hands detailed billing to Merchant Web securely.
-9. **WhatsApp sells; AI assists.** Both consume shared entitlement facts and never create subscription/commercial truth.
-10. **Legacy retirement is late.** `tenant_subscriptions` remains compatibility runtime until C2-10 proves the new authority.
+6. **Branch count is not a plan limit under current policy.** Each Branch carries its own commercial obligation. Do not introduce included-Branch allowances, extra-Branch add-ons or Branch-count quotas unless a later explicit product decision changes this rule.
+7. **No automatic co-termination or proration.** Independent Branch anniversaries remain independent unless a later explicit policy approves co-term behavior.
+8. **Legal authority is Universal Master Agreement + Merchant Order Form.** Current required Master is accepted once per Business/version; each governed commercial commitment gets immutable Order Form evidence. An unchanged Master is not repeatedly accepted for another Branch, renewal or plan change.
+9. **Merchant Web manages commercial self-service.** Mobile shows Branch plan/status/limits and hands detailed billing to Merchant Web securely.
+10. **WhatsApp sells; AI assists.** Both consume shared entitlement facts and never create subscription/commercial truth.
+11. **Legacy retirement is late.** `tenant_subscriptions` remains compatibility runtime until C2-10 proves the new authority.
 
 ## 3. Current subscription/runtime authority
 
@@ -191,7 +192,7 @@ Merchant customer tender configuration is not ProcessEdge commercial subscriptio
 
 Current behavior includes membership, role/capability administration, Branch assignment, Branch creation/management and Business/Branch context selection.
 
-Possible limits/add-ons include staff seats, Branch allowances and approved advanced team features. Authentication/authorization/isolation are never plan switches.
+Possible commercial candidates include staff-seat limits and approved advanced team/permission features. **Branch count/extra Branch allowances are explicitly excluded from plan-limit/add-on design under current Commercial V2 policy; each Branch instead carries its own commercial obligation.** Authentication/authorization/isolation are never plan switches.
 
 ### WhatsApp
 
@@ -221,7 +222,9 @@ C2-2 must preserve these distinct concepts:
 
 - **Feature** — module/product availability such as WhatsApp selling, AI insights, advanced reports or integrations.
 - **Capability** — an action a plan may permit but which still requires actor authorization, such as return, stock transfer or advanced discounting.
-- **Limit** — a quantitative threshold such as Branch count, staff seats, AI usage, WhatsApp volume or export count.
+- **Limit** — a quantitative threshold such as staff seats, AI usage, WhatsApp volume or export count.
+
+Under current Commercial V2 policy, **Branch count is not a Plan Profile Limit**. Additional Branches create their own Branch subscription/commercial obligation instead of consuming an included-Branch allowance.
 
 A Feature is not a user permission. A Capability is not automatically granted to every user. A Limit does not replace transaction validation.
 
@@ -423,6 +426,8 @@ Every candidate must be classified as one of:
 - add-on candidate;
 - Admin-only operational capability;
 - non-commercial role/permission/scope concept.
+
+Current policy explicitly excludes Branch count/included-Branch allowances from Plan Profile Limits/add-ons; each Branch is its own commercial subscription subject.
 
 Only after this classification is reviewed should editable Starter/Growth/Scale seeds be created.
 
