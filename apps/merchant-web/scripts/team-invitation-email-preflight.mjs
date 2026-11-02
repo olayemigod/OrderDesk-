@@ -4,12 +4,13 @@ import path from 'node:path';
 
 const merchantRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = path.resolve(merchantRoot, '../..');
-const [source, authEmailSource, inviteHtml, inviteJs, inviteCss] = await Promise.all([
+const [source, authEmailSource, inviteHtml, inviteJs, inviteCss, incomingInvitationsSource] = await Promise.all([
   readFile(path.join(repoRoot, 'supabase/functions/team-management/index.ts'), 'utf8'),
   readFile(path.join(repoRoot, 'supabase/functions/send-auth-email/index.ts'), 'utf8'),
   readFile(path.join(merchantRoot, 'public/invite.html'), 'utf8'),
   readFile(path.join(merchantRoot, 'public/invite.js'), 'utf8'),
   readFile(path.join(merchantRoot, 'public/invite.css'), 'utf8'),
+  readFile(path.join(merchantRoot, 'src/IncomingBusinessInvitations.tsx'), 'utf8'),
 ]);
 
 const failures = [];
@@ -59,6 +60,13 @@ expect(inviteHtml.includes('same account'), 'browser fallback must explain the m
 expect(inviteJs.includes('sellertray://invite/'), 'browser fallback must hand off to the SellerTray custom scheme');
 expect(inviteJs.includes('UUID_RE'), 'browser fallback must validate the invitation locator before handoff');
 expect(inviteJs.includes('/?invitation='), 'browser fallback must preserve the invitation locator when continuing on Merchant Web');
+expect(inviteJs.includes("sellertray.pendingInvitationId"), 'browser fallback must use the governed non-authoritative invitation-locator storage key');
+expect(inviteJs.includes('window.localStorage.setItem(PENDING_INVITATION_KEY, invitationId)'), 'browser fallback must persist the invitation locator through signup/auth redirects');
+expect(incomingInvitationsSource.includes("sellertray.pendingInvitationId"), 'Merchant Web invitation review must restore the same persisted invitation locator');
+expect(incomingInvitationsSource.includes('window.localStorage.getItem(PENDING_INVITATION_KEY)'), 'Merchant Web must restore invitation focus after browser authentication');
+expect(incomingInvitationsSource.includes('window.localStorage.removeItem(PENDING_INVITATION_KEY)'), 'Merchant Web must clear the locator after resolution/dismissal');
+expect(incomingInvitationsSource.includes('focusedInvitationId === invitationId'), 'Merchant Web must clear only the focused resolved invitation locator');
+expect(incomingInvitationsSource.includes("value === 'staff' ? 'Cashier' : 'Manager'"), 'Merchant Web must keep internal staff merchant-facing as Cashier');
 expect(!inviteHtml.includes('<script>'), 'browser fallback must not require inline script under Merchant Web CSP');
 expect(!inviteHtml.includes('<style>'), 'browser fallback must not require inline style under Merchant Web CSP');
 expect(inviteCss.length > 0, 'browser fallback must ship self-hosted styles');
