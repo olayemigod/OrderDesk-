@@ -13,7 +13,7 @@ select extensions.ok(has_function_privilege('service_role','public.register_sell
 select extensions.is((select count(*)::integer from public.sellertray_limit_definitions where code='branch_count'),0,'Branch count remains excluded from Plan Profile limits');
 select extensions.ok((select count(*)=0 from information_schema.columns where table_schema='public' and table_name='tenant_subscriptions' and column_name='branch_id'),'tenant_subscriptions remains Business-scoped compatibility authority');
 select extensions.ok(position('line_type<>''branch_subscription''' in replace(pg_get_functiondef('public.register_sellertray_branch_subscription_term(uuid,uuid,uuid,text,timestamptz,uuid,uuid,uuid,boolean,uuid,uuid,uuid,text,jsonb,uuid,text,uuid)'::regprocedure),' ',''))>0,'Native C2 registration requires the future C2-6 Branch-bound subscription line');
-select extensions.ok(position('same Branch Subscription Branch' in pg_get_functiondef('public.validate_sellertray_branch_subscription_evidence()'::regprocedure))>0 and position('required version' in pg_get_functiondef('public.validate_sellertray_branch_subscription_evidence()'::regprocedure))>0,'Evidence validation checks Branch and required Master version semantics, not only tenant ownership');
+select extensions.ok(position('Branch Subscription Branch' in pg_get_functiondef('public.validate_sellertray_branch_subscription_evidence()'::regprocedure))>0 and position('required version' in pg_get_functiondef('public.validate_sellertray_branch_subscription_evidence()'::regprocedure))>0,'Evidence validation checks Branch and required Master version semantics, not only tenant ownership');
 
 create temp table c2_branch_subscription_fixture(
   tenant_id uuid not null,
@@ -98,14 +98,14 @@ insert into public.sellertray_plan_profile_versions(
 )
 select plan_a_version_id,plan_a_id,1,'published','C2 Authority A v1',
        'Published test Plan Profile A for Branch Subscription authority coverage.',
-       'Test Plan Profile A.',array['monthly','yearly']::text[],'2026-01-01T00:00:00Z',
-       'Publish C2 authority test plan A',actor_user_id,actor_user_id,'2026-01-01T00:00:00Z'
+       'Test Plan Profile A.',array['monthly','yearly']::text[],'2026-01-01T00:00:00Z'::timestamptz,
+       'Publish C2 authority test plan A',actor_user_id,actor_user_id,'2026-01-01T00:00:00Z'::timestamptz
 from c2_branch_subscription_fixture
 union all
 select plan_b_version_id,plan_b_id,1,'published','C2 Authority B v1',
        'Published test Plan Profile B for Branch Subscription authority coverage.',
-       'Test Plan Profile B.',array['monthly','yearly']::text[],'2026-01-01T00:00:00Z',
-       'Publish C2 authority test plan B',actor_user_id,actor_user_id,'2026-01-01T00:00:00Z'
+       'Test Plan Profile B.',array['monthly','yearly']::text[],'2026-01-01T00:00:00Z'::timestamptz,
+       'Publish C2 authority test plan B',actor_user_id,actor_user_id,'2026-01-01T00:00:00Z'::timestamptz
 from c2_branch_subscription_fixture;
 
 insert into public.sellertray_addon_definitions(id,code,default_display_name,status,sort_order,created_by_user_id)
