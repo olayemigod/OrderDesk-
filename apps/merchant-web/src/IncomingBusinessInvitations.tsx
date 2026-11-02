@@ -18,6 +18,7 @@ export default function IncomingBusinessInvitations({
   onMembershipChanged?: () => Promise<void> | void;
 }) {
   const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
+  const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const focusedInvitationId = invitationIdFromBrowser();
@@ -38,6 +39,7 @@ export default function IncomingBusinessInvitations({
   }, []);
 
   async function load() {
+    setLoading(true);
     try {
       const { data, error: invokeError } = await supabase.functions.invoke('team-management', {
         body: { action: 'pending_invites' },
@@ -47,6 +49,8 @@ export default function IncomingBusinessInvitations({
       setError(null);
     } catch (cause) {
       setError(errorMessage(cause, 'Unable to load your Business invitations.'));
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -68,7 +72,7 @@ export default function IncomingBusinessInvitations({
     }
   }
 
-  if (!invitations.length && !error && !focusedInvitationId) return null;
+  if (!loading && !invitations.length && !error && !focusedInvitationId) return null;
 
   return <article className="panel invitation-panel">
     <div className="panel-head">
@@ -83,14 +87,20 @@ export default function IncomingBusinessInvitations({
       </div>
     </div>
     {error ? <div className="error-banner compact">{error}<button type="button" onClick={() => void load()}>Retry</button></div> : null}
-    {focusedInvitationId && !focusedInvitationIsPending && !error ? <div className="invitation-row">
+    {loading && focusedInvitationId && !error ? <div className="invitation-row">
+      <span>
+        <strong>Loading invitation…</strong>
+        <small>Checking the latest invitation status for your SellerTray account.</small>
+      </span>
+    </div> : null}
+    {focusedInvitationId && !focusedInvitationIsPending && !loading && !error ? <div className="invitation-row">
       <span>
         <strong>This invitation is no longer pending</strong>
         <small>It may already have been accepted, declined, expired or cancelled. Your current SellerTray access remains unchanged.</small>
       </span>
       <button type="button" className="secondary-button" onClick={() => clearInvitationLocator(true)}>Continue</button>
     </div> : null}
-    {orderedInvitations.map((invitation) => {
+    {!loading ? orderedInvitations.map((invitation) => {
       const busy = busyId === invitation.id;
       const focused = focusedInvitationId === invitation.id;
       return <div className={focused ? 'invitation-row invitation-row-focused' : 'invitation-row'} key={invitation.id}>
@@ -103,7 +113,7 @@ export default function IncomingBusinessInvitations({
           <button type="button" className="primary-button" disabled={busy} onClick={() => void decide(invitation.id, 'accept_invite')}>{busy ? 'Working…' : 'Accept'}</button>
         </span>
       </div>;
-    })}
+    }) : null}
   </article>;
 }
 
