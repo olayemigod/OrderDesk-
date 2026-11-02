@@ -24,6 +24,25 @@ Do not interpret “same implementation sweep” as “copy the same UI everywhe
 
 The requirement is **one coherent business flow and one source of truth**, with the appropriate UX on each affected surface.
 
+## Canonical production origins — approved 2026-11-02
+
+Production routing is a cross-surface delivery contract, not a second source of business truth. The canonical production origins are:
+
+- Public/marketing: `https://sellertray.com`
+- Merchant Web: `https://app.sellertray.com`
+- Admin Web: `https://admin.sellertray.com`
+
+Rules:
+
+1. Merchant-facing production links, Mobile onboarding/commercial continuation links and supported Merchant Web callbacks must use `https://app.sellertray.com`.
+2. Platform-operator production links and supported Admin Web callbacks must use `https://admin.sellertray.com`.
+3. `*.vercel.app` hostnames are deployment/preview aliases only and must not be production fallbacks or user-facing canonical URLs.
+4. Mobile must fail closed when a server-provided Merchant Web continuation points to a non-canonical production origin; HTTPS alone is not sufficient trust.
+5. Prefer same-origin/static assets on Merchant Web and Admin Web instead of coupling production CSP or branding to a deployment alias.
+6. WhatsApp, notifications, documents, receipts, reporting exports and AI responses must not generate deployment-alias links when a canonical SellerTray origin exists.
+7. Domain routing never changes tenant/Branch isolation, commercial state, payments, permissions, inventory, UOM, audit, reporting or onboarding authority; those remain governed by the shared core.
+8. Preview/staging environments may use non-canonical hosts only for explicitly non-production testing and must not silently become production fallback authority.
+
 ## Mandatory impact assessment before editing
 
 For every SellerTray change, the agent must first answer these questions from the current repository and governing skills:

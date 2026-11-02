@@ -90,9 +90,10 @@ requireValue(
 requireValue(
   handoffClient.includes("supabase.functions.invoke('merchant-web-handoff'") &&
     !handoffClient.includes('sellertray-merchant.vercel.app') &&
-    handoffClient.includes("url.protocol === 'https:'") &&
+    handoffClient.includes("const MERCHANT_WEB_ORIGIN = 'https://app.sellertray.com'") &&
+    handoffClient.includes('url.origin === MERCHANT_WEB_ORIGIN') &&
     handoffClient.includes("url.hash.startsWith('#st_handoff=')"),
-  'Mobile Merchant Web continuation must use the governed handoff service rather than a hard-coded unauthenticated portal link',
+  'Mobile Merchant Web continuation must use the governed handoff service and fail closed to the canonical Merchant Web production origin',
 );
 requireValue(
   handoffMigration.includes('sellertray_merchant_web_handoffs') &&

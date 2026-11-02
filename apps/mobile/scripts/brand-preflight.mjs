@@ -3,7 +3,8 @@ import { join } from 'node:path';
 
 const root = process.cwd();
 const failures = [];
-const V2_ICON_URL = 'https://sellertray.vercel.app/brand/sellertray-app-icon-v2.png';
+const APP_ICON = './assets/icon.png';
+const ADAPTIVE_ICON = './assets/adaptive-icon.png';
 const MOBILE_MARK = 'assets/sellertray-v2-mark-128.png';
 
 function read(path) {
@@ -18,10 +19,9 @@ const brand = read('src/components/SellerTrayBrand.tsx');
 const appConfig = JSON.parse(read('app.json'));
 const expo = appConfig.expo ?? {};
 
-requireValue(
-  existsSync(join(root, MOBILE_MARK)),
-  'Mobile must bundle the Android-safe SellerTray v2 mark derived from the approved brand artwork',
-);
+for (const asset of [MOBILE_MARK, APP_ICON.replace(/^\.\//, ''), ADAPTIVE_ICON.replace(/^\.\//, '')]) {
+  requireValue(existsSync(join(root, asset)), `Mobile must bundle required SellerTray brand asset ${asset}`);
+}
 requireValue(
   brand.includes("require('../../assets/sellertray-v2-mark-128.png')"),
   'Mobile SellerTrayBrand must render the bundled SellerTray v2 mark instead of the unsupported in-app WebP path',
@@ -31,16 +31,20 @@ requireValue(
   'Mobile SellerTrayBrand must not depend on the Admin WebP runtime decoder path that failed on Android QA',
 );
 requireValue(
-  expo.icon === V2_ICON_URL,
-  'Mobile app icon must use the same SellerTray v2 icon source as Admin Portal',
+  expo.icon === APP_ICON,
+  'Mobile app icon must use the bundled SellerTray icon instead of a remote deployment alias',
 );
 requireValue(
-  expo.android?.adaptiveIcon?.foregroundImage === V2_ICON_URL,
-  'Android adaptive icon must use the same SellerTray v2 icon source as Admin Portal',
+  expo.android?.adaptiveIcon?.foregroundImage === ADAPTIVE_ICON,
+  'Android adaptive icon must use the bundled SellerTray adaptive icon instead of a remote deployment alias',
 );
 requireValue(
-  expo.splash?.image === V2_ICON_URL,
-  'Mobile splash branding must use the same SellerTray v2 icon source as Admin Portal',
+  expo.splash?.image === APP_ICON,
+  'Mobile splash branding must use the bundled SellerTray icon instead of a remote deployment alias',
+);
+requireValue(
+  !JSON.stringify(appConfig).includes('vercel.app'),
+  'Mobile app configuration must not depend on a Vercel deployment alias for production branding',
 );
 
 if (failures.length) {
