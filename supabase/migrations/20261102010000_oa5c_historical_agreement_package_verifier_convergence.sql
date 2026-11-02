@@ -119,24 +119,40 @@ begin
   end if;
 
   if v_order_form_ok and v_order_form_template_authorized then
-    -- The package is selected by the immutable Order Form/commercial order pair. Its
-    -- own Master version is historical purchase evidence and may legitimately differ
-    -- from the currently required Master Agreement version.
+    -- The immutable confirmation is the authority for which exact Agreement Package
+    -- the merchant reviewed. Multiple historical packages for the same Order Form
+    -- must never cause the verifier to select a newer package by timestamp.
     select count(*)::integer
-      into v_package_count
-    from public.sellertray_agreement_packages p
-    where p.tenant_id=p_tenant_id
-      and p.commercial_order_id=p_commercial_order_id
-      and p.order_form_id=v_order_form.id;
+      into v_confirmation_count
+    from public.sellertray_order_form_confirmations c
+    where c.tenant_id=p_tenant_id
+      and c.order_form_id=v_order_form.id;
 
-    select p.*
-      into v_package
-    from public.sellertray_agreement_packages p
-    where p.tenant_id=p_tenant_id
-      and p.commercial_order_id=p_commercial_order_id
-      and p.order_form_id=v_order_form.id
-    order by p.created_at desc,p.id desc
+    select c.*
+      into v_confirmation
+    from public.sellertray_order_form_confirmations c
+    where c.tenant_id=p_tenant_id
+      and c.order_form_id=v_order_form.id
+    order by c.confirmed_at desc,c.id desc
     limit 1;
+
+    if v_confirmation.id is not null then
+      select count(*)::integer
+        into v_package_count
+      from public.sellertray_agreement_packages p
+      where p.id=v_confirmation.agreement_package_id
+        and p.tenant_id=p_tenant_id
+        and p.commercial_order_id=p_commercial_order_id
+        and p.order_form_id=v_order_form.id;
+
+      select p.*
+        into v_package
+      from public.sellertray_agreement_packages p
+      where p.id=v_confirmation.agreement_package_id
+        and p.tenant_id=p_tenant_id
+        and p.commercial_order_id=p_commercial_order_id
+        and p.order_form_id=v_order_form.id;
+    end if;
 
     if v_package.id is not null then
       select m.*
@@ -165,22 +181,6 @@ begin
         and v_package.manifest#>>'{orderForm,reference}'=v_order_form.order_form_reference
         and v_package.manifest#>>'{orderForm,contentSha256}'=v_order_form.content_sha256
         and v_package.manifest#>>'{orderForm,commercialSnapshotSha256}'=v_order_form.commercial_snapshot_sha256;
-
-      select count(*)::integer
-        into v_confirmation_count
-      from public.sellertray_order_form_confirmations c
-      where c.tenant_id=p_tenant_id
-        and c.order_form_id=v_order_form.id
-        and c.agreement_package_id=v_package.id;
-
-      select c.*
-        into v_confirmation
-      from public.sellertray_order_form_confirmations c
-      where c.tenant_id=p_tenant_id
-        and c.order_form_id=v_order_form.id
-        and c.agreement_package_id=v_package.id
-      order by c.confirmed_at desc,c.id desc
-      limit 1;
 
       select count(*)::integer
         into v_package_master_acceptance_count
