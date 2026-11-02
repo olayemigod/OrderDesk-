@@ -56,6 +56,7 @@ function ProvisioningGate({
   const platformAdmin = usePlatformAdmin();
   const [invitations, setInvitations] = useState<PendingTeamInvitation[]>([]);
   const [invitationLoading, setInvitationLoading] = useState(true);
+  const [loadedFocusedInvitationId, setLoadedFocusedInvitationId] = useState<string | null>(null);
   const [invitationBusyId, setInvitationBusyId] = useState<string | null>(null);
   const [invitationError, setInvitationError] = useState<string | null>(null);
 
@@ -72,8 +73,15 @@ function ProvisioningGate({
   }, []);
 
   useEffect(() => {
-    void refreshInvitations();
-  }, [refreshInvitations]);
+    let active = true;
+    setLoadedFocusedInvitationId(null);
+    void refreshInvitations().then(() => {
+      if (active) setLoadedFocusedInvitationId(focusedInvitationId);
+    });
+    return () => {
+      active = false;
+    };
+  }, [focusedInvitationId, refreshInvitations]);
 
   const handleInvitation = useCallback(async (invitationId: string, decision: 'accept' | 'decline') => {
     const invitation = invitations.find((candidate) => candidate.id === invitationId) ?? null;
@@ -95,6 +103,10 @@ function ProvisioningGate({
     }
   }, [focusedInvitationId, invitations, onResolveInvitation, refresh, refreshInvitations]);
 
+  const focusedInvitationRefreshing = Boolean(
+    focusedInvitationId && loadedFocusedInvitationId !== focusedInvitationId,
+  );
+
   if ((!invitationLinkReady || loading || platformAdmin.loading || invitationLoading) && !activeBusiness && !platformAdmin.overview) {
     return <SellerTrayLoadingScreen message="Preparing your SellerTray account…" />;
   }
@@ -108,6 +120,7 @@ function ProvisioningGate({
             busyId={invitationBusyId}
             error={invitationError}
             focusedInvitationId={focusedInvitationId}
+            focusedInvitationRefreshing={focusedInvitationRefreshing}
             onAccept={(id) => void handleInvitation(id, 'accept')}
             onDecline={(id) => void handleInvitation(id, 'decline')}
             onRetry={() => void refreshInvitations()}
@@ -156,6 +169,7 @@ function ProvisioningGate({
                 busyId={invitationBusyId}
                 error={null}
                 focusedInvitationId={focusedInvitationId}
+                focusedInvitationRefreshing={focusedInvitationRefreshing}
                 onAccept={(id) => void handleInvitation(id, 'accept')}
                 onDecline={(id) => void handleInvitation(id, 'decline')}
                 onRetry={() => void refreshInvitations()}
@@ -192,6 +206,7 @@ function ProvisioningGate({
             busyId={invitationBusyId}
             error={invitationError}
             focusedInvitationId={focusedInvitationId}
+            focusedInvitationRefreshing={focusedInvitationRefreshing}
             compact
             onAccept={(id) => void handleInvitation(id, 'accept')}
             onDecline={(id) => void handleInvitation(id, 'decline')}
@@ -212,6 +227,7 @@ type PendingInvitationsPanelProps = {
   busyId: string | null;
   error: string | null;
   focusedInvitationId?: string | null;
+  focusedInvitationRefreshing?: boolean;
   compact?: boolean;
   onAccept: (invitationId: string) => void;
   onDecline: (invitationId: string) => void;
@@ -224,6 +240,7 @@ function PendingInvitationsPanel({
   busyId,
   error,
   focusedInvitationId = null,
+  focusedInvitationRefreshing = false,
   compact = false,
   onAccept,
   onDecline,
@@ -258,7 +275,13 @@ function PendingInvitationsPanel({
           </Pressable>
         </View>
       ) : null}
-      {focusedInvitationId && !hasFocusedInvitation && !error ? (
+      {focusedInvitationRefreshing && !error ? (
+        <View style={styles.invitationResolvedCard}>
+          <Text style={styles.invitationBusiness}>Loading invitation…</Text>
+          <Text style={styles.invitationMeta}>Checking the latest invitation status for your SellerTray account.</Text>
+        </View>
+      ) : null}
+      {focusedInvitationId && !hasFocusedInvitation && !focusedInvitationRefreshing && !error ? (
         <View style={styles.invitationResolvedCard}>
           <Text style={styles.invitationBusiness}>This invitation is no longer pending</Text>
           <Text style={styles.invitationMeta}>It may already have been accepted, declined, expired or cancelled. Your current SellerTray Business access remains unchanged.</Text>
