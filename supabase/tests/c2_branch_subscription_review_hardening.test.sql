@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(8);
+select extensions.plan(9);
 
 select extensions.ok(
   (select is_identity='YES' and is_nullable='NO'
