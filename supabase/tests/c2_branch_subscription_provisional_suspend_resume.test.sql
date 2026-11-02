@@ -5,7 +5,7 @@ select extensions.plan(7);
 select extensions.ok(
   position('sellertray-branch-subscription|' in lower(pg_get_functiondef('public.transition_sellertray_branch_subscription(uuid,uuid,text,timestamptz,timestamptz,timestamptz,uuid,text,text,uuid)'::regprocedure))) > 0
   and position('sellertray-branch-subscription|' in lower(pg_get_functiondef('public.transition_sellertray_branch_subscription(uuid,uuid,text,timestamptz,timestamptz,timestamptz,uuid,text,text,uuid)'::regprocedure)))
-      < position('for update' in lower(pg_get_functiondef('public.transition_sellertray_branch_subscription(uuid,uuid,text,timestamptz,timestamptz,timestamptz,uuid,text,text,uuid)'::regprocedure))),
+      < position('for update;' in lower(pg_get_functiondef('public.transition_sellertray_branch_subscription(uuid,uuid,text,timestamptz,timestamptz,timestamptz,uuid,text,text,uuid)'::regprocedure))),
   'Lifecycle transition acquires the Branch advisory lock before the subscription row lock'
 );
 
