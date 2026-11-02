@@ -7,12 +7,14 @@ on:
     paths:
       - 'package.json'
       - 'apps/merchant-web/**'
+      - 'supabase/functions/team-management/**'
       - 'scripts/check-internal-authority-rpc-boundary.mjs'
       - '.github/workflows/merchant-web-ci.yml'
   pull_request:
     paths:
       - 'package.json'
       - 'apps/merchant-web/**'
+      - 'supabase/functions/team-management/**'
       - 'scripts/check-internal-authority-rpc-boundary.mjs'
       - '.github/workflows/merchant-web-ci.yml'
 
