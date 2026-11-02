@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { loadBranchPosPaymentMethods, type PosPaymentMethod } from '../data/commerceRepository';
-import { collectCustomerBalance } from '../data/receivablesRepository';
+import { createPosClientReference } from '../data/commerceRepository';
+import { collectCustomerBalance, customerCollectionErrorMessage } from '../data/receivablesRepository';
 import type { MerchantOrder } from '../domain/order';
 import { orderOutstanding } from '../domain/order';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
@@ -23,6 +24,7 @@ export function OrderBalanceCollection({ tenantId, order, currency, onChanged }:
     && order.status === 'completed'
     && Boolean(order.customerId)
     && outstanding > 0.005;
+  const collectionCommand = useRef<{ key: string; id: string } | null>(null);
   const [open, setOpen] = useState(false);
   const [methods, setMethods] = useState<PosPaymentMethod[]>([]);
   const [methodKey, setMethodKey] = useState('cash');
@@ -62,6 +64,9 @@ export function OrderBalanceCollection({ tenantId, order, currency, onChanged }:
       return;
     }
     const method = methods.find((row) => paymentKey(row) === methodKey) ?? methods.find((row) => row.methodType === 'cash');
+    // Retain the same command after an uncertain network outcome.
+    const key = JSON.stringify([tenantId, order.id, method?.paymentMethodId ?? null, value]);
+    if (collectionCommand.current?.key !== key) collectionCommand.current = { key, id: createPosClientReference() };
     setSaving(true);
     setError(null);
     setNotice(null);
@@ -71,14 +76,18 @@ export function OrderBalanceCollection({ tenantId, order, currency, onChanged }:
         orderId: order.id,
         paymentMethodId: method?.paymentMethodId ?? null,
         amount: value,
+        commandId: collectionCommand.current.id,
       });
+      collectionCommand.current = null;
       setNotice(result.status === 'pending_verification'
         ? 'Bank payment recorded for verification. A Payment Receipt is available only after confirmation.'
-        : 'Customer payment collected. Its Payment Receipt is available under Sale documents.');
+        : result.status === 'confirmed'
+          ? 'Customer payment collected. Its Payment Receipt is available under Sale documents.'
+          : 'This payment is no longer awaiting collection. Refresh the sale to review its status.');
       setOpen(false);
       await onChanged();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Unable to collect this customer payment.');
+      setError(cause instanceof Error ? cause.message : customerCollectionErrorMessage(cause));
     } finally {
       setSaving(false);
     }
