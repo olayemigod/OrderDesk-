@@ -15,7 +15,12 @@ type TeamAction =
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')?.trim() ?? '';
-const TEAM_INVITE_EMAIL_FROM = (Deno.env.get('TEAM_INVITE_EMAIL_FROM') ?? Deno.env.get('AUTH_EMAIL_FROM') ?? '').trim();
+const TEAM_INVITE_EMAIL_FROM = sellerTraySender(
+  Deno.env.get('SELLERTRAY_EMAIL_FROM')
+    ?? Deno.env.get('TEAM_INVITE_EMAIL_FROM')
+    ?? Deno.env.get('AUTH_EMAIL_FROM')
+    ?? '',
+);
 const SELLERTRAY_MERCHANT_URL = (Deno.env.get('SELLERTRAY_MERCHANT_URL') ?? 'https://app.sellertray.com').replace(/\/+$/, '');
 
 const corsHeaders = {
@@ -142,10 +147,13 @@ Deno.serve(withObservability('team-management', async (request) => {
       });
 
       try {
+        const invitationId = cleanUuid(result.invitationId);
+        if (!invitationId) throw new Error('Governed invitation response did not include an invitation id.');
         await sendTeamInvitationEmail({
           to: email,
           businessName,
           role,
+          invitationId,
         });
       } catch (error) {
         console.error(JSON.stringify({
@@ -268,17 +276,19 @@ async function sendTeamInvitationEmail({
   to,
   businessName,
   role,
+  invitationId,
 }: {
   to: string;
   businessName: string;
   role: 'manager' | 'staff';
+  invitationId: string;
 }): Promise<void> {
   const roleLabel = role === 'staff' ? 'Cashier' : 'Manager';
   const safeBusinessName = escapeHtml(businessName);
   const safeRole = escapeHtml(roleLabel);
   const safeEmail = escapeHtml(to);
   const subjectBusinessName = cleanEmailHeader(businessName) || 'A SellerTray business';
-  const actionUrl = `${SELLERTRAY_MERCHANT_URL}/`;
+  const actionUrl = `${SELLERTRAY_MERCHANT_URL}/invite.html?invitation=${encodeURIComponent(invitationId)}`;
   const html = `
     <!doctype html>
     <html>
@@ -287,16 +297,18 @@ async function sendTeamInvitationEmail({
           <tr><td align="center">
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:32px">
               <tr><td>
-                <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#0056A6">SellerTray by ProcessEdge</p>
+                <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#12B76A">SellerTray</p>
                 <h2 style="margin:0 0 16px">You're invited to ${safeBusinessName}</h2>
                 <p style="font-size:15px;line-height:1.65">You have been invited to join <strong>${safeBusinessName}</strong> in SellerTray as a <strong>${safeRole}</strong>.</p>
-                <p style="font-size:15px;line-height:1.65">Sign in with <strong>${safeEmail}</strong>. SellerTray will show the pending Business invitation for you to review and accept. Access starts only after you accept it.</p>
-                <p style="margin:24px 0"><a href="${escapeHtml(actionUrl)}" style="display:inline-block;background:#102A43;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700">Open SellerTray</a></p>
-                <p style="font-size:14px;line-height:1.65;color:#475467">If this email address does not yet have a SellerTray account, create the account in the SellerTray mobile app using this same email address, then sign in to review the invitation. The invitation expires after 7 days.</p>
+                <p style="font-size:15px;line-height:1.65">Use <strong>${safeEmail}</strong> to sign in. If you already use SellerTray for another Business, keep the same account. Access starts only after you review and accept this invitation.</p>
+                <p style="margin:24px 0"><a href="${escapeHtml(actionUrl)}" style="display:inline-block;background:#102A43;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:700">Review invitation</a></p>
+                <p style="font-size:14px;line-height:1.65;color:#475467">On a supported phone, the link opens SellerTray. If the app cannot open, the secure browser fallback lets you continue to SellerTray without granting access automatically.</p>
+                <p style="font-size:14px;line-height:1.65;color:#475467">If this email address does not yet have a SellerTray account, create one using this same email address, confirm it if required, then sign in to review the invitation. The invitation expires after 7 days.</p>
                 <p style="font-size:14px;line-height:1.65;color:#475467">If you were not expecting this invitation, you can ignore this email.</p>
                 <p style="margin:28px 0 0;font-size:12px;line-height:1.6;color:#7b8794">
-                  <a href="https://processedge.com.ng/sellertray/privacy">Privacy</a> ·
-                  <a href="https://processedge.com.ng/sellertray/terms">Terms</a>
+                  <a href="https://sellertray.com/privacy">Privacy</a> ·
+                  <a href="https://sellertray.com/terms">Terms</a><br />
+                  SellerTray is a ProcessEdge product.
                 </p>
               </td></tr>
             </table>
@@ -352,6 +364,14 @@ function cleanEmailHeader(value: string): string {
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 160);
+}
+
+function sellerTraySender(value: string): string {
+  const clean = cleanEmailHeader(value);
+  if (!clean) return '';
+  const addressMatch = clean.match(/<([^<>]+)>\s*$/);
+  const address = cleanEmail(addressMatch?.[1] ?? clean);
+  return address ? `SellerTray <${address}>` : '';
 }
 
 async function verifiedIdentity(
