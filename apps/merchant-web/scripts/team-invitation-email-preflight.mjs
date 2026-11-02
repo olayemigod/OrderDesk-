@@ -4,8 +4,9 @@ import path from 'node:path';
 
 const merchantRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = path.resolve(merchantRoot, '../..');
-const [source, inviteHtml, inviteJs, inviteCss] = await Promise.all([
+const [source, authEmailSource, inviteHtml, inviteJs, inviteCss] = await Promise.all([
   readFile(path.join(repoRoot, 'supabase/functions/team-management/index.ts'), 'utf8'),
+  readFile(path.join(repoRoot, 'supabase/functions/send-auth-email/index.ts'), 'utf8'),
   readFile(path.join(merchantRoot, 'public/invite.html'), 'utf8'),
   readFile(path.join(merchantRoot, 'public/invite.js'), 'utf8'),
   readFile(path.join(merchantRoot, 'public/invite.css'), 'utf8'),
@@ -44,11 +45,19 @@ expect(source.includes('https://sellertray.com/terms'), 'invitation email must u
 expect(!source.includes('SellerTray by ProcessEdge</p>'), 'ProcessEdge must not be the primary invitation-email brand identity');
 expect(!source.includes('inviteUserByEmail'), 'business invitation delivery must not bypass SellerTray membership acceptance through Supabase Auth admin invites');
 
+expect(authEmailSource.includes("Deno.env.get('SELLERTRAY_EMAIL_FROM')"), 'authentication emails must prefer the same SellerTray sender configuration');
+expect(authEmailSource.includes('function sellerTraySender(value: string)'), 'authentication emails must normalize the visible sender identity');
+expect(authEmailSource.includes('`SellerTray <${address}>`'), 'authentication emails must display SellerTray rather than ProcessEdge');
+expect(authEmailSource.includes("'https://app.sellertray.com'"), 'authentication email fallback redirect must use canonical Merchant Web');
+expect(authEmailSource.includes('https://sellertray.com/privacy'), 'authentication email footer must use canonical SellerTray privacy');
+expect(authEmailSource.includes('https://sellertray.com/terms'), 'authentication email footer must use canonical SellerTray terms');
+expect(!authEmailSource.includes('SellerTray by ProcessEdge</p>'), 'authentication emails must not use ProcessEdge as primary brand identity');
+
 expect(inviteHtml.includes('Review your SellerTray invitation'), 'browser fallback must present a SellerTray invitation review surface');
 expect(inviteHtml.includes('Open SellerTray app'), 'browser fallback must expose an app-open action');
 expect(inviteHtml.includes('same account'), 'browser fallback must explain the multi-Business identity model');
 expect(inviteJs.includes('sellertray://invite/'), 'browser fallback must hand off to the SellerTray custom scheme');
-expect(inviteJs.includes("UUID_RE"), 'browser fallback must validate the invitation locator before handoff');
+expect(inviteJs.includes('UUID_RE'), 'browser fallback must validate the invitation locator before handoff');
 expect(inviteJs.includes('/?invitation='), 'browser fallback must preserve the invitation locator when continuing on Merchant Web');
 expect(!inviteHtml.includes('<script>'), 'browser fallback must not require inline script under Merchant Web CSP');
 expect(!inviteHtml.includes('<style>'), 'browser fallback must not require inline style under Merchant Web CSP');
