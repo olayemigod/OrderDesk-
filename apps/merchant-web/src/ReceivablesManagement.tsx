@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { SellerTrayInput, SellerTraySelect } from './SellerTrayElements';
 import { errorMessage, numberValue, supabase } from './supabase';
 
@@ -32,6 +32,7 @@ type ListResponse = {
 const PAGE_SIZE = 50;
 
 export default function ReceivablesManagement({ tenantId, branches }: { tenantId: string; branches: Branch[] }) {
+  const collectionCommand = useRef<{ key: string; id: string } | null>(null);
   const [rows, setRows] = useState<Receivable[]>([]);
   const [query, setQuery] = useState('');
   const [branchId, setBranchId] = useState('all');
@@ -131,6 +132,8 @@ export default function ReceivablesManagement({ tenantId, branches }: { tenantId
       return;
     }
     const method = methods.find((item) => (item.id ?? 'cash') === methodId) ?? methods.find((item) => item.type === 'cash');
+    const key = JSON.stringify([tenantId, collecting.orderId, method?.id ?? null, value]);
+    if (collectionCommand.current?.key !== key) collectionCommand.current = { key, id: crypto.randomUUID() };
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -140,11 +143,12 @@ export default function ReceivablesManagement({ tenantId, branches }: { tenantId
         p_order_id: collecting.orderId,
         p_payment_method_id: method?.id ?? null,
         p_amount: value,
-        p_command_id: crypto.randomUUID(),
+        p_command_id: collectionCommand.current.id,
       });
       if (rpcError) throw rpcError;
       const result = (data ?? {}) as Record<string, unknown>;
-      setNotice(result.status === 'pending_verification' ? 'Bank payment recorded and sent for verification.' : 'Customer payment collected.');
+      collectionCommand.current = null;
+      setNotice(result.status === 'pending_verification' ? 'Bank payment recorded and sent for verification.' : result.status === 'confirmed' ? 'Customer payment collected.' : 'Refresh the sale to review this payment’s current status.');
       setCollecting(null);
       await load();
     } catch (cause) {

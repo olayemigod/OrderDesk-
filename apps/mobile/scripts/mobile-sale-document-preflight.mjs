@@ -17,7 +17,7 @@ const offlineHook = readFileSync(resolve(root, 'src/hooks/useOfflineSalesSync.ts
 const offlineRepository = readFileSync(resolve(root, 'src/data/offlineSalesRepository.ts'), 'utf8');
 const receivablesRepository = readFileSync(resolve(root, 'src/data/receivablesRepository.ts'), 'utf8');
 const printerFunction = readFileSync(resolve(root, '../../supabase/functions/printer/index.ts'), 'utf8');
-const receivableMigration = readFileSync(resolve(root, '../../supabase/migrations/20261016234422_phase_b_receivable_collection_command.sql'), 'utf8');
+const receivableMigration = readFileSync(resolve(root, '../../supabase/migrations/20261102100000_receivable_collection_confirmation_convergence.sql'), 'utf8');
 const allocationMigration = readFileSync(resolve(root, '../../supabase/migrations/20261016082241_pos_payment_allocation_runtime_convergence.sql'), 'utf8');
 
 const failures = [];
@@ -55,7 +55,7 @@ requireValue(escPos.includes("cleanRight.length >= width || (cleanLeft && cleanL
 requireValue(escPos.includes("replace(/₦/g, 'NGN ')") && escPos.includes('/^(pos:|walk[- ]?in|anonymous|guest)/i'), 'Printer output must remain printer-safe and suppress internal customer sentinels.');
 requireValue(offlineRepository.includes('checkoutCommandId') && offlineRepository.includes('const existing = rows.find((row) => row.clientReference === input.clientReference)'), 'Offline sales must retain deterministic checkout identity and local outbox deduplication.');
 requireValue(offlineHook.includes('expectedAmountPaid') && offlineHook.includes('expectedOutstanding') && offlineHook.includes('duplicate payment allocations') && offlineHook.includes('result.idempotentReplay'), 'Offline replay must verify amount paid, retained outstanding balance, duplicate-payment protection and idempotent retries.');
-requireValue(receivableMigration.includes('Payment exceeds the outstanding customer balance') && receivableMigration.includes("'receivable:'||p_command_id::text") && receivableMigration.includes("v_status:='confirmed'"), 'Receivable collection must reject overpayment, preserve command identity and create confirmed payment evidence where allowed.');
+requireValue(receivableMigration.includes('Payment exceeds the outstanding customer balance') && receivableMigration.includes("'receivable:'||p_command_id::text") && receivableMigration.includes("v_status:='initiated'") && receivableMigration.includes('confirm_sellertray_offline_payment'), 'Receivable collection must reject overpayment, preserve command identity and create confirmed payment evidence where allowed.');
 requireValue(allocationMigration.includes('where p.tenant_id=p_tenant_id and p.idempotency_key=v_key') && allocationMigration.includes('return v_existing.id'), 'Shared POS payment allocation must return the existing allocation for an idempotent replay rather than create a duplicate receivable payment.');
 
 if (failures.length) {
