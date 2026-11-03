@@ -180,13 +180,37 @@ select public.accept_sellertray_master_agreement(
  jsonb_build_object('channel','merchant_web','authority_confirmed',true),
  gen_random_uuid(),f.actor_id
 ) from discount_guard_fixture f;
+-- Orchestration may also produce an installment-specific Order Form where
+-- an authorized production template already exists. Confirm every current
+-- instrument to model a merchant who has completed the pre-discount contract.
 select public.create_sellertray_agreement_package(
- f.tenant_id,f.original_form_id,f.master_version_id
-) from discount_guard_fixture f;
+ f.tenant_id,o.id,f.master_version_id
+)
+from discount_guard_fixture f
+join public.sellertray_commercial_order_forms o
+ on o.tenant_id=f.tenant_id and o.commercial_order_id=f.order_id
+where not exists (select 1 from public.sellertray_commercial_order_forms next
+ where next.tenant_id=o.tenant_id and next.supersedes_order_form_id=o.id);
 select public.confirm_sellertray_agreement_package(
- f.tenant_id,f.original_form_id,'Discount Gate Owner',
+ f.tenant_id,o.id,'Discount Gate Owner',
  jsonb_build_object('authority_confirmed',true),gen_random_uuid(),f.actor_id
-) from discount_guard_fixture f;
+)
+from discount_guard_fixture f
+join public.sellertray_commercial_order_forms o
+ on o.tenant_id=f.tenant_id and o.commercial_order_id=f.order_id
+where not exists (select 1 from public.sellertray_commercial_order_forms next
+ where next.tenant_id=o.tenant_id and next.supersedes_order_form_id=o.id);
+select extensions.ok(
+  not exists(
+    select 1 from public.sellertray_commercial_order_forms o
+    join discount_guard_fixture f on o.commercial_order_id=f.order_id
+    where not exists (select 1 from public.sellertray_commercial_order_forms next
+      where next.tenant_id=o.tenant_id and next.supersedes_order_form_id=o.id)
+      and not exists (select 1 from public.sellertray_order_form_confirmations c
+        where c.tenant_id=o.tenant_id and c.order_form_id=o.id)
+  ),
+  'all pre-discount current commercial Order Forms are confirmed'
+);
 
 -- Initially the current obligation is 70% due now.
 select extensions.is(
@@ -290,12 +314,20 @@ select extensions.ok(
   join discount_guard_fixture f on sub.tenant_id=f.tenant_id),
  'unconfirmed replacement does not activate legacy compatibility subscription'
 );
-select extensions.is(
+select extensions.ok(
  (select count(*)::integer from public.sellertray_commercial_order_forms o
   join discount_guard_fixture f on o.commercial_order_id=f.order_id
   where not exists (select 1 from public.sellertray_commercial_order_forms next
-   where next.tenant_id=o.tenant_id and next.supersedes_order_form_id=o.id)),
- 1, 'exactly one current replacement Order Form exists after both discounts'
+   where next.tenant_id=o.tenant_id and next.supersedes_order_form_id=o.id)) >= 1
+  and not exists(
+    select 1 from public.sellertray_commercial_order_forms o
+    join discount_guard_fixture f on o.commercial_order_id=f.order_id
+    where not exists(select 1 from public.sellertray_commercial_order_forms next
+      where next.tenant_id=o.tenant_id and next.supersedes_order_form_id=o.id)
+      and exists(select 1 from public.sellertray_order_form_confirmations c
+        where c.tenant_id=o.tenant_id and c.order_form_id=o.id)
+  ),
+  'all current replacement Order Forms remain unconfirmed after both discounts'
 );
 
 -- The current replacement alone can unlock subsequent entitlement release.
