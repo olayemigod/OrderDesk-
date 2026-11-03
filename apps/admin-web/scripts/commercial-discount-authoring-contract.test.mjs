@@ -4,7 +4,7 @@ import { test } from 'node:test';
 
 const ui = readFileSync(new URL('../src/CommercialSettlementAdministration.tsx', import.meta.url), 'utf8');
 const edge = readFileSync(new URL('../../../supabase/functions/platform-admin-settlement/index.ts', import.meta.url), 'utf8');
-const migration = readFileSync(new URL('../../../supabase/migrations/20261103120000_pre_c2_governed_discount_authoring.sql', import.meta.url), 'utf8');
+const migration = readFileSync(new URL('../../../supabase/migrations/20261102101000_pre_c2_governed_discount_authoring.sql', import.meta.url), 'utf8');
 
 test('Admin exposes fixed-amount and percentage discount authoring', () => {
   assert.match(ui, /<option value="fixed_amount">Fixed amount<\/option>/);

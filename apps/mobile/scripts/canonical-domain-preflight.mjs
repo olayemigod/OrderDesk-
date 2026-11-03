@@ -18,6 +18,8 @@ const [
   adminIndex,
   adminVercel,
   adminNavigation,
+  adminEntry,
+  adminBrandOverride,
 ] = await Promise.all([
   readFile(path.join(repoRoot, 'apps/mobile/src/data/merchantWebHandoff.ts'), 'utf8'),
   readFile(path.join(repoRoot, 'apps/mobile/app.json'), 'utf8'),
@@ -30,6 +32,8 @@ const [
   readFile(path.join(repoRoot, 'apps/admin-web/index.html'), 'utf8'),
   readFile(path.join(repoRoot, 'apps/admin-web/vercel.json'), 'utf8'),
   readFile(path.join(repoRoot, 'apps/admin-web/src/admin-navigation.css'), 'utf8'),
+  readFile(path.join(repoRoot, 'apps/admin-web/src/main.tsx'), 'utf8'),
+  readFile(path.join(repoRoot, 'apps/admin-web/src/admin-brand-asset-convergence.css'), 'utf8'),
 ]);
 
 const canonicalMerchantOrigin = 'https://app.sellertray.com';
@@ -73,9 +77,12 @@ assert.equal(
   'QA Android signing certificate must be associated with the SellerTray invitation origin',
 );
 
-assert.match(adminIndex, /href="\/brand\/sellertray-admin-icon\.png"/);
+assert.match(adminIndex, /href="\/brand\/sellertray-v2-mark\.svg"/);
+assert.doesNotMatch(adminIndex, /sellertray-admin-icon\.png/);
 assert.doesNotMatch(adminVercel, /sellertray\.vercel\.app/);
-assert.match(adminNavigation, /url\('\/brand\/sellertray-admin-icon\.png'\)/);
+assert.match(adminBrandOverride, /url\('\/brand\/sellertray-v2-mark\.svg'\)/);
+assert.ok(adminEntry.indexOf("import './admin-brand-asset-convergence.css'") > adminEntry.indexOf("import './admin-context-convergence.css'"), 'approved Admin brand override must load after historical navigation CSS');
+assert.match(adminNavigation, /workspace-sidebar-brand/);
 
 const productionSources = [
   ['Mobile handoff', mobileHandoff],
@@ -88,6 +95,8 @@ const productionSources = [
   ['Admin shell', adminIndex],
   ['Admin config', adminVercel],
   ['Admin navigation', adminNavigation],
+  ['Admin entry', adminEntry],
+  ['Admin brand override', adminBrandOverride],
 ];
 
 for (const alias of retiredAliases) {
