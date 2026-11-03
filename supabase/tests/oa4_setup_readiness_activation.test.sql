@@ -186,6 +186,79 @@ select public.platform_admin_assign_branch_setup_service_area(admin_user_id,tena
 update sellertray_c1b_fixture set appointment_1_id=public.platform_admin_schedule_branch_setup(admin_user_id,tenant_id,commercial_order_id,branch_id,worker_id,area_id,now()+interval '1 day',now()+interval '1 day 1 hour',null,null,gen_random_uuid(),'Schedule first Branch');
 update sellertray_c1b_fixture set appointment_2_id=public.platform_admin_schedule_branch_setup(admin_user_id,tenant_id,commercial_order_id,branch_2_id,worker_id,area_id,now()+interval '2 days',now()+interval '2 days 1 hour',null,null,gen_random_uuid(),'Schedule Lekki Branch');
 
+-- New setup readiness can no longer accept a human-claimed test receipt.
+-- Set up real same-Branch register/printer rows and native print-job evidence.
+-- The second Branch deliberately starts commercially/infrastructurally
+-- inactive: the proof itself is Branch-scoped and does not activate it.
+insert into public.sellertray_registers(tenant_id,branch_id,code,name,is_default,is_active)
+select tenant_id,branch_id,'OA4MAIN','OA4 main register',true,true from sellertray_c1b_fixture
+union all
+select tenant_id,branch_2_id,'OA4LEKKI','OA4 Lekki register',true,true from sellertray_c1b_fixture;
+
+select extensions.throws_ok(
+  $test$select public.platform_admin_transition_branch_setup(
+    admin_user_id,tenant_id,appointment_1_id,'completed',completion_command,
+    'Setup complete',e) from sellertray_c1b_fixture,oa4_evidence$test$,
+  '23514',null::text,'A claimed test print without registered printer cannot complete setup'
+);
+select extensions.is(
+  (select count(*)::integer from public.sellertray_commercial_branch_setup_readiness r
+   join sellertray_c1b_fixture f on r.tenant_id=f.tenant_id),0,
+  'Rejected hardware claim leaves no readiness fact'
+);
+
+insert into public.sellertray_printers(
+  tenant_id,branch_id,register_id,display_name,transport,hardware_identifier,
+  paper_width_mm,is_default,is_active,created_by_user_id
+)
+select f.tenant_id,r.branch_id,r.id,
+  case when r.branch_id=f.branch_id then 'OA4 Main Printer' else 'OA4 Lekki Printer' end,
+  'bluetooth',
+  case when r.branch_id=f.branch_id then 'BT-123456' else 'BT-123456-LEKKI' end,
+  58,true,true,f.owner_user_id
+from sellertray_c1b_fixture f
+join public.sellertray_registers r on r.tenant_id=f.tenant_id
+  and r.branch_id in (f.branch_id,f.branch_2_id)
+  and r.code in ('OA4MAIN','OA4LEKKI');
+
+select extensions.throws_ok(
+  $test$select public.platform_admin_transition_branch_setup(
+    admin_user_id,tenant_id,appointment_1_id,'completed',completion_command,
+    'Setup complete',e) from sellertray_c1b_fixture,oa4_evidence$test$,
+  '23514',null::text,'A registered printer without a successful native test cannot complete setup'
+);
+select extensions.throws_ok(
+  $test$select public.assert_sellertray_setup_printer_proof(
+    f.tenant_id,f.branch_2_id,e,now()
+  ) from sellertray_c1b_fixture f,oa4_evidence$test$,
+  '23514',null::text,'A printer registered in another Branch is not acceptable setup evidence'
+);
+
+insert into public.sellertray_print_jobs(
+  tenant_id,branch_id,register_id,printer_id,job_type,
+  request_key,status,transport,printer_name,hardware_identifier,paper_width_mm,
+  content_snapshot,requested_by_user_id,requested_at,started_at,completed_at
+)
+select p.tenant_id,p.branch_id,p.register_id,p.id,'test',
+  'oa4-proof-'||p.id::text,'printed','bluetooth',p.display_name,p.hardware_identifier,
+  p.paper_width_mm,
+  jsonb_build_object('formatVersion',1,'documentType','test','title','OA4 receipt test'),
+  f.owner_user_id,now(),now(),now()
+from public.sellertray_printers p join sellertray_c1b_fixture f
+  on f.tenant_id=p.tenant_id and p.branch_id in (f.branch_id,f.branch_2_id)
+where p.hardware_identifier in ('BT-123456','BT-123456-LEKKI');
+
+select extensions.throws_ok(
+  $test$select public.platform_admin_transition_branch_setup(
+    admin_user_id,tenant_id,appointment_1_id,'completed',completion_command,
+    'Setup complete',e) from sellertray_c1b_fixture,oa4_evidence$test$,
+  '23514',null::text,'Early completion cannot bypass the scheduled appointment without approval'
+);
+update oa4_evidence
+set e=jsonb_set(e,'{earlyCompletionApproval}',
+  '{"reason":"Merchant requested and approved early same-day setup handover"}'::jsonb);
+
+
 select extensions.throws_ok($test$select public.platform_admin_transition_branch_setup(owner_user_id,tenant_id,appointment_1_id,'completed',completion_command,'Setup complete',e) from sellertray_c1b_fixture,oa4_evidence$test$,'42501',null,'merchant cannot complete setup');
 select extensions.throws_ok($test$select public.platform_admin_transition_branch_setup(admin_user_id,tenant_id,appointment_1_id,'completed',completion_command,'Setup complete','{}') from sellertray_c1b_fixture$test$,'22023',null,'generic completion cannot change state');
 select extensions.is((select a.status from public.sellertray_commercial_setup_appointments a join sellertray_c1b_fixture f on f.appointment_1_id=a.id),'scheduled','invalid evidence leaves appointment scheduled');
@@ -202,7 +275,11 @@ select extensions.is(public.get_sellertray_onboarding_state_core(tenant_id)#>>'{
 select extensions.ok(exists(select 1 from public.sellertray_commercial_setup_appointment_events a where a.command_id=completion_command and a.details->>'workerId'=worker_id::text and a.details->>'actorUserId'=admin_user_id::text and a.details->>'completedAt' is not null),'installer actor and server completion time are immutable evidence') from sellertray_c1b_fixture;
 
 update public.tenant_subscriptions s set status='active',current_period_start=now()-interval '1 month',current_period_end=now()+interval '1 month' from sellertray_c1b_fixture f where f.tenant_id=s.tenant_id;
-select public.platform_admin_transition_branch_setup(admin_user_id,tenant_id,appointment_2_id,'completed',gen_random_uuid(),'Lekki setup complete',e) from sellertray_c1b_fixture,oa4_evidence;
+select public.platform_admin_transition_branch_setup(
+  admin_user_id,tenant_id,appointment_2_id,'completed',gen_random_uuid(),
+  'Lekki setup complete',
+  jsonb_set(e,'{equipment,0,identifier}','"BT-123456-LEKKI"'::jsonb)
+) from sellertray_c1b_fixture,oa4_evidence;
 select extensions.is(public.get_sellertray_onboarding_state_core(tenant_id)#>>'{branchSetup,readyCount}','2','readiness persists even when entitlement reconciliation fails') from sellertray_c1b_fixture;
 select extensions.is((select count(*)::integer from public.sellertray_commercial_entitlement_events e join sellertray_c1b_fixture f on f.commercial_order_id=e.commercial_order_id),0,'runtime conflict cannot create entitlement');
 select extensions.ok(exists(select 1 from public.platform_admin_audit a where a.tenant_id=tenant_id and a.action='setup_activation_reconciliation_failed'),'reconciliation failure is audited') from sellertray_c1b_fixture;
