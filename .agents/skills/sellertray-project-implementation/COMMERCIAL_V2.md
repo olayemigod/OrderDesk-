@@ -604,6 +604,32 @@ Overrides must preserve:
 
 No hidden permanent table edit is an acceptable override mechanism.
 
+## C2-6 Branch add-on purchase and settlement contract — 2026-11-03
+
+For new Branch commercial purchases, an add-on selection is a governed add-on
+version (not a free-text feature or client-side price). The server resolves its
+published effective price/tax version and freezes the selected add-on version,
+billing cycle, Branch, price and tax into an immutable commercial order line.
+The Branch's settlement obligation includes subscription, applicable setup
+and selected add-on amounts; the Merchant Order Form must show these same
+facts, not a separate add-on ledger.
+
+For an add-on selected within the initial combined Branch purchase, its
+recurring billing cycle must match that Branch Subscription's selected cycle.
+An explicitly allowed one-time add-on may be included. A different recurring
+cycle or mid-term add-on purchase requires a future approved renewal and
+proration/term policy; do not invent co-termination or grant entitlements by
+merely creating an order.
+
+A priced add-on order line and confirmed payment are not themselves an
+operational entitlement. The shared Branch Subscription/add-on authority must
+assign entitlement only after applicable purchase, Master Agreement, payment,
+setup and lifecycle gates. Linked assignments must reference the exact
+purchased add-on version, Branch, price line and cycle; no merchant client
+may grant them directly. Existing C1/OA2 history and live legacy
+tenant_subscriptions remain unchanged until the controlled C2 cutover.
+
+
 # 23. Compatibility and migration discipline
 
 Commercial V2 is a deliberate migration, not a destructive rewrite.
