@@ -6,6 +6,50 @@
 -- exposes exact-Business acceptance identifiers for context-specific display.
 begin;
 
+-- A historical production QA/version quarantine authority existed outside the
+-- clean-history migration ledger. Converge it without modifying quarantined
+-- version rows or rewriting Master acceptance evidence.
+create table if not exists public.sellertray_master_agreement_version_quarantines (
+  id uuid primary key default gen_random_uuid(),
+  agreement_version_id uuid not null
+    constraint sellertray_master_agreement_version_qu_agreement_version_id_key unique
+    references public.sellertray_master_agreement_versions(id) on delete restrict,
+  reason text not null
+    constraint sellertray_master_agreement_quarantine_reason_check
+    check (char_length(btrim(reason)) between 6 and 1000 and reason=btrim(reason)),
+  quarantined_by_user_id uuid not null
+    references auth.users(id) on delete restrict,
+  quarantined_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+alter table public.sellertray_master_agreement_version_quarantines enable row level security;
+revoke all on public.sellertray_master_agreement_version_quarantines from public,anon,authenticated;
+grant all on public.sellertray_master_agreement_version_quarantines to service_role;
+create index if not exists sellertray_master_agreement_quarantine_actor_idx
+  on public.sellertray_master_agreement_version_quarantines
+  (quarantined_by_user_id,quarantined_at desc);
+
+do $
+begin
+  if (select count(*) from information_schema.columns
+      where table_schema='public' and table_name='sellertray_master_agreement_version_quarantines')<>6
+    or not exists (select 1 from information_schema.columns where table_schema='public'
+      and table_name='sellertray_master_agreement_version_quarantines'
+      and column_name='agreement_version_id' and data_type='uuid' and is_nullable='NO')
+    or not exists (select 1 from pg_constraint where conrelid='public.sellertray_master_agreement_version_quarantines'::regclass
+      and contype='u' and pg_get_constraintdef(oid)='UNIQUE (agreement_version_id)')
+  then
+    raise exception 'Master Agreement quarantine schema diverges from governed version history';
+  end if;
+  if not exists (select 1 from pg_trigger
+    where tgrelid='public.sellertray_master_agreement_version_quarantines'::regclass
+    and tgname='prevent_sellertray_master_agreement_quarantine_mutation') then
+    create trigger prevent_sellertray_master_agreement_quarantine_mutation
+      before update or delete on public.sellertray_master_agreement_version_quarantines
+      for each row execute function public.prevent_sellertray_commercial_history_mutation();
+  end if;
+end $;
+
 -- Forward-only convergence: get_sellertray_master_agreement_admin
 CREATE OR REPLACE FUNCTION public.get_sellertray_master_agreement_admin(p_actor_user_id uuid, p_tenant_id uuid DEFAULT NULL::uuid)
  RETURNS jsonb
