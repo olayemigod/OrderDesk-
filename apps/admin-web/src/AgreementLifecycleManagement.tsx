@@ -12,6 +12,8 @@ type AgreementVersion = {
   publishedAt: string;
   publishedByUserId: string;
   publishReason: string;
+  quarantined: boolean;
+  quarantineReason: string | null;
 };
 
 type Acceptance = {
@@ -36,6 +38,7 @@ type AgreementOverview = {
   actorRole: string;
   canPublish: boolean;
   versions: AgreementVersion[];
+  acceptedVersionIds: string[];
   tenantState: TenantState | null;
 };
 
@@ -63,13 +66,19 @@ export default function AgreementLifecycleManagement({ session, tenantId }: { se
   const [sourcePdf, setSourcePdf] = useState<File | null>(null);
   const [fileInputKey, setFileInputKey] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [historyScope, setHistoryScope] = useState<'merchant' | 'platform'>('merchant');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const requestSequence = useRef(0);
 
-  useEffect(() => { setMessage(null); void load(); }, [tenantId, session]);
+  useEffect(() => {
+    setMessage(null);
+    setHistoryScope('merchant');
+    setSelectedId(null);
+    void load();
+  }, [tenantId, session]);
 
   async function load(preferredId?: string | null) {
     const sequence = ++requestSequence.current;
@@ -84,9 +93,13 @@ export default function AgreementLifecycleManagement({ session, tenantId }: { se
       const next = parseOverview(response.overview);
       setState(next);
       const wanted = preferredId ?? selectedId;
-      setSelectedId(wanted && next.versions.some((version) => version.id === wanted)
+      const tenantAcceptedIds = new Set(next.acceptedVersionIds);
+      const merchantVersions = tenantId
+        ? next.versions.filter((version) => tenantAcceptedIds.has(version.id))
+        : next.versions;
+      setSelectedId(wanted && merchantVersions.some((version) => version.id === wanted)
         ? wanted
-        : next.tenantState?.currentVersion?.id ?? next.versions[0]?.id ?? null);
+        : merchantVersions[0]?.id ?? null);
     } catch (cause) {
       if (sequence !== requestSequence.current) return;
       setState(null);
@@ -132,6 +145,7 @@ export default function AgreementLifecycleManagement({ session, tenantId }: { se
       }, session);
       const next = parseOverview(response.overview);
       setState(next);
+      setHistoryScope('platform');
       setSelectedId(response.agreementVersionId ?? next.tenantState?.currentVersion?.id ?? next.versions[0]?.id ?? null);
       setForm(emptyForm());
       setSourcePdf(null);
@@ -144,7 +158,12 @@ export default function AgreementLifecycleManagement({ session, tenantId }: { se
     }
   }
 
-  const versions = state?.versions ?? [];
+  const platformVersions = state?.versions ?? [];
+  const acceptedIds = new Set(state?.acceptedVersionIds ?? []);
+  const showMerchantHistory = Boolean(tenantId) && historyScope === 'merchant';
+  const versions = showMerchantHistory
+    ? platformVersions.filter((version) => acceptedIds.has(version.id))
+    : platformVersions;
   const selected = versions.find((version) => version.id === selectedId) ?? versions[0] ?? null;
   const tenantState = state?.tenantState ?? null;
 
@@ -183,16 +202,22 @@ export default function AgreementLifecycleManagement({ session, tenantId }: { se
         <div className="workspace-panel-heading">
           <div>
             <p className="workspace-eyebrow">Version history</p>
-            <h2>Published Master Agreement versions</h2>
-            <p>Immutable platform legal history.</p>
+            <h2>{showMerchantHistory ? 'Accepted Master Agreement versions' : 'Published Master Agreement versions'}</h2>
+            <p>{showMerchantHistory
+              ? 'Only the Master Agreement versions this Business has accepted. Pending current acceptance appears above.'
+              : 'Immutable platform legal history. Publication does not mean this Business accepted a version.'}</p>
           </div>
+          {tenantId ? <div className="workspace-actions" role="group" aria-label="Master Agreement history scope">
+            <button type="button" className="workspace-button text compact" aria-pressed={showMerchantHistory} onClick={() => { setHistoryScope('merchant'); setSelectedId(null); }}>Merchant accepted</button>
+            <button type="button" className="workspace-button text compact" aria-pressed={!showMerchantHistory} onClick={() => { setHistoryScope('platform'); setSelectedId(null); }}>Platform versions</button>
+          </div> : null}
         </div>
         {loading && !state ? <div className="workspace-empty-state"><strong>Loading agreement versions…</strong></div> : null}
-        {!loading && !versions.length ? <div className="workspace-empty-state"><strong>No Master Agreement published</strong><p>Publish the reviewed universal legal PDF before a new SellerTray service-delivery activation is allowed.</p></div> : null}
+        {!loading && !versions.length ? <div className="workspace-empty-state"><strong>{showMerchantHistory ? 'No Master Agreement accepted by this Business' : 'No Master Agreement published'}</strong><p>{showMerchantHistory ? 'The current required version must be accepted by an authorised merchant representative. Publication alone is not acceptance.' : 'Publish the reviewed universal legal PDF before new SellerTray service delivery is allowed.'}</p></div> : null}
         <div className="admin-agreement-version-list">
           {versions.map((version) => <button key={version.id} type="button" className={`admin-agreement-version ${selected?.id === version.id ? 'active' : ''}`} onClick={() => setSelectedId(version.id)}>
             <span className="admin-agreement-version-mark">V</span>
-            <span><strong>{version.title}</strong><small>Version {version.versionCode} · Effective {formatDate(version.effectiveFrom)}</small></span>
+            <span><strong>{version.title}</strong><small>Version {version.versionCode}{version.quarantined ? ' · Quarantined' : ''} · Effective {formatDate(version.effectiveFrom)}</small></span>
           </button>)}
         </div>
       </article>
@@ -201,11 +226,11 @@ export default function AgreementLifecycleManagement({ session, tenantId }: { se
         {selected ? <>
           <div className="workspace-panel-heading">
             <div>
-              <p className="workspace-eyebrow">Immutable published version</p>
+              <p className="workspace-eyebrow">{showMerchantHistory ? 'Accepted Master Agreement' : 'Immutable published version'}</p>
               <h2>{selected.title}</h2>
               <p>Version {selected.versionCode}</p>
             </div>
-            <span className="workspace-status-pill good">Published</span>
+            <span className={`workspace-status-pill ${selected.quarantined ? 'warn' : 'good'}`}>{selected.quarantined ? 'Quarantined' : showMerchantHistory ? 'Accepted' : 'Published'}</span>
           </div>
           <div className="workspace-detail-grid admin-agreement-facts">
             <Fact label="Effective" value={formatDate(selected.effectiveFrom)} />
@@ -284,6 +309,8 @@ function parseVersion(value: unknown): AgreementVersion | null {
     publishedAt: String(row.publishedAt ?? ''),
     publishedByUserId: String(row.publishedByUserId ?? ''),
     publishReason: String(row.publishReason ?? ''),
+    quarantined: row.quarantined === true,
+    quarantineReason: typeof row.quarantineReason === 'string' ? row.quarantineReason : null,
   };
 }
 function parseAcceptance(value: unknown): Acceptance | null {
@@ -320,6 +347,9 @@ function parseOverview(value: unknown): AgreementOverview {
     actorRole: String(root.actorRole ?? ''),
     canPublish: root.canPublish === true,
     versions,
+    acceptedVersionIds: Array.isArray(root.acceptedVersionIds)
+      ? root.acceptedVersionIds.filter((id): id is string => typeof id === 'string')
+      : [],
     tenantState: parseTenantState(root.tenantState),
   };
 }
