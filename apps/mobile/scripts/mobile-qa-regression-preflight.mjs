@@ -38,7 +38,7 @@ requireValue(reconciliation.includes('dark && darkStyles.metric'), 'Payment Inbo
 requireValue(reconciliation.includes('dark && active && darkStyles.filterButtonActive'), 'Payment Inbox active filters must preserve dark-mode contrast');
 
 requireValue(printers.includes('dark && darkStyles.outlineButton'), 'Printer outline controls must have a dark-mode surface');
-requireValue(printers.includes('dark && darkStyles.chipActive'), 'Printer chips must preserve selected-state contrast in dark mode');
+requireValue(printers.includes('dark && active && darkStyles.chipActive'), 'Printer chips must preserve selected-state contrast in dark mode');
 requireValue(printers.includes('ToggleRow label="Default printer" value={isDefault} onChange={setIsDefault} dark={dark}'), 'Printer toggle labels must receive dark-mode state');
 requireValue(printers.includes('style={[styles.copyCard, dark && darkStyles.copyCard]}'), 'Receipt copy cards must use a dark surface');
 
