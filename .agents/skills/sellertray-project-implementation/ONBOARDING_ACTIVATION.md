@@ -339,7 +339,10 @@ Safe preparation may include, subject to existing permissions:
 
 For pre-C2 merchant device setup, use existing `sellertray_business_is_preparing` compatibility semantics only with original Owner/Manager, device capability and Branch checks and explicit non-retired Business verification. Do not widen `orderdesk_subscription_can_write` or permit POS, shifts, stock or payment transactions. Under Commercial V2, migrate this setup permission to Branch-specific preparation entitlement.
 
-A readiness event recorded after a completed setup appointment must require a same-Branch register and active printer, a successful canonical test-print job for that printer completed no later than readiness, and approved equipment/handover evidence. An early appointment completion requires auditable permission/reschedule evidence. Preserve historical evidence as-is and surface exceptions rather than rewriting it.
+A readiness event recorded after a completed setup appointment must require a same-Branch register and active printer, a successful canonical test-print job for that printer completed no later than readiness, and approved equipment/handover evidence.
+
+
+Purchased setup Branches may remain operationally inactive before their own setup is completed. Preparing such a Branch must allow a merchant Owner/Manager with the original device permission to configure a register, register a Bluetooth printer and run an auditable test print via the setup-only merchant/Mobile device area. The prepared Branch must not become eligible for POS checkout, shifts, payment collection or stock posting merely because device provisioning succeeded. For early setup completion, capture a specific operator-approved reason in immutable appointment evidence; never silently complete an appointment before its scheduled start. An early appointment completion requires auditable permission/reschedule evidence. Preserve historical evidence as-is and surface exceptions rather than rewriting it.
 
 Live POS selling, cashier shifts, operational payment collection and live commerce capabilities that require active entitlement must remain server-gated until activation.
 
