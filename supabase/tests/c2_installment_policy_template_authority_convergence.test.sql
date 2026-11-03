@@ -11,10 +11,8 @@ select extensions.ok(
   'C2 policy versions share the canonical policy store but have their own context'
 );
 select extensions.ok(
-  exists(select 1 from information_schema.columns
-    where table_schema='public' and table_name='sellertray_installment_policy_versions'
-      and column_name='publish_command_id'),
-  'C2 policy publication has a replay command identity'
+  not has_table_privilege('service_role','public.sellertray_installment_policy_allowed_templates','INSERT'),
+  'Even the service gateway cannot directly append to a published policy allowed set'
 );
 select extensions.ok(
   to_regclass('public.sellertray_installment_policy_allowed_templates') is not null,
