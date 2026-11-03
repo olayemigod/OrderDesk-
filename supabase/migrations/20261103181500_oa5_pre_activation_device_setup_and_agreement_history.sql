@@ -50,6 +50,27 @@ begin
   end if;
 end $$;
 
+-- The canonical required Master must exclude quarantined publication history.
+-- This is the exact production resolver shape, converged for clean-history
+-- databases. Global published version rows remain immutable and queryable.
+CREATE OR REPLACE FUNCTION public.resolve_sellertray_master_agreement_version_id(p_as_of timestamp with time zone DEFAULT now())
+ RETURNS uuid
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  select v.id
+  from public.sellertray_master_agreement_versions v
+  where v.effective_from<=p_as_of
+    and not exists (
+      select 1
+      from public.sellertray_master_agreement_version_quarantines q
+      where q.agreement_version_id=v.id
+    )
+  order by v.effective_from desc,v.published_at desc,v.id desc
+  limit 1
+$function$;
+
 -- Forward-only convergence: get_sellertray_master_agreement_admin
 CREATE OR REPLACE FUNCTION public.get_sellertray_master_agreement_admin(p_actor_user_id uuid, p_tenant_id uuid DEFAULT NULL::uuid)
  RETURNS jsonb
