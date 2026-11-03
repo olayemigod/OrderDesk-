@@ -334,6 +334,13 @@ Safe preparation may include, subject to existing permissions:
 - appointment visibility;
 - help/support/onboarding guidance.
 
+- governed Branch register creation/editing, Bluetooth printer pairing/assignment, receipt-copy configuration and physical test printing before activation;
+- scoped ProcessEdge setup staff equipment installation through a dedicated appointment-linked, audited and MFA/AAL2-protected authority, not implicit merchant membership.
+
+For pre-C2 merchant device setup, use existing `sellertray_business_is_preparing` compatibility semantics only with original Owner/Manager, device capability and Branch checks and explicit non-retired Business verification. Do not widen `orderdesk_subscription_can_write` or permit POS, shifts, stock or payment transactions. Under Commercial V2, migrate this setup permission to Branch-specific preparation entitlement.
+
+A readiness event recorded after a completed setup appointment must require a same-Branch register and active printer, a successful canonical test-print job for that printer completed no later than readiness, and approved equipment/handover evidence. An early appointment completion requires auditable permission/reschedule evidence. Preserve historical evidence as-is and surface exceptions rather than rewriting it.
+
 Live POS selling, cashier shifts, operational payment collection and live commerce capabilities that require active entitlement must remain server-gated until activation.
 
 Hiding a Mobile tab is not sufficient authority.
