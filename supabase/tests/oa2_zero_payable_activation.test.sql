@@ -152,8 +152,35 @@ select extensions.is(
 select public.accept_sellertray_master_agreement(
   f.tenant_id,f.agreement_id,'Full Discount Owner','{}',f.checkout_1_command,f.owner_user_id
 ) from sellertray_c1b_fixture f;
+
+-- OA5: preceding setup proof is a real canonical native test-job fixture,
+-- not a claim in the old C1/OA2 readiness JSON. Historical authority is unchanged.
+insert into public.sellertray_registers(
+  tenant_id,branch_id,code,name,is_default,is_active)
+select f.tenant_id,f.branch_id,'OA5NATIVE','OA5 proof register',false,true
+from sellertray_c1b_fixture f;
+insert into public.sellertray_printers(
+  tenant_id,branch_id,register_id,display_name,transport,hardware_identifier,
+  paper_width_mm,is_default,is_active,created_by_user_id)
+select f.tenant_id,f.branch_id,r.id,'OA5 proof printer','bluetooth',
+  'OA5-NATIVE-PROOF',58,false,true,f.admin_user_id
+from sellertray_c1b_fixture f join public.sellertray_registers r
+  on r.tenant_id=f.tenant_id and r.branch_id=f.branch_id and r.code='OA5NATIVE';
+insert into public.sellertray_print_jobs(
+  tenant_id,branch_id,register_id,printer_id,job_type,request_key,status,
+  transport,printer_name,hardware_identifier,paper_width_mm,content_snapshot,
+  requested_by_user_id,requested_at,started_at,completed_at)
+select p.tenant_id,p.branch_id,p.register_id,p.id,'test',
+  'oa5-c1b-proof-'||p.id::text,'printed','bluetooth',p.display_name,
+  p.hardware_identifier,p.paper_width_mm,
+  jsonb_build_object('formatVersion',1,'documentType','test'),
+  f.admin_user_id,now(),now(),now()
+from sellertray_c1b_fixture f join public.sellertray_printers p
+  on p.tenant_id=f.tenant_id and p.branch_id=f.branch_id
+  and p.hardware_identifier='OA5-NATIVE-PROOF';
+
 select public.mark_sellertray_commercial_branch_setup_ready(
-  f.tenant_id,f.commercial_order_id,f.branch_id,gen_random_uuid(),'{}','Setup verified',now(),f.admin_user_id
+  f.tenant_id,f.commercial_order_id,f.branch_id,gen_random_uuid(),jsonb_build_object('equipment',jsonb_build_array(jsonb_build_object('kind','bluetooth_printer','identifier','OA5-NATIVE-PROOF'))),'Setup verified',now(),f.admin_user_id
 ) from sellertray_c1b_fixture f;
 select public.reconcile_sellertray_installment_entitlement(tenant_id,installment_obligation_id)
 from sellertray_c1b_fixture;
