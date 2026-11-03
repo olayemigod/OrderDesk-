@@ -17,6 +17,16 @@ begin
      or jsonb_typeof(p_evidence->'equipment') is distinct from 'array' then
     raise exception 'Branch and structured equipment evidence are required' using errcode='22023';
   end if;
+  -- A database-owner maintenance session has no checklist validator, so the
+  -- system evidence gate itself must reject empty and non-printer arrays.
+  if not exists (
+    select 1 from jsonb_array_elements(p_evidence->'equipment') e
+    where jsonb_typeof(e.value)='object'
+      and e.value->>'kind'='bluetooth_printer'
+  ) then
+    raise exception 'At least one Bluetooth printer is required for new Branch setup readiness'
+      using errcode='23514';
+  end if;
   for v_item in select e.value from jsonb_array_elements(p_evidence->'equipment') e
     where e.value->>'kind'='bluetooth_printer' loop
     v_printer_id:=null;
