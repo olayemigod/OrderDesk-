@@ -1,6 +1,17 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(24);
+select extensions.plan(25);
+
+select extensions.ok(
+  exists(
+    select 1 from pg_trigger t
+    where t.tgrelid='public.sellertray_commercial_installment_obligations'::regclass
+      and t.tgname='snapshot_sellertray_inserted_installment_contract'
+      and position('obligation_scope' in pg_get_triggerdef(t.oid))>0
+      and position('commercial_order' in pg_get_triggerdef(t.oid))>0
+  ),
+  'Legacy C1 installment snapshot trigger does not run on native Branch obligations'
+);
 
 select extensions.ok(
   exists(select 1 from information_schema.columns
