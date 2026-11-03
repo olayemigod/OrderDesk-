@@ -14,6 +14,7 @@ function requireValue(condition, message) {
 
 const profile = read('src/components/BusinessProfileView.tsx');
 const logoRepository = read('src/data/businessLogoRepository.ts');
+const businessRepository = read('src/data/businessRepository.ts');
 const support = read('src/components/SettingsHub.tsx');
 const reconciliation = read('src/components/PaymentReconciliationPanel.tsx');
 const printers = read('src/redesign/PrinterWorkspace.tsx');
@@ -27,6 +28,10 @@ requireValue(profile.includes('backgroundColor: theme.dark.surfaceSubtle'), 'Bus
 requireValue(logoRepository.includes("BUSINESS_LOGO_BUCKET = 'business-logos'"), 'Mobile business logos must use the shared business-logos bucket');
 requireValue(logoRepository.includes('BUSINESS_LOGO_MAX_BYTES = 5 * 1024 * 1024'), 'Mobile business logos must preserve the shared 5 MB limit');
 requireValue(logoRepository.includes('business-logo-'), 'Mobile business-logo objects must use the governed tenant object naming contract');
+const profileSave = businessRepository.split('export async function updateBusinessProfile(')[1]?.split('\n}')[0] ?? '';
+requireValue(profileSave.includes("supabase.rpc('save_sellertray_business_profile'"), 'Mobile Business Profile must save through the shared governed business-profile RPC');
+requireValue(profileSave.includes('p_logo_url: cleanOptional(input.logoUrl)'), 'Mobile profile saves must pass logo changes into server-side tenant/logo validation');
+requireValue(!profileSave.includes(".from('tenants')"), 'Mobile profile edits must not bypass the governed business-profile RPC with direct tenant writes');
 
 requireValue(!support.includes('SellerTray support chat uses EXPO_PUBLIC_SUPPORT_CHAT_URL'), 'Support UI must not expose Expo environment variable names');
 requireValue(!support.includes('ProcessEdge WhatsApp support conversation'), 'SellerTray support UI must not expose internal fallback wording');
