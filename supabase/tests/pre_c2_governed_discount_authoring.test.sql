@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(14);
+select extensions.plan(16);
 
 select extensions.ok(
   exists(select 1 from information_schema.columns where table_schema='public' and table_name='sellertray_commercial_adjustments' and column_name='discount_input_type'),
@@ -56,6 +56,15 @@ select extensions.ok(
 select extensions.ok(
   to_regprocedure('public.platform_admin_record_commercial_adjustment(uuid,uuid,uuid,uuid,numeric,text,jsonb)') is not null,
   'legacy amount-only adjustment authority remains available for rolling compatibility'
+);
+select extensions.ok(
+  position('below confirmed payments' in lower(pg_get_functiondef('public.record_sellertray_commercial_adjustment_internal(uuid,uuid,uuid,numeric,text,jsonb,uuid)'::regprocedure))) > 0,
+  'legacy amount-only adjustment path also fails closed below confirmed payments'
+);
+select extensions.ok(
+  position('sellertray_commercial_installment_payment_confirmations' in lower(pg_get_functiondef('public.record_sellertray_commercial_adjustment_internal(uuid,uuid,uuid,numeric,text,jsonb,uuid)'::regprocedure))) > 0
+  and position('sellertray_commercial_direct_payment_confirmations' in lower(pg_get_functiondef('public.record_sellertray_commercial_adjustment_internal(uuid,uuid,uuid,numeric,text,jsonb,uuid)'::regprocedure))) > 0,
+  'legacy amount-only adjustment path accounts for both confirmed payment authorities'
 );
 select extensions.ok(
   position('command id was already used with different input' in lower(pg_get_functiondef('public.record_sellertray_commercial_discount_internal(uuid,uuid,uuid,text,numeric,text,jsonb,uuid)'::regprocedure))) > 0,
