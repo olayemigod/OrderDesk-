@@ -36,6 +36,7 @@ create table public.sellertray_installment_policy_allowed_templates(
 alter table public.sellertray_installment_policy_allowed_templates enable row level security;
 revoke all on public.sellertray_installment_policy_allowed_templates from public,anon,authenticated;
 grant select on public.sellertray_installment_policy_allowed_templates to service_role;
+revoke insert,update,delete on public.sellertray_installment_policy_allowed_templates from service_role;
 
 create trigger prevent_sellertray_installment_policy_allowed_template_mutation
 before update or delete on public.sellertray_installment_policy_allowed_templates
