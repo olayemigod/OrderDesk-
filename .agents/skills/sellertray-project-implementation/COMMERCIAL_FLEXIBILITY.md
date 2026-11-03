@@ -202,3 +202,48 @@ Do not:
 - fabricate payments to close a disabled schedule;
 - let a disabled/superseded checkout later become payment authority;
 - let customization create a second commercial truth outside the shared core.
+
+## 2026-11-03 — C2 Branch installment-selection and versioning correction
+
+For **new Commercial V2 Branch commitments**, a governed 100% upfront schedule is
+the initial **default**. The default is identified **only** by the effective
+policy version's `default_template_id`. A schedule code or display name
+(including `full_payment_100`, `two_installment_70_30`, and
+`three_installment_60_20_20`) is never sufficient to authorize the
+selection or determine allocation arithmetic.
+
+The versioned C2 installment policy has two distinct configurable concerns:
+
+1. **Default schedule** — one published, effective schedule template version
+   that is applied when the order does not explicitly select a template. This
+   remains selectable even when optional installments are disabled.
+2. **Allowed alternative schedules** — an explicit immutable set of other
+   published, effective template-version IDs governed by that policy version.
+   An alternative is selectable only when installments are enabled **and**
+   that exact template-version ID belongs to the allowed set. A template's
+   publication alone does not grant merchant eligibility.
+
+The initial C2 Branch policy defaults to full upfront for monthly and yearly
+commitments. Optional alternative structures are disabled for monthly
+commitments and include the seeded 70/30 and 60/20/20 structures for yearly
+commitments until ProcessEdge publishes replacement policy versions. These
+are initial **data choices**, never hard-coded behavioral branches.
+
+A new policy/default/allowed-set combination is published as a **new policy
+version**, with ProcessEdge `admin.installments.manage` authority, scope,
+reason, MFA/AAL2 at the Admin transport, idempotent command identity and
+immutable audit. The selected template must be snapshotted by ID, version and
+its exact percentage/fixed allocation lines and due dates into the Branch
+commercial obligation. The Merchant Order Form includes that selected version
+and the Branch settlement schedule. Publisher/consumer code may not append
+new alternatives to a previously published policy version as a shortcut;
+publish a successor instead.
+
+C1/OA2 legacy policy versions and previously accepted obligations, confirmed
+payments and agreement evidence remain unchanged. The C2 Branch policy is a
+separate context **within the existing versioned policy authority**, not a
+separate subscription engine. Pending/unconfirmed drafts obey current
+eligibility, whereas a confirmed Merchant Order Form and its existing
+settlement contract must not be retroactively voided by later policy changes.
+The legacy Business subscription runtime remains authoritative until a
+separate approved C2 cutover.
