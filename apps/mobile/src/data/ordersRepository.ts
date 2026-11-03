@@ -1,4 +1,5 @@
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import { customerContactPhone } from './customerRepository';
 
 import type {
   MatchSource,
@@ -160,8 +161,10 @@ function mapOrder(
     posOperatorName: row.pos_operator_name,
     customerId: customer?.id ?? '',
     publicOrderId: row.public_order_id,
-    customerName: customer?.display_name || customer?.phone || customer?.wa_id || 'WhatsApp customer',
-    customerPhone: customer?.phone || customer?.wa_id || '',
+    customerName: customer?.display_name
+      || (customer ? customerContactPhone({ phone: customer.phone, whatsappId: customer.wa_id }) : null)
+      || 'Customer',
+    customerPhone: customer ? (customerContactPhone({ phone: customer.phone, whatsappId: customer.wa_id }) ?? '') : '',
     receivedAt: row.created_at,
     status: row.status,
     statusReason: row.status_reason,
