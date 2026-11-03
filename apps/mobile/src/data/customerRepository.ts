@@ -13,7 +13,7 @@ export function customerContactPhone(customer: { phone: string | null; whatsappI
   const phone = customer.phone?.trim();
   if (phone) return phone;
   const whatsappId = customer.whatsappId.trim();
-  return /^\\+?[0-9]{7,15}$/.test(whatsappId) ? whatsappId : null;
+  return /^\+?[0-9]{7,15}$/.test(whatsappId) ? whatsappId : null;
 }
 
 export type MerchantCustomer = {
