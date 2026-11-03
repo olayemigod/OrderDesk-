@@ -75,7 +75,7 @@ begin
     'generatedAt',now()
   );
 end;
-$function$
+$function$;
 
 -- Forward-only convergence: save_sellertray_printer
 CREATE OR REPLACE FUNCTION public.save_sellertray_printer(p_tenant_id uuid, p_printer_id uuid, p_branch_id uuid, p_register_id uuid, p_display_name text, p_hardware_identifier text, p_paper_width_mm integer, p_is_default boolean, p_is_active boolean, p_actor_user_id uuid)
@@ -122,7 +122,7 @@ begin
  v_after:=public.sellertray_printer_state(v_printer);
  if v_before is null or v_before is distinct from v_after then insert into public.sellertray_printer_events(tenant_id,printer_id,event_type,actor_user_id,before_state,after_state) values(p_tenant_id,v_printer.id,v_event_type,p_actor_user_id,v_before,v_after); end if;
  return v_after;
-end; $function$
+end; $function$;
 
 -- Forward-only convergence: save_sellertray_printer_receipt_settings
 CREATE OR REPLACE FUNCTION public.save_sellertray_printer_receipt_settings(p_tenant_id uuid, p_printer_id uuid, p_copy_definitions jsonb, p_merchant_footer text DEFAULT NULL::text)
@@ -137,7 +137,7 @@ AS $function$ declare v_user_id uuid := (select auth.uid()); v_printer public.se
         select 1 from public.tenants t
         where t.id=p_tenant_id and t.retired_at is null
       )
-    ) then raise exception 'SellerTray subscription is read-only' using errcode='42501'; end if; if not public.sellertray_user_can_operate_branch(p_tenant_id,v_printer.branch_id,v_user_id) or not public.sellertray_user_has_capability(p_tenant_id,v_user_id,'can_manage_devices') then raise exception 'You do not have permission to manage this printer' using errcode='42501'; end if; v_before := jsonb_build_object('receiptCopyDefinitions',v_printer.receipt_copy_definitions,'merchantReceiptFooter',v_printer.merchant_receipt_footer); for v_copy in select value from jsonb_array_elements(p_copy_definitions) loop v_type := lower(btrim(coalesce(v_copy->>'type',''))); v_label := btrim(coalesce(v_copy->>'label','')); if v_type not in ('customer','store','audit','accounts','dispatch','production','custom') then raise exception 'Choose a valid receipt copy type' using errcode='22023'; end if; if char_length(v_label) not between 1 and 40 then raise exception 'Each receipt copy needs a short label' using errcode='22023'; end if; if coalesce((v_copy->>'enabled')::boolean,true)=false then raise exception 'Remove disabled copies instead of saving them' using errcode='22023'; end if; if lower(v_label)=any(v_seen_labels) then raise exception 'Receipt copy labels must be unique' using errcode='22023'; end if; v_seen_labels := array_append(v_seen_labels,lower(v_label)); end loop; update public.sellertray_printers set receipt_copy_definitions=p_copy_definitions,merchant_receipt_footer=v_footer,updated_at=now() where tenant_id=p_tenant_id and id=p_printer_id returning * into v_printer; if v_before is distinct from jsonb_build_object('receiptCopyDefinitions',p_copy_definitions,'merchantReceiptFooter',v_footer) then insert into public.sellertray_printer_events(tenant_id,printer_id,event_type,actor_user_id,before_state,after_state) values(p_tenant_id,p_printer_id,'updated',v_user_id,v_before,jsonb_build_object('receiptCopyDefinitions',p_copy_definitions,'merchantReceiptFooter',v_footer)); end if; return jsonb_build_object('printerId',p_printer_id,'receiptCopyDefinitions',p_copy_definitions,'merchantReceiptFooter',v_footer); end; $function$
+    ) then raise exception 'SellerTray subscription is read-only' using errcode='42501'; end if; if not public.sellertray_user_can_operate_branch(p_tenant_id,v_printer.branch_id,v_user_id) or not public.sellertray_user_has_capability(p_tenant_id,v_user_id,'can_manage_devices') then raise exception 'You do not have permission to manage this printer' using errcode='42501'; end if; v_before := jsonb_build_object('receiptCopyDefinitions',v_printer.receipt_copy_definitions,'merchantReceiptFooter',v_printer.merchant_receipt_footer); for v_copy in select value from jsonb_array_elements(p_copy_definitions) loop v_type := lower(btrim(coalesce(v_copy->>'type',''))); v_label := btrim(coalesce(v_copy->>'label','')); if v_type not in ('customer','store','audit','accounts','dispatch','production','custom') then raise exception 'Choose a valid receipt copy type' using errcode='22023'; end if; if char_length(v_label) not between 1 and 40 then raise exception 'Each receipt copy needs a short label' using errcode='22023'; end if; if coalesce((v_copy->>'enabled')::boolean,true)=false then raise exception 'Remove disabled copies instead of saving them' using errcode='22023'; end if; if lower(v_label)=any(v_seen_labels) then raise exception 'Receipt copy labels must be unique' using errcode='22023'; end if; v_seen_labels := array_append(v_seen_labels,lower(v_label)); end loop; update public.sellertray_printers set receipt_copy_definitions=p_copy_definitions,merchant_receipt_footer=v_footer,updated_at=now() where tenant_id=p_tenant_id and id=p_printer_id returning * into v_printer; if v_before is distinct from jsonb_build_object('receiptCopyDefinitions',p_copy_definitions,'merchantReceiptFooter',v_footer) then insert into public.sellertray_printer_events(tenant_id,printer_id,event_type,actor_user_id,before_state,after_state) values(p_tenant_id,p_printer_id,'updated',v_user_id,v_before,jsonb_build_object('receiptCopyDefinitions',p_copy_definitions,'merchantReceiptFooter',v_footer)); end if; return jsonb_build_object('printerId',p_printer_id,'receiptCopyDefinitions',p_copy_definitions,'merchantReceiptFooter',v_footer); end; $function$;
 
 -- Forward-only convergence: save_sellertray_register
 CREATE OR REPLACE FUNCTION public.save_sellertray_register(p_tenant_id uuid, p_register_id uuid, p_branch_id uuid, p_code text, p_name text, p_is_default boolean, p_is_active boolean)
@@ -260,6 +260,6 @@ begin
     'isActive',v_register.is_active
   );
 end;
-$function$
+$function$;
 
 commit;
