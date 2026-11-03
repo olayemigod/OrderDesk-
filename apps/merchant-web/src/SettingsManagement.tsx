@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { errorMessage, supabase } from './supabase';
 import { PosPolicySettings } from './PosPolicySettings';
+import PaymentBranchManagement from './PaymentBranchManagement';
 import { SellerTrayInput, SellerTraySelect, SellerTrayTextarea } from './SellerTrayElements';
 
 type PaymentGate = 'none' | 'before_processing' | 'before_ready' | 'before_fulfillment';
@@ -382,6 +383,13 @@ export default function SettingsManagement({ tenantId }: { tenantId: string }) {
           </div> : null}
         </form>
       </div>
+      {activeTab === 'payments' ? <section className="page-stack settings-payment-availability" aria-label="Payment configuration">
+        <div className="section-heading">
+          <div><p className="eyebrow">Settings · Payments</p><h2>Branch availability & terminals</h2></div>
+          <p className="muted">Configure where payment methods can be used and add physical card terminals. Reconciliation and customer balances remain under Money.</p>
+        </div>
+        <PaymentBranchManagement tenantId={tenantId} />
+      </section> : null}
     </div>
   </div>;
 }
