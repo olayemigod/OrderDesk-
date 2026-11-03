@@ -177,18 +177,16 @@ export async function updateBusinessProfile(
   if (currency.length !== 3) throw new Error('Currency must be a 3-letter code.');
   if (!timezone) throw new Error('Timezone is required.');
 
-  const { error } = await supabase
-    .from('tenants')
-    .update({
-      name,
-      business_email: cleanOptional(input.businessEmail),
-      business_phone: cleanOptional(input.businessPhone),
-      business_type: cleanOptional(input.businessType),
-      logo_url: cleanOptional(input.logoUrl),
-      currency,
-      timezone,
-    })
-    .eq('id', businessId);
+  const { error } = await supabase.rpc('save_sellertray_business_profile', {
+    p_tenant_id: businessId,
+    p_name: name,
+    p_business_email: cleanOptional(input.businessEmail),
+    p_business_phone: cleanOptional(input.businessPhone),
+    p_business_type: cleanOptional(input.businessType),
+    p_logo_url: cleanOptional(input.logoUrl),
+    p_currency: currency,
+    p_timezone: timezone,
+  });
 
   if (error) throw error;
 }
