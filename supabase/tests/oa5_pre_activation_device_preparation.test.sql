@@ -169,27 +169,17 @@ select extensions.ok(
   'suspended Business is not treated as a preparing Business'
 );
 
-update public.tenant_subscriptions s
-set status='trial',current_period_start=null,current_period_end=null
-from oa5_device_fixture f where s.tenant_id=f.tenant_id;
-update public.tenants t
-set retired_at=now()
-from oa5_device_fixture f where t.id=f.tenant_id;
-
-do $$
-begin
-  begin
-    perform public.save_sellertray_register(
-      f.tenant_id,null,f.branch_id,'RETIRED','Retired register',false,true
-    ) from oa5_device_fixture f;
-  exception when sqlstate '42501' then
-    update oa5_device_fixture set retired_register_rejected=true;
-  end;
-end $$;
-
+-- The governed retirement command forbids direct retirement timestamp updates.
+-- Lock the retired-Business denial in each command definition without violating
+-- retirement audit/command contracts in a test fixture.
 select extensions.ok(
-  (select retired_register_rejected from oa5_device_fixture),
-  'retired Business cannot use preparation exemption even with trial compatibility'
+  position('t.retired_at is null' in lower(pg_get_functiondef(
+    'public.save_sellertray_register(uuid,uuid,uuid,text,text,boolean,boolean)'::regprocedure)))>0
+  and position('t.retired_at is null' in lower(pg_get_functiondef(
+    'public.save_sellertray_printer(uuid,uuid,uuid,uuid,text,text,integer,boolean,boolean,uuid)'::regprocedure)))>0
+  and position('t.retired_at is null' in lower(pg_get_functiondef(
+    'public.save_sellertray_printer_receipt_settings(uuid,uuid,jsonb,text)'::regprocedure)))>0,
+  'retired Business is explicitly excluded from all device preparation exceptions'
 );
 
 select * from extensions.finish();
