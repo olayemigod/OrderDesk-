@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { loadCashRegisters, type CashRegister, type CashShift } from '../data/cashShiftRepository';
@@ -18,6 +18,7 @@ const DEFAULT_COPY:ReceiptCopyDefinition={type:'customer',label:'Customer Copy',
 
 export function PrinterWorkspace({tenantId,branch,activeShift,onClose}:Props){
  const appearance=useSellerTrayAppearance();const dark=appearance.dark;
+ const deviceEditEpoch=useRef(0);
  const[deviceBranchId,setDeviceBranchId]=useState(branch.id);
  const[deviceBranches,setDeviceBranches]=useState<DeviceSetupBranch[]>([{id:branch.id,name:branch.name,isActive:true}]);
  const deviceBranch=deviceBranches.find(row=>row.id===deviceBranchId)??deviceBranches[0];
@@ -25,7 +26,11 @@ export function PrinterWorkspace({tenantId,branch,activeShift,onClose}:Props){
  const selectedRegister=useMemo(()=>registers.find(r=>r.id===registerId)??null,[registerId,registers]);
   useEffect(()=>{
     let mounted=true;
+    deviceEditEpoch.current+=1;
     setDeviceBranchId(branch.id);
+    setRegisterId('');setPrinters([]);setEditingId(null);
+    setDeviceAddress('');setDisplayName('');setPaperWidthMm(58);
+    setIsDefault(true);setIsActive(true);setCopies([DEFAULT_COPY]);setMerchantFooter('');
     setDeviceBranches([{id:branch.id,name:branch.name,isActive:true}]);
     // Management-only Branches never enter the POS switcher.
     void supabase.rpc('get_sellertray_manageable_branches',{p_tenant_id:tenantId}).then(({data,error})=>{
@@ -40,7 +45,10 @@ export function PrinterWorkspace({tenantId,branch,activeShift,onClose}:Props){
   },[tenantId,branch.id,branch.name]);
   function chooseDeviceBranch(nextId:string){
     if(nextId===deviceBranchId)return;
+    deviceEditEpoch.current+=1;
     setDeviceBranchId(nextId);setRegisterId('');setPrinters([]);setEditingId(null);
+    setDeviceAddress('');setDisplayName('');setPaperWidthMm(58);
+    setIsDefault(true);setIsActive(true);setCopies([DEFAULT_COPY]);setMerchantFooter('');
     setPairedDevices([]);setError(null);setNotice(null);
   }
  useEffect(()=>{let mounted=true;setLoading(true);setError(null);void Promise.all([loadCashRegisters(tenantId,deviceBranchId),loadPrintingCapabilities(tenantId,deviceBranchId)]).then(([r,c])=>{if(!mounted)return;setRegisters(r);setCapabilities(c);setRegisterId(current=>r.some(x=>x.id===current)?current:activeShift&&r.some(x=>x.id===activeShift.registerId)?activeShift.registerId:r.find(x=>x.isDefault)?.id??r[0]?.id??'');}).catch(e=>mounted&&setError(e instanceof Error?e.message:'Unable to load printer settings.')).finally(()=>mounted&&setLoading(false));return()=>{mounted=false};},[tenantId,deviceBranchId,activeShift?.registerId,registerReloadKey]);
@@ -48,8 +56,20 @@ export function PrinterWorkspace({tenantId,branch,activeShift,onClose}:Props){
  async function refreshPrinters(){if(registerId)setPrinters(await loadPrinters(tenantId,deviceBranchId,registerId));}
  async function loadPaired(){setDiscovering(true);setError(null);setNotice(null);try{const d=await listPairedBluetoothPrinters();setPairedDevices(d);if(!d.length)setNotice('No paired Bluetooth devices were found. Pair the printer in Android Bluetooth settings first.');}catch(e){setError(e instanceof Error?e.message:'Unable to read paired Bluetooth devices.');}finally{setDiscovering(false)}}
  function selectDevice(d:BluetoothPrinterDevice){setDeviceAddress(d.address);if(!displayName.trim())setDisplayName(d.name);setNotice(null)}
- async function editPrinter(p:SellerTrayPrinter){setEditingId(p.id);setDeviceAddress(p.hardwareIdentifier);setDisplayName(p.displayName);setPaperWidthMm(p.paperWidthMm);setIsDefault(p.isDefault);setIsActive(p.isActive);setError(null);setNotice(null);try{const s=await loadPrinterReceiptSettings(tenantId,p.id);setCopies(s.copyDefinitions);setMerchantFooter(s.merchantFooter??'');}catch(e){setError(e instanceof Error?e.message:'Unable to load receipt settings.')}}
- function resetForm(){setEditingId(null);setDeviceAddress('');setDisplayName('');setPaperWidthMm(58);setIsDefault(printers.length===0);setIsActive(true);setCopies([DEFAULT_COPY]);setMerchantFooter('')}
+ async function editPrinter(p:SellerTrayPrinter){
+  const editEpoch=++deviceEditEpoch.current;
+  setEditingId(p.id);setDeviceAddress(p.hardwareIdentifier);setDisplayName(p.displayName);
+  setPaperWidthMm(p.paperWidthMm);setIsDefault(p.isDefault);setIsActive(p.isActive);
+  setCopies([DEFAULT_COPY]);setMerchantFooter('');setError(null);setNotice(null);
+  try{
+    const settings=await loadPrinterReceiptSettings(tenantId,p.id);
+    if(deviceEditEpoch.current!==editEpoch)return;
+    setCopies(settings.copyDefinitions);setMerchantFooter(settings.merchantFooter??'');
+  }catch(e){
+    if(deviceEditEpoch.current===editEpoch)setError(e instanceof Error?e.message:'Unable to load receipt settings.');
+  }
+ }
+ function resetForm(){deviceEditEpoch.current+=1;setEditingId(null);setDeviceAddress('');setDisplayName('');setPaperWidthMm(58);setIsDefault(printers.length===0);setIsActive(true);setCopies([DEFAULT_COPY]);setMerchantFooter('')}
  function addCopy(){if(copies.length>=8)return;setCopies(current=>[...current,{type:'store',label:'Store Copy',sortOrder:current.length+1}])}
  function removeCopy(index:number){if(copies.length===1)return;setCopies(current=>current.filter((_,i)=>i!==index).map((c,i)=>({...c,sortOrder:i+1})))}
  function changeCopyType(index:number,type:ReceiptCopyType){const standard=COPY_TYPES.find(x=>x.type===type)?.label??'Custom';setCopies(current=>current.map((c,i)=>i===index?{...c,type,label:type==='custom'?(c.type==='custom'?c.label:''):standard}:c))}
