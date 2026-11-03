@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(25);
+select extensions.plan(27);
 
 select extensions.ok(
   exists(
@@ -75,7 +75,8 @@ create temp table c2_addon_order_fixture(
   changed_command_rejected boolean not null default false,
   wrong_cycle_rejected boolean not null default false,
   duplicate_addon_rejected boolean not null default false,
-  unknown_addon_rejected boolean not null default false
+  unknown_addon_rejected boolean not null default false,
+  wrong_subscription_cycle_rejected boolean not null default false
 ) on commit drop;
 
 insert into c2_addon_order_fixture(
@@ -193,6 +194,42 @@ update c2_addon_order_fixture f set result=
     'c2-addon-'||substr(f.tenant_id::text,1,8),
     f.command_id,'system',f.actor_id
   );
+
+select extensions.ok(
+  exists(
+    select 1 from pg_trigger t
+    where t.tgrelid='public.sellertray_branch_subscriptions'::regclass
+      and t.tgname='validate_sellertray_native_branch_subscription_purchase'
+      and not t.tgisinternal
+  ),
+  'Native Branch Subscription registration has database purchase-line binding'
+);
+
+do $test$
+declare
+  v c2_addon_order_fixture%rowtype;
+begin
+  select * into strict v from c2_addon_order_fixture;
+  begin
+    perform public.register_sellertray_branch_subscription_term(
+      v.tenant_id,v.branch_id,v.plan_version_id,'monthly',now(),
+      (v.result->>'commercialOrderId')::uuid,
+      (v.result->'subjects'->0->>'branchSubscriptionLineId')::uuid,
+      (v.result->'subjects'->0->>'installmentObligationId')::uuid,
+      true,null,null,null,'commercial_order',
+      jsonb_build_object('test','wrong-purchased-cycle'),
+      gen_random_uuid(),'system',v.actor_id
+    );
+  exception when sqlstate '23514' then
+    update c2_addon_order_fixture set wrong_subscription_cycle_rejected=true;
+  end;
+end
+$test$;
+
+select extensions.ok(
+  (select wrong_subscription_cycle_rejected from c2_addon_order_fixture),
+  'A yearly-priced Branch order cannot register a monthly entitlement term'
+);
 
 select extensions.is(
   (select (result->>'totalGrossAmount')::numeric
