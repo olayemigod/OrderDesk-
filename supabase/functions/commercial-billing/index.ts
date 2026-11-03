@@ -98,16 +98,17 @@ async function billingCenter(tenantId: string, userId: string): Promise<JsonReco
     const order = record(raw);
     const commercialOrderId = stringValue(order.commercialOrderId);
     const installmentObligationId = stringValue(order.installmentObligationId);
-    const form = forms
-      .filter((candidate) => stringValue(candidate.commercialOrderId) === commercialOrderId)
-      .sort((a, b) => String(b.issuedAt ?? '').localeCompare(String(a.issuedAt ?? '')))[0] ?? null;
+    const orderForms = forms.filter((candidate) => stringValue(candidate.commercialOrderId) === commercialOrderId);
+    const currentOrderForms = orderForms
+      .filter((candidate) => candidate.isCurrent === true)
+      .sort((a, b) => String(b.issuedAt ?? '').localeCompare(String(a.issuedAt ?? '')));
+    const form = currentOrderForms[0] ?? null;
     const hasProcessing = processingRows.some((candidate) =>
       stringValue(candidate.commercial_order_id) === commercialOrderId
       || (installmentObligationId && stringValue(candidate.installment_obligation_id) === installmentObligationId));
-    const confirmation = form ? record(form.confirmation) : {};
-    const orderFormState: OrderFormState = form
-      ? (stringValue(confirmation.id) ? 'confirmed' : 'ready_for_review')
-      : hasProcessing ? 'preparing' : 'legacy';
+    const orderFormState: OrderFormState = currentOrderForms.length > 0
+      ? (currentOrderForms.every((candidate) => Boolean(stringValue(record(candidate.confirmation).id))) ? 'confirmed' : 'ready_for_review')
+      : hasProcessing || orderForms.length > 0 ? 'preparing' : 'legacy';
     return {
       ...order,
       orderFormId: form ? stringValue(form.id) : null,

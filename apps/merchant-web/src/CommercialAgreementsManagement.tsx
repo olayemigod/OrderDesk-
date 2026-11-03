@@ -108,10 +108,9 @@ export default function CommercialAgreementsManagement({ tenantId, onContinueToB
   const reviewReady = Boolean(reviewDocument && previewBytes && reviewedPdfSha256 === reviewDocument.pdfSha256);
   const agreementsComplete = Boolean(master?.acceptance && !center?.masterAcceptanceRequired);
   const hasOrderForms = Boolean(center?.orderForms.length);
-  const currentOrderFormConfirmed = Boolean(center?.orderForms.some((value) => {
-    const form = record(value);
-    return form.isCurrent === true && typeof record(form.confirmation).id === 'string';
-  }));
+  const currentOrderForms = (center?.orderForms ?? []).map(record).filter((form) => form.isCurrent === true);
+  const currentOrderFormConfirmed = currentOrderForms.length > 0
+    && currentOrderForms.every((form) => typeof record(form.confirmation).id === 'string');
 
   return <section className="page-stack">
     <div className="section-heading"><div><p className="eyebrow">Commercial onboarding</p><h2>Agreements</h2></div><p className="muted">The Master Agreement is accepted once per required version. Each SellerTray purchase has its own Order Form for review and confirmation.</p></div>

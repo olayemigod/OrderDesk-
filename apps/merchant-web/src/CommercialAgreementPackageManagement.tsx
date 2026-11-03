@@ -72,7 +72,7 @@ export default function CommercialAgreementPackageManagement({ tenantId, onChang
       const next = parseCenter(record(data).center);
       setCenter(next);
       const wanted = preferredId ?? selectedId;
-      setSelectedId(wanted && next.orderForms.some((form) => form.id === wanted)
+      setSelectedId(wanted && next.orderForms.some((form) => form.id === wanted && form.isCurrent)
         ? wanted
         : next.orderForms.find((form) => form.isCurrent && !form.confirmation)?.id
           ?? next.orderForms.find((form) => form.isCurrent)?.id
@@ -215,6 +215,7 @@ export default function CommercialAgreementPackageManagement({ tenantId, onChang
 
         {selected.confirmation ? <div className="success-banner">Order Form confirmed {formatDate(selected.confirmation.confirmedAt)} by {selected.confirmation.confirmedLegalName} ({roleLabel(selected.confirmation.confirmedRole)}).</div> : null}
         {!selected.isCurrent ? <div className="warning-banner">This Order Form has been replaced. Review the current replacement instead.</div> : null}
+        {selected.isCurrent && actionRequired && selected.supersedesOrderFormId ? <div className="warning-banner">Your purchase terms have changed. Review and confirm this updated Order Form before returning to Billing.</div> : null}
         {selected.isCurrent && actionRequired && center?.masterAcceptanceRequired ? <div className="warning-banner">Accept the current Master Agreement separately before confirming this Order Form.</div> : null}
         {selected.isCurrent && actionRequired && !center?.masterAcceptanceRequired && !center?.canAccept ? <div className="warning-banner">Only the Business Owner or an explicitly authorised Manager can confirm this Order Form.</div> : null}
 

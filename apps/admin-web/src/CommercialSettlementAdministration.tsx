@@ -144,7 +144,7 @@ export default function CommercialSettlementAdministration({ session, initialTen
       applyOrder(response.order);
       commands.current.delete('adjustment');
       setAdjustment({ type: 'fixed_amount', value: '', reason: '', evidenceReference: '', evidenceNote: '' });
-      setMessage('Discount recorded. The payable balance and any installment amounts have been recalculated.');
+      setMessage('Discount recorded. The payable balance and installments have been recalculated. If an Order Form was already issued, SellerTray has prepared replacement terms for Merchant review and confirmation before further payment.');
     } catch (cause) { setError(messageFrom(cause, 'Unable to record the discount.')); }
     finally { setSaving(null); }
   }
@@ -261,7 +261,7 @@ export default function CommercialSettlementAdministration({ session, initialTen
             <label>Discount type<select value={adjustment.type} onChange={(event) => setAdjustment((current) => ({ ...current, type: event.target.value === 'percentage' ? 'percentage' : 'fixed_amount', value: '' }))} disabled={!center.capabilities.canAdjust}><option value="fixed_amount">Fixed amount</option><option value="percentage">Percentage</option></select></label>
             <label>{adjustment.type === 'percentage' ? 'Percentage (%)' : `Amount (${selectedOrder.currency})`}<input type="number" min="0.000001" max={adjustment.type === 'percentage' ? 100 : undefined} step={adjustment.type === 'percentage' ? '0.01' : '0.01'} value={adjustment.value} onChange={(event) => setAdjustment((current) => ({ ...current, value: event.target.value }))} disabled={!center.capabilities.canAdjust} /></label>
           </div>
-          <p className="workspace-disclosure">The final monetary discount, payable balance and installment schedule are calculated by SellerTray after submission. A discount cannot reduce the net amount below payments already confirmed.</p>
+          <p className="workspace-disclosure">The final monetary discount, payable balance and installment schedule are calculated by SellerTray after submission. A discount cannot reduce the net amount below payments already confirmed. When an Order Form already exists, SellerTray issues a replacement for the Merchant to review and confirm before further payment.</p>
           <label>Reason<textarea value={adjustment.reason} maxLength={1000} onChange={(event) => setAdjustment((current) => ({ ...current, reason: event.target.value }))} disabled={!center.capabilities.canAdjust} /></label>
           <label>Evidence reference<input value={adjustment.evidenceReference} maxLength={160} onChange={(event) => setAdjustment((current) => ({ ...current, evidenceReference: event.target.value }))} disabled={!center.capabilities.canAdjust} /></label>
           <label>Evidence note<textarea value={adjustment.evidenceNote} maxLength={1000} onChange={(event) => setAdjustment((current) => ({ ...current, evidenceNote: event.target.value }))} disabled={!center.capabilities.canAdjust} /></label>

@@ -19,6 +19,7 @@ const prepurchaseAuthority = read('../../supabase/functions/master-agreement-pre
 const commercialBilling = read('../../supabase/functions/commercial-billing/index.ts');
 const separationMigration = read('../../supabase/migrations/20261030173500_separate_master_agreement_order_form_confirmation.sql');
 const checkoutGate = read('../../supabase/migrations/20261030210000_order_form_checkout_confirmation_gate.sql');
+const discountReconfirmation = read('../../supabase/migrations/20261102103000_pre_c2_discount_order_form_reconfirmation.sql');
 const legacyAgreementApi = read('../../supabase/functions/commercial-agreements/index.ts');
 const failures = [];
 const requireValue = (condition, message) => { if (!condition) failures.push(message); };
@@ -124,6 +125,14 @@ requireValue(
 );
 requireValue(excludes(packageAgreements, ['masterAcceptanceCreated', "'Accept & Continue'", 'I accept the Master Agreement, confirm this purchase']), 'Order Form confirmation must never double as Master acceptance.');
 requireValue(
+  discountReconfirmation.includes('reissue_sellertray_order_forms_after_discount')
+    && discountReconfirmation.includes('supersedes_order_form_id')
+    && discountReconfirmation.includes('create_sellertray_agreement_package')
+    && packageAgreements.includes('form.id === wanted && form.isCurrent')
+    && packageAgreements.includes('Your purchase terms have changed. Review and confirm this updated Order Form before returning to Billing.'),
+  'Merchant Web must surface the amended current Order Form and require fresh PDF review/confirmation after an Admin discount.',
+);
+requireValue(
   separationMigration.includes('Accept the current SellerTray Master Agreement separately before confirming this Order Form')
     && separationMigration.includes("'masterAcceptanceCreated',false") && !separationMigration.includes('perform public.accept_sellertray_master_agreement'),
   'Database Order Form confirmation must require an existing Master acceptance and never manufacture one.',
@@ -136,6 +145,13 @@ requireValue(
   'Initial purchase must prepare the Order Form; Confirm Purchase is reserved for the Order Form itself.',
 );
 requireValue(commercialBilling.includes('orderFormState,'), 'Commercial Billing must expose server-resolved Order Form readiness.');
+requireValue(
+  agreements.includes('currentOrderForms.every(')
+    && commercialBilling.includes('currentOrderForms.every(')
+    && commercialBilling.includes('candidate.isCurrent === true')
+    && commercialBilling.includes("orderForms.length > 0 ? 'preparing' : 'legacy'"),
+  'Multiple current purchase Order Forms must all be confirmed; historical forms never qualify Billing or Merchant acceptance.',
+);
 requireValue(
   billing.includes("order.orderFormState === 'ready_for_review'") && billing.includes('Review Order Form')
     && billing.includes("order.orderFormState === 'preparing'")
