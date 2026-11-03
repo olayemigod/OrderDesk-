@@ -47,11 +47,36 @@ Deno.serve(async (request) => {
     if (action === 'record_adjustment') {
       const commercialOrderId = cleanUuid(body.commercialOrderId);
       const commandId = cleanUuid(body.commandId);
-      const amount = cleanPositiveAmount(body.amount);
       const reason = cleanReason(body.reason);
       const evidence = cleanEvidence(body.evidence);
+      const discountType = cleanEnum(body.discountType, ['fixed_amount', 'percentage'] as const);
+      const discountValue = cleanPositiveValue(body.discountValue);
+
+      if (discountType) {
+        if (!commercialOrderId || !commandId || discountValue === null || !reason || evidence === null) {
+          return json({ error: 'Order, command, discount value, reason and valid evidence are required' }, 400);
+        }
+        if (discountType === 'percentage' && discountValue > 100) {
+          return json({ error: 'Discount percentage cannot exceed 100' }, 400);
+        }
+        const order = await rpc<JsonRecord>('platform_admin_record_commercial_discount', {
+          p_actor_user_id: identity.userId,
+          p_tenant_id: tenantId,
+          p_commercial_order_id: commercialOrderId,
+          p_command_id: commandId,
+          p_discount_type: discountType,
+          p_discount_value: discountValue,
+          p_reason: reason,
+          p_evidence: evidence,
+        });
+        return json({ ok: true, order }, 201);
+      }
+
+      // Compatibility path for an older Admin bundle during a rolling release.
+      // New Admin clients never calculate percentage discounts in the browser.
+      const amount = cleanPositiveAmount(body.amount);
       if (!commercialOrderId || !commandId || amount === null || !reason || evidence === null) {
-        return json({ error: 'Order, command, positive amount, reason and valid evidence are required' }, 400);
+        return json({ error: 'Discount type must be fixed amount or percentage' }, 400);
       }
       const order = await rpc<JsonRecord>('platform_admin_record_commercial_adjustment', {
         p_actor_user_id: identity.userId,
@@ -215,6 +240,10 @@ function cleanSlug(value: unknown, max: number): string | null {
 function cleanPositiveAmount(value: unknown): number | null {
   const parsed = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? Math.round((parsed + Number.EPSILON) * 100) / 100 : null;
+}
+function cleanPositiveValue(value: unknown): number | null {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.round((parsed + Number.EPSILON) * 1_000_000) / 1_000_000 : null;
 }
 function cleanIsoTimestamp(value: unknown): string | null {
   if (typeof value !== 'string' || !value.trim()) return null;
