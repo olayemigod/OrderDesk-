@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.18"
+  version: "0.1.19"
   status: governing
 ---
 
@@ -257,6 +257,9 @@ Rules:
 7. Customer choice is part of the sale snapshot and must survive idempotent retry and offline replay. A branch change or completed/cleared sale must invalidate stale customer context safely.
 8. Customer-linked orders, payments, invoices/receipts and outstanding amounts must remain attributable to that Customer so merchant web can support customer history, receivables and balance follow-up. Walk-in sales remain intentionally unassigned to a named Customer.
 9. Do not expose direct customer-table writes from mobile clients. Customer creation/reuse and identity convergence belong behind governed server/domain commands.
+10. **Customer phone number is optional** for named Customer creation in Merchant Web and Mobile POS. Require a name; validate phone only when supplied. Name-only customers remain distinct, may share display names without being merged, and must retain stable Customer IDs through POS, receivables, history, retries and offline replay.
+11. Reserved technical Customer identities (such as `manual:unlinked:<uuid>` and `pos:walk-in`) are internal linkage values, not phone numbers or WhatsApp contact details. Never display, print, export or send them as customer contact fields on Orders, invoices, receipts, documents or reports; show `No phone saved` or omit the phone. Do not invent a phone, merge by name alone or link WhatsApp without a verified canonical contact identity.
+12. Existing real phone/WhatsApp identity matching and WhatsApp/manual order contact requirements remain unchanged. Presentation rules must be consistent on Mobile, Merchant Web, printing and financial document generation, including 58/80mm receipts.
 
 ## Inventory
 
