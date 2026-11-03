@@ -146,6 +146,13 @@ requireValue(
 );
 requireValue(commercialBilling.includes('orderFormState,'), 'Commercial Billing must expose server-resolved Order Form readiness.');
 requireValue(
+  agreements.includes('currentOrderForms.every(')
+    && commercialBilling.includes('currentOrderForms.every(')
+    && commercialBilling.includes('candidate.isCurrent === true')
+    && commercialBilling.includes("orderForms.length > 0 ? 'preparing' : 'legacy'"),
+  'Multiple current purchase Order Forms must all be confirmed; historical forms never qualify Billing or Merchant acceptance.',
+);
+requireValue(
   billing.includes("order.orderFormState === 'ready_for_review'") && billing.includes('Review Order Form')
     && billing.includes("order.orderFormState === 'preparing'")
     && billing.includes("order.orderFormState === 'confirmed' || order.orderFormState === 'legacy'")
