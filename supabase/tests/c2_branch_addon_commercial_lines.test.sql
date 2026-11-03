@@ -148,17 +148,17 @@ insert into public.sellertray_commercial_price_versions(
   created_by_user_id,approved_by_user_id,approved_at,price_scope
 )
 select 'subscription','branch_subscription',null,plan_version_id,null::uuid,
-  'yearly','NGN',10000,'2026-01-01T00:00:00Z',
+  'yearly','NGN',10000,'2026-01-01T00:00:00Z'::timestamptz,
   'published','C2 test Branch subscription price',actor_id,actor_id,now(),'standard'
 from c2_addon_order_fixture
 union all
 select 'branch_setup','branch_setup',null,null,null::uuid,
-  null,'NGN',5000,'2026-01-01T00:00:00Z',
+  null,'NGN',5000,'2026-01-01T00:00:00Z'::timestamptz,
   'published','C2 test Branch setup price',actor_id,actor_id,now(),'standard'
 from c2_addon_order_fixture
 union all
 select 'addon','addon',null,null,addon_version_id,
-  'yearly','NGN',2500,'2026-01-01T00:00:00Z',
+  'yearly','NGN',2500,'2026-01-01T00:00:00Z'::timestamptz,
   'published','C2 test Branch add-on price',actor_id,actor_id,now(),'standard'
 from c2_addon_order_fixture;
 
