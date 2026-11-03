@@ -697,14 +697,27 @@ function BranchSwitcher({ branches, activeBranchId, onSelect }: { branches: Comm
       <View style={styles.branchList}>
         {branches.map((branch) => {
           const active = branch.id === activeBranchId;
-          return <Pressable key={branch.id} onPress={() => onSelect(branch.id)} style={[styles.branchRow, appearance.dark && darkStyles.subtleCard, active && styles.branchRowActive]}>
-            <View style={styles.branchIcon}><Ionicons name="storefront-outline" size={19} color={theme.colors.greenDark} /></View>
-            <View style={styles.branchCopy}>
-              <Text style={[styles.branchName, appearance.dark && darkStyles.titleText]}>{branch.name}</Text>
-              <Text style={[styles.branchCode, appearance.dark && darkStyles.bodyText]}>{branch.code}{branch.isDefault ? ' · Default' : ''}</Text>
-            </View>
-            {active ? <Ionicons name="checkmark-circle" size={21} color={theme.colors.green} /> : null}
-          </Pressable>;
+          return (
+            <Pressable
+              key={branch.id}
+              onPress={() => onSelect(branch.id)}
+              style={[
+                styles.branchRow,
+                appearance.dark && darkStyles.subtleCard,
+                active && styles.branchRowActive,
+                appearance.dark && active && darkStyles.branchRowActive,
+              ]}
+            >
+              <View style={[styles.branchIcon, appearance.dark && darkStyles.branchIcon]}>
+                <Ionicons name="storefront-outline" size={19} color={appearance.dark ? theme.dark.accentText : theme.colors.greenDark} />
+              </View>
+              <View style={styles.branchCopy}>
+                <Text style={[styles.branchName, appearance.dark && darkStyles.titleText]}>{branch.name}</Text>
+                <Text style={[styles.branchCode, appearance.dark && darkStyles.bodyText]}>{branch.code}{branch.isDefault ? ' · Default' : ''}</Text>
+              </View>
+              {active ? <Ionicons name="checkmark-circle" size={21} color={appearance.dark ? theme.dark.accentText : theme.colors.green} /> : null}
+            </Pressable>
+          );
         })}
       </View>
     </View>
@@ -763,10 +776,12 @@ const styles = StyleSheet.create({
 });
 
 const darkStyles = StyleSheet.create({
-  page: { backgroundColor: '#081825' },
-  card: { backgroundColor: theme.colors.navy, borderColor: '#344054' },
-  subtleCard: { backgroundColor: '#162F46', borderColor: '#344054' },
+  page: { backgroundColor: theme.dark.canvas },
+  card: { backgroundColor: theme.dark.surface, borderColor: theme.dark.border },
+  subtleCard: { backgroundColor: theme.dark.surfaceSubtle, borderColor: theme.dark.border },
+  branchRowActive: { backgroundColor: theme.dark.accentSoft, borderColor: theme.colors.green },
+  branchIcon: { backgroundColor: theme.dark.surfaceRaised, borderWidth: 1, borderColor: theme.dark.borderStrong },
   errorCard: { backgroundColor: '#3A1717', borderColor: '#7A271A' },
-  titleText: { color: theme.colors.cloud },
-  bodyText: { color: '#D0D5DD' },
+  titleText: { color: theme.dark.text },
+  bodyText: { color: theme.dark.textMuted },
 });
