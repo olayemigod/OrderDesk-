@@ -219,22 +219,31 @@ select extensions.is(
   'test starts with 70% installment rounded to 700.01'
 ) from discount_guard_fixture f;
 
-with c as (
- insert into public.billing_checkout_sessions(
-   tenant_id,plan_code,requested_by_user_id,billing_email,provider,reference,
-   authorization_url,status,checkout_kind,command_id,commercial_order_id,
-   installment_obligation_id,installment_schedule_id,amount,currency,
-   provider_initialization_started_at
- )
- select tenant_id,'business',actor_id,
-   'discount-gate-'||left(actor_id::text,8)||'@example.com',
-   'paystack','DGG-CHK-'||replace(checkout_command::text,'-',''),
-   'https://paystack.example.invalid/stale','initialized','installment',
-   checkout_command,order_id,obligation_id,schedule_id,700.01,'NGN',now()
- from discount_guard_fixture
- returning id
+-- Reserve and initialize through the real Paystack checkout state machine.
+-- The BEFORE INSERT payment guard does not permit directly inserting an
+-- initialized Paystack URL; a production checkout must begin as preparing.
+update discount_guard_fixture f
+set checkout_id = (
+  public.reserve_sellertray_installment_checkout(
+    f.tenant_id,f.schedule_id,f.checkout_command,f.actor_id,
+    'discount-gate-'||left(f.actor_id::text,8)||'@example.com'
+  )->>'sessionId'
+)::uuid;
+
+select public.begin_sellertray_installment_checkout_initialization(f.checkout_id)
+from discount_guard_fixture f;
+select public.complete_sellertray_installment_checkout_initialization(
+  f.checkout_id,
+  'sti-'||left(replace(f.tenant_id::text,'-',''),8)
+    ||'-'||replace(f.checkout_command::text,'-',''),
+  'https://paystack.example.invalid/stale'
 )
-update discount_guard_fixture set checkout_id=(select id from c);
+from discount_guard_fixture f;
+select extensions.is(
+  (select s.status from public.billing_checkout_sessions s where s.id=f.checkout_id),
+  'initialized'::text,
+  'the original checkout is properly initialized through the governed provider lease'
+) from discount_guard_fixture f;
 
 select public.record_sellertray_commercial_discount_internal(
  f.tenant_id,f.order_id,f.first_discount,'fixed_amount',0.01,
@@ -266,7 +275,7 @@ begin
   begin
     perform public.confirm_sellertray_installment_payment_from_checkout(
       f.checkout_id,
-      'DGG-CHK-'||replace(f.checkout_command::text,'-',''),
+      'sti-'||left(replace(f.tenant_id::text,'-',''),8)||'-'||replace(f.checkout_command::text,'-',''),
       'pg-tap-charge',700.01,'NGN',now(),'discount-gate-verified-provider-event'
     );
   exception when sqlstate '23514' then
