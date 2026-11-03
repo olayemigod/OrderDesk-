@@ -19,14 +19,14 @@ const DEFAULT_COPY:ReceiptCopyDefinition={type:'customer',label:'Customer Copy',
 export function PrinterWorkspace({tenantId,branch,activeShift,onClose}:Props){
  const appearance=useSellerTrayAppearance();const dark=appearance.dark;
  const[deviceBranchId,setDeviceBranchId]=useState(branch.id);
- const[deviceBranches,setDeviceBranches]=useState<DeviceSetupBranch[]>([{id:branch.id,name:branch.name,isActive:branch.isActive}]);
+ const[deviceBranches,setDeviceBranches]=useState<DeviceSetupBranch[]>([{id:branch.id,name:branch.name,isActive:true}]);
  const deviceBranch=deviceBranches.find(row=>row.id===deviceBranchId)??deviceBranches[0];
  const[registers,setRegisters]=useState<CashRegister[]>([]);const[registerReloadKey,setRegisterReloadKey]=useState(0);const[registerId,setRegisterId]=useState(activeShift?.registerId??'');const[printers,setPrinters]=useState<SellerTrayPrinter[]>([]);const[capabilities,setCapabilities]=useState<PrintingCapabilities>(NO_CAPABILITIES);const[pairedDevices,setPairedDevices]=useState<BluetoothPrinterDevice[]>([]);const[loading,setLoading]=useState(true);const[discovering,setDiscovering]=useState(false);const[saving,setSaving]=useState(false);const[printingId,setPrintingId]=useState<string|null>(null);const[error,setError]=useState<string|null>(null);const[notice,setNotice]=useState<string|null>(null);const[editingId,setEditingId]=useState<string|null>(null);const[deviceAddress,setDeviceAddress]=useState('');const[displayName,setDisplayName]=useState('');const[paperWidthMm,setPaperWidthMm]=useState<58|80>(58);const[isDefault,setIsDefault]=useState(true);const[isActive,setIsActive]=useState(true);const[copies,setCopies]=useState<ReceiptCopyDefinition[]>([DEFAULT_COPY]);const[merchantFooter,setMerchantFooter]=useState('');
  const selectedRegister=useMemo(()=>registers.find(r=>r.id===registerId)??null,[registerId,registers]);
   useEffect(()=>{
     let mounted=true;
     setDeviceBranchId(branch.id);
-    setDeviceBranches([{id:branch.id,name:branch.name,isActive:branch.isActive}]);
+    setDeviceBranches([{id:branch.id,name:branch.name,isActive:true}]);
     // Management-only Branches never enter the POS switcher.
     void supabase.rpc('get_sellertray_manageable_branches',{p_tenant_id:tenantId}).then(({data,error})=>{
       if(!mounted||error||!Array.isArray(data))return;
@@ -37,7 +37,7 @@ export function PrinterWorkspace({tenantId,branch,activeShift,onClose}:Props){
       if(rows.length)setDeviceBranches(rows);
     });
     return()=>{mounted=false};
-  },[tenantId,branch.id,branch.name,branch.isActive]);
+  },[tenantId,branch.id,branch.name]);
   function chooseDeviceBranch(nextId:string){
     if(nextId===deviceBranchId)return;
     setDeviceBranchId(nextId);setRegisterId('');setPrinters([]);setEditingId(null);
