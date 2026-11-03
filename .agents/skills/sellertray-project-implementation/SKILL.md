@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.16"
+  version: "0.1.17"
   status: governing
 ---
 
@@ -497,6 +497,10 @@ Receipt copy rules:
 6. A reprint is an explicit audited print attempt and must never replay the sale. Printing failure must never roll back or replay the completed commercial transaction.
 7. Merchant receipt footer and SellerTray platform attribution are separate concepts. Do not hard-code ProcessEdge Solutions Limited into merchant receipt content. Thermal output must use printer-safe text and must not expose internal customer sentinels such as `pos:walk-in`.
 8. Test prints remain distinct from commercial receipt copies and may identify SellerTray for device verification.
+
+9. Initial Branch setup must allow an authorised Owner/Manager to create a register, assign/configure a Bluetooth printer and receipt-copy profile, and complete a real hardware test print **before** subscription activation; these preparation writes must not unlock selling, shifts, payments or stock posting.
+10. ProcessEdge field installers must use a distinct Branch/appointment-scoped, time-limited, audited setup permission with verified Admin capability and AAL2. Never impersonate merchants or bypass tenant/device checks.
+11. New setup readiness must link canonical same-Branch register/printer and successful test-print evidence **before** readiness, plus signed equipment handover; historical readiness evidence is immutable. Early appointment completion requires approved recorded exception or rescheduling evidence.
 
 Critical invariant:
 
