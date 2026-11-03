@@ -42,10 +42,10 @@ select extensions.ok(
 );
 select extensions.ok(
   position(
-    '''checkouteligible'',true' in
+    '''checkouteligible'',case' in
     replace(lower(pg_get_functiondef('public.get_sellertray_installment_contract_checkout_policy(uuid,uuid,timestamptz)'::regprocedure)),' ','')
   ) > 0,
-  'installment payment checkout remains eligible independently of Master Agreement state'
+  'checkout eligibility branches explicitly by obligation scope, independently of Master Agreement state'
 );
 select extensions.ok(
   position(
