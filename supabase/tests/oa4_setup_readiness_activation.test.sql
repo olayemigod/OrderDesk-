@@ -255,6 +255,18 @@ select extensions.ok(
   'Inactive purchased Branch completes a governed native print test without selling'
 );
 
+select extensions.ok(
+  (select public.get_sellertray_print_job(f.tenant_id,t.job_id)->>'status'
+   from sellertray_c1b_fixture f,oa4_preparation_print_job t)='printed'
+  and (select public.get_sellertray_printer_receipt_settings(f.tenant_id,p.id)
+       ->>'printerId'=p.id::text
+       from public.sellertray_printers p,sellertray_c1b_fixture f
+       where p.tenant_id=f.tenant_id and p.branch_id=f.branch_2_id
+         and p.hardware_identifier='BT-PREP-LEKKI'),
+  'Setup-only Branch authorisation includes native test job and receipt profile reads'
+);
+
+
 -- An arbitrary inactive Branch without a purchased setup line is not eligible.
 with b as (
   insert into public.branches(tenant_id,code,name,is_default,is_active)
