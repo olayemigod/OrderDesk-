@@ -105,7 +105,7 @@ export default function BranchesManagement({ tenantId, onBranchesChanged }: { te
         <div className="topbar-actions"><button className="primary-button" disabled={saving}>{saving ? 'Saving' : 'Save Branch'}</button><button type="button" className="secondary-button" onClick={startNew}>Add another</button></div>
       </form> : activeTab === 'registers'
         ? <BranchRegistersManagement tenantId={tenantId} branchId={selected.id} branchName={selected.name} />
-        : <DevicesPrintersManagement tenantId={tenantId} branchId={selected.id} />}
+        : <DevicesPrintersManagement tenantId={tenantId} branchId={selected.id} branchName={selected.name} />}
     </div> : <form className="panel form-stack" onSubmit={save}>
       <div><p className="eyebrow">New Branch</p><h3>Add Branch</h3><p className="muted">Create the Branch first, then manage its sales registers from Branch detail.</p></div>
       <label>Branch name<SellerTrayInput value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} maxLength={120} required /></label>
