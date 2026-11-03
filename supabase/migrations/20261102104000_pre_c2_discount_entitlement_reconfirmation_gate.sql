@@ -8,6 +8,34 @@
 -- Legacy C1 purchases without a governed Order Form preserve their
 -- existing compatibility behavior until the separate C2 cutover.
 
+-- Production already has the extracted C1B package core, but clean-history
+-- databases still name their original event-writing reconciler
+-- reconcile_sellertray_installment_entitlement. Preserve that exact core
+-- before installing the new contractual wrapper. Do not duplicate or
+-- replace the earned-entitlement/legacy-runtime state machine.
+do $
+begin
+  if to_regprocedure(
+    'public.reconcile_sellertray_installment_entitlement_package_core(uuid,uuid)'
+  ) is null then
+    if to_regprocedure(
+      'public.reconcile_sellertray_installment_entitlement(uuid,uuid)'
+    ) is null then
+      raise exception 'Existing SellerTray installment reconciliation core is missing'
+        using errcode='42883';
+    end if;
+    execute
+      'alter function public.reconcile_sellertray_installment_entitlement(uuid,uuid) '
+      ||'rename to reconcile_sellertray_installment_entitlement_package_core';
+  end if;
+end;
+$;
+
+revoke all on function public.reconcile_sellertray_installment_entitlement_package_core(uuid,uuid)
+  from public,anon,authenticated;
+grant execute on function public.reconcile_sellertray_installment_entitlement_package_core(uuid,uuid)
+  to service_role;
+
 create or replace function public.reconcile_sellertray_installment_entitlement(
   p_tenant_id uuid,
   p_installment_obligation_id uuid
