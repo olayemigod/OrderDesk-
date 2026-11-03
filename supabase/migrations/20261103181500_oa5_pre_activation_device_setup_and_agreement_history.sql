@@ -29,7 +29,7 @@ create index if not exists sellertray_master_agreement_quarantine_actor_idx
   on public.sellertray_master_agreement_version_quarantines
   (quarantined_by_user_id,quarantined_at desc);
 
-do $
+do $$
 begin
   if (select count(*) from information_schema.columns
       where table_schema='public' and table_name='sellertray_master_agreement_version_quarantines')<>6
@@ -48,7 +48,7 @@ begin
       before update or delete on public.sellertray_master_agreement_version_quarantines
       for each row execute function public.prevent_sellertray_commercial_history_mutation();
   end if;
-end $;
+end $$;
 
 -- Forward-only convergence: get_sellertray_master_agreement_admin
 CREATE OR REPLACE FUNCTION public.get_sellertray_master_agreement_admin(p_actor_user_id uuid, p_tenant_id uuid DEFAULT NULL::uuid)
