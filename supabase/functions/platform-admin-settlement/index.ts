@@ -1,5 +1,5 @@
 type JsonRecord = Record<string, unknown>;
-type SettlementAction = 'center' | 'record_adjustment' | 'record_direct_payment' | 'publish_installment_policy';
+type SettlementAction = 'center' | 'record_adjustment' | 'record_direct_payment' | 'publish_installment_policy' | 'publish_c2_installment_policy';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -33,7 +33,7 @@ Deno.serve(async (request) => {
   const action = cleanAction(body.action);
   const tenantId = cleanUuid(body.tenantId);
   if (!action) return json({ error: 'Unsupported commercial settlement action' }, 400);
-  if (!tenantId) return json({ error: 'Business is required' }, 400);
+  if (!tenantId && action !== 'publish_c2_installment_policy') return json({ error: 'Business is required' }, 400);
 
   try {
     if (action === 'center') {
@@ -90,6 +90,62 @@ Deno.serve(async (request) => {
         p_evidence: evidence,
       });
       return json({ ok: true, order }, 201);
+    }
+
+    if (action === 'publish_c2_installment_policy') {
+      const commandId = cleanUuid(body.commandId);
+      const scopeKind = cleanEnum(body.scopeKind,
+        ['platform', 'plan_profile_cycle', 'tenant', 'commercial_order'] as const);
+      const planProfileVersionId = optionalUuid(body.planProfileVersionId);
+      const commercialOrderId = optionalUuid(body.commercialOrderId);
+      const billingCycle = cleanEnum(body.billingCycle, ['monthly', 'yearly'] as const);
+      const defaultTemplateId = cleanUuid(body.defaultTemplateId);
+      const enabled = typeof body.enabled === 'boolean' ? body.enabled : null;
+      const effectiveFrom = cleanIsoTimestamp(body.effectiveFrom);
+      const effectiveUntil = cleanOptionalTimestamp(body.effectiveUntil);
+      const reason = cleanReason(body.reason);
+      const alternativesInput = body.allowedAlternativeTemplateIds ?? [];
+      if (!Array.isArray(alternativesInput) || alternativesInput.length > 32) {
+        return json({ error: 'Allowed alternative schedules must be a bounded list' }, 400);
+      }
+      const alternatives = alternativesInput.map((value: unknown) => cleanUuid(value));
+      if (alternatives.some((value) => !value) || new Set(alternatives).size !== alternatives.length) {
+        return json({ error: 'Allowed alternative schedules must have unique valid identifiers' }, 400);
+      }
+      if (!commandId || !scopeKind || !billingCycle || !defaultTemplateId
+        || enabled === null || !effectiveFrom || effectiveUntil === undefined || !reason) {
+        return json({ error: 'Command, scope, cycle, default schedule, effective time and reason are required' }, 400);
+      }
+      if ((body.tenantId && !tenantId)
+        || (body.planProfileVersionId && !planProfileVersionId)
+        || (body.commercialOrderId && !commercialOrderId)) {
+        return json({ error: 'Invalid Business, Plan Profile or commercial order identifier' }, 400);
+      }
+      if ((scopeKind === 'platform' && (tenantId || planProfileVersionId || commercialOrderId))
+        || (scopeKind === 'plan_profile_cycle' && (!planProfileVersionId || tenantId || commercialOrderId))
+        || (scopeKind === 'tenant' && (!tenantId || planProfileVersionId || commercialOrderId))
+        || (scopeKind === 'commercial_order' && (!tenantId || !commercialOrderId || planProfileVersionId))) {
+        return json({ error: 'The chosen installment policy scope has inconsistent Business or plan details' }, 400);
+      }
+      if (!enabled && alternatives.length) {
+        return json({ error: 'Enable optional installments before allowing alternative schedules' }, 400);
+      }
+      const policyVersionId = await rpc<string>('publish_sellertray_installment_policy_v2_admin', {
+        p_scope_kind: scopeKind,
+        p_tenant_id: tenantId,
+        p_commercial_order_id: commercialOrderId,
+        p_plan_profile_version_id: planProfileVersionId,
+        p_billing_cycle: billingCycle,
+        p_enabled: enabled,
+        p_default_template_id: defaultTemplateId,
+        p_allowed_alternative_template_ids: alternatives,
+        p_effective_from: effectiveFrom,
+        p_effective_until: effectiveUntil,
+        p_reason: reason,
+        p_actor_user_id: identity.userId,
+        p_command_id: commandId,
+      });
+      return json({ ok: true, policyVersionId }, 201);
     }
 
     const commandId = cleanUuid(body.commandId);
@@ -185,7 +241,7 @@ function getJwtAal(token: string): 'aal1' | 'aal2' | null {
 }
 
 function cleanAction(value: unknown): SettlementAction | null {
-  return value === 'center' || value === 'record_adjustment' || value === 'record_direct_payment' || value === 'publish_installment_policy'
+  return value === 'center' || value === 'record_adjustment' || value === 'record_direct_payment' || value === 'publish_installment_policy' || value === 'publish_c2_installment_policy'
     ? value
     : null;
 }
