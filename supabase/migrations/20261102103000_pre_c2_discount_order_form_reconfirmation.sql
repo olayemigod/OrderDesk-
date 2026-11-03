@@ -16,6 +16,7 @@ declare
   v_master_version_id uuid;
   v_current_snapshot jsonb;
   v_reference text;
+  v_order_form_replaced boolean := false;
 begin
   if new.adjustment_type <> 'discount' then
     return new;
@@ -65,6 +66,7 @@ begin
       v_reference,'pending','{}'::jsonb,repeat('0',64),repeat('0',64),
       v_prior.id,new.actor_user_id
     ) returning id into v_new_form_id;
+    v_order_form_replaced := true;
 
     -- Generate the exact new purchase package against the current Master.
     -- If a required Master is not yet published, the normal governed
@@ -92,6 +94,21 @@ begin
       )
     );
   end loop;
+
+  -- A previously initialized Paystack URL remains executable even if
+  -- rounding leaves the next installment amount unchanged. Retire every
+  -- unpaid/preparing checkout bound to the replaced commercial terms;
+  -- historical paid sessions are immutable settlement evidence. The
+  -- existing reserve/confirm authorities reject superseded sessions and
+  -- old command retries request a fresh checkout after reconfirmation.
+  if v_order_form_replaced then
+    update public.billing_checkout_sessions s
+    set status='superseded',updated_at=now()
+    where s.tenant_id=new.tenant_id
+      and s.commercial_order_id=new.commercial_order_id
+      and s.checkout_kind='installment'
+      and s.status in ('preparing','initialized');
+  end if;
 
   return new;
 end;
