@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.17"
+  version: "0.1.18"
   status: governing
 ---
 
@@ -572,6 +572,10 @@ Rules:
 3. Branch scope and capability scope must both pass.
 4. Preserve appropriate historical read/audit access when current operational authority changes.
 5. Do not infer management authority from a neighbouring operational capability; for example, ordinary stock operation does not imply purchase receiving and ordinary cash entry does not imply cash correction.
+
+### ProcessEdge staff and installers
+
+ProcessEdge staff must have separate authenticated internal accounts and role-based capabilities, not merchant Team membership. **Setup Installer** is an approved narrow role for assigned Branch appointments, with MFA, appointment scope, revoked-access enforcement and immutable device/handover evidence. It may prepare registers and printers and perform test printing before merchant activation, without gaining selling, stock, payment, subscription or legal acceptance rights. Admin manages staff identity and assignment; Mobile supports assigned installation work; Shared Core verifies permissions. See `ADMIN_CAPABILITIES.md` and `ONBOARDING_ACTIVATION.md`.
 
 # 15. Approved implementation phases
 
