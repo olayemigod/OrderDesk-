@@ -9,7 +9,8 @@ create temp table oa5_master_context_fixture (
   tenant_a_id uuid default gen_random_uuid(),
   tenant_b_id uuid default gen_random_uuid(),
   version_1_id uuid,
-  version_2_id uuid
+  version_2_id uuid,
+  quarantine_version_id uuid
 ) on commit drop;
 insert into oa5_master_context_fixture default values;
 
@@ -100,6 +101,53 @@ select extensions.is(
   public.get_sellertray_master_agreement_admin(f.admin_id,null)->'acceptedVersionIds',
   '[]'::jsonb,
   'platform-wide publication context does not borrow a selected Business acceptance'
+) from oa5_master_context_fixture f;
+
+-- The immutable global publication history may contain quarantined QA
+-- versions. They must never become the current *required* legal version,
+-- affect merchant acceptance, or prevent an already accepted Business
+-- from qualifying for service delivery.
+update oa5_master_context_fixture f
+set quarantine_version_id=public.publish_sellertray_master_agreement_admin(
+  'oa5-context-qa-'||substr(f.admin_id::text,1,8),
+  'NON-PRODUCTION QA Master',
+  'Quarantined QA content cannot become the required Merchant Master.',
+  now(),'QA-only quarantine resolution regression',f.admin_id
+);
+
+insert into public.sellertray_master_agreement_version_quarantines(
+  agreement_version_id,reason,quarantined_by_user_id
+)
+select quarantine_version_id,'Non-production QA version excluded from merchant requirement',admin_id
+from oa5_master_context_fixture;
+
+select extensions.is(
+  public.resolve_sellertray_master_agreement_version_id(now()),
+  f.version_2_id,
+  'Quarantined newer QA version is excluded from the current Master resolver'
+) from oa5_master_context_fixture f;
+
+select extensions.ok(
+  (public.get_sellertray_master_agreement_state(f.tenant_b_id,now())->>'accepted')::boolean
+  and not (public.get_sellertray_master_agreement_state(f.tenant_b_id,now())->>'acceptanceRequired')::boolean,
+  'Already accepted current Master v2 remains valid for service delivery after QA quarantine'
+) from oa5_master_context_fixture f;
+
+select extensions.ok(
+  (public.get_sellertray_master_agreement_state(f.tenant_a_id,now())->'currentVersion'->>'id')::uuid=f.version_2_id
+  and (public.get_sellertray_master_agreement_state(f.tenant_a_id,now())->>'acceptanceRequired')::boolean,
+  'Business A still awaits v2, not the quarantined QA version'
+) from oa5_master_context_fixture f;
+
+select extensions.ok(
+  exists(
+    select 1 from jsonb_array_elements(public.get_sellertray_master_agreement_admin(f.admin_id,f.tenant_a_id)->'versions') v
+    where v->>'id'=f.quarantine_version_id::text
+      and (v->>'quarantined')::boolean
+  )
+  and not (public.get_sellertray_master_agreement_admin(f.admin_id,f.tenant_a_id)->'acceptedVersionIds')
+    @>jsonb_build_array(f.quarantine_version_id),
+  'Quarantined QA version remains identifiable in platform history, never merchant accepted history'
 ) from oa5_master_context_fixture f;
 
 select * from extensions.finish();
