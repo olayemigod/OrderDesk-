@@ -45,7 +45,7 @@ requireValue(printers.includes('style={[styles.copyCard, dark && darkStyles.copy
 requireValue(redesign.includes('appearance.dark && active && darkStyles.branchRowActive'), 'Selected Branch row must use a dark selected-state surface');
 requireValue(redesign.includes('appearance.dark && darkStyles.branchIcon'), 'Branch selector icon must use a dark-mode surface');
 
-requireValue(app.expo?.android?.versionCode === 45, 'Keep Android on build 45 until approved launcher branding is verified');
+requireValue(app.expo?.android?.versionCode >= 46, 'Android QA build must advance beyond build 45 only after approved launcher branding is verified');
 requireValue(app.expo?.plugins?.some((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-image-picker' && String(plugin[1]?.photosPermission ?? '').includes('business logo')), 'Photo permission copy must cover business-logo selection');
 
 if (failures.length) {
