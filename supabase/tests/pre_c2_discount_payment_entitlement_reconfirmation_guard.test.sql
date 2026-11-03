@@ -128,18 +128,16 @@ with lines as (
 update discount_guard_fixture set schedule_id=(select id from lines where sequence_no=1);
 set constraints all immediate;
 
--- The current C1B reconciler snapshots the governed installment policy.
--- Test setup inserts that same immutable schedule contract directly.
-insert into public.sellertray_installment_contract_snapshots(
-  tenant_id,commercial_order_id,installment_obligation_id,template_id,
-  template_code,template_version,provisional_entitlement_months,
-  qualifying_settlement_sequence
-)
-select f.tenant_id,f.order_id,f.obligation_id,t.id,t.template_code,t.version,
-  t.provisional_entitlement_months,t.qualifying_settlement_sequence
-from discount_guard_fixture f
-join public.sellertray_installment_schedule_templates t
-  on t.template_code='two_installment_70_30' and t.version=1;
+-- The existing obligation-insert trigger snapshots the approved installment policy;
+-- verify that authoritative snapshot rather than inserting a duplicate.
+select extensions.ok(
+  exists (
+    select 1 from public.sellertray_installment_contract_snapshots snap
+    join discount_guard_fixture f on f.obligation_id=snap.installment_obligation_id
+    where snap.tenant_id=f.tenant_id and snap.template_code='two_installment_70_30'
+  ),
+  'governed obligation trigger freezes the active installment schedule template'
+);
 
 with t as (
   insert into public.sellertray_commercial_agreement_template_versions(
