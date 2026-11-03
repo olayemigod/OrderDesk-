@@ -320,6 +320,44 @@ from public.sellertray_printers p join sellertray_c1b_fixture f
   on f.tenant_id=p.tenant_id and p.branch_id in (f.branch_id,f.branch_2_id)
 where p.hardware_identifier in ('BT-123456','BT-123456-LEKKI');
 
+-- A native success recorded after the claimed readiness time never qualifies.
+select extensions.throws_ok(
+  $test$select public.assert_sellertray_setup_printer_proof(
+    f.tenant_id,f.branch_id,e,now()-interval '1 hour'
+  ) from sellertray_c1b_fixture f,oa4_evidence$test$,
+  '23514',null::text,'A post-readiness printer/test record cannot be backdated into setup proof'
+);
+
+-- A merely requested (or failed) test cannot be mistaken for printed.
+insert into public.sellertray_printers(
+  tenant_id,branch_id,register_id,display_name,transport,hardware_identifier,
+  paper_width_mm,is_default,is_active,created_by_user_id
+)
+select f.tenant_id,f.branch_id,r.id,'Pending Test Printer','bluetooth',
+       'BT-TEST-PENDING',58,false,true,f.owner_user_id
+from sellertray_c1b_fixture f join public.sellertray_registers r
+  on r.tenant_id=f.tenant_id and r.branch_id=f.branch_id and r.code='OA4MAIN';
+insert into public.sellertray_print_jobs(
+  tenant_id,branch_id,register_id,printer_id,job_type,request_key,status,
+  transport,printer_name,hardware_identifier,paper_width_mm,
+  content_snapshot,requested_by_user_id
+)
+select p.tenant_id,p.branch_id,p.register_id,p.id,'test',
+       'oa4-pending-'||p.id::text,'requested','bluetooth',
+       p.display_name,p.hardware_identifier,p.paper_width_mm,
+       jsonb_build_object('documentType','test'),f.owner_user_id
+from public.sellertray_printers p join sellertray_c1b_fixture f
+  on f.tenant_id=p.tenant_id and f.branch_id=p.branch_id
+where p.hardware_identifier='BT-TEST-PENDING';
+select extensions.throws_ok(
+  $test$select public.assert_sellertray_setup_printer_proof(
+    f.tenant_id,f.branch_id,
+    jsonb_set(e,'{equipment,0,identifier}','"BT-TEST-PENDING"'::jsonb),now()
+  ) from sellertray_c1b_fixture f,oa4_evidence$test$,
+  '23514',null::text,'A requested printer test cannot satisfy setup readiness'
+);
+
+
 select extensions.throws_ok(
   $test$select public.platform_admin_transition_branch_setup(
     admin_user_id,tenant_id,appointment_1_id,'completed',completion_command,
