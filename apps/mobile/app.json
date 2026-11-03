@@ -8,7 +8,7 @@
     "userInterfaceStyle": "automatic",
     "android": {
       "package": "ng.processedge.sellertray",
-      "versionCode": 46,
+      "versionCode": 45,
       "intentFilters": [
         {
           "action": "VIEW",
