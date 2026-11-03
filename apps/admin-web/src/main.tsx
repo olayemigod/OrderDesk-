@@ -12,6 +12,7 @@ import './admin-portfolio-revenue-redesign.css';
 import './admin-workspace-composition-v2.css';
 import './admin-console-v3.css';
 import './admin-context-convergence.css';
+import './admin-brand-asset-convergence.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
