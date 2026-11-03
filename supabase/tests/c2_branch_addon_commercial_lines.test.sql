@@ -247,7 +247,7 @@ select extensions.ok(
 select extensions.ok(
   (select count(*)=1
      and max(l.gross_amount)=2500
-     and max(l.addon_version_id)=f.addon_version_id
+     and bool_and(l.addon_version_id=f.addon_version_id)
    from public.sellertray_commercial_order_price_snapshots l
    join c2_addon_order_fixture f on f.tenant_id=l.tenant_id
    where l.commercial_order_id=(f.result->>'commercialOrderId')::uuid
