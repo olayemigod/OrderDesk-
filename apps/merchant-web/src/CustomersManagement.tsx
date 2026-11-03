@@ -133,7 +133,7 @@ export default function CustomersManagement({ tenantId, currency }: { tenantId: 
       const { data, error: rpcError } = await supabase.rpc('create_sellertray_customer', {
         p_tenant_id: tenantId,
         p_display_name: newName.trim(),
-        p_phone: newPhone.trim(),
+        p_phone: newPhone.trim() || null,
         p_email: newEmail.trim() || null,
       });
       if (rpcError) throw rpcError;
@@ -143,7 +143,7 @@ export default function CustomersManagement({ tenantId, currency }: { tenantId: 
       setNewEmail('');
       setCreating(false);
       setSearch('');
-      setNotice('Customer saved. Existing matching phone records are reused when the match is unambiguous.');
+      setNotice(newPhone.trim() ? 'Customer saved. An existing matching phone was reused where applicable.' : 'Customer saved without a phone number.');
       await loadCustomers(0, customerId ?? undefined, '');
     } catch (cause) {
       setError(errorMessage(cause, 'Unable to save customer.'));
@@ -199,7 +199,7 @@ export default function CustomersManagement({ tenantId, currency }: { tenantId: 
       <div className="panel-head"><div><p className="eyebrow">New customer</p><h3>Add Customer</h3></div></div>
       <div className="form-grid">
         <label>Name<SellerTrayInput required maxLength={120} value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Customer name" /></label>
-        <label>Phone<SellerTrayInput required inputMode="tel" value={newPhone} onChange={(event) => setNewPhone(event.target.value)} placeholder="e.g. 08012345678" /></label>
+        <label>Phone <span className="muted">Optional</span><SellerTrayInput inputMode="tel" value={newPhone} onChange={(event) => setNewPhone(event.target.value)} placeholder="e.g. 08012345678" /></label>
         <label>Email <span className="muted">Optional</span><SellerTrayInput type="email" value={newEmail} onChange={(event) => setNewEmail(event.target.value)} placeholder="customer@example.com" /></label>
       </div>
       <div className="topbar-actions"><button type="button" className="secondary-button" onClick={() => setCreating(false)}>Cancel</button><button className="primary-button" disabled={saving}>{saving ? 'Saving' : 'Save Customer'}</button></div>
