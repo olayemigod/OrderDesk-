@@ -13,23 +13,34 @@
 -- reconcile_sellertray_installment_entitlement. Preserve that exact core
 -- before installing the new contractual wrapper. Do not duplicate or
 -- replace the earned-entitlement/legacy-runtime state machine.
-do $
+do $sellertray_preserve_core$
+declare
+  v_original_definition text;
 begin
   if to_regprocedure(
     'public.reconcile_sellertray_installment_entitlement_package_core(uuid,uuid)'
   ) is null then
-    if to_regprocedure(
-      'public.reconcile_sellertray_installment_entitlement(uuid,uuid)'
-    ) is null then
+    select pg_get_functiondef(
+      to_regprocedure('public.reconcile_sellertray_installment_entitlement(uuid,uuid)')
+    ) into v_original_definition;
+    if v_original_definition is null or
+       position('CREATE OR REPLACE FUNCTION public.reconcile_sellertray_installment_entitlement('
+         in v_original_definition) <> 1 then
       raise exception 'Existing SellerTray installment reconciliation core is missing'
         using errcode='42883';
     end if;
-    execute
-      'alter function public.reconcile_sellertray_installment_entitlement(uuid,uuid) '
-      ||'rename to reconcile_sellertray_installment_entitlement_package_core';
+
+    -- Copy the existing implementation under a distinct name rather than
+    -- renaming its original OID. Renaming could redirect already-compiled
+    -- callers directly to the unguarded core and bypass this new wrapper.
+    execute replace(
+      v_original_definition,
+      'CREATE OR REPLACE FUNCTION public.reconcile_sellertray_installment_entitlement(',
+      'CREATE OR REPLACE FUNCTION public.reconcile_sellertray_installment_entitlement_package_core('
+    );
   end if;
 end;
-$;
+$sellertray_preserve_core$;
 
 revoke all on function public.reconcile_sellertray_installment_entitlement_package_core(uuid,uuid)
   from public,anon,authenticated;
