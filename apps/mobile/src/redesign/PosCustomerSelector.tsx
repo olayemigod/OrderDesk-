@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { loadCustomers, type MerchantCustomer } from '../data/customerRepository';
+import { customerContactPhone, loadCustomers, type MerchantCustomer } from '../data/customerRepository';
 import { isLikelyConnectivityError, loadCustomerCache, saveCustomerCache } from '../data/offlineSalesRepository';
 import { sellerTrayUserMessage } from '../data/userFacingError';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
@@ -50,7 +50,7 @@ export function PosCustomerSelector({ tenantId, value, onChange, disabled = fals
     return customers.filter((customer) => [
       customer.displayName ?? '',
       customer.phone ?? '',
-      customer.whatsappId ?? '',
+      customerContactPhone(customer) ?? '',
       customer.email ?? '',
     ].join(' ').toLowerCase().includes(normalized)).slice(0, 20);
   }, [customers, normalized]);
