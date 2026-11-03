@@ -12,6 +12,23 @@ select extensions.ok(
   'entitlement reconciliation enforces current Order Form confirmation before calling the event-writing core'
 );
 select extensions.ok(
+  to_regprocedure(
+    'public.reconcile_sellertray_installment_entitlement_package_core(uuid,uuid)'
+  ) is not null
+  and has_function_privilege(
+    'service_role',
+    'public.reconcile_sellertray_installment_entitlement_package_core(uuid,uuid)',
+    'EXECUTE'
+  )
+  and not has_function_privilege(
+    'authenticated',
+    'public.reconcile_sellertray_installment_entitlement_package_core(uuid,uuid)',
+    'EXECUTE'
+  ),
+  'clean-history and upgraded databases preserve the guarded C1B entitlement core'
+);
+
+select extensions.ok(
   not has_function_privilege('authenticated',
     'public.reconcile_sellertray_installment_entitlement(uuid,uuid)','EXECUTE')
   and has_function_privilege('service_role',
