@@ -195,6 +195,78 @@ select tenant_id,branch_id,'OA4MAIN','OA4 main register',true,true from sellertr
 union all
 select tenant_id,branch_2_id,'OA4LEKKI','OA4 Lekki register',true,true from sellertray_c1b_fixture;
 
+-- An inactive Branch already purchased for setup is eligible for hardware
+-- preparation by the merchant Owner; it remains ineligible to sell.
+select set_config('request.jwt.claim.sub',owner_user_id::text,true)
+from sellertray_c1b_fixture;
+select extensions.ok(
+  public.sellertray_can_prepare_purchased_branch_devices(tenant_id,branch_2_id,owner_user_id)
+  and not public.sellertray_user_can_operate_branch(tenant_id,branch_2_id,owner_user_id)
+  and not public.orderdesk_subscription_can_write(tenant_id),
+  'Purchased inactive Branch allows bounded setup but not general operations'
+) from sellertray_c1b_fixture;
+select extensions.lives_ok(
+  $test$select public.save_sellertray_register(
+    tenant_id,null,branch_2_id,'OA4PREP','Preactivation register',false,true
+  ) from sellertray_c1b_fixture$test$,
+  'Owner can create a register in a purchased, inactive Branch before activation'
+);
+select extensions.ok(
+  (public.get_sellertray_device_management_overview(tenant_id,branch_2_id)
+     ->'registers') @> '[{"code":"OA4PREP"}]'::jsonb,
+  'Merchant Web device overview exposes prepared register before Branch activation'
+) from sellertray_c1b_fixture;
+select extensions.lives_ok(
+  $test$select public.save_sellertray_printer(
+    f.tenant_id,null,f.branch_2_id,r.id,'Prepared Printer','BT-PREP-LEKKI',
+    58,false,true,f.owner_user_id
+  ) from sellertray_c1b_fixture f join public.sellertray_registers r
+  on r.tenant_id=f.tenant_id and r.branch_id=f.branch_2_id and r.code='OA4PREP'$test$,
+  'Owner can configure a receipt printer in purchased inactive Branch'
+);
+select extensions.ok(
+  (select count(*)>0 from public.get_sellertray_accessible_registers(
+    f.tenant_id,f.branch_2_id
+  )) and
+  (select count(*)>0 from public.get_sellertray_printers(
+    f.tenant_id,f.branch_2_id,null
+  )) and
+  (select can_manage_devices and can_print_receipt
+   from public.get_sellertray_printing_capabilities(f.tenant_id,f.branch_2_id)),
+  'Mobile register, printer and setup-printing capabilities work before Branch activation'
+) from sellertray_c1b_fixture f;
+create temp table oa4_preparation_print_job(job_id uuid);
+insert into oa4_preparation_print_job
+select (public.request_sellertray_print_job(
+  p.tenant_id,p.id,'test',null,'oa4-prep-native-'||p.id::text,f.owner_user_id
+)->>'jobId')::uuid
+from public.sellertray_printers p
+join sellertray_c1b_fixture f on f.tenant_id=p.tenant_id
+where p.branch_id=f.branch_2_id and p.hardware_identifier='BT-PREP-LEKKI';
+select public.transition_sellertray_print_job(
+  f.tenant_id,j.job_id,'printing',null,null,f.owner_user_id
+) from sellertray_c1b_fixture f,oa4_preparation_print_job j;
+select public.transition_sellertray_print_job(
+  f.tenant_id,j.job_id,'printed',null,null,f.owner_user_id
+) from sellertray_c1b_fixture f,oa4_preparation_print_job j;
+select extensions.ok(
+  exists(select 1 from public.sellertray_print_jobs j,oa4_preparation_print_job t
+    where j.id=t.job_id and j.status='printed' and j.job_type='test'),
+  'Inactive purchased Branch completes a governed native print test without selling'
+);
+
+-- An arbitrary inactive Branch without a purchased setup line is not eligible.
+with b as (
+  insert into public.branches(tenant_id,code,name,is_default,is_active)
+  select tenant_id,'OA4UNBOUGHT','Unpurchased test Branch',false,false
+  from sellertray_c1b_fixture returning id
+)
+select extensions.ok(
+  not public.sellertray_can_prepare_purchased_branch_devices(f.tenant_id,b.id,f.owner_user_id),
+  'Unpurchased inactive Branch does not inherit preparation access'
+) from b,sellertray_c1b_fixture f;
+
+
 select extensions.throws_ok(
   $test$select public.platform_admin_transition_branch_setup(
     admin_user_id,tenant_id,appointment_1_id,'completed',completion_command,
