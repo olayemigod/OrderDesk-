@@ -345,6 +345,10 @@ Live POS selling, cashier shifts, operational payment collection and live commer
 
 Hiding a Mobile tab is not sufficient authority.
 
+### ProcessEdge installer identity
+
+ProcessEdge field installers receive their own verified staff account, explicit Setup Installer role and appointment-specific Business/Branch assignment. Admin provisions and revokes accounts; Mobile must provide a purpose-limited assigned-installation flow with register/printer pairing, a real native test print and handover evidence. A worker scheduling row is not an authenticated user. Only the shared permission and setup authority may permit completion; installer permissions cannot confer live selling or financial access. Keep activation readiness blocked until the evidence is verified. See `ADMIN_CAPABILITIES.md` and issue #199.
+
 # 15. Merchant-facing status language
 
 Merchant-facing status must remain plain and action-oriented.
