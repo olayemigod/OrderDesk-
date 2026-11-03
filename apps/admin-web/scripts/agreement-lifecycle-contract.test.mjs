@@ -97,7 +97,7 @@ test('merchant-context Master history is accepted-only while published platform 
 
 test('pre-C2 device preparation never broadens commerce subscription write permission', () => {
   for (const command of ['save_sellertray_register', 'save_sellertray_printer', 'save_sellertray_printer_receipt_settings']) {
-    assert.match(oa5PreactivationRepair, new RegExp('create or replace function public\\.' + command + '\\('));
+    assert.match(oa5PreactivationRepair, new RegExp('create or replace function public\\.' + command + '\\(', 'i'));
   }
   assert.match(oa5PreactivationRepair, /sellertray_business_is_preparing\(p_tenant_id\)/);
   assert.match(oa5PreactivationRepair, /t\.retired_at is null/);
