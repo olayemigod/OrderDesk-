@@ -9,6 +9,11 @@ const proof = read('../../../supabase/migrations/20261103210000_oa5_branch_setup
 
 assert.match(workspace,/get_sellertray_manageable_branches/);
 assert.match(workspace,/setDeviceBranchId\(nextId\)/);
+assert.match(workspace,/deviceEditEpoch/);
+assert.match(workspace,/setDeviceAddress/);
+assert.match(workspace,/setMerchantFooter/);
+assert.match(workspace,/if\\(deviceEditEpoch\\.current!==editEpoch\\)return/);
+assert.match(workspace,/if\\(deviceEditEpoch\\.current===editEpoch\\)setError/);
 assert.match(workspace,/loadCashRegisters\(tenantId,deviceBranchId\)/);
 assert.match(workspace,/loadPrintingCapabilities\(tenantId,deviceBranchId\)/);
 assert.match(workspace,/branchId:deviceBranchId/);
