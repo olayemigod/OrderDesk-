@@ -7,7 +7,8 @@ create temp table optional_phone_fixture (
   owner_id uuid default gen_random_uuid(),
   id_one uuid,
   id_two uuid,
-  id_phone uuid
+  id_phone uuid,
+  walk_in_id uuid
 ) on commit drop;
 insert into optional_phone_fixture default values;
 
@@ -46,10 +47,16 @@ select extensions.is(
   public.create_sellertray_customer(f.tenant_id,'Telephone Customer','+2348012345678',null),
   f.id_phone,'Phone-based matching remains unchanged') from optional_phone_fixture f;
 
+-- Read the inserted walk-in on the next SQL statement, after the
+-- volatile resolver's insert is visible to the subsequent statement snapshot.
+update optional_phone_fixture f
+set walk_in_id=public.resolve_sellertray_pos_customer(f.tenant_id,null,null,null);
 select extensions.ok(
-  (select wa_id='pos:walk-in' from public.customers c
-   where c.id=public.resolve_sellertray_pos_customer(f.tenant_id,null,null,null)),
-  'Anonymous walk-in retains its own identity') from optional_phone_fixture f;
+  exists (select 1 from public.customers c where c.tenant_id=f.tenant_id
+    and c.id=f.walk_in_id and c.wa_id='pos:walk-in')
+  and f.walk_in_id not in (f.id_one,f.id_two),
+  'Anonymous walk-in retains a separate stable identity'
+) from optional_phone_fixture f;
 
 select extensions.throws_ok(
   format('select public.create_sellertray_customer(%L,%L,%L,%L)',
