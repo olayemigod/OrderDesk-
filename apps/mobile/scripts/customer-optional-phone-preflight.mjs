@@ -13,6 +13,9 @@ const customerRepository = readFileSync(resolve(import.meta.dirname, '../src/dat
 assert.match(directory, /customerContactPhone\(selected\)/);
 assert.match(directory, /customerContactPhone\(customer\)/);
 assert.match(directory, /No phone saved/);
+assert.match(selector, /customerContactPhone\(customer\)/);
+assert.match(directory, /customerContactPhone\(selected\)/);
 assert.doesNotMatch(directory, /selected\.phone \|\| selected\.whatsappId/);
-assert.ok(customerRepository.includes(String.raw`return /^\+?[0-9]{7,15}$/.test(whatsappId) ? whatsappId : null;`));
+assert.ok(customerRepository.includes(String.raw`return /^\+?[0-9]{7,15}$/.test(whatsappId.replace(/[\s()-]/g, '')) ? whatsappId : null;`));
+assert.match(customerRepository, /phone\.replace/);
 console.log('Mobile name-only POS customer selection preflight passed.');
