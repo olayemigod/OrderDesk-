@@ -11,6 +11,7 @@ const lifecycle = read('admin-web/src/AgreementLifecycleManagement.tsx');
 const masterGateway = read('../supabase/functions/master-agreements/index.ts');
 const masterAuthority = read('../supabase/migrations/20261026060117_universal_master_agreement_authority.sql');
 const pdfOnlyPublication = read('../supabase/migrations/20261030233000_master_agreement_pdf_only_publication.sql');
+const oa5PreactivationRepair = read('../supabase/migrations/20261103181500_oa5_pre_activation_device_setup_and_agreement_history.sql');
 
 test('focused Agreements destination owns universal governance while Merchant selectors stay pure', () => {
   assert.match(workspace, /import AgreementLifecycleManagement/);
@@ -75,4 +76,30 @@ test('agreement lifecycle does not invent commercial, refund, guarantee or entit
   assert.match(lifecycle, /Published versions are immutable and remain available for legal history/);
   assert.match(lifecycle, /Publish one reviewed, immutable Master Agreement PDF for the entire SellerTray platform/);
   assert.match(lifecycle, /review-only for Master Agreement publication/);
+});
+
+
+test('merchant-context Master history is accepted-only while published platform legal versions remain available', () => {
+  assert.match(lifecycle, /acceptedVersionIds/);
+  assert.match(lifecycle, /new Set\(state\?\.acceptedVersionIds \?\? \[\]\)/);
+  assert.match(lifecycle, /platformVersions\.filter\(\(version\) => acceptedIds\.has\(version\.id\)\)/);
+  assert.match(lifecycle, /historyScope === 'merchant'/);
+  assert.match(lifecycle, /Accepted Master Agreement versions/);
+  assert.match(lifecycle, /Platform versions/);
+  assert.match(lifecycle, /'Awaiting acceptance'|Pending current acceptance|pending current acceptance|Pending current/);
+  assert.match(lifecycle, /quarantined/);
+  assert.match(oa5PreactivationRepair, /get_sellertray_master_agreement_admin/);
+  assert.match(oa5PreactivationRepair, /'acceptedVersionIds',case when p_tenant_id is null/);
+  assert.match(oa5PreactivationRepair, /sellertray_master_agreement_acceptances a/);
+  assert.match(oa5PreactivationRepair, /a\.tenant_id=p_tenant_id/);
+  assert.match(oa5PreactivationRepair, /'versions',v_versions/);
+});
+
+test('pre-C2 device preparation never broadens commerce subscription write permission', () => {
+  for (const command of ['save_sellertray_register', 'save_sellertray_printer', 'save_sellertray_printer_receipt_settings']) {
+    assert.match(oa5PreactivationRepair, new RegExp('create or replace function public\\.' + command + '\\('));
+  }
+  assert.match(oa5PreactivationRepair, /sellertray_business_is_preparing\(p_tenant_id\)/);
+  assert.match(oa5PreactivationRepair, /t\.retired_at is null/);
+  assert.doesNotMatch(oa5PreactivationRepair, /create or replace function public\.orderdesk_subscription_can_write/);
 });
