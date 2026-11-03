@@ -191,9 +191,9 @@ update sellertray_c1b_fixture set appointment_2_id=public.platform_admin_schedul
 -- The second Branch deliberately starts commercially/infrastructurally
 -- inactive: the proof itself is Branch-scoped and does not activate it.
 insert into public.sellertray_registers(tenant_id,branch_id,code,name,is_default,is_active)
-select tenant_id,branch_id,'OA4MAIN','OA4 main register',true,true from sellertray_c1b_fixture
+select tenant_id,branch_id,'OA4MAIN','OA4 main register',false,true from sellertray_c1b_fixture
 union all
-select tenant_id,branch_2_id,'OA4LEKKI','OA4 Lekki register',true,true from sellertray_c1b_fixture;
+select tenant_id,branch_2_id,'OA4LEKKI','OA4 Lekki register',false,true from sellertray_c1b_fixture;
 
 -- An inactive Branch already purchased for setup is eligible for hardware
 -- preparation by the merchant Owner; it remains ineligible to sell.
