@@ -15,6 +15,9 @@ const printerEdge = read('../../../supabase/functions/printer/index.ts');
 const printBinding = read('../../../supabase/migrations/20261104065500_oa5_installer_test_print_appointment_binding.sql');
 const handover = read('../../../supabase/migrations/20261104070000_oa5_installer_handover_evidence.sql');
 const completionLink = read('../../../supabase/migrations/20261104071500_oa5_installer_handover_completion_validation.sql');
+const printerProvenance = read('../../../supabase/migrations/20261104073000_oa5_installer_printer_mutation_audit.sql');
+const printerRepository = read('../../mobile/src/data/printerRepository.ts');
+const printerWorkspace = read('../../mobile/src/redesign/PrinterWorkspace.tsx');
 const completion = read('../src/SetupCompletionForm.tsx');
 const installerMobile = read('../../mobile/src/components/ProcessEdgeInstallationsView.tsx');
 
@@ -159,4 +162,28 @@ test('Installer handover remains evidence until Admin verifies and completes can
   assert.match(installerMobile,/AsyncStorage\.setItem/);
   assert.match(installerMobile,/t\.status==='printed'/);
   assert.doesNotMatch(handover,/create or replace function public\.platform_admin_transition_branch_setup/);
+});
+
+test('Installer printer mutations and receipt copies preserve immutable exact appointment provenance',()=>{
+  assert.match(printerProvenance,/sellertray_installer_printer_commands/);
+  assert.match(printerProvenance,/sellertray_installer_printer_events/);
+  assert.match(printerProvenance,/sellertray_capture_installer_printer_event/);
+  assert.match(printerProvenance,/sellertray_printer_events/);
+  assert.match(printerProvenance,/deferrable initially deferred/);
+  assert.match(printerProvenance,/prevent_sellertray_installer_printer_events_mutation/);
+  assert.match(printerProvenance,/prevent_sellertray_installer_printer_commands_mutation/);
+  assert.match(printerProvenance,/sellertray_setup_installer_has_assignment/);
+  assert.match(printerProvenance,/v_assignment_id/);
+  assert.match(printerProvenance,/new\.before_state,new\.after_state/);
+  assert.match(printerProvenance,/save_sellertray_installer_printer/);
+  assert.match(printerProvenance,/save_sellertray_installer_receipt_settings/);
+  assert.match(printerProvenance,/public\.save_sellertray_printer\(/);
+  assert.match(printerProvenance,/public\.save_sellertray_printer_receipt_settings\(/);
+  assert.match(printerEdge,/rpcName = installerAppointmentId/);
+  assert.match(printerEdge,/save_sellertray_installer_printer/);
+  assert.match(printerRepository,/save_sellertray_installer_receipt_settings/);
+  assert.match(printerRepository,/installerRequestKey/);
+  assert.match(printerWorkspace,/printerCommand\.current/);
+  assert.match(printerWorkspace,/receiptCommand\.current/);
+  assert.match(printerWorkspace,/installerRequestKey/);
 });
