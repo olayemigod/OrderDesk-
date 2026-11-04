@@ -202,4 +202,93 @@ revoke all on function public.get_sellertray_setup_installer_profile(uuid)
 grant execute on function public.get_sellertray_setup_installer_profile(uuid)
   to service_role;
 
+-- Authorized Admins can inspect unresolved delivery attempts without
+-- exposing internal staff or invitation identities to merchant clients.
+create or replace function public.platform_admin_list_setup_installer_reservations(
+  p_actor_user_id uuid
+) returns jsonb language plpgsql stable security definer set search_path='' as $list$
+begin
+  if not exists(select 1 from public.platform_admins pa
+      where pa.user_id=p_actor_user_id and pa.role='admin')
+    or not public.platform_admin_has_capability(
+      p_actor_user_id,'admin.branch_setup.manage',null,now()) then
+    raise exception 'Platform Admin setup authority required' using errcode='42501';
+  end if;
+  return coalesce((select jsonb_agg(jsonb_build_object(
+    'commandId',r.command_id,
+    'email',r.email_normalized,
+    'workerId',r.worker_id,
+    'deliveryStartedAt',r.delivery_started_at,
+    'authUserId',r.auth_user_id,
+    'linkedAt',r.linked_at,
+    'createdAt',r.created_at
+  ) order by r.created_at desc,r.command_id)
+  from (select * from public.sellertray_internal_setup_invitation_reservations
+    order by created_at desc,command_id limit 100) r),'[]'::jsonb);
+end;
+$list$;
+revoke all on function public.platform_admin_list_setup_installer_reservations(uuid)
+  from public,anon,authenticated;
+grant execute on function public.platform_admin_list_setup_installer_reservations(uuid)
+  to service_role;
+
+-- Explicit reconciliation never resends mail. It uses only the Auth account
+-- matching the original reserved address and the original designated worker.
+create or replace function public.platform_admin_reconcile_setup_installer_invitation(
+  p_actor_user_id uuid,p_reservation_command_id uuid,
+  p_command_id uuid,p_reason text
+) returns uuid language plpgsql security definer set search_path='' as $reconcile$
+declare v_reservation public.sellertray_internal_setup_invitation_reservations%rowtype;
+        v_user_id uuid;
+        v_staff public.sellertray_internal_setup_staff%rowtype;
+begin
+  if p_command_id is null or p_reservation_command_id is null
+    or char_length(btrim(coalesce(p_reason,''))) not between 6 and 1000 then
+    raise exception 'Reconciliation command, invitation and reason are required' using errcode='22023';
+  end if;
+  if not exists(select 1 from public.platform_admins pa
+      where pa.user_id=p_actor_user_id and pa.role='admin')
+    or not public.platform_admin_has_capability(
+      p_actor_user_id,'admin.branch_setup.manage',null,now()) then
+    raise exception 'Platform Admin setup authority required' using errcode='42501';
+  end if;
+  select * into v_reservation
+    from public.sellertray_internal_setup_invitation_reservations
+    where command_id=p_reservation_command_id for update;
+  if not found then raise exception 'Installer invitation not found' using errcode='23514'; end if;
+  if v_reservation.delivery_started_at is null then
+    raise exception 'Installer invitation has not been attempted' using errcode='23514';
+  end if;
+  select u.id into v_user_id from auth.users u
+    where lower(btrim(u.email))=v_reservation.email_normalized
+    order by u.created_at asc limit 1;
+  if v_user_id is null
+    or (v_reservation.auth_user_id is not null
+      and v_reservation.auth_user_id<>v_user_id) then
+    raise exception 'Reserved invitation has no matching Auth account to reconcile'
+      using errcode='23514';
+  end if;
+  select * into v_staff from public.sellertray_internal_setup_staff
+    where user_id=v_user_id;
+  if found then
+    if v_staff.worker_id<>v_reservation.worker_id then
+      raise exception 'Reserved installer is linked to a different worker'
+        using errcode='23514';
+    end if;
+  else
+    perform public.platform_admin_link_setup_installer(
+      p_actor_user_id,v_user_id,v_reservation.worker_id,p_command_id,p_reason
+    );
+  end if;
+  update public.sellertray_internal_setup_invitation_reservations
+    set auth_user_id=v_user_id,linked_at=coalesce(linked_at,now())
+    where command_id=p_reservation_command_id;
+  return v_user_id;
+end;
+$reconcile$;
+revoke all on function public.platform_admin_reconcile_setup_installer_invitation(
+ uuid,uuid,uuid,text) from public,anon,authenticated;
+grant execute on function public.platform_admin_reconcile_setup_installer_invitation(
+ uuid,uuid,uuid,text) to service_role;
+
 commit;
