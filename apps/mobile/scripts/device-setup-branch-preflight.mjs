@@ -20,8 +20,6 @@ assert.match(workspace,/refreshPrinters\(saveTenant,saveBranch,saveRegister,save
 assert.match(workspace,/if\(deviceEditEpoch\.current===epochAtRequest\)setPrinters\(rows\)/);
 assert.ok((workspace.match(/if\(deviceEditEpoch\.current!==saveEpoch\)return/g)??[]).length >= 2,
   'Save must discard stale completion and refresh when setup Branch changes');
-assert.match(workspace,/disabled=\{saving\} onPress=\{\(\)=>chooseDeviceBranch\(b\.id\)\}/);
-assert.match(workspace,/disabled=\{saving\} onPress=\{\(\)=>\{if\(r\.id===registerId\)return;/);
 assert.match(workspace,/setPrinters\(\[\]\);resetForm\(true\)/);
 assert.match(workspace,/disabled=\{saving\|\|printingId!==null\} onPress=\{\(\)=>chooseDeviceBranch\(b\.id\)\}/);
 assert.match(workspace,/disabled=\{saving\|\|printingId!==null\} onPress=\{\(\)=>\{if\(r\.id===registerId\)return;/);
