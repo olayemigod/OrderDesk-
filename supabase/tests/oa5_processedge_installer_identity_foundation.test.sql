@@ -467,6 +467,42 @@ select extensions.throws_ok(
   '42501',null::text,'ProcessEdge Support cannot bypass Admin installer evidence review'
 );
 
+-- The final completion event must not be allowed to attach a different
+-- installer submission, or silently rewrite merchant receipt of equipment.
+select extensions.throws_ok(
+  $test$insert into public.sellertray_commercial_setup_appointment_events(
+    appointment_id,tenant_id,commercial_order_id,branch_id,command_id,
+    event_type,actor_user_id,actor_kind,reason,details
+  )
+  select f.appointment_id,f.tenant_id,f.commercial_order_id,f.branch_id,
+    gen_random_uuid(),'completed',f.admin_id,'platform',
+    'Confirm hardware handover from ProcessEdge staff',
+    jsonb_build_object('evidence',jsonb_build_object(
+      'installerHandoverSubmissionId',gen_random_uuid()))
+  from oa5_installer_fixture f$test$,
+  '23514',null::text,
+  'Admin cannot attach a handover from a different Branch or appointment'
+);
+select extensions.throws_ok(
+  $test$insert into public.sellertray_commercial_setup_appointment_events(
+    appointment_id,tenant_id,commercial_order_id,branch_id,command_id,
+    event_type,actor_user_id,actor_kind,reason,details
+  )
+  select f.appointment_id,f.tenant_id,f.commercial_order_id,f.branch_id,
+    gen_random_uuid(),'completed',f.admin_id,'platform',
+    'Confirm hardware handover from ProcessEdge staff',
+    jsonb_build_object('evidence',jsonb_build_object(
+      'installerHandoverSubmissionId',h.id,
+      'receivedBy','Different Representative',
+      'acknowledgement',h.evidence->>'acknowledgement',
+      'equipment',h.evidence->'equipment'))
+  from oa5_installer_fixture f
+  join public.sellertray_installer_handover_submissions h
+    on h.tenant_id=f.tenant_id and h.appointment_id=f.appointment_id$test$,
+  '23514',null::text,
+  'Admin cannot change merchant recipient while claiming a signed installer handover'
+);
+
 select set_config('request.jwt.claims','',true);
 select set_config('request.jwt.claim.sub','',true);
 
