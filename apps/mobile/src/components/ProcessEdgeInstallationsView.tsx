@@ -306,10 +306,48 @@ export default function ProcessEdgeInstallationsView({
                 <Text style={styles.secondaryActionText}>{pairedLoading?'Checking paired devices…':'Show paired Android Bluetooth devices'}</Text>
               </Pressable>
               {pairedDevices.length?pairedDevices.map(p=><Text key={p.address} style={[styles.body,dark&&styles.textSecondary]}>{p.name} · {p.address}</Text>):null}
+              <Text style={[styles.sectionTitle,dark&&styles.textLight]}>Submit installation handover</Text>
               <Text style={[styles.helper,dark&&styles.textSecondary]}>
-                Device inspection is read-only. Use Configure register & printer above for authorised
-                Branch preparation and a native test print. Final handover and appointment completion
-                require separately verified evidence before activation.
+                Select a successful SellerTray test from this appointment. ProcessEdge Admin will
+                separately review the merchant walkthrough before completing setup.
+              </Text>
+              {!deviceView.data.recentTests.some(t=>t.status==='printed'&&deviceView.data?.printers.some(p=>p.id===t.printer_id&&p.is_active))
+                ? <Text style={[styles.body,dark&&styles.textSecondary]}>No eligible printed test yet. Test the paired Branch printer above, then inspect again.</Text>
+                : deviceView.data.recentTests.filter(t=>t.status==='printed'&&deviceView.data?.printers.some(p=>p.id===t.printer_id&&p.is_active)).map(t=>
+                <Pressable key={t.id} accessibilityRole="radio"
+                  accessibilityState={{checked:handover.testJobId===t.id}}
+                  style={styles.secondaryAction} onPress={()=>setHandover(current=>({...current,testJobId:t.id}))}>
+                  <Text style={styles.secondaryActionText}>
+                    {handover.testJobId===t.id?'Selected · ':'Choose · '}
+                    {deviceView.data?.printers.find(p=>p.id===t.printer_id)?.display_name??'Branch printer'}
+                    {' · '}{t.completed_at?new Date(t.completed_at).toLocaleString():'Printed'}
+                  </Text>
+                </Pressable>)}
+              <TextInput accessibilityLabel="Printer handover condition"
+                placeholder="Printer condition at handover" value={handover.handoverCondition}
+                maxLength={500} onChangeText={value=>setHandover(current=>({...current,handoverCondition:value}))}
+                style={[styles.input,dark&&styles.inputDark]}/>
+              <TextInput accessibilityLabel="Receiving merchant representative"
+                placeholder="Receiving merchant representative" value={handover.receivedBy}
+                maxLength={200} onChangeText={value=>setHandover(current=>({...current,receivedBy:value}))}
+                style={[styles.input,dark&&styles.inputDark]}/>
+              <TextInput accessibilityLabel="Merchant acknowledgement evidence reference"
+                placeholder="Signed handover or acknowledgement reference" value={handover.acknowledgement}
+                maxLength={1000} onChangeText={value=>setHandover(current=>({...current,acknowledgement:value}))}
+                style={[styles.input,dark&&styles.inputDark]}/>
+              <TextInput accessibilityLabel="Installer handover notes"
+                placeholder="Installation notes / reason" value={handover.reason} multiline
+                maxLength={1000} onChangeText={value=>setHandover(current=>({...current,reason:value}))}
+                style={[styles.input,dark&&styles.inputDark]}/>
+              <Pressable accessibilityRole="button" disabled={busy||!handover.testJobId}
+                onPress={()=>void submitHandover(item)}
+                style={[styles.action,(busy||!handover.testJobId)&&styles.disabled]}>
+                <Text style={styles.actionText}>{busy?'Submitting…':'Submit handover for Admin review'}</Text>
+              </Pressable>
+              {handoverMessage?<Text style={[styles.body,dark&&styles.textLight]}>{handoverMessage}</Text>:null}
+              <Text style={[styles.helper,dark&&styles.textSecondary]}>
+                This records evidence only. The existing Admin setup completion and payment/agreements
+                gates must still pass before Branch activation.
               </Text>
             </View>:null}
           </View>:null}
