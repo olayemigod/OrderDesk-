@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(21);
+select extensions.plan(24);
 
 select extensions.ok(
  to_regprocedure('public.apply_sellertray_stock_adjustment_with_cost(uuid,uuid,uuid,uuid,numeric,text,text,text,text,uuid,numeric,text,text)') is not null,
@@ -19,7 +19,9 @@ create temp table cost_adjust_fixture (
  movement jsonb,replay jsonb,zero_cost jsonb,unknown jsonb,reduction jsonb,
  conflicting boolean default false,blocked boolean default false,
  bad_decrease boolean default false,rolled_back boolean default false,
- bad_branch boolean default false
+ bad_branch boolean default false,
+ replay_dropped_cost_rejected boolean default false,
+ replay_added_cost_rejected boolean default false
 ) on commit drop;
 insert into cost_adjust_fixture(tenant_id,actor_id,blocked_actor,product_id)
 values(gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid());
@@ -67,6 +69,26 @@ select extensions.ok(
  (select replay->>'idempotentReplay'='true' and replay->>'costEvidenceId'=movement->>'costEvidenceId' from cost_adjust_fixture),
  'Exact-command replay is safe for stock and cost');
 
+-- Cost-bearing command must not be replayed as an unvalued command.
+do $
+declare f record;
+begin
+  select * into f from cost_adjust_fixture;
+  begin
+    perform public.apply_sellertray_stock_adjustment_with_cost(
+      f.tenant_id,f.branch_id,f.product_id,f.uom_id,5,'increase',
+      'COST-ADJ-001','Data correction','cost-adjust-001',f.actor_id,
+      null,null,null
+    );
+  exception when unique_violation then
+    update cost_adjust_fixture set replay_dropped_cost_rejected=true;
+  end;
+end $;
+select extensions.ok(
+ (select replay_dropped_cost_rejected from cost_adjust_fixture),
+ 'Same stock command cannot drop previously recorded cost intent'
+);
+
 do $$
 declare f record;
 begin
@@ -97,6 +119,33 @@ select extensions.is((select unknown->>'costEvidenceStatus' from cost_adjust_fix
 select extensions.is(
  (select v.unvalued_quantity_on_hand from public.sellertray_inventory_valuation_state v join cost_adjust_fixture f on v.tenant_id=f.tenant_id and v.catalog_item_id=f.product_id),
  2::numeric,'Unpriced positive quantity cannot inherit average cost');
+
+-- Cost absent on first commit is immutable for this stock command even if the
+-- actor now knows the cost. Historical evidence has its own authorised command.
+do $
+declare f record;
+begin
+  select * into f from cost_adjust_fixture;
+  begin
+    perform public.apply_sellertray_stock_adjustment_with_cost(
+      f.tenant_id,f.branch_id,f.product_id,f.uom_id,2,'increase',
+      'COST-ADJ-002','Inventory recovery','cost-adjust-002',f.actor_id,
+      20,'BACKDATED-INVOICE','Cost submitted on a changed stock-command retry'
+    );
+  exception when unique_violation then
+    update cost_adjust_fixture set replay_added_cost_rejected=true;
+  end;
+end $;
+select extensions.ok(
+ (select replay_added_cost_rejected from cost_adjust_fixture),
+ 'Same stock command cannot add cost evidence after an unvalued first commit'
+);
+select extensions.is(
+ (select count(*)::int from public.sellertray_inventory_cost_basis_evidence e
+  join cost_adjust_fixture f on e.tenant_id=f.tenant_id and e.catalog_item_id=f.product_id),
+ 2,
+ 'Rejected changed-cost replay does not create or change evidence'
+);
 
 update cost_adjust_fixture f set reduction=public.apply_sellertray_stock_adjustment_with_cost(
  f.tenant_id,f.branch_id,f.product_id,f.uom_id,1,'decrease','COST-ADJ-003',

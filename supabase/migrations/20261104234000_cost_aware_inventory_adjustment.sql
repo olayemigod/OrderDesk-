@@ -195,12 +195,30 @@ begin
   );
   v_movement_id := (v_result->>'movementId')::uuid;
 
+  -- This cost command is a stable extension of the immutable stock command.
+  -- Once the stock command has posted, neither adding previously absent
+  -- evidence nor dropping previously supplied evidence is a legal retry.
+  -- Older no-cost stock commands have no matching cost evidence identity and
+  -- continue to replay without cost. For later cost resolution, use the
+  -- separate governed historical-evidence command instead.
+  v_cost_command_id := pg_catalog.md5(
+    'sellertray:adjustment-cost:'||p_tenant_id::text||':'||p_command_id
+  )::uuid;
+
+  if coalesce((v_result->>'idempotentReplay')::boolean,false)
+     and (
+       exists(
+         select 1 from public.sellertray_inventory_cost_basis_evidence e
+         where e.tenant_id=p_tenant_id
+           and e.inventory_movement_id=v_movement_id
+           and e.command_id=v_cost_command_id
+       )
+     ) is distinct from v_has_cost then
+    raise exception 'Stock action retry cannot change the original cost evidence choice; use historical cost evidence to resolve missing cost'
+      using errcode='23505';
+  end if;
+
   if v_has_cost then
-    -- Stable retry identity; it is derived from the original stock command,
-    -- not a second disposable browser/mobile-generated UUID.
-    v_cost_command_id := pg_catalog.md5(
-      'sellertray:adjustment-cost:'||p_tenant_id::text||':'||p_command_id
-    )::uuid;
     v_evidence_id := public.record_sellertray_inventory_cost_basis_for_actor(
       p_tenant_id,v_movement_id,p_stock_unit_cost,
       p_cost_reference,p_cost_reason,v_cost_command_id,null,p_actor_user_id
