@@ -39,6 +39,10 @@ The variant deliberately rejects the live project and the **unrebuilt** Agreemen
 
 The declarative fixtures in `docs/qa/oa5-test-merchant-fixtures.json` cover three synthetic Businesses and five Branch scenarios. Validate them with `node scripts/qa/oa5-test-merchant-fixtures.mjs --check`. This command **does not** create merchants; create them only after staged infrastructure is approved using governed signup, commercial, branch, catalogue, stock, payment and installer flows.
 
+## Vercel branch tracking and preview backend proof
+
+Read [the read-only Vercel Production deployment provenance record](./oa5-vercel-production-provenance-2026-11-04.md) and the fail-closed web attestation source `docs/qa/oa5-staging-backend-attestation.json`. Latest production deployment SHAs/aliases have been identified, but the configured **Production Branch Tracking** setting in each Vercel project remains unavailable from the connected project metadata; the release operator must verify it under Vercel Project Settings → Environments → Production before merging the new allowlist. The default **Preview** environment in both projects currently uses the live backend. Merchant/Admin `npm run prebuild` now blocks any Vercel Preview until the branch-specific backend is truly non-production and the reviewed Test project attestation is verified. A Vercel Preview label alone is never proof of staging isolation.
+
 ## Operator command safety
 
 `node --test scripts/qa/oa5-staging-isolation.test.mjs` tests the boundary entirely offline.
