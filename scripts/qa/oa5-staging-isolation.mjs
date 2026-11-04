@@ -17,6 +17,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
+const { reusedTestProjectApproved } = require('../../apps/mobile/app.config.js');
+const attestationUrl = new URL('../../docs/qa/oa5-staging-backend-attestation.json', import.meta.url);
+
 
 const configUrl = new URL('../../apps/mobile/eas.json', import.meta.url);
 
@@ -40,7 +43,7 @@ function plausiblePublishableKey(value) {
 export function verifyStagingIsolation({
   productionUrl, productionKey, qaUrl, qaKey, stagingUrl, stagingKey,
   productionAndroidPackage, qaAndroidPackage, qaAndroidName,
-  targetOnly = false,
+  targetOnly = false, stagingAttestation = null,
 }) {
   const errors = [];
   const production = canonicalSupabaseUrl(productionUrl);
@@ -50,10 +53,12 @@ export function verifyStagingIsolation({
   if (!staging) errors.push('Provide a valid, independent HTTPS staging Supabase project URL');
   if (production && staging && staging === production)
     errors.push('Production Supabase is forbidden for OA5 installation acceptance');
-  // The existing Agreement Package Test project has a divergent migration
-  // ledger. It is NOT an independent branch suitable for installer acceptance.
-  if (staging === 'https://iukgsukdoowvnhlfmpml.supabase.co')
-    errors.push('The existing Agreement Package Test project is not an OA5 staging branch');
+  // The existing standalone Agreement Test project is reusable, but ONLY after
+  // archival, clean rebuild and explicit source-controlled hosted attestation.
+  // It is not a staging branch of Production and is currently blocked.
+  if (staging === 'https://iukgsukdoowvnhlfmpml.supabase.co'
+      && !reusedTestProjectApproved(stagingAttestation, staging))
+    errors.push('Agreement Test project reuse requires full approved staging attestation');
   if (!plausiblePublishableKey(stagingKey))
     errors.push('Provide a valid staging publishable key through protected CI secrets');
   if (typeof productionKey === 'string' && productionKey === stagingKey)
@@ -105,11 +110,20 @@ export function loadAppSettings() {
   };
 }
 
+function loadStagingBackendAttestation() {
+  try {
+    return JSON.parse(readFileSync(fileURLToPath(attestationUrl), 'utf8'));
+  } catch {
+    return null; // Missing or malformed evidence blocks reuse.
+  }
+}
+
 function main() {
   const result = verifyStagingIsolation({
     ...loadAppSettings(),
     stagingUrl: process.env.SELLERTRAY_OA5_STAGING_SUPABASE_URL ?? '',
     stagingKey: process.env.SELLERTRAY_OA5_STAGING_PUBLISHABLE_KEY ?? '',
+    stagingAttestation: loadStagingBackendAttestation(),
     targetOnly: process.argv.includes('--target-only'),
   });
   if (!result.ok) {
