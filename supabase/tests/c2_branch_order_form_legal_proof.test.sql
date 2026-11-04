@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(16);
+select extensions.plan(18);
 
 -- C2-7: exercise real publication, Branch order, governed Order Form issue,
 -- separately accepted Master, confirmed package and native term registration.
@@ -23,7 +23,8 @@ create temp table c2_legal_proof_fixture(
  legacy_before jsonb,
  missing_master_denied boolean not null default false,
  unconfirmed_form_denied boolean not null default false,
- outsider_denied boolean not null default false
+ outsider_denied boolean not null default false,
+ signer_spoof_denied boolean not null default false
 ) on commit drop;
 
 insert into c2_legal_proof_fixture(
@@ -166,6 +167,32 @@ end $test$;
 select extensions.ok((select unconfirmed_form_denied from c2_legal_proof_fixture),
  'Even an accepted Master cannot authorize an unconfirmed Branch Order Form');
 
+select extensions.ok(
+ has_function_privilege('authenticated',
+ 'public.confirm_sellertray_agreement_package(uuid,uuid,text,jsonb,uuid,uuid)','EXECUTE'),
+ 'Authenticated owners may confirm a purchase only as their own identity');
+
+select set_config('request.jwt.claim.role','authenticated',true);
+select set_config('request.jwt.claim.sub',
+ (select outsider_id::text from c2_legal_proof_fixture),true);
+
+do $test$
+declare f c2_legal_proof_fixture%rowtype;
+begin
+ select * into strict f from c2_legal_proof_fixture;
+ begin
+  perform public.confirm_sellertray_agreement_package(
+   f.tenant_id,f.form_id,'Impersonated Owner',
+   jsonb_build_object('authority_confirmed',true),
+   gen_random_uuid(),f.owner_id);
+ exception when sqlstate '42501' then
+  update c2_legal_proof_fixture set signer_spoof_denied=true;
+ end;
+end $test$;
+select extensions.ok(
+ (select signer_spoof_denied from c2_legal_proof_fixture),
+ 'An authenticated user cannot sign by passing a different owner UUID');
+
 do $test$
 declare f c2_legal_proof_fixture%rowtype;
 begin
@@ -187,11 +214,17 @@ select extensions.is(
   join c2_legal_proof_fixture f on s.tenant_id=f.tenant_id),0,
  'An unconfirmed Branch purchase cannot create a pending subscription');
 
+select set_config('request.jwt.claim.sub',
+ (select owner_id::text from c2_legal_proof_fixture),true);
+
 update c2_legal_proof_fixture f
 set confirmation_result=public.confirm_sellertray_agreement_package(
  f.tenant_id,f.form_id,'Business Owner',
  jsonb_build_object('authority_confirmed',true),
  gen_random_uuid(),f.owner_id);
+
+select set_config('request.jwt.claim.role','service_role',true);
+select set_config('request.jwt.claim.sub','',true);
 
 select extensions.is(
  (select jsonb_array_length(confirmation_result->'branchSubscriptions')
