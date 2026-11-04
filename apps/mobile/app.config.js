@@ -12,6 +12,24 @@ const QA_PACKAGE = 'ng.processedge.sellertray.qa';
 const PRODUCTION_PACKAGE = 'ng.processedge.sellertray';
 const PRODUCTION_URL = 'https://eujxswjspolugrzlsjnn.supabase.co';
 const UNATTESTED_AGREEMENT_TEST_URL = 'https://iukgsukdoowvnhlfmpml.supabase.co';
+const ATTESTATION_FILE = resolve(__dirname, '../../docs/qa/oa5-staging-backend-attestation.json');
+
+// Shared with Merchant/Admin preview gate; fail closed until actual hosted
+// recovery and permission evidence is recorded in the checked-in attestation.
+// Lazy require means the production app identity needs no QA helper at boot.
+function reusedTestProjectApproved(attestation, endpoint) {
+  return require('../../scripts/qa/oa5-staging-attestation.cjs')
+    .reusedTestProjectApproved(attestation, endpoint);
+}
+function hasApprovedTestBackend(endpoint) {
+  try {
+    return reusedTestProjectApproved(
+      JSON.parse(readFileSync(ATTESTATION_FILE, 'utf8')), endpoint
+    );
+  } catch {
+    return false; // Missing, inaccessible or invalid evidence always blocks QA.
+  }
+}
 
 function qaConfiguration({ config }, env = process.env) {
   const variant = env.SELLERTRAY_APP_VARIANT;
@@ -23,7 +41,8 @@ function qaConfiguration({ config }, env = process.env) {
   const endpoint = env.EXPO_PUBLIC_SUPABASE_URL;
   const publishableKey = env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   if (typeof endpoint !== 'string' || !/^https:\/\/[a-z0-9]{20}\.supabase\.co$/.test(endpoint)
-      || endpoint === PRODUCTION_URL || endpoint === UNATTESTED_AGREEMENT_TEST_URL)
+      || endpoint === PRODUCTION_URL
+      || (endpoint === UNATTESTED_AGREEMENT_TEST_URL && !hasApprovedTestBackend(endpoint)))
     throw new Error('QA Android build is blocked until an attested, non-production Supabase backend is selected');
   if (typeof publishableKey !== 'string'
       || !/^sb_publishable_[A-Za-z0-9_-]{12,}$/.test(publishableKey)
@@ -60,3 +79,4 @@ function qaConfiguration({ config }, env = process.env) {
   };
 }
 module.exports = qaConfiguration;
+module.exports.reusedTestProjectApproved = reusedTestProjectApproved;

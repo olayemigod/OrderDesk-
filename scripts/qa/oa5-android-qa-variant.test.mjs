@@ -7,6 +7,20 @@ import { join } from 'node:path';
 
 const require = createRequire(import.meta.url);
 const dynamicConfig = require('../../apps/mobile/app.config.js');
+const reusedTestProjectApproved = dynamicConfig.reusedTestProjectApproved;
+const reuseUrl = 'https://iukgsukdoowvnhlfmpml.supabase.co';
+const approvedReuse = {
+  schema_version: 1, state:'verified',
+  approved_staging_project_ref:'iukgsukdoowvnhlfmpml',
+  reviewed_source_sha:'a'.repeat(40),
+  approved_at:'04/11/2026',
+  clean_migration_replay_verified:true,
+  historical_agreement_evidence_archived:true,
+  restore_path_verified:true,
+  vercel_preview_dependencies_reconciled:true,
+  test_only_auth_and_provider_config_verified:true,
+  qa_edge_functions_deployed_and_verified:true,
+};
 const original = require('../../apps/mobile/app.json').expo;
 const eas = require('../../apps/mobile/eas.json');
 const testUrl = 'https://' + 's'.repeat(20) + '.supabase.co';
@@ -88,4 +102,21 @@ test('QA rejects a Firebase configuration registered to a production Android pac
 
 test('QA fails when production source application ID drifts instead of modifying another package', () => {
   assert.throws(() => dynamicConfig({config:{...original,android:{...original.android,package:'com.example.other'}}},validEnv()), /base app identity/);
+});
+
+test('historical Agreement Test project is reusable only after independent hosted attestation', () => {
+  assert.equal(reusedTestProjectApproved(null,reuseUrl),false);
+  assert.equal(reusedTestProjectApproved({...approvedReuse,state:'blocked'},reuseUrl),false);
+  assert.equal(reusedTestProjectApproved({...approvedReuse,restore_path_verified:false},reuseUrl),false);
+  assert.equal(reusedTestProjectApproved({...approvedReuse,reviewed_source_sha:null},reuseUrl),false);
+  assert.equal(reusedTestProjectApproved({...approvedReuse,approved_at:'not-a-date'},reuseUrl),false);
+  assert.equal(reusedTestProjectApproved({...approvedReuse,approved_staging_project_ref:'eujxswjspolugrzlsjnn'},reuseUrl),false);
+  assert.equal(reusedTestProjectApproved(approvedReuse,'https://eujxswjspolugrzlsjnn.supabase.co'),false);
+  assert.equal(reusedTestProjectApproved(approvedReuse,reuseUrl),true);
+});
+
+test('the checked-in staging attestation stays blocked today', () => {
+  const attestation = require('../../docs/qa/oa5-staging-backend-attestation.json');
+  assert.equal(reusedTestProjectApproved(attestation,reuseUrl),false);
+  assert.throws(() => dynamicConfig({config:original},{...validEnv(),EXPO_PUBLIC_SUPABASE_URL:reuseUrl}),/attested/);
 });
