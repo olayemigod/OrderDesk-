@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.16"
+  version: "0.1.19"
   status: governing
 ---
 
@@ -257,6 +257,9 @@ Rules:
 7. Customer choice is part of the sale snapshot and must survive idempotent retry and offline replay. A branch change or completed/cleared sale must invalidate stale customer context safely.
 8. Customer-linked orders, payments, invoices/receipts and outstanding amounts must remain attributable to that Customer so merchant web can support customer history, receivables and balance follow-up. Walk-in sales remain intentionally unassigned to a named Customer.
 9. Do not expose direct customer-table writes from mobile clients. Customer creation/reuse and identity convergence belong behind governed server/domain commands.
+10. **Customer phone number is optional** for named Customer creation in Merchant Web and Mobile POS. Require a name; validate phone only when supplied. Name-only customers remain distinct, may share display names without being merged, and must retain stable Customer IDs through POS, receivables, history, retries and offline replay.
+11. Reserved technical Customer identities (such as `manual:unlinked:<uuid>` and `pos:walk-in`) are internal linkage values, not phone numbers or WhatsApp contact details. Never display, print, export or send them as customer contact fields on Orders, invoices, receipts, documents or reports; show `No phone saved` or omit the phone. Do not invent a phone, merge by name alone or link WhatsApp without a verified canonical contact identity.
+12. Existing real phone/WhatsApp identity matching and WhatsApp/manual order contact requirements remain unchanged. Presentation rules must be consistent on Mobile, Merchant Web, printing and financial document generation, including 58/80mm receipts.
 
 ## Inventory
 
@@ -498,6 +501,10 @@ Receipt copy rules:
 7. Merchant receipt footer and SellerTray platform attribution are separate concepts. Do not hard-code ProcessEdge Solutions Limited into merchant receipt content. Thermal output must use printer-safe text and must not expose internal customer sentinels such as `pos:walk-in`.
 8. Test prints remain distinct from commercial receipt copies and may identify SellerTray for device verification.
 
+9. Initial Branch setup must allow an authorised Owner/Manager to create a register, assign/configure a Bluetooth printer and receipt-copy profile, and complete a real hardware test print **before** subscription activation; these preparation writes must not unlock selling, shifts, payments or stock posting.
+10. ProcessEdge field installers must use a distinct Branch/appointment-scoped, time-limited, audited setup permission with verified Admin capability and AAL2. Never impersonate merchants or bypass tenant/device checks.
+11. New setup readiness must link canonical same-Branch register/printer and successful test-print evidence **before** readiness, plus signed equipment handover; historical readiness evidence is immutable. Early appointment completion requires approved recorded exception or rescheduling evidence.
+
 Critical invariant:
 
 > A successful sale must never be rolled back because receipt printing failed.
@@ -568,6 +575,10 @@ Rules:
 3. Branch scope and capability scope must both pass.
 4. Preserve appropriate historical read/audit access when current operational authority changes.
 5. Do not infer management authority from a neighbouring operational capability; for example, ordinary stock operation does not imply purchase receiving and ordinary cash entry does not imply cash correction.
+
+### ProcessEdge staff and installers
+
+ProcessEdge staff must have separate authenticated internal accounts and role-based capabilities, not merchant Team membership. **Setup Installer** is an approved narrow role for assigned Branch appointments, with MFA, appointment scope, revoked-access enforcement and immutable device/handover evidence. It may prepare registers and printers and perform test printing before merchant activation, without gaining selling, stock, payment, subscription or legal acceptance rights. Admin manages staff identity and assignment; Mobile supports assigned installation work; Shared Core verifies permissions. See `ADMIN_CAPABILITIES.md` and `ONBOARDING_ACTIVATION.md`.
 
 # 15. Approved implementation phases
 

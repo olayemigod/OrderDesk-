@@ -239,6 +239,8 @@ ProcessEdge Admin may:
 - inspect package/document integrity evidence;
 - reconcile approved Order Form/package generation where authorised.
 
+When a Merchant/Business context is selected, **Accepted Master Agreement history** must show only versions backed by an immutable acceptance fact for that exact Business/version. A current required but unaccepted version appears separately as **Awaiting acceptance**. The distinct authorised platform publication history retains every immutable version (including quarantined history labelled accurately). Never treat publication as merchant acceptance.
+
 ProcessEdge Admin must not:
 
 - create merchant-specific variants of the universal Master Agreement merely to hold commercial particulars;

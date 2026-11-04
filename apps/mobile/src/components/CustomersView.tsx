@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { MerchantBusiness } from '../data/businessRepository';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import {
+  customerContactPhone,
   loadCustomers,
   updateCustomerProfile,
   type MerchantCustomer,
@@ -45,7 +46,7 @@ export function CustomersView({ business }: { business: MerchantBusiness }) {
       customer.displayName ?? '',
       customer.phone ?? '',
       customer.email ?? '',
-      customer.whatsappId,
+      customerContactPhone(customer) ?? '',
       ...customer.orders.map((order) => order.publicOrderId),
     ].join(' ').toLowerCase().includes(needle));
   }, [customers, query]);
@@ -101,7 +102,7 @@ export function CustomersView({ business }: { business: MerchantBusiness }) {
           </View>
           <View style={styles.customerCopy}>
             <Text style={[styles.profileName, appearance.dark && darkStyles.titleText]}>{selected.displayName || selected.phone || 'WhatsApp customer'}</Text>
-            <Text style={[styles.meta, appearance.dark && darkStyles.bodyText]}>{selected.phone || selected.whatsappId}</Text>
+            <Text style={[styles.meta, appearance.dark && darkStyles.bodyText]}>{customerContactPhone(selected) ?? 'No phone saved'}</Text>
             {selected.email ? <Text style={[styles.meta, appearance.dark && darkStyles.bodyText]}>{selected.email}</Text> : null}
           </View>
         </View>
@@ -113,9 +114,9 @@ export function CustomersView({ business }: { business: MerchantBusiness }) {
 
         <View style={[styles.detailCard, appearance.dark && darkStyles.card]}>
           <Text style={[styles.sectionTitle, appearance.dark && darkStyles.titleText]}>Customer profile</Text>
-          <Text style={styles.identityLabel}>WhatsApp / phone identity</Text>
-          <Text style={[styles.identityValue, appearance.dark && darkStyles.titleText]}>{selected.phone || selected.whatsappId}</Text>
-          <Text style={[styles.identityHelp, appearance.dark && darkStyles.bodyText]}>Read-only. SellerTray uses this identity to keep WhatsApp order history linked correctly.</Text>
+          <Text style={styles.identityLabel}>Contact phone</Text>
+          <Text style={[styles.identityValue, appearance.dark && darkStyles.titleText]}>{customerContactPhone(selected) ?? 'No phone saved'}</Text>
+          <Text style={[styles.identityHelp, appearance.dark && darkStyles.bodyText]}>A verified phone number is used to link WhatsApp orders to this customer when available.</Text>
 
           <Text style={styles.fieldLabel}>Display name</Text>
           <TextInput value={displayName} onChangeText={setDisplayName} editable={canEdit && !busy} maxLength={120} style={[styles.input, appearance.dark && darkStyles.input, appearance.dark && darkStyles.inputText]} />
@@ -201,7 +202,7 @@ export function CustomersView({ business }: { business: MerchantBusiness }) {
                 <Text style={[styles.customerName, appearance.dark && darkStyles.titleText]}>{customer.displayName || customer.phone || 'WhatsApp customer'}</Text>
                 <Text style={[styles.orderCount, appearance.dark && darkStyles.bodyText]}>{customer.orderCount} order{customer.orderCount === 1 ? '' : 's'}</Text>
               </View>
-              <Text style={styles.meta}>{customer.phone || customer.whatsappId}</Text>
+              <Text style={styles.meta}>{customerContactPhone(customer) ?? 'No phone saved'}</Text>
               <Text style={[styles.value, appearance.dark && darkStyles.greenText]}>{formatMoney(customer.lifetimeValue, business.currency)} completed value</Text>
               <Text style={styles.meta}>Last order: {customer.lastOrderAt ? formatDate(customer.lastOrderAt) : 'No orders yet'}</Text>
             </View>

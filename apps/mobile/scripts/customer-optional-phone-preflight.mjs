@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+const selector = readFileSync(resolve(import.meta.dirname, '../src/redesign/PosCustomerSelector.tsx'), 'utf8');
+assert.match(selector, /newPhone\.trim\(\) && !phone/);
+assert.match(selector, /Phone number \(optional\)/);
+assert.match(selector, /phone is blank|phone is blank|Phone is optional/);
+assert.doesNotMatch(selector, /if \(!phone\) \{/);
+assert.match(selector, /onChange\(\{ id: null, name, phone \}\)/);
+const directory = readFileSync(resolve(import.meta.dirname, '../src/components/CustomersView.tsx'), 'utf8');
+const customerRepository = readFileSync(resolve(import.meta.dirname, '../src/data/customerRepository.ts'), 'utf8');
+assert.match(directory, /customerContactPhone\(selected\)/);
+assert.match(directory, /customerContactPhone\(customer\)/);
+assert.match(directory, /No phone saved/);
+assert.match(selector, /customerContactPhone\(customer\)/);
+assert.match(directory, /customerContactPhone\(selected\)/);
+assert.doesNotMatch(directory, /selected\.phone \|\| selected\.whatsappId/);
+assert.ok(customerRepository.includes(String.raw`return /^\+?[0-9]{7,15}$/.test(whatsappId.replace(/[\s()-]/g, '')) ? whatsappId : null;`));
+assert.match(customerRepository, /phone\.replace/);
+console.log('Mobile name-only POS customer selection preflight passed.');

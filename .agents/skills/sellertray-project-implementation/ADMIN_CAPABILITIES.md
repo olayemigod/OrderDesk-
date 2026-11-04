@@ -50,6 +50,19 @@ Default intent: ProcessEdge support/operations staff who need broad visibility a
 
 Support is **read/review first**. A Support user may mutate only when an explicit approved capability grants that operation. Do not infer commercial authority from support access.
 
+### ProcessEdge Setup Installer / Field Technician (approved)
+
+ProcessEdge installation staff require **their own authenticated internal user accounts and narrowly scoped setup role**, independent of merchant Owner/Manager/Cashier membership. This is an approved role, not a speculative generic support privilege.
+
+- ProcessEdge Admin provisions/invites, assigns, suspends and revokes internal staff accounts and role bundles; account activation requires verified identity and governed MFA/AAL2.
+- A Setup Installer can list **only their assigned** Branch setup appointments and the minimum merchant/Branch/device details required to perform installation. Appointment, worker, user and Branch assignment must be linked through explicit current authority, not by a matching display name or a self-declared worker ID.
+- The installer may perform approved preparation actions: create/configure the Branch register, bind/pair/configure an approved printer, perform a canonical test print, capture equipment/receipt setup evidence, record handover acknowledgement and complete the assigned appointment under a recorded command and reason.
+- The installer cannot access unrelated Businesses/Branches/appointments; change commercial pricing, discounts, settlement, subscriptions, entitlements or agreements; approve payments; perform POS/stock transactions; grant roles; or impersonate a merchant.
+- AAL2 applies to Admin staff/role provisioning and sensitive setup completion. Setup device commands must additionally verify a live appointment assignment, scoped capability and time/revocation state; revocation must be effective server-side immediately.
+- Setup configuration and completion must preserve immutable actor, appointment, Business/Branch, device, command/idempotency and audit evidence. A printer or readiness fact cannot be fabricated merely by ticking the checklist.
+
+**Existing-model reconciliation:** `platform_admins` currently accepts only `admin | support`; `sellertray_setup_workers` is a scheduling resource without authenticated user identity; `platform-admin-team` currently supports ownership transfer rather than general staff invitations. Do not falsely treat a scheduling worker row as a signed-in installer. Introduce a forward-only linked internal identity/role/assignment authority and dedicated Mobile installer mode in a bounded follow-on implementation; preserve existing Admin/Support capabilities and Merchant-role isolation.
+
 ### Future internal personas
 
 SellerTray may later introduce responsibility-oriented bundles such as Finance, Commercial Operations, Platform Operations, Auditor or Leadership. These are **bundles over capabilities**, not new business-truth engines.

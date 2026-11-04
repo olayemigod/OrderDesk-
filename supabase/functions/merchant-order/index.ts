@@ -94,8 +94,13 @@ Deno.serve(async (request) => {
     if (customerIdProvided && !customerId) return json({ error: 'Selected customer is invalid' }, 400);
     if (clientReferenceProvided && !clientReference) return json({ error: 'Sale reference is invalid' }, 400);
     if (!lines.length) return json({ error: 'Add at least one product' }, 400);
-    if (!customerId && (customerName === null) !== (customerPhone === null)) {
-      return json({ error: 'Enter both customer name and phone, or leave both blank for a walk-in sale' }, 400);
+    if (!customerId && !customerName && customerPhone) {
+      return json({ error: 'Enter the customer name when providing a phone' }, 400);
+    }
+    // Blank phone is allowed for a named POS customer; malformed supplied
+    // phone values remain invalid instead of silently creating an unlinked person.
+    if (typeof body.customerPhone === 'string' && body.customerPhone.trim() && !customerPhone) {
+      return json({ error: 'Enter a valid customer phone or leave it blank' }, 400);
     }
     if (
       clientReference

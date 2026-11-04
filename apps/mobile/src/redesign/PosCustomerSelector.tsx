@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { loadCustomers, type MerchantCustomer } from '../data/customerRepository';
+import { customerContactPhone, loadCustomers, type MerchantCustomer } from '../data/customerRepository';
 import { isLikelyConnectivityError, loadCustomerCache, saveCustomerCache } from '../data/offlineSalesRepository';
 import { sellerTrayUserMessage } from '../data/userFacingError';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
@@ -50,7 +50,7 @@ export function PosCustomerSelector({ tenantId, value, onChange, disabled = fals
     return customers.filter((customer) => [
       customer.displayName ?? '',
       customer.phone ?? '',
-      customer.whatsappId ?? '',
+      customerContactPhone(customer) ?? '',
       customer.email ?? '',
     ].join(' ').toLowerCase().includes(normalized)).slice(0, 20);
   }, [customers, normalized]);
@@ -73,8 +73,8 @@ export function PosCustomerSelector({ tenantId, value, onChange, disabled = fals
       setError('Enter the customer name.');
       return;
     }
-    if (!phone) {
-      setError('Enter a valid customer phone number.');
+    if (newPhone.trim() && !phone) {
+      setError('Enter a valid phone number or leave it blank.');
       return;
     }
     setError(null);
@@ -166,13 +166,13 @@ export function PosCustomerSelector({ tenantId, value, onChange, disabled = fals
           <TextInput
             value={newPhone}
             onChangeText={setNewPhone}
-            placeholder="Phone number"
+            placeholder="Phone number (optional)"
             placeholderTextColor={theme.colors.subtle}
             keyboardType="phone-pad"
             style={[styles.textField, dark && darkStyles.input, dark && darkStyles.inputText]}
           />
           <Text style={[styles.helper, dark && darkStyles.bodyText]}>
-            SellerTray creates the customer only when this sale is prepared. If one existing customer already uses the phone, that customer is reused.
+            Phone is optional. SellerTray creates a separate customer record when the phone is blank; a supplied matching phone reuses the existing customer.
           </Text>
           <Pressable disabled={disabled} onPress={useNewCustomer} style={[styles.primaryButton, disabled && styles.disabled]}>
             <Text style={styles.primaryText}>Use this customer</Text>
