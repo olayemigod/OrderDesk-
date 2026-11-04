@@ -2,6 +2,10 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select extensions.plan(20);
 
+-- Valuation math uses trusted internal service context. Client authorization
+-- is independently verified by sellertray_reporting_definer_caller_scope.test.sql.
+select set_config('request.jwt.claim.role','service_role',true);
+
 select extensions.ok(
   to_regclass('public.sellertray_inventory_valuation_entries') is not null
   and to_regclass('public.sellertray_inventory_valuation_state') is not null,
