@@ -13,6 +13,11 @@ on:
       - '.github/workflows/android-qa-apk.yml'
       - 'scripts/qa/sellertray-environment-resource-policy.mjs'
       - 'scripts/qa/sellertray-environment-resource-policy.test.mjs'
+      - 'scripts/qa/vercel-frontend-environment.mjs'
+      - 'scripts/qa/vercel-frontend-environment.test.mjs'
+      - 'docs/qa/oa5-staging-backend-attestation.json'
+      - 'apps/merchant-web/package.json'
+      - 'apps/admin-web/package.json'
       - '.github/workflows/environment-resource-governance.yml'
   push:
     branches: [main]
@@ -25,6 +30,11 @@ on:
       - '.github/workflows/android-qa-apk.yml'
       - 'scripts/qa/sellertray-environment-resource-policy.mjs'
       - 'scripts/qa/sellertray-environment-resource-policy.test.mjs'
+      - 'scripts/qa/vercel-frontend-environment.mjs'
+      - 'scripts/qa/vercel-frontend-environment.test.mjs'
+      - 'docs/qa/oa5-staging-backend-attestation.json'
+      - 'apps/merchant-web/package.json'
+      - 'apps/admin-web/package.json'
       - '.github/workflows/environment-resource-governance.yml'
   workflow_dispatch:
 
@@ -50,6 +60,6 @@ jobs:
         with:
           node-version: '22'
       - name: Offline resource governance tests
-        run: node --test scripts/qa/sellertray-environment-resource-policy.test.mjs
+        run: node --test scripts/qa/sellertray-environment-resource-policy.test.mjs scripts/qa/vercel-frontend-environment.test.mjs
       - name: Verify project policies
         run: node scripts/qa/sellertray-environment-resource-policy.mjs --check
