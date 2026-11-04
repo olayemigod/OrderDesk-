@@ -67,6 +67,30 @@ create trigger sellertray_setup_installer_merchant_membership_exclusion
 create trigger sellertray_setup_installer_platform_admin_exclusion
   before insert or update of user_id on public.platform_admins
   for each row execute function public.sellertray_reject_setup_installer_membership();
+-- The reverse path (link_existing) must use the same lock as merchant grants.
+-- An installer account cannot be linked concurrently with a Team invitation.
+create or replace function public.sellertray_reject_merchant_internal_staff_link()
+returns trigger language plpgsql security definer set search_path='' as $link_guard$
+declare v_email text;
+begin
+  select lower(btrim(u.email)) into v_email from auth.users u where u.id=new.user_id;
+  if v_email is not null then
+    perform pg_advisory_xact_lock(hashtextextended('setup-invite:'||v_email,0));
+  end if;
+  if exists(select 1 from public.tenant_members tm where tm.user_id=new.user_id)
+    or exists(select 1 from public.platform_admins pa where pa.user_id=new.user_id) then
+    raise exception 'A dedicated ProcessEdge installer identity is required'
+      using errcode='42501';
+  end if;
+  return new;
+end;
+$link_guard$;
+revoke all on function public.sellertray_reject_merchant_internal_staff_link()
+  from public,anon,authenticated;
+create trigger sellertray_internal_staff_link_exclusion
+  before insert or update of user_id on public.sellertray_internal_setup_staff
+  for each row execute function public.sellertray_reject_merchant_internal_staff_link();
+
 
 create or replace function public.platform_admin_reserve_setup_installer_invitation(
   p_actor_user_id uuid,p_email text,p_worker_id uuid,p_command_id uuid,p_reason text
