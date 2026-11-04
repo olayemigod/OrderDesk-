@@ -1,7 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.115.0';
 
 type JsonRecord = Record<string, unknown>;
-type AdminAction = 'invite' | 'link_existing' | 'set_status' | 'assign' | 'revoke_assignment';
+type AdminAction = 'invite' | 'reconcile_invite' | 'link_existing' | 'set_status' | 'assign' | 'revoke_assignment';
 type Action = AdminAction | 'mine' | 'staff_list' | 'profile';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -83,12 +83,17 @@ Deno.serve(async (request) => {
 
   if (action === 'staff_list') {
     try {
-      const roster = await rpc<JsonRecord>('platform_admin_list_setup_installer_staff', {
-        p_actor_user_id: identity.userId,
-        p_tenant_id: tenantId,
-      });
+      const [roster, reservations] = await Promise.all([
+        rpc<JsonRecord>('platform_admin_list_setup_installer_staff', {
+          p_actor_user_id: identity.userId, p_tenant_id: tenantId,
+        }),
+        rpc<unknown>('platform_admin_list_setup_installer_reservations', {
+          p_actor_user_id: identity.userId,
+        }),
+      ]);
       return json({ staff: Array.isArray(roster.staff) ? roster.staff : [],
-        assignments: Array.isArray(roster.assignments) ? roster.assignments : [] });
+        assignments: Array.isArray(roster.assignments) ? roster.assignments : [],
+        pendingInvitations: Array.isArray(reservations) ? reservations : [] });
     } catch {
       return json({ error: 'Unable to load ProcessEdge installer accounts' }, 400);
     }
@@ -161,12 +166,25 @@ Deno.serve(async (request) => {
           p_command_id: commandId,
           p_reason: reason,
         });
+        await rpc<string>('platform_admin_reconcile_setup_installer_invitation', {
+          p_actor_user_id: identity.userId, p_reservation_command_id: commandId,
+          p_command_id: commandId, p_reason: reason,
+        });
         return json({ staffUserId: userId, status: 'pending', invitationSent: true });
       } catch {
         return json({
           error: 'Invitation may have been delivered. Installer identity remains reserved pending Admin reconciliation; do not resend.',
         }, 409);
       }
+    }
+    if (action === 'reconcile_invite') {
+      const reservationCommandId = cleanUuid(body.reservationCommandId);
+      if (!reservationCommandId) return json({ error: 'Invitation reservation ID required' }, 400);
+      const userId = await rpc<string>('platform_admin_reconcile_setup_installer_invitation', {
+        p_actor_user_id: identity.userId, p_reservation_command_id: reservationCommandId,
+        p_command_id: commandId, p_reason: reason,
+      });
+      return json({ staffUserId: userId, reconciled: true });
     }
     if (action === 'link_existing') {
       if (!workerId || !staffUserId) return json({ error: 'Setup worker and existing user ID required' }, 400);
@@ -244,7 +262,7 @@ async function verifiedIdentity(authorization: string):
   } catch { return null; }
 }
 function cleanAction(value: unknown): Action | null {
-  const allowed: Action[] = ['invite','link_existing','set_status','assign','revoke_assignment','mine','staff_list','profile'];
+  const allowed: Action[] = ['invite','reconcile_invite','link_existing','set_status','assign','revoke_assignment','mine','staff_list','profile'];
   return allowed.find(action => action === value) ?? null;
 }
 function cleanUuid(value: unknown): string | null {
