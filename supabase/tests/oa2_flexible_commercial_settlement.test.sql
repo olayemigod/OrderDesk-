@@ -141,7 +141,7 @@ select extensions.is(
 select extensions.is(
   (select count(*)::integer
    from public.sellertray_installment_policy_versions
-   where scope_kind='platform' and billing_cycle='yearly'),
+   where scope_kind='platform' and policy_context='legacy' and billing_cycle='yearly'),
   2,
   'disabling installments appends policy history instead of rewriting the previous commercial rule'
 );

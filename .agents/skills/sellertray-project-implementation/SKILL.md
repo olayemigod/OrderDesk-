@@ -321,6 +321,7 @@ Rules:
 7. Merchants should not need to understand ledger, conversion, sync or payment internals.
 8. Appearance uses a persisted font-size slider rather than only fixed Small/Large choices. The preference must apply consistently across appropriate SellerTray mobile text surfaces through a shared typography primitive or equivalent central mechanism; do not implement screen-specific font scaling that drifts between Home, Sell, Orders, Inventory and More.
 9. Font scaling must preserve usable layouts and touch targets; it changes readable text sizing, not business logic or transaction truth.
+10. **Date presentation:** show merchant/operator-facing calendar dates as **dd/mm/yyyy** (e.g. 04/11/2026), consistently across Mobile, Merchant Web, Admin Web and generated documents. Where event time matters, display **dd/mm/yyyy HH:mm** and an explicit timezone (e.g. **WAT** for Nigerian legal/commercial evidence). Convert display consistently using the appropriate governed business timezone; for platform legal/Commercial V2 Order Forms use **Africa/Lagos**. Do not alter authoritative server timestamps, due-date instants, original historical snapshots, document hashes, payment timing or native date/time input/storage contracts merely to change presentation. Valid explicitly unscheduled installment due dates remain unspecified, not invented.
 
 ### Brand identity authority
 

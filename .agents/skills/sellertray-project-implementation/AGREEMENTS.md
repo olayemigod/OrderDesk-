@@ -143,6 +143,16 @@ Rules:
 5. The Order Form references or operates under the accepted Master Agreement; it does not create a new universal Master Agreement version.
 6. Confirming a new Order Form under an unchanged Master Agreement must not create another Master acceptance.
 
+### C2 Branch Order Form confirmation and replacement boundary
+
+For Commercial V2 Branch commitments, an Order Form freezes the purchased Branch, Plan Profile Version, installment template/version, price/tax snapshot, and required Master version. Until the merchant confirms it, a selected alternative installment structure must still be allowed by the **currently effective** governed installment policy. Withdrawing an alternative blocks first confirmation through all channels; the merchant must receive a new governed quote/Order Form or ProcessEdge must explicitly reauthorise the original structure through a new policy version. A policy change must not rewrite historical quotes.
+
+Once an Order Form has been confirmed and native pending Branch Subscription terms registered, that confirmation and selected installment schedule are immutable historical commercial facts. Subsequent policy changes must not revoke the already-confirmed schedule or invalidate settlement of that commitment.
+
+**C2-7 implementation safety boundary:** A C2 Order Form that is still unconfirmed may be superseded, retaining the original legal history. A **confirmed** C2 Order Form may not be directly superseded for the same commercial order because its pending Branch Subscription registration is bound to the confirmed Form and a deterministic command identity. Reject such a replacement before issuing it, rather than strand the merchant with an unconfirmable form. A later change must create a new governed commercial commitment and Order Form with an appropriate Branch Subscription replacement lineage. An explicit future confirmed-contract amendment path must govern any exceptional in-place lineage safely, not reuse the original registration command with changed facts.
+
+This C2-only guard does not rewrite or narrow historical C1/OA2 confirmation evidence or existing accepted Master versions.
+
 ## Order Form review and confirmation UX
 
 Order Form confirmation is distinct from Master Agreement acceptance.
@@ -161,6 +171,13 @@ The final action must not be labelled **Accept & Continue** when the Master Agre
 The Order Form confirmation button remains disabled until the exact governed Order Form/review PDF has been opened and the merchant completes the required authority/confirmation controls.
 
 Order Form confirmation evidence must bind to the exact Order Form/commercial snapshot/package fingerprint or equivalent immutable evidence used by the implementation.
+
+For C2 Branch purchases, the **reviewed and executed Order Form PDF** must display the applicable frozen Branch payment commitments, not only total purchase lines: merchant-facing Branch name, cycle, setup inclusion, exact approved installment structure/version, each installment's amount and the Branch's amount due. Show each installment's calendar due date **when the selected published template defines one**. The seeded 70/30 and 60/20/20 alternative versions intentionally carry `due_offset_days = NULL`: their frozen `dueAt = null` is a valid governed fact, and the PDF must explicitly say **"Not specified in the selected installment structure"** instead of fabricating a date or refusing review/confirmation. This applies equally to review and executed PDFs for already-issued Forms; do not rewrite historical snapshots or retroactively introduce contract deadlines. The renderer uses the issuance-time immutable commercial snapshot, not a live settlement query or mutable Branch metadata. An actually incomplete/corrupt C2 schedule (missing the due-date field entirely, invalid supplied calendar date, absent lines/Branch identity) must still fail closed rather than present invalid legal evidence. The review and executed PDFs use the same Order Form rendering path.
+
+Commercial V2 payment acceptance and entitlement activation remain separate: a confirmed Paystack payment must be recorded once against its exact Branch obligation, but the legacy C1 installment entitlement reconciler must not be invoked for native C2 obligations. Native C2 entitlement requires its own gated payment/setup/legal reconciliation before cutover.
+
+**Legal date display (approved 4 November 2026):** Generated review/executed Order Form PDFs, Merchant Web Master Agreement/Order Form summaries and Admin agreement lifecycle pages display dates as **dd/mm/yyyy**, using Africa/Lagos civil time. For acceptance, confirmation, publication and execution evidence, retain the human-readable time as **dd/mm/yyyy HH:mm WAT**; the full canonical server timestamp remains unchanged as immutable legal/audit evidence. This is a presentation rule, not new due-date or settlement policy. It applies to newly rendered PDFs of existing immutable snapshots without rewriting published source PDFs, accepted Master Agreement history or commercial obligations.
+
 
 ## Agreement Package PDF
 

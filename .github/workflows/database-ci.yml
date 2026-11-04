@@ -59,6 +59,18 @@ jobs:
       - name: Verify C1B installment webhook retry contract
         run: node supabase/functions/paystack-webhook/c1b-contract.mjs
 
+      - name: Verify C2 reviewed Branch installment PDF contract
+        run: node supabase/functions/master-agreements/c2-branch-pdf-contract.mjs
+
+      - name: Verify C2 undated installment PDF rendering and historical compatibility
+        run: node --test supabase/functions/master-agreements/c2-installment-due-date.test.mjs
+
+      - name: Verify dd/mm/yyyy in reviewed/executed SellerTray legal dates and agreement screens
+        run: node --test supabase/functions/master-agreements/c2-agreement-date-display.test.mjs
+
+      - name: Verify C2 Paystack webhook reconciliation scope
+        run: node supabase/functions/paystack-webhook/c2-scope-contract.mjs
+
       - name: Verify C1B installment checkout retry contract
         run: node supabase/functions/billing-checkout/c1b-contract.mjs
 

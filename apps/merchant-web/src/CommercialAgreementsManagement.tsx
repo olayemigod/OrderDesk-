@@ -3,6 +3,7 @@ import CommercialAgreementPackageManagement from './CommercialAgreementPackageMa
 import { SellerTrayInput } from './SellerTrayElements';
 import VerifiedPdfPreview from './VerifiedPdfPreview';
 import { fetchVerifiedPdf } from './agreementPdf';
+import { formatLegalDate as formatDate, formatLegalDateTime as formatDateTime } from './legalDate';
 import { errorMessage, supabase } from './supabase';
 import './agreement-documents.css';
 
@@ -127,7 +128,7 @@ export default function CommercialAgreementsManagement({ tenantId, onContinueToB
 
     {!master ? <article className="panel empty-state"><strong>Master Agreement not yet published</strong><p>ProcessEdge must publish the current SellerTray Master Agreement before a new commercial commitment can proceed.</p></article> : <article className="panel agreement-brand-panel">
       <div className="agreement-brand-heading"><img className="agreement-brand-logo" src="/brand/sellertray-logo-v2.svg" alt="SellerTray" /><div><p className="eyebrow">Master Agreement</p><h3>{master.title}</h3><p className="muted">Version {master.versionCode} · Effective {formatDate(master.effectiveFrom)}</p></div><span className="role-pill">{center?.masterAcceptanceRequired ? 'Acceptance required' : 'Accepted'}</span></div>
-      <div className="settings-grid two"><Fact label="Version" value={master.versionCode} /><Fact label="Status" value={center?.masterAcceptanceRequired ? 'Acceptance required' : 'Accepted'} /><Fact label="Accepted by" value={master.acceptance?.acceptedLegalName ?? '—'} /><Fact label="Accepted at" value={master.acceptance?.acceptedAt ? formatDate(master.acceptance.acceptedAt) : '—'} /></div>
+      <div className="settings-grid two"><Fact label="Version" value={master.versionCode} /><Fact label="Status" value={center?.masterAcceptanceRequired ? 'Acceptance required' : 'Accepted'} /><Fact label="Accepted by" value={master.acceptance?.acceptedLegalName ?? '—'} /><Fact label="Accepted at" value={master.acceptance?.acceptedAt ? formatDateTime(master.acceptance.acceptedAt) : '—'} /></div>
       <div className="governance-note">The Master Agreement is the continuing legal framework for this Business. Purchase details such as plan, Branches, prices and installments belong to the separate Order Form.</div>
       <div className="agreement-package-card"><div className="agreement-package-card-copy"><p className="eyebrow">Agreement document</p><h3>{center?.masterAcceptanceRequired ? 'Review Master Agreement PDF' : 'View Master Agreement'}</h3><p>{center?.masterAcceptanceRequired ? 'Preview the exact current Master Agreement before accepting.' : 'The accepted Master Agreement remains available for reference without changing your acceptance record.'}</p></div><div className="agreement-package-actions"><button type="button" className={center?.masterAcceptanceRequired ? 'primary-button' : 'secondary-button'} disabled={documentBusy} onClick={() => void openMasterAgreement()}>{documentBusy ? 'Preparing preview…' : center?.masterAcceptanceRequired ? (reviewReady ? 'Review agreement again' : 'Review Master Agreement') : 'View Master Agreement'}</button>{center?.masterAcceptanceRequired && reviewReady ? <small>Verified PDF rendered successfully. Complete the representative details below.</small> : null}</div></div>
       {!center?.masterAcceptanceRequired ? <div className="success-banner">Master Agreement accepted. This document remains available here for reference.</div> : null}
@@ -147,7 +148,6 @@ export default function CommercialAgreementsManagement({ tenantId, onContinueToB
 }
 
 function Fact({ label, value }: { label: string; value: string }) { return <div className="role-lock"><span>{label}</span><strong>{value}</strong></div>; }
-function formatDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(date); }
 function record(value: unknown): Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 function parseAcceptance(value: unknown): MasterAcceptance | null { const row = record(value); if (typeof row.id !== 'string') return null; return { id: row.id, acceptedAt: String(row.acceptedAt ?? ''), acceptedLegalName: String(row.acceptedLegalName ?? ''), acceptedRole: row.acceptedRole === 'manager' ? 'manager' : 'owner' }; }
 function parseMaster(value: unknown): MasterAgreement | null { const row = record(value); if (typeof row.id !== 'string') return null; return { id: row.id, versionCode: String(row.versionCode ?? ''), title: String(row.title ?? 'SellerTray Master Agreement'), contentBody: String(row.contentBody ?? ''), contentSha256: String(row.contentSha256 ?? ''), effectiveFrom: String(row.effectiveFrom ?? ''), acceptance: parseAcceptance(row.acceptance) }; }

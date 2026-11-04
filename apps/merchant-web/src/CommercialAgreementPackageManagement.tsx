@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { SellerTrayInput } from './SellerTrayElements';
 import VerifiedPdfPreview from './VerifiedPdfPreview';
 import { fetchVerifiedPdf } from './agreementPdf';
+import { formatLegalDate as formatDate, formatLegalDateTime as formatDateTime } from './legalDate';
 import { errorMessage, supabase } from './supabase';
 
 type MasterAcceptance = { id: string; acceptedAt: string; acceptedLegalName: string; acceptedRole: 'owner' | 'manager' };
@@ -17,7 +18,8 @@ type CommercialSnapshot = {
 type OrderForm = {
   id: string; reference: string; title: string; templateVersion: string; renderedContent: string; contentSha256: string;
   commercialSnapshotSha256: string; commercialSnapshot: CommercialSnapshot; commercialOrderId: string;
-  installmentObligationId: string | null; supersedesOrderFormId: string | null; isCurrent: boolean; issuedAt: string;
+  installmentObligationId: string | null; requiredMasterAgreementVersionId: string | null; requiredMasterAccepted: boolean;
+  supersedesOrderFormId: string | null; isCurrent: boolean; issuedAt: string;
   confirmation: OrderFormConfirmation | null;
 };
 type AgreementCenter = { tenantId: string; actorRole: 'owner' | 'manager'; canAccept: boolean; masterAgreement: MasterAgreement | null; masterAcceptanceRequired: boolean; orderForms: OrderForm[] };
@@ -61,6 +63,9 @@ export default function CommercialAgreementPackageManagement({ tenantId, onChang
   const history = useMemo(() => orderForms.filter((form) => !form.isCurrent), [orderForms]);
   const selected = orderForms.find((form) => form.id === selectedId) ?? current[0] ?? orderForms[0] ?? null;
   const actionRequired = Boolean(selected?.isCurrent && !selected.confirmation);
+  const selectedMasterAcceptanceRequired = selected?.requiredMasterAgreementVersionId
+    ? !selected.requiredMasterAccepted
+    : center?.masterAcceptanceRequired === true;
   const reviewReady = Boolean(reviewDocument && reviewedFingerprint === reviewDocument.packageFingerprint);
   const previewIsReview = previewDocument?.artifactKind === 'review_pdf';
 
@@ -87,8 +92,10 @@ export default function CommercialAgreementPackageManagement({ tenantId, onChang
 
   async function openDocument(artifactKind: 'review_pdf' | 'executed_pdf') {
     if (!selected || documentBusy) return;
-    if (artifactKind === 'review_pdf' && center?.masterAcceptanceRequired) {
-      setError('Accept the current Master Agreement separately before reviewing this Order Form.');
+    if (artifactKind === 'review_pdf' && selectedMasterAcceptanceRequired) {
+      setError(selected.requiredMasterAgreementVersionId
+        ? 'The Master Agreement version required by this Order Form has not been accepted. Complete that acceptance or request an updated Order Form.'
+        : 'Accept the current Master Agreement separately before reviewing this Order Form.');
       return;
     }
     setDocumentBusy(artifactKind); setError(null);
@@ -127,7 +134,7 @@ export default function CommercialAgreementPackageManagement({ tenantId, onChang
 
   async function confirmPackage(event: FormEvent) {
     event.preventDefault();
-    if (!selected || !selected.isCurrent || !center?.canAccept || !center.masterAgreement || center.masterAcceptanceRequired || !actionRequired || !reviewDocument || !reviewReady) return;
+    if (!selected || !selected.isCurrent || !center?.canAccept || !center.masterAgreement || selectedMasterAcceptanceRequired || !actionRequired || !reviewDocument || !reviewReady) return;
     const name = legalName.trim().replace(/\s+/g, ' ');
     if (!name) { setError('Enter the authorised representative legal name.'); return; }
     if (!confirmed) { setError('Confirm your authority and purchase approval before continuing.'); return; }
@@ -169,7 +176,9 @@ export default function CommercialAgreementPackageManagement({ tenantId, onChang
     {error ? <div className="error-banner">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div> : null}
     {message ? <div className="success-banner">{message}<button type="button" onClick={() => setMessage(null)}>Dismiss</button></div> : null}
 
-    {center?.masterAcceptanceRequired ? <div className="warning-banner">The current Master Agreement must be reviewed and accepted separately before any new Order Form can be reviewed or confirmed.</div> : null}
+    {selectedMasterAcceptanceRequired ? <div className="warning-banner">{selected?.requiredMasterAgreementVersionId
+      ? 'This Order Form requires acceptance of its specified Master Agreement version. If that version has been replaced before acceptance, request an updated Order Form.'
+      : 'Accept the current Master Agreement separately before reviewing or confirming this Order Form.'}</div> : null}
 
     {center?.masterAgreement ? <article className="panel agreement-brand-panel">
       <div className="agreement-brand-heading">
@@ -180,8 +189,8 @@ export default function CommercialAgreementPackageManagement({ tenantId, onChang
       <div className="settings-grid two">
         <Fact label="Version" value={center.masterAgreement.versionCode} />
         <Fact label="Accepted by" value={center.masterAgreement.acceptance?.acceptedLegalName ?? '—'} />
-        <Fact label="Accepted at" value={center.masterAgreement.acceptance?.acceptedAt ? formatDate(center.masterAgreement.acceptance.acceptedAt) : '—'} />
-        <Fact label="Order Form authority" value={center.masterAcceptanceRequired ? 'Blocked until Master acceptance' : 'Ready'} />
+        <Fact label="Accepted at" value={center.masterAgreement.acceptance?.acceptedAt ? formatDateTime(center.masterAgreement.acceptance.acceptedAt) : '—'} />
+        <Fact label="Order Form authority" value={selectedMasterAcceptanceRequired ? 'Blocked until required Master acceptance' : 'Ready'} />
       </div>
     </article> : <div className="warning-banner">The current SellerTray Master Agreement is not available. Order Form confirmation is unavailable until it is published and accepted.</div>}
 
@@ -198,7 +207,7 @@ export default function CommercialAgreementPackageManagement({ tenantId, onChang
       {selected ? <article className="panel member-editor">
         <div className="panel-head">
           <div><p className="eyebrow">Order Form</p><h3>{selected.title}</h3><p className="muted">Reference {selected.reference} · Version {selected.templateVersion}</p></div>
-          <Status form={selected} masterAcceptanceRequired={center?.masterAcceptanceRequired === true} />
+          <Status form={selected} masterAcceptanceRequired={selectedMasterAcceptanceRequired} />
         </div>
         <div className="settings-grid two"><Fact label="Created" value={formatDate(selected.issuedAt)} /><Fact label="Order reference" value={selected.commercialSnapshot.orderReference || selected.reference} /></div>
         <CommercialFacts snapshot={selected.commercialSnapshot} />
@@ -207,18 +216,18 @@ export default function CommercialAgreementPackageManagement({ tenantId, onChang
         <div className="agreement-package-card">
           <div className="agreement-package-card-copy"><p className="eyebrow">Purchase document</p><h3>Review Order Form PDF</h3><p>Review the exact purchase terms under the Master Agreement you already accepted. The package may include the governing Master Agreement for reference, but this action confirms only this Order Form.</p></div>
           <div className="agreement-package-actions">
-            <button type="button" className="primary-button" disabled={documentBusy !== null || !selected.isCurrent || center?.masterAcceptanceRequired === true} onClick={() => void openDocument('review_pdf')}>{documentBusy === 'review_pdf' ? 'Preparing Order Form…' : reviewReady ? 'Review Order Form again' : 'Review Order Form'}</button>
+            <button type="button" className="primary-button" disabled={documentBusy !== null || !selected.isCurrent || selectedMasterAcceptanceRequired} onClick={() => void openDocument('review_pdf')}>{documentBusy === 'review_pdf' ? 'Preparing Order Form…' : reviewReady ? 'Review Order Form again' : 'Review Order Form'}</button>
             {reviewReady ? <small>Verified Order Form PDF rendered successfully. You can confirm this purchase below.</small> : null}
             {selected.confirmation ? <button type="button" className="secondary-button" disabled={documentBusy !== null} onClick={() => void openDocument('executed_pdf')}>{documentBusy === 'executed_pdf' ? 'Preparing signed copy…' : executedDocument ? 'View confirmed copy again' : 'View confirmed copy'}</button> : null}
           </div>
         </div>
 
-        {selected.confirmation ? <div className="success-banner">Order Form confirmed {formatDate(selected.confirmation.confirmedAt)} by {selected.confirmation.confirmedLegalName} ({roleLabel(selected.confirmation.confirmedRole)}).</div> : null}
+        {selected.confirmation ? <div className="success-banner">Order Form confirmed {formatDateTime(selected.confirmation.confirmedAt)} by {selected.confirmation.confirmedLegalName} ({roleLabel(selected.confirmation.confirmedRole)}).</div> : null}
         {!selected.isCurrent ? <div className="warning-banner">This Order Form has been replaced. Review the current replacement instead.</div> : null}
-        {selected.isCurrent && actionRequired && center?.masterAcceptanceRequired ? <div className="warning-banner">Accept the current Master Agreement separately before confirming this Order Form.</div> : null}
-        {selected.isCurrent && actionRequired && !center?.masterAcceptanceRequired && !center?.canAccept ? <div className="warning-banner">Only the Business Owner or an explicitly authorised Manager can confirm this Order Form.</div> : null}
+        {selected.isCurrent && actionRequired && selectedMasterAcceptanceRequired ? <div className="warning-banner">Accept the required Master Agreement version before confirming this Order Form, or request an updated Order Form if that version has been replaced.</div> : null}
+        {selected.isCurrent && actionRequired && !selectedMasterAcceptanceRequired && !center?.canAccept ? <div className="warning-banner">Only the Business Owner or an explicitly authorised Manager can confirm this Order Form.</div> : null}
 
-        {selected.isCurrent && actionRequired && !center?.masterAcceptanceRequired && center?.canAccept && center.masterAgreement ? <form className="settings-form agreement-signature-form" onSubmit={confirmPackage}>
+        {selected.isCurrent && actionRequired && !selectedMasterAcceptanceRequired && center?.canAccept && center.masterAgreement ? <form className="settings-form agreement-signature-form" onSubmit={confirmPackage}>
           <div className={`agreement-review-status ${reviewReady ? 'ready' : ''}`}><strong>{reviewReady ? 'Order Form rendered and ready to confirm' : 'Review the Order Form PDF before continuing'}</strong><span>{reviewReady ? 'SellerTray will record your authenticated confirmation against the exact verified purchase document rendered in the preview.' : 'Use Review Order Form above. Confirm Purchase remains locked until SellerTray renders the verified PDF.'}</span></div>
           <label className="field"><span>Authorised representative legal name</span><SellerTrayInput maxLength={200} required value={legalName} onChange={(event) => setLegalName(event.target.value)} placeholder="Full legal name" /></label>
           <label className="access-card"><SellerTrayInput type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span><strong>I confirm this purchase under the SellerTray Master Agreement already accepted by this Business and confirm my authority to continue.</strong><small>This confirms only this Order Form and purchase. It does not create or replace Master Agreement acceptance.</small></span></label>
@@ -250,7 +259,6 @@ function Fact({ label, value }: { label: string; value: string }) { return <div 
 function roleLabel(value: string) { return value === 'owner' ? 'Owner' : value === 'manager' ? 'Manager' : value; }
 function structureLabel(value: string) { return value === 'two_installment_70_30' ? '70% + 30%' : value === 'three_installment_60_20_20' ? '60% + 20% + 20%' : value.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()); }
 function money(value: number, currency: string) { try { return new Intl.NumberFormat('en-NG', { style: 'currency', currency: currency || 'NGN', maximumFractionDigits: 2 }).format(value); } catch { return `${currency || 'NGN'} ${value.toFixed(2)}`; } }
-function formatDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(date); }
 function record(value: unknown): Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 function array(value: unknown): unknown[] { return Array.isArray(value) ? value : []; }
 function stringValue(value: unknown, fallback = ''): string { return typeof value === 'string' ? value : fallback; }
@@ -266,7 +274,7 @@ function parseSnapshot(value: unknown): CommercialSnapshot {
 function parseOrderForm(value: unknown): OrderForm | null {
   const row = record(value); const id = stringValue(row.id); if (!id) return null; const confirmationRow = record(row.confirmation);
   const confirmation = stringValue(confirmationRow.id) ? { id: stringValue(confirmationRow.id), confirmedAt: stringValue(confirmationRow.confirmedAt), confirmedLegalName: stringValue(confirmationRow.confirmedLegalName), confirmedRole: confirmationRow.confirmedRole === 'manager' ? 'manager' as const : 'owner' as const, packageFingerprint: stringValue(confirmationRow.packageFingerprint) } : null;
-  return { id, reference: stringValue(row.reference), title: stringValue(row.title, 'SellerTray Order Form'), templateVersion: stringValue(row.templateVersion), renderedContent: stringValue(row.renderedContent), contentSha256: stringValue(row.contentSha256), commercialSnapshotSha256: stringValue(row.commercialSnapshotSha256), commercialSnapshot: parseSnapshot(row.commercialSnapshot), commercialOrderId: stringValue(row.commercialOrderId), installmentObligationId: nullableString(row.installmentObligationId), supersedesOrderFormId: nullableString(row.supersedesOrderFormId), isCurrent: row.isCurrent === true, issuedAt: stringValue(row.issuedAt), confirmation };
+  return { id, reference: stringValue(row.reference), title: stringValue(row.title, 'SellerTray Order Form'), templateVersion: stringValue(row.templateVersion), renderedContent: stringValue(row.renderedContent), contentSha256: stringValue(row.contentSha256), commercialSnapshotSha256: stringValue(row.commercialSnapshotSha256), commercialSnapshot: parseSnapshot(row.commercialSnapshot), commercialOrderId: stringValue(row.commercialOrderId), installmentObligationId: nullableString(row.installmentObligationId), requiredMasterAgreementVersionId: nullableString(row.requiredMasterAgreementVersionId), requiredMasterAccepted: row.requiredMasterAccepted === true, supersedesOrderFormId: nullableString(row.supersedesOrderFormId), isCurrent: row.isCurrent === true, issuedAt: stringValue(row.issuedAt), confirmation };
 }
 function parseCenter(value: unknown): AgreementCenter { const root = record(value); return { tenantId: stringValue(root.tenantId), actorRole: root.actorRole === 'manager' ? 'manager' : 'owner', canAccept: root.canAccept === true, masterAgreement: parseMaster(root.masterAgreement), masterAcceptanceRequired: root.masterAcceptanceRequired === true, orderForms: array(root.orderForms).flatMap((item) => { const form = parseOrderForm(item); return form ? [form] : []; }) }; }
 function parseConfirmResult(value: unknown): ConfirmResult { const row = record(value); const result = { orderFormConfirmationCreated: row.orderFormConfirmationCreated === true, agreementPackageId: stringValue(row.agreementPackageId), packageFingerprint: stringValue(row.packageFingerprint) }; if (!result.agreementPackageId || !result.packageFingerprint) throw new Error('Order Form confirmation response is incomplete.'); return result; }

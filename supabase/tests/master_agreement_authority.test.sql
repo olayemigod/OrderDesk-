@@ -55,8 +55,8 @@ select extensions.ok(
   'service-delivery reconciliation no longer consumes legacy order-bound agreement acceptance'
 );
 select extensions.ok(
-  position('''checkouteligible'',true' in replace(lower(pg_get_functiondef('public.get_sellertray_installment_contract_checkout_policy(uuid,uuid,timestamptz)'::regprocedure)),' ','')) > 0,
-  'payment checkout remains independent of Master Agreement acceptance'
+  position('''checkouteligible'',case' in replace(lower(pg_get_functiondef('public.get_sellertray_installment_contract_checkout_policy(uuid,uuid,timestamptz)'::regprocedure)),' ','')) > 0,
+  'checkout eligibility is a per-scope CASE independent of Master Agreement acceptance'
 );
 select extensions.ok(
   position('legacy order-bound agreement acceptance is retired' in lower(pg_get_functiondef('public.accept_sellertray_commercial_agreement(uuid,uuid,text,jsonb,uuid,uuid)'::regprocedure))) > 0,

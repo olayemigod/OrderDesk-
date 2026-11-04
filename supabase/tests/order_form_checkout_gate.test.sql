@@ -39,8 +39,8 @@ select extensions.ok(
   'existing active checkout sessions remain reusable before the new Order Form gate'
 );
 select extensions.ok(
-  position('no order form and no orchestration record is the structural legacy' in lower(pg_get_functiondef('public.reserve_sellertray_installment_checkout(uuid,uuid,uuid,uuid,text)'::regprocedure))) > 0,
-  'structural legacy compatibility remains explicit until C2'
+  position('elsif v_order.order_kind=''branch_commercial_v2'' then' in lower(pg_get_functiondef('public.reserve_sellertray_installment_checkout(uuid,uuid,uuid,uuid,text)'::regprocedure))) > 0,
+  'new Branch purchases fail closed without a confirmed Order Form while legacy purchases retain orchestration compatibility'
 );
 
 select * from extensions.finish();

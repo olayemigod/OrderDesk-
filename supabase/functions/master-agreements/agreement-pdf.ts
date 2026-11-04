@@ -1,5 +1,7 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'npm:pdf-lib@1.17.1';
 import { extractText, getDocumentProxy } from 'npm:unpdf@1.9.1';
+import { formatOrderFormInstallmentDueDate } from './installment-due-date.mjs';
+import { formatAgreementDate, formatAgreementDateTime } from './agreement-date-display.mjs';
 
 export type MasterSourceDocument = {
   filename: string;
@@ -153,7 +155,7 @@ function drawCover(page: PDFPage, regular: PDFFont, bold: PDFFont, input: Agreem
     ['Order Form', input.orderForm.reference],
     ['Master Agreement', `Version ${input.masterAgreement.versionCode}`],
     ['Package reference', shortHash(input.packageFingerprint, 24)],
-    ['Prepared', formatDate(input.generatedAt)],
+    ['Prepared', formatAgreementDateTime(input.generatedAt)],
   ] as const;
   for (const [label, value] of facts) {
     page.drawText(label.toUpperCase(), { x: 55, y, size: 8, font: bold, color: GREEN });
@@ -201,7 +203,7 @@ function drawOrderForm(doc: PDFDocument, regular: PDFFont, bold: PDFFont, input:
     ['Business email', stringValue(merchant.business_email) || '—'],
     ['Business phone', stringValue(merchant.business_phone) || '—'],
     ['Commercial order', stringValue(snapshot.order_reference) || '—'],
-    ['Order date', formatDate(stringValue(snapshot.ordered_at))],
+    ['Order date', formatAgreementDate(stringValue(snapshot.ordered_at))],
     ['Order total', money(numberValue(snapshot.total_gross_amount), stringValue(snapshot.currency) || 'NGN')],
     ['Approved adjustments', money(numberValue(settlement.approvedAdjustmentAmount), stringValue(snapshot.currency) || 'NGN')],
     ['Current amount due', money(numberValue(settlement.netAmountDue), stringValue(snapshot.currency) || 'NGN')],
@@ -230,6 +232,15 @@ function drawOrderForm(doc: PDFDocument, regular: PDFFont, bold: PDFFont, input:
     }
   }
 
+  // Every C2 Branch's exact installment schedule is part of the immutable
+  // merchant-reviewed Order Form. Never substitute a live settlement projection
+  // after the Order Form was issued.
+  if (stringValue(snapshot.orderKind) === 'branch_commercial_v2') {
+    const result = drawBranchCommitmentSchedules(doc, page, regular, bold, snapshot, y);
+    page = result.page;
+    y = result.y;
+  }
+
   y -= 12;
   if (y < 120) { page = doc.addPage(A4); y = drawSectionHeader(page, bold, 'MERCHANT ORDER FORM', 'Legal wording'); }
   page.drawText('ORDER FORM LEGAL WORDING', { x: 55, y, size: 9, font: bold, color: NAVY });
@@ -240,6 +251,83 @@ function drawOrderForm(doc: PDFDocument, regular: PDFFont, bold: PDFFont, input:
     const result = drawWrappedText(doc, page, regular, clean, 55, y, 485, 10, 14, SLATE);
     page = result.page; y = result.y - 10;
   }
+}
+
+
+function drawBranchCommitmentSchedules(
+  doc: PDFDocument,
+  startPage: PDFPage,
+  regular: PDFFont,
+  bold: PDFFont,
+  snapshot: Record<string, unknown>,
+  startY: number,
+): { page: PDFPage; y: number } {
+  const commitments = array(snapshot.branch_commitments);
+  if (!commitments.length) throw new Error('The Branch Order Form is missing its frozen commercial commitments');
+
+  const currency = stringValue(snapshot.currency) || 'NGN';
+  let page = startPage;
+  let y = startY - 15;
+  if (y < 138) {
+    page = doc.addPage(A4);
+    y = drawSectionHeader(page, bold, 'MERCHANT ORDER FORM', 'Branch payment commitments');
+  }
+  page.drawText('BRANCH PAYMENT COMMITMENTS', { x: 55, y, size: 9.5, font: bold, color: NAVY });
+  y -= 26;
+
+  for (const item of commitments) {
+    const branch = record(item);
+    const branchId = stringValue(branch.branch_id);
+    const branchName = stringValue(branch.branch_name) || (branchId ? `Branch ${branchId}` : '');
+    const settlement = record(branch.settlement);
+    const schedule = array(settlement.schedule);
+    if (!branchName || !schedule.length) {
+      throw new Error('The Branch Order Form is missing a Branch identity or its frozen payment schedule');
+    }
+
+    if (y < 155) {
+      page = doc.addPage(A4);
+      y = drawSectionHeader(page, bold, 'MERCHANT ORDER FORM', 'Branch payment commitments (continued)');
+    }
+    const branchHeading = drawWrappedText(doc, page, bold, branchName, 55, y, 485, 10.3, 14, NAVY);
+    page = branchHeading.page; y = branchHeading.y - 4;
+    const cycle = stringValue(branch.billing_cycle) || '—';
+    const structure = stringValue(branch.installment_template_code);
+    const version = numberValue(branch.installment_template_version);
+    const details = `Billing cycle: ${cycle} | Payment schedule: ${structure || 'Selected structure'}${version > 0 ? ` (version ${version})` : ''}`;
+    const detailRow = drawWrappedText(doc, page, regular, details, 65, y, 470, 9, 13, SLATE);
+    page = detailRow.page; y = detailRow.y - 3;
+    const dueRow = drawWrappedText(
+      doc, page, regular,
+      `Branch amount due: ${money(numberValue(settlement.netAmountDue), currency)} | Setup included: ${branch.setup_required === true ? 'Yes' : 'No'}`,
+      65, y, 470, 9.1, 13, SLATE,
+    );
+    page = dueRow.page; y = dueRow.y - 5;
+
+    for (const item of schedule) {
+      const installment = record(item);
+      const sequence = numberValue(installment.sequenceNo);
+      const allocation = stringValue(installment.allocationMode);
+      const percent = numberValue(installment.percentage);
+      const portion = allocation === 'fixed' ? 'fixed installment' : `${percent}%`;
+      if (sequence < 1 || !Number.isInteger(sequence) || !Object.hasOwn(installment, 'dueAt')) {
+        throw new Error('The Branch Order Form is missing a required installment sequence or due-date field');
+      }
+      // Some approved versioned templates have NO calendar due-date rule.
+      // Reproduce that absence honestly, instead of fabricating a deadline
+      // or refusing to render an otherwise valid reviewed/legal commitment.
+      const dueDateLabel = formatOrderFormInstallmentDueDate(installment.dueAt, formatAgreementDate);
+      if (y < 87) {
+        page = doc.addPage(A4);
+        y = drawSectionHeader(page, bold, 'MERCHANT ORDER FORM', 'Branch installments (continued)');
+      }
+      const row = `Installment ${sequence} (${portion}): ${money(numberValue(installment.amountDue), currency)} | Due: ${dueDateLabel}`;
+      const rendered = drawWrappedText(doc, page, regular, row, 75, y, 455, 9.2, 13.2, SLATE);
+      page = rendered.page; y = rendered.y - 5;
+    }
+    y -= 14;
+  }
+  return { page, y };
 }
 
 function drawIntegrityPage(doc: PDFDocument, page: PDFPage, regular: PDFFont, bold: PDFFont, input: AgreementPdfInput) {
@@ -283,8 +371,8 @@ function drawExecutionCertificate(doc: PDFDocument, page: PDFPage, regular: PDFF
   const rows: [string, string][] = [
     ['Business representative', confirmation.confirmedLegalName],
     ['Merchant authority', roleLabel(confirmation.confirmedRole)],
-    ['Master Agreement accepted', formatDate(acceptance.acceptedAt)],
-    ['Order Form confirmed', formatDate(confirmation.confirmedAt)],
+    ['Master Agreement accepted', formatAgreementDateTime(acceptance.acceptedAt)],
+    ['Order Form confirmed', formatAgreementDateTime(confirmation.confirmedAt)],
     ['Master acceptance actor', acceptance.acceptedByUserId],
     ['Order Form confirmation actor', confirmation.confirmedByUserId],
     ['Package fingerprint', input.packageFingerprint],
@@ -301,7 +389,7 @@ function drawExecutionCertificate(doc: PDFDocument, page: PDFPage, regular: PDFF
   page.drawText(confirmation.confirmedLegalName, { x: 74, y: y - 39, size: 18, font: italic, color: NAVY, maxWidth: 440 });
   page.drawLine({ start: { x: 74, y: y - 58 }, end: { x: 315, y: y - 58 }, thickness: 1, color: SLATE });
   page.drawText('Authenticated electronic signature', { x: 74, y: y - 76, size: 8.5, font: regular, color: SLATE });
-  page.drawText(formatDate(confirmation.confirmedAt), { x: 74, y: y - 91, size: 8.5, font: regular, color: SLATE });
+  page.drawText(formatAgreementDateTime(confirmation.confirmedAt), { x: 74, y: y - 91, size: 8.5, font: regular, color: SLATE });
 
   page.drawText('The typed signature is presentation. Legal evidence is the authenticated identity, merchant authority, immutable hashes, package fingerprint, command evidence and server timestamps.', {
     x: 55, y: 52, size: 8.2, font: regular, color: SLATE, maxWidth: 485, lineHeight: 11,
@@ -365,11 +453,9 @@ function stringValue(value: unknown): string { return typeof value === 'string' 
 function numberValue(value: unknown): number { const parsed = typeof value === 'number' ? value : Number(value); return Number.isFinite(parsed) ? parsed : 0; }
 function shortHash(value: string, length: number) { return value.replace(/[^0-9a-f]/gi, '').slice(0, length); }
 function roleLabel(value: string) { return value === 'owner' ? 'Business Owner' : value === 'manager' ? 'Authorised Manager' : value; }
-function formatDate(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Africa/Lagos' }).format(date);
-}
 function money(value: number, currency: string) {
-  try { return new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 2 }).format(value); }
+  // Standard Helvetica only supports WinAnsi; the NGN currency symbol is not
+  // encodable. Use the currency code so every reviewed amount remains legible.
+  try { return `${currency.toUpperCase()} ${new Intl.NumberFormat('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`; }
   catch { return `${currency} ${value.toFixed(2)}`; }
 }
