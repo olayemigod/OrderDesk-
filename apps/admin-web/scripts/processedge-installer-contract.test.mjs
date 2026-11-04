@@ -177,6 +177,12 @@ test('Installer printer mutations and receipt copies preserve immutable exact ap
   assert.match(printerProvenance,/new\.before_state,new\.after_state/);
   assert.match(printerProvenance,/save_sellertray_installer_printer/);
   assert.match(printerProvenance,/save_sellertray_installer_receipt_settings/);
+  const receiptScope=printerProvenance.slice(printerProvenance.indexOf(
+    'create or replace function public.save_sellertray_installer_receipt_settings('));
+  assert.match(receiptScope,/pg_advisory_xact_lock[\s\S]*?for update/);
+  assert.match(receiptScope,/v_locked_branch is distinct from v_branch/);
+  assert.doesNotMatch(receiptScope,/p\.id=p_printer_id for share/);
+
   assert.match(printerProvenance,/public\.save_sellertray_printer\(/);
   assert.match(printerProvenance,/public\.save_sellertray_printer_receipt_settings\(/);
   assert.match(printerEdge,/rpcName = installerAppointmentId/);
