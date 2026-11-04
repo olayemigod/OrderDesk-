@@ -22,7 +22,8 @@ export function assessProductionMigrationBoundary(files, lastApplied) {
   }).filter(Boolean).sort((a,b)=>a.version.localeCompare(b.version));
   const pending=versions.filter(row=>row.version>lastApplied);
   const c2=pending.filter(row=>row.name.startsWith('c2_'));
-  const oa5=pending.filter(row=>/^(oa5_|pre_c2_)/.test(row.name));
+  const oa5=pending.filter(row=>/^(oa5_|pre_c2_)/.test(row.name)
+    || row.name === 'legacy_commercial_adjustment_confirmed_payment_guard');
   const other=pending.filter(row=>!c2.includes(row)&&!oa5.includes(row));
   // Source migration timestamp order is shared even for unrelated prerelease
   // C2 foundations; do not silently apply C2 schema/function updates in OA5.

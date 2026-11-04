@@ -6,6 +6,7 @@ import { invokeJson } from './supabase';
 type CapabilitySet = { canAdjust: boolean; canConfirmDirectPayment: boolean; canManageInstallments: boolean };
 type TemplateLine = { sequenceNo: number; percentage: number | null; fixedAmount: number | null; dueOffsetDays: number | null };
 type ScheduleTemplate = { id: string; code: string; version: number; displayName: string; provisionalEntitlementMonths: number; qualifyingSettlementSequence: number; lines: TemplateLine[] };
+type DiscountInputType = 'fixed_amount' | 'percentage';
 type Settlement = {
   grossAmount: number;
   approvedAdjustmentAmount: number;
@@ -19,7 +20,21 @@ type Settlement = {
   nextInstallmentScheduleId: string | null;
   nextPayableAmount: number;
 };
-type History = { id: string; amount: number; reason?: string; paymentReference?: string; paymentMethod?: string; provider?: string; providerReference?: string; paidAt?: string; approvedAt?: string; recordedAt?: string };
+type History = {
+  id: string;
+  amount: number;
+  reason?: string;
+  paymentReference?: string;
+  paymentMethod?: string;
+  provider?: string;
+  providerReference?: string;
+  paidAt?: string;
+  approvedAt?: string;
+  recordedAt?: string;
+  discountInputType?: DiscountInputType;
+  discountInputValue?: number;
+  discountCalculationBaseAmount?: number;
+};
 type SettlementOrder = {
   commercialOrderId: string;
   orderReference: string;
@@ -53,7 +68,7 @@ export default function CommercialSettlementAdministration({ session, initialTen
   const commands = useRef(new Map<CommandSlot, string>());
   const loadSequence = useRef(0);
 
-  const [adjustment, setAdjustment] = useState({ amount: '', reason: '', evidenceReference: '', evidenceNote: '' });
+  const [adjustment, setAdjustment] = useState({ type: 'fixed_amount' as DiscountInputType, value: '', reason: '', evidenceReference: '', evidenceNote: '' });
   const [directPayment, setDirectPayment] = useState({ amount: '', reference: '', method: 'bank_transfer', paidAt: nowLocal(), reason: '', evidenceNote: '' });
   const [policy, setPolicy] = useState({ scopeKind: 'commercial_order' as 'tenant' | 'commercial_order', billingCycle: 'yearly' as 'monthly' | 'yearly', enabled: true, templateId: '', effectiveFrom: nowLocal(), effectiveUntil: '', reason: '' });
 
@@ -114,22 +129,23 @@ export default function CommercialSettlementAdministration({ session, initialTen
 
   async function recordAdjustment() {
     if (!tenantId || !selectedOrder || saving) return;
-    const amount = positiveNumber(adjustment.amount);
+    const discountValue = positiveValue(adjustment.value);
     const reason = adjustment.reason.trim();
-    if (amount === null) return setError('Enter a positive adjustment amount.');
-    if (reason.length < 6) return setError('Enter an adjustment reason of at least 6 characters.');
+    if (discountValue === null) return setError('Enter a positive discount value.');
+    if (adjustment.type === 'percentage' && discountValue > 100) return setError('Discount percentage cannot exceed 100%.');
+    if (reason.length < 6) return setError('Enter a discount reason of at least 6 characters.');
     setSaving('adjustment'); setError(null); setMessage(null);
     try {
       const response = await invoke({
         action: 'record_adjustment', tenantId, commercialOrderId: selectedOrder.commercialOrderId,
-        commandId: commandId('adjustment'), amount, reason,
+        commandId: commandId('adjustment'), discountType: adjustment.type, discountValue, reason,
         evidence: compactEvidence(adjustment.evidenceReference, adjustment.evidenceNote),
       });
       applyOrder(response.order);
       commands.current.delete('adjustment');
-      setAdjustment({ amount: '', reason: '', evidenceReference: '', evidenceNote: '' });
-      setMessage('Commercial adjustment recorded. The authoritative balance has been recalculated.');
-    } catch (cause) { setError(messageFrom(cause, 'Unable to record the commercial adjustment.')); }
+      setAdjustment({ type: 'fixed_amount', value: '', reason: '', evidenceReference: '', evidenceNote: '' });
+      setMessage('Discount recorded. The payable balance and any installment amounts have been recalculated.');
+    } catch (cause) { setError(messageFrom(cause, 'Unable to record the discount.')); }
     finally { setSaving(null); }
   }
 
@@ -240,8 +256,12 @@ export default function CommercialSettlementAdministration({ session, initialTen
 
         {tab === 'adjustments' ? <article className="workspace-card workspace-form-stack">
           <div className="workspace-card-heading"><div><p className="workspace-eyebrow">Commercial adjustment</p><h3>Record discount</h3></div><Capability allowed={center.capabilities.canAdjust} /></div>
-          <p className="workspace-muted">Creates an audited discount fact against this order. It does not edit the immutable price snapshot.</p>
-          <label>Amount<input type="number" min="0.01" step="0.01" value={adjustment.amount} onChange={(event) => setAdjustment((current) => ({ ...current, amount: event.target.value }))} disabled={!center.capabilities.canAdjust} /></label>
+          <p className="workspace-muted">Creates an audited discount against this order without editing its original gross price. Percentage discounts are calculated by the server from the immutable order gross.</p>
+          <div className="workspace-field-grid two">
+            <label>Discount type<select value={adjustment.type} onChange={(event) => setAdjustment((current) => ({ ...current, type: event.target.value === 'percentage' ? 'percentage' : 'fixed_amount', value: '' }))} disabled={!center.capabilities.canAdjust}><option value="fixed_amount">Fixed amount</option><option value="percentage">Percentage</option></select></label>
+            <label>{adjustment.type === 'percentage' ? 'Percentage (%)' : `Amount (${selectedOrder.currency})`}<input type="number" min="0.000001" max={adjustment.type === 'percentage' ? 100 : undefined} step={adjustment.type === 'percentage' ? '0.01' : '0.01'} value={adjustment.value} onChange={(event) => setAdjustment((current) => ({ ...current, value: event.target.value }))} disabled={!center.capabilities.canAdjust} /></label>
+          </div>
+          <p className="workspace-disclosure">The final monetary discount, payable balance and installment schedule are calculated by SellerTray after submission. A discount cannot reduce the net amount below payments already confirmed.</p>
           <label>Reason<textarea value={adjustment.reason} maxLength={1000} onChange={(event) => setAdjustment((current) => ({ ...current, reason: event.target.value }))} disabled={!center.capabilities.canAdjust} /></label>
           <label>Evidence reference<input value={adjustment.evidenceReference} maxLength={160} onChange={(event) => setAdjustment((current) => ({ ...current, evidenceReference: event.target.value }))} disabled={!center.capabilities.canAdjust} /></label>
           <label>Evidence note<textarea value={adjustment.evidenceNote} maxLength={1000} onChange={(event) => setAdjustment((current) => ({ ...current, evidenceNote: event.target.value }))} disabled={!center.capabilities.canAdjust} /></label>
@@ -279,7 +299,7 @@ function WorkspaceTabs({ value, onChange }: { value: SettlementTab; onChange: (v
 }
 
 function HistoryCard({ title, rows, currency, kind }: { title: string; rows: History[]; currency: string; kind: 'adjustment' | 'direct' | 'gateway' }) {
-  return <article className="workspace-card"><div className="workspace-card-heading"><h3>{title}</h3></div>{!rows.length ? <p className="workspace-muted">No records.</p> : <div className="workspace-stack compact">{rows.map((row) => <div key={row.id} className="workspace-history-row"><div><strong>{money(row.amount, currency)}</strong><small>{kind === 'adjustment' ? row.reason || 'Discount' : kind === 'direct' ? `${row.paymentMethod ? friendly(row.paymentMethod) : 'Direct payment'}${row.paymentReference ? ` · ${row.paymentReference}` : ''}` : `${row.provider ? friendly(row.provider) : 'Gateway'}${row.providerReference ? ` · ${row.providerReference}` : ''}`}</small></div><span>{formatDate(row.paidAt || row.approvedAt || row.recordedAt || '')}</span></div>)}</div>}</article>;
+  return <article className="workspace-card"><div className="workspace-card-heading"><h3>{title}</h3></div>{!rows.length ? <p className="workspace-muted">No records.</p> : <div className="workspace-stack compact">{rows.map((row) => <div key={row.id} className="workspace-history-row"><div><strong>{kind === 'adjustment' ? discountHistoryLabel(row, currency) : money(row.amount, currency)}</strong><small>{kind === 'adjustment' ? row.reason || 'Discount' : kind === 'direct' ? `${row.paymentMethod ? friendly(row.paymentMethod) : 'Direct payment'}${row.paymentReference ? ` · ${row.paymentReference}` : ''}` : `${row.provider ? friendly(row.provider) : 'Gateway'}${row.providerReference ? ` · ${row.providerReference}` : ''}`}</small></div><span>{formatDate(row.paidAt || row.approvedAt || row.recordedAt || '')}</span></div>)}</div>}</article>;
 }
 function Capability({ allowed }: { allowed: boolean }) { return <span className={`workspace-status-pill ${allowed ? 'good' : 'neutral'}`}>{allowed ? 'Enabled' : 'Read-only'}</span>; }
 function Stat({ label, value }: { label: string; value: string }) { return <div className="workspace-stat"><span>{label}</span><strong>{value}</strong></div>; }
@@ -288,7 +308,8 @@ function record(value: unknown): Record<string, unknown> { return typeof value =
 function stringOrNull(value: unknown): string | null { return typeof value === 'string' && value ? value : null; }
 function numberValue(value: unknown) { const parsed = typeof value === 'number' ? value : Number(value ?? 0); return Number.isFinite(parsed) ? parsed : 0; }
 function nullableNumber(value: unknown): number | null { if (value === null || value === undefined || value === '') return null; const parsed = typeof value === 'number' ? value : Number(value); return Number.isFinite(parsed) ? parsed : null; }
-function parseHistory(value: unknown): History[] { return Array.isArray(value) ? value.flatMap((raw) => { const row = record(raw); const id = stringOrNull(row.id); return id ? [{ id, amount: numberValue(row.amount), reason: stringOrNull(row.reason) ?? undefined, paymentReference: stringOrNull(row.paymentReference) ?? undefined, paymentMethod: stringOrNull(row.paymentMethod) ?? undefined, provider: stringOrNull(row.provider) ?? undefined, providerReference: stringOrNull(row.providerReference) ?? undefined, paidAt: stringOrNull(row.paidAt) ?? undefined, approvedAt: stringOrNull(row.approvedAt) ?? undefined, recordedAt: stringOrNull(row.recordedAt) ?? undefined }] : []; }) : []; }
+function parseDiscountType(value: unknown): DiscountInputType | undefined { return value === 'fixed_amount' || value === 'percentage' ? value : undefined; }
+function parseHistory(value: unknown): History[] { return Array.isArray(value) ? value.flatMap((raw) => { const row = record(raw); const id = stringOrNull(row.id); const discountInputValue = nullableNumber(row.discountInputValue); const discountCalculationBaseAmount = nullableNumber(row.discountCalculationBaseAmount); return id ? [{ id, amount: numberValue(row.amount), reason: stringOrNull(row.reason) ?? undefined, paymentReference: stringOrNull(row.paymentReference) ?? undefined, paymentMethod: stringOrNull(row.paymentMethod) ?? undefined, provider: stringOrNull(row.provider) ?? undefined, providerReference: stringOrNull(row.providerReference) ?? undefined, paidAt: stringOrNull(row.paidAt) ?? undefined, approvedAt: stringOrNull(row.approvedAt) ?? undefined, recordedAt: stringOrNull(row.recordedAt) ?? undefined, discountInputType: parseDiscountType(row.discountInputType), discountInputValue: discountInputValue ?? undefined, discountCalculationBaseAmount: discountCalculationBaseAmount ?? undefined }] : []; }) : []; }
 function parseOrder(value: unknown): SettlementOrder {
   const row = record(value); const settlementRaw = record(row.settlement); const commercialOrderId = String(row.commercialOrderId ?? '');
   if (!commercialOrderId) throw new Error('Settlement order response is invalid.');
@@ -302,6 +323,8 @@ function parseCenter(value: unknown): SettlementCenter {
   return { actorRole: root.actorRole === 'support' ? 'support' : 'admin', tenantId: String(root.tenantId ?? ''), capabilities: { canAdjust: capabilitiesRaw.canAdjust === true, canConfirmDirectPayment: capabilitiesRaw.canConfirmDirectPayment === true, canManageInstallments: capabilitiesRaw.canManageInstallments === true }, templates, orders, generatedAt: String(root.generatedAt ?? '') };
 }
 function positiveNumber(value: string): number | null { const parsed = Number(value); return Number.isFinite(parsed) && parsed > 0 ? Math.round((parsed + Number.EPSILON) * 100) / 100 : null; }
+function positiveValue(value: string): number | null { const parsed = Number(value); return Number.isFinite(parsed) && parsed > 0 ? Math.round((parsed + Number.EPSILON) * 1_000_000) / 1_000_000 : null; }
+function discountHistoryLabel(row: History, currency: string) { if (row.discountInputType === 'percentage' && row.discountInputValue !== undefined) return `${row.discountInputValue}% → ${money(row.amount, currency)}`; if (row.discountInputType === 'fixed_amount') return `Fixed ${money(row.amount, currency)}`; return money(row.amount, currency); }
 function nowLocal() { const date = new Date(Date.now() - new Date().getTimezoneOffset() * 60_000); return date.toISOString().slice(0, 16); }
 function isoFromLocal(value: string): string | null { const date = new Date(value); return Number.isNaN(date.getTime()) ? null : date.toISOString(); }
 function money(value: number, currency: string) { try { return new Intl.NumberFormat('en-NG', { style: 'currency', currency: currency || 'NGN' }).format(value); } catch { return `${currency || 'NGN'} ${value.toLocaleString()}`; } }
