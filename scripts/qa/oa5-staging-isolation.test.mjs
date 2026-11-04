@@ -25,6 +25,14 @@ test('rejects a real-looking production URL even if the QA profile also uses it'
   assert.match(r.errors.join('\n'), /Production Supabase is forbidden/);
 });
 
+test('rejects the unrelated Agreement Package Test project as a substitute for an OA5 branch', () => {
+  const r = verifyStagingIsolation({
+    ...valid, stagingUrl:'https://iukgsukdoowvnhlfmpml.supabase.co',
+  });
+  assert.equal(r.ok,false);
+  assert.match(r.errors.join('\\n'), /not an OA5 staging branch/);
+});
+
 test('rejects staging reusing production publishable key', () => {
   assert.equal(verifyStagingIsolation({...valid, stagingKey:productionKey, qaKey:productionKey}).ok, false);
 });

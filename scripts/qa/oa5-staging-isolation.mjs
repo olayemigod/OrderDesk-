@@ -47,6 +47,10 @@ export function verifyStagingIsolation({
   if (!staging) errors.push('Provide a valid, independent HTTPS staging Supabase project URL');
   if (production && staging && staging === production)
     errors.push('Production Supabase is forbidden for OA5 installation acceptance');
+  // The existing Agreement Package Test project has a divergent migration
+  // ledger. It is NOT an independent branch suitable for installer acceptance.
+  if (staging === 'https://iukgsukdoowvnhlfmpml.supabase.co')
+    errors.push('The existing Agreement Package Test project is not an OA5 staging branch');
   if (!plausiblePublishableKey(stagingKey))
     errors.push('Provide a valid staging publishable key through protected CI secrets');
   if (typeof productionKey === 'string' && productionKey === stagingKey)
