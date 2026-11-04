@@ -21,6 +21,7 @@ const approvedReuse = {
   test_only_auth_and_provider_config_verified:true,
   qa_edge_functions_deployed_and_verified:true,
 };
+const approvedSynthetic = {...approvedReuse, approved_staging_project_ref:'s'.repeat(20)};
 const original = require('../../apps/mobile/app.json').expo;
 const eas = require('../../apps/mobile/eas.json');
 const testUrl = 'https://' + 's'.repeat(20) + '.supabase.co';
@@ -56,7 +57,7 @@ test('staging profile exists but has no production API URL or key fallback', () 
 });
 
 test('QA Android app installs alongside production with distinct app name, scheme and Firebase', () => {
-  const qa = dynamicConfig({config:original}, validEnv());
+  const qa = dynamicConfig({config:original}, validEnv(), approvedSynthetic);
   assert.equal(qa.android.package, 'ng.processedge.sellertray.qa');
   assert.notEqual(qa.android.package, original.android.package);
   assert.equal(qa.name, 'SellerTray QA');
@@ -84,20 +85,20 @@ test('QA cannot run against production or the unrebuilt Agreement Package Test p
 });
 
 test('QA requires protected independent publishable key', () => {
-  assert.throws(() => dynamicConfig({config:original}, {...validEnv(),EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY:eas.build.production.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY}), /separate staging publishable key/);
-  assert.throws(() => dynamicConfig({config:original}, {...validEnv(),EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY:''}), /separate staging publishable key/);
+  assert.throws(() => dynamicConfig({config:original}, {...validEnv(),EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY:eas.build.production.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY}, approvedSynthetic), /separate staging publishable key/);
+  assert.throws(() => dynamicConfig({config:original}, {...validEnv(),EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY:''}, approvedSynthetic), /separate staging publishable key/);
 });
 
 test('QA fails without its dedicated Firebase configuration', () => {
-  assert.throws(() => dynamicConfig({config:original}, {...validEnv(),SELLERTRAY_QA_GOOGLE_SERVICES_FILE:''}), /separate protected Firebase/);
-  assert.throws(() => dynamicConfig({config:original}, {...validEnv(),SELLERTRAY_QA_GOOGLE_SERVICES_FILE:'./google-services.json'}), /separate protected Firebase/);
-  assert.throws(() => dynamicConfig({config:original}, {...validEnv(),SELLERTRAY_QA_GOOGLE_SERVICES_FILE:'/nonexistent/test-only.json'}), /Firebase file is missing/);
+  assert.throws(() => dynamicConfig({config:original}, {...validEnv(),SELLERTRAY_QA_GOOGLE_SERVICES_FILE:''}, approvedSynthetic), /separate protected Firebase/);
+  assert.throws(() => dynamicConfig({config:original}, {...validEnv(),SELLERTRAY_QA_GOOGLE_SERVICES_FILE:'./google-services.json'}, approvedSynthetic), /separate protected Firebase/);
+  assert.throws(() => dynamicConfig({config:original}, {...validEnv(),SELLERTRAY_QA_GOOGLE_SERVICES_FILE:'/nonexistent/test-only.json'}, approvedSynthetic), /Firebase file is missing/);
 });
 
 test('QA rejects a Firebase configuration registered to a production Android package', () => {
   const bad = join(dir, 'production-firebase-placeholder.json');
   writeFileSync(bad, JSON.stringify({client:[{client_info:{android_client_info:{package_name:'ng.processedge.sellertray'}}}]}));
-  assert.throws(() => dynamicConfig({config:original}, {...validEnv(),SELLERTRAY_QA_GOOGLE_SERVICES_FILE:bad}), /Firebase package identity/);
+  assert.throws(() => dynamicConfig({config:original}, {...validEnv(),SELLERTRAY_QA_GOOGLE_SERVICES_FILE:bad}, approvedSynthetic), /Firebase package identity/);
 });
 
 test('QA fails when production source application ID drifts instead of modifying another package', () => {
@@ -119,4 +120,19 @@ test('the checked-in staging attestation stays blocked today', () => {
   const attestation = require('../../docs/qa/oa5-staging-backend-attestation.json');
   assert.equal(reusedTestProjectApproved(attestation,reuseUrl),false);
   assert.throws(() => dynamicConfig({config:original},{...validEnv(),EXPO_PUBLIC_SUPABASE_URL:reuseUrl}),/attested/);
+});
+
+test('unapproved arbitrary QA backend fails closed despite independent Firebase and publishable key', () => {
+  assert.throws(() => dynamicConfig({config:original}, validEnv()),/attested, non-production/);
+  assert.throws(() => dynamicConfig({config:original}, validEnv(), approvedReuse),/attested, non-production/);
+  assert.throws(() => dynamicConfig({config:original}, {
+    ...validEnv(), SELLERTRAY_OA5_STAGING_ATTESTED:'true',
+  }),/attested, non-production/);
+});
+
+test('the same reused Test project is build-eligible only with matching reviewed evidence', () => {
+  const accepted = dynamicConfig({config:original},
+    {...validEnv(), EXPO_PUBLIC_SUPABASE_URL:reuseUrl}, approvedReuse);
+  assert.equal(accepted.android.package, 'ng.processedge.sellertray.qa');
+  assert.equal(accepted.name, 'SellerTray QA');
 });
