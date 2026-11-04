@@ -321,18 +321,41 @@ select extensions.ok(
 );
 
 update oa5_installer_fixture f set test_job_id=(
-  public.request_sellertray_print_job(
-    f.tenant_id,f.printer_id,'test',null,
-    'oa5-installer-physical-test-01',f.installer_id
+  public.request_sellertray_installer_test_print_job(
+    f.installer_id,f.tenant_id,f.branch_id,f.appointment_id,f.printer_id,
+    'oa5-installer-physical-test-01'
   )->>'jobId')::uuid;
 
 select extensions.ok(
-  (public.request_sellertray_print_job(
-    f.tenant_id,f.printer_id,'test',null,
-    'oa5-installer-physical-test-01',f.installer_id
+  (public.request_sellertray_installer_test_print_job(
+    f.installer_id,f.tenant_id,f.branch_id,f.appointment_id,f.printer_id,
+    'oa5-installer-physical-test-01'
   )->>'idempotentReplay')::boolean,
   'Installer test print request cannot duplicate job on retry'
 ) from oa5_installer_fixture f;
+select extensions.ok(
+  exists(select 1 from public.sellertray_installer_test_print_bindings b
+    join oa5_installer_fixture f on f.test_job_id=b.job_id
+    where b.appointment_id=f.appointment_id and b.actor_user_id=f.installer_id
+      and b.printer_id=f.printer_id and b.branch_id=f.branch_id),
+  'Print job records immutable authorization provenance for the exact appointment'
+);
+select extensions.throws_ok(
+  $test$select public.request_sellertray_installer_test_print_job(
+    f.installer_id,f.tenant_id,f.branch_id,gen_random_uuid(),f.printer_id,
+    'oa5-installer-physical-test-01'
+  ) from oa5_installer_fixture f$test$,
+  '42501',null::text,
+  'Another appointment cannot reuse the same installer print request identity'
+);
+select extensions.ok(
+  not has_function_privilege('authenticated',
+    'public.request_sellertray_installer_test_print_job(uuid,uuid,uuid,uuid,uuid,text)','EXECUTE')
+  and not has_table_privilege('authenticated',
+    'public.sellertray_installer_test_print_bindings','SELECT'),
+  'Installer print provenance cannot be forged by a merchant or Mobile client'
+);
+
 
 select extensions.throws_ok(
   $test$select public.request_sellertray_print_job(
