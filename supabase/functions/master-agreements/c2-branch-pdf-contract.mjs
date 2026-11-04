@@ -16,12 +16,14 @@ for (const property of [
   'settlement.schedule', 'settlement.netAmountDue', 'branch.setup_required',
   'branch.billing_cycle', 'branch.installment_template_code',
   'installment.sequenceNo', 'installment.percentage', 'installment.amountDue',
-  'installment.dueAt', 'formatOrderFormInstallmentDueDate(installment.dueAt, formatDate)', 'money(',
+  'installment.dueAt', 'formatOrderFormInstallmentDueDate(installment.dueAt, formatAgreementDate)', 'money(',
   'The Branch Order Form is missing a Branch identity or its frozen payment schedule',
 ]) {
   assert.ok(renderer.includes(property), `Branch PDF must use immutable field or fail-closed: ${property}`);
 }
 assert.match(source, /currency\.toUpperCase\(\)/, 'WinAnsi-friendly amounts use explicit ISO currency code');
 assert.match(source, /import \{ formatOrderFormInstallmentDueDate \} from '\.\/installment-due-date\.mjs'/, 'PDF uses independently tested nullable-date presentation');
+assert.match(source, /import \{ formatAgreementDate, formatAgreementDateTime \} from '\.\/agreement-date-display\.mjs'/, 'PDF uses dd/mm/yyyy Nigerian display dates');
+assert.match(source, /formatAgreementDateTime\(confirmation\.confirmedAt\)/, 'Legal signing timestamp still displays its local time');
 assert.doesNotMatch(renderer, /sequence < 1 \|\| !dueAt/, 'Approved NULL due dates cannot prevent C2 PDF review');
 console.log('SellerTray C2 reviewed Branch installment PDF source contract passed');
