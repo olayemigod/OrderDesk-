@@ -13,6 +13,9 @@ const require = createRequire(import.meta.url);
 
 const PRODUCTION_REF = 'eujxswjspolugrzlsjnn';
 const AGREEMENT_TEST_REF = 'iukgsukdoowvnhlfmpml';
+// The production project key is already published to existing clients. It
+// must never be re-used to bind a Test/Preview build.
+const productionPublishableKey = require('../../apps/mobile/eas.json')?.build?.production?.env?.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 const PREFIXES = Object.freeze({
   merchant: 'qa-preview/merchant-',
   admin: 'qa-preview/admin-',
@@ -62,6 +65,8 @@ export function verifyFrontendBuildEnvironment({ surface, env, attestation }) {
       errors.push('Preview source branch must be the explicit QA acceptance branch for this surface');
     if (!backendRef || backendRef === PRODUCTION_REF)
       errors.push('Preview must never use Production Supabase');
+    if (typeof productionPublishableKey !== 'string' || key === productionPublishableKey)
+      errors.push('Preview must use a separate non-production Supabase publishable key');
     if (backendRef === AGREEMENT_TEST_REF && !attestationIsValid(attestation))
       errors.push('Existing Agreement Test project has not passed hosted staging attestation');
     if (!attestationIsValid(attestation))
