@@ -42,7 +42,7 @@ assert.match(printerWorkspace,/installerAppointmentId/);
 assert.match(printerRepository,/appointmentId: input\.installerAppointmentId/);
 assert.match(printExecutor,/installerAppointmentId/);
 assert.match(installer,/listPairedBluetoothPrinters/);
-assert.match(installer,/Device inspection and Bluetooth discovery are read-only/);
+assert.match(installer,/Device inspection is read-only/);
 assert.doesNotMatch(installer,/save_sellertray_register|save_sellertray_printer|sellertray_user_can_operate_branch/);
 
 assert.match(edge,/if\(action === 'profile'\)/);
