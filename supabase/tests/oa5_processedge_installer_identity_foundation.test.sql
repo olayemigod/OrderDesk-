@@ -226,6 +226,47 @@ select extensions.ok(
   ),'Exact assignment revocation replay is safe'
 ) from oa5_installer_fixture f;
 
+-- A suspended account must revoke its current appointment permissions and
+-- reactivation must not resurrect a previously approved assignment.
+update oa5_installer_fixture f set assignment_id=public.platform_admin_assign_setup_installer(
+  f.admin_id,f.installer_id,f.tenant_id,f.appointment_id,now()+interval '2 days',
+  gen_random_uuid(),'New ProcessEdge appointment access after previous revocation'
+);
+select extensions.ok(
+  public.sellertray_setup_installer_has_assignment(
+    f.installer_id,f.tenant_id,f.branch_id,f.appointment_id,now()
+  ),'New explicit assignment can restore access to an active installer'
+) from oa5_installer_fixture f;
+
+select extensions.is(
+  public.platform_admin_set_setup_installer_status(
+    f.admin_id,f.installer_id,'suspended',gen_random_uuid(),
+    'Security review temporarily suspended staff account'
+  ),'suspended','Suspending staff also retires active appointment permissions'
+) from oa5_installer_fixture f;
+
+select extensions.ok(
+  not public.sellertray_setup_installer_has_assignment(
+    f.installer_id,f.tenant_id,f.branch_id,f.appointment_id,now()
+  ) and exists (
+    select 1 from public.sellertray_internal_setup_staff_assignments a
+    where a.id=f.assignment_id and a.revoked_at is not null
+  ),'A suspended installer loses all active assignments immediately'
+) from oa5_installer_fixture f;
+
+select extensions.is(
+  public.platform_admin_set_setup_installer_status(
+    f.admin_id,f.installer_id,'active',gen_random_uuid(),
+    'Security review complete; restore staff identity only'
+  ),'active','Reactivation may restore account but not appointment permissions'
+) from oa5_installer_fixture f;
+
+select extensions.ok(
+  not public.sellertray_setup_installer_has_assignment(
+    f.installer_id,f.tenant_id,f.branch_id,f.appointment_id,now()
+  ),'Old appointment authority does not silently revive after staff reactivation'
+) from oa5_installer_fixture f;
+
 select extensions.throws_ok(
   $test$update public.sellertray_internal_setup_staff_events
     set reason='Rewrite' where event_type='registered'$test$,
