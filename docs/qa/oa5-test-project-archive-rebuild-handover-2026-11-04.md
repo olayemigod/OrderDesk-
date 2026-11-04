@@ -43,6 +43,24 @@ The counts above are **inventory metadata, not a recoverable archive**. They do 
 7. **After approval only**, perform the reviewed clean rebuild and deploy the accepted OA5 Build 47 SQL/Edge package in order; verify function/RLS/grant parity, Test-only Auth keys/Firebase and sandbox message/payment endpoints. Turn the checked-in `oa5-staging-backend-attestation.json` to approved only with actual hosted evidence and an independent security review of the gate change. Populate *synthetic* test merchants using the reviewed fixture plan, never Production data.
 8. **Acceptance then release:** perform Merchant/Admin preview baseline and physical Android 58/80mm printer, installer AAL2/branch, first-purchase/activation, POS/UOM/stock-cost and offline replay tests; keep OA5C and C2 cutover distinct. Generate only the milestone-authorised staging QA APK and later the separately approved Production Build 47.
 
+## Operator archive checksums (offline; not reset approval)
+
+After the separate Test-only SQL dumps and **actual** disposable-local restore rehearsal, the operator must retain an `archive-evidence.json` in the protected, encrypted archive directory, **not in GitHub**. It must record:
+
+- `schema_version: 1`, `project_ref: "iukgsukdoowvnhlfmpml"`, `backup_completed_utc` and `restore_completed_utc` in UTC ISO form;
+- `files` mapping exactly `roles.sql`, `schema.sql`, `data.sql`, `history_schema.sql`, `history_data.sql` to their actual `sha256` and byte sizes;
+- `restore_target: "local_disposable"`, `restore_verified: true`, `secrets_committed_to_git: false` and `restore_counts` documenting the actual restored `auth_users`, `businesses`, `branches`, `commercial_orders`, `agreement_packages`, `order_form_confirmations`, `migration_rows` counts.
+
+The read-only baseline counts at 04/11/2026 are **5, 3, 3, 5, 5, 5, 52** respectively. If the historical Test project changes, stop and refresh/review this baseline rather than falsifying the manifest.
+
+The operator may check file integrity **locally** (never upload raw SQL to CI):
+
+```bash
+node scripts/qa/oa5-test-backup-manifest.mjs --check /path/to/secure-external-archive
+```
+
+This checker is strictly offline: it confirms the named files' checksums and presence of an operator-asserted restore comparison, but **cannot independently prove that a restore happened**. A reviewer must still inspect the actual restore log, recovery target, archive encryption, retention ownership, five historical Preview dependencies, callback/channel isolation and explicit reset approval before attesting staging. No backup or approval can be inferred from the script passing.
+
 ## Evidence sign-off (all unresolved at this checkpoint)
 
 | Required proof | State | Evidence location / responsible reviewer |

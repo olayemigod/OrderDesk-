@@ -9,6 +9,8 @@ on:
       - 'scripts/qa/oa5-migration-boundary.test.mjs'
       - 'scripts/qa/oa5-test-merchant-fixtures.mjs'
       - 'scripts/qa/oa5-test-merchant-fixtures.test.mjs'
+      - 'scripts/qa/oa5-test-backup-manifest.mjs'
+      - 'scripts/qa/oa5-test-backup-manifest.test.mjs'
       - 'docs/qa/oa5-test-merchant-fixtures.json'
       - 'scripts/qa/oa5-android-qa-variant.test.mjs'
       - 'apps/mobile/app.config.js'
@@ -35,3 +37,4 @@ jobs:
         run: |
           node --test scripts/qa/oa5-staging-isolation.test.mjs scripts/qa/oa5-migration-boundary.test.mjs scripts/qa/oa5-test-merchant-fixtures.test.mjs scripts/qa/oa5-android-qa-variant.test.mjs
           node scripts/qa/oa5-test-merchant-fixtures.mjs --check
+          node --test scripts/qa/oa5-test-backup-manifest.test.mjs
