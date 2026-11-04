@@ -28,6 +28,8 @@ export function PrinterWorkspace({tenantId,branch,activeShift,onClose,installerA
  // Preserve one command key when a network response is lost. Different facts
  // always receive a different key; retries can never create another register.
  const registerCommand=useRef<{facts:string;key:string}|null>(null);
+ const printerCommand=useRef<{facts:string;key:string}|null>(null);
+ const receiptCommand=useRef<{facts:string;key:string}|null>(null);
  const selectedRegister=useMemo(()=>registers.find(r=>r.id===registerId)??null,[registerId,registers]);
   useEffect(()=>{
     let mounted=true;
@@ -89,10 +91,42 @@ export function PrinterWorkspace({tenantId,branch,activeShift,onClose,installerA
   if(!registerId||saving)return;
   const saveEpoch=deviceEditEpoch.current;
   const saveTenant=tenantId,saveBranch=deviceBranchId,saveRegister=registerId;
+  const printerFacts=JSON.stringify({
+    tenantId:saveTenant,branchId:saveBranch,registerId:saveRegister,
+    appointmentId:installerAppointmentId,printerId:editingId,
+    displayName:displayName.trim(),hardwareIdentifier:deviceAddress.trim(),
+    paperWidthMm,isDefault,isActive,
+  });
+  if(installerAppointmentId&&printerCommand.current?.facts!==printerFacts){
+    printerCommand.current={
+      facts:printerFacts,
+      key:`installer-printer-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,14)}`,
+    };
+  }
   setSaving(true);setError(null);setNotice(null);
   try{
-   const p=await savePrinter({tenantId:saveTenant,printerId:editingId,branchId:saveBranch,registerId:saveRegister,displayName,hardwareIdentifier:deviceAddress,paperWidthMm,isDefault,isActive,installerAppointmentId});
-   await savePrinterReceiptSettings({tenantId:saveTenant,printerId:p.id,copyDefinitions:copies,merchantFooter});
+   const p=await savePrinter({
+     tenantId:saveTenant,printerId:editingId,branchId:saveBranch,registerId:saveRegister,
+     displayName,hardwareIdentifier:deviceAddress,paperWidthMm,isDefault,isActive,
+     installerAppointmentId,
+     installerRequestKey:installerAppointmentId?printerCommand.current?.key:null,
+   });
+   const receiptFacts=JSON.stringify({
+     tenantId:saveTenant,printerId:p.id,appointmentId:installerAppointmentId,
+     copyDefinitions:copies,merchantFooter:merchantFooter.trim(),
+   });
+   if(installerAppointmentId&&receiptCommand.current?.facts!==receiptFacts){
+     receiptCommand.current={
+       facts:receiptFacts,
+       key:`installer-copies-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,14)}`,
+     };
+   }
+   await savePrinterReceiptSettings({
+     tenantId:saveTenant,printerId:p.id,copyDefinitions:copies,merchantFooter,
+     installerAppointmentId,
+     installerRequestKey:installerAppointmentId?receiptCommand.current?.key:null,
+   });
+   printerCommand.current=null;receiptCommand.current=null;
    if(deviceEditEpoch.current!==saveEpoch)return;
    await refreshPrinters(saveTenant,saveBranch,saveRegister,saveEpoch);
    if(deviceEditEpoch.current!==saveEpoch)return;
