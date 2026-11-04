@@ -2,7 +2,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.115.0';
 
 type JsonRecord = Record<string, unknown>;
 type AdminAction = 'invite' | 'reconcile_invite' | 'link_existing' | 'set_status' | 'assign' | 'revoke_assignment';
-type Action = AdminAction | 'mine' | 'staff_list' | 'profile';
+type Action = AdminAction | 'mine' | 'devices' | 'staff_list' | 'profile';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const INVITE_REDIRECT_URL = Deno.env.get('SETUP_INSTALLER_INVITE_REDIRECT_URL') ?? '';
@@ -60,6 +60,61 @@ Deno.serve(async (request) => {
       return json({ appointments: Array.isArray(work) ? work : [] });
     } catch {
       return json({ error: 'Unable to load assigned installations' }, 400);
+    }
+  }
+
+  // Read-only, exact-appointment device inspection for assigned ProcessEdge
+  // installers. Do not return customer, commerce, or payment data, and never
+  // authorize by a Business ID alone.
+  if (action === 'devices') {
+    const tenantId = cleanUuid(body.tenantId);
+    const branchId = cleanUuid(body.branchId);
+    const appointmentId = cleanUuid(body.appointmentId);
+    if (!tenantId || !branchId || !appointmentId) {
+      return json({ error: 'Assigned Business, Branch and appointment are required' }, 400);
+    }
+    try {
+      const entitled = await rpc<boolean>('sellertray_setup_installer_has_assignment', {
+        p_actor_user_id: identity.userId,
+        p_tenant_id: tenantId, p_branch_id: branchId,
+        p_appointment_id: appointmentId,
+        p_as_of: new Date().toISOString(),
+      });
+      if (entitled !== true) return json({ error: 'This installation assignment is no longer available' }, 403);
+      const [registerResult, printerResult, testResult] = await Promise.all([
+        client.from('sellertray_registers')
+          .select('id,code,name,is_active,is_default')
+          .eq('tenant_id', tenantId).eq('branch_id', branchId)
+          .order('name', { ascending: true }).limit(100),
+        client.from('sellertray_printers')
+          .select('id,register_id,display_name,transport,hardware_identifier,paper_width_mm,is_active,is_default')
+          .eq('tenant_id', tenantId).eq('branch_id', branchId)
+          .order('display_name', { ascending: true }).limit(100),
+        client.from('sellertray_print_jobs')
+          .select('id,printer_id,register_id,status,requested_at,completed_at,requested_by_user_id')
+          .eq('tenant_id', tenantId).eq('branch_id', branchId)
+          .eq('job_type', 'test')
+          .order('requested_at', { ascending: false }).limit(50),
+      ]);
+      if (registerResult.error || printerResult.error || testResult.error) {
+        throw new Error('Unable to load the assigned installation device records');
+      }
+      // A second check closes the window between inspection and revocation.
+      const stillEntitled = await rpc<boolean>('sellertray_setup_installer_has_assignment', {
+        p_actor_user_id: identity.userId,
+        p_tenant_id: tenantId, p_branch_id: branchId,
+        p_appointment_id: appointmentId,
+        p_as_of: new Date().toISOString(),
+      });
+      if (stillEntitled !== true) return json({ error: 'This installation assignment has been revoked' }, 403);
+      return json({
+        appointmentId, branchId,
+        registers: registerResult.data ?? [],
+        printers: printerResult.data ?? [],
+        recentTests: testResult.data ?? [],
+      });
+    } catch {
+      return json({ error: 'Unable to verify assigned installation devices' }, 400);
     }
   }
 
@@ -262,7 +317,7 @@ async function verifiedIdentity(authorization: string):
   } catch { return null; }
 }
 function cleanAction(value: unknown): Action | null {
-  const allowed: Action[] = ['invite','reconcile_invite','link_existing','set_status','assign','revoke_assignment','mine','staff_list','profile'];
+  const allowed: Action[] = ['invite','reconcile_invite','link_existing','set_status','assign','revoke_assignment','mine','devices','staff_list','profile'];
   return allowed.find(action => action === value) ?? null;
 }
 function cleanUuid(value: unknown): string | null {
