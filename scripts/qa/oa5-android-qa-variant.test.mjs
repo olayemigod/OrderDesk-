@@ -10,10 +10,10 @@ const dynamicConfig = require('../../apps/mobile/app.config.js');
 const reusedTestProjectApproved = dynamicConfig.reusedTestProjectApproved;
 const reuseUrl = 'https://iukgsukdoowvnhlfmpml.supabase.co';
 const approvedReuse = {
-  schema_version: 1, state:'approved',
+  schema_version: 1, state:'verified',
   approved_staging_project_ref:'iukgsukdoowvnhlfmpml',
   reviewed_source_sha:'a'.repeat(40),
-  approved_at:'2026-11-04T20:00:00Z',
+  approved_at:'04/11/2026',
   clean_migration_replay_verified:true,
   historical_agreement_evidence_archived:true,
   restore_path_verified:true,
