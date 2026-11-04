@@ -7,6 +7,16 @@ import { bluetoothPrintingSupported, listPairedBluetoothPrinters, type Bluetooth
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 
+function formatInstallationDate(value: string | null | undefined): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' :
+    new Intl.DateTimeFormat('en-GB', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    }).format(date);
+}
+
 type Installation = {
   assignmentId:string;
   appointmentId:string;
@@ -264,8 +274,8 @@ export default function ProcessEdgeInstallationsView({
         {installations.map(item=><View key={item.assignmentId} style={[styles.card,dark&&styles.cardDark]}>
           <Text style={[styles.cardTitle,dark&&styles.textLight]}>{item.businessName}</Text>
           <Text style={[styles.body,dark&&styles.textSecondary]}>{item.branchName} · {item.appointmentStatus.replace('_',' ')}</Text>
-          <Text style={[styles.body,dark&&styles.textSecondary]}>Appointment: {new Date(item.scheduledStartAt).toLocaleString()}</Text>
-          <Text style={[styles.body,dark&&styles.textSecondary]}>Assigned until: {new Date(item.validUntil).toLocaleString()}</Text>
+          <Text style={[styles.body,dark&&styles.textSecondary]}>Appointment: {formatInstallationDate(item.scheduledStartAt)}</Text>
+          <Text style={[styles.body,dark&&styles.textSecondary]}>Assigned until: {formatInstallationDate(item.validUntil)}</Text>
           <Pressable disabled={busy} accessibilityRole="button"
             onPress={()=>setSetupAssignmentId(current=>current===item.assignmentId?null:item.assignmentId)}
             style={styles.secondaryAction}>
@@ -320,7 +330,7 @@ export default function ProcessEdgeInstallationsView({
                   <Text style={styles.secondaryActionText}>
                     {handover.testJobId===t.id?'Selected · ':'Choose · '}
                     {deviceView.data?.printers.find(p=>p.id===t.printer_id)?.display_name??'Branch printer'}
-                    {' · '}{t.completed_at?new Date(t.completed_at).toLocaleString():'Printed'}
+                    {' · '}{t.completed_at?formatInstallationDate(t.completed_at):'Printed'}
                   </Text>
                 </Pressable>)}
               <TextInput accessibilityLabel="Printer handover condition"
