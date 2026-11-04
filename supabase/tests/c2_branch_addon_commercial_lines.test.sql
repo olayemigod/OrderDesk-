@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(27);
+select extensions.plan(28);
 
 select extensions.ok(
   exists(
@@ -76,6 +76,7 @@ create temp table c2_addon_order_fixture(
   wrong_cycle_rejected boolean not null default false,
   duplicate_addon_rejected boolean not null default false,
   unknown_addon_rejected boolean not null default false,
+  unpaid_setup_waiver_rejected boolean not null default false,
   wrong_subscription_cycle_rejected boolean not null default false
 ) on commit drop;
 
@@ -351,9 +352,19 @@ begin
   exception when sqlstate '23514' then
     update c2_addon_order_fixture set unknown_addon_rejected=true;
   end;
+  v_bad:=jsonb_set(v.request,'{0,setupRequired}','false'::jsonb);
+  begin
+    perform public.create_sellertray_c2_branch_commercial_order(
+      v.tenant_id,'NGN',v_bad,'c2-addon-unpaid-setup-'||substr(v.tenant_id::text,1,8),
+      gen_random_uuid(),'system',v.actor_id);
+  exception when sqlstate '23514' then
+    update c2_addon_order_fixture set unpaid_setup_waiver_rejected=true;
+  end;
 end
 $test$;
 
+select extensions.ok((select unpaid_setup_waiver_rejected from c2_addon_order_fixture),
+  'An unpaid prior Branch setup order never waives the later setup fee');
 select extensions.ok((select changed_command_rejected from c2_addon_order_fixture),
   'A commercial order command cannot be replayed with altered add-on choices');
 select extensions.ok((select wrong_cycle_rejected from c2_addon_order_fixture),
