@@ -115,11 +115,12 @@ begin
       using errcode='23514';
   end if;
 
-  -- Reported walkthrough/recipient details remain operator testimony until
-  -- Admin verifies them; actual printer/test authority is system-derived.
+  -- Installer-reported recipient details remain unapproved. The Admin must
+  -- independently verify Branch configuration and merchant walkthrough before
+  -- the existing appointment completion command can mark readiness.
   v_evidence:=jsonb_build_object(
     'schemaVersion',1,
-    'checklist',jsonb_build_object('branchConfigured',true,'merchantWalkthrough',true),
+    'checklist',jsonb_build_object('branchConfigured',false,'merchantWalkthrough',false),
     'equipment',jsonb_build_array(jsonb_build_object(
       'kind','bluetooth_printer','provisioning','configured',
       'identifier',v_printer.hardware_identifier,'pairingTestResult','passed',
