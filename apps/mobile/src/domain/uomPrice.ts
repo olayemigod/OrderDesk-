@@ -1,4 +1,14 @@
 /**
+ * Product base-price management must never read a default-selling alternate
+ * UOM's calculated price. The Stock UOM is the sole product-base authority.
+ */
+export function stockUnitSellingPrice(
+  uoms: ReadonlyArray<{ isStockUom: boolean; sellingPrice: number | null }>,
+): number | null {
+  return uoms.find((uom) => uom.isStockUom)?.sellingPrice ?? null;
+}
+
+/**
  * Read-only price preview for the POS catalogue and offline product snapshot.
  * The server's sellertray_effective_uom_selling_price is authoritative.
  * A configured selling price, including zero, always supersedes conversion.

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveSellerTrayUnitPrice } from '../src/domain/uomPrice.ts';
+import { resolveSellerTrayUnitPrice, stockUnitSellingPrice } from '../src/domain/uomPrice.ts';
 
 test('an omitted price derives using product-specific Stock UOM conversion', () => {
   assert.equal(resolveSellerTrayUnitPrice(null, 500, 12), 6000);
@@ -29,4 +29,13 @@ test('recalculation follows the latest base price, not a previously generated ov
   assert.equal(resolveSellerTrayUnitPrice(null, 500, 12), 6000);
   assert.equal(resolveSellerTrayUnitPrice(null, 600, 12), 7200);
   assert.equal(resolveSellerTrayUnitPrice(5500, 600, 12), 5500);
+});
+
+test('product base editor never writes calculated default-selling alternate UOM price', () => {
+  const stock = { isStockUom: true, isDefaultSelling: false, sellingPrice: 250 };
+  const defaultPack = { isStockUom: false, isDefaultSelling: true, sellingPrice: 1500 };
+  assert.equal(stockUnitSellingPrice([defaultPack, stock]), 250);
+  assert.equal(stockUnitSellingPrice([stock, defaultPack]), 250);
+  assert.equal(stockUnitSellingPrice([defaultPack]), null);
+  assert.equal(stockUnitSellingPrice([{ ...stock, sellingPrice: 0 }, defaultPack]), 0);
 });
