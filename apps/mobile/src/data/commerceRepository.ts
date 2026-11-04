@@ -12,6 +12,7 @@ export type CommerceUom = {
   name: string;
   conversionFactor: number;
   sellingPrice: number | null;
+  priceIsCalculated?: boolean;
   barcode: string | null;
   allowFractional: boolean;
   isDefaultSelling: boolean;
@@ -132,6 +133,7 @@ type ProductRow = {
   category: string | null;
   image_url: string | null;
   stock_uom: string;
+  price_ngn: number | string | null;
   allow_fractional_stock: boolean;
   is_active: boolean;
   catalog_item_uoms: Array<{
@@ -170,6 +172,26 @@ export async function loadBranchPosPaymentMethods(tenantId: string, branchId: st
   }));
 }
 
+/**
+ * Read-only preview of the governed SQL price resolver for POS and offline UX.
+ * Explicit per-unit prices (including zero) always win. Missing unit prices
+ * derive from Stock UOM pricing without becoming stored overrides.
+ * The server revalidates expected prices when queued sales are submitted.
+ */
+export function resolveSellerTrayUnitPrice(
+  explicitPrice: number | string | null,
+  stockUnitPrice: number | string | null,
+  conversionFactor: number | string,
+): number | null {
+  const configured = toNumber(explicitPrice);
+  if (configured !== null) return configured;
+  const base = toNumber(stockUnitPrice);
+  const conversion = toNumber(conversionFactor);
+  if (base === null || conversion === null || conversion <= 0 || base < 0) return null;
+  const cents = Math.round(Math.round(base * 100) * conversion + Number.EPSILON);
+  return Number.isFinite(cents) ? cents / 100 : null;
+}
+
 export async function loadCommerceProducts(tenantId: string, options?: { includeInactive?: boolean }): Promise<CommerceProduct[]> {
   if (!tenantId) return [];
   let query = supabase.from('catalog_items').select(`
@@ -179,6 +201,7 @@ export async function loadCommerceProducts(tenantId: string, options?: { include
       category,
       image_url,
       stock_uom,
+      price_ngn,
       allow_fractional_stock,
       is_active,
       catalog_item_uoms(
@@ -209,7 +232,8 @@ export async function loadCommerceProducts(tenantId: string, options?: { include
         id: uom.id,
         name: uom.uom_name,
         conversionFactor: toNumber(uom.conversion_factor) ?? 1,
-        sellingPrice: toNumber(uom.selling_price),
+        sellingPrice: resolveSellerTrayUnitPrice(uom.selling_price, row.price_ngn, uom.conversion_factor),
+        priceIsCalculated: uom.selling_price === null,
         barcode: uom.barcode,
         allowFractional: uom.allow_fractional,
         isDefaultSelling: uom.is_default_selling,
