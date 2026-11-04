@@ -144,7 +144,9 @@ begin
   if not exists(
     select 1 from public.branches b
     where b.tenant_id=p_tenant_id and b.id=p_branch_id
-      and (b.is_active=true or public.sellertray_can_prepare_purchased_branch_devices(p_tenant_id,p_branch_id,v_user_id)) or public.sellertray_setup_installer_device_allowed(p_tenant_id,p_branch_id,v_user_id,false)
+      and (b.is_active=true
+        or public.sellertray_can_prepare_purchased_branch_devices(p_tenant_id,p_branch_id,v_user_id)
+        or public.sellertray_setup_installer_device_allowed(p_tenant_id,p_branch_id,v_user_id,false))
   ) then
     raise exception 'Selected Branch is unavailable' using errcode='23514';
   end if;
