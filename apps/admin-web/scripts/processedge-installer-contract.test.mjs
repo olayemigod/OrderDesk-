@@ -29,6 +29,11 @@ test('ProcessEdge installer management uses the existing approved setup shell',(
   assert.match(staff,/action: 'staff_list', tenantId:/);
   assert.match(staff,/commandId/);
   assert.match(staff,/Revok(e|ed) assignment/);
+  assert.match(staff,/function formatDateTime/);
+  assert.match(staff,/new Intl.DateTimeFormat\('en-GB'/);
+  assert.match(staff,/toLocalDateTimeInput/);
+  assert.match(setup,/new Intl.DateTimeFormat\('en-GB'/);
+  assert.match(installerMobile,/new Intl.DateTimeFormat\('en-GB'/);
   assert.doesNotMatch(staff,/SUPABASE_SERVICE_ROLE_KEY|SUPABASE_SECRET_KEY/);
 });
 
