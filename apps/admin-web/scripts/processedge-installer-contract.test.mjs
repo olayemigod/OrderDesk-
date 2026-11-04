@@ -157,6 +157,6 @@ test('Installer handover remains evidence until Admin verifies and completes can
   assert.match(completion,/merchantWalkthrough: false/);
   assert.match(installerMobile,/submitHandover/);
   assert.match(installerMobile,/AsyncStorage\.setItem/);
-  assert.match(installerMobile,/test\.status==='printed'/);
+  assert.match(installerMobile,/t\.status==='printed'/);
   assert.doesNotMatch(handover,/create or replace function public\.platform_admin_transition_branch_setup/);
 });
