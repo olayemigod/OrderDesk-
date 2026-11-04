@@ -6,6 +6,7 @@ const failures = [];
 const APP_ICON = './assets/icon.png';
 const ADAPTIVE_ICON = './assets/adaptive-icon.png';
 const MOBILE_MARK = 'assets/sellertray-v2-mark-128.png';
+const APPROVED_APP_ICON = '../merchant-web/public/brand/sellertray-app-icon-v2.png';
 
 function read(path) {
   return readFileSync(join(root, path), 'utf8');
@@ -19,9 +20,14 @@ const brand = read('src/components/SellerTrayBrand.tsx');
 const appConfig = JSON.parse(read('app.json'));
 const expo = appConfig.expo ?? {};
 
-for (const asset of [MOBILE_MARK, APP_ICON.replace(/^\.\//, ''), ADAPTIVE_ICON.replace(/^\.\//, '')]) {
+for (const asset of [MOBILE_MARK, APP_ICON.replace(/^\.\//, ''), ADAPTIVE_ICON.replace(/^\.\//, ''), APPROVED_APP_ICON]) {
   requireValue(existsSync(join(root, asset)), `Mobile must bundle required SellerTray brand asset ${asset}`);
 }
+
+const approvedAppIcon = existsSync(join(root, APPROVED_APP_ICON)) ? readFileSync(join(root, APPROVED_APP_ICON)) : null;
+const mobileAppIcon = existsSync(join(root, APP_ICON)) ? readFileSync(join(root, APP_ICON)) : null;
+const adaptiveAppIcon = existsSync(join(root, ADAPTIVE_ICON)) ? readFileSync(join(root, ADAPTIVE_ICON)) : null;
+
 requireValue(
   brand.includes("require('../../assets/sellertray-v2-mark-128.png')"),
   'Mobile SellerTrayBrand must render the bundled SellerTray v2 mark instead of the unsupported in-app WebP path',
@@ -31,16 +37,24 @@ requireValue(
   'Mobile SellerTrayBrand must not depend on the Admin WebP runtime decoder path that failed on Android QA',
 );
 requireValue(
+  approvedAppIcon && mobileAppIcon && approvedAppIcon.equals(mobileAppIcon),
+  'Mobile launcher icon must match the approved SellerTray v2 app icon exactly',
+);
+requireValue(
+  approvedAppIcon && adaptiveAppIcon && approvedAppIcon.equals(adaptiveAppIcon),
+  'Android adaptive launcher foreground must match the approved SellerTray v2 app icon exactly',
+);
+requireValue(
   expo.icon === APP_ICON,
-  'Mobile app icon must use the bundled SellerTray icon instead of a remote deployment alias',
+  'Mobile app icon must use the bundled approved SellerTray icon instead of a remote deployment alias',
 );
 requireValue(
   expo.android?.adaptiveIcon?.foregroundImage === ADAPTIVE_ICON,
-  'Android adaptive icon must use the bundled SellerTray adaptive icon instead of a remote deployment alias',
+  'Android adaptive icon must use the bundled approved SellerTray adaptive icon instead of a remote deployment alias',
 );
 requireValue(
   expo.splash?.image === APP_ICON,
-  'Mobile splash branding must use the bundled SellerTray icon instead of a remote deployment alias',
+  'Mobile splash branding must use the bundled approved SellerTray icon instead of a remote deployment alias',
 );
 requireValue(
   !JSON.stringify(appConfig).includes('vercel.app'),
