@@ -525,4 +525,27 @@ revoke all on function public.platform_admin_list_setup_installer_staff(uuid,uui
 grant execute on function public.platform_admin_list_setup_installer_staff(uuid,uuid)
   to service_role;
 
+-- An authenticated, unprivileged staff user may discover only whether
+-- their own ProcessEdge installer account exists. The Edge gateway binds the
+-- actor to an already verified JWT, and no appointment or tenant information
+-- is returned until AAL2 has been verified.
+create or replace function public.get_sellertray_setup_installer_profile(
+  p_actor_user_id uuid
+) returns jsonb language sql stable security invoker set search_path='' as $profile$
+  select jsonb_build_object(
+    'isInstaller',exists(
+      select 1 from public.sellertray_internal_setup_staff s
+      where s.user_id=p_actor_user_id and s.staff_role='setup_installer'
+    ),
+    'status',(
+      select s.status from public.sellertray_internal_setup_staff s
+      where s.user_id=p_actor_user_id and s.staff_role='setup_installer'
+    )
+  );
+$profile$;
+revoke all on function public.get_sellertray_setup_installer_profile(uuid)
+  from public,anon,authenticated;
+grant execute on function public.get_sellertray_setup_installer_profile(uuid)
+  to service_role;
+
 commit;
