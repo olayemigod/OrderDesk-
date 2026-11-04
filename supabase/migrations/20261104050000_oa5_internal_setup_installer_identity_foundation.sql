@@ -246,4 +246,165 @@ revoke all on function public.platform_admin_set_setup_installer_status(uuid,uui
 grant execute on function public.platform_admin_set_setup_installer_status(uuid,uuid,text,uuid,text)
   to service_role;
 
+
+-- Bind an already active installer to exactly one governed, open appointment.
+-- The appointment's worker assignment and Branch purchase are authoritative.
+create or replace function public.platform_admin_assign_setup_installer(
+  p_actor_user_id uuid,p_staff_user_id uuid,p_tenant_id uuid,
+  p_appointment_id uuid,p_valid_until timestamptz,
+  p_command_id uuid,p_reason text
+) returns uuid language plpgsql security definer set search_path='' as $assign$
+declare
+  v_staff public.sellertray_internal_setup_staff%rowtype;
+  v_appointment public.sellertray_commercial_setup_appointments%rowtype;
+  v_existing_event public.sellertray_internal_setup_staff_events%rowtype;
+  v_assignment public.sellertray_internal_setup_staff_assignments%rowtype;
+begin
+  if p_actor_user_id is null or p_staff_user_id is null or p_tenant_id is null
+     or p_appointment_id is null or p_command_id is null or p_valid_until is null
+     or p_valid_until<=now()
+     or p_valid_until>now()+interval '90 days'
+     or char_length(btrim(coalesce(p_reason,''))) not between 6 and 1000 then
+    raise exception 'Appointment, installer, bounded expiry, command and reason are required' using errcode='22023';
+  end if;
+  if not exists (select 1 from public.platform_admins pa
+      where pa.user_id=p_actor_user_id and pa.role='admin')
+     or not public.platform_admin_has_capability(
+       p_actor_user_id,'admin.branch_setup.manage',p_tenant_id,now()
+     ) then raise exception 'Platform Admin Branch setup authority required' using errcode='42501';
+  end if;
+  perform pg_advisory_xact_lock(hashtextextended(p_command_id::text,0));
+  select * into v_existing_event from public.sellertray_internal_setup_staff_events
+   where command_id=p_command_id;
+  if found then
+    if v_existing_event.actor_user_id<>p_actor_user_id
+      or v_existing_event.staff_user_id<>p_staff_user_id
+      or v_existing_event.tenant_id is distinct from p_tenant_id
+      or v_existing_event.appointment_id is distinct from p_appointment_id
+      or v_existing_event.event_type<>'assignment_created'
+      or v_existing_event.reason<>btrim(p_reason)
+      or v_existing_event.details->>'validUntil'<>to_jsonb(p_valid_until)#>>'{}' then
+      raise exception 'Installer assignment command already used for different facts' using errcode='23505';
+    end if;
+    return (v_existing_event.details->>'assignmentId')::uuid;
+  end if;
+
+  select * into strict v_staff from public.sellertray_internal_setup_staff
+    where user_id=p_staff_user_id for share;
+  if v_staff.status<>'active' then
+    raise exception 'Only active verified ProcessEdge installers may be assigned' using errcode='23514';
+  end if;
+  select * into strict v_appointment from public.sellertray_commercial_setup_appointments
+    where id=p_appointment_id and tenant_id=p_tenant_id for share;
+  if v_appointment.worker_id<>v_staff.worker_id
+     or v_appointment.status not in ('scheduled','in_progress')
+     or not exists (select 1 from public.sellertray_setup_workers w
+       where w.id=v_staff.worker_id and w.active)
+     or not exists (select 1 from public.tenants t
+       where t.id=p_tenant_id and t.retired_at is null)
+     or not exists(
+       select 1 from public.sellertray_commercial_order_price_snapshots x
+       where x.tenant_id=p_tenant_id and x.commercial_order_id=v_appointment.commercial_order_id
+         and x.branch_id=v_appointment.branch_id and x.line_type='branch_setup'
+     ) then
+    raise exception 'Installer must match the live purchased Branch setup appointment and worker' using errcode='23514';
+  end if;
+
+  insert into public.sellertray_internal_setup_staff_assignments(
+     staff_user_id,tenant_id,branch_id,appointment_id,worker_id,
+     valid_from,valid_until,assigned_by_user_id
+  ) values(
+     p_staff_user_id,p_tenant_id,v_appointment.branch_id,p_appointment_id,v_staff.worker_id,
+     now(),p_valid_until,p_actor_user_id
+  ) returning * into v_assignment;
+
+  insert into public.sellertray_internal_setup_staff_events(
+     command_id,staff_user_id,actor_user_id,event_type,tenant_id,
+     appointment_id,reason,details
+  ) values (
+     p_command_id,p_staff_user_id,p_actor_user_id,'assignment_created',
+     p_tenant_id,p_appointment_id,btrim(p_reason),
+     jsonb_build_object('assignmentId',v_assignment.id,'workerId',v_staff.worker_id,
+       'branchId',v_appointment.branch_id,'validUntil',p_valid_until)
+  );
+  insert into public.platform_admin_audit(actor_user_id,tenant_id,action,detail)
+  values (p_actor_user_id,p_tenant_id,'setup_installer_assigned',
+    jsonb_build_object('staffUserId',p_staff_user_id,'appointmentId',p_appointment_id,
+      'branchId',v_appointment.branch_id,'assignmentId',v_assignment.id,
+      'commandId',p_command_id));
+  return v_assignment.id;
+end;
+$assign$;
+revoke all on function public.platform_admin_assign_setup_installer(
+  uuid,uuid,uuid,uuid,timestamptz,uuid,text
+) from public,anon,authenticated;
+grant execute on function public.platform_admin_assign_setup_installer(
+  uuid,uuid,uuid,uuid,timestamptz,uuid,text
+) to service_role;
+
+-- Revocation changes only the assignment's current access state; the original
+-- assignment and all command events retain their original IDs and audit facts.
+create or replace function public.platform_admin_revoke_setup_installer_assignment(
+  p_actor_user_id uuid,p_assignment_id uuid,p_command_id uuid,p_reason text
+) returns boolean language plpgsql security definer set search_path='' as $revoke$
+declare
+  v_assignment public.sellertray_internal_setup_staff_assignments%rowtype;
+  v_existing_event public.sellertray_internal_setup_staff_events%rowtype;
+begin
+  if p_actor_user_id is null or p_assignment_id is null or p_command_id is null
+     or char_length(btrim(coalesce(p_reason,''))) not between 6 and 1000 then
+    raise exception 'Installer assignment, command and reason are required' using errcode='22023';
+  end if;
+  perform pg_advisory_xact_lock(hashtextextended(p_command_id::text,0));
+  select * into v_assignment
+    from public.sellertray_internal_setup_staff_assignments
+    where id=p_assignment_id for update;
+  if not found then raise exception 'Installer assignment not found' using errcode='23514'; end if;
+  if not exists(select 1 from public.platform_admins pa
+      where pa.user_id=p_actor_user_id and pa.role='admin')
+     or not public.platform_admin_has_capability(
+       p_actor_user_id,'admin.branch_setup.manage',v_assignment.tenant_id,now()
+     ) then raise exception 'Platform Admin Branch setup authority required' using errcode='42501';
+  end if;
+  select * into v_existing_event from public.sellertray_internal_setup_staff_events
+    where command_id=p_command_id;
+  if found then
+    if v_existing_event.event_type<>'assignment_revoked'
+       or v_existing_event.actor_user_id<>p_actor_user_id
+       or v_existing_event.staff_user_id<>v_assignment.staff_user_id
+       or v_existing_event.tenant_id is distinct from v_assignment.tenant_id
+       or v_existing_event.appointment_id is distinct from v_assignment.appointment_id
+       or v_existing_event.details->>'assignmentId'<>p_assignment_id::text
+       or v_existing_event.reason<>btrim(p_reason) then
+      raise exception 'Assignment revocation command already used for different facts' using errcode='23505';
+    end if;
+    return true;
+  end if;
+  if v_assignment.revoked_at is not null then
+    raise exception 'Installer assignment already revoked; replay the original command' using errcode='23514';
+  end if;
+  update public.sellertray_internal_setup_staff_assignments
+    set revoked_at=now(),revoked_by_user_id=p_actor_user_id,revocation_reason=btrim(p_reason)
+    where id=p_assignment_id;
+  insert into public.sellertray_internal_setup_staff_events(
+    command_id,staff_user_id,actor_user_id,event_type,tenant_id,appointment_id,reason,details
+  ) values (
+    p_command_id,v_assignment.staff_user_id,p_actor_user_id,'assignment_revoked',
+    v_assignment.tenant_id,v_assignment.appointment_id,btrim(p_reason),
+    jsonb_build_object('assignmentId',p_assignment_id,'branchId',v_assignment.branch_id)
+  );
+  insert into public.platform_admin_audit(actor_user_id,tenant_id,action,detail)
+  values (p_actor_user_id,v_assignment.tenant_id,'setup_installer_assignment_revoked',
+    jsonb_build_object('assignmentId',p_assignment_id,'staffUserId',v_assignment.staff_user_id,
+      'branchId',v_assignment.branch_id,'commandId',p_command_id));
+  return true;
+end;
+$revoke$;
+revoke all on function public.platform_admin_revoke_setup_installer_assignment(
+  uuid,uuid,uuid,text
+) from public,anon,authenticated;
+grant execute on function public.platform_admin_revoke_setup_installer_assignment(
+  uuid,uuid,uuid,text
+) to service_role;
+
 commit;
