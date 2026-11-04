@@ -143,6 +143,16 @@ Rules:
 5. The Order Form references or operates under the accepted Master Agreement; it does not create a new universal Master Agreement version.
 6. Confirming a new Order Form under an unchanged Master Agreement must not create another Master acceptance.
 
+### C2 Branch Order Form confirmation and replacement boundary
+
+For Commercial V2 Branch commitments, an Order Form freezes the purchased Branch, Plan Profile Version, installment template/version, price/tax snapshot, and required Master version. Until the merchant confirms it, a selected alternative installment structure must still be allowed by the **currently effective** governed installment policy. Withdrawing an alternative blocks first confirmation through all channels; the merchant must receive a new governed quote/Order Form or ProcessEdge must explicitly reauthorise the original structure through a new policy version. A policy change must not rewrite historical quotes.
+
+Once an Order Form has been confirmed and native pending Branch Subscription terms registered, that confirmation and selected installment schedule are immutable historical commercial facts. Subsequent policy changes must not revoke the already-confirmed schedule or invalidate settlement of that commitment.
+
+**C2-7 implementation safety boundary:** A C2 Order Form that is still unconfirmed may be superseded, retaining the original legal history. A **confirmed** C2 Order Form may not be directly superseded for the same commercial order because its pending Branch Subscription registration is bound to the confirmed Form and a deterministic command identity. Reject such a replacement before issuing it, rather than strand the merchant with an unconfirmable form. A later change must create a new governed commercial commitment and Order Form with an appropriate Branch Subscription replacement lineage. An explicit future confirmed-contract amendment path must govern any exceptional in-place lineage safely, not reuse the original registration command with changed facts.
+
+This C2-only guard does not rewrite or narrow historical C1/OA2 confirmation evidence or existing accepted Master versions.
+
 ## Order Form review and confirmation UX
 
 Order Form confirmation is distinct from Master Agreement acceptance.
