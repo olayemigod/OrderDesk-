@@ -197,7 +197,8 @@ declare
   v_target text:=lower(btrim(coalesce(p_status,'')));
   v_expected_event_type text;
 begin
-  v_expected_event_type:=case when v_target='active' then 'activated' else v_target end;
+  v_expected_event_type:=v_target;
+  if v_target='active' then v_expected_event_type:='activated'; end if;
   if p_actor_user_id is null or p_staff_user_id is null or p_command_id is null
      or v_target not in ('active','suspended','revoked')
      or char_length(btrim(coalesce(p_reason,''))) not between 6 and 1000 then
