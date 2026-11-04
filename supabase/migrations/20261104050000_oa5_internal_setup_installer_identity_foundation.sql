@@ -458,4 +458,50 @@ revoke all on function public.get_sellertray_setup_installer_work(uuid)
 grant execute on function public.get_sellertray_setup_installer_work(uuid)
   to service_role;
 
+-- Platform Admin sees the bounded internal installer roster. Assignment data is
+-- limited to a selected Business; the roster is never exposed to merchants.
+create or replace function public.platform_admin_list_setup_installer_staff(
+  p_actor_user_id uuid,p_tenant_id uuid default null
+) returns jsonb language plpgsql stable security definer set search_path='' as $list$
+declare v_staff jsonb; v_assignments jsonb;
+begin
+  if not exists(select 1 from public.platform_admins pa where pa.user_id=p_actor_user_id and pa.role='admin')
+    or not public.platform_admin_has_capability(
+      p_actor_user_id,'admin.branch_setup.manage',null,now()
+    ) then raise exception 'Platform Admin setup administration required' using errcode='42501'; end if;
+  if p_tenant_id is not null and not public.platform_admin_has_capability(
+    p_actor_user_id,'admin.branch_setup.manage',p_tenant_id,now()
+  ) then raise exception 'Business setup administration capability required' using errcode='42501'; end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'userId',s.user_id,'email',u.email,'workerId',s.worker_id,
+    'workerName',w.display_name,'role',s.staff_role,'status',s.status,
+    'registeredAt',s.registered_at,'activatedAt',s.activated_at
+  ) order by s.registered_at desc,s.user_id),'[]'::jsonb)
+  into v_staff from (
+    select * from public.sellertray_internal_setup_staff s order by registered_at desc,user_id limit 100
+  ) s
+  join auth.users u on u.id=s.user_id
+  join public.sellertray_setup_workers w on w.id=s.worker_id;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'assignmentId',a.id,'userId',a.staff_user_id,'workerId',a.worker_id,
+    'tenantId',a.tenant_id,'branchId',a.branch_id,'appointmentId',a.appointment_id,
+    'validFrom',a.valid_from,'validUntil',a.valid_until,
+    'revokedAt',a.revoked_at,'assignedAt',a.assigned_at
+  ) order by a.assigned_at desc,a.id),'[]'::jsonb)
+  into v_assignments from (
+    select * from public.sellertray_internal_setup_staff_assignments a
+    where p_tenant_id is not null and a.tenant_id=p_tenant_id
+    order by a.assigned_at desc,a.id limit 100
+  ) a;
+
+  return jsonb_build_object('staff',v_staff,'assignments',v_assignments);
+end;
+$list$;
+revoke all on function public.platform_admin_list_setup_installer_staff(uuid,uuid)
+  from public,anon,authenticated;
+grant execute on function public.platform_admin_list_setup_installer_staff(uuid,uuid)
+  to service_role;
+
 commit;
