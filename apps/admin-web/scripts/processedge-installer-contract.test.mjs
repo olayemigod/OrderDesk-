@@ -36,6 +36,16 @@ test('ProcessEdge installer invitation and assignment always use AAL2 and distin
   assert.doesNotMatch(migration,/alter table public\.platform_admins drop constraint/i);
 });
 
+test('Installer device inspection is exact-appointment, MFA-guarded and non-financial',()=>{
+  assert.match(edge,/action === 'devices'/);
+  assert.match(edge,/identity\.aal !== 'aal2'/);
+  assert.match(edge,/p_appointment_id: appointmentId/);
+  assert.match(edge,/sellertray_setup_installer_has_assignment/);
+  assert.match(edge,/\.eq\('job_type', 'test'\)/);
+  assert.doesNotMatch(edge,/\.from\('orders'\)/);
+  assert.doesNotMatch(edge,/\.from\('order_payments'\)/);
+});
+
 test('Appointment-scope access is server-only, time and revocation bounded',()=>{
   for(const table of ['sellertray_internal_setup_staff','sellertray_internal_setup_staff_assignments','sellertray_internal_setup_staff_events']){
     assert.match(migration,new RegExp('alter table public\\.'+table+' enable row level security'));
