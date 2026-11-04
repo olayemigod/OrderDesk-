@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(18);
+select extensions.plan(20);
 
 -- C2-7: exercise real publication, Branch order, governed Order Form issue,
 -- separately accepted Master, confirmed package and native term registration.
@@ -289,6 +289,17 @@ select extensions.is(
  (select count(*)::integer from public.sellertray_branch_subscriptions s
   join c2_legal_proof_fixture f on s.tenant_id=f.other_tenant_id),0,
  'No native subscription leaks into another Business');
+
+select extensions.is(
+ (select public.get_sellertray_installment_billing_states_for_tenant(f.tenant_id,f.owner_id)
+  from c2_legal_proof_fixture f),
+ '[]'::jsonb,
+ 'Legacy Merchant billing reader ignores a native Branch installment obligation');
+select extensions.is(
+ (select public.get_sellertray_installment_billing_states_for_admin(f.tenant_id,f.admin_id)
+  from c2_legal_proof_fixture f),
+ '[]'::jsonb,
+ 'Legacy Admin billing reader ignores a native Branch installment obligation');
 
 select * from extensions.finish();
 rollback;
