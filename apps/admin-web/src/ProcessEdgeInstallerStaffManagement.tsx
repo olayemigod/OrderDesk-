@@ -32,6 +32,13 @@ type Assignment = {
 };
 type StaffResponse = { staff?: StaffAccount[]; assignments?: Assignment[] };
 
+// datetime-local must receive the browser's local wall-clock time, not UTC.
+function toLocalDateTimeInput(value: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return [value.getFullYear(), '-', pad(value.getMonth() + 1), '-', pad(value.getDate()),
+    'T', pad(value.getHours()), ':', pad(value.getMinutes())].join('');
+}
+
 export default function ProcessEdgeInstallerStaffManagement({
   session, tenantId, workers, appointments,
 }: {
@@ -191,7 +198,7 @@ export default function ProcessEdgeInstallerStaffManagement({
             const appointment = assignableAppointments.find((a) => a.id === e.target.value);
             if (appointment) {
               const end = new Date(Date.parse(appointment.scheduledEndAt) + 24 * 60 * 60 * 1000);
-              setAssignmentExpiresAt(end.toISOString().slice(0,16));
+              setAssignmentExpiresAt(toLocalDateTimeInput(end));
             }
           }}>
             <option value="">Choose a scheduled appointment</option>
