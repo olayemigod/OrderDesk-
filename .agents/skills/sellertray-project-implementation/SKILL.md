@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.20"
+  version: "0.1.21"
   status: governing
 ---
 
@@ -370,7 +370,7 @@ Rules:
 
 1. Inventory ledger quantities are stored in Stock UOM.
 2. Transaction lines preserve selected UOM, transaction quantity, conversion factor used and resulting stock quantity.
-3. UOM prices may be independent; never assume alternate price = base price × conversion.
+3. A product-UOM explicitly configured selling price always takes priority (including zero). Only where a unit has no specific selling price (`selling_price IS NULL`), derive its effective selling price from the current configured Stock UOM selling price multiplied by the product-specific conversion factor, rounded to currency precision. Derived prices are not stored as explicit UOM overrides. All POS/offline/barcode/WhatsApp applicable selling paths must obey the shared server authority, with historical order prices and inventory quantities unchanged.
 4. Purchase UOM may differ from Selling UOM.
 5. Barcode may resolve Product + UOM.
 6. Fractional quantity is permitted only where product/UOM policy allows it.

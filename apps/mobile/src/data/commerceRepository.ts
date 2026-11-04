@@ -1,3 +1,4 @@
+import { resolveSellerTrayUnitPrice } from '../domain/uomPrice';
 import { supabase } from '../lib/supabase';
 
 export type CommerceBranch = {
@@ -12,6 +13,7 @@ export type CommerceUom = {
   name: string;
   conversionFactor: number;
   sellingPrice: number | null;
+  priceIsCalculated?: boolean;
   barcode: string | null;
   allowFractional: boolean;
   isDefaultSelling: boolean;
@@ -132,6 +134,7 @@ type ProductRow = {
   category: string | null;
   image_url: string | null;
   stock_uom: string;
+  price_ngn: number | string | null;
   allow_fractional_stock: boolean;
   is_active: boolean;
   catalog_item_uoms: Array<{
@@ -179,6 +182,7 @@ export async function loadCommerceProducts(tenantId: string, options?: { include
       category,
       image_url,
       stock_uom,
+      price_ngn,
       allow_fractional_stock,
       is_active,
       catalog_item_uoms(
@@ -195,7 +199,12 @@ export async function loadCommerceProducts(tenantId: string, options?: { include
   if (!options?.includeInactive) query = query.eq('is_active', true);
   const { data, error } = await query.order('name', { ascending: true });
   if (error) throw error;
-  return ((data ?? []) as unknown as ProductRow[]).map((row) => ({
+  return ((data ?? []) as unknown as ProductRow[]).map((row) => {
+    const stockUnitRow = (row.catalog_item_uoms ?? []).find((uom) =>
+      uom.uom_name.trim().toLowerCase() === row.stock_uom.trim().toLowerCase(),
+    );
+    const stockUnitPrice = stockUnitRow?.selling_price ?? row.price_ngn;
+    return ({
     id: row.id,
     name: row.name,
     sku: row.sku,
@@ -209,7 +218,8 @@ export async function loadCommerceProducts(tenantId: string, options?: { include
         id: uom.id,
         name: uom.uom_name,
         conversionFactor: toNumber(uom.conversion_factor) ?? 1,
-        sellingPrice: toNumber(uom.selling_price),
+        sellingPrice: resolveSellerTrayUnitPrice(uom.selling_price, stockUnitPrice, uom.conversion_factor),
+        priceIsCalculated: uom.selling_price === null,
         barcode: uom.barcode,
         allowFractional: uom.allow_fractional,
         isDefaultSelling: uom.is_default_selling,
@@ -222,7 +232,8 @@ export async function loadCommerceProducts(tenantId: string, options?: { include
         if (left.conversionFactor !== right.conversionFactor) return left.conversionFactor - right.conversionFactor;
         return left.name.localeCompare(right.name);
       }),
-  }));
+    });
+  });
 }
 
 export async function createPosDraft(input: CreatePosDraftInput): Promise<string> {
