@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(23);
+select extensions.plan(25);
 
 -- C2-7: exercise real publication, Branch order, governed Order Form issue,
 -- separately accepted Master, confirmed package and native term registration.
@@ -170,6 +170,20 @@ select extensions.is(
  (select public.resolve_sellertray_master_agreement_version_id(now()) from c2_legal_proof_fixture),
  (select later_master_id from c2_legal_proof_fixture),
  'A newly published Master supersedes the Order Form pinned Master for new purchases');
+
+select extensions.is(
+ (select (public.get_sellertray_agreement_package_center(f.tenant_id,f.owner_id)
+   ->'orderForms'->0->>'requiredMasterAgreementVersionId')::uuid
+   from c2_legal_proof_fixture f),
+ (select master_id from c2_legal_proof_fixture),
+ 'Merchant Agreement Center identifies the Master version pinned to the C2 Order Form');
+select extensions.ok(
+ (select (public.get_sellertray_agreement_package_center(f.tenant_id,f.owner_id)
+    ->>'masterAcceptanceRequired')::boolean
+     and (public.get_sellertray_agreement_package_center(f.tenant_id,f.owner_id)
+    ->'orderForms'->0->>'requiredMasterAccepted')::boolean
+  from c2_legal_proof_fixture f),
+ 'Later current Master acceptance is independent of the already accepted pinned Order Form Master');
 
 do $test$
 declare f c2_legal_proof_fixture%rowtype;
