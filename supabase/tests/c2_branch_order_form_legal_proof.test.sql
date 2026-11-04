@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(36);
+select extensions.plan(41);
 
 -- C2-7: exercise real publication, Branch order, governed Order Form issue,
 -- separately accepted Master, confirmed package and native term registration.
@@ -32,6 +32,9 @@ create temp table c2_legal_proof_fixture(
  policy_order_result jsonb,
  policy_form_id uuid,
  policy_package_id uuid,
+ policy_replacement_form_id uuid,
+ policy_replacement_package_id uuid,
+ policy_confirmation_result jsonb,
  policy_direct_denied boolean not null default false,
  policy_reviewed_denied boolean not null default false,
  confirmed_supersession_denied boolean not null default false
@@ -576,6 +579,94 @@ select extensions.is(
   join c2_legal_proof_fixture f on c.order_form_id=f.policy_form_id),
  0,
  'Rejected confirmations do not create any commercial confirmation evidence');
+
+
+-- An unconfirmed replacement remains valid, unlike a replacement of a
+-- confirmed native term. Reauthorise the same selected schedule version
+-- through a new immutable policy version and confirm the replacement.
+select public.publish_sellertray_installment_policy_v2_admin(
+ 'commercial_order',f.tenant_id,(f.policy_order_result->>'commercialOrderId')::uuid,
+ null,'yearly',true,
+ (select t.id from public.sellertray_installment_schedule_templates t
+  where t.template_code='full_payment_100' and t.version=1),
+ array[(select t.id from public.sellertray_installment_schedule_templates t
+  where t.template_code='two_installment_70_30' and t.version=1)],
+ now()-interval '10 seconds',null,
+ 'Reauthorise scheduled alternative to confirm reviewed replacement',
+ f.admin_id,gen_random_uuid()
+) from c2_legal_proof_fixture f;
+
+update c2_legal_proof_fixture f set policy_replacement_form_id=
+ public.issue_sellertray_commercial_order_form_admin(
+  f.tenant_id,(f.policy_order_result->>'commercialOrderId')::uuid,null,
+  f.template_id,'c2-valid-replacement-'||substr(f.tenant_id::text,1,8),
+  f.policy_form_id,'Replace still-unconfirmed C2 Order Form',f.admin_id);
+
+select extensions.ok(
+ (select exists(
+   select 1 from public.sellertray_commercial_order_forms replacement
+   where replacement.tenant_id=f.tenant_id
+     and replacement.id=f.policy_replacement_form_id
+     and replacement.supersedes_order_form_id=f.policy_form_id
+ ) from c2_legal_proof_fixture f),
+ 'An unconfirmed C2 Order Form can be replaced while preserving its history');
+
+update c2_legal_proof_fixture f set policy_replacement_package_id=
+ public.create_sellertray_agreement_package(
+  f.tenant_id,f.policy_replacement_form_id,f.later_master_id);
+
+update c2_legal_proof_fixture f set policy_confirmation_result=
+ public.confirm_sellertray_agreement_package_reviewed(
+  f.tenant_id,f.policy_replacement_form_id,f.policy_replacement_package_id,
+  (select p.package_fingerprint from public.sellertray_agreement_packages p
+   where p.id=f.policy_replacement_package_id),
+  'Business Owner',jsonb_build_object('authority_confirmed',true),
+  gen_random_uuid(),f.owner_id);
+
+select extensions.is(
+ (select jsonb_array_length(policy_confirmation_result->'branchSubscriptions')
+  from c2_legal_proof_fixture),1,
+ 'A reauthorised alternative registers one pending term from the replacement Form');
+
+select extensions.is(
+ (select s.lifecycle_status
+  from public.sellertray_branch_subscriptions s
+  join c2_legal_proof_fixture f
+    on s.tenant_id=f.tenant_id and s.order_form_id=f.policy_replacement_form_id),
+ 'pending',
+ 'Restored policy and confirmed replacement never activate a Branch without reconciliation');
+
+-- A later policy withdrawal cannot alter a confirmed legal/payment schedule.
+select public.publish_sellertray_installment_policy_v2_admin(
+ 'commercial_order',f.tenant_id,(f.policy_order_result->>'commercialOrderId')::uuid,
+ null,'yearly',false,
+ (select t.id from public.sellertray_installment_schedule_templates t
+  where t.template_code='full_payment_100' and t.version=1),
+ '{}'::uuid[],now()-interval '1 second',null,
+ 'Post confirmation alternative withdrawal preserves prior legal commitment',
+ f.admin_id,gen_random_uuid()
+) from c2_legal_proof_fixture f;
+
+select extensions.is(
+ (select (public.get_sellertray_installment_contract_checkout_policy(
+  f.tenant_id,(f.policy_order_result->'subjects'->0->>'installmentObligationId')::uuid,now()
+ )->>'checkoutEligible')::boolean from c2_legal_proof_fixture f),
+ true,
+ 'Post-confirmation policy changes do not revoke the earlier confirmed schedule');
+
+select extensions.is(
+ (select (public.confirm_sellertray_agreement_package_reviewed(
+  f.tenant_id,f.policy_replacement_form_id,f.policy_replacement_package_id,
+  (select p.package_fingerprint from public.sellertray_agreement_packages p
+   where p.id=f.policy_replacement_package_id),
+  'Business Owner',jsonb_build_object('authority_confirmed',true),
+  c.command_id,f.owner_id)->>'orderFormConfirmationId')::uuid
+  from c2_legal_proof_fixture f
+  join public.sellertray_order_form_confirmations c
+    on c.order_form_id=f.policy_replacement_form_id),
+ (select (policy_confirmation_result->>'orderFormConfirmationId')::uuid
+  from c2_legal_proof_fixture),
+ 'Confirmed Order Form remains idempotently replayable after installment withdrawal');
 
 select * from extensions.finish();
 rollback;
