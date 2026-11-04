@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { supabase } from '../lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PrinterWorkspace } from '../redesign/PrinterWorkspace';
 import { bluetoothPrintingSupported, listPairedBluetoothPrinters, type BluetoothPrinterDevice } from '../printing/bluetoothPrinter';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
@@ -43,12 +44,20 @@ export default function ProcessEdgeInstallationsView({
   const [setupAssignmentId,setSetupAssignmentId]=useState<string | null>(null);
   const [pairedDevices,setPairedDevices]=useState<BluetoothPrinterDevice[]>([]);
   const [pairedLoading,setPairedLoading]=useState(false);
+  const [handover,setHandover]=useState({
+    assignmentId:'',testJobId:'',handoverCondition:'',
+    receivedBy:'',acknowledgement:'',reason:'',
+  });
+  const [handoverMessage,setHandoverMessage]=useState<string|null>(null);
 
   useEffect(()=>{void refresh();},[status]);
 
   async function refresh() {
     deviceRequestEpoch.current+=1;
     setDeviceView(null);setPairedDevices([]);setSetupAssignmentId(null);
+    setHandover({assignmentId:'',testJobId:'',handoverCondition:'',
+      receivedBy:'',acknowledgement:'',reason:''});
+    setHandoverMessage(null);
     setLoading(true);setError(null);
     try {
       const [{data:level,error:levelError},{data:factors,error:factorError}]=await Promise.all([
@@ -78,6 +87,9 @@ export default function ProcessEdgeInstallationsView({
   async function inspectAssignedDevices(item: Installation) {
     const current=++deviceRequestEpoch.current;
     setDeviceView({assignmentId:item.assignmentId,loading:true,data:null,error:null});
+    setHandover({assignmentId:item.assignmentId,testJobId:'',handoverCondition:'',
+      receivedBy:'',acknowledgement:'',reason:''});
+    setHandoverMessage(null);
     setPairedDevices([]);
     try {
       const {data,error:requestError}=await supabase.functions.invoke('platform-setup-installer', {
@@ -110,6 +122,52 @@ export default function ProcessEdgeInstallationsView({
       setDeviceView(previous=>previous?{...previous,
         error:cause instanceof Error?cause.message:'Unable to read paired Bluetooth devices.'}:previous);
     } finally {setPairedLoading(false);}
+  }
+
+  async function submitHandover(item:Installation) {
+    const view=deviceView;
+    if(busy||view?.assignmentId!==item.assignmentId||!view.data
+      ||handover.assignmentId!==item.assignmentId)return;
+    const test=view.data.recentTests.find(t=>t.id===handover.testJobId && t.status==='printed');
+    const printer=view.data.printers.find(p=>p.id===test?.printer_id && p.is_active);
+    const condition=handover.handoverCondition.trim();
+    const recipient=handover.receivedBy.trim();
+    const acknowledgement=handover.acknowledgement.trim();
+    const reason=handover.reason.trim();
+    if(!test||!printer||condition.length<2||recipient.length<2
+      ||acknowledgement.length<2||reason.length<6){
+      setDeviceView(previous=>previous?{...previous,
+        error:'Choose an actual printed test and complete the recipient, condition and approval details.'}:previous);
+      return;
+    }
+    const payload={
+      action:'submit_handover',tenantId:item.tenantId,branchId:item.branchId,
+      appointmentId:item.appointmentId,printerId:printer.id,testJobId:test.id,
+      handoverCondition:condition,receivedBy:recipient,acknowledgement,reason,
+    };
+    const fingerprint=JSON.stringify(payload);
+    const storageKey='sellertray.installerHandover.v1:'+item.assignmentId;
+    setBusy(true);setHandoverMessage(null);
+    try{
+      const raw=await AsyncStorage.getItem(storageKey);
+      let previous:{fingerprint:string;commandKey:string}|null=null;
+      try{previous=raw?JSON.parse(raw) as {fingerprint:string;commandKey:string}:null;}catch{previous=null;}
+      const commandKey=previous?.fingerprint===fingerprint?previous.commandKey
+        :'installer-handover-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,14);
+      if(previous?.fingerprint!==fingerprint)await AsyncStorage.setItem(storageKey,JSON.stringify({fingerprint,commandKey}));
+      const {data,error:requestError}=await supabase.functions.invoke('platform-setup-installer',{
+        body:{...payload,commandKey},
+      });
+      if(requestError)throw requestError;
+      const response=data as {submissionId?:string;requiresAdminCompletion?:boolean;error?:string}|null;
+      if(!response?.submissionId||response.requiresAdminCompletion!==true)throw new Error(response?.error??'Handover was not confirmed.');
+      await AsyncStorage.removeItem(storageKey);
+      setHandoverMessage('Handover submitted for ProcessEdge Admin review. This does not activate merchant sales.');
+      setDeviceView(previous=>previous?{...previous,error:null}:previous);
+    }catch(cause){
+      setDeviceView(previous=>previous?{...previous,
+        error:cause instanceof Error?cause.message:'Unable to submit installation handover.'}:previous);
+    }finally{setBusy(false);}
   }
 
   async function enrolTotp() {
