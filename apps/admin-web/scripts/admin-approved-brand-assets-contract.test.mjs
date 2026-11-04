@@ -21,3 +21,11 @@ test('authenticated Admin shell resolves the approved v2 mark after legacy prese
   assert.match(brandCorrection, /sellertray-v2-mark\.svg/);
   assert.doesNotMatch(brandCorrection, /sellertray-admin-icon\.png/);
 });
+
+test('Admin embedded favicon artwork matches the approved Mobile v2 mark byte for byte', () => {
+  const embedded = approvedMark.match(/href="data:image\/png;base64,([A-Za-z0-9+/=]+)"/);
+  assert.ok(embedded, 'Admin favicon must embed the approved PNG artwork');
+  const actual = Buffer.from(embedded[1], 'base64');
+  const approved = readFileSync(new URL('../../mobile/assets/sellertray-v2-mark-128.png', import.meta.url));
+  assert.deepEqual(actual, approved, 'Do not corrupt or fork the approved SellerTray v2 brand artwork');
+});
