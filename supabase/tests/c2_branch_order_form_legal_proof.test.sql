@@ -384,18 +384,52 @@ select extensions.ok(
   from c2_legal_proof_fixture f),
  'Completed setup without any confirmed payment cannot waive a later setup fee');
 
-insert into public.sellertray_commercial_direct_payment_confirmations(
- tenant_id,commercial_order_id,installment_obligation_id,
- command_id,payment_reference,payment_method,amount,currency,
- reason,evidence,actor_user_id,paid_at
+-- Configure a versioned ProcessEdge payment method in the rollback-only
+-- fixture, then select and confirm payment through the native governed RPCs.
+insert into public.sellertray_commercial_payment_method_versions(
+ payment_method_id,version,display_name,method_type,confirmation_mode,
+ configuration,effective_from,change_reason,created_by_user_id,command_id
 )
-select f.tenant_id,(f.order_result->>'commercialOrderId')::uuid,
- (f.order_result->'subjects'->0->>'installmentObligationId')::uuid,
- gen_random_uuid(),'c2-setup-settled-'||substr(f.tenant_id::text,1,8),
- 'bank_transfer',5000,'NGN',
- 'Qualified Branch setup payment for regression',
- jsonb_build_object('test','confirmed-settlement-fixture'),f.admin_id,now()
-from c2_legal_proof_fixture f;
+select m.id,coalesce((
+  select max(v.version)+1
+  from public.sellertray_commercial_payment_method_versions v
+  where v.payment_method_id=m.id
+ ),1),'C2 Branch bank transfer','bank_transfer','manual_confirmation',
+ '{}'::jsonb,now()-interval '1 day',
+ 'C2 completed-setup settlement regression',f.admin_id,gen_random_uuid()
+from public.sellertray_commercial_payment_methods m
+cross join c2_legal_proof_fixture f
+where m.code='bank_transfer';
+
+do $test$
+declare
+ f c2_legal_proof_fixture%rowtype;
+ v_payment_method_version_id uuid;
+ v_obligation_id uuid;
+begin
+ select * into strict f from c2_legal_proof_fixture;
+ select v.id into strict v_payment_method_version_id
+ from public.sellertray_commercial_payment_method_versions v
+ join public.sellertray_commercial_payment_methods m on m.id=v.payment_method_id
+ where m.code='bank_transfer'
+   and v.created_by_user_id=f.admin_id
+ order by v.created_at desc,v.id desc
+ limit 1;
+
+ v_obligation_id:=(f.order_result->'subjects'->0->>'installmentObligationId')::uuid;
+ perform public.select_sellertray_commercial_payment_method(
+   f.tenant_id,v_obligation_id,v_payment_method_version_id,
+   gen_random_uuid(),f.admin_id
+ );
+ perform public.record_sellertray_c2_direct_payment_confirmation(
+   f.tenant_id,v_obligation_id,v_payment_method_version_id,
+   'c2-setup-settled-'||substr(f.tenant_id::text,1,8),
+   5000,now(),'Qualified Branch setup payment for regression',
+   jsonb_build_object('test','confirmed-settlement-fixture'),
+   gen_random_uuid(),f.admin_id
+ );
+end;
+$test$;
 
 select extensions.ok(
  (select not public.sellertray_branch_requires_commercial_setup(f.tenant_id,f.branch_id,null)
