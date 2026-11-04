@@ -12,6 +12,11 @@ const exclusion = read('../../../supabase/migrations/20261104053000_oa5_installe
 const deviceMigration = read('../../../supabase/migrations/20261104063000_oa5_installer_scoped_device_authority.sql');
 const registerAudit = read('../../../supabase/migrations/20261104064500_oa5_installer_register_audit_and_idempotency.sql');
 const printerEdge = read('../../../supabase/functions/printer/index.ts');
+const printBinding = read('../../../supabase/migrations/20261104065500_oa5_installer_test_print_appointment_binding.sql');
+const handover = read('../../../supabase/migrations/20261104070000_oa5_installer_handover_evidence.sql');
+const completionLink = read('../../../supabase/migrations/20261104071500_oa5_installer_handover_completion_validation.sql');
+const completion = read('../src/SetupCompletionForm.tsx');
+const installerMobile = read('../../mobile/src/components/ProcessEdgeInstallationsView.tsx');
 
 test('ProcessEdge installer management uses the existing approved setup shell',()=>{
   assert.match(setup,/import ProcessEdgeInstallerStaffManagement from '.\/ProcessEdgeInstallerStaffManagement'/);
@@ -44,7 +49,7 @@ test('Installer device inspection is exact-appointment, MFA-guarded and non-fina
   assert.match(edge,/identity\.aal !== 'aal2'/);
   assert.match(edge,/p_appointment_id: appointmentId/);
   assert.match(edge,/sellertray_setup_installer_has_assignment/);
-  assert.match(edge,/\.eq\('job_type', 'test'\)/);
+  assert.match(edge,/\.eq\('job_type','test'\)/);
   assert.doesNotMatch(edge,/\.from\('orders'\)/);
   assert.doesNotMatch(edge,/\.from\('order_payments'\)/);
 });
@@ -112,4 +117,46 @@ test('Installer reservations protect identity even after partial invitation deli
   assert.match(staff,/Reconcile account/);
   assert.match(staff,/toLocalDateTimeInput\(end\)/);
   assert.doesNotMatch(staff,/setAssignmentExpiresAt\(end\.toISOString\(\)\.slice/);
+});
+
+test('Installer printed test is inseparable from the exact assigned appointment',()=>{
+  assert.match(printBinding,/sellertray_installer_test_print_bindings/);
+  assert.match(printBinding,/request_sellertray_installer_test_print_job/);
+  assert.match(printBinding,/assignment_id/);
+  assert.match(printBinding,/appointment_id/);
+  assert.match(printBinding,/idempotentReplay/);
+  assert.match(printBinding,/An earlier unbound test job is not appointment evidence/);
+  assert.match(printerEdge,/request_sellertray_installer_test_print_job/);
+  assert.match(printerEdge,/sellertray_installer_test_print_bindings/);
+  assert.match(edge,/sellertray_installer_test_print_bindings/);
+  assert.match(edge,/\.eq\('appointment_id',appointmentId\)/);
+  assert.match(handover,/join public\.sellertray_installer_test_print_bindings b/);
+  assert.match(handover,/b\.appointment_id=p_appointment_id/);
+  assert.match(handover,/b\.assignment_id/);
+});
+
+test('Installer handover remains evidence until Admin verifies and completes canonical appointment',()=>{
+  assert.match(edge,/action === 'submit_handover'/);
+  assert.match(edge,/action === 'handover_list'/);
+  assert.match(edge,/identity\.aal !== 'aal2'/);
+  assert.match(edge,/platform_installer_submit_handover/);
+  assert.match(edge,/platform_admin_list_installer_handovers/);
+  assert.match(handover,/sellertray_installer_handover_submissions/);
+  assert.match(handover,/prevent_sellertray_installer_handover_mutation/);
+  assert.match(handover,/branchConfigured',false/);
+  assert.match(handover,/merchantWalkthrough',false/);
+  assert.match(handover,/requiresAdminCompletion',true/);
+  assert.match(completionLink,/sellertray_validate_installer_handover_completion/);
+  assert.match(completionLink,/sellertray_commercial_setup_appointment_events/);
+  assert.match(completionLink,/installerHandoverSubmissionId/);
+  assert.match(setup,/handover_list/);
+  assert.match(setup,/appointmentHandovers/);
+  assert.match(setup,/selectedHandover/);
+  assert.match(completion,/installerHandoverSubmissionId/);
+  assert.match(completion,/branchConfigured: false/);
+  assert.match(completion,/merchantWalkthrough: false/);
+  assert.match(installerMobile,/submitHandover/);
+  assert.match(installerMobile,/AsyncStorage\.setItem/);
+  assert.match(installerMobile,/test\.status==='printed'/);
+  assert.doesNotMatch(handover,/create or replace function public\.platform_admin_transition_branch_setup/);
 });
