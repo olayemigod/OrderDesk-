@@ -18,8 +18,8 @@ type Installation = {
 };
 
 export default function ProcessEdgeInstallationsView({
-  status,
-}: { status:string | null }) {
+  status,onRefreshProfile,
+}: { status:string | null; onRefreshProfile:()=>void }) {
   const appearance=useSellerTrayAppearance();
   const dark=appearance.dark;
   const [loading,setLoading]=useState(true);
@@ -163,7 +163,7 @@ export default function ProcessEdgeInstallationsView({
       </>:null}
 
       <View style={styles.footer}>
-        <Pressable onPress={()=>void refresh()} disabled={busy}>
+        <Pressable onPress={()=>{onRefreshProfile();void refresh()}} disabled={busy}>
           <Text style={styles.link}>Refresh access</Text>
         </Pressable>
         <Pressable onPress={()=>void supabase.auth.signOut({scope:'local'})}>
