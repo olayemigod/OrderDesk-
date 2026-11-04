@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.20"
+  version: "0.1.22"
   status: governing
 ---
 
@@ -370,7 +370,7 @@ Rules:
 
 1. Inventory ledger quantities are stored in Stock UOM.
 2. Transaction lines preserve selected UOM, transaction quantity, conversion factor used and resulting stock quantity.
-3. UOM prices may be independent; never assume alternate price = base price × conversion.
+3. A product-UOM explicitly configured selling price always takes priority (including zero). Only where a unit has no specific selling price (`selling_price IS NULL`), derive its effective selling price from the current configured Stock UOM selling price multiplied by the product-specific conversion factor, rounded to currency precision. Derived prices are not stored as explicit UOM overrides. All POS/offline/barcode/WhatsApp applicable selling paths must obey the shared server authority, with historical order prices and inventory quantities unchanged.
 4. Purchase UOM may differ from Selling UOM.
 5. Barcode may resolve Product + UOM.
 6. Fractional quantity is permitted only where product/UOM policy allows it.
@@ -400,6 +400,7 @@ Rules:
 8. Purchase stock enters inventory only when a physical receipt is posted for that Purchase Order. Partial receipts post only the physically received quantity.
 9. Stock needed by another branch must be received against that branch’s Purchase Order or moved through a governed Stock Transfer after receipt; do not create global phantom stock from placing a purchase.
 10. Generic direct stock receipt must not bypass Purchase Receiving or Stock Transfer receiving.
+11. Cost-aware stock adjustment uses one shared atomic command. Decreases consume the existing cost composition without extra cost entry. A positive correction may attach verified Stock-UOM cost and source evidence in that same posting if the actor has cost-management authority; if evidence is absent, the inbound quantity remains explicitly unvalued and is available for authorised Merchant Web reconciliation. Do not infer its cost from sales price or current average, and never mutate the posted stock ledger when adding historical evidence. Existing mobile versions must remain compatible and do not gain cost privilege from ordinary stock-edit authority.
 
 # 8. WhatsApp preservation and unification
 

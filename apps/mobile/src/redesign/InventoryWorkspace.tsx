@@ -67,6 +67,10 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
   const [reference, setReference] = useState('');
   const [reason, setReason] = useState<string>(ADJUST_REASONS[0]);
   const [reasonOpen, setReasonOpen] = useState(false);
+  const [costCaptureMode, setCostCaptureMode] = useState<'pending' | 'verified'>('pending');
+  const [unitCost, setUnitCost] = useState('');
+  const [costReference, setCostReference] = useState('');
+  const [costRationale, setCostRationale] = useState('');
   const [saving, setSaving] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -182,6 +186,10 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
     ? parsedQuantity * selectedUom.conversionFactor
     : null;
 
+  const projectedStockQuantity = previewStockQuantity === null || !selected
+    ? null
+    : selected.quantityOnHand + (direction === 'increase' ? previewStockQuantity : -previewStockQuantity);
+
   function beginAdjustment() {
     if (!selectedProduct) {
       setOperationError('Product units are not available yet. Refresh Inventory and try again.');
@@ -197,6 +205,10 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
     setReference(createOperationalReference('adjust'));
     setReason(defaultReason);
     setReasonOpen(false);
+    setCostCaptureMode('pending');
+    setUnitCost('');
+    setCostReference('');
+    setCostRationale('');
     setOperationError(null);
     setNotice(null);
   }
@@ -214,9 +226,17 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
     const parsed = Number(quantity);
     if (!commandId) return setOperationError('Restart this stock adjustment and try again.');
     if (!selectedUom) return setOperationError('Choose a unit for this stock adjustment.');
-    if (!Number.isFinite(parsed) || parsed <= 0) return setOperationError('Enter a quantity greater than zero.');
+    if (!Number.isFinite(parsed) || parsed <= 0) return setOperationError('Enter the amount to adjust, not the new total.');
+    // Projected balance is guidance only; the server resolves exact-command
+    // retries before checking available stock, including after lost responses.
     if (!reference.trim()) return setOperationError('Reference is required. Generate one or enter an external reference.');
     if (!reason.trim()) return setOperationError('Choose a reason for this stock adjustment.');
+    const isVerifiedIncrease = direction === 'increase'
+      && capabilities.canManageHistoricalCost === true && costCaptureMode === 'verified';
+    if (isVerifiedIncrease && (unitCost.trim() === '' || !Number.isFinite(Number(unitCost)) || Number(unitCost) < 0
+      || !costReference.trim() || !costRationale.trim())) {
+      return setOperationError('Enter the verified cost per Stock UOM, document reference and evidence rationale.');
+    }
 
     setSaving(true);
     setOperationError(null);
@@ -233,18 +253,27 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
         adjustmentDirection: direction,
         reference,
         reason,
+        stockUnitCost: isVerifiedIncrease ? Number(unitCost) : null,
+        costReference: isVerifiedIncrease ? costReference.trim() : null,
+        costReason: isVerifiedIncrease ? costRationale.trim() : null,
       });
-      setNotice(
-        result.idempotentReplay
-          ? `${result.reference} was already posted. Current stock is ${formatQuantity(result.quantityOnHand)} ${result.stockUom}.`
-          : `Stock adjusted. Current stock is ${formatQuantity(result.quantityOnHand)} ${result.stockUom}.`,
-      );
+      const balanceNotice = result.idempotentReplay
+        ? `${result.reference} was already posted. Current stock is ${formatQuantity(result.quantityOnHand)} ${result.stockUom}.`
+        : `Stock adjusted. Current stock is ${formatQuantity(result.quantityOnHand)} ${result.stockUom}.`;
+      setNotice(balanceNotice + (result.costEvidenceStatus === 'valued'
+        ? ' Verified cost evidence recorded.'
+        : direction === 'increase' ? ' Cost evidence is pending management review on Merchant Web.' : ''));
+
       setAdjustOpen(false);
       setCommandId('');
       setQuantity('');
       setReference('');
       setReason(ADJUST_REASONS[0]);
       setReasonOpen(false);
+      setCostCaptureMode('pending');
+      setUnitCost('');
+      setCostReference('');
+      setCostRationale('');
       await Promise.all([refreshStock(), refreshMovements(selected.catalogItemId)]);
     } catch (cause) {
       setOperationError(cause instanceof Error ? cause.message : 'Unable to post this stock adjustment.');
@@ -304,7 +333,7 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
             <View style={styles.operationHead}>
               <View style={styles.flexCopy}>
                 <Text style={[styles.operationTitle, dark && darkStyles.titleText]}>Adjust stock</Text>
-                <Text style={[styles.muted, dark && darkStyles.bodyText]}>Record a controlled correction to this branch stock. Do not use this for supplier receipts or branch transfers.</Text>
+                <Text style={[styles.muted, dark && darkStyles.bodyText]}>Enter the amount to add or remove, not the new total. For an actual physical balance, use Stock count and review the variance.</Text>
               </View>
               <Pressable onPress={closeAdjustment} disabled={saving} style={styles.iconButton}><Ionicons name="close" size={20} color={theme.colors.slate} /></Pressable>
             </View>
@@ -314,7 +343,13 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
                 <Pressable
                   key={nextDirection}
                   disabled={forcedDirection !== null}
-                  onPress={() => setDirection(nextDirection)}
+                  onPress={() => {
+                    setDirection(nextDirection);
+                    setCostCaptureMode('pending');
+                    setUnitCost('');
+                    setCostReference('');
+                    setCostRationale('');
+                  }}
                   style={[styles.segmentButton, dark && darkStyles.outlineButton, direction === nextDirection && styles.segmentButtonActive, forcedDirection !== null && styles.disabled]}
                 >
                   <Text style={[styles.segmentText, dark && darkStyles.bodyText, direction === nextDirection && styles.segmentTextActive]}>{nextDirection === 'increase' ? 'Increase' : 'Decrease'}</Text>
@@ -331,9 +366,9 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
               ))}
             </View>
 
-            <Text style={[styles.fieldLabel, dark && darkStyles.bodyText]}>Quantity</Text>
+            <Text style={[styles.fieldLabel, dark && darkStyles.bodyText]}>{direction === 'increase' ? 'Quantity to ADD (not new total)' : 'Quantity to REMOVE (not new total)'}</Text>
             <TextInput value={quantity} onChangeText={setQuantity} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
-            {previewStockQuantity !== null && selectedUom ? <Text style={[styles.preview, dark && darkStyles.bodyText]}>{formatQuantity(parsedQuantity)} {selectedUom.name} = {formatQuantity(previewStockQuantity)} {selected.stockUom}</Text> : null}
+            {previewStockQuantity !== null && selectedUom ? <Text style={[styles.preview, dark && darkStyles.bodyText]}>{formatQuantity(parsedQuantity)} {selectedUom.name} = {direction === 'increase' ? '+' : '-'}{formatQuantity(previewStockQuantity)} {selected.stockUom}. Current: {formatQuantity(selected.quantityOnHand)}; after change: {formatQuantity(projectedStockQuantity ?? selected.quantityOnHand)} {selected.stockUom}. Final balance is verified when posted.</Text> : null}
 
             <View style={styles.fieldHeadingRow}>
               <Text style={[styles.fieldLabel, dark && darkStyles.bodyText]}>Reference</Text>
@@ -354,6 +389,8 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
                     key={nextReason}
                     onPress={() => {
                       setReason(nextReason);
+                      setCostCaptureMode('pending');
+                      setUnitCost(''); setCostReference(''); setCostRationale('');
                       const required = requiredDirectionForAdjustmentReason(nextReason);
                       if (required) setDirection(required);
                       setReasonOpen(false);
@@ -367,6 +404,28 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
               </View>
             ) : null}
             <Text style={[styles.helperText, dark && darkStyles.bodyText]}>Damage, expiry and missing stock reduce stock. Inventory recovery increases stock.</Text>
+
+            {direction === 'increase' ? <View style={{ gap: 9 }}>
+              <Text style={[styles.fieldLabel, dark && darkStyles.bodyText]}>Cost evidence for added stock</Text>
+              {capabilities.canManageHistoricalCost ? <>
+                <View style={styles.segmentRow}>
+                  <Pressable onPress={() => setCostCaptureMode('pending')} style={[styles.segmentButton, dark && darkStyles.outlineButton, costCaptureMode === 'pending' && styles.segmentButtonActive]}>
+                    <Text style={[styles.segmentText, dark && darkStyles.bodyText]}>Cost unavailable</Text>
+                  </Pressable>
+                  <Pressable onPress={() => setCostCaptureMode('verified')} style={[styles.segmentButton, dark && darkStyles.outlineButton, costCaptureMode === 'verified' && styles.segmentButtonActive]}>
+                    <Text style={[styles.segmentText, dark && darkStyles.bodyText]}>Verified cost</Text>
+                  </Pressable>
+                </View>
+                {costCaptureMode === 'verified' ? <>
+                  <Text style={[styles.fieldLabel, dark && darkStyles.bodyText]}>Cost per {selected.stockUom} (not selling price)</Text>
+                  <TextInput value={unitCost} onChangeText={setUnitCost} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
+                  <Text style={[styles.fieldLabel, dark && darkStyles.bodyText]}>Cost evidence reference</Text>
+                  <TextInput value={costReference} onChangeText={setCostReference} placeholder="Invoice or verified count sheet" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
+                  <Text style={[styles.fieldLabel, dark && darkStyles.bodyText]}>Why is this cost verified?</Text>
+                  <TextInput value={costRationale} onChangeText={setCostRationale} placeholder="Describe the documented historical cost" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
+                </> : <Text style={[styles.helperText, dark && darkStyles.bodyText]}>Added stock will be unvalued until a Manager records historical cost evidence in Merchant Web. No cost is inferred from selling price.</Text>}
+              </> : <Text style={[styles.helperText, dark && darkStyles.bodyText]}>You can adjust quantity. Cost is not inferred; an authorised Manager must review any missing cost evidence in Merchant Web.</Text>}
+            </View> : <Text style={[styles.helperText, dark && darkStyles.bodyText]}>Removed stock automatically uses existing governed valuation. Do not enter a new cost basis.</Text>}
 
             {operationError ? <ErrorCard text={operationError} dark={dark} /> : null}
             <View style={styles.formActions}>
