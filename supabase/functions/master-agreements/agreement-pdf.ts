@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'npm:pdf-lib@1.17.1';
 import { extractText, getDocumentProxy } from 'npm:unpdf@1.9.1';
+import { formatOrderFormInstallmentDueDate } from './installment-due-date.mjs';
 
 export type MasterSourceDocument = {
   filename: string;
@@ -308,15 +309,18 @@ function drawBranchCommitmentSchedules(
       const allocation = stringValue(installment.allocationMode);
       const percent = numberValue(installment.percentage);
       const portion = allocation === 'fixed' ? 'fixed installment' : `${percent}%`;
-      const dueAt = stringValue(installment.dueAt);
-      if (sequence < 1 || !dueAt) {
-        throw new Error('The Branch Order Form is missing a required installment sequence or due date');
+      if (sequence < 1 || !Number.isInteger(sequence) || !Object.hasOwn(installment, 'dueAt')) {
+        throw new Error('The Branch Order Form is missing a required installment sequence or due-date field');
       }
+      // Some approved versioned templates have NO calendar due-date rule.
+      // Reproduce that absence honestly, instead of fabricating a deadline
+      // or refusing to render an otherwise valid reviewed/legal commitment.
+      const dueDateLabel = formatOrderFormInstallmentDueDate(installment.dueAt, formatDate);
       if (y < 87) {
         page = doc.addPage(A4);
         y = drawSectionHeader(page, bold, 'MERCHANT ORDER FORM', 'Branch installments (continued)');
       }
-      const row = `Installment ${sequence} (${portion}): ${money(numberValue(installment.amountDue), currency)} | Due: ${formatDate(dueAt)}`;
+      const row = `Installment ${sequence} (${portion}): ${money(numberValue(installment.amountDue), currency)} | Due: ${dueDateLabel}`;
       const rendered = drawWrappedText(doc, page, regular, row, 75, y, 455, 9.2, 13.2, SLATE);
       page = rendered.page; y = rendered.y - 5;
     }
