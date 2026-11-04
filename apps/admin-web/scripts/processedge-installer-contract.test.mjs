@@ -10,6 +10,7 @@ const edge = read('../../../supabase/functions/platform-setup-installer/index.ts
 const migration = read('../../../supabase/migrations/20261104050000_oa5_internal_setup_installer_identity_foundation.sql');
 const exclusion = read('../../../supabase/migrations/20261104053000_oa5_installer_invitation_and_merchant_exclusion.sql');
 const deviceMigration = read('../../../supabase/migrations/20261104063000_oa5_installer_scoped_device_authority.sql');
+const registerAudit = read('../../../supabase/migrations/20261104064500_oa5_installer_register_audit_and_idempotency.sql');
 const printerEdge = read('../../../supabase/functions/printer/index.ts');
 
 test('ProcessEdge installer management uses the existing approved setup shell',()=>{
