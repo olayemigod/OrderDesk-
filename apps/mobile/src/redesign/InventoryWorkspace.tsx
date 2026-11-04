@@ -227,7 +227,8 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
     if (!commandId) return setOperationError('Restart this stock adjustment and try again.');
     if (!selectedUom) return setOperationError('Choose a unit for this stock adjustment.');
     if (!Number.isFinite(parsed) || parsed <= 0) return setOperationError('Enter the amount to adjust, not the new total.');
-    if (projectedStockQuantity !== null && projectedStockQuantity < -0.000001) return setOperationError('The reduction exceeds available stock. Refresh and try again.');
+    // Projected balance is guidance only; the server resolves exact-command
+    // retries before checking available stock, including after lost responses.
     if (!reference.trim()) return setOperationError('Reference is required. Generate one or enter an external reference.');
     if (!reason.trim()) return setOperationError('Choose a reason for this stock adjustment.');
     const isVerifiedIncrease = direction === 'increase'
@@ -342,7 +343,13 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
                 <Pressable
                   key={nextDirection}
                   disabled={forcedDirection !== null}
-                  onPress={() => setDirection(nextDirection)}
+                  onPress={() => {
+                    setDirection(nextDirection);
+                    setCostCaptureMode('pending');
+                    setUnitCost('');
+                    setCostReference('');
+                    setCostRationale('');
+                  }}
                   style={[styles.segmentButton, dark && darkStyles.outlineButton, direction === nextDirection && styles.segmentButtonActive, forcedDirection !== null && styles.disabled]}
                 >
                   <Text style={[styles.segmentText, dark && darkStyles.bodyText, direction === nextDirection && styles.segmentTextActive]}>{nextDirection === 'increase' ? 'Increase' : 'Decrease'}</Text>
@@ -382,6 +389,8 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
                     key={nextReason}
                     onPress={() => {
                       setReason(nextReason);
+                      setCostCaptureMode('pending');
+                      setUnitCost(''); setCostReference(''); setCostRationale('');
                       const required = requiredDirectionForAdjustmentReason(nextReason);
                       if (required) setDirection(required);
                       setReasonOpen(false);

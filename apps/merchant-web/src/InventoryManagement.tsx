@@ -331,7 +331,8 @@ export default function InventoryManagement({ tenantId, branch, branches }: { te
     event.preventDefault(); if (!branch) return;
     const quantity = Number(adjustQty);
     if (!adjustProductId || !adjustUomId || !Number.isFinite(quantity) || quantity <= 0 || !adjustReference.trim()) { setError('Enter the amount of stock to change, not the new total.'); return; }
-    if (projectedStockBalance !== null && projectedStockBalance < -0.000001) { setError('The reduction exceeds current stock. Refresh stock and try again.'); return; }
+    // The preview is advisory: a previous exact command may already have
+    // committed while its response was lost, so never block server replay.
     const verified = adjustDirection === 'increase' && canManageCost && costMode === 'verified';
     if (verified && (!verifiedUnitCost.trim() || !Number.isFinite(Number(verifiedUnitCost)) || Number(verifiedUnitCost) < 0 || !costEvidenceReference.trim() || !costEvidenceRationale.trim())) {
       setError('Enter verified cost per Stock UOM, a document reference and a cost evidence rationale.'); return;
@@ -528,10 +529,22 @@ export default function InventoryManagement({ tenantId, branch, branches }: { te
         <label className="field">Reorder target<SellerTrayInput type="number" min="0" step="any" value={policyTarget} onChange={(event) => setPolicyTarget(event.target.value)} placeholder="Optional" /></label>
       </div><div className="form-actions"><button className="primary-button" disabled={busy}>{busy ? 'Saving…' : 'Save policy'}</button></div></form> : null}
       {capabilities.can_adjust_stock ? <form className="panel product-editor-stack" onSubmit={submitAdjustment}><div className="panel-head"><div><p className="eyebrow">Controlled correction</p><h3>Adjust stock</h3></div></div><p className="muted">Enter the amount of stock to add or remove, not the new total on hand. For an actual counted balance, use Stock count, review the variance and apply. Supplier receipts belong in Purchasing and Branch receipts belong in Transfers.</p><div className="form-grid">
-        <label className="field">Product<SellerTraySelect value={adjustProductId} onChange={(event) => setAdjustProductId(event.target.value)}>{products.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</SellerTraySelect></label>
-        <label className="field">Unit<SellerTraySelect value={adjustUomId} onChange={(event) => setAdjustUomId(event.target.value)}>{selectedProduct?.catalog_item_uoms?.map((row) => <option key={row.id} value={row.id}>{row.uom_name}</option>)}</SellerTraySelect></label>
+        <label className="field">Product<SellerTraySelect value={adjustProductId} onChange={(event) => {
+          setAdjustProductId(event.target.value); setCostMode('pending');
+          setVerifiedUnitCost(''); setCostEvidenceReference(''); setCostEvidenceRationale('');
+          adjustRequest.current = null;
+        }}>{products.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</SellerTraySelect></label>
+        <label className="field">Unit<SellerTraySelect value={adjustUomId} onChange={(event) => {
+          setAdjustUomId(event.target.value); setCostMode('pending');
+          setVerifiedUnitCost(''); setCostEvidenceReference(''); setCostEvidenceRationale('');
+          adjustRequest.current = null;
+        }}>{selectedProduct?.catalog_item_uoms?.map((row) => <option key={row.id} value={row.id}>{row.uom_name}</option>)}</SellerTraySelect></label>
         <label className="field">{adjustDirection === 'increase' ? 'Quantity to ADD (not new total)' : 'Quantity to REMOVE (not new total)'}<SellerTrayInput type="number" min="0" step="any" value={adjustQty} onChange={(event) => setAdjustQty(event.target.value)} /></label>
-        <label className="field">Direction<SellerTraySelect value={adjustDirection} onChange={(event) => setAdjustDirection(event.target.value as 'increase' | 'decrease')}><option value="decrease">Reduce stock</option><option value="increase">Increase stock</option></SellerTraySelect></label>
+        <label className="field">Direction<SellerTraySelect value={adjustDirection} onChange={(event) => {
+          setAdjustDirection(event.target.value as 'increase' | 'decrease');
+          setCostMode('pending'); setVerifiedUnitCost(''); setCostEvidenceReference(''); setCostEvidenceRationale('');
+          adjustRequest.current = null;
+        }}><option value="decrease">Reduce stock</option><option value="increase">Increase stock</option></SellerTraySelect></label>
         <label className="field">Reason<SellerTraySelect value={adjustReason} onChange={(event) => setAdjustReason(event.target.value)}>{ADJUST_REASONS.map((reason) => <option key={reason}>{reason}</option>)}</SellerTraySelect></label>
         <label className="field">Reference<SellerTrayInput value={adjustReference} onChange={(event) => setAdjustReference(event.target.value)} /></label>
       </div>
