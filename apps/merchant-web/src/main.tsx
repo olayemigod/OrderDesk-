@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import MerchantApp from './MerchantApp';
+import MerchantPortalRoot from './MerchantPortalRoot';
 import { consumeMerchantWebHandoff } from './merchantHandoff';
 import './styles.css';
 import './products.css';
@@ -31,7 +32,7 @@ async function start() {
       : <MerchantApp />;
     createRoot(root!).render(
       <StrictMode>
-        {merchantApp}
+        <MerchantPortalRoot>{merchantApp}</MerchantPortalRoot>
       </StrictMode>,
     );
   } catch (cause) {
