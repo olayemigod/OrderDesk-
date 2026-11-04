@@ -17,7 +17,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { reusedTestProjectApproved } = require('../../apps/mobile/app.config.js');
+const { reusedTestProjectApproved } = require('./oa5-staging-attestation.cjs');
 const attestationUrl = new URL('../../docs/qa/oa5-staging-backend-attestation.json', import.meta.url);
 
 
