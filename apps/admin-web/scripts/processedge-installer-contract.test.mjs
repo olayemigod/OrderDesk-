@@ -64,6 +64,19 @@ test('Appointment-scope access is server-only, time and revocation bounded',()=>
 });
 
 
+test('Installer register mutation is command-keyed and appointment-audited',()=>{
+  assert.match(registerAudit,/save_sellertray_installer_register/);
+  assert.match(registerAudit,/sellertray_installer_register_commands/);
+  assert.match(registerAudit,/sellertray_installer_register_events/);
+  assert.match(registerAudit,/sellertray_capture_installer_register_change/);
+  assert.match(registerAudit,/sellertray_installer_register_mutation_audit/);
+  assert.match(registerAudit,/current_setting\('sellertray\.installer_register_command_id'/);
+  assert.match(registerAudit,/p_request_key text/);
+  assert.match(registerAudit,/v_previous\.request_facts is distinct from v_facts/);
+  assert.match(registerAudit,/public\.save_sellertray_register/);
+  assert.match(registerAudit,/prevent_sellertray_installer_register_event_mutation/);
+});
+
 test('Installer hardware work stays inside appointment-scoped shared printer authority',()=>{
   assert.match(deviceMigration,/sellertray_setup_installer_device_allowed/);
   assert.match(deviceMigration,/auth\.uid\(\)=p_actor_user_id/);
