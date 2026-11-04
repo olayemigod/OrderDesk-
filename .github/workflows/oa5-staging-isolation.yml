@@ -17,6 +17,9 @@ on:
       - 'scripts/qa/oa5-test-backup-manifest.test.mjs'
       - 'docs/qa/oa5-test-merchant-fixtures.json'
       - 'scripts/qa/oa5-android-qa-variant.test.mjs'
+      - 'apps/mobile/src/domain/nativeAuthScheme.ts'
+      - 'apps/mobile/src/components/AuthGate.tsx'
+      - 'apps/mobile/scripts/native-auth-scheme.test.mjs'
       - 'apps/mobile/app.config.js'
       - 'apps/mobile/eas.json'
       - '.github/workflows/oa5-staging-isolation.yml'
@@ -43,3 +46,4 @@ jobs:
           node scripts/qa/oa5-test-merchant-fixtures.mjs --check
           node --test scripts/qa/oa5-test-backup-manifest.test.mjs
           node --test scripts/qa/vercel-frontend-environment.test.mjs
+          node --experimental-strip-types --test apps/mobile/scripts/native-auth-scheme.test.mjs
