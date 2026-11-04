@@ -76,6 +76,8 @@ Deno.serve(async (request) => {
     .eq('user_id', userId)
     .maybeSingle();
   if (membershipError) return json({ error: membershipError.message }, 400);
+  let installerBranchId: string | null = null;
+  const installerAppointmentId = !membership ? cleanUuid(body.appointmentId) : null;
   if (!membership) {
     // ProcessEdge installers are not merchant Team members. They may only
     // configure an assigned Branch printer or test it; never print any sales
@@ -105,7 +107,14 @@ Deno.serve(async (request) => {
           .eq('tenant_id',tenantId).eq('id',jobId).maybeSingle();
         if (jobError) return json({ error: 'Unable to check this test print' }, 400);
         if (job?.job_type === 'test' && job.requested_by_user_id === userId) {
-          deviceBranchId = job.branch_id;
+          const {data: binding,error: bindingError} = await admin
+            .from('sellertray_installer_test_print_bindings')
+            .select('appointment_id')
+            .eq('job_id',jobId).eq('actor_user_id',userId)
+            .eq('tenant_id',tenantId).eq('appointment_id',appointmentId)
+            .maybeSingle();
+          if (bindingError) return json({ error: 'Unable to verify test-print appointment' }, 400);
+          if (binding?.appointment_id === appointmentId) deviceBranchId = job.branch_id;
         }
       }
     }
@@ -118,6 +127,7 @@ Deno.serve(async (request) => {
     if (assignmentError || assigned !== true) {
       return json({ error: 'This appointment no longer authorizes this Branch printer' }, 403);
     }
+    installerBranchId = deviceBranchId;
   }
 
   if (action === 'request_business_document_print') {
@@ -164,15 +174,26 @@ Deno.serve(async (request) => {
         || (jobType === 'test' && orderId !== null)) {
       return json({ error: 'Printer, print type and request key are required' }, 400);
     }
-    rpcName = 'request_sellertray_print_job';
-    rpcArgs = {
-      p_tenant_id: tenantId,
-      p_printer_id: printerId,
-      p_job_type: jobType,
-      p_order_id: orderId,
-      p_request_key: requestKey,
-      p_actor_user_id: userId,
-    };
+    rpcName = installerAppointmentId
+      ? 'request_sellertray_installer_test_print_job'
+      : 'request_sellertray_print_job';
+    rpcArgs = installerAppointmentId
+      ? {
+          p_actor_user_id: userId,
+          p_tenant_id: tenantId,
+          p_branch_id: installerBranchId,
+          p_appointment_id: installerAppointmentId,
+          p_printer_id: printerId,
+          p_request_key: requestKey,
+        }
+      : {
+          p_tenant_id: tenantId,
+          p_printer_id: printerId,
+          p_job_type: jobType,
+          p_order_id: orderId,
+          p_request_key: requestKey,
+          p_actor_user_id: userId,
+        };
   } else {
     const jobId = cleanUuid(body.jobId);
     const status = body.status === 'printing' || body.status === 'printed' || body.status === 'failed'
