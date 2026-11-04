@@ -71,7 +71,9 @@ function qaConfiguration({ config }, env = process.env, testEvidence = undefined
   return {
     ...config,
     name: 'SellerTray QA',
-    slug: 'sellertray-qa',
+    // EAS projectId remains linked to the existing SellerTray project;
+    // Android applicationId/name provide QA isolation, not a new EAS slug.
+    slug: config.slug,
     scheme: ['sellertray-qa'],
     android: {
       ...config.android,
