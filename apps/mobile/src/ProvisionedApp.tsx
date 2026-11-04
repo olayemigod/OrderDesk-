@@ -4,6 +4,7 @@ import { Platform, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, T
 import { AuthGate } from './components/AuthGate';
 import { CreateBusinessView } from './components/CreateBusinessView';
 import { LegalAcceptanceGate } from './components/LegalAcceptanceGate';
+import { ProcessEdgeIdentityGate } from './components/ProcessEdgeIdentityGate';
 import { PlatformAdminView } from './components/PlatformAdminView';
 import { SellerTrayLoadingScreen } from './components/SellerTrayLoadingScreen';
 import {
@@ -24,13 +25,15 @@ export default function ProvisionedApp() {
 
   return (
     <AuthGate>
-      <LegalAcceptanceGate>
-        <ProvisioningGate
-          focusedInvitationId={invitationLink.invitationId}
-          invitationLinkReady={invitationLink.ready}
-          onResolveInvitation={invitationLink.clearInvitation}
-        />
-      </LegalAcceptanceGate>
+      <ProcessEdgeIdentityGate>
+        <LegalAcceptanceGate>
+          <ProvisioningGate
+            focusedInvitationId={invitationLink.invitationId}
+            invitationLinkReady={invitationLink.ready}
+            onResolveInvitation={invitationLink.clearInvitation}
+          />
+        </LegalAcceptanceGate>
+      </ProcessEdgeIdentityGate>
     </AuthGate>
   );
 }
