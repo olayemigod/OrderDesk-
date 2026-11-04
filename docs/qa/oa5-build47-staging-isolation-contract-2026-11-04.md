@@ -35,6 +35,10 @@ The read-only local check `SELLERTRAY_PRODUCTION_LAST_APPLIED_MIGRATION=<fresh l
 
 `node scripts/qa/oa5-staging-isolation.mjs --target-only` checks only a proposed isolated Supabase endpoint and publishable key. The existing agreement-test ref remains specifically blocked until its archive, approved clean rebuild and reviewed attestation are complete; this is intentional. A passing result means **staging target accepted for further preparation, not a working or installed build**.
 
+## Dedicated QA merchant acceptance
+
+**User decision 04/11/2026:** OA5 hardware/installation and future C2 Mobile testing must use dedicated **synthetic test merchants** in the independently verified Test/Staging backend, never Tandar Oil Solutions or another live merchant. Test fixture groups must cover first-merchant activation, two independent Branches, Owner/Manager/Cashier permission denial, separate appointed ProcessEdge Installer, POS/stock/UOM/receivables, printer/register/receipt-copy, sandbox commercial settlement, idempotent retries, failed payments, and optional customer phone. Use test-only email/WhatsApp/webhook/notification sinks; no live money or message delivery. Existing production-bound Android Build 47 cannot be used as the staging client; a new separately identified QA APK with proven non-production endpoint is required. Preserve Tandar's installed production app/merchant data and the legacy Business/trial runtime until later approved release gates.
+
 ## Evidence required for closeout
 
 Record exact GitHub PR/SHA, independent staging project ref (and branch ID only if applicable), migration ledger range and function deployment identities, test user/Branch/appointment references, AAL1 denial and AAL2 allow, real Bluetooth 58/80mm test-print IDs, immutable handover completion, activation/entitlement state, Vercel Admin/Merchant exact-SHA screenshots and the human approval date in **dd/mm/yyyy**. No test is green by inference.
