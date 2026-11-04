@@ -15,6 +15,8 @@
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 
 const configUrl = new URL('../../apps/mobile/eas.json', import.meta.url);
 
@@ -37,6 +39,7 @@ function plausiblePublishableKey(value) {
 
 export function verifyStagingIsolation({
   productionUrl, productionKey, qaUrl, qaKey, stagingUrl, stagingKey,
+  productionAndroidPackage, qaAndroidPackage, qaAndroidName,
   targetOnly = false,
 }) {
   const errors = [];
@@ -62,18 +65,43 @@ export function verifyStagingIsolation({
       errors.push('The QA APK configuration does not use the staging project publishable key');
     if (production && qa === production)
       errors.push('QA app configuration still targets production; do not install for OA5 lifecycle testing');
+    if (productionAndroidPackage !== 'ng.processedge.sellertray'
+        || qaAndroidPackage !== 'ng.processedge.sellertray.qa'
+        || qaAndroidPackage === productionAndroidPackage
+        || qaAndroidName !== 'SellerTray QA')
+      errors.push('QA Android must have its own SellerTray QA identity and package; production app replacement is forbidden');
   }
   return { ok: errors.length === 0, errors, production, staging, qa, targetOnly };
 }
 
 export function loadAppSettings() {
   const config = JSON.parse(readFileSync(fileURLToPath(configUrl), 'utf8'));
+  const baseApp = JSON.parse(readFileSync(fileURLToPath(
+    new URL('../../apps/mobile/app.json', import.meta.url)), 'utf8')).expo;
   const profiles = config.build ?? {};
+  const stagingVariant = process.env.SELLERTRAY_APP_VARIANT === 'qa-staging';
+  // Legacy "qa" profile still points at production; it is never staging.
+  let qaAndroidPackage = baseApp.android?.package;
+  let qaAndroidName = baseApp.name;
+  if (stagingVariant && profiles['qa-staging']?.env?.SELLERTRAY_APP_VARIANT === 'qa-staging') {
+    try {
+      const resolved = require('../../apps/mobile/app.config.js')({ config: baseApp });
+      qaAndroidPackage = resolved.android?.package;
+      qaAndroidName = resolved.name;
+    } catch {
+      // Missing/invalid protected QA Firebase/backend config must fail closed.
+      qaAndroidPackage = null;
+      qaAndroidName = null;
+    }
+  }
   return {
     productionUrl: profiles.production?.env?.EXPO_PUBLIC_SUPABASE_URL,
     productionKey: profiles.production?.env?.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
-    qaUrl: profiles.qa?.env?.EXPO_PUBLIC_SUPABASE_URL,
-    qaKey: profiles.qa?.env?.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+    qaUrl: stagingVariant ? process.env.EXPO_PUBLIC_SUPABASE_URL : profiles.qa?.env?.EXPO_PUBLIC_SUPABASE_URL,
+    qaKey: stagingVariant ? process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY : profiles.qa?.env?.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+    productionAndroidPackage: baseApp.android?.package,
+    qaAndroidPackage,
+    qaAndroidName,
   };
 }
 
