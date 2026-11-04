@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(20);
+select extensions.plan(23);
 
 -- C2-7: exercise real publication, Branch order, governed Order Form issue,
 -- separately accepted Master, confirmed package and native term registration.
@@ -16,6 +16,9 @@ create temp table c2_legal_proof_fixture(
  branch_id uuid,
  order_result jsonb,
  master_id uuid,
+ later_master_id uuid,
+ reviewed_package_id uuid,
+ wrong_package_id uuid,
  template_id uuid,
  form_id uuid,
  master_acceptance_id uuid,
@@ -24,7 +27,8 @@ create temp table c2_legal_proof_fixture(
  missing_master_denied boolean not null default false,
  unconfirmed_form_denied boolean not null default false,
  outsider_denied boolean not null default false,
- signer_spoof_denied boolean not null default false
+ signer_spoof_denied boolean not null default false,
+ wrong_package_denied boolean not null default false
 ) on commit drop;
 
 insert into c2_legal_proof_fixture(
@@ -152,6 +156,40 @@ set master_acceptance_id=public.accept_sellertray_master_agreement(
  jsonb_build_object('authority_confirmed',true,'channel','merchant_web'),
  gen_random_uuid(),f.owner_id);
 
+update c2_legal_proof_fixture f set
+ reviewed_package_id=public.create_sellertray_agreement_package(f.tenant_id,f.form_id,f.master_id),
+ later_master_id=public.publish_sellertray_master_agreement_admin(
+  'c2-legal-next-'||substr(f.tenant_id::text,1,8),
+  'SellerTray Master Agreement','New Master content published after the Order Form.',
+  now()-interval '1 minute','Legal review pinning regression',f.admin_id);
+
+update c2_legal_proof_fixture f set
+ wrong_package_id=public.create_sellertray_agreement_package(f.tenant_id,f.form_id,f.later_master_id);
+
+select extensions.is(
+ (select public.resolve_sellertray_master_agreement_version_id(now()) from c2_legal_proof_fixture),
+ (select later_master_id from c2_legal_proof_fixture),
+ 'A newly published Master supersedes the Order Form pinned Master for new purchases');
+
+do $test$
+declare f c2_legal_proof_fixture%rowtype;
+begin
+ select * into strict f from c2_legal_proof_fixture;
+ begin
+  perform public.confirm_sellertray_agreement_package_reviewed(
+   f.tenant_id,f.form_id,f.wrong_package_id,
+   (select package_fingerprint from public.sellertray_agreement_packages
+    where id=f.wrong_package_id),
+   'Business Owner',jsonb_build_object('authority_confirmed',true),
+   gen_random_uuid(),f.owner_id);
+ exception when sqlstate '23514' then
+  update c2_legal_proof_fixture set wrong_package_denied=true;
+ end;
+end $test$;
+select extensions.ok(
+ (select wrong_package_denied from c2_legal_proof_fixture),
+ 'A newer unpinned Master package cannot be confirmed for an older C2 Order Form');
+
 do $test$
 declare f c2_legal_proof_fixture%rowtype;
 begin
@@ -223,13 +261,20 @@ select set_config('request.jwt.claim.sub',
  (select owner_id::text from c2_legal_proof_fixture),true);
 
 update c2_legal_proof_fixture f
-set confirmation_result=public.confirm_sellertray_agreement_package(
- f.tenant_id,f.form_id,'Business Owner',
- jsonb_build_object('authority_confirmed',true),
+set confirmation_result=public.confirm_sellertray_agreement_package_reviewed(
+ f.tenant_id,f.form_id,f.reviewed_package_id,
+ (select p.package_fingerprint from public.sellertray_agreement_packages p
+  where p.id=f.reviewed_package_id),
+ 'Business Owner',jsonb_build_object('authority_confirmed',true),
  gen_random_uuid(),f.owner_id);
 
 select set_config('request.jwt.claim.role','service_role',true);
 select set_config('request.jwt.claim.sub','',true);
+
+select extensions.is(
+ (select (confirmation_result->>'agreementPackageId')::uuid from c2_legal_proof_fixture),
+ (select reviewed_package_id from c2_legal_proof_fixture),
+ 'Confirmed legal package identity equals the originally reviewed pinned package');
 
 select extensions.is(
  (select jsonb_array_length(confirmation_result->'branchSubscriptions')
@@ -259,9 +304,11 @@ select extensions.ok(
  'Native Branch Subscription preserves exact purchased and accepted legal identities');
 
 select extensions.is(
- (select (public.confirm_sellertray_agreement_package(
-  f.tenant_id,f.form_id,'Business Owner',
-  jsonb_build_object('authority_confirmed',true),
+ (select (public.confirm_sellertray_agreement_package_reviewed(
+  f.tenant_id,f.form_id,f.reviewed_package_id,
+  (select p.package_fingerprint from public.sellertray_agreement_packages p
+   where p.id=f.reviewed_package_id),
+  'Business Owner',jsonb_build_object('authority_confirmed',true),
   c.command_id,f.owner_id)->>'orderFormConfirmationId')::uuid
   from c2_legal_proof_fixture f
   join public.sellertray_order_form_confirmations c on c.order_form_id=f.form_id),
