@@ -1,0 +1,65 @@
+name: SellerTray Environment Resource Governance
+
+# Cheap, offline-only contract. Do not trigger web previews, Android builds,
+# Supabase migrations, provider webhooks or other paid/limited resources.
+on:
+  pull_request:
+    paths:
+      - 'AGENTS.md'
+      - '.agents/skills/sellertray-project-implementation/SKILL.md'
+      - '.agents/skills/sellertray-project-implementation/ENVIRONMENTS_RESOURCES.md'
+      - 'apps/admin-web/vercel.json'
+      - 'apps/merchant-web/vercel.json'
+      - '.github/workflows/android-qa-apk.yml'
+      - 'scripts/qa/sellertray-environment-resource-policy.mjs'
+      - 'scripts/qa/sellertray-environment-resource-policy.test.mjs'
+      - 'scripts/qa/vercel-frontend-environment.mjs'
+      - 'scripts/qa/vercel-frontend-environment.test.mjs'
+      - 'docs/qa/oa5-staging-backend-attestation.json'
+      - 'apps/merchant-web/package.json'
+      - 'apps/admin-web/package.json'
+      - '.github/workflows/environment-resource-governance.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'AGENTS.md'
+      - '.agents/skills/sellertray-project-implementation/SKILL.md'
+      - '.agents/skills/sellertray-project-implementation/ENVIRONMENTS_RESOURCES.md'
+      - 'apps/admin-web/vercel.json'
+      - 'apps/merchant-web/vercel.json'
+      - '.github/workflows/android-qa-apk.yml'
+      - 'scripts/qa/sellertray-environment-resource-policy.mjs'
+      - 'scripts/qa/sellertray-environment-resource-policy.test.mjs'
+      - 'scripts/qa/vercel-frontend-environment.mjs'
+      - 'scripts/qa/vercel-frontend-environment.test.mjs'
+      - 'docs/qa/oa5-staging-backend-attestation.json'
+      - 'apps/merchant-web/package.json'
+      - 'apps/admin-web/package.json'
+      - '.github/workflows/environment-resource-governance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sellertray-environment-resources-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout source SHA
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Offline resource governance tests
+        run: node --test scripts/qa/sellertray-environment-resource-policy.test.mjs scripts/qa/vercel-frontend-environment.test.mjs
+      - name: Verify project policies
+        run: node scripts/qa/sellertray-environment-resource-policy.mjs --check

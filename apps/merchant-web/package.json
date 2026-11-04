@@ -9,6 +9,7 @@
     "preflight": "node scripts/security-preflight.mjs && node scripts/auth-management-preflight.mjs && node scripts/merchant-approved-preservation-preflight.mjs && node scripts/ai-security-preflight.mjs && node scripts/commercial-agreements-preflight.mjs && node scripts/lifecycle-notifications-preflight.mjs && node scripts/sellertray-elements-preflight.mjs && node scripts/mobile-layout-preflight.mjs && node scripts/brand-preflight.mjs && node scripts/billing-runtime-preflight.mjs && node scripts/team-invitation-email-preflight.mjs && node scripts/settings-payment-customer-preflight.mjs && node scripts/branch-setup-proof-preflight.mjs",
     "preflight:billing-runtime": "node scripts/billing-runtime-preflight.mjs",
     "preflight:team-invitation-email": "node scripts/team-invitation-email-preflight.mjs",
+    "prebuild": "node ../../scripts/qa/vercel-frontend-environment.mjs merchant",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview"
   },

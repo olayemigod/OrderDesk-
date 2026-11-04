@@ -1,0 +1,49 @@
+name: OA5 Staging Isolation Contract
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/qa/oa5-staging-attestation.cjs'
+      - 'docs/qa/oa5-staging-backend-attestation.json'
+      - 'scripts/qa/vercel-frontend-environment.mjs'
+      - 'scripts/qa/vercel-frontend-environment.test.mjs'
+      - 'scripts/qa/oa5-staging-isolation.mjs'
+      - 'scripts/qa/oa5-staging-isolation.test.mjs'
+      - 'scripts/qa/oa5-migration-boundary.mjs'
+      - 'scripts/qa/oa5-migration-boundary.test.mjs'
+      - 'scripts/qa/oa5-test-merchant-fixtures.mjs'
+      - 'scripts/qa/oa5-test-merchant-fixtures.test.mjs'
+      - 'scripts/qa/oa5-test-backup-manifest.mjs'
+      - 'scripts/qa/oa5-test-backup-manifest.test.mjs'
+      - 'docs/qa/oa5-test-merchant-fixtures.json'
+      - 'scripts/qa/oa5-android-qa-variant.test.mjs'
+      - 'apps/mobile/src/domain/nativeAuthScheme.ts'
+      - 'apps/mobile/src/components/AuthGate.tsx'
+      - 'apps/mobile/scripts/native-auth-scheme.test.mjs'
+      - 'apps/mobile/app.config.js'
+      - 'apps/mobile/eas.json'
+      - '.github/workflows/oa5-staging-isolation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  non-production-boundary:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact candidate source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      - name: Set up Node 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Test OA5 isolated staging contract (offline only)
+        run: |
+          node --test scripts/qa/oa5-staging-isolation.test.mjs scripts/qa/oa5-migration-boundary.test.mjs scripts/qa/oa5-test-merchant-fixtures.test.mjs scripts/qa/oa5-android-qa-variant.test.mjs
+          node scripts/qa/oa5-test-merchant-fixtures.mjs --check
+          node --test scripts/qa/oa5-test-backup-manifest.test.mjs
+          node --test scripts/qa/vercel-frontend-environment.test.mjs
+          node --experimental-strip-types --test apps/mobile/scripts/native-auth-scheme.test.mjs

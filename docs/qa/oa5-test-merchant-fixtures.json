@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "environment": "test-staging",
+  "state": "planned-not-provisioned",
+  "can_mutate_database": false,
+  "can_copy_production_records": false,
+  "merchants": [
+    {
+      "code": "QA_FIRST_PURCHASE",
+      "name": "SellerTray QA - First Purchase",
+      "branches": [
+        {
+          "code": "QA_PRIMARY",
+          "name": "QA Initial Branch",
+          "scenario_state": "purchased_not_ready"
+        }
+      ],
+      "merchant_roles": [
+        "owner",
+        "manager"
+      ],
+      "oa5_scenarios": [
+        "qa_registration_and_master_agreement",
+        "qa_governed_commercial_order",
+        "qa_sandbox_payment_confirmation",
+        "qa_setup_appointment",
+        "qa_preactivation_register",
+        "qa_58mm_80mm_printer_test",
+        "qa_installer_handover",
+        "qa_activation_reconciliation",
+        "qa_optional_customer_phone"
+      ]
+    },
+    {
+      "code": "QA_OPERATIONS",
+      "name": "SellerTray QA - Branch Operations",
+      "branches": [
+        {
+          "code": "QA_NORTH",
+          "name": "QA North Branch",
+          "scenario_state": "active_after_governed_activation"
+        },
+        {
+          "code": "QA_SOUTH",
+          "name": "QA South Branch",
+          "scenario_state": "active_after_governed_activation"
+        }
+      ],
+      "merchant_roles": [
+        "owner",
+        "manager",
+        "cashier"
+      ],
+      "oa5_scenarios": [
+        "qa_pos_sale_and_payment",
+        "qa_branch_and_capability_isolation",
+        "qa_uom_and_stock_ledger",
+        "qa_partial_pay_later_receivables",
+        "qa_receipt_reprint_idempotency",
+        "qa_whatsapp_test_sink",
+        "qa_offline_replay_integrity"
+      ]
+    },
+    {
+      "code": "QA_UNREADY",
+      "name": "SellerTray QA - Inactive Branch",
+      "branches": [
+        {
+          "code": "QA_BASE",
+          "name": "QA Existing Branch",
+          "scenario_state": "active_after_governed_activation"
+        },
+        {
+          "code": "QA_PENDING",
+          "name": "QA Purchased Unready Branch",
+          "scenario_state": "purchased_not_ready"
+        }
+      ],
+      "merchant_roles": [
+        "owner",
+        "manager"
+      ],
+      "oa5_scenarios": [
+        "qa_inactive_branch_sale_denial",
+        "qa_purchased_branch_device_setup",
+        "qa_installer_aal1_denial",
+        "qa_installer_assignment_expiry_revocation",
+        "qa_cross_tenant_and_branch_denial"
+      ]
+    }
+  ],
+  "internal_roles": [
+    "platform_admin",
+    "platform_support",
+    "setup_installer"
+  ],
+  "required_safety_checks": [
+    "isolated_backend_attested",
+    "qa_apk_endpoint_sha_verified",
+    "separate_test_auth_identities",
+    "payment_sandbox_only",
+    "whatsapp_and_email_inert_sinks",
+    "push_notifications_test_only",
+    "no_live_customer_data",
+    "no_production_fallback",
+    "branch_scope_and_rls_verified",
+    "no_real_merchant_app_rebinding"
+  ],
+  "deferred_c2_scenarios": [
+    "qa_branch_owned_subscription_profiles",
+    "qa_independent_branch_renewal_anniversaries",
+    "qa_staggered_branch_expansion",
+    "qa_legacy_runtime_read_parity"
+  ]
+}

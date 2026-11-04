@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "state": "blocked",
+  "approved_staging_project_ref": null,
+  "reviewed_source_sha": null,
+  "clean_migration_replay_verified": false,
+  "historical_agreement_evidence_archived": false,
+  "restore_path_verified": false,
+  "vercel_preview_dependencies_reconciled": false,
+  "test_only_auth_and_provider_config_verified": false,
+  "qa_edge_functions_deployed_and_verified": false,
+  "approved_at": null,
+  "evidence_note": "Not yet attested. Do not bind any Merchant Web/Admin Web preview or mobile QA build to this project. Source file must be reviewed and updated with actual evidence before Test/Staging acceptance."
+}

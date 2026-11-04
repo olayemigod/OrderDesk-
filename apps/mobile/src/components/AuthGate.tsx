@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Ionicons } from '@expo/vector-icons';
+import Constants from 'expo-constants';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -16,6 +17,7 @@ import {
 import type { Session } from '@supabase/supabase-js';
 
 import { supabase } from '../lib/supabase';
+import { isNativeSellerTrayAuthUrl, nativeAuthRedirectUrl } from '../domain/nativeAuthScheme';
 import { SellerTrayBrand } from './SellerTrayBrand';
 import { SellerTrayLoadingScreen } from './SellerTrayLoadingScreen';
 
@@ -643,12 +645,12 @@ function PrimaryButton({ label, submitting, onPress }: { label: string; submitti
 }
 
 function isSellerTrayAuthUrl(url: string): boolean {
-  return url.startsWith('sellertray://') || url.startsWith('orderdesk://');
+  return isNativeSellerTrayAuthUrl(url, Constants.expoConfig);
 }
 
-function authRedirectUrl(path: string): string {
+function authRedirectUrl(path: 'auth-confirm' | 'reset-password'): string {
   if (Platform.OS === 'web' && typeof window !== 'undefined') return window.location.origin;
-  return `sellertray://${path}`;
+  return nativeAuthRedirectUrl(path, Constants.expoConfig);
 }
 
 function parseAuthTokens(url: string): {

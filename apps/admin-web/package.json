@@ -6,6 +6,7 @@
   "scripts": {
     "test": "node --test scripts/*.test.mjs",
     "dev": "vite",
+    "prebuild": "node ../../scripts/qa/vercel-frontend-environment.mjs admin",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit --pretty false",
     "preflight": "node scripts/security-preflight.mjs",
