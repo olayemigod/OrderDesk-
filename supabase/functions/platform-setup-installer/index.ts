@@ -2,7 +2,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.115.0';
 
 type JsonRecord = Record<string, unknown>;
 type AdminAction = 'invite' | 'reconcile_invite' | 'link_existing' | 'set_status' | 'assign' | 'revoke_assignment';
-type Action = AdminAction | 'mine' | 'devices' | 'staff_list' | 'profile';
+type Action = AdminAction | 'mine' | 'devices' | 'submit_handover' | 'handover_list' | 'staff_list' | 'profile';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const INVITE_REDIRECT_URL = Deno.env.get('SETUP_INSTALLER_INVITE_REDIRECT_URL') ?? '';
@@ -328,7 +328,7 @@ async function verifiedIdentity(authorization: string):
   } catch { return null; }
 }
 function cleanAction(value: unknown): Action | null {
-  const allowed: Action[] = ['invite','reconcile_invite','link_existing','set_status','assign','revoke_assignment','mine','devices','staff_list','profile'];
+  const allowed: Action[] = ['invite','reconcile_invite','link_existing','set_status','assign','revoke_assignment','mine','devices','submit_handover','handover_list','staff_list','profile'];
   return allowed.find(action => action === value) ?? null;
 }
 function cleanUuid(value: unknown): string | null {
