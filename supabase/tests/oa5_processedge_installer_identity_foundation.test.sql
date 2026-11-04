@@ -215,6 +215,69 @@ select extensions.ok(
   'AAL2 does not grant unrelated Branch hardware access'
 ) from oa5_installer_fixture f;
 
+-- The assigned installer creates a setup register through the one audited
+-- RPC. The same request key is safe after a lost Mobile response.
+select extensions.lives_ok(
+  $test$select public.save_sellertray_installer_register(
+    f.tenant_id,f.branch_id,f.appointment_id,
+    'OAI-SETUP-01','Front Counter Setup','oa5-installer-register-setup-01'
+  ) from oa5_installer_fixture f$test$,
+  'Assigned AAL2 installer creates a register through the audited command'
+);
+select extensions.ok(
+  (public.save_sellertray_installer_register(
+    f.tenant_id,f.branch_id,f.appointment_id,
+    'OAI-SETUP-01','Front Counter Setup','oa5-installer-register-setup-01'
+  )->>'idempotentReplay')::boolean,
+  'Exact request replay returns the same register without creating another'
+) from oa5_installer_fixture f;
+select extensions.ok(
+  (select count(*) from public.sellertray_installer_register_commands c
+    where c.request_key='oa5-installer-register-setup-01')=1
+  and (select count(*) from public.sellertray_installer_register_events e
+    join oa5_installer_fixture f on f.installer_id=e.actor_user_id
+    where e.appointment_id=f.appointment_id and e.event_type='created')=1
+  and (select count(*) from public.sellertray_registers r
+    join oa5_installer_fixture f on f.tenant_id=r.tenant_id
+    where r.branch_id=f.branch_id and r.code='OAI-SETUP-01')=1,
+  'Exactly one register and an immutable appointment-linked created event'
+);
+select extensions.throws_ok(
+  $test$select public.save_sellertray_installer_register(
+    f.tenant_id,f.branch_id,f.appointment_id,
+    'OTHER-REG','Other Register','oa5-installer-register-setup-01'
+  ) from oa5_installer_fixture f$test$,
+  '23505',null::text,'Same command key cannot be reused for different register facts'
+);
+select extensions.throws_ok(
+  $test$select public.save_sellertray_installer_register(
+    f.tenant_id,gen_random_uuid(),f.appointment_id,
+    'OAI-BAD','Out of Scope','oa5-installer-wrong-branch-01'
+  ) from oa5_installer_fixture f$test$,
+  '42501',null::text,'Register preparation is denied for another Branch'
+);
+select extensions.throws_ok(
+  $test$select public.save_sellertray_register(
+    f.tenant_id,null,f.branch_id,'OAI-BYPASS','Unlogged Register',false,true
+  ) from oa5_installer_fixture f$test$,
+  '42501',null::text,'Direct installer writes without an audited command are blocked'
+);
+select extensions.throws_ok(
+  $test$update public.sellertray_installer_register_events
+    set after_state='{}'::jsonb where event_type='created'$test$,
+  '55000',null::text,'Installer register audit history cannot be rewritten'
+);
+select extensions.ok(
+  not has_table_privilege('authenticated',
+    'public.sellertray_installer_register_commands','SELECT')
+  and not has_table_privilege('authenticated',
+    'public.sellertray_installer_register_events','INSERT')
+  and has_function_privilege('authenticated',
+    'public.save_sellertray_installer_register(uuid,uuid,uuid,text,text,text)','EXECUTE'),
+  'Only the audited installer command is client-callable; event records are server-protected'
+);
+
+
 select set_config('request.jwt.claims','{"role":"service_role"}',true);
 select extensions.ok(
   public.sellertray_setup_installer_device_allowed(
