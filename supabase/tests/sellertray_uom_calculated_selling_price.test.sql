@@ -57,13 +57,13 @@ with ins as (
 ) update sellertray_uom_price_fixture set pack_uom_id=(select id from ins);
 
 with ins as (
-  insert into public.catalog_item_uoms(tenant_id,catalog_item_id,uom_name,conversion_factor,selling_price,allow_fractional,is_default_selling)
+  insert into public.catalog_item_uoms(tenant_id,catalog_item_id,uom_name,conversion_factor,selling_price,barcode,allow_fractional,is_default_selling)
   select tenant_id,product_id,'Crate',12,1200,null,false,false
   from sellertray_uom_price_fixture returning id
 ) update sellertray_uom_price_fixture set crate_uom_id=(select id from ins);
 
 with ins as (
-  insert into public.catalog_item_uoms(tenant_id,catalog_item_id,uom_name,conversion_factor,selling_price,allow_fractional,is_default_selling)
+  insert into public.catalog_item_uoms(tenant_id,catalog_item_id,uom_name,conversion_factor,selling_price,barcode,allow_fractional,is_default_selling)
   select tenant_id,product_id,'Box',2,0,null,false,false
   from sellertray_uom_price_fixture returning id
 ) update sellertray_uom_price_fixture set free_uom_id=(select id from ins);
