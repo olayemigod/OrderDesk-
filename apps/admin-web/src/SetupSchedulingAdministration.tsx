@@ -234,7 +234,8 @@ export default function SetupSchedulingAdministration({
         </label>
         {selectedHandover ? <p>Installer evidence: {selectedHandover.submissionId}. Confirm the receiving merchant, printer and successful test below before completing setup.</p> : null}
       </section> : null}
-      {showCompletion && completion && center.canManage ? <SetupCompletionForm key={completion.id} branchName={completion.branchName} scheduledStartAt={completion.scheduledStartAt} saving={saving !== null} onClose={() => setCompletion(null)} onSubmit={async (evidence, reason) => {
+      {showCompletion && completion && center.canManage ? <SetupCompletionForm key={completion.id + ':' + selectedHandoverId}
+        handover={selectedHandover} branchName={completion.branchName} scheduledStartAt={completion.scheduledStartAt} saving={saving !== null} onClose={() => setCompletion(null)} onSubmit={async (evidence, reason) => {
         const storageKey = 'sellertray.setupCompletion.v1:' + tenantId + ':' + completion.id;
         const facts = JSON.stringify({ evidence, reason });
         const previous = sessionStorage.getItem(storageKey);
