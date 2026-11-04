@@ -649,6 +649,10 @@ For every SellerTray task:
 6. **Verify** — focused tests plus relevant regression tests. A change without verification is incomplete.
 7. **Report accurately** — state what changed, what was preserved, tests run/results, migration/build/deployment requirements, limitations and the next bounded milestone. Never report planned work as completed.
 
+## Environment and resource economy — approved 04/11/2026
+
+Read and apply the normative `ENVIRONMENTS_RESOURCES.md` whenever SellerTray work might incur Vercel previews, Android/Expo native builds, hosted Supabase branches/databases, remote migrations, third-party AI/WhatsApp/payment calls or other rate-limited resources. Run exactly two persistent logical environments: Production remains live for Tandar and all real merchants, Test/Staging hosts synthetic merchants only. Keep unaffected/reusable UI deployment artefacts and exact-SHA previews; create intentional one-per-surface acceptance previews using distinct approved preview branches rather than every feature push. Prefer cheap offline/source/CI checks before any browser, hosted, physical or billable test. Require explicit cost approval for any new paid instance, and never bypass OA5/C2 release gates merely to save quota.
+
 ## Live merchant protection and dedicated QA merchants — approved 04/11/2026
 
 SellerTray mobile operational testing, OA5 installation/activation acceptance and C2 lifecycle testing must use **dedicated synthetic test merchants**, test staff, and test Branches in a **separate verified non-production Supabase Test/Staging environment**. Real merchants (including Tandar Oil Solutions) must continue using the existing production-bound mobile app for day-to-day sales, stock, orders, receipts and payments without interruption.
