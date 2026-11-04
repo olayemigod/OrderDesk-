@@ -421,4 +421,41 @@ grant execute on function public.platform_admin_revoke_setup_installer_assignmen
   uuid,uuid,uuid,text
 ) to service_role;
 
+-- Dedicated ProcessEdge Mobile installation inbox. This is not a Merchant
+-- business list and cannot be used to infer an unrelated Business's identity.
+-- The AAL2-validated Edge transport supplies the authenticated actor ID.
+create or replace function public.get_sellertray_setup_installer_work(
+  p_actor_user_id uuid
+) returns jsonb language sql stable security invoker set search_path='' as $work$
+  select coalesce(jsonb_agg(
+    jsonb_build_object(
+      'assignmentId',a.id,
+      'appointmentId',ap.id,
+      'tenantId',a.tenant_id,
+      'businessName',t.name,
+      'branchId',a.branch_id,
+      'branchName',b.name,
+      'workerId',a.worker_id,
+      'scheduledStartAt',ap.scheduled_start_at,
+      'scheduledEndAt',ap.scheduled_end_at,
+      'appointmentStatus',ap.status,
+      'validUntil',a.valid_until
+    ) order by ap.scheduled_start_at,ap.id
+  ),'[]'::jsonb)
+  from public.sellertray_internal_setup_staff_assignments a
+  join public.sellertray_commercial_setup_appointments ap
+    on ap.id=a.appointment_id and ap.tenant_id=a.tenant_id
+      and ap.branch_id=a.branch_id and ap.worker_id=a.worker_id
+  join public.tenants t on t.id=a.tenant_id
+  join public.branches b on b.id=a.branch_id and b.tenant_id=a.tenant_id
+  where a.staff_user_id=p_actor_user_id
+    and public.sellertray_setup_installer_has_assignment(
+      p_actor_user_id,a.tenant_id,a.branch_id,a.appointment_id,now()
+    );
+$work$;
+revoke all on function public.get_sellertray_setup_installer_work(uuid)
+  from public,anon,authenticated;
+grant execute on function public.get_sellertray_setup_installer_work(uuid)
+  to service_role;
+
 commit;
