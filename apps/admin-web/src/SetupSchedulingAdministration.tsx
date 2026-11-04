@@ -14,6 +14,11 @@ type PendingRequest = { id: string; appointmentId: string; branchId: string; req
 type Onboarding = { blockers: { message: string }[]; commercialOrder: { installmentObligationId?: string } | null; activation: { operationallyActive?: boolean; guaranteeStart?: string; guaranteeEnd?: string }; nextAction: { label?: string } };
 type Center = { onboarding: Onboarding; canManage: boolean; canManagePlatformMasters: boolean; serviceAreas: ServiceArea[]; workers: Worker[]; branchAreas: BranchArea[]; setupSubjects: SetupSubject[]; appointments: Appointment[]; pendingRequests: PendingRequest[] };
 type Response = { ok?: boolean; id?: string; center?: unknown; result?: unknown };
+type InstallerHandover = {
+  submissionId: string; appointmentId: string; branchId: string;
+  actorUserId: string; printerId: string; testJobId: string;
+  evidence: Record<string, unknown>; reason: string; submittedAt: string;
+};
 type SetupView = 'all' | 'appointments' | 'resources' | 'completion' | 'activation';
 type ResourceTab = 'list' | 'area' | 'worker';
 
@@ -51,6 +56,9 @@ export default function SetupSchedulingAdministration({
   const [areaForm, setAreaForm] = useState({ code: '', name: '', reason: '' });
   const [workerForm, setWorkerForm] = useState({ workerCode: '', displayName: '', maxConcurrentSetups: '1', travelBufferMinutes: '30', serviceAreaIds: [] as string[], reason: '' });
   const [completion, setCompletion] = useState<Appointment | null>(null);
+  const [handovers, setHandovers] = useState<InstallerHandover[]>([]);
+  const [handoverError, setHandoverError] = useState<string | null>(null);
+  const [selectedHandoverId, setSelectedHandoverId] = useState('');
   const [schedule, setSchedule] = useState<ScheduleDraft | null>(null);
   const commandIds = useRef(new Map<string, string>());
   const currentTenant = useRef(tenantId);
@@ -58,7 +66,12 @@ export default function SetupSchedulingAdministration({
   const [loadedTenantId, setLoadedTenantId] = useState('');
 
   useEffect(() => { if (initialTenantId !== undefined) setTenantId(initialTenantId ?? ''); }, [initialTenantId]);
-  useEffect(() => { setCenter(null); setSchedule(null); setCompletion(null); setResourceTab('list'); commandIds.current.clear(); if (tenantId) void load(); }, [tenantId]);
+  useEffect(() => {
+    setCenter(null); setSchedule(null); setCompletion(null);
+    setHandovers([]); setHandoverError(null); setSelectedHandoverId('');
+    setResourceTab('list'); commandIds.current.clear();
+    if (tenantId) void load();
+  }, [tenantId]);
 
   const activeAreas = useMemo(() => center?.serviceAreas.filter((row) => row.active) ?? [], [center]);
   const activeWorkers = useMemo(() => center?.workers.filter((row) => row.active) ?? [], [center]);
@@ -77,8 +90,23 @@ export default function SetupSchedulingAdministration({
     try {
       const response = await invoke({ action: 'center', tenantId });
       if (currentTenant.current !== tenantId) return;
-      setCenter(parseCenter(response.center));
+      const parsed = parseCenter(response.center);
+      setCenter(parsed);
       setLoadedTenantId(tenantId);
+      if (parsed.canManage && (view === 'all' || view === 'completion')) {
+        try {
+          const result = await invokeJson<{handovers?: InstallerHandover[]}>('platform-setup-installer', {
+            action:'handover_list',tenantId,
+          }, session);
+          if (currentTenant.current !== tenantId) return;
+          setHandovers(Array.isArray(result.handovers) ? result.handovers : []);
+          setHandoverError(null);
+        } catch(cause) {
+          if (currentTenant.current !== tenantId) return;
+          setHandovers([]);
+          setHandoverError(messageFrom(cause,'Unable to load ProcessEdge installer handovers.'));
+        }
+      }
     } catch (cause) { setError(messageFrom(cause, 'Unable to load governed setup scheduling.')); }
     finally { setLoading(false); }
   }
@@ -141,7 +169,10 @@ export default function SetupSchedulingAdministration({
   }
 
   function transition(appointment: Appointment, status: 'in_progress' | 'completed' | 'cancelled' | 'no_show') {
-    if (status === 'completed') { setCompletion(appointment); return; }
+    if (status === 'completed') {
+      setCompletion(appointment); setSelectedHandoverId('');
+      return;
+    }
     const reason = window.prompt(`Reason for ${status.replace('_', ' ')}?`)?.trim() ?? '';
     if (reason.length < 6) return;
     const commandKey = `transition:${appointment.id}:${status}`;
@@ -154,6 +185,10 @@ export default function SetupSchedulingAdministration({
     if (reason.length < 6) return;
     void mutate(`request:${request.id}`, { action: 'resolve_request', requestId: request.id, decision: 'declined', reason }, 'Reschedule request declined.');
   }
+
+  const appointmentHandovers = handovers.filter(h =>
+    h.appointmentId === completion?.id && h.branchId === completion?.branchId);
+  const selectedHandover = appointmentHandovers.find(h => h.submissionId === selectedHandoverId) ?? null;
 
   const heading = view === 'resources'
     ? ['Setup resources', 'Manage ProcessEdge setup service areas, workforce coverage, capacity and travel buffers.']
