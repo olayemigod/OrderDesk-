@@ -30,7 +30,20 @@ type Assignment = {
   validUntil: string;
   revokedAt: string | null;
 };
-type StaffResponse = { staff?: StaffAccount[]; assignments?: Assignment[] };
+type InvitationReservation = {
+  commandId: string;
+  email: string;
+  workerId: string;
+  deliveryStartedAt: string | null;
+  authUserId: string | null;
+  linkedAt: string | null;
+  createdAt: string;
+};
+type StaffResponse = {
+  staff?: StaffAccount[];
+  assignments?: Assignment[];
+  pendingInvitations?: InvitationReservation[];
+};
 
 // datetime-local must receive the browser's local wall-clock time, not UTC.
 function toLocalDateTimeInput(value: Date): string {
@@ -49,6 +62,7 @@ export default function ProcessEdgeInstallerStaffManagement({
 }) {
   const [staff, setStaff] = useState<StaffAccount[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [pendingInvitations, setPendingInvitations] = useState<InvitationReservation[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +91,7 @@ export default function ProcessEdgeInstallerStaffManagement({
   useEffect(() => {
     setStaff([]);
     setAssignments([]);
+    setPendingInvitations([]);
     setSelectedStaffId('');
     setSelectedAppointmentId('');
     setError(null);
@@ -95,6 +110,7 @@ export default function ProcessEdgeInstallerStaffManagement({
       if (tenantRef.current !== requestTenant) return;
       setStaff(Array.isArray(result.staff) ? result.staff : []);
       setAssignments(Array.isArray(result.assignments) ? result.assignments : []);
+      setPendingInvitations(Array.isArray(result.pendingInvitations) ? result.pendingInvitations : []);
     } catch (cause) {
       if (tenantRef.current === requestTenant) {
         setError(cause instanceof Error ? cause.message : 'Unable to load ProcessEdge installers.');
@@ -227,6 +243,28 @@ export default function ProcessEdgeInstallerStaffManagement({
         </button>
       </div>
     </div>
+
+    <h4>Installer invitations and reconciliation</h4>
+    <p className="muted">Invitation records are internal ProcessEdge staff identities, even if email delivery or account linkage needs review. Reconciliation never sends another invitation.</p>
+    {pendingInvitations.length === 0 && !loading
+      ? <p className="muted">No installer invitation records yet.</p>
+      : <div className="workspace-table-wrap"><table className="workspace-table compact-table">
+        <thead><tr><th>Installer email</th><th>Setup worker</th><th>Delivery/linkage</th><th>Action</th></tr></thead>
+        <tbody>{pendingInvitations.map((invite) => <tr key={invite.commandId}>
+          <td><strong>{invite.email}</strong></td>
+          <td>{workers.find((w) => w.id === invite.workerId)?.name ?? 'Assigned ProcessEdge worker'}</td>
+          <td>{invite.linkedAt ? 'Linked'
+            : invite.deliveryStartedAt ? 'Delivery attempted — verify identity' : 'Reserved — delivery not attempted'}</td>
+          <td>{invite.deliveryStartedAt && !invite.linkedAt
+            ? <button type="button" className="workspace-button subtle" disabled={Boolean(saving)}
+              onClick={() => {
+                const reason = window.prompt('Approval reference or reason for reconciling this installer identity?')?.trim();
+                if (reason && reason.length >= 6) void mutate('reconcile_invite',{
+                  reservationCommandId:invite.commandId, reason,
+                },'Reserved installer identity reconciled. Activate only after email verification.');
+              }}>Reconcile account</button> : null}</td>
+        </tr>)}</tbody>
+      </table></div>}
 
     <h4>ProcessEdge installation accounts</h4>
     {staff.length === 0 && !loading ? <p className="muted">No ProcessEdge installer accounts have been registered yet.</p>
