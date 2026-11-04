@@ -85,7 +85,7 @@ select extensions.ok(
   from cost_adjust_fixture),
  'Reference replay using a fresh transport command preserves the original cost evidence'
 );
-do $
+do $$
 declare f record;
 begin
  select * into f from cost_adjust_fixture;
@@ -98,13 +98,13 @@ begin
  exception when unique_violation then
    update cost_adjust_fixture set new_reference_cost_dropped=true;
  end;
-end $;
+end $$;
 select extensions.ok((select new_reference_cost_dropped from cost_adjust_fixture),
  'New transport command cannot omit cost on a reference-replayed valued stock movement'
 );
 
 -- Cost-bearing command must not be replayed as an unvalued command.
-do $
+do $$
 declare f record;
 begin
   select * into f from cost_adjust_fixture;
@@ -117,7 +117,7 @@ begin
   exception when unique_violation then
     update cost_adjust_fixture set replay_dropped_cost_rejected=true;
   end;
-end $;
+end $$;
 select extensions.ok(
  (select replay_dropped_cost_rejected from cost_adjust_fixture),
  'Same stock command cannot drop previously recorded cost intent'
@@ -154,7 +154,7 @@ select extensions.is(
  (select v.unvalued_quantity_on_hand from public.sellertray_inventory_valuation_state v join cost_adjust_fixture f on v.tenant_id=f.tenant_id and v.catalog_item_id=f.product_id),
  2::numeric,'Unpriced positive quantity cannot inherit average cost');
 
-do $
+do $$
 declare f record;
 begin
  select * into f from cost_adjust_fixture;
@@ -167,14 +167,14 @@ begin
  exception when unique_violation then
    update cost_adjust_fixture set new_reference_cost_added=true;
  end;
-end $;
+end $$;
 select extensions.ok((select new_reference_cost_added from cost_adjust_fixture),
  'New transport command cannot retroactively add cost to an unvalued stock event'
 );
 
 -- Cost absent on first commit is immutable for this stock command even if the
 -- actor now knows the cost. Historical evidence has its own authorised command.
-do $
+do $$
 declare f record;
 begin
   select * into f from cost_adjust_fixture;
@@ -187,7 +187,7 @@ begin
   exception when unique_violation then
     update cost_adjust_fixture set replay_added_cost_rejected=true;
   end;
-end $;
+end $$;
 select extensions.ok(
  (select replay_added_cost_rejected from cost_adjust_fixture),
  'Same stock command cannot add cost evidence after an unvalued first commit'
