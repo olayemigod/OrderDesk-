@@ -170,7 +170,7 @@ Deno.serve(async (request) => {
       rpc<JsonRecord>('platform_admin_bootstrap', { p_actor_user_id: identity.userId }),
       rpc<boolean>('platform_admin_has_capability', {
         p_actor_user_id: identity.userId, p_capability_code: 'admin.branch_setup.manage',
-        p_tenant_id: action === 'assign' ? tenantId : null, p_as_of: new Date().toISOString(),
+        p_tenant_id: action === 'assign' || action === 'handover_list' ? tenantId : null, p_as_of: new Date().toISOString(),
       }),
     ]);
     if (bootstrap.actorRole !== 'admin' || allowed !== true) {
@@ -178,6 +178,18 @@ Deno.serve(async (request) => {
     }
   } catch {
     return json({ error: 'ProcessEdge Platform Admin setup permission required' }, 403);
+  }
+
+  if (action === 'handover_list') {
+    if (!tenantId) return json({ error: 'Select the Business for installation handovers' }, 400);
+    try {
+      const data = await rpc<unknown>('platform_admin_list_installer_handovers', {
+        p_actor_user_id: identity.userId, p_tenant_id: tenantId,
+      });
+      return json({ handovers: Array.isArray(data) ? data : [] });
+    } catch {
+      return json({ error: 'Unable to review handovers for this Business' }, 400);
+    }
   }
 
   if (action === 'staff_list') {
