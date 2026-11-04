@@ -165,9 +165,13 @@ export function PrinterWorkspace({tenantId,branch,activeShift,onClose,installerA
   if(!registerCommand.current||registerCommand.current.facts!==facts) {
     registerCommand.current={facts,key:`installer-register-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,12)}`};
   }
-  const requestKey=registerCommand.current.key;
+  const storedCommandKey=`sellertray.installerRegister.v1:${tenantId}:${deviceBranchId}:${installerAppointmentId}`;
   setSaving(true);setError(null);setNotice(null);
   try {
+    const requestKey=await durableInstallerCommand(
+      storedCommandKey,facts,registerCommand.current.key,
+    );
+    registerCommand.current.key=requestKey;
     const {error:requestError}=await supabase.rpc('save_sellertray_installer_register',{
       p_tenant_id:tenantId,p_branch_id:deviceBranchId,
       p_appointment_id:installerAppointmentId,
@@ -175,6 +179,7 @@ export function PrinterWorkspace({tenantId,branch,activeShift,onClose,installerA
     });
     if(requestError)throw requestError;
     if(registerCommand.current?.key===requestKey)registerCommand.current=null;
+    await AsyncStorage.removeItem(storedCommandKey).catch(()=>{});
     if(deviceEditEpoch.current!==epoch)return;
     setSetupRegisterCode('');setSetupRegisterName('');
     setRegisterReloadKey(value=>value+1);
