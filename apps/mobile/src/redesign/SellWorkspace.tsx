@@ -372,7 +372,7 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
       <View style={[styles.card, dark && darkStyles.card]}>{cartLines.map((line) => <View key={line.key} style={[styles.cartLine, dark && darkStyles.subtleCard]}>
         <View style={styles.flex}>
           <Text style={[styles.productName, dark && darkStyles.title]}>{line.product.name}</Text>
-          <Text style={[styles.muted, dark && darkStyles.body]}>{line.uom.name} · configured {formatMoney(line.uom.sellingPrice ?? 0, currency)}</Text>
+          <Text style={[styles.muted, dark && darkStyles.body]}>{line.uom.name} · {line.uom.priceIsCalculated ? 'calculated' : 'configured'} {formatMoney(line.uom.sellingPrice ?? 0, currency)}</Text>
           <View style={styles.editRow}>
             <View>
               <Text style={[styles.fieldLabel, dark && darkStyles.fieldLabel]}>Quantity</Text>

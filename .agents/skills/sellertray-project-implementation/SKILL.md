@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.16"
+  version: "0.1.17"
   status: governing
 ---
 
@@ -367,7 +367,7 @@ Rules:
 
 1. Inventory ledger quantities are stored in Stock UOM.
 2. Transaction lines preserve selected UOM, transaction quantity, conversion factor used and resulting stock quantity.
-3. UOM prices may be independent; never assume alternate price = base price × conversion.
+3. An explicitly configured product-UOM selling price always takes precedence (including zero). When an alternate product UOM has no explicit selling price (`selling_price IS NULL`), calculate the current effective selling price as the product's Stock UOM selling price × that UOM's configured conversion factor, rounded to currency precision. This is a calculated fallback, not a persisted explicit unit price. Governed sale creation, draft editing, idempotent/offline replay, barcode resolution, and applicable WhatsApp commerce must validate the same effective price. Previously posted transaction line prices and UOM snapshots are never recalculated.
 4. Purchase UOM may differ from Selling UOM.
 5. Barcode may resolve Product + UOM.
 6. Fractional quantity is permitted only where product/UOM policy allows it.
@@ -699,6 +699,7 @@ When feedback is touched, verify signed-in submission state, repeat submission, 
 10. Do not let clients invent Category/UOM master records implicitly from unknown Product-form text.
 11. Do not classify Bank Deposit or Owner Withdrawal as operating expense merely because they reduce drawer cash.
 12. Do not calculate tax independently in Mobile, Web, WhatsApp or AI when the shared commerce authority can govern it once.
+13. Do not turn a conversion-derived fallback unit price into a stored explicit override, or let client price previews bypass server-side UOM/price validation.
 
 # 19. Definition of done
 
