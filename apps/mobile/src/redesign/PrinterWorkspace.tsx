@@ -25,6 +25,9 @@ export function PrinterWorkspace({tenantId,branch,activeShift,onClose,installerA
  const[registers,setRegisters]=useState<CashRegister[]>([]);const[registerReloadKey,setRegisterReloadKey]=useState(0);const[registerId,setRegisterId]=useState(activeShift?.registerId??'');const[printers,setPrinters]=useState<SellerTrayPrinter[]>([]);const[capabilities,setCapabilities]=useState<PrintingCapabilities>(NO_CAPABILITIES);const[pairedDevices,setPairedDevices]=useState<BluetoothPrinterDevice[]>([]);const[loading,setLoading]=useState(true);const[discovering,setDiscovering]=useState(false);const[saving,setSaving]=useState(false);const[printingId,setPrintingId]=useState<string|null>(null);const[error,setError]=useState<string|null>(null);const[notice,setNotice]=useState<string|null>(null);const[editingId,setEditingId]=useState<string|null>(null);const[deviceAddress,setDeviceAddress]=useState('');const[displayName,setDisplayName]=useState('');const[paperWidthMm,setPaperWidthMm]=useState<58|80>(58);const[isDefault,setIsDefault]=useState(true);const[isActive,setIsActive]=useState(true);const[copies,setCopies]=useState<ReceiptCopyDefinition[]>([DEFAULT_COPY]);const[merchantFooter,setMerchantFooter]=useState('');
  const [setupRegisterCode,setSetupRegisterCode]=useState('');
  const [setupRegisterName,setSetupRegisterName]=useState('');
+ // Preserve one command key when a network response is lost. Different facts
+ // always receive a different key; retries can never create another register.
+ const registerCommand=useRef<{facts:string;key:string}|null>(null);
  const selectedRegister=useMemo(()=>registers.find(r=>r.id===registerId)??null,[registerId,registers]);
   useEffect(()=>{
     let mounted=true;
@@ -101,14 +104,22 @@ export function PrinterWorkspace({tenantId,branch,activeShift,onClose,installerA
  async function createInstallationRegister(){
   if(!installerAppointmentId||saving||!setupRegisterCode.trim()||!setupRegisterName.trim())return;
   const epoch=deviceEditEpoch.current;
+  const code=setupRegisterCode.trim().toUpperCase();
+  const name=setupRegisterName.trim();
+  const facts=JSON.stringify({tenantId,branchId:deviceBranchId,appointmentId:installerAppointmentId,code,name});
+  if(!registerCommand.current||registerCommand.current.facts!==facts) {
+    registerCommand.current={facts,key:`installer-register-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,12)}`};
+  }
+  const requestKey=registerCommand.current.key;
   setSaving(true);setError(null);setNotice(null);
-  try{
-    const {error:requestError}=await supabase.rpc('save_sellertray_register',{
-      p_tenant_id:tenantId,p_register_id:null,p_branch_id:deviceBranchId,
-      p_code:setupRegisterCode.trim().toUpperCase(),p_name:setupRegisterName.trim(),
-      p_is_default:registers.length===0,p_is_active:true,
+  try {
+    const {error:requestError}=await supabase.rpc('save_sellertray_installer_register',{
+      p_tenant_id:tenantId,p_branch_id:deviceBranchId,
+      p_appointment_id:installerAppointmentId,
+      p_code:code,p_name:name,p_request_key:requestKey,
     });
     if(requestError)throw requestError;
+    if(registerCommand.current?.key===requestKey)registerCommand.current=null;
     if(deviceEditEpoch.current!==epoch)return;
     setSetupRegisterCode('');setSetupRegisterName('');
     setRegisterReloadKey(value=>value+1);
