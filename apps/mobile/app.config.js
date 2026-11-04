@@ -17,9 +17,10 @@ const ATTESTATION_FILE = resolve(__dirname, '../../docs/qa/oa5-staging-backend-a
 // Shared with Merchant/Admin preview gate; fail closed until actual hosted
 // recovery and permission evidence is recorded in the checked-in attestation.
 // Lazy require means the production app identity needs no QA helper at boot.
-const { stagingBackendApproved, reusedTestProjectApproved } =
-  require('../../scripts/qa/oa5-staging-attestation.cjs');
-
+function reusedTestProjectApproved(attestation, endpoint) {
+  return require('../../scripts/qa/oa5-staging-attestation.cjs')
+    .reusedTestProjectApproved(attestation, endpoint);
+}
 function hasApprovedTestBackend(endpoint, testEvidence) {
   try {
     // Production EAS/Expo only invokes this module with ({config}); the third
@@ -27,7 +28,8 @@ function hasApprovedTestBackend(endpoint, testEvidence) {
     const evidence = testEvidence === undefined
       ? JSON.parse(readFileSync(ATTESTATION_FILE, 'utf8'))
       : testEvidence;
-    return stagingBackendApproved(evidence, endpoint);
+    return require('../../scripts/qa/oa5-staging-attestation.cjs')
+      .stagingBackendApproved(evidence, endpoint);
   } catch {
     return false; // Missing, inaccessible or invalid evidence always blocks QA.
   }
