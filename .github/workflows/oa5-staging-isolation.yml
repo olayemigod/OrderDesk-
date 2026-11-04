@@ -1,0 +1,27 @@
+name: OA5 Staging Isolation Contract
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/qa/oa5-staging-isolation.mjs'
+      - 'scripts/qa/oa5-staging-isolation.test.mjs'
+      - '.github/workflows/oa5-staging-isolation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  non-production-boundary:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact candidate source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      - name: Set up Node 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Test OA5 isolated staging contract (offline only)
+        run: node --test scripts/qa/oa5-staging-isolation.test.mjs
