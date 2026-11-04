@@ -14,26 +14,12 @@ const PRODUCTION_URL = 'https://eujxswjspolugrzlsjnn.supabase.co';
 const UNATTESTED_AGREEMENT_TEST_URL = 'https://iukgsukdoowvnhlfmpml.supabase.co';
 const ATTESTATION_FILE = resolve(__dirname, '../../docs/qa/oa5-staging-backend-attestation.json');
 
-// This approved source-controlled attestation can be updated only after an
-// independent hosted recovery/migration/security review. An environment
-// variable cannot bypass a missing or blocked attestation.
+// Shared with Merchant/Admin preview gate; fail closed until actual hosted
+// recovery and permission evidence is recorded in the checked-in attestation.
+// Lazy require means the production app identity needs no QA helper at boot.
 function reusedTestProjectApproved(attestation, endpoint) {
-  if (endpoint !== UNATTESTED_AGREEMENT_TEST_URL) return false;
-  if (!attestation || attestation.schema_version !== 1 ||
-      attestation.state !== 'approved' ||
-      attestation.approved_staging_project_ref !== 'iukgsukdoowvnhlfmpml' ||
-      !/^[0-9a-f]{40}$/.test(attestation.reviewed_source_sha || '') ||
-      typeof attestation.approved_at !== 'string' ||
-      !/^[0-9]{4}-[0-9]{2}-[0-9]{2}T/.test(attestation.approved_at) ||
-      !Number.isFinite(Date.parse(attestation.approved_at))) return false;
-  return [
-    'clean_migration_replay_verified',
-    'historical_agreement_evidence_archived',
-    'restore_path_verified',
-    'vercel_preview_dependencies_reconciled',
-    'test_only_auth_and_provider_config_verified',
-    'qa_edge_functions_deployed_and_verified',
-  ].every(key => attestation[key] === true);
+  return require('../../scripts/qa/oa5-staging-attestation.cjs')
+    .reusedTestProjectApproved(attestation, endpoint);
 }
 function hasApprovedTestBackend(endpoint) {
   try {
