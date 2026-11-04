@@ -33,7 +33,7 @@ select extensions.ok(
 select extensions.ok(
   exists(
     select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-    where n.nspname='public' and p.proname='record_sellertray_inventory_cost_basis'
+    where n.nspname='public' and p.proname='record_sellertray_inventory_cost_basis_for_actor'
       and lower(pg_get_functiondef(p.oid)) like '%sellertray_user_can_read_branch%'
       and lower(pg_get_functiondef(p.oid)) like '%can_adjust_stock%'
       and lower(pg_get_functiondef(p.oid)) like '%can_manage_purchasing%'
