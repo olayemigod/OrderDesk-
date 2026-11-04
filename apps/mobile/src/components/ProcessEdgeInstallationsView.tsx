@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { bluetoothPrintingSupported, listPairedBluetoothPrinters, type BluetoothPrinterDevice } from '../printing/bluetoothPrinter';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 
@@ -17,6 +18,12 @@ type Installation = {
   validUntil:string;
 };
 
+type SetupRegister = { id: string; code: string; name: string; is_active: boolean; is_default: boolean };
+type SetupPrinter = { id: string; register_id: string; display_name: string; hardware_identifier: string; paper_width_mm: number; is_active: boolean };
+type SetupTest = { id: string; printer_id: string; status: string; requested_at: string; completed_at: string | null };
+type DeviceInspection = { appointmentId: string; branchId: string; registers: SetupRegister[]; printers: SetupPrinter[]; recentTests: SetupTest[] };
+type DeviceView = { assignmentId: string; loading: boolean; data: DeviceInspection | null; error: string | null };
+
 export default function ProcessEdgeInstallationsView({
   status,onRefreshProfile,
 }: { status:string | null; onRefreshProfile:()=>void }) {
@@ -30,10 +37,16 @@ export default function ProcessEdgeInstallationsView({
   const [code,setCode]=useState('');
   const [installations,setInstallations]=useState<Installation[]>([]);
   const [error,setError]=useState<string | null>(null);
+  const deviceRequestEpoch=useRef(0);
+  const [deviceView,setDeviceView]=useState<DeviceView | null>(null);
+  const [pairedDevices,setPairedDevices]=useState<BluetoothPrinterDevice[]>([]);
+  const [pairedLoading,setPairedLoading]=useState(false);
 
   useEffect(()=>{void refresh();},[status]);
 
   async function refresh() {
+    deviceRequestEpoch.current+=1;
+    setDeviceView(null);setPairedDevices([]);
     setLoading(true);setError(null);
     try {
       const [{data:level,error:levelError},{data:factors,error:factorError}]=await Promise.all([
@@ -58,6 +71,43 @@ export default function ProcessEdgeInstallationsView({
     if(requestError) throw requestError;
     const payload=data as {appointments?:Installation[]};
     setInstallations(Array.isArray(payload?.appointments) ? payload.appointments : []);
+  }
+
+  async function inspectAssignedDevices(item: Installation) {
+    const current=++deviceRequestEpoch.current;
+    setDeviceView({assignmentId:item.assignmentId,loading:true,data:null,error:null});
+    setPairedDevices([]);
+    try {
+      const {data,error:requestError}=await supabase.functions.invoke('platform-setup-installer', {
+        body:{action:'devices',tenantId:item.tenantId,branchId:item.branchId,appointmentId:item.appointmentId},
+      });
+      if (requestError) throw requestError;
+      const result=data as DeviceInspection | null;
+      if (!result || result.appointmentId!==item.appointmentId || result.branchId!==item.branchId
+        || !Array.isArray(result.registers) || !Array.isArray(result.printers)
+        || !Array.isArray(result.recentTests)) throw new Error('Invalid installation device response.');
+      if (current!==deviceRequestEpoch.current) return;
+      setDeviceView({assignmentId:item.assignmentId,loading:false,data:result,error:null});
+    } catch (cause) {
+      if (current!==deviceRequestEpoch.current) return;
+      setDeviceView({assignmentId:item.assignmentId,loading:false,data:null,
+        error:cause instanceof Error?cause.message:'Unable to verify these installation devices.'});
+    }
+  }
+
+  async function inspectPairedBluetooth() {
+    if (!bluetoothPrintingSupported()) {
+      setDeviceView(previous=>previous?{...previous,error:'Device discovery requires the installed Android application.'}:previous);
+      return;
+    }
+    setPairedLoading(true);
+    try {
+      const devices=await listPairedBluetoothPrinters();
+      setPairedDevices(devices);
+    } catch(cause) {
+      setDeviceView(previous=>previous?{...previous,
+        error:cause instanceof Error?cause.message:'Unable to read paired Bluetooth devices.'}:previous);
+    } finally {setPairedLoading(false);}
   }
 
   async function enrolTotp() {
@@ -156,9 +206,41 @@ export default function ProcessEdgeInstallationsView({
           <Text style={[styles.body,dark&&styles.textSecondary]}>{item.branchName} · {item.appointmentStatus.replace('_',' ')}</Text>
           <Text style={[styles.body,dark&&styles.textSecondary]}>Appointment: {new Date(item.scheduledStartAt).toLocaleString()}</Text>
           <Text style={[styles.body,dark&&styles.textSecondary]}>Assigned until: {new Date(item.validUntil).toLocaleString()}</Text>
-          <Text style={[styles.helper,dark&&styles.textSecondary]}>
-            Printer installation actions require verified Branch and appointment authority and are not yet enabled in this build.
-          </Text>
+          <Pressable disabled={Boolean(deviceView?.loading)||busy}
+            accessibilityRole="button" onPress={()=>void inspectAssignedDevices(item)} style={styles.action}>
+            <Text style={styles.actionText}>{deviceView?.assignmentId===item.assignmentId&&deviceView.loading?'Checking devices…':'Inspect installation devices'}</Text>
+          </Pressable>
+          {deviceView?.assignmentId===item.assignmentId ? <View style={styles.deviceSection}>
+            {deviceView.loading?<ActivityIndicator color={theme.colors.greenDark}/>:null}
+            {deviceView.error?<Text style={styles.errorText}>{deviceView.error}</Text>:null}
+            {deviceView.data?<View style={styles.form}>
+              <Text style={[styles.sectionTitle,dark&&styles.textLight]}>Registers ({deviceView.data.registers.length})</Text>
+              {deviceView.data.registers.length===0?<Text style={[styles.body,dark&&styles.textSecondary]}>No register prepared for this Branch.</Text>:null}
+              {deviceView.data.registers.map(r=><Text key={r.id} style={[styles.body,dark&&styles.textSecondary]}>
+                {r.name} ({r.code}) · {r.is_active?'Active':'Inactive'}{r.is_default?' · Default':''}
+              </Text>)}
+              <Text style={[styles.sectionTitle,dark&&styles.textLight]}>Registered printers ({deviceView.data.printers.length})</Text>
+              {deviceView.data.printers.length===0?<Text style={[styles.body,dark&&styles.textSecondary]}>No registered printer for this Branch.</Text>:null}
+              {deviceView.data.printers.map(p=><View key={p.id} style={styles.deviceEntry}>
+                <Text style={[styles.body,dark&&styles.textLight]}>{p.display_name} · {p.paper_width_mm}mm · {p.is_active?'Active':'Inactive'}</Text>
+                <Text style={[styles.helper,dark&&styles.textSecondary]}>Bluetooth ID: {p.hardware_identifier}</Text>
+                <Text style={[styles.helper,dark&&styles.textSecondary]}>
+                  {deviceView.data!.recentTests.find(t=>t.printer_id===p.id)?.status==='printed'
+                    ? 'Latest recorded test: Printed'
+                    : 'No confirmed latest test print'}
+                </Text>
+              </View>)}
+              <Pressable disabled={pairedLoading} onPress={()=>void inspectPairedBluetooth()} style={styles.secondaryAction}>
+                <Text style={styles.secondaryActionText}>{pairedLoading?'Checking paired devices…':'Show paired Android Bluetooth devices'}</Text>
+              </Pressable>
+              {pairedDevices.length?pairedDevices.map(p=><Text key={p.address} style={[styles.body,dark&&styles.textSecondary]}>{p.name} · {p.address}</Text>):null}
+              <Text style={[styles.helper,dark&&styles.textSecondary]}>
+                Device inspection and Bluetooth discovery are read-only. The actual register/printer setup,
+                canonical test printing and merchant handover require the appointment-scoped setup command
+                before activation can be approved.
+              </Text>
+            </View>:null}
+          </View>:null}
         </View>)}
       </>:null}
 
@@ -184,6 +266,11 @@ const styles=StyleSheet.create({
   textLight:{color:'#F8FAFC'},textSecondary:{color:'#CBD5E1'},
   card:{padding:16,borderWidth:1,borderColor:'#E4E7EC',backgroundColor:'#FFFFFF',borderRadius:14,gap:10},
   cardDark:{backgroundColor:'#183B56',borderColor:'#475467'},
+  deviceSection:{gap:12,paddingTop:10},
+  deviceEntry:{paddingVertical:8,borderBottomWidth:1,borderBottomColor:'#667085'},
+  sectionTitle:{fontSize:14,color:'#102A43',fontWeight:'700'},
+  secondaryAction:{borderColor:'#12B76A',borderWidth:1,padding:12,borderRadius:9,alignItems:'center'},
+  secondaryActionText:{color:'#12B76A',fontWeight:'700'},
   cardTitle:{color:'#102A43',fontWeight:'800',fontSize:16},
   body:{color:'#475467',fontSize:13,lineHeight:20},
   helper:{color:'#667085',fontSize:12,lineHeight:18,marginTop:8},
