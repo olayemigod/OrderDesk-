@@ -26,7 +26,7 @@ assert.match(workspace,/setPrinters\(\[\]\);resetForm\(true\)/);
 assert.match(workspace,/if\(deviceEditEpoch\.current===saveEpoch\)setError/);
 assert.match(workspace,/loadCashRegisters\(tenantId,deviceBranchId\)/);
 assert.match(workspace,/loadPrintingCapabilities\(tenantId,deviceBranchId\)/);
-assert.match(workspace,/branchId:deviceBranchId/);
+assert.match(workspace,/branchId:saveBranch/);
 assert.match(workspace,/Setup only/);
 assert.match(workspace,/not active for sales/);
 assert.doesNotMatch(workspace,/setActiveBranch\(/);
