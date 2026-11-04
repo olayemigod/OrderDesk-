@@ -7,7 +7,7 @@
  * This tool does NOT connect to Supabase, invoke providers, run SQL, deploy,
  * approve migration ordering or alter the production migration ledger.
  */
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 export const REQUIRED_SECURITY_MIGRATIONS = Object.freeze([
@@ -100,4 +100,7 @@ function main() {
   }
 }
 
-if(process.argv[1]&&fileURLToPath(import.meta.url)===fileURLToPath(new URL('file://'+process.argv[1])))main();
+// Compare canonical filesystem paths, never raw file:// concatenation:
+// '#' and '?' in checkout directories must not suppress the mandatory guard.
+// realpathSync also covers ordinary symlinked CLI entrypoints.
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) main();
