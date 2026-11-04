@@ -221,6 +221,19 @@ export default function SetupSchedulingAdministration({
         }}>Retry activation check</button> : null}
       </section> : null}
 
+      {showCompletion && completion && center.canManage ? <section className="workspace-panel" aria-label="Installation evidence review">
+        <h3>Installer handover submissions</h3>
+        {handoverError ? <div className="workspace-banner error">{handoverError}</div> : null}
+        <label>Evidence for this Branch appointment
+          <select value={selectedHandoverId} onChange={event=>setSelectedHandoverId(event.target.value)}>
+            <option value="">Continue without an installer submission</option>
+            {appointmentHandovers.map(h=><option key={h.submissionId} value={h.submissionId}>
+              {formatDate(h.submittedAt)} · {text(h.evidence.receivedBy)}
+            </option>)}
+          </select>
+        </label>
+        {selectedHandover ? <p>Installer evidence: {selectedHandover.submissionId}. Confirm the receiving merchant, printer and successful test below before completing setup.</p> : null}
+      </section> : null}
       {showCompletion && completion && center.canManage ? <SetupCompletionForm key={completion.id} branchName={completion.branchName} scheduledStartAt={completion.scheduledStartAt} saving={saving !== null} onClose={() => setCompletion(null)} onSubmit={async (evidence, reason) => {
         const storageKey = 'sellertray.setupCompletion.v1:' + tenantId + ':' + completion.id;
         const facts = JSON.stringify({ evidence, reason });
