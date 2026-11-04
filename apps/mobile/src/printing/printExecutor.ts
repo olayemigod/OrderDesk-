@@ -2,7 +2,7 @@ import { loadPrintJob, type PrintJob, type ReceiptCopyDefinition, updatePrintJob
 import { sendBluetoothPrintBytes } from './bluetoothPrinter';
 import { buildEscPosPrintBytes } from './escPosReceipt';
 
-export async function executePreparedPrintJob(tenantId: string, job: PrintJob): Promise<void> {
+export async function executePreparedPrintJob(tenantId: string, job: PrintJob, installerAppointmentId?: string | null): Promise<void> {
   if (!tenantId) throw new Error('Business is required to print.');
   if (job.status !== 'requested') {
     throw new Error('This print attempt has already started. Create a new reprint if another copy is needed.');
@@ -11,7 +11,7 @@ export async function executePreparedPrintJob(tenantId: string, job: PrintJob): 
   let started = false;
   let hardwareWriteCompleted = false;
   try {
-    await updatePrintJob({ tenantId, jobId: job.jobId, status: 'printing' });
+    await updatePrintJob({ tenantId, jobId: job.jobId, status: 'printing', installerAppointmentId });
     started = true;
 
     const copies = receiptCopies(job);
@@ -25,7 +25,7 @@ export async function executePreparedPrintJob(tenantId: string, job: PrintJob): 
     hardwareWriteCompleted = true;
 
     try {
-      await updatePrintJob({ tenantId, jobId: job.jobId, status: 'printed' });
+      await updatePrintJob({ tenantId, jobId: job.jobId, status: 'printed', installerAppointmentId });
     } catch (statusError) {
       const reconciled = await reconcilePrintedStatus(tenantId, job.jobId);
       if (!reconciled) throw statusError;
@@ -44,6 +44,7 @@ export async function executePreparedPrintJob(tenantId: string, job: PrintJob): 
           tenantId,
           jobId: job.jobId,
           status: 'failed',
+          installerAppointmentId,
           failureCode: classifyPrintFailure(message),
           failureMessage: message,
         });
