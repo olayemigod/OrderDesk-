@@ -24,6 +24,40 @@ Do not interpret “same implementation sweep” as “copy the same UI everywhe
 
 The requirement is **one coherent business flow and one source of truth**, with the appropriate UX on each affected surface.
 
+## Canonical production origins — approved 2026-11-02
+
+Production routing is a cross-surface delivery contract, not a second source of business truth. The canonical production origins are:
+
+- Public/marketing: `https://sellertray.com`
+- Merchant Web: `https://app.sellertray.com`
+- Admin Web: `https://admin.sellertray.com`
+
+Rules:
+
+1. Merchant-facing production links, Mobile onboarding/commercial continuation links and supported Merchant Web callbacks must use `https://app.sellertray.com`.
+2. Platform-operator production links and supported Admin Web callbacks must use `https://admin.sellertray.com`.
+3. `*.vercel.app` hostnames are deployment/preview aliases only and must not be production fallbacks or user-facing canonical URLs.
+4. Mobile must fail closed when a server-provided Merchant Web continuation points to a non-canonical production origin; HTTPS alone is not sufficient trust.
+5. Prefer same-origin/static assets on Merchant Web and Admin Web instead of coupling production CSP or branding to a deployment alias.
+6. WhatsApp, notifications, documents, receipts, reporting exports and AI responses must not generate deployment-alias links when a canonical SellerTray origin exists.
+7. Domain routing never changes tenant/Branch isolation, commercial state, payments, permissions, inventory, UOM, audit, reporting or onboarding authority; those remain governed by the shared core.
+8. Preview/staging environments may use non-canonical hosts only for explicitly non-production testing and must not silently become production fallback authority.
+
+## Identity and Business invitations — approved 2026-11-02
+
+The detailed normative contract is recorded in `IDENTITY_INVITATIONS.md` and applies whenever SellerTray identity, Business membership or team invitations are touched.
+
+At minimum:
+
+1. One authenticated SellerTray identity may hold memberships in multiple Businesses; Business-specific role and Branch authority remain isolated.
+2. An existing identity invited to another Business keeps the same account. Do not create a second login or replace an existing Business membership.
+3. Business invitations require explicit authenticated acceptance. The invitation link is a locator only and never grants membership by possession.
+4. The authenticated identity must still match the invited email through the governed server authority before membership is created.
+5. Cashier invitations primarily route to Mobile because Mobile performs; Owner/Manager invitations may also be accepted through Merchant Web management flows.
+6. Internal `staff` must be presented to merchants as **Cashier**.
+7. SellerTray transactional/authentication email sender identity is **SellerTray**. ProcessEdge may remain in legal/footer ownership wording, but must not replace SellerTray as the primary product/sender identity.
+8. The preferred production sender mailbox is `notifications@sellertray.com` only after the sending domain/mailbox is verified with the configured provider. Until then, retain a verified configured address while forcing the visible display name to SellerTray.
+
 ## Mandatory impact assessment before editing
 
 For every SellerTray change, the agent must first answer these questions from the current repository and governing skills:

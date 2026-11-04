@@ -24,6 +24,7 @@ const repository = read(join(mobileRoot, 'src/data/onboardingRepository.ts'));
 const handoffClient = read(join(mobileRoot, 'src/data/merchantWebHandoff.ts'));
 const businessesHook = read(join(mobileRoot, 'src/hooks/useBusinesses.ts'));
 const hook = read(join(mobileRoot, 'src/hooks/useOnboardingState.ts'));
+const businessSetup = read(join(mobileRoot, 'src/components/CreateBusinessView.tsx'));
 const card = read(join(mobileRoot, 'src/redesign/OnboardingPreparationCard.tsx'));
 const home = read(join(mobileRoot, 'src/redesign/HomeDashboard.tsx'));
 
@@ -67,6 +68,18 @@ requireValue(
   'Mobile onboarding status must refresh when the app returns to the foreground so external Merchant Web progress is reflected',
 );
 requireValue(
+  businessSetup.includes('What happens next') &&
+    businessSetup.includes('title="Agreements"') &&
+    businessSetup.includes('title="Billing"') &&
+    businessSetup.includes('title="Setup & Activation"') &&
+    !businessSetup.includes('title="Business profile"') &&
+    !businessSetup.includes('Catalogue & payments') &&
+    !businessSetup.includes('WhatsApp connection') &&
+    !businessSetup.includes('Step 1 of 3') &&
+    !businessSetup.includes('33%'),
+  'Business creation must remain a prerequisite and preview Agreements -> Billing -> Setup & Activation without the retired catalogue/WhatsApp onboarding workflow',
+);
+requireValue(
   card.includes('Preparation') &&
     card.includes('Current selling access remains available') &&
     card.includes('Continue this step in Merchant Web') &&
@@ -77,9 +90,10 @@ requireValue(
 requireValue(
   handoffClient.includes("supabase.functions.invoke('merchant-web-handoff'") &&
     !handoffClient.includes('sellertray-merchant.vercel.app') &&
-    handoffClient.includes("url.protocol === 'https:'") &&
+    handoffClient.includes("const MERCHANT_WEB_ORIGIN = 'https://app.sellertray.com'") &&
+    handoffClient.includes('url.origin === MERCHANT_WEB_ORIGIN') &&
     handoffClient.includes("url.hash.startsWith('#st_handoff=')"),
-  'Mobile Merchant Web continuation must use the governed handoff service rather than a hard-coded unauthenticated portal link',
+  'Mobile Merchant Web continuation must use the governed handoff service and fail closed to the canonical Merchant Web production origin',
 );
 requireValue(
   handoffMigration.includes('sellertray_merchant_web_handoffs') &&

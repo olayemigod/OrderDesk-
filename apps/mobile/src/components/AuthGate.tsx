@@ -21,8 +21,8 @@ import { SellerTrayLoadingScreen } from './SellerTrayLoadingScreen';
 
 type AuthMode = 'welcome' | 'sign-in' | 'sign-up' | 'forgot-password' | 'reset-password';
 
-const SELLERTRAY_PRIVACY_URL = 'https://sellertray.vercel.app/privacy';
-const SELLERTRAY_TERMS_URL = 'https://sellertray.vercel.app/terms';
+const SELLERTRAY_PRIVACY_URL = 'https://sellertray.com/privacy';
+const SELLERTRAY_TERMS_URL = 'https://sellertray.com/terms';
 
 export function AuthGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);

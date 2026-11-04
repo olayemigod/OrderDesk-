@@ -13,16 +13,6 @@ const exceptions = new Map([
     },
   ],
   [
-    'GHSA-86W9-CPQP-85RV',
-    {
-      packageName: 'node-forge',
-      version: '1.4.0',
-      expiresOn: '2026-11-13',
-      reason:
-        'Expo CLI/code-signing tooling uses node-forge. The published 1.4.0 release has no patched successor yet, and this package is not part of the SellerTray Android runtime bundle.',
-    },
-  ],
-  [
     'GHSA-MRHX-C7XC-M3W5',
     {
       packageName: 'zod',

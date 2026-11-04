@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { errorMessage, supabase } from './supabase';
 
 type PendingInvitation = {
@@ -9,20 +9,37 @@ type PendingInvitation = {
   expiresAt: string;
 };
 
+const PENDING_INVITATION_KEY = 'sellertray.pendingInvitationId';
+const INVITATION_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export default function IncomingBusinessInvitations({
   onMembershipChanged,
 }: {
   onMembershipChanged?: () => Promise<void> | void;
 }) {
   const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
+  const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const focusedInvitationId = invitationIdFromBrowser();
+  const orderedInvitations = useMemo(() => {
+    if (!focusedInvitationId) return invitations;
+    return [...invitations].sort((left, right) => {
+      if (left.id === focusedInvitationId) return -1;
+      if (right.id === focusedInvitationId) return 1;
+      return 0;
+    });
+  }, [focusedInvitationId, invitations]);
+  const focusedInvitationIsPending = Boolean(
+    focusedInvitationId && invitations.some((invitation) => invitation.id === focusedInvitationId),
+  );
 
   useEffect(() => {
     void load();
   }, []);
 
   async function load() {
+    setLoading(true);
     try {
       const { data, error: invokeError } = await supabase.functions.invoke('team-management', {
         body: { action: 'pending_invites' },
@@ -32,6 +49,8 @@ export default function IncomingBusinessInvitations({
       setError(null);
     } catch (cause) {
       setError(errorMessage(cause, 'Unable to load your Business invitations.'));
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -43,6 +62,7 @@ export default function IncomingBusinessInvitations({
         body: { action, invitationId },
       });
       if (invokeError) throw invokeError;
+      if (focusedInvitationId === invitationId) clearInvitationLocator(false);
       await load();
       if (action === 'accept_invite') await onMembershipChanged?.();
     } catch (cause) {
@@ -52,20 +72,38 @@ export default function IncomingBusinessInvitations({
     }
   }
 
-  if (!invitations.length && !error) return null;
+  if (!loading && !invitations.length && !error && !focusedInvitationId) return null;
 
   return <article className="panel invitation-panel">
     <div className="panel-head">
       <div>
         <p className="eyebrow">Business invitations</p>
-        <h3>Pending access</h3>
-        <p className="muted">A Business is added to your SellerTray account only after you accept its invitation.</p>
+        <h3>{focusedInvitationIsPending ? 'Review invitation' : 'Pending access'}</h3>
+        <p className="muted">
+          {focusedInvitationIsPending
+            ? 'Accepting adds this Business to your existing SellerTray account. Your other Businesses and sign-in stay unchanged.'
+            : 'A Business is added to your SellerTray account only after you accept its invitation.'}
+        </p>
       </div>
     </div>
     {error ? <div className="error-banner compact">{error}<button type="button" onClick={() => void load()}>Retry</button></div> : null}
-    {invitations.map((invitation) => {
+    {loading && focusedInvitationId && !error ? <div className="invitation-row">
+      <span>
+        <strong>Loading invitation…</strong>
+        <small>Checking the latest invitation status for your SellerTray account.</small>
+      </span>
+    </div> : null}
+    {focusedInvitationId && !focusedInvitationIsPending && !loading && !error ? <div className="invitation-row">
+      <span>
+        <strong>This invitation is no longer pending</strong>
+        <small>It may already have been accepted, declined, expired or cancelled. Your current SellerTray access remains unchanged.</small>
+      </span>
+      <button type="button" className="secondary-button" onClick={() => clearInvitationLocator(true)}>Continue</button>
+    </div> : null}
+    {!loading ? orderedInvitations.map((invitation) => {
       const busy = busyId === invitation.id;
-      return <div className="invitation-row" key={invitation.id}>
+      const focused = focusedInvitationId === invitation.id;
+      return <div className={focused ? 'invitation-row invitation-row-focused' : 'invitation-row'} key={invitation.id}>
         <span>
           <strong>{invitation.tenantName}</strong>
           <small>{roleLabel(invitation.role)} · expires {dateOnly(invitation.expiresAt)}{invitation.invitedByEmail ? ` · invited by ${invitation.invitedByEmail}` : ''}</small>
@@ -75,8 +113,45 @@ export default function IncomingBusinessInvitations({
           <button type="button" className="primary-button" disabled={busy} onClick={() => void decide(invitation.id, 'accept_invite')}>{busy ? 'Working…' : 'Accept'}</button>
         </span>
       </div>;
-    })}
+    }) : null}
   </article>;
+}
+
+function invitationIdFromBrowser(): string | null {
+  if (typeof window === 'undefined') return null;
+  const queryValue = new URLSearchParams(window.location.search).get('invitation')?.trim().toLowerCase() ?? '';
+  if (INVITATION_UUID_RE.test(queryValue)) {
+    rememberInvitationLocator(queryValue);
+    return queryValue;
+  }
+
+  try {
+    const storedValue = window.localStorage.getItem(PENDING_INVITATION_KEY)?.trim().toLowerCase() ?? '';
+    return INVITATION_UUID_RE.test(storedValue) ? storedValue : null;
+  } catch {
+    return null;
+  }
+}
+
+function rememberInvitationLocator(invitationId: string) {
+  try {
+    window.localStorage.setItem(PENDING_INVITATION_KEY, invitationId);
+  } catch {
+    // Query-string focus still works when browser storage is unavailable.
+  }
+}
+
+function clearInvitationLocator(reload: boolean) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(PENDING_INVITATION_KEY);
+  } catch {
+    // Storage may be unavailable in hardened browser modes.
+  }
+  const url = new URL(window.location.href);
+  url.searchParams.delete('invitation');
+  window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+  if (reload) window.location.reload();
 }
 
 function parseInvitations(value: unknown): PendingInvitation[] {

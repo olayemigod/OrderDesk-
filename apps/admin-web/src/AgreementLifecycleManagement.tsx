@@ -148,77 +148,109 @@ export default function AgreementLifecycleManagement({ session, tenantId }: { se
   const selected = versions.find((version) => version.id === selectedId) ?? versions[0] ?? null;
   const tenantState = state?.tenantState ?? null;
 
-  return <section className="page-stack">
-    <div className="section-heading">
-      <div><p className="eyebrow">Platform legal governance</p><h2>SellerTray Master Agreement</h2></div>
-      <p className="muted">Publish one reviewed, immutable Master Agreement PDF for the entire SellerTray platform. Merchant-specific commercial terms remain in governed Order Forms.</p>
-    </div>
+  return <section className="workspace-page admin-agreement-workspace">
+    <header className="workspace-page-header">
+      <div>
+        <p className="workspace-eyebrow">Platform legal governance</p>
+        <h1>SellerTray Master Agreement</h1>
+        <p>Publish one reviewed, immutable Master Agreement PDF for the entire SellerTray platform. Merchant-specific commercial terms remain in governed Order Forms.</p>
+      </div>
+      <span className="workspace-status-pill neutral">Platform-wide authority</span>
+    </header>
 
-    {error ? <div className="error-banner">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div> : null}
-    {message ? <div className="success-banner">{message}<button type="button" onClick={() => setMessage(null)}>Dismiss</button></div> : null}
+    {error ? <div className="workspace-banner error"><span>{error}</span><button className="workspace-button text compact" type="button" onClick={() => setError(null)}>Dismiss</button></div> : null}
+    {message ? <div className="workspace-banner success"><span>{message}</span><button className="workspace-button text compact" type="button" onClick={() => setMessage(null)}>Dismiss</button></div> : null}
 
-    {tenantState ? <article className="panel">
-      <div className="panel-head"><div><p className="eyebrow">Selected Merchant</p><h3>Acceptance status</h3></div><span className="role-pill">{tenantState.accepted ? 'Accepted' : tenantState.published ? 'Pending' : 'Not published'}</span></div>
-      <div className="settings-grid two">
+    {tenantState ? <article className="workspace-panel">
+      <div className="workspace-panel-heading">
+        <div>
+          <p className="workspace-eyebrow">Selected Merchant</p>
+          <h2>Acceptance status</h2>
+          <p>This is Business + Master Agreement version evidence. It is not tied to a commercial order, installment, Branch, Order Form confirmation or payment.</p>
+        </div>
+        <span className={`workspace-status-pill ${tenantState.accepted ? 'good' : tenantState.published ? 'warn' : 'neutral'}`}>{tenantState.accepted ? 'Accepted' : tenantState.published ? 'Pending' : 'Not published'}</span>
+      </div>
+      <div className="workspace-detail-grid admin-agreement-facts">
         <Fact label="Current version" value={tenantState.currentVersion?.versionCode ?? 'No effective version'} />
         <Fact label="Service-delivery agreement gate" value={tenantState.serviceDeliveryAllowed ? 'Satisfied' : 'Blocked'} />
         <Fact label="Accepted by" value={tenantState.acceptance?.acceptedLegalName ?? '—'} />
         <Fact label="Accepted at" value={tenantState.acceptance?.acceptedAt ? formatDate(tenantState.acceptance.acceptedAt) : '—'} />
       </div>
-      <div className="governance-note">This status is Business + Master Agreement version evidence. It is not tied to a commercial order, installment, Branch, Order Form confirmation or payment.</div>
     </article> : null}
 
-    <div className="two-column">
-      <article className="panel">
-        <div className="panel-head"><div><p className="eyebrow">Version history</p><h3>Published Master Agreement versions</h3></div></div>
-        {loading && !state ? <p className="muted">Loading agreement versions…</p> : null}
-        {!loading && !versions.length ? <div className="empty-state"><strong>No Master Agreement published</strong><p>Publish the reviewed universal legal PDF before a new SellerTray service-delivery activation is allowed.</p></div> : null}
-        {versions.map((version) => <button key={version.id} type="button" className={selected?.id === version.id ? 'member-row active' : 'member-row'} onClick={() => setSelectedId(version.id)}>
-          <span className="member-avatar">V</span>
-          <span><strong>{version.title}</strong><small>Version {version.versionCode} · Effective {formatDate(version.effectiveFrom)}</small></span>
-        </button>)}
+    <div className="workspace-grid two admin-agreement-history-grid">
+      <article className="workspace-panel">
+        <div className="workspace-panel-heading">
+          <div>
+            <p className="workspace-eyebrow">Version history</p>
+            <h2>Published Master Agreement versions</h2>
+            <p>Immutable platform legal history.</p>
+          </div>
+        </div>
+        {loading && !state ? <div className="workspace-empty-state"><strong>Loading agreement versions…</strong></div> : null}
+        {!loading && !versions.length ? <div className="workspace-empty-state"><strong>No Master Agreement published</strong><p>Publish the reviewed universal legal PDF before a new SellerTray service-delivery activation is allowed.</p></div> : null}
+        <div className="admin-agreement-version-list">
+          {versions.map((version) => <button key={version.id} type="button" className={`admin-agreement-version ${selected?.id === version.id ? 'active' : ''}`} onClick={() => setSelectedId(version.id)}>
+            <span className="admin-agreement-version-mark">V</span>
+            <span><strong>{version.title}</strong><small>Version {version.versionCode} · Effective {formatDate(version.effectiveFrom)}</small></span>
+          </button>)}
+        </div>
       </article>
 
-      <article className="panel">
+      <article className="workspace-panel admin-agreement-document-card">
         {selected ? <>
-          <div className="panel-head"><div><p className="eyebrow">Immutable published version</p><h3>{selected.title}</h3><p className="muted">Version {selected.versionCode}</p></div></div>
-          <div className="settings-grid two">
+          <div className="workspace-panel-heading">
+            <div>
+              <p className="workspace-eyebrow">Immutable published version</p>
+              <h2>{selected.title}</h2>
+              <p>Version {selected.versionCode}</p>
+            </div>
+            <span className="workspace-status-pill good">Published</span>
+          </div>
+          <div className="workspace-detail-grid admin-agreement-facts">
             <Fact label="Effective" value={formatDate(selected.effectiveFrom)} />
             <Fact label="Published" value={formatDate(selected.publishedAt)} />
             <Fact label="Content integrity" value={`${selected.contentSha256.slice(0, 16)}…`} />
             <Fact label="Scope" value="All SellerTray Businesses" />
           </div>
-          <div className="governance-note">Reason: {selected.publishReason}</div>
-          <div className="panel agreement-document"><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontFamily: 'inherit', margin: 0 }}>{selected.contentBody}</pre></div>
-        </> : <div className="empty-state"><strong>No version selected</strong><p>Published versions are immutable and remain available for legal history.</p></div>}
+          <div className="workspace-banner info admin-agreement-reason"><strong>Publication reason</strong><span>{selected.publishReason}</span></div>
+          <div className="admin-agreement-document"><pre>{selected.contentBody}</pre></div>
+        </> : <div className="workspace-empty-state"><strong>No version selected</strong><p>Published versions are immutable and remain available for legal history.</p></div>}
       </article>
     </div>
 
-    <article className="panel">
-      <div className="panel-head"><div><p className="eyebrow">Publish reviewed version</p><h3>New universal Master Agreement</h3></div>{!state?.canPublish ? <span className="role-pill">Review only</span> : null}</div>
-      <div className="governance-note">Upload the exact reviewed text-based PDF approved for publication. SellerTray extracts and hashes its legal text, stores the source PDF immutably, and binds merchant acceptance to that governed document. Do not include merchant-specific pricing, order IDs, Branch terms or bespoke merchant clauses.</div>
-      {state?.canPublish ? <form className="settings-form" onSubmit={publish}>
-        <div className="settings-grid two">
-          <label className="field"><span>Version code</span><input maxLength={64} required value={form.versionCode} onChange={(event) => setForm((current) => ({ ...current, versionCode: event.target.value }))} placeholder="e.g. v1.0" /></label>
-          <label className="field"><span>Title</span><input maxLength={200} required value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} /></label>
-          <label className="field"><span>Effective from</span><input type="datetime-local" required value={form.effectiveFrom} onChange={(event) => setForm((current) => ({ ...current, effectiveFrom: event.target.value }))} /></label>
-          <label className="field"><span>Publication reason</span><input maxLength={1000} required value={form.reason} onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))} placeholder="Reviewed legal successor publication" /></label>
+    <article className="workspace-panel admin-agreement-publish">
+      <div className="workspace-panel-heading">
+        <div>
+          <p className="workspace-eyebrow">Publish reviewed version</p>
+          <h2>New universal Master Agreement</h2>
+          <p>Publish only the exact reviewed platform-wide legal document.</p>
         </div>
-        <label className="field"><span>Reviewed Master Agreement PDF</span><input key={fileInputKey} type="file" accept="application/pdf,.pdf" required onChange={(event) => {
+        {!state?.canPublish ? <span className="workspace-status-pill neutral">Review only</span> : null}
+      </div>
+      <div className="workspace-banner info">Upload the exact reviewed text-based PDF approved for publication. SellerTray extracts and hashes its legal text, stores the source PDF immutably, and binds merchant acceptance to that governed document. Do not include merchant-specific pricing, order IDs, Branch terms or bespoke merchant clauses.</div>
+      {state?.canPublish ? <form className="workspace-form-stack" onSubmit={publish}>
+        <div className="workspace-field-grid two">
+          <label><span>Version code</span><input maxLength={64} required value={form.versionCode} onChange={(event) => setForm((current) => ({ ...current, versionCode: event.target.value }))} placeholder="e.g. v1.0" /></label>
+          <label><span>Title</span><input maxLength={200} required value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} /></label>
+          <label><span>Effective from</span><input type="datetime-local" required value={form.effectiveFrom} onChange={(event) => setForm((current) => ({ ...current, effectiveFrom: event.target.value }))} /></label>
+          <label><span>Publication reason</span><input maxLength={1000} required value={form.reason} onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))} placeholder="Reviewed legal successor publication" /></label>
+        </div>
+        <label><span>Reviewed Master Agreement PDF</span><input key={fileInputKey} type="file" accept="application/pdf,.pdf" required onChange={(event) => {
           const file = event.target.files?.[0] ?? null;
           setSourcePdf(file);
           if (!file) return;
           if (!isPdfFile(file)) setError('Upload a PDF document for the reviewed Master Agreement.');
           else if (file.size < 1 || file.size > MAX_MASTER_PDF_BYTES) setError('Reviewed Master Agreement PDF must be 8 MB or smaller.');
           else setError(null);
-        }} />{sourcePdf ? <small>{sourcePdf.name} · {formatFileSize(sourcePdf.size)}</small> : <small>Text-based PDF only · maximum 8 MB</small>}</label>
-        <div className="settings-actions"><button className="primary-button" disabled={saving}>{saving ? 'Publishing reviewed PDF…' : 'Publish reviewed PDF version'}</button></div>
-      </form> : <p className="muted">Your ProcessEdge access is review-only for Master Agreement publication.</p>}
+        }} />{sourcePdf ? <small className="workspace-muted small">{sourcePdf.name} · {formatFileSize(sourcePdf.size)}</small> : <small className="workspace-muted small">Text-based PDF only · maximum 8 MB</small>}</label>
+        <div className="workspace-actions"><button type="submit" className="workspace-button primary" disabled={saving}>{saving ? 'Publishing reviewed PDF…' : 'Publish reviewed PDF version'}</button></div>
+      </form> : <p className="workspace-muted">Your ProcessEdge access is review-only for Master Agreement publication.</p>}
     </article>
   </section>;
 }
 
-function Fact({ label, value }: { label: string; value: string }) { return <div className="role-lock"><span>{label}</span><strong>{value}</strong></div>; }
+function Fact({ label, value }: { label: string; value: string }) { return <div className="workspace-detail"><span>{label}</span><strong>{value}</strong></div>; }
 function record(value: unknown): Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 function formatDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(date); }
 function localDateTime(date: Date) { const offset = date.getTimezoneOffset(); return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 16); }

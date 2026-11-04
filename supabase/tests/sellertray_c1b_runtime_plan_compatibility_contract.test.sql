@@ -1,5 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
+-- Inspect the preserved C1B entitlement-writing core; the public entrypoint now
+-- adds current Order Form confirmation gating before delegating to this core.
 select extensions.plan(6);
 
 select extensions.ok(
@@ -16,13 +18,13 @@ select extensions.ok(
   position(
     'select s.plan_code,s.billing_cycle'
     in lower(pg_get_functiondef(
-      'public.reconcile_sellertray_installment_entitlement(uuid,uuid)'::regprocedure
+      'public.reconcile_sellertray_installment_entitlement_package_core(uuid,uuid)'::regprocedure
     ))
   ) > 0
   and position(
     'and s.line_type=''subscription'''
     in lower(pg_get_functiondef(
-      'public.reconcile_sellertray_installment_entitlement(uuid,uuid)'::regprocedure
+      'public.reconcile_sellertray_installment_entitlement_package_core(uuid,uuid)'::regprocedure
     ))
   ) > 0,
   'C1B reconciliation derives the runtime plan from the immutable commercial subscription snapshot'
@@ -32,18 +34,18 @@ select extensions.ok(
   position(
     'if v_agreement_accepted_at is null'
     in lower(pg_get_functiondef(
-      'public.reconcile_sellertray_installment_entitlement(uuid,uuid)'::regprocedure
+      'public.reconcile_sellertray_installment_entitlement_package_core(uuid,uuid)'::regprocedure
     ))
   ) > 0
   and position(
     'if v_agreement_accepted_at is null'
     in lower(pg_get_functiondef(
-      'public.reconcile_sellertray_installment_entitlement(uuid,uuid)'::regprocedure
+      'public.reconcile_sellertray_installment_entitlement_package_core(uuid,uuid)'::regprocedure
     ))
   ) < position(
     'update public.tenant_subscriptions'
     in lower(pg_get_functiondef(
-      'public.reconcile_sellertray_installment_entitlement(uuid,uuid)'::regprocedure
+      'public.reconcile_sellertray_installment_entitlement_package_core(uuid,uuid)'::regprocedure
     ))
   ),
   'agreement, Branch setup and first-payment prerequisites are evaluated before any runtime compatibility mutation'
@@ -53,7 +55,7 @@ select extensions.ok(
   position(
     'set plan_code=v_plan_code'
     in lower(pg_get_functiondef(
-      'public.reconcile_sellertray_installment_entitlement(uuid,uuid)'::regprocedure
+      'public.reconcile_sellertray_installment_entitlement_package_core(uuid,uuid)'::regprocedure
     ))
   ) > 0,
   'successful C1B reconciliation moves the compatibility row to the governed purchased plan'
