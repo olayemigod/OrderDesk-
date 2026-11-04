@@ -3,6 +3,10 @@ name: OA5 Staging Isolation Contract
 on:
   pull_request:
     paths:
+      - 'scripts/qa/oa5-staging-attestation.cjs'
+      - 'docs/qa/oa5-staging-backend-attestation.json'
+      - 'scripts/qa/vercel-frontend-environment.mjs'
+      - 'scripts/qa/vercel-frontend-environment.test.mjs'
       - 'scripts/qa/oa5-staging-isolation.mjs'
       - 'scripts/qa/oa5-staging-isolation.test.mjs'
       - 'scripts/qa/oa5-migration-boundary.mjs'
@@ -38,3 +42,4 @@ jobs:
           node --test scripts/qa/oa5-staging-isolation.test.mjs scripts/qa/oa5-migration-boundary.test.mjs scripts/qa/oa5-test-merchant-fixtures.test.mjs scripts/qa/oa5-android-qa-variant.test.mjs
           node scripts/qa/oa5-test-merchant-fixtures.mjs --check
           node --test scripts/qa/oa5-test-backup-manifest.test.mjs
+          node --test scripts/qa/vercel-frontend-environment.test.mjs
