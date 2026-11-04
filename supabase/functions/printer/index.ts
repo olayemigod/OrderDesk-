@@ -76,7 +76,49 @@ Deno.serve(async (request) => {
     .eq('user_id', userId)
     .maybeSingle();
   if (membershipError) return json({ error: membershipError.message }, 400);
-  if (!membership) return json({ error: 'You do not have access to this business' }, 403);
+  if (!membership) {
+    // ProcessEdge installers are not merchant Team members. They may only
+    // configure an assigned Branch printer or test it; never print any sales
+    // invoice, payment receipt, or general merchant order document.
+    const appointmentId = cleanUuid(body.appointmentId);
+    if (!appointmentId || !verifiedAal2(token)
+      || action === 'request_business_document_print') {
+      return json({ error: 'You do not have access to this business' }, 403);
+    }
+    let deviceBranchId: string | null = null;
+    if (action === 'save_printer') {
+      deviceBranchId = cleanUuid(body.branchId);
+    } else if (action === 'request_print' && body.jobType === 'test'
+      && (body.orderId === null || body.orderId === undefined)) {
+      const printerId = cleanUuid(body.printerId);
+      if (printerId) {
+        const {data: printer, error: lookupError} = await admin.from('sellertray_printers')
+          .select('branch_id').eq('tenant_id',tenantId).eq('id',printerId).maybeSingle();
+        if (lookupError) return json({ error: 'Unable to check this printer' }, 400);
+        deviceBranchId = printer?.branch_id ?? null;
+      }
+    } else if (action === 'update_print') {
+      const jobId = cleanUuid(body.jobId);
+      if (jobId) {
+        const {data: job,error: jobError} = await admin.from('sellertray_print_jobs')
+          .select('branch_id,job_type,requested_by_user_id')
+          .eq('tenant_id',tenantId).eq('id',jobId).maybeSingle();
+        if (jobError) return json({ error: 'Unable to check this test print' }, 400);
+        if (job?.job_type === 'test' && job.requested_by_user_id === userId) {
+          deviceBranchId = job.branch_id;
+        }
+      }
+    }
+    if (!deviceBranchId) return json({ error: 'Installer permissions do not include this print action' }, 403);
+    const {data: assigned,error: assignmentError} = await admin.rpc(
+      'sellertray_setup_installer_has_assignment',{
+        p_actor_user_id:userId,p_tenant_id:tenantId,p_branch_id:deviceBranchId,
+        p_appointment_id:appointmentId,p_as_of:new Date().toISOString(),
+      });
+    if (assignmentError || assigned !== true) {
+      return json({ error: 'This appointment no longer authorizes this Branch printer' }, 403);
+    }
+  }
 
   if (action === 'request_business_document_print') {
     return requestBusinessDocumentPrint(admin, body, tenantId, userId);
@@ -472,6 +514,18 @@ function printJobState(row: PrintJobRow, idempotentReplay: boolean): JsonRecord 
     failureMessage: row.failure_message,
     idempotentReplay,
   };
+}
+
+// Only inspect an already server-verified Auth token; do not use user_metadata
+// or client-provided role/assurance values for authorization.
+function verifiedAal2(token: string): boolean {
+  try {
+    const segment=token.split('.')[1];
+    if (!segment) return false;
+    const b64=segment.replace(/-/g,'+').replace(/_/g,'/');
+    const data=JSON.parse(atob(b64.padEnd(Math.ceil(b64.length/4)*4,'='))) as JsonRecord;
+    return data.aal === 'aal2';
+  } catch { return false; }
 }
 
 function cleanAction(value: unknown): PrinterAction | null {
