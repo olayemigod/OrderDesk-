@@ -301,6 +301,18 @@ async function applyInstallmentPaymentSuccess(
     throw new Error('Verified provider payment time is required for installment confirmation');
   }
 
+  // Commercial V2 Branch payments and legacy OA2 installment payments share
+  // this immutable provider confirmation RPC, but NOT the C1 entitlement
+  // reconciler. Resolve the obligation scope before committing payment so a
+  // failed scope read cannot leave a newly paid checkout unclassified.
+  const obligations = await rest<Array<{ obligation_scope: string }>>(
+    `/rest/v1/sellertray_commercial_installment_obligations?select=obligation_scope&tenant_id=eq.${encodeURIComponent(tenantId)}&id=eq.${encodeURIComponent(resolution.installmentObligationId)}&limit=1`,
+  );
+  const obligationScope = obligations[0]?.obligation_scope;
+  if (obligationScope !== 'commercial_order' && obligationScope !== 'branch_subscription') {
+    throw new Error('Installment checkout is not bound to a recognised commercial obligation');
+  }
+
   await rpc<string>('confirm_sellertray_installment_payment_from_checkout', {
     p_checkout_session_id: resolution.checkoutSessionId,
     p_provider_reference: reference,
@@ -311,14 +323,16 @@ async function applyInstallmentPaymentSuccess(
     p_provider_event_fingerprint: fingerprint,
   });
 
-  // Payment confirmation is already committed in its own database transaction.
-  // Do not mark the provider event processed until reconciliation succeeds. If
-  // reconciliation fails, the webhook returns 500 so Paystack can retry the
-  // same immutable payment confirmation and reconciliation idempotently.
-  await rpc<JsonRecord>('reconcile_sellertray_installment_entitlement', {
-    p_tenant_id: tenantId,
-    p_installment_obligation_id: resolution.installmentObligationId,
-  });
+  // C1/OA2: payment confirmation is committed in a separate transaction,
+  // so a failed legacy entitlement reconciliation must return 500 and remain
+  // retryable. Native C2 payment is settlement evidence only: its independent
+  // Branch payment-to-entitlement reconciliation is NOT active in this slice.
+  if (obligationScope === 'commercial_order') {
+    await rpc<JsonRecord>('reconcile_sellertray_installment_entitlement', {
+      p_tenant_id: tenantId,
+      p_installment_obligation_id: resolution.installmentObligationId,
+    });
+  }
 
   await captureReusableAuthorization(tenantId, data, resolution.billingEmail ?? null);
 }
