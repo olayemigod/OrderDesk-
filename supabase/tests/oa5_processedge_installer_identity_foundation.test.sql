@@ -368,6 +368,69 @@ select extensions.lives_ok(
   'OA4 readiness hardware proof recognises a real printed installer test job'
 );
 
+-- Installer handover is immutable reported evidence, not activation.
+-- The canonical same-Branch printer and test job must already exist.
+select extensions.lives_ok(
+  $test$select public.platform_installer_submit_handover(
+    f.installer_id,f.tenant_id,f.branch_id,f.appointment_id,
+    f.printer_id,f.test_job_id,'New and functional','Receiving Manager',
+    'SIGNED-HANDOVER-REF-001','Merchant walkthrough and hardware handover',
+    'oa5-installer-handover-setup-01'
+  ) from oa5_installer_fixture f$test$,
+  'Assigned installer can record verified printer/test and merchant handover evidence'
+);
+select extensions.ok(
+  (public.platform_installer_submit_handover(
+    f.installer_id,f.tenant_id,f.branch_id,f.appointment_id,
+    f.printer_id,f.test_job_id,'New and functional','Receiving Manager',
+    'SIGNED-HANDOVER-REF-001','Merchant walkthrough and hardware handover',
+    'oa5-installer-handover-setup-01'
+  )->>'idempotentReplay')::boolean,
+  'Replaying an identical handover command does not duplicate evidence'
+) from oa5_installer_fixture f;
+select extensions.ok(
+  (select count(*)=1 from public.sellertray_installer_handover_submissions h
+    join oa5_installer_fixture f
+      on f.tenant_id=h.tenant_id and f.appointment_id=h.appointment_id
+    where h.actor_user_id=f.installer_id
+      and h.test_job_id=f.test_job_id
+      and h.evidence->'equipment'->0->>'identifier'='OA5-INSTALLER-HW-001')
+  and not exists(select 1 from public.sellertray_commercial_branch_setup_readiness r
+    join oa5_installer_fixture f on r.tenant_id=f.tenant_id
+    where r.branch_id=f.branch_id),
+  'Handover evidence is retained but cannot independently create readiness'
+);
+select extensions.throws_ok(
+  $test$select public.platform_installer_submit_handover(
+    f.installer_id,f.tenant_id,f.branch_id,f.appointment_id,
+    f.printer_id,f.test_job_id,'Damaged','Different recipient',
+    'SIGNED-HANDOVER-REF-001','Merchant walkthrough and hardware handover',
+    'oa5-installer-handover-setup-01'
+  ) from oa5_installer_fixture f$test$,
+  '23505',null::text,'Handover idempotency rejects different evidence for one command'
+);
+select extensions.throws_ok(
+  $test$select public.platform_installer_submit_handover(
+    f.installer_id,f.tenant_id,gen_random_uuid(),f.appointment_id,
+    f.printer_id,f.test_job_id,'New and functional','Receiving Manager',
+    'SIGNED-HANDOVER-REF-001','Merchant walkthrough and hardware handover',
+    'oa5-installer-handover-wrong-branch'
+  ) from oa5_installer_fixture f$test$,
+  '42501',null::text,'Installer handover cannot cross Branch boundaries'
+);
+select extensions.throws_ok(
+  $test$update public.sellertray_installer_handover_submissions
+    set reason='Overwritten' where command_key='oa5-installer-handover-setup-01'$test$,
+  '55000',null::text,'Installer handover evidence cannot be rewritten'
+);
+select extensions.ok(
+  not has_table_privilege('authenticated',
+    'public.sellertray_installer_handover_submissions','SELECT')
+  and not has_function_privilege('authenticated',
+    'public.platform_installer_submit_handover(uuid,uuid,uuid,uuid,uuid,uuid,text,text,text,text,text)','EXECUTE'),
+  'Handover evidence remains server-only until verified installer transport is wired'
+);
+
 select set_config('request.jwt.claims','',true);
 select set_config('request.jwt.claim.sub','',true);
 
