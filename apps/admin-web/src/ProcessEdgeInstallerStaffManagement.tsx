@@ -45,6 +45,15 @@ type StaffResponse = {
   pendingInvitations?: InvitationReservation[];
 };
 
+function formatDateTime(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' :
+    new Intl.DateTimeFormat('en-GB', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    }).format(date);
+}
+
 // datetime-local must receive the browser's local wall-clock time, not UTC.
 function toLocalDateTimeInput(value: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -219,7 +228,7 @@ export default function ProcessEdgeInstallerStaffManagement({
           }}>
             <option value="">Choose a scheduled appointment</option>
             {assignableAppointments.map((a) => <option key={a.id} value={a.id}>
-              {a.branchName} — {new Date(a.scheduledEndAt).toLocaleString()}
+              {a.branchName} — {formatDateTime(a.scheduledEndAt)}
             </option>)}
           </select>
         </label>
@@ -305,7 +314,7 @@ export default function ProcessEdgeInstallerStaffManagement({
         <tbody>{assignments.map((a) => <tr key={a.assignmentId}>
           <td>{staff.find((s) => s.userId === a.userId)?.email ?? 'ProcessEdge installer'}</td>
           <td>{appointments.find((ap) => ap.id === a.appointmentId)?.branchName ?? 'Assigned Branch'}</td>
-          <td>{new Date(a.validUntil).toLocaleString()}</td>
+          <td>{formatDateTime(a.validUntil)}</td>
           <td>{a.revokedAt ? 'Revoked' : Date.parse(a.validUntil) <= Date.now() ? 'Expired' : 'Assigned'}</td>
           <td>{!a.revokedAt ? <button type="button" className="workspace-button subtle" disabled={Boolean(saving)}
             onClick={() => {
