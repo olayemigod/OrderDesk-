@@ -303,13 +303,14 @@ alter table oa5_installer_fixture
   add column test_job_id uuid;
 
 update oa5_installer_fixture f set printer_id=(
-  public.save_sellertray_printer(
-    f.tenant_id,null,f.branch_id,
+  public.save_sellertray_installer_printer(
+    f.installer_id,f.tenant_id,f.branch_id,f.appointment_id,
+    null,
     (select r.id from public.sellertray_registers r
       where r.tenant_id=f.tenant_id and r.branch_id=f.branch_id
         and r.code='OAI-SETUP-01'),
     'Installer Bluetooth Test Printer','OA5-INSTALLER-HW-001',
-    58,true,true,f.installer_id
+    58,true,true,'oa5-installer-printer-save-01'
   )->>'printerId')::uuid;
 
 select extensions.ok(
@@ -319,6 +320,79 @@ select extensions.ok(
       and p.hardware_identifier='OA5-INSTALLER-HW-001'),
   'Assigned installer configures the canonical Branch printer without merchant membership'
 );
+
+select extensions.ok(
+  exists(select 1 from public.sellertray_installer_printer_commands c
+    join oa5_installer_fixture f on f.appointment_id=c.appointment_id
+    where c.actor_user_id=f.installer_id and c.branch_id=f.branch_id
+      and c.command_type='printer_save'
+      and c.command_key='oa5-installer-printer-save-01')
+  and exists(select 1 from public.sellertray_installer_printer_events e
+    join oa5_installer_fixture f on f.appointment_id=e.appointment_id
+    where e.actor_user_id=f.installer_id and e.printer_id=f.printer_id
+      and e.assignment_id=f.assignment_id and e.event_type='registered'),
+  'Printer registration has immutable command, original event and exact appointment/assignment provenance'
+);
+select extensions.ok(
+  (select count(*)=1 from public.sellertray_installer_printer_commands
+    where command_key='oa5-installer-printer-save-01'),
+  'Installation printer command is not duplicated by retries'
+);
+select extensions.throws_ok(
+  $test$select public.save_sellertray_printer(
+    f.tenant_id,f.printer_id,f.branch_id,
+    (select r.id from public.sellertray_registers r
+      where r.tenant_id=f.tenant_id and r.branch_id=f.branch_id
+        and r.code='OAI-SETUP-01'),
+    'Unaudited Installer Printer','OA5-INSTALLER-HW-001',
+    58,true,true,f.installer_id
+  ) from oa5_installer_fixture f$test$,
+  '42501',null::text,
+  'Legacy printer call cannot perform unaudited staff configuration changes'
+);
+select extensions.ok(
+  not has_function_privilege('authenticated',
+    'public.save_sellertray_installer_printer(uuid,uuid,uuid,uuid,uuid,uuid,text,text,integer,boolean,boolean,text)','EXECUTE'),
+  'Actor-parametrized installer printer mutation is service-role-only'
+);
+select set_config('request.jwt.claims',jsonb_build_object(
+  'sub',installer_id,'role','authenticated','aal','aal2')::text,true)
+from oa5_installer_fixture;
+select extensions.lives_ok(
+  $test$select public.save_sellertray_installer_receipt_settings(
+    f.tenant_id,f.appointment_id,f.printer_id,
+    '[{"type":"customer","label":"Customer Copy","enabled":true,"sortOrder":1},
+      {"type":"store","label":"Store Copy","enabled":true,"sortOrder":2}]'::jsonb,
+    'Merchant receipt footer','oa5-installer-receipt-profile-01'
+  ) from oa5_installer_fixture f$test$,
+  'AAL2 installer edits the shared receipt copy profile under audited appointment command'
+);
+select extensions.ok(
+  exists(select 1 from public.sellertray_installer_printer_commands c
+    join oa5_installer_fixture f on f.appointment_id=c.appointment_id
+    where c.command_type='receipt_settings' and c.actor_user_id=f.installer_id
+      and c.command_key='oa5-installer-receipt-profile-01')
+  and exists(select 1 from public.sellertray_installer_printer_events e
+    join oa5_installer_fixture f on f.appointment_id=e.appointment_id
+    where e.printer_id=f.printer_id and e.actor_user_id=f.installer_id
+      and e.assignment_id=f.assignment_id and e.event_type='updated'),
+  'Receipt profile change preserves the same appointment/assignment and immutable before/after printer event'
+);
+select extensions.throws_ok(
+  $test$select public.save_sellertray_printer_receipt_settings(
+    f.tenant_id,f.printer_id,
+    '[{"type":"customer","label":"Unaudited Copy","enabled":true,"sortOrder":1}]'::jsonb,
+    'Bypass footer'
+  ) from oa5_installer_fixture f$test$,
+  '42501',null::text,
+  'Direct installer receipt-settings RPC cannot bypass immutable appointment command'
+);
+select extensions.throws_ok(
+  $test$update public.sellertray_installer_printer_events set after_state='{}'::jsonb$test$,
+  '55000',null::text,'Installer printer before/after audit evidence cannot be rewritten'
+);
+select set_config('request.jwt.claims','{"role":"service_role"}',true);
+
 
 update oa5_installer_fixture f set test_job_id=(
   public.request_sellertray_installer_test_print_job(
