@@ -177,6 +177,14 @@ export default function InventoryManagement({ tenantId, branch, branches }: { te
   const [transferCancelReason, setTransferCancelReason] = useState('');
 
   const selectedProduct = products.find((row) => row.id === adjustProductId) ?? null;
+  const adjustmentUom = selectedProduct?.catalog_item_uoms?.find((row) => row.id === adjustUomId) ?? null;
+  const parsedAdjustmentQty = adjustQty.trim() ? Number(adjustQty) : null;
+  const convertedAdjustment = adjustmentUom && parsedAdjustmentQty !== null && Number.isFinite(parsedAdjustmentQty) && parsedAdjustmentQty > 0
+    ? parsedAdjustmentQty * numberValue(adjustmentUom.conversion_factor) : null;
+  const selectedStockRow = stock.items.find((row) => row.catalogItemId === adjustProductId) ?? null;
+  const projectedStockBalance = convertedAdjustment !== null && selectedStockRow
+    ? numberValue(selectedStockRow.quantityOnHand) + (adjustDirection === 'increase' ? convertedAdjustment : -convertedAdjustment)
+    : null;
   const lineProduct = products.find((row) => row.id === lineProductId) ?? null;
   const policyProduct = policyProductId ? stock.items.find((row) => row.catalogItemId === policyProductId) ?? null : null;
   const countEntryItem = count?.items.find((item) => item.productId === countEntryProductId) ?? null;
@@ -305,11 +313,14 @@ export default function InventoryManagement({ tenantId, branch, branches }: { te
   async function submitAdjustment(event: FormEvent) {
     event.preventDefault(); if (!branch) return;
     const quantity = Number(adjustQty);
-    if (!adjustProductId || !adjustUomId || !Number.isFinite(quantity) || quantity <= 0 || !adjustReference.trim()) { setError('Choose a product and enter a valid quantity and reference.'); return; }
+    if (!adjustProductId || !adjustUomId || !Number.isFinite(quantity) || quantity <= 0 || !adjustReference.trim()) { setError('Enter the amount of stock to change, not the new total.'); return; }
+    if (projectedStockBalance !== null && projectedStockBalance < -0.000001) { setError('The reduction exceeds current stock. Refresh stock and try again.'); return; }
     setBusy(true); setError(null); setMessage(null);
     try {
-      await invoke('inventory-operation', { tenantId, branchId: branch.id, productId: adjustProductId, uomId: adjustUomId, operation: 'adjust', quantity, adjustmentDirection: adjustDirection, reference: adjustReference, reason: adjustReason, commandId: commandId('adjust') });
-      setMessage('Stock adjustment posted.'); setAdjustQty(''); setAdjustReference(reference('ADJ')); await loadBranchInventory();
+      const result = await invoke('inventory-operation', { tenantId, branchId: branch.id, productId: adjustProductId, uomId: adjustUomId, operation: 'adjust', quantity, adjustmentDirection: adjustDirection, reference: adjustReference, reason: adjustReason, commandId: commandId('adjust') });
+      setMessage(typeof result?.quantityOnHand === 'number' && typeof result?.stockUom === 'string'
+        ? `Stock adjusted. Current stock: ${formatNumber(result.quantityOnHand)} ${result.stockUom}.`
+        : 'Stock adjustment posted. Refresh to see the latest stock balance.'); setAdjustQty(''); setAdjustReference(reference('ADJ')); await loadBranchInventory();
     } catch (cause) { setError(errorMessage(cause, 'Unable to post this stock adjustment.')); } finally { setBusy(false); }
   }
 
@@ -481,14 +492,22 @@ export default function InventoryManagement({ tenantId, branch, branches }: { te
         <label className="field">Low-stock threshold<SellerTrayInput type="number" min="0" step="any" value={policyThreshold} onChange={(event) => setPolicyThreshold(event.target.value)} /></label>
         <label className="field">Reorder target<SellerTrayInput type="number" min="0" step="any" value={policyTarget} onChange={(event) => setPolicyTarget(event.target.value)} placeholder="Optional" /></label>
       </div><div className="form-actions"><button className="primary-button" disabled={busy}>{busy ? 'Saving…' : 'Save policy'}</button></div></form> : null}
-      {capabilities.can_adjust_stock ? <form className="panel product-editor-stack" onSubmit={submitAdjustment}><div className="panel-head"><div><p className="eyebrow">Controlled correction</p><h3>Adjust stock</h3></div></div><p className="muted">Use this only for corrections, damage, expiry, shrinkage or recovery. Supplier receipts belong in Purchasing and Branch receipts belong in Transfers.</p><div className="form-grid">
+      {capabilities.can_adjust_stock ? <form className="panel product-editor-stack" onSubmit={submitAdjustment}><div className="panel-head"><div><p className="eyebrow">Controlled correction</p><h3>Adjust stock</h3></div></div><p className="muted">Enter the amount of stock to add or remove, not the new total on hand. For an actual counted balance, use Stock count, review the variance and apply. Supplier receipts belong in Purchasing and Branch receipts belong in Transfers.</p><div className="form-grid">
         <label className="field">Product<SellerTraySelect value={adjustProductId} onChange={(event) => setAdjustProductId(event.target.value)}>{products.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</SellerTraySelect></label>
         <label className="field">Unit<SellerTraySelect value={adjustUomId} onChange={(event) => setAdjustUomId(event.target.value)}>{selectedProduct?.catalog_item_uoms?.map((row) => <option key={row.id} value={row.id}>{row.uom_name}</option>)}</SellerTraySelect></label>
-        <label className="field">Quantity<SellerTrayInput type="number" min="0" step="any" value={adjustQty} onChange={(event) => setAdjustQty(event.target.value)} /></label>
+        <label className="field">{adjustDirection === 'increase' ? 'Quantity to ADD (not new total)' : 'Quantity to REMOVE (not new total)'}<SellerTrayInput type="number" min="0" step="any" value={adjustQty} onChange={(event) => setAdjustQty(event.target.value)} /></label>
         <label className="field">Direction<SellerTraySelect value={adjustDirection} onChange={(event) => setAdjustDirection(event.target.value as 'increase' | 'decrease')}><option value="decrease">Reduce stock</option><option value="increase">Increase stock</option></SellerTraySelect></label>
         <label className="field">Reason<SellerTraySelect value={adjustReason} onChange={(event) => setAdjustReason(event.target.value)}>{ADJUST_REASONS.map((reason) => <option key={reason}>{reason}</option>)}</SellerTraySelect></label>
         <label className="field">Reference<SellerTrayInput value={adjustReference} onChange={(event) => setAdjustReference(event.target.value)} /></label>
-      </div><div className="form-actions"><button className="primary-button" disabled={busy}>{busy ? 'Posting…' : 'Post adjustment'}</button></div></form> : null}
+      </div>
+      {convertedAdjustment !== null && selectedProduct ? <p className="muted">
+        Stock change: {adjustDirection === 'increase' ? '+' : '-'}{formatNumber(convertedAdjustment)} {selectedProduct.stock_uom}.
+        {projectedStockBalance !== null && selectedStockRow
+          ? ` Current: ${formatNumber(numberValue(selectedStockRow.quantityOnHand))}; after adjustment: ${formatNumber(projectedStockBalance)} ${selectedProduct.stock_uom}.`
+          : ' Current on-hand stock is not loaded for this Product. Review the Branch stock list before posting.'}
+        {' '}Final balance is verified against the latest stock ledger.
+      </p> : null}
+      <div className="form-actions"><button className="primary-button" disabled={busy}>{busy ? 'Posting…' : 'Post adjustment'}</button></div></form> : null}
     </> : null}
 
     {tab === 'movements' ? <article className="panel">
