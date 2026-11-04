@@ -43,6 +43,12 @@ Proposed minimum reusable fixture coverage: (a) a single-Branch merchant for fir
 
 Do **not** create these merchants yet: the existing Agreement Test project is not an OA5-capable general staging target until archive, explicit reset approval, clean rebuild and deployment attestation are complete.
 
+## Agreement Test retention inventory — read-only checkpoint 04/11/2026
+
+Read-only queries against the existing test ref `iukgsukdoowvnhlfmpml` confirm **3 merchant records, 3 Branches, 5 Auth users, 5 Auth sessions, 3 Storage buckets with 0 objects, 5 commercial orders, 5 agreement packages and 5 order-form confirmations**. All three merchant names currently contain test/QA/demo/agreement wording; **names do not prove data is safe to destroy**. The three historical `*_stale_pre_oa5c` package/form/confirmation tables currently contain zero rows, but their schema and related agreements remain part of the historical test evidence. The project has five agreement-specific Vercel preview bindings identified above.
+
+The required archive remains **unperformed**: no data export, point-in-time restore rehearsal or backup artefact has been produced using the connected read-only tooling. Do not equate this counts-only inventory with backup. A project operator with approved secure database access must export/retain agreement evidence and prove recoverability, inspect authentication sessions/redirects and the five dependent preview branches, then request explicit reset approval before any test-project rebuild.
+
 ## Controlled conversion sequence — no destructive execution authorised
 
 1. **Dependency and retention inventory:** identify Supabase Auth users, active sessions, test-only tenant records, agreement proof rows, Edge function versions, Storage objects, preview URLs, app callbacks, branch-scoped Vercel variables, CI/environment secrets, and scheduled webhook/email/notification jobs. Identify owners and external dependencies.
