@@ -117,6 +117,13 @@ select extensions.is(
  (select master_id from c2_legal_proof_fixture),
  'C2 Merchant Order Form pins the published Master Agreement version');
 
+select extensions.ok(
+ (select o.commercial_snapshot->'branch_commitments'->0->>'installment_template_id' =
+         f.order_result->'subjects'->0->>'installmentTemplateId'
+  from public.sellertray_commercial_order_forms o
+  join c2_legal_proof_fixture f on f.form_id=o.id),
+ 'Confirmed purchase evidence retains the exact selected installment template');
+
 do $test$
 declare f c2_legal_proof_fixture%rowtype;
 begin
