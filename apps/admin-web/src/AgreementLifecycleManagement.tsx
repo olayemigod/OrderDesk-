@@ -174,7 +174,7 @@ export default function AgreementLifecycleManagement({ session, tenantId }: { se
         <Fact label="Current version" value={tenantState.currentVersion?.versionCode ?? 'No effective version'} />
         <Fact label="Service-delivery agreement gate" value={tenantState.serviceDeliveryAllowed ? 'Satisfied' : 'Blocked'} />
         <Fact label="Accepted by" value={tenantState.acceptance?.acceptedLegalName ?? '—'} />
-        <Fact label="Accepted at" value={tenantState.acceptance?.acceptedAt ? formatDate(tenantState.acceptance.acceptedAt) : '—'} />
+        <Fact label="Accepted at" value={tenantState.acceptance?.acceptedAt ? formatDateTime(tenantState.acceptance.acceptedAt) : '—'} />
       </div>
     </article> : null}
 
@@ -209,7 +209,7 @@ export default function AgreementLifecycleManagement({ session, tenantId }: { se
           </div>
           <div className="workspace-detail-grid admin-agreement-facts">
             <Fact label="Effective" value={formatDate(selected.effectiveFrom)} />
-            <Fact label="Published" value={formatDate(selected.publishedAt)} />
+            <Fact label="Published" value={formatDateTime(selected.publishedAt)} />
             <Fact label="Content integrity" value={`${selected.contentSha256.slice(0, 16)}…`} />
             <Fact label="Scope" value="All SellerTray Businesses" />
           </div>
@@ -252,7 +252,18 @@ export default function AgreementLifecycleManagement({ session, tenantId }: { se
 
 function Fact({ label, value }: { label: string; value: string }) { return <div className="workspace-detail"><span>{label}</span><strong>{value}</strong></div>; }
 function record(value: unknown): Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
-function formatDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(date); }
+function formatDate(value: string) {
+  const date = new Date(value);
+  return Number.isFinite(date.getTime())
+    ? new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Africa/Lagos' }).format(date)
+    : '—';
+}
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return '—';
+  const time = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Africa/Lagos' }).format(date);
+  return `${formatDate(value)} ${time} WAT`;
+}
 function localDateTime(date: Date) { const offset = date.getTimezoneOffset(); return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 16); }
 function messageFrom(value: unknown, fallback: string) { return value instanceof Error && value.message ? value.message : fallback; }
 function isPdfFile(file: File) { return file.name.toLowerCase().endsWith('.pdf') && (!file.type || file.type === 'application/pdf'); }
