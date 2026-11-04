@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { loadCashRegisters, type CashRegister, type CashShift } from '../data/cashShiftRepository';
@@ -104,7 +105,15 @@ export function PrinterWorkspace({tenantId,branch,activeShift,onClose,installerA
     };
   }
   setSaving(true);setError(null);setNotice(null);
+  const printerStorageKey = installerAppointmentId
+    ? `sellertray.installerPrinter.v1:${saveTenant}:${saveBranch}:${installerAppointmentId}`
+    : null;
   try{
+   if(printerStorageKey&&printerCommand.current){
+     printerCommand.current.key=await durableInstallerCommand(
+       printerStorageKey,printerFacts,printerCommand.current.key,
+     );
+   }
    const p=await savePrinter({
      tenantId:saveTenant,printerId:editingId,branchId:saveBranch,registerId:saveRegister,
      displayName,hardwareIdentifier:deviceAddress,paperWidthMm,isDefault,isActive,
@@ -121,12 +130,24 @@ export function PrinterWorkspace({tenantId,branch,activeShift,onClose,installerA
        key:`installer-copies-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,14)}`,
      };
    }
+   const receiptStorageKey = installerAppointmentId
+     ? `sellertray.installerCopies.v1:${saveTenant}:${installerAppointmentId}:${p.id}`
+     : null;
+   if(receiptStorageKey&&receiptCommand.current){
+     receiptCommand.current.key=await durableInstallerCommand(
+       receiptStorageKey,receiptFacts,receiptCommand.current.key,
+     );
+   }
    await savePrinterReceiptSettings({
      tenantId:saveTenant,printerId:p.id,copyDefinitions:copies,merchantFooter,
      installerAppointmentId,
      installerRequestKey:installerAppointmentId?receiptCommand.current?.key:null,
    });
    printerCommand.current=null;receiptCommand.current=null;
+   // Clear keys only once the entire printer + receipt profile workflow has
+   // succeeded; a lost response between the two writes can safely replay.
+   if(printerStorageKey)await AsyncStorage.removeItem(printerStorageKey).catch(()=>{});
+   if(receiptStorageKey)await AsyncStorage.removeItem(receiptStorageKey).catch(()=>{});
    if(deviceEditEpoch.current!==saveEpoch)return;
    await refreshPrinters(saveTenant,saveBranch,saveRegister,saveEpoch);
    if(deviceEditEpoch.current!==saveEpoch)return;
@@ -215,6 +236,19 @@ export function PrinterWorkspace({tenantId,branch,activeShift,onClose,installerA
   </View>:null}
  </View>;
 }
+async function durableInstallerCommand(storageKey:string,facts:string,proposedKey:string):Promise<string>{
+  const prior=await AsyncStorage.getItem(storageKey);
+  if(prior){
+    try{
+      const saved=JSON.parse(prior) as {facts?:unknown;key?:unknown};
+      if(saved.facts===facts && typeof saved.key==='string'
+        && saved.key.length>=12 && saved.key.length<=128)return saved.key;
+    }catch{ /* malformed local state is superseded, not replayed */ }
+  }
+  await AsyncStorage.setItem(storageKey,JSON.stringify({facts,key:proposedKey}));
+  return proposedKey;
+}
+
 function Field({label,value,onChange,dark,placeholder}:{label:string;value:string;onChange:(v:string)=>void;dark:boolean;placeholder?:string}){return <><Text style={[styles.fieldLabel,dark&&darkStyles.bodyText]}>{label}</Text><TextInput value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={theme.colors.subtle} style={[styles.input,dark&&darkStyles.input]}/></>}
 function ToggleRow({label,value,onChange}:{label:string;value:boolean;onChange:(v:boolean)=>void}){return <View style={styles.toggleRow}><Text style={styles.toggleLabel}>{label}</Text><Switch value={value} onValueChange={onChange}/></View>}
 function MessageCard({tone,text,dark}:{tone:'error'|'success';text:string;dark:boolean}){return <View style={[styles.messageCard,tone==='error'?styles.errorCard:styles.successCard,dark&&darkStyles.card]}><Text style={[styles.messageText,dark&&darkStyles.bodyText]}>{text}</Text></View>}
