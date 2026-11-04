@@ -2,7 +2,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.115.0';
 
 type JsonRecord = Record<string, unknown>;
 type AdminAction = 'invite' | 'link_existing' | 'set_status' | 'assign' | 'revoke_assignment';
-type Action = AdminAction | 'mine' | 'staff_list';
+type Action = AdminAction | 'mine' | 'staff_list' | 'profile';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const INVITE_REDIRECT_URL = Deno.env.get('SETUP_INSTALLER_INVITE_REDIRECT_URL') ?? '';
@@ -27,13 +27,28 @@ Deno.serve(async (request) => {
 
   const identity = await verifiedIdentity(request.headers.get('authorization') ?? '');
   if (!identity) return json({ error: 'Authentication required' }, 401);
-  if (identity.aal !== 'aal2') {
-    return json({ error: 'Multi-factor verification is required for ProcessEdge installation access' }, 403);
-  }
   let body: JsonRecord;
   try { body = await request.json() as JsonRecord; } catch { return json({ error: 'Invalid JSON' }, 400); }
   const action = cleanAction(body.action);
   if (!action) return json({ error: 'Unsupported installer action' }, 400);
+  // The first login is AAL1; allow only an own-identity, status-only lookup.
+  // All actual appointment reads and privileged operations require AAL2.
+  if(action === 'profile') {
+    try {
+      const profile = await rpc<JsonRecord>('get_sellertray_setup_installer_profile', {
+        p_actor_user_id: identity.userId,
+      });
+      return json({
+        isInstaller: profile.isInstaller === true,
+        status: typeof profile.status === 'string' ? profile.status : null,
+      });
+    } catch {
+      return json({ error: 'Unable to verify ProcessEdge installation access' }, 400);
+    }
+  }
+  if (identity.aal !== 'aal2') {
+    return json({ error: 'Multi-factor verification is required for ProcessEdge installation access' }, 403);
+  }
 
   // Installer users can only see their own exact, active appointments. There
   // is no Merchant Team, platform portfolio or unrelated Branch read.
@@ -208,7 +223,7 @@ async function verifiedIdentity(authorization: string):
   } catch { return null; }
 }
 function cleanAction(value: unknown): Action | null {
-  const allowed: Action[] = ['invite','link_existing','set_status','assign','revoke_assignment','mine','staff_list'];
+  const allowed: Action[] = ['invite','link_existing','set_status','assign','revoke_assignment','mine','staff_list','profile'];
   return allowed.find(action => action === value) ?? null;
 }
 function cleanUuid(value: unknown): string | null {
