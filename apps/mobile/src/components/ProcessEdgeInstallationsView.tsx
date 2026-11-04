@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { PrinterWorkspace } from '../redesign/PrinterWorkspace';
 import { bluetoothPrintingSupported, listPairedBluetoothPrinters, type BluetoothPrinterDevice } from '../printing/bluetoothPrinter';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
@@ -39,6 +40,7 @@ export default function ProcessEdgeInstallationsView({
   const [error,setError]=useState<string | null>(null);
   const deviceRequestEpoch=useRef(0);
   const [deviceView,setDeviceView]=useState<DeviceView | null>(null);
+  const [setupAssignmentId,setSetupAssignmentId]=useState<string | null>(null);
   const [pairedDevices,setPairedDevices]=useState<BluetoothPrinterDevice[]>([]);
   const [pairedLoading,setPairedLoading]=useState(false);
 
@@ -46,7 +48,7 @@ export default function ProcessEdgeInstallationsView({
 
   async function refresh() {
     deviceRequestEpoch.current+=1;
-    setDeviceView(null);setPairedDevices([]);
+    setDeviceView(null);setPairedDevices([]);setSetupAssignmentId(null);
     setLoading(true);setError(null);
     try {
       const [{data:level,error:levelError},{data:factors,error:factorError}]=await Promise.all([
@@ -206,6 +208,18 @@ export default function ProcessEdgeInstallationsView({
           <Text style={[styles.body,dark&&styles.textSecondary]}>{item.branchName} · {item.appointmentStatus.replace('_',' ')}</Text>
           <Text style={[styles.body,dark&&styles.textSecondary]}>Appointment: {new Date(item.scheduledStartAt).toLocaleString()}</Text>
           <Text style={[styles.body,dark&&styles.textSecondary]}>Assigned until: {new Date(item.validUntil).toLocaleString()}</Text>
+          <Pressable disabled={busy} accessibilityRole="button"
+            onPress={()=>setSetupAssignmentId(current=>current===item.assignmentId?null:item.assignmentId)}
+            style={styles.secondaryAction}>
+            <Text style={styles.secondaryActionText}>{setupAssignmentId===item.assignmentId
+              ? 'Close Branch setup' : 'Configure register & printer'}</Text>
+          </Pressable>
+          {setupAssignmentId===item.assignmentId?<PrinterWorkspace
+            key={item.assignmentId} tenantId={item.tenantId}
+            branch={{id:item.branchId,code:'SETUP',name:item.branchName,isDefault:true}}
+            activeShift={null} installerAppointmentId={item.appointmentId}
+            onClose={()=>setSetupAssignmentId(null)}
+          />:null}
           <Pressable disabled={Boolean(deviceView?.loading)||busy}
             accessibilityRole="button" onPress={()=>void inspectAssignedDevices(item)} style={styles.action}>
             <Text style={styles.actionText}>{deviceView?.assignmentId===item.assignmentId&&deviceView.loading?'Checking devices…':'Inspect installation devices'}</Text>
