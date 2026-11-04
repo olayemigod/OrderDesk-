@@ -27,7 +27,7 @@ export function resolveSellerTrayUnitPrice(
  */
 export function scaledDecimal(value: number, places: number): bigint | null {
   if (!Number.isFinite(value) || value < 0) return null;
-  const match = /^(\\d+)(?:\\.(\\d+))?$/.exec(String(value));
+  const match = /^([0-9]+)(?:[.]([0-9]+))?$/.exec(String(value));
   if (!match) return null;
   const fraction = match[2] ?? '';
   if (fraction.length > places && /[1-9]/.test(fraction.slice(places))) return null;
