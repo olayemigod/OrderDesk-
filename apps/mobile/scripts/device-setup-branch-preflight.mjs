@@ -14,6 +14,16 @@ assert.match(workspace,/setDeviceAddress/);
 assert.match(workspace,/setMerchantFooter/);
 assert.match(workspace,/if\(deviceEditEpoch\.current!==editEpoch\)return/);
 assert.match(workspace,/if\(deviceEditEpoch\.current===editEpoch\)setError/);
+assert.match(workspace,/const saveEpoch=deviceEditEpoch\.current/);
+assert.match(workspace,/const saveTenant=tenantId,saveBranch=deviceBranchId,saveRegister=registerId/);
+assert.match(workspace,/refreshPrinters\(saveTenant,saveBranch,saveRegister,saveEpoch\)/);
+assert.match(workspace,/if\(deviceEditEpoch\.current===epochAtRequest\)setPrinters\(rows\)/);
+assert.ok((workspace.match(/if\(deviceEditEpoch\.current!==saveEpoch\)return/g)??[]).length >= 2,
+  'Save must discard stale completion and refresh when setup Branch changes');
+assert.match(workspace,/disabled=\{saving\} onPress=\{\(\)=>chooseDeviceBranch\(b\.id\)\}/);
+assert.match(workspace,/disabled=\{saving\} onPress=\{\(\)=>\{if\(r\.id===registerId\)return;/);
+assert.match(workspace,/setPrinters\(\[\]\);resetForm\(true\)/);
+assert.match(workspace,/if\(deviceEditEpoch\.current===saveEpoch\)setError/);
 assert.match(workspace,/loadCashRegisters\(tenantId,deviceBranchId\)/);
 assert.match(workspace,/loadPrintingCapabilities\(tenantId,deviceBranchId\)/);
 assert.match(workspace,/branchId:deviceBranchId/);
