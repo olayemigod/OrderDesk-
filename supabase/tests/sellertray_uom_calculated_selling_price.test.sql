@@ -2,7 +2,13 @@
 -- Each assertion runs in a disposable pgTAP transaction and rolls back.
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(20);
+select extensions.plan(21);
+
+select extensions.ok(
+  position('public.sellertray_effective_uom_selling_price(p_tenant_id,v_uom.catalog_item_id,v_uom.id)' in
+    pg_get_functiondef('public.update_sellertray_pos_draft_items(uuid,uuid,jsonb)'::regprocedure))>0,
+  'Draft editor effective price uses a catalog identifier present in all supported runtime variants'
+);
 
 select extensions.ok(
   has_function_privilege('service_role','public.sellertray_effective_uom_selling_price(uuid,uuid,uuid)','EXECUTE')

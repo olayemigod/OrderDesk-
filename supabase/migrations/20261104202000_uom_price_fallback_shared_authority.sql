@@ -185,25 +185,27 @@ $function$;
 do $sellertray_uom_price_editor$
 declare
   v_definition text;
-  v_filter text := 'u.selling_price is not null and u.selling_price>=0';
+  v_filter text := 'u[.]selling_price[[:space:]]+is[[:space:]]+not[[:space:]]+null[[:space:]]+and[[:space:]]+u[.]selling_price[[:space:]]*>=[[:space:]]*0';
   v_count integer;
 begin
   select pg_get_functiondef('public.update_sellertray_pos_draft_items(uuid,uuid,jsonb)'::regprocedure)
     into v_definition;
-  v_count := (length(v_definition)-length(replace(v_definition,v_filter,'')))/length(v_filter);
+  -- The installed Production editor and the newer additive-resume editor
+  -- format their guards differently. Match whitespace without changing logic.
+  select count(*)::int into v_count from regexp_matches(v_definition,v_filter,'g');
   if v_count not in (1,2)
      or position('v_effective_price:=v_uom.selling_price;' in v_definition)=0
      or position('abs(v_requested_price-v_uom.selling_price)>0.004' in v_definition)=0 then
     raise exception 'Unexpected POS draft editor version; manual governed migration review required' using errcode='23514';
   end if;
 
-  v_definition := replace(
+  v_definition := regexp_replace(
     v_definition,v_filter,
-    'public.sellertray_effective_uom_selling_price(p_tenant_id,u.catalog_item_id,u.id) is not null'
+    'public.sellertray_effective_uom_selling_price(p_tenant_id,u.catalog_item_id,u.id) is not null','g'
   );
   v_definition := replace(
     v_definition,'v_effective_price:=v_uom.selling_price;',
-    'v_effective_price:=public.sellertray_effective_uom_selling_price(p_tenant_id,v_catalog_item_id,v_uom.id);'
+    'v_effective_price:=public.sellertray_effective_uom_selling_price(p_tenant_id,v_uom.catalog_item_id,v_uom.id);'
   );
   v_definition := replace(
     v_definition,'abs(v_requested_price-v_uom.selling_price)>0.004',
