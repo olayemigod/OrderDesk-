@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import SetupCompletionForm from './SetupCompletionForm';
+import ProcessEdgeInstallerStaffManagement from './ProcessEdgeInstallerStaffManagement';
 import MerchantSelector from './MerchantSelector';
 import { invokeJson } from './supabase';
 
@@ -206,6 +207,20 @@ export default function SetupSchedulingAdministration({
             <div><h4>Setup workforce</h4><div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Worker</th><th>Capacity</th><th>Buffer</th><th>Coverage</th></tr></thead><tbody>{center.workers.map((worker) => <tr key={worker.id}><td><strong>{worker.name}</strong><small>{worker.code}</small></td><td>{worker.maxConcurrentSetups}</td><td>{worker.travelBufferMinutes}m</td><td>{worker.serviceAreaIds.map((id) => center.serviceAreas.find((area) => area.id === id)?.name ?? 'Unknown').join(', ') || 'No areas'}</td></tr>)}{!center.workers.length ? <tr><td colSpan={4}>No setup workers configured.</td></tr> : null}</tbody></table></div></div>
           </div>
         </section> : null}
+        {resourceTab === 'list' && center.canManagePlatformMasters ? (
+          <ProcessEdgeInstallerStaffManagement
+            session={session}
+            tenantId={tenantId}
+            workers={center.workers.map((worker) => ({ id: worker.id, name: worker.name, active: worker.active }))}
+            appointments={center.appointments.map((appointment) => ({
+              id: appointment.id,
+              workerId: appointment.workerId,
+              branchName: appointment.branchName,
+              scheduledEndAt: appointment.scheduledEndAt,
+              status: appointment.status,
+            }))}
+          />
+        ) : null}
         {resourceTab === 'area' ? <section className="workspace-panel workspace-form-stack">
           <div className="workspace-panel-heading"><div><h3>Add service area</h3><p>Create a governed ProcessEdge setup service area used by scheduling and capacity checks.</p></div>{!center.canManagePlatformMasters ? <span className="workspace-status-pill neutral">Review only</span> : null}</div>
           {center.canManagePlatformMasters ? <>
