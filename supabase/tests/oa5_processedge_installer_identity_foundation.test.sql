@@ -448,6 +448,78 @@ select extensions.throws_ok(
     set reason='Overwritten' where command_key='oa5-installer-handover-setup-01'$test$,
   '55000',null::text,'Installer handover evidence cannot be rewritten'
 );
+-- Regression: one worker has two legitimate purchased setup appointments in
+-- the *same* Branch. A print from appointment A cannot serve appointment B.
+create temp table oa5_second_installer_appointment(
+  commercial_order_id uuid, appointment_id uuid, assignment_id uuid
+) on commit drop;
+with next_order as (
+  insert into public.sellertray_commercial_orders(
+    tenant_id,order_reference,currency,total_gross_amount,
+    ordered_at,created_by_user_id
+  )
+  select tenant_id,'OAI-SECOND-'||upper(left(tenant_id::text,8)),
+    'NGN',200,now(),admin_id
+  from oa5_installer_fixture returning id
+)
+insert into oa5_second_installer_appointment(commercial_order_id)
+select id from next_order;
+
+insert into public.sellertray_commercial_order_price_snapshots(
+  tenant_id,commercial_order_id,line_no,line_type,
+  source_price_version_id,branch_id,description_snapshot
+)
+select f.tenant_id,a.commercial_order_id,1,'branch_setup',
+  f.price_id,f.branch_id,'Second purchased setup of same Branch'
+from oa5_installer_fixture f cross join oa5_second_installer_appointment a;
+
+with second_appointment as (
+  insert into public.sellertray_commercial_setup_appointments(
+    tenant_id,commercial_order_id,branch_id,worker_id,service_area_id,
+    scheduled_start_at,scheduled_end_at,travel_buffer_minutes_snapshot,
+    status,created_by_user_id
+  )
+  select f.tenant_id,a.commercial_order_id,f.branch_id,f.worker_id,f.area_id,
+    now()+interval '12 hours',now()+interval '14 hours',0,'scheduled',f.admin_id
+  from oa5_installer_fixture f cross join oa5_second_installer_appointment a
+  returning id
+)
+update oa5_second_installer_appointment
+set appointment_id=(select id from second_appointment);
+
+update oa5_second_installer_appointment a set assignment_id=(
+  select public.platform_admin_assign_setup_installer(
+    f.admin_id,f.installer_id,f.tenant_id,a.appointment_id,
+    now()+interval '2 days',gen_random_uuid(),
+    'Second active appointment to test same-Branch print provenance'
+  )
+  from oa5_installer_fixture f
+);
+
+select extensions.ok(
+  public.sellertray_setup_installer_has_assignment(
+    f.installer_id,f.tenant_id,f.branch_id,a.appointment_id,now()),
+  'Installer legitimately holds another appointment for the exact same Branch'
+) from oa5_installer_fixture f cross join oa5_second_installer_appointment a;
+
+select extensions.throws_ok(
+  $test$select public.platform_installer_submit_handover(
+    f.installer_id,f.tenant_id,f.branch_id,a.appointment_id,
+    f.printer_id,f.test_job_id,'New and functional','Receiving Manager',
+    'SIGNED-HANDOVER-REF-002','Attempt cross-appointment test reuse',
+    'oa5-installer-second-appointment-reuse'
+  ) from oa5_installer_fixture f cross join oa5_second_installer_appointment a$test$,
+  '23514',null::text,
+  'Another active same-Branch appointment cannot reuse the first appointment test'
+);
+select extensions.ok(
+  public.platform_admin_revoke_setup_installer_assignment(
+    f.admin_id,a.assignment_id,gen_random_uuid(),
+    'Close same-Branch test fixture second appointment assignment'
+  ),
+  'Second assignment is revoked so original expiry/revocation tests remain isolated'
+) from oa5_installer_fixture f cross join oa5_second_installer_appointment a;
+
 select extensions.ok(
   not has_table_privilege('authenticated',
     'public.sellertray_installer_handover_submissions','SELECT')
