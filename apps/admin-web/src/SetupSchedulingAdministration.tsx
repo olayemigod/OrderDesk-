@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import SetupCompletionForm from './SetupCompletionForm';
+import ProcessEdgeInstallerStaffManagement from './ProcessEdgeInstallerStaffManagement';
 import MerchantSelector from './MerchantSelector';
 import { invokeJson } from './supabase';
 
@@ -13,6 +14,11 @@ type PendingRequest = { id: string; appointmentId: string; branchId: string; req
 type Onboarding = { blockers: { message: string }[]; commercialOrder: { installmentObligationId?: string } | null; activation: { operationallyActive?: boolean; guaranteeStart?: string; guaranteeEnd?: string }; nextAction: { label?: string } };
 type Center = { onboarding: Onboarding; canManage: boolean; canManagePlatformMasters: boolean; serviceAreas: ServiceArea[]; workers: Worker[]; branchAreas: BranchArea[]; setupSubjects: SetupSubject[]; appointments: Appointment[]; pendingRequests: PendingRequest[] };
 type Response = { ok?: boolean; id?: string; center?: unknown; result?: unknown };
+type InstallerHandover = {
+  submissionId: string; appointmentId: string; branchId: string;
+  actorUserId: string; printerId: string; testJobId: string;
+  evidence: Record<string, unknown>; reason: string; submittedAt: string;
+};
 type SetupView = 'all' | 'appointments' | 'resources' | 'completion' | 'activation';
 type ResourceTab = 'list' | 'area' | 'worker';
 
@@ -50,6 +56,9 @@ export default function SetupSchedulingAdministration({
   const [areaForm, setAreaForm] = useState({ code: '', name: '', reason: '' });
   const [workerForm, setWorkerForm] = useState({ workerCode: '', displayName: '', maxConcurrentSetups: '1', travelBufferMinutes: '30', serviceAreaIds: [] as string[], reason: '' });
   const [completion, setCompletion] = useState<Appointment | null>(null);
+  const [handovers, setHandovers] = useState<InstallerHandover[]>([]);
+  const [handoverError, setHandoverError] = useState<string | null>(null);
+  const [selectedHandoverId, setSelectedHandoverId] = useState('');
   const [schedule, setSchedule] = useState<ScheduleDraft | null>(null);
   const commandIds = useRef(new Map<string, string>());
   const currentTenant = useRef(tenantId);
@@ -57,7 +66,12 @@ export default function SetupSchedulingAdministration({
   const [loadedTenantId, setLoadedTenantId] = useState('');
 
   useEffect(() => { if (initialTenantId !== undefined) setTenantId(initialTenantId ?? ''); }, [initialTenantId]);
-  useEffect(() => { setCenter(null); setSchedule(null); setCompletion(null); setResourceTab('list'); commandIds.current.clear(); if (tenantId) void load(); }, [tenantId]);
+  useEffect(() => {
+    setCenter(null); setSchedule(null); setCompletion(null);
+    setHandovers([]); setHandoverError(null); setSelectedHandoverId('');
+    setResourceTab('list'); commandIds.current.clear();
+    if (tenantId) void load();
+  }, [tenantId]);
 
   const activeAreas = useMemo(() => center?.serviceAreas.filter((row) => row.active) ?? [], [center]);
   const activeWorkers = useMemo(() => center?.workers.filter((row) => row.active) ?? [], [center]);
@@ -76,8 +90,23 @@ export default function SetupSchedulingAdministration({
     try {
       const response = await invoke({ action: 'center', tenantId });
       if (currentTenant.current !== tenantId) return;
-      setCenter(parseCenter(response.center));
+      const parsed = parseCenter(response.center);
+      setCenter(parsed);
       setLoadedTenantId(tenantId);
+      if (parsed.canManage && (view === 'all' || view === 'completion')) {
+        try {
+          const result = await invokeJson<{handovers?: InstallerHandover[]}>('platform-setup-installer', {
+            action:'handover_list',tenantId,
+          }, session);
+          if (currentTenant.current !== tenantId) return;
+          setHandovers(Array.isArray(result.handovers) ? result.handovers : []);
+          setHandoverError(null);
+        } catch(cause) {
+          if (currentTenant.current !== tenantId) return;
+          setHandovers([]);
+          setHandoverError(messageFrom(cause,'Unable to load ProcessEdge installer handovers.'));
+        }
+      }
     } catch (cause) { setError(messageFrom(cause, 'Unable to load governed setup scheduling.')); }
     finally { setLoading(false); }
   }
@@ -140,7 +169,10 @@ export default function SetupSchedulingAdministration({
   }
 
   function transition(appointment: Appointment, status: 'in_progress' | 'completed' | 'cancelled' | 'no_show') {
-    if (status === 'completed') { setCompletion(appointment); return; }
+    if (status === 'completed') {
+      setCompletion(appointment); setSelectedHandoverId('');
+      return;
+    }
     const reason = window.prompt(`Reason for ${status.replace('_', ' ')}?`)?.trim() ?? '';
     if (reason.length < 6) return;
     const commandKey = `transition:${appointment.id}:${status}`;
@@ -153,6 +185,10 @@ export default function SetupSchedulingAdministration({
     if (reason.length < 6) return;
     void mutate(`request:${request.id}`, { action: 'resolve_request', requestId: request.id, decision: 'declined', reason }, 'Reschedule request declined.');
   }
+
+  const appointmentHandovers = handovers.filter(h =>
+    h.appointmentId === completion?.id && h.branchId === completion?.branchId);
+  const selectedHandover = appointmentHandovers.find(h => h.submissionId === selectedHandoverId) ?? null;
 
   const heading = view === 'resources'
     ? ['Setup resources', 'Manage ProcessEdge setup service areas, workforce coverage, capacity and travel buffers.']
@@ -185,7 +221,21 @@ export default function SetupSchedulingAdministration({
         }}>Retry activation check</button> : null}
       </section> : null}
 
-      {showCompletion && completion && center.canManage ? <SetupCompletionForm key={completion.id} branchName={completion.branchName} scheduledStartAt={completion.scheduledStartAt} saving={saving !== null} onClose={() => setCompletion(null)} onSubmit={async (evidence, reason) => {
+      {showCompletion && completion && center.canManage ? <section className="workspace-panel" aria-label="Installation evidence review">
+        <h3>Installer handover submissions</h3>
+        {handoverError ? <div className="workspace-banner error">{handoverError}</div> : null}
+        <label>Evidence for this Branch appointment
+          <select value={selectedHandoverId} onChange={event=>setSelectedHandoverId(event.target.value)}>
+            <option value="">Continue without an installer submission</option>
+            {appointmentHandovers.map(h=><option key={h.submissionId} value={h.submissionId}>
+              {formatDate(h.submittedAt)} · {text(h.evidence.receivedBy)}
+            </option>)}
+          </select>
+        </label>
+        {selectedHandover ? <p>Installer evidence: {selectedHandover.submissionId}. Confirm the receiving merchant, printer and successful test below before completing setup.</p> : null}
+      </section> : null}
+      {showCompletion && completion && center.canManage ? <SetupCompletionForm key={completion.id + ':' + selectedHandoverId}
+        handover={selectedHandover} branchName={completion.branchName} scheduledStartAt={completion.scheduledStartAt} saving={saving !== null} onClose={() => setCompletion(null)} onSubmit={async (evidence, reason) => {
         const storageKey = 'sellertray.setupCompletion.v1:' + tenantId + ':' + completion.id;
         const facts = JSON.stringify({ evidence, reason });
         const previous = sessionStorage.getItem(storageKey);
@@ -206,6 +256,20 @@ export default function SetupSchedulingAdministration({
             <div><h4>Setup workforce</h4><div className="workspace-table-wrap"><table className="workspace-table compact-table"><thead><tr><th>Worker</th><th>Capacity</th><th>Buffer</th><th>Coverage</th></tr></thead><tbody>{center.workers.map((worker) => <tr key={worker.id}><td><strong>{worker.name}</strong><small>{worker.code}</small></td><td>{worker.maxConcurrentSetups}</td><td>{worker.travelBufferMinutes}m</td><td>{worker.serviceAreaIds.map((id) => center.serviceAreas.find((area) => area.id === id)?.name ?? 'Unknown').join(', ') || 'No areas'}</td></tr>)}{!center.workers.length ? <tr><td colSpan={4}>No setup workers configured.</td></tr> : null}</tbody></table></div></div>
           </div>
         </section> : null}
+        {resourceTab === 'list' && center.canManagePlatformMasters ? (
+          <ProcessEdgeInstallerStaffManagement
+            session={session}
+            tenantId={tenantId}
+            workers={center.workers.map((worker) => ({ id: worker.id, name: worker.name, active: worker.active }))}
+            appointments={center.appointments.map((appointment) => ({
+              id: appointment.id,
+              workerId: appointment.workerId,
+              branchName: appointment.branchName,
+              scheduledEndAt: appointment.scheduledEndAt,
+              status: appointment.status,
+            }))}
+          />
+        ) : null}
         {resourceTab === 'area' ? <section className="workspace-panel workspace-form-stack">
           <div className="workspace-panel-heading"><div><h3>Add service area</h3><p>Create a governed ProcessEdge setup service area used by scheduling and capacity checks.</p></div>{!center.canManagePlatformMasters ? <span className="workspace-status-pill neutral">Review only</span> : null}</div>
           {center.canManagePlatformMasters ? <>
@@ -266,7 +330,15 @@ function array(value: unknown): unknown[] { return Array.isArray(value) ? value 
 function text(value: unknown): string { return typeof value === 'string' ? value : ''; }
 function nullableText(value: unknown): string | null { return typeof value === 'string' && value ? value : null; }
 function number(value: unknown, fallback: number): number { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : fallback; }
-function formatDate(value: string | null | undefined): string { if (!value) return '—'; const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString(); }
+function formatDate(value: string | null | undefined): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' :
+    new Intl.DateTimeFormat('en-GB', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    }).format(date);
+}
 function toLocal(value: string): string { const date = new Date(value); const offset = date.getTimezoneOffset() * 60_000; return new Date(date.getTime() - offset).toISOString().slice(0,16); }
 function fromLocal(value: string): string | null { const date = new Date(value); return Number.isNaN(date.getTime()) ? null : date.toISOString(); }
 function messageFrom(value: unknown, fallback: string): string { if (value instanceof Error && value.message) return value.message; const row = record(value); return typeof row.message === 'string' ? row.message : fallback; }

@@ -8,7 +8,7 @@
     "userInterfaceStyle": "automatic",
     "android": {
       "package": "ng.processedge.sellertray",
-      "versionCode": 45,
+      "versionCode": 47,
       "intentFilters": [
         {
           "action": "VIEW",
@@ -84,7 +84,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow SellerTray to select product images from your photo library.",
+          "photosPermission": "Allow SellerTray to select product images and your business logo from your photo library.",
           "cameraPermission": "Allow SellerTray to scan product barcodes during selling and product setup.",
           "microphonePermission": false
         }

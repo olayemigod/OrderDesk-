@@ -176,13 +176,17 @@ export async function loadReceiptPrintReference(tenantId: string, orderId: strin
   return row ? { documentId: row.document_id, documentReference: row.document_reference, amount: toNumber(row.amount), currency: row.currency, issuedAt: row.issued_at } : null;
 }
 
-export async function savePrinter(input: { tenantId: string; printerId?: string | null; branchId: string; registerId: string; displayName: string; hardwareIdentifier: string; paperWidthMm: 58 | 80; isDefault: boolean; isActive: boolean }): Promise<SellerTrayPrinter> {
+export async function savePrinter(input: { tenantId: string; printerId?: string | null; branchId: string; registerId: string; displayName: string; hardwareIdentifier: string; paperWidthMm: 58 | 80; isDefault: boolean; isActive: boolean; installerAppointmentId?: string | null; installerRequestKey?: string | null }): Promise<SellerTrayPrinter> {
   if (!input.tenantId || !input.branchId || !input.registerId) throw new Error('Business, branch and register are required.');
   if (!input.displayName.trim()) throw new Error('Printer name is required.');
   if (!input.hardwareIdentifier.trim()) throw new Error('Bluetooth printer identity is required.');
   const data = await invokePrinter({
     action: 'save_printer',
     tenantId: input.tenantId,
+    ...(input.installerAppointmentId ? {
+      appointmentId: input.installerAppointmentId,
+      requestKey: input.installerRequestKey,
+    } : {}),
     printerId: input.printerId ?? null,
     branchId: input.branchId,
     registerId: input.registerId,
@@ -212,7 +216,7 @@ export async function loadPrinterReceiptSettings(tenantId: string, printerId: st
   return parseReceiptSettings(data as Record<string, unknown>);
 }
 
-export async function savePrinterReceiptSettings(input: { tenantId: string; printerId: string; copyDefinitions: ReceiptCopyDefinition[]; merchantFooter?: string | null }): Promise<PrinterReceiptSettings> {
+export async function savePrinterReceiptSettings(input: { tenantId: string; printerId: string; copyDefinitions: ReceiptCopyDefinition[]; merchantFooter?: string | null; installerAppointmentId?: string | null; installerRequestKey?: string | null }): Promise<PrinterReceiptSettings> {
   if (input.copyDefinitions.length < 1 || input.copyDefinitions.length > 8) throw new Error('Choose between 1 and 8 receipt copies.');
   const labels = new Set<string>();
   const copies = input.copyDefinitions.map((copy, index) => {
@@ -223,22 +227,32 @@ export async function savePrinterReceiptSettings(input: { tenantId: string; prin
     labels.add(key);
     return { type: copy.type, label, enabled: true, sortOrder: index + 1 };
   });
-  const { data, error } = await supabase.rpc('save_sellertray_printer_receipt_settings', {
-    p_tenant_id: input.tenantId,
-    p_printer_id: input.printerId,
-    p_copy_definitions: copies,
-    p_merchant_footer: input.merchantFooter?.trim() || null,
-  });
+  const { data, error } = input.installerAppointmentId
+    ? await supabase.rpc('save_sellertray_installer_receipt_settings', {
+        p_tenant_id: input.tenantId,
+        p_appointment_id: input.installerAppointmentId,
+        p_printer_id: input.printerId,
+        p_copy_definitions: copies,
+        p_merchant_footer: input.merchantFooter?.trim() || null,
+        p_command_key: input.installerRequestKey,
+      })
+    : await supabase.rpc('save_sellertray_printer_receipt_settings', {
+        p_tenant_id: input.tenantId,
+        p_printer_id: input.printerId,
+        p_copy_definitions: copies,
+        p_merchant_footer: input.merchantFooter?.trim() || null,
+      });
   if (error) throw error;
   return parseReceiptSettings(data as Record<string, unknown>);
 }
 
-export async function requestPrintJob(input: { tenantId: string; printerId: string; jobType: PrintJobType; orderId?: string | null; requestKey?: string }): Promise<PrintJob> {
+export async function requestPrintJob(input: { tenantId: string; printerId: string; jobType: PrintJobType; orderId?: string | null; requestKey?: string; installerAppointmentId?: string | null }): Promise<PrintJob> {
   if (!input.tenantId || !input.printerId) throw new Error('Business and printer are required.');
   if (input.jobType === 'receipt' && !input.orderId) throw new Error('Receipt order is required.');
   const data = await invokePrinter({
     action: 'request_print',
     tenantId: input.tenantId,
+    ...(input.installerAppointmentId ? { appointmentId: input.installerAppointmentId } : {}),
     printerId: input.printerId,
     jobType: input.jobType,
     orderId: input.jobType === 'receipt' ? input.orderId : null,
@@ -270,12 +284,13 @@ export async function requestBusinessDocumentPrint(input: {
   return parsePrintJob(data);
 }
 
-export async function updatePrintJob(input: { tenantId: string; jobId: string; status: 'printing' | 'printed' | 'failed'; failureCode?: string | null; failureMessage?: string | null }): Promise<{ jobId: string; status: PrintJobStatus; idempotentReplay: boolean }> {
+export async function updatePrintJob(input: { tenantId: string; jobId: string; status: 'printing' | 'printed' | 'failed'; failureCode?: string | null; failureMessage?: string | null; installerAppointmentId?: string | null }): Promise<{ jobId: string; status: PrintJobStatus; idempotentReplay: boolean }> {
   if (!input.tenantId || !input.jobId) throw new Error('Business and print job are required.');
   if (input.status === 'failed' && !input.failureMessage?.trim()) throw new Error('Printer failure message is required.');
   const data = await invokePrinter({
     action: 'update_print',
     tenantId: input.tenantId,
+    ...(input.installerAppointmentId ? { appointmentId: input.installerAppointmentId } : {}),
     jobId: input.jobId,
     status: input.status,
     failureCode: input.status === 'failed' ? input.failureCode?.trim() || null : null,

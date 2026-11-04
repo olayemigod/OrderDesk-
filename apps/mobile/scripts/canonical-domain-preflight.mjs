@@ -18,6 +18,8 @@ const [
   adminIndex,
   adminVercel,
   adminNavigation,
+  adminMain,
+  adminBrandConvergence,
 ] = await Promise.all([
   readFile(path.join(repoRoot, 'apps/mobile/src/data/merchantWebHandoff.ts'), 'utf8'),
   readFile(path.join(repoRoot, 'apps/mobile/app.json'), 'utf8'),
@@ -30,6 +32,8 @@ const [
   readFile(path.join(repoRoot, 'apps/admin-web/index.html'), 'utf8'),
   readFile(path.join(repoRoot, 'apps/admin-web/vercel.json'), 'utf8'),
   readFile(path.join(repoRoot, 'apps/admin-web/src/admin-navigation.css'), 'utf8'),
+  readFile(path.join(repoRoot, 'apps/admin-web/src/main.tsx'), 'utf8'),
+  readFile(path.join(repoRoot, 'apps/admin-web/src/admin-brand-asset-convergence.css'), 'utf8'),
 ]);
 
 const canonicalMerchantOrigin = 'https://app.sellertray.com';
@@ -73,9 +77,17 @@ assert.equal(
   'QA Android signing certificate must be associated with the SellerTray invitation origin',
 );
 
-assert.match(adminIndex, /href="\/brand\/sellertray-admin-icon\.png"/);
+assert.match(adminIndex, /href="\/brand\/sellertray-v2-mark\.svg"/);
 assert.doesNotMatch(adminVercel, /sellertray\.vercel\.app/);
+// The legacy stylesheet still references the prior mark. The approved PR201
+// correction must load later and override it without reverting the Admin shell.
 assert.match(adminNavigation, /url\('\/brand\/sellertray-admin-icon\.png'\)/);
+assert.match(adminBrandConvergence, /url\('\/brand\/sellertray-v2-mark\.svg'\)/);
+assert.ok(
+  adminMain.indexOf("import './admin-brand-asset-convergence.css'") >
+  adminMain.indexOf("import './admin-context-convergence.css'"),
+  'Approved SellerTray v2 brand correction must load after the legacy Admin CSS',
+);
 
 const productionSources = [
   ['Mobile handoff', mobileHandoff],
@@ -88,6 +100,7 @@ const productionSources = [
   ['Admin shell', adminIndex],
   ['Admin config', adminVercel],
   ['Admin navigation', adminNavigation],
+  ['Admin v2 brand correction', adminBrandConvergence],
 ];
 
 for (const alias of retiredAliases) {
