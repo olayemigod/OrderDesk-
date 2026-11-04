@@ -53,7 +53,11 @@ export function PrinterWorkspace({tenantId,branch,activeShift,onClose}:Props){
   }
  useEffect(()=>{let mounted=true;setLoading(true);setError(null);void Promise.all([loadCashRegisters(tenantId,deviceBranchId),loadPrintingCapabilities(tenantId,deviceBranchId)]).then(([r,c])=>{if(!mounted)return;setRegisters(r);setCapabilities(c);setRegisterId(current=>r.some(x=>x.id===current)?current:activeShift&&r.some(x=>x.id===activeShift.registerId)?activeShift.registerId:r.find(x=>x.isDefault)?.id??r[0]?.id??'');}).catch(e=>mounted&&setError(e instanceof Error?e.message:'Unable to load printer settings.')).finally(()=>mounted&&setLoading(false));return()=>{mounted=false};},[tenantId,deviceBranchId,activeShift?.registerId,registerReloadKey]);
  useEffect(()=>{if(!registerId){setPrinters([]);return;}let mounted=true;void loadPrinters(tenantId,deviceBranchId,registerId).then(rows=>mounted&&setPrinters(rows)).catch(e=>mounted&&setError(e instanceof Error?e.message:'Unable to load printers.'));return()=>{mounted=false};},[tenantId,deviceBranchId,registerId]);
- async function refreshPrinters(){if(registerId)setPrinters(await loadPrinters(tenantId,deviceBranchId,registerId));}
+ async function refreshPrinters(tenantAtRequest:string,branchAtRequest:string,registerAtRequest:string,epochAtRequest:number){
+  const rows=await loadPrinters(tenantAtRequest,branchAtRequest,registerAtRequest);
+  // A delayed save may not replace another setup Branch/register's printer list.
+  if(deviceEditEpoch.current===epochAtRequest)setPrinters(rows);
+ }
  async function loadPaired(){setDiscovering(true);setError(null);setNotice(null);try{const d=await listPairedBluetoothPrinters();setPairedDevices(d);if(!d.length)setNotice('No paired Bluetooth devices were found. Pair the printer in Android Bluetooth settings first.');}catch(e){setError(e instanceof Error?e.message:'Unable to read paired Bluetooth devices.');}finally{setDiscovering(false)}}
  function selectDevice(d:BluetoothPrinterDevice){setDeviceAddress(d.address);if(!displayName.trim())setDisplayName(d.name);setNotice(null)}
  async function editPrinter(p:SellerTrayPrinter){
@@ -74,7 +78,22 @@ export function PrinterWorkspace({tenantId,branch,activeShift,onClose}:Props){
  function removeCopy(index:number){if(copies.length===1)return;setCopies(current=>current.filter((_,i)=>i!==index).map((c,i)=>({...c,sortOrder:i+1})))}
  function changeCopyType(index:number,type:ReceiptCopyType){const standard=COPY_TYPES.find(x=>x.type===type)?.label??'Custom';setCopies(current=>current.map((c,i)=>i===index?{...c,type,label:type==='custom'?(c.type==='custom'?c.label:''):standard}:c))}
  function changeCopyLabel(index:number,label:string){setCopies(current=>current.map((c,i)=>i===index?{...c,label}:c))}
- async function persistPrinter(){if(!registerId)return;setSaving(true);setError(null);setNotice(null);try{const p=await savePrinter({tenantId,printerId:editingId,branchId:deviceBranchId,registerId,displayName,hardwareIdentifier:deviceAddress,paperWidthMm,isDefault,isActive});await savePrinterReceiptSettings({tenantId,printerId:p.id,copyDefinitions:copies,merchantFooter});await refreshPrinters();resetForm();setNotice('Printer and receipt settings saved.');}catch(e){setError(e instanceof Error?e.message:'Unable to save this printer.');}finally{setSaving(false)}}
+ async function persistPrinter(){
+  if(!registerId||saving)return;
+  const saveEpoch=deviceEditEpoch.current;
+  const saveTenant=tenantId,saveBranch=deviceBranchId,saveRegister=registerId;
+  setSaving(true);setError(null);setNotice(null);
+  try{
+   const p=await savePrinter({tenantId:saveTenant,printerId:editingId,branchId:saveBranch,registerId:saveRegister,displayName,hardwareIdentifier:deviceAddress,paperWidthMm,isDefault,isActive});
+   await savePrinterReceiptSettings({tenantId:saveTenant,printerId:p.id,copyDefinitions:copies,merchantFooter});
+   if(deviceEditEpoch.current!==saveEpoch)return;
+   await refreshPrinters(saveTenant,saveBranch,saveRegister,saveEpoch);
+   if(deviceEditEpoch.current!==saveEpoch)return;
+   resetForm();setNotice('Printer and receipt settings saved.');
+  }catch(e){
+   if(deviceEditEpoch.current===saveEpoch)setError(e instanceof Error?e.message:'Unable to save this printer.');
+  }finally{setSaving(false)}
+ }
  async function testPrinter(p:SellerTrayPrinter){setPrintingId(p.id);setError(null);setNotice(null);try{const job=await requestPrintJob({tenantId,printerId:p.id,jobType:'test'});await executePreparedPrintJob(tenantId,job);setNotice(`Test receipt printed on ${p.displayName}.`);}catch(e){setError(e instanceof Error?e.message:'Test print failed.')}finally{setPrintingId(null)}}
  return <View style={styles.stack}>
   <Pressable onPress={onClose} style={styles.backRow}><Ionicons name="chevron-back" size={20} color={dark?theme.colors.cloud:theme.colors.navy}/><Text style={[styles.backText,dark&&darkStyles.titleText]}>More</Text></Pressable>
@@ -82,7 +101,7 @@ export function PrinterWorkspace({tenantId,branch,activeShift,onClose}:Props){
   {deviceBranches.length>1?<View style={styles.section}>
     <Text style={[styles.sectionLabel,dark&&darkStyles.bodyText]}>PRINTER SETUP BRANCH</Text>
     <View style={styles.chipRow}>{deviceBranches.map(b=><Pressable key={b.id}
-      accessibilityRole="button" onPress={()=>chooseDeviceBranch(b.id)}
+      accessibilityRole="button" disabled={saving} onPress={()=>chooseDeviceBranch(b.id)}
       style={[styles.chip,b.id===deviceBranchId&&styles.chipActive,dark&&darkStyles.outline]}>
       <Text style={[styles.chipText,b.id===deviceBranchId&&styles.chipTextActive]}>{b.name}{b.isActive?'':' · Setup only'}</Text>
     </Pressable>)}</View>
@@ -104,9 +123,9 @@ export function PrinterWorkspace({tenantId,branch,activeShift,onClose}:Props){
     </Pressable>
    </View>
   </View>:null}
-  {registers.length?<View style={styles.section}><Text style={[styles.sectionLabel,dark&&darkStyles.bodyText]}>REGISTER</Text><View style={styles.chipRow}>{registers.map(r=><Pressable key={r.id} onPress={()=>setRegisterId(r.id)} style={[styles.chip,r.id===registerId&&styles.chipActive,dark&&darkStyles.outline]}><Text style={[styles.chipText,r.id===registerId&&styles.chipTextActive]}>{r.name}</Text></Pressable>)}</View></View>:null}
-  {selectedRegister?<View style={styles.section}><Text style={[styles.sectionTitle,dark&&darkStyles.titleText]}>{selectedRegister.name}</Text>{!printers.length?<View style={[styles.emptyCard,dark&&darkStyles.card]}><Text style={[styles.emptyTitle,dark&&darkStyles.titleText]}>No printer configured</Text></View>:printers.map(p=><View key={p.id} style={[styles.printerCard,dark&&darkStyles.card]}><View style={styles.printerMain}><Ionicons name="print-outline" size={22} color={theme.colors.greenDark}/><View style={styles.flexOne}><Text style={[styles.printerName,dark&&darkStyles.titleText]}>{p.displayName}</Text><Text style={[styles.printerMeta,dark&&darkStyles.bodyText]}>{p.paperWidthMm} mm · {p.isDefault?'Default':'Additional'} · {p.isActive?'Active':'Inactive'}</Text></View></View><View style={styles.actionRow}>{capabilities.canManageDevices?<Pressable onPress={()=>void editPrinter(p)} style={styles.smallButton}><Text style={styles.smallButtonText}>Edit</Text></Pressable>:null}{capabilities.canPrintReceipt&&p.isActive?<Pressable disabled={printingId!==null} onPress={()=>void testPrinter(p)} style={[styles.testButton,printingId!==null&&styles.disabled]}><Text style={styles.testButtonText}>{printingId===p.id?'Printing…':'Test print'}</Text></Pressable>:null}</View></View>)}</View>:null}
-  {capabilities.canManageDevices&&selectedRegister?<View style={[styles.setupCard,dark&&darkStyles.card]}><View style={styles.sectionHeader}><Text style={[styles.sectionTitle,dark&&darkStyles.titleText]}>{editingId?'Update printer':'Add printer'}</Text>{editingId?<Pressable onPress={resetForm}><Text style={styles.linkText}>Cancel</Text></Pressable>:null}</View>
+  {registers.length?<View style={styles.section}><Text style={[styles.sectionLabel,dark&&darkStyles.bodyText]}>REGISTER</Text><View style={styles.chipRow}>{registers.map(r=><Pressable key={r.id} disabled={saving} onPress={()=>{if(r.id===registerId)return;deviceEditEpoch.current+=1;setRegisterId(r.id);setPrinters([]);resetForm()}} style={[styles.chip,r.id===registerId&&styles.chipActive,dark&&darkStyles.outline]}><Text style={[styles.chipText,r.id===registerId&&styles.chipTextActive]}>{r.name}</Text></Pressable>)}</View></View>:null}
+  {selectedRegister?<View style={styles.section}><Text style={[styles.sectionTitle,dark&&darkStyles.titleText]}>{selectedRegister.name}</Text>{!printers.length?<View style={[styles.emptyCard,dark&&darkStyles.card]}><Text style={[styles.emptyTitle,dark&&darkStyles.titleText]}>No printer configured</Text></View>:printers.map(p=><View key={p.id} style={[styles.printerCard,dark&&darkStyles.card]}><View style={styles.printerMain}><Ionicons name="print-outline" size={22} color={theme.colors.greenDark}/><View style={styles.flexOne}><Text style={[styles.printerName,dark&&darkStyles.titleText]}>{p.displayName}</Text><Text style={[styles.printerMeta,dark&&darkStyles.bodyText]}>{p.paperWidthMm} mm · {p.isDefault?'Default':'Additional'} · {p.isActive?'Active':'Inactive'}</Text></View></View><View style={styles.actionRow}>{capabilities.canManageDevices?<Pressable disabled={saving} onPress={()=>void editPrinter(p)} style={[styles.smallButton,saving&&styles.disabled]}><Text style={styles.smallButtonText}>Edit</Text></Pressable>:null}{capabilities.canPrintReceipt&&p.isActive?<Pressable disabled={printingId!==null} onPress={()=>void testPrinter(p)} style={[styles.testButton,printingId!==null&&styles.disabled]}><Text style={styles.testButtonText}>{printingId===p.id?'Printing…':'Test print'}</Text></Pressable>:null}</View></View>)}</View>:null}
+  {capabilities.canManageDevices&&selectedRegister?<View style={[styles.setupCard,dark&&darkStyles.card]}><View style={styles.sectionHeader}><Text style={[styles.sectionTitle,dark&&darkStyles.titleText]}>{editingId?'Update printer':'Add printer'}</Text>{editingId?<Pressable disabled={saving} onPress={resetForm}><Text style={styles.linkText}>Cancel</Text></Pressable>:null}</View>
    <Pressable disabled={discovering} onPress={()=>void loadPaired()} style={styles.outlineButton}><Text style={styles.outlineButtonText}>{discovering?'Loading…':'Show paired devices'}</Text></Pressable>
    {pairedDevices.map(d=><Pressable key={d.address} onPress={()=>selectDevice(d)} style={styles.deviceRow}><Text style={styles.flexOne}>{d.name} · {d.address}</Text></Pressable>)}
    <Field label="Printer name" value={displayName} onChange={setDisplayName} dark={dark}/><Field label="Bluetooth address" value={deviceAddress} onChange={v=>setDeviceAddress(v.toUpperCase())} dark={dark}/>
