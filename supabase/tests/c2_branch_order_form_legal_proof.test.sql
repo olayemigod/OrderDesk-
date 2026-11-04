@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(29);
+select extensions.plan(36);
 
 -- C2-7: exercise real publication, Branch order, governed Order Form issue,
 -- separately accepted Master, confirmed package and native term registration.
@@ -28,7 +28,13 @@ create temp table c2_legal_proof_fixture(
  unconfirmed_form_denied boolean not null default false,
  outsider_denied boolean not null default false,
  signer_spoof_denied boolean not null default false,
- wrong_package_denied boolean not null default false
+ wrong_package_denied boolean not null default false,
+ policy_order_result jsonb,
+ policy_form_id uuid,
+ policy_package_id uuid,
+ policy_direct_denied boolean not null default false,
+ policy_reviewed_denied boolean not null default false,
+ confirmed_supersession_denied boolean not null default false
 ) on commit drop;
 
 insert into c2_legal_proof_fixture(
@@ -447,6 +453,129 @@ select extensions.is(
   from c2_legal_proof_fixture f),
  10000::numeric,
  'A later Branch purchase charges subscription only after genuine completed and paid setup evidence');
+
+
+-- Confirmed C2 forms may not be superseded before issuing a new commercial
+-- order: reject the replacement up front rather than trapping both forms.
+do $test$
+declare f c2_legal_proof_fixture%rowtype; v_message text;
+begin
+ select * into strict f from c2_legal_proof_fixture;
+ begin
+  perform public.issue_sellertray_commercial_order_form_admin(
+   f.tenant_id,(f.order_result->>'commercialOrderId')::uuid,null,
+   f.template_id,'c2-replace-confirmed-'||substr(f.tenant_id::text,1,8),
+   f.form_id,'Attempt to replace an already confirmed C2 Order Form',f.admin_id);
+ exception when sqlstate '23514' then
+  get stacked diagnostics v_message=message_text;
+  if position('confirmed forms cannot be replaced directly' in v_message)>0 then
+   update c2_legal_proof_fixture set confirmed_supersession_denied=true;
+  end if;
+ end;
+end $test$;
+
+select extensions.ok(
+ (select confirmed_supersession_denied from c2_legal_proof_fixture),
+ 'Already-confirmed C2 Form cannot be superseded into an unusable replacement');
+select extensions.ok(
+ (select not exists(
+   select 1 from public.sellertray_commercial_order_forms replacement
+   where replacement.tenant_id=f.tenant_id
+     and replacement.supersedes_order_form_id=f.form_id
+ ) from c2_legal_proof_fixture f),
+ 'Rejected supersession leaves the existing confirmed Form current');
+
+-- A separate unconfirmed C2 order deliberately selects a policy-approved
+-- 70/30 version. ProcessEdge subsequently removes that alternative.
+update c2_legal_proof_fixture f set policy_order_result=
+ public.create_sellertray_c2_branch_commercial_order(
+   f.tenant_id,'NGN',jsonb_build_array(jsonb_build_object(
+    'branchId',f.branch_id,'planProfileVersionId',f.plan_version_id,
+    'billingCycle','yearly','setupRequired',false,
+    'installmentTemplateId',(select id from public.sellertray_installment_schedule_templates
+       where template_code='two_installment_70_30' and version=1))),
+   'c2-revoked-schedule-'||substr(f.tenant_id::text,1,8),
+   gen_random_uuid(),'system',f.admin_id);
+
+update c2_legal_proof_fixture f set policy_form_id=
+ public.issue_sellertray_commercial_order_form_admin(
+  f.tenant_id,(f.policy_order_result->>'commercialOrderId')::uuid,null,
+  f.template_id,'c2-revoked-form-'||substr(f.tenant_id::text,1,8),
+  null,'Order Form before configured installment withdrawal',f.admin_id);
+
+update c2_legal_proof_fixture f set policy_package_id=
+ public.create_sellertray_agreement_package(f.tenant_id,f.policy_form_id,f.later_master_id);
+
+select public.accept_sellertray_master_agreement(
+ f.tenant_id,f.later_master_id,'Business Owner',
+ jsonb_build_object('authority_confirmed',true,'channel','merchant_web'),
+ gen_random_uuid(),f.owner_id
+) from c2_legal_proof_fixture f;
+
+select extensions.is(
+ (select (public.get_sellertray_installment_contract_checkout_policy(
+  f.tenant_id,(f.policy_order_result->'subjects'->0->>'installmentObligationId')::uuid,now()
+ )->>'draftEligible')::boolean from c2_legal_proof_fixture f),
+ true,
+ 'A 70/30 purchase is eligible while its alternative policy is published');
+
+select public.publish_sellertray_installment_policy_v2_admin(
+ 'commercial_order',f.tenant_id,(f.policy_order_result->>'commercialOrderId')::uuid,
+ null,'yearly',false,
+ (select t.id from public.sellertray_installment_schedule_templates t
+  where t.template_code='full_payment_100' and t.version=1),
+ '{}'::uuid[],now()-interval '15 seconds',null,
+ 'Withdraw optional schedule before first legal confirmation',
+ f.admin_id,gen_random_uuid()
+) from c2_legal_proof_fixture f;
+
+select extensions.is(
+ (select (public.get_sellertray_installment_contract_checkout_policy(
+  f.tenant_id,(f.policy_order_result->'subjects'->0->>'installmentObligationId')::uuid,now()
+ )->>'draftEligible')::boolean from c2_legal_proof_fixture f),
+ false,
+ 'A policy change withdraws the unconfirmed 70/30 schedule');
+
+do $test$
+declare f c2_legal_proof_fixture%rowtype; v_message text;
+begin
+ select * into strict f from c2_legal_proof_fixture;
+ begin
+  perform public.confirm_sellertray_agreement_package(
+   f.tenant_id,f.policy_form_id,'Business Owner',
+   jsonb_build_object('authority_confirmed',true),gen_random_uuid(),f.owner_id);
+ exception when sqlstate '23514' then
+  get stacked diagnostics v_message=message_text;
+  if position('no longer available' in v_message)>0 then
+   update c2_legal_proof_fixture set policy_direct_denied=true;
+  end if;
+ end;
+ begin
+  perform public.confirm_sellertray_agreement_package_reviewed(
+   f.tenant_id,f.policy_form_id,f.policy_package_id,
+   (select p.package_fingerprint from public.sellertray_agreement_packages p
+    where p.id=f.policy_package_id),
+   'Business Owner',jsonb_build_object('authority_confirmed',true),
+   gen_random_uuid(),f.owner_id);
+ exception when sqlstate '23514' then
+  get stacked diagnostics v_message=message_text;
+  if position('no longer available' in v_message)>0 then
+   update c2_legal_proof_fixture set policy_reviewed_denied=true;
+  end if;
+ end;
+end $test$;
+
+select extensions.ok(
+ (select policy_direct_denied from c2_legal_proof_fixture),
+ 'Direct first confirmation rejects the withdrawn installment alternative');
+select extensions.ok(
+ (select policy_reviewed_denied from c2_legal_proof_fixture),
+ 'Reviewed first confirmation rejects the withdrawn installment alternative');
+select extensions.is(
+ (select count(*)::integer from public.sellertray_order_form_confirmations c
+  join c2_legal_proof_fixture f on c.order_form_id=f.policy_form_id),
+ 0,
+ 'Rejected confirmations do not create any commercial confirmation evidence');
 
 select * from extensions.finish();
 rollback;
