@@ -62,7 +62,7 @@ The required archive remains **unperformed**: no data export, point-in-time rest
 
 ## Existing PR #209 guard and QA APK are intentionally blocked
 
-`scripts/qa/oa5-staging-isolation.mjs` currently rejects `iukgsukdoowvnhlfmpml` outright because it has the divergent agreement-test ledger. **Do not remove that fail-closed check just to make the old test URL pass.** When the independent project is demonstrably rebuilt, add a *separate reviewed code change* to allow a specifically attested standalone test project without weakening production URL/key rejection or QA APK source matching. Preserve the negative tests until the attestation changes. The existing Build 47 EAS QA profile targets the production Supabase URL and is not a staging acceptance build.
+`scripts/qa/oa5-staging-isolation.mjs` and `apps/mobile/app.config.js` now use the same `scripts/qa/oa5-staging-attestation.cjs` contract as Merchant/Admin Vercel Preview guards. They **still reject** the existing Agreement Test project while the checked-in `oa5-staging-backend-attestation.json` remains `state: "blocked"`. A later **documented, independently verified** clean rebuild may authorize reuse of the same standalone Test project through `state: "verified"` and the full archival, restore, migration, callback and provider-isolation evidence. Do not approve that attestation from source tests alone. Production URL/key rejection and separate QA Android identity remain mandatory. The prior Android Build 47 QA profile still points to Production and must not be used for Test. The existing Build 47 EAS QA profile targets the production Supabase URL and is not a staging acceptance build.
 
 ## Release state and cross-surface impact
 
