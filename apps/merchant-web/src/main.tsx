@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import MerchantApp from './MerchantApp';
+import MerchantPortalRoot from './MerchantPortalRoot';
 import { consumeMerchantWebHandoff } from './merchantHandoff';
 import './styles.css';
 import './products.css';
@@ -17,6 +18,7 @@ import './brand.css';
 import './qa-convergence.css';
 import './shell-layout.css';
 import './notifications.css';
+import './merchant-commercial-journey.css';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('SellerTray could not start.');
@@ -31,7 +33,7 @@ async function start() {
       : <MerchantApp />;
     createRoot(root!).render(
       <StrictMode>
-        {merchantApp}
+        <MerchantPortalRoot>{merchantApp}</MerchantPortalRoot>
       </StrictMode>,
     );
   } catch (cause) {
