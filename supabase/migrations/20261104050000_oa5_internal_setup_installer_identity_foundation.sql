@@ -235,6 +235,27 @@ begin
     or exists(select 1 from public.tenant_members tm where tm.user_id=p_staff_user_id)
   ) then raise exception 'Installer must use a separate ProcessEdge account' using errcode='23514';
   end if;
+  -- Suspending or revoking a staff account also retires all active appointment
+  -- assignments. Re-activation cannot silently revive an old assignment.
+  if v_target in ('suspended','revoked') then
+    with retired as (
+      update public.sellertray_internal_setup_staff_assignments a
+      set revoked_at=now(),revoked_by_user_id=p_actor_user_id,
+          revocation_reason='Installer account status changed: '||v_target
+      where a.staff_user_id=p_staff_user_id and a.revoked_at is null
+      returning a.id,a.tenant_id,a.appointment_id,a.branch_id
+    )
+    insert into public.sellertray_internal_setup_staff_events(
+      command_id,staff_user_id,actor_user_id,event_type,tenant_id,
+      appointment_id,reason,details
+    )
+    select gen_random_uuid(),p_staff_user_id,p_actor_user_id,
+      'assignment_revoked',r.tenant_id,r.appointment_id,
+      'Assignment revoked on installer account '||v_target,
+      jsonb_build_object('assignmentId',r.id,'branchId',r.branch_id,
+        'sourceCommandId',p_command_id,'sourceStatus',v_target)
+    from retired r;
+  end if;
   update public.sellertray_internal_setup_staff set
     status=v_target,
     activated_at=case when v_target='active' then coalesce(activated_at,now()) else activated_at end,
