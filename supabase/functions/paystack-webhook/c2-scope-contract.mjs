@@ -1,0 +1,20 @@
+import { readFileSync } from 'node:fs';
+import assert from 'node:assert/strict';
+
+const source = readFileSync(new URL('./index.ts', import.meta.url), 'utf8');
+const a = source.indexOf('async function applyInstallmentPaymentSuccess(');
+const b = source.indexOf('async function applyUsageSettlementSuccess(', a);
+assert.ok(a >= 0 && b > a, 'Installment payment webhook handler exists');
+const body = source.slice(a, b);
+const scopeRead = body.indexOf('sellertray_commercial_installment_obligations?select=obligation_scope');
+const paymentConfirm = body.indexOf("rpc<string>('confirm_sellertray_installment_payment_from_checkout'");
+const branch = body.indexOf("if (obligationScope === 'commercial_order')");
+const reconcile = body.indexOf("rpc<JsonRecord>('reconcile_sellertray_installment_entitlement'");
+assert.ok(scopeRead > -1 && scopeRead < paymentConfirm, 'C1/C2 scope is resolved before any payment is committed');
+assert.ok(paymentConfirm > -1 && paymentConfirm < branch && branch < reconcile, 'Immutable payment confirmation precedes C1-only entitlement reconciliation');
+assert.match(body.slice(scopeRead, paymentConfirm), /obligationScope !== 'commercial_order' && obligationScope !== 'branch_subscription'/, 'Unrecognized obligation scopes fail closed');
+const guarded = body.slice(branch, body.indexOf('await captureReusableAuthorization', branch));
+assert.match(guarded, /^if \(obligationScope === 'commercial_order'\) \{/);
+assert.equal((guarded.match(/reconcile_sellertray_installment_entitlement/g) ?? []).length, 1, 'Only C1 calls legacy reconciliation');
+assert.match(source, /return new Response\('Webhook processing failed', \{ status: 500 \}\)/, 'C1 reconciliation failure remains retryable');
+console.log('SellerTray C1/C2 Paystack webhook scope contract passed');
