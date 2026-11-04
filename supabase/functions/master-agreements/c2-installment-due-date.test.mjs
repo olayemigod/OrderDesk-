@@ -28,14 +28,55 @@ test('review/executed artifact can display a dated installment as frozen', () =>
   assert.equal(formatOrderFormInstallmentDueDate(dueAt, display), display(dueAt));
 });
 
-test('missing or invalid due-date evidence must still be rejected', () => {
-  for (const value of [undefined, '', 'not-a-date', {}, 0, '2026-11-04']) {
-    assert.throws(() => formatOrderFormInstallmentDueDate(value, display), /invalid installment due date/);
+test('missing, impossible, or invalid due-date evidence must fail closed', () => {
+  const impossible = [
+    undefined, '', 'not-a-date', {}, 0, '2026-11-04',
+    '2026-02-30T09:00:00Z',  // Previously normalised to March 2.
+    '2026-04-31T09:00:00Z',  // Previously normalised to May 1.
+    '2026-02-29T09:00:00Z',  // 2026 is not a leap year.
+    '2100-02-29T09:00:00Z',  // Divisible by 100, but not 400.
+    '2026-00-01T09:00:00Z',
+    '2026-13-01T09:00:00Z',
+    '2026-12-00T09:00:00Z',
+    '2026-12-32T09:00:00Z',
+    '2026-12-31T24:00:00Z', // Javascript accepts a midnight day rollover.
+    '2026-12-31T23:60:00Z',
+    '2026-12-31T23:59:60Z',
+    '2026-12-31T23:59:59+25:00',
+    '2026-12-31T23:59:59+01:60',
+    '2026-12-31T23:59:59', // Missing governed timezone evidence.
+    '2026-12-31T23:59:59Z trailing',
+  ];
+  for (const value of impossible) {
+    assert.throws(
+      () => formatOrderFormInstallmentDueDate(value, display),
+      /invalid installment due date/,
+      `Invalid supplied installment evidence must not be silently normalised: ${String(value)}`,
+    );
   }
   assert.throws(
     () => formatOrderFormInstallmentDueDate('2026-12-31T09:00:00Z', () => '—'),
     /could not format/,
   );
+});
+
+test('real calendar and timezone dates survive strict validation unchanged', () => {
+  const valid = [
+    '2028-02-29T09:00:00Z', // Leap day.
+    '2000-02-29T09:00:00Z', // Century leap year.
+    '2026-02-28T23:59:59Z',
+    '2026-04-30T09:00:00+01:00',
+    '2026-12-31T09:00:00+05:30',
+    '2026-12-31T09:00:00.123456+00:00', // PostgreSQL timestamptz precision.
+    '2026-12-31 09:00:00.123+00:00', // Valid historical timestamptz format.
+  ];
+  for (const dueAt of valid) {
+    assert.equal(
+      formatOrderFormInstallmentDueDate(dueAt, display),
+      display(dueAt),
+      `Valid frozen installment evidence must retain its specified calendar date: ${dueAt}`,
+    );
+  }
 });
 
 test('explicit null due date remains readable on historic issued forms', () => {
