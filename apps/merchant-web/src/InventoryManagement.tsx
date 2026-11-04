@@ -1,5 +1,5 @@
 import { SellerTrayInput, SellerTraySelect, SellerTrayTabs } from './SellerTrayElements';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { errorMessage, numberValue, supabase } from './supabase';
 
 type Branch = { id: string; name: string };
@@ -159,6 +159,9 @@ export default function InventoryManagement({ tenantId, branch, branches }: { te
   const [adjustDirection, setAdjustDirection] = useState<'increase' | 'decrease'>('decrease');
   const [adjustReason, setAdjustReason] = useState(ADJUST_REASONS[0]);
   const [adjustReference, setAdjustReference] = useState(() => reference('ADJ'));
+  // Keep one command key for identical retry payloads when the network
+  // response is lost after the server has already committed the movement.
+  const adjustRequest = useRef<{ fingerprint: string; id: string } | null>(null);
   const [countReference, setCountReference] = useState(() => reference('COUNT'));
   const [countReason, setCountReason] = useState('Routine stock count');
   const [countEntryProductId, setCountEntryProductId] = useState<string | null>(null);
@@ -192,6 +195,7 @@ export default function InventoryManagement({ tenantId, branch, branches }: { te
   const transferToCancel = transferCancelId ? transfers.items.find((row) => row.id === transferCancelId) ?? null : null;
 
   useEffect(() => {
+    adjustRequest.current = null;
     setMessage(null); setError(null); setCount(null); setStock(EMPTY_STOCK); setMovements(EMPTY_MOVEMENTS); setTransfers(EMPTY_TRANSFERS); setProducts([]); setPolicyProductId(null);
     setCountEntryProductId(null); setCountEntryUomId(''); setCountEntryQty(''); setCountCancelOpen(false); setCountCancelReason('');
     setTransferCancelId(null); setTransferCancelReason(''); setStockOffset(0); setMovementOffset(0); setTransferOffset(0);
@@ -315,9 +319,13 @@ export default function InventoryManagement({ tenantId, branch, branches }: { te
     const quantity = Number(adjustQty);
     if (!adjustProductId || !adjustUomId || !Number.isFinite(quantity) || quantity <= 0 || !adjustReference.trim()) { setError('Enter the amount of stock to change, not the new total.'); return; }
     if (projectedStockBalance !== null && projectedStockBalance < -0.000001) { setError('The reduction exceeds current stock. Refresh stock and try again.'); return; }
+    const fingerprint = JSON.stringify([tenantId,branch.id,adjustProductId,adjustUomId,quantity,adjustDirection,adjustReference.trim(),adjustReason]);
+    const id = adjustRequest.current?.fingerprint === fingerprint ? adjustRequest.current.id : commandId('adjust');
+    adjustRequest.current = { fingerprint, id };
     setBusy(true); setError(null); setMessage(null);
     try {
-      const result = await invoke('inventory-operation', { tenantId, branchId: branch.id, productId: adjustProductId, uomId: adjustUomId, operation: 'adjust', quantity, adjustmentDirection: adjustDirection, reference: adjustReference, reason: adjustReason, commandId: commandId('adjust') });
+      const result = await invoke('inventory-operation', { tenantId, branchId: branch.id, productId: adjustProductId, uomId: adjustUomId, operation: 'adjust', quantity, adjustmentDirection: adjustDirection, reference: adjustReference.trim(), reason: adjustReason, commandId: id });
+      adjustRequest.current = null;
       setMessage(typeof result?.quantityOnHand === 'number' && typeof result?.stockUom === 'string'
         ? `Stock adjusted. Current stock: ${formatNumber(result.quantityOnHand)} ${result.stockUom}.`
         : 'Stock adjustment posted. Refresh to see the latest stock balance.'); setAdjustQty(''); setAdjustReference(reference('ADJ')); await loadBranchInventory();
