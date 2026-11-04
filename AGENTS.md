@@ -8,6 +8,12 @@ Before planning, editing, reviewing, refactoring, testing, or documenting any Se
 
 `.agents/skills/sellertray-project-implementation/SKILL.md`
 
+For **every SellerTray task that involves a build, preview, test project, CI, deployment, external API cost or Test/Production environment**, also read and follow:
+
+`.agents/skills/sellertray-project-implementation/ENVIRONMENTS_RESOURCES.md`
+
+`ENVIRONMENTS_RESOURCES.md` is the approved 04/11/2026 governance contract for two persistent environments (Production and Test/Staging), dedicated synthetic test merchants, opt-in Vercel previews, controlled Android builds, Supabase cost approvals and no automatic consumption of rate-limited/billable provider resources. A later product decision may change resource policy but may not weaken the no-production-test-data boundary.
+
 For **every SellerTray task**, also read and follow:
 
 `.agents/skills/sellertray-project-implementation/CROSS_SURFACE.md`
