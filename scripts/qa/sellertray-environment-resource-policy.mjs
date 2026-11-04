@@ -52,8 +52,8 @@ export function validateResourcePolicy({merchant,admin,androidWorkflow,governanc
      || !governance.includes('eujxswjspolugrzlsjnn')
      || !governance.includes('iukgsukdoowvnhlfmpml')
      || !governance.includes('Tandar Oil Solutions')
-     || !governance.includes('no production')
-     || !governance.includes('05/11/') && !governance.includes('04/11/2026'))
+     || !/no production|production.*must.*never|never.*production/i.test(governance)
+     || !governance.includes('04/11/2026'))
     errors.push('Normative environment governance must preserve Production and Test boundaries');
   return {ok:errors.length===0,errors};
 }
