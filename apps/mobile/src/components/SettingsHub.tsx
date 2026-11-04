@@ -249,7 +249,6 @@ export function SettingsHub({
         </View>
       </View>
 
-
       {platformAdmin.overview ? (
         <View style={styles.adminGroup}>
           <Text style={[styles.groupLabel, appearance.dark && darkStyles.bodyText]}>PROCESSEDGE ADMIN</Text>
@@ -384,20 +383,20 @@ function SupportView() {
         <View style={styles.liveChatIcon}><Ionicons name="chatbubbles-outline" size={24} color="#FFFFFF" /></View>
         <View style={styles.menuCopy}>
           <Text style={styles.liveChatTitle}>Chat with SellerTray Support</Text>
-          <Text style={styles.liveChatText}>{configuredChatUrl ? 'Open live customer-service chat' : 'Chat immediately on WhatsApp while live-chat inbox setup is completed'}</Text>
+          <Text style={styles.liveChatText}>{configuredChatUrl ? 'Open live customer-service chat' : 'Chat with SellerTray Support on WhatsApp'}</Text>
         </View>
         <Ionicons name="arrow-forward-circle" size={25} color="#FFFFFF" />
       </Pressable>
 
       <View style={[styles.menuGroup, appearance.dark && darkStyles.card]}>
-        <SupportRow icon="chatbubbles-outline" title="Live chat" text={configuredChatUrl ? 'Dedicated SellerTray chat inbox' : 'Currently routed to WhatsApp support'} url={chatUrl} />
+        <SupportRow icon="chatbubbles-outline" title="Live chat" text={configuredChatUrl ? 'Dedicated SellerTray chat inbox' : 'Available on WhatsApp'} url={chatUrl} />
         <SupportRow icon="logo-whatsapp" title="WhatsApp" text="+234 809 608 6857" url={whatsappUrl} />
         <SupportRow icon="call-outline" title="Call support" text="+234 809 608 6857" url="tel:+2348096086857" />
         <SupportRow icon="mail-outline" title="Email" text="processedgeng@gmail.com" url="mailto:processedgeng@gmail.com?subject=SellerTray%20Support" />
       </View>
       <View style={[styles.supportNote, appearance.dark && darkStyles.mintCard]}>
         <Ionicons name="information-circle-outline" size={20} color="#079455" />
-        <Text style={[styles.supportNoteText, appearance.dark && darkStyles.bodyText]}>SellerTray support chat uses EXPO_PUBLIC_SUPPORT_CHAT_URL when configured. Until then, Chat opens the ProcessEdge WhatsApp support conversation so merchants always have a working support channel.</Text>
+        <Text style={[styles.supportNoteText, appearance.dark && darkStyles.bodyText]}>Live chat opens WhatsApp whenever the in-app support inbox is unavailable, so you can always reach SellerTray Customer Service.</Text>
       </View>
     </View>
   );
