@@ -10,6 +10,9 @@ on:
       - 'scripts/qa/oa5-test-merchant-fixtures.mjs'
       - 'scripts/qa/oa5-test-merchant-fixtures.test.mjs'
       - 'docs/qa/oa5-test-merchant-fixtures.json'
+      - 'scripts/qa/oa5-android-qa-variant.test.mjs'
+      - 'apps/mobile/app.config.js'
+      - 'apps/mobile/eas.json'
       - '.github/workflows/oa5-staging-isolation.yml'
   workflow_dispatch:
 
@@ -30,5 +33,5 @@ jobs:
           node-version: '22'
       - name: Test OA5 isolated staging contract (offline only)
         run: |
-          node --test scripts/qa/oa5-staging-isolation.test.mjs scripts/qa/oa5-migration-boundary.test.mjs scripts/qa/oa5-test-merchant-fixtures.test.mjs
+          node --test scripts/qa/oa5-staging-isolation.test.mjs scripts/qa/oa5-migration-boundary.test.mjs scripts/qa/oa5-test-merchant-fixtures.test.mjs scripts/qa/oa5-android-qa-variant.test.mjs
           node scripts/qa/oa5-test-merchant-fixtures.mjs --check
