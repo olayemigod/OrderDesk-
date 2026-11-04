@@ -229,8 +229,11 @@ begin
     raise exception 'Verified installer and receipt-profile command are required'
       using errcode='42501';
   end if;
+  -- Scope inspection must NOT hold a FOR SHARE printer lock while a later
+  -- canonical save requires FOR UPDATE. Acquire the command advisory lock
+  -- first, then the printer's exclusive row lock, consistently for writers.
   select p.branch_id into v_branch from public.sellertray_printers p
-    where p.tenant_id=p_tenant_id and p.id=p_printer_id for share;
+    where p.tenant_id=p_tenant_id and p.id=p_printer_id;
   if v_branch is null or not public.sellertray_setup_installer_has_assignment(
     v_actor,p_tenant_id,v_branch,p_appointment_id,now()
   ) then
@@ -251,6 +254,17 @@ begin
     'merchantFooter',nullif(btrim(coalesce(p_merchant_footer,'')),'')
   );
   perform pg_advisory_xact_lock(hashtextextended('installer-printer:'||v_key,0));
+  -- Lock exclusively after acquiring the command lock. A second caller
+  -- cannot hold a shared printer lock and wait for this same command.
+  if not exists(
+    select 1 from public.sellertray_printers p
+    where p.tenant_id=p_tenant_id and p.id=p_printer_id
+      and p.branch_id=v_branch
+    for update
+  ) then
+    raise exception 'Printer has changed Branch during installation setup'
+      using errcode='42501';
+  end if;
   select * into v_prior from public.sellertray_installer_printer_commands c
     where c.command_key=v_key;
   if found then
