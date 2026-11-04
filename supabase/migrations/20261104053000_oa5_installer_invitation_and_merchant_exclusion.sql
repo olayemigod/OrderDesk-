@@ -43,7 +43,15 @@ grant execute on function public.sellertray_user_is_reserved_setup_installer(uui
 -- later manual Team membership and future writers, not only the Mobile gate.
 create or replace function public.sellertray_reject_setup_installer_membership()
 returns trigger language plpgsql security definer set search_path='' as $guard$
+declare v_email text;
 begin
+  -- Serialize membership grants against reservation creation on this email.
+  -- Otherwise concurrent invite and merchant signup transactions could each
+  -- observe the other's uncommitted state and both succeed.
+  select lower(btrim(u.email)) into v_email from auth.users u where u.id=new.user_id;
+  if v_email is not null then
+    perform pg_advisory_xact_lock(hashtextextended('setup-invite:'||v_email,0));
+  end if;
   if public.sellertray_user_is_reserved_setup_installer(new.user_id) then
     raise exception 'ProcessEdge installation accounts cannot join Merchant Team or Platform Admin'
       using errcode='42501';
