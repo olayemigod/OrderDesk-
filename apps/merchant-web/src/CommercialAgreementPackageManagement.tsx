@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { SellerTrayInput } from './SellerTrayElements';
 import VerifiedPdfPreview from './VerifiedPdfPreview';
 import { fetchVerifiedPdf } from './agreementPdf';
+import { formatLegalDate as formatDate, formatLegalDateTime as formatDateTime } from './legalDate';
 import { errorMessage, supabase } from './supabase';
 
 type MasterAcceptance = { id: string; acceptedAt: string; acceptedLegalName: string; acceptedRole: 'owner' | 'manager' };
@@ -188,7 +189,7 @@ export default function CommercialAgreementPackageManagement({ tenantId, onChang
       <div className="settings-grid two">
         <Fact label="Version" value={center.masterAgreement.versionCode} />
         <Fact label="Accepted by" value={center.masterAgreement.acceptance?.acceptedLegalName ?? '—'} />
-        <Fact label="Accepted at" value={center.masterAgreement.acceptance?.acceptedAt ? formatDate(center.masterAgreement.acceptance.acceptedAt) : '—'} />
+        <Fact label="Accepted at" value={center.masterAgreement.acceptance?.acceptedAt ? formatDateTime(center.masterAgreement.acceptance.acceptedAt) : '—'} />
         <Fact label="Order Form authority" value={selectedMasterAcceptanceRequired ? 'Blocked until required Master acceptance' : 'Ready'} />
       </div>
     </article> : <div className="warning-banner">The current SellerTray Master Agreement is not available. Order Form confirmation is unavailable until it is published and accepted.</div>}
@@ -221,7 +222,7 @@ export default function CommercialAgreementPackageManagement({ tenantId, onChang
           </div>
         </div>
 
-        {selected.confirmation ? <div className="success-banner">Order Form confirmed {formatDate(selected.confirmation.confirmedAt)} by {selected.confirmation.confirmedLegalName} ({roleLabel(selected.confirmation.confirmedRole)}).</div> : null}
+        {selected.confirmation ? <div className="success-banner">Order Form confirmed {formatDateTime(selected.confirmation.confirmedAt)} by {selected.confirmation.confirmedLegalName} ({roleLabel(selected.confirmation.confirmedRole)}).</div> : null}
         {!selected.isCurrent ? <div className="warning-banner">This Order Form has been replaced. Review the current replacement instead.</div> : null}
         {selected.isCurrent && actionRequired && selectedMasterAcceptanceRequired ? <div className="warning-banner">Accept the required Master Agreement version before confirming this Order Form, or request an updated Order Form if that version has been replaced.</div> : null}
         {selected.isCurrent && actionRequired && !selectedMasterAcceptanceRequired && !center?.canAccept ? <div className="warning-banner">Only the Business Owner or an explicitly authorised Manager can confirm this Order Form.</div> : null}
@@ -258,7 +259,6 @@ function Fact({ label, value }: { label: string; value: string }) { return <div 
 function roleLabel(value: string) { return value === 'owner' ? 'Owner' : value === 'manager' ? 'Manager' : value; }
 function structureLabel(value: string) { return value === 'two_installment_70_30' ? '70% + 30%' : value === 'three_installment_60_20_20' ? '60% + 20% + 20%' : value.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()); }
 function money(value: number, currency: string) { try { return new Intl.NumberFormat('en-NG', { style: 'currency', currency: currency || 'NGN', maximumFractionDigits: 2 }).format(value); } catch { return `${currency || 'NGN'} ${value.toFixed(2)}`; } }
-function formatDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(date); }
 function record(value: unknown): Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 function array(value: unknown): unknown[] { return Array.isArray(value) ? value : []; }
 function stringValue(value: unknown, fallback = ''): string { return typeof value === 'string' ? value : fallback; }
