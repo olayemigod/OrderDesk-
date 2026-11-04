@@ -176,6 +176,8 @@ For C2 Branch purchases, the **reviewed and executed Order Form PDF** must displ
 
 Commercial V2 payment acceptance and entitlement activation remain separate: a confirmed Paystack payment must be recorded once against its exact Branch obligation, but the legacy C1 installment entitlement reconciler must not be invoked for native C2 obligations. Native C2 entitlement requires its own gated payment/setup/legal reconciliation before cutover.
 
+**Legal date display (approved 4 November 2026):** Generated review/executed Order Form PDFs, Merchant Web Master Agreement/Order Form summaries and Admin agreement lifecycle pages display dates as **dd/mm/yyyy**, using Africa/Lagos civil time. For acceptance, confirmation, publication and execution evidence, retain the human-readable time as **dd/mm/yyyy HH:mm WAT**; the full canonical server timestamp remains unchanged as immutable legal/audit evidence. This is a presentation rule, not new due-date or settlement policy. It applies to newly rendered PDFs of existing immutable snapshots without rewriting published source PDFs, accepted Master Agreement history or commercial obligations.
+
 
 ## Agreement Package PDF
 
