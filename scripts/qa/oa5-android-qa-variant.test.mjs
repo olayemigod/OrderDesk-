@@ -61,6 +61,8 @@ test('QA Android app installs alongside production with distinct app name, schem
   assert.equal(qa.android.package, 'ng.processedge.sellertray.qa');
   assert.notEqual(qa.android.package, original.android.package);
   assert.equal(qa.name, 'SellerTray QA');
+  assert.equal(qa.slug, original.slug);
+  assert.equal(qa.extra.eas.projectId, original.extra.eas.projectId);
   assert.equal(qa.ios.bundleIdentifier, qa.android.package);
   assert.deepEqual(qa.scheme, ['sellertray-qa']);
   assert.deepEqual(qa.android.intentFilters, []);
