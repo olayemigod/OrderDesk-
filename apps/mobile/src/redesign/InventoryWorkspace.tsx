@@ -182,6 +182,10 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
     ? parsedQuantity * selectedUom.conversionFactor
     : null;
 
+  const projectedStockQuantity = previewStockQuantity === null || !selected
+    ? null
+    : selected.quantityOnHand + (direction === 'increase' ? previewStockQuantity : -previewStockQuantity);
+
   function beginAdjustment() {
     if (!selectedProduct) {
       setOperationError('Product units are not available yet. Refresh Inventory and try again.');
@@ -214,7 +218,8 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
     const parsed = Number(quantity);
     if (!commandId) return setOperationError('Restart this stock adjustment and try again.');
     if (!selectedUom) return setOperationError('Choose a unit for this stock adjustment.');
-    if (!Number.isFinite(parsed) || parsed <= 0) return setOperationError('Enter a quantity greater than zero.');
+    if (!Number.isFinite(parsed) || parsed <= 0) return setOperationError('Enter the amount to adjust, not the new total.');
+    if (projectedStockQuantity !== null && projectedStockQuantity < -0.000001) return setOperationError('The reduction exceeds available stock. Refresh and try again.');
     if (!reference.trim()) return setOperationError('Reference is required. Generate one or enter an external reference.');
     if (!reason.trim()) return setOperationError('Choose a reason for this stock adjustment.');
 
@@ -304,7 +309,7 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
             <View style={styles.operationHead}>
               <View style={styles.flexCopy}>
                 <Text style={[styles.operationTitle, dark && darkStyles.titleText]}>Adjust stock</Text>
-                <Text style={[styles.muted, dark && darkStyles.bodyText]}>Record a controlled correction to this branch stock. Do not use this for supplier receipts or branch transfers.</Text>
+                <Text style={[styles.muted, dark && darkStyles.bodyText]}>Enter the amount to add or remove, not the new total. For an actual physical balance, use Stock count and review the variance.</Text>
               </View>
               <Pressable onPress={closeAdjustment} disabled={saving} style={styles.iconButton}><Ionicons name="close" size={20} color={theme.colors.slate} /></Pressable>
             </View>
@@ -331,9 +336,9 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
               ))}
             </View>
 
-            <Text style={[styles.fieldLabel, dark && darkStyles.bodyText]}>Quantity</Text>
+            <Text style={[styles.fieldLabel, dark && darkStyles.bodyText]}>{direction === 'increase' ? 'Quantity to ADD (not new total)' : 'Quantity to REMOVE (not new total)'}</Text>
             <TextInput value={quantity} onChangeText={setQuantity} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
-            {previewStockQuantity !== null && selectedUom ? <Text style={[styles.preview, dark && darkStyles.bodyText]}>{formatQuantity(parsedQuantity)} {selectedUom.name} = {formatQuantity(previewStockQuantity)} {selected.stockUom}</Text> : null}
+            {previewStockQuantity !== null && selectedUom ? <Text style={[styles.preview, dark && darkStyles.bodyText]}>{formatQuantity(parsedQuantity)} {selectedUom.name} = {direction === 'increase' ? '+' : '-'}{formatQuantity(previewStockQuantity)} {selected.stockUom}. Current: {formatQuantity(selected.quantityOnHand)}; after change: {formatQuantity(projectedStockQuantity ?? selected.quantityOnHand)} {selected.stockUom}. Final balance is verified when posted.</Text> : null}
 
             <View style={styles.fieldHeadingRow}>
               <Text style={[styles.fieldLabel, dark && darkStyles.bodyText]}>Reference</Text>
