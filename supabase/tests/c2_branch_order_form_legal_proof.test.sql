@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(41);
+select extensions.plan(46);
 
 -- C2-7: exercise real publication, Branch order, governed Order Form issue,
 -- separately accepted Master, confirmed package and native term registration.
@@ -37,7 +37,10 @@ create temp table c2_legal_proof_fixture(
  policy_confirmation_result jsonb,
  policy_direct_denied boolean not null default false,
  policy_reviewed_denied boolean not null default false,
- confirmed_supersession_denied boolean not null default false
+ confirmed_supersession_denied boolean not null default false,
+ latest_manual_denied boolean not null default false,
+ paystack_checkout_id uuid,
+ paystack_checkout_method_id uuid
 ) on commit drop;
 
 insert into c2_legal_proof_fixture(
@@ -667,6 +670,109 @@ select extensions.is(
  (select (policy_confirmation_result->>'orderFormConfirmationId')::uuid
   from c2_legal_proof_fixture),
  'Confirmed Order Form remains idempotently replayable after installment withdrawal');
+
+
+-- A reviewed C2 Form resolves a legible Branch identity and immutable
+-- installment schedule without relying on mutable Branch settings at PDF time.
+select extensions.is(
+ (select oform.commercial_snapshot->'branch_commitments'->0->>'branch_name'
+  from public.sellertray_commercial_order_forms oform
+  join c2_legal_proof_fixture f on f.form_id=oform.id),
+ (select b.name
+  from public.branches b
+  join c2_legal_proof_fixture f on b.tenant_id=f.tenant_id and b.id=f.branch_id),
+ 'Frozen C2 Order Form snapshot includes its merchant-facing Branch name');
+
+select extensions.ok(
+ (select jsonb_array_length(oform.commercial_snapshot->'branch_commitments'->0->'settlement'->'schedule')>0
+  from public.sellertray_commercial_order_forms oform
+  join c2_legal_proof_fixture f on f.form_id=oform.id),
+ 'Frozen Branch settlement schedule includes installments for reviewed PDF display');
+
+-- The older Paystack selection must NEVER be used after a newer manual method.
+-- Test only governed method-selection and reservation commands; no Paystack
+-- external request is made and the test transaction rolls back.
+insert into public.sellertray_commercial_payment_method_versions(
+ payment_method_id,version,display_name,method_type,confirmation_mode,
+ provider_code,configuration,effective_from,change_reason,created_by_user_id
+)
+select m.id,coalesce((select max(v.version)+1
+ from public.sellertray_commercial_payment_method_versions v
+ where v.payment_method_id=m.id),1),
+ 'C2 Branch Paystack test method','paystack','automatic',
+ 'paystack','{}'::jsonb,now()-interval '1 day',
+ 'C2 latest payment selection checkout regression',f.admin_id
+from public.sellertray_commercial_payment_methods m
+cross join c2_legal_proof_fixture f
+where m.code='paystack';
+
+do $test$
+declare
+ f c2_legal_proof_fixture%rowtype;
+ v_paystack uuid;
+ v_manual uuid;
+ v_obligation uuid;
+ v_next uuid;
+ v_result jsonb;
+ v_error text;
+begin
+ select * into strict f from c2_legal_proof_fixture;
+ v_obligation:=(f.order_result->'subjects'->0->>'installmentObligationId')::uuid;
+ select v.id into strict v_paystack
+ from public.sellertray_commercial_payment_method_versions v
+ join public.sellertray_commercial_payment_methods m on m.id=v.payment_method_id
+ where m.code='paystack' and v.created_by_user_id=f.admin_id
+ order by v.created_at desc,v.id desc limit 1;
+ select v.id into strict v_manual
+ from public.sellertray_commercial_payment_method_versions v
+ join public.sellertray_commercial_payment_methods m on m.id=v.payment_method_id
+ where m.code='bank_transfer' and v.created_by_user_id=f.admin_id
+ order by v.created_at desc,v.id desc limit 1;
+
+ perform public.select_sellertray_commercial_payment_method(
+  f.tenant_id,v_obligation,v_paystack,gen_random_uuid(),f.owner_id);
+ perform public.select_sellertray_commercial_payment_method(
+  f.tenant_id,v_obligation,v_manual,gen_random_uuid(),f.owner_id);
+ v_next:=(public.get_sellertray_commercial_obligation_settlement_state(
+  f.tenant_id,v_obligation)->>'nextInstallmentScheduleId')::uuid;
+
+ begin
+  perform public.reserve_sellertray_installment_checkout(
+   f.tenant_id,v_next,gen_random_uuid(),f.owner_id,
+   'c2-checkout-test@example.com');
+ exception when sqlstate '23514' then
+  get stacked diagnostics v_error=message_text;
+  if position('Select the available Paystack' in v_error)>0 then
+   update c2_legal_proof_fixture set latest_manual_denied=true;
+  end if;
+ end;
+
+ -- Selecting Paystack once more makes it the actual latest choice.
+ perform public.select_sellertray_commercial_payment_method(
+  f.tenant_id,v_obligation,v_paystack,gen_random_uuid(),f.owner_id);
+ v_result:=public.reserve_sellertray_installment_checkout(
+  f.tenant_id,v_next,gen_random_uuid(),f.owner_id,'c2-checkout-test@example.com');
+ update c2_legal_proof_fixture set
+  paystack_checkout_id=(v_result->>'sessionId')::uuid,
+  paystack_checkout_method_id=(v_result->>'commercialPaymentMethodVersionId')::uuid;
+end $test$;
+
+select extensions.ok(
+ (select latest_manual_denied from c2_legal_proof_fixture),
+ 'Checkout denies Paystack when a newer bank-transfer selection supersedes it');
+select extensions.is(
+ (select paystack_checkout_method_id from c2_legal_proof_fixture),
+ (select v.id
+  from public.sellertray_commercial_payment_method_versions v
+  join public.sellertray_commercial_payment_methods m on m.id=v.payment_method_id
+  join c2_legal_proof_fixture f on f.admin_id=v.created_by_user_id
+  where m.code='paystack' order by v.created_at desc,v.id desc limit 1),
+ 'New checkout binds the latest selected Paystack payment-method version');
+select extensions.is(
+ (select s.status from public.billing_checkout_sessions s
+  join c2_legal_proof_fixture f on f.paystack_checkout_id=s.id),
+ 'preparing',
+ 'Payment-method validation only creates a preparing checkout and no financial confirmation');
 
 select * from extensions.finish();
 rollback;
