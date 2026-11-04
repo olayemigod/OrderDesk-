@@ -18,7 +18,7 @@ test('governed 70/30 and 60/20/20 alternatives render without invented deadlines
     assert.equal(labels.length, example.amounts.length, example.structure);
     for (const label of labels) {
       assert.equal(label, 'Not specified in the selected installment structure');
-      assert.doesNotMatch(label, /\\b20\\d{2}\\b|immediate|today|activation|30 days/i);
+      assert.equal(formatOrderFormInstallmentDueDate(null, () => { throw new Error('must not invent date'); }), label);
     }
   }
 });
