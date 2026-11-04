@@ -283,7 +283,7 @@ begin
       or v_existing_event.appointment_id is distinct from p_appointment_id
       or v_existing_event.event_type<>'assignment_created'
       or v_existing_event.reason<>btrim(p_reason)
-      or v_existing_event.details->>'validUntil'<>to_jsonb(p_valid_until)#>>'{}' then
+      or (v_existing_event.details->>'validUntil')::timestamptz is distinct from p_valid_until then
       raise exception 'Installer assignment command already used for different facts' using errcode='23505';
     end if;
     return (v_existing_event.details->>'assignmentId')::uuid;
