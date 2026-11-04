@@ -81,6 +81,15 @@ Deno.serve(async (request) => {
         p_as_of: new Date().toISOString(),
       });
       if (entitled !== true) return json({ error: 'This installation assignment is no longer available' }, 403);
+      const {data: boundJobs,error: bindingError} = await client
+        .from('sellertray_installer_test_print_bindings')
+        .select('job_id')
+        .eq('tenant_id',tenantId).eq('branch_id',branchId)
+        .eq('actor_user_id',identity.userId)
+        .eq('appointment_id',appointmentId)
+        .order('requested_at',{ascending:false}).limit(50);
+      if (bindingError) throw new Error('Unable to verify appointment-bound test jobs');
+      const boundJobIds=(boundJobs??[]).map(row=>row.job_id);
       const [registerResult, printerResult, testResult] = await Promise.all([
         client.from('sellertray_registers')
           .select('id,code,name,is_active,is_default')
@@ -90,11 +99,13 @@ Deno.serve(async (request) => {
           .select('id,register_id,display_name,transport,hardware_identifier,paper_width_mm,is_active,is_default')
           .eq('tenant_id', tenantId).eq('branch_id', branchId)
           .order('display_name', { ascending: true }).limit(100),
-        client.from('sellertray_print_jobs')
-          .select('id,printer_id,register_id,status,requested_at,completed_at,requested_by_user_id')
-          .eq('tenant_id', tenantId).eq('branch_id', branchId)
-          .eq('job_type', 'test')
-          .order('requested_at', { ascending: false }).limit(50),
+        boundJobIds.length
+          ? client.from('sellertray_print_jobs')
+              .select('id,printer_id,register_id,status,requested_at,completed_at,requested_by_user_id')
+              .eq('tenant_id',tenantId).eq('branch_id',branchId)
+              .eq('job_type','test').in('id',boundJobIds)
+              .order('requested_at',{ascending:false}).limit(50)
+          : Promise.resolve({data: [],error: null}),
       ]);
       if (registerResult.error || printerResult.error || testResult.error) {
         throw new Error('Unable to load the assigned installation device records');
