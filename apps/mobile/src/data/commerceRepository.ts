@@ -1,3 +1,4 @@
+import { resolveSellerTrayUnitPrice } from '../domain/uomPrice';
 import { supabase } from '../lib/supabase';
 
 export type CommerceBranch = {
@@ -170,26 +171,6 @@ export async function loadBranchPosPaymentMethods(tenantId: string, branchId: st
     bankAccountNumber: row.bank_account_number,
     instructions: row.instructions,
   }));
-}
-
-/**
- * Read-only preview of the governed SQL price resolver for POS and offline UX.
- * Explicit per-unit prices (including zero) always win. Missing unit prices
- * derive from Stock UOM pricing without becoming stored overrides.
- * The server revalidates expected prices when queued sales are submitted.
- */
-export function resolveSellerTrayUnitPrice(
-  explicitPrice: number | string | null,
-  stockUnitPrice: number | string | null,
-  conversionFactor: number | string,
-): number | null {
-  const configured = toNumber(explicitPrice);
-  if (configured !== null) return configured;
-  const base = toNumber(stockUnitPrice);
-  const conversion = toNumber(conversionFactor);
-  if (base === null || conversion === null || conversion <= 0 || base < 0) return null;
-  const cents = Math.round(Math.round(base * 100) * conversion + Number.EPSILON);
-  return Number.isFinite(cents) ? cents / 100 : null;
 }
 
 export async function loadCommerceProducts(tenantId: string, options?: { includeInactive?: boolean }): Promise<CommerceProduct[]> {
