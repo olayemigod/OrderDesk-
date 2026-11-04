@@ -202,6 +202,7 @@ declare
   v_method public.sellertray_commercial_payment_methods%rowtype;
   v_existing public.sellertray_commercial_payment_method_selections%rowtype;
   v_id uuid;
+  v_selected_at timestamptz;
 begin
   if p_tenant_id is null or p_installment_obligation_id is null or p_payment_method_version_id is null or p_command_id is null then
     raise exception 'Business, commercial obligation, payment method and command are required' using errcode='22023';
@@ -242,12 +243,15 @@ begin
     raise exception 'Selected ProcessEdge commercial payment method is not currently available' using errcode='23514';
   end if;
 
+  -- now() is transaction-stable: multiple choices in one transaction can
+  -- otherwise tie and a random UUID becomes the accidental latest selector.
+  v_selected_at:=clock_timestamp();
   insert into public.sellertray_commercial_payment_method_selections(
     tenant_id,commercial_order_id,installment_obligation_id,payment_method_version_id,
-    command_id,actor_user_id,selected_at
+    command_id,actor_user_id,selected_at,created_at
   ) values(
     p_tenant_id,v_obligation.commercial_order_id,p_installment_obligation_id,p_payment_method_version_id,
-    p_command_id,p_actor_user_id,now()
+    p_command_id,p_actor_user_id,v_selected_at,v_selected_at
   ) returning id into v_id;
   return v_id;
 end;
