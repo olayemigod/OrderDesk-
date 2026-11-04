@@ -123,7 +123,7 @@ export default function InventoryCostBasisManagement({ tenantId, branchId, branc
       <div>
         <p className="eyebrow">Historical cost evidence</p>
         <h3>Resolve unvalued inventory</h3>
-        <p className="muted">Attach verified historical cost to an eligible inbound stock event in {branchName}. Quantity is never changed. SellerTray replays valuation from the original business date, so historical COGS and profitability may change.</p>
+        <p className="muted">This is a history of inbound stock events, not a list of distinct Products or current on-hand balances. The same Product appears once for opening stock and again for any later positive adjustment. Use Inventory → Branch stock for its single current balance. Cost corrections change valuation, never stock quantity.</p>
       </div>
       <button className="text-button" type="button" disabled={loading || busy} onClick={() => void load()}>{loading ? 'Loading…' : 'Refresh'}</button>
     </div>
@@ -131,13 +131,13 @@ export default function InventoryCostBasisManagement({ tenantId, branchId, branc
     {error ? <div className="error-banner">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div> : null}
     {message ? <div className="success-banner">{message}</div> : null}
 
-    {rows.length ? <div className="table-wrap"><table><thead><tr><th>Product</th><th>Source</th><th>Business date</th><th>Quantity</th><th>Current cost basis</th><th>Evidence</th><th>Action</th></tr></thead><tbody>
+    {rows.length ? <div className="table-wrap"><table><thead><tr><th>Product</th><th>Stock event</th><th>Business date</th><th>Event quantity, not balance</th><th>Cost per Stock UOM</th><th>Evidence</th><th>Action</th></tr></thead><tbody>
       {rows.map((row) => <tr key={row.movement_id}>
         <td><strong>{row.item_name}</strong><small className="report-subline">{row.sku || 'No SKU'}</small></td>
         <td>{sourceLabel(row.movement_type)}<small className="report-subline">{row.reference_id || row.reference_type}</small></td>
         <td>{dateTime(row.business_at)}</td>
         <td>{formatQuantity(row.quantity_delta)} {row.stock_uom}</td>
-        <td>{row.current_stock_unit_cost == null ? <span className="danger-text">Unvalued</span> : money(numberValue(row.current_stock_unit_cost), row.currency || currency)}</td>
+        <td>{row.current_stock_unit_cost == null ? <span className="danger-text">Unvalued</span> : money(numberValue(row.current_stock_unit_cost), row.currency || currency)} / {row.stock_uom}</td>
         <td>{row.current_evidence_id ? <><strong>{row.evidence_reference || 'Recorded evidence'}</strong><small className="report-subline">{row.evidence_reason || '—'}</small></> : 'No governed evidence'}</td>
         <td>{canManage ? <button className="text-button" type="button" disabled={busy} onClick={() => beginEdit(row)}>{row.current_evidence_id ? 'Correct basis' : 'Set cost basis'}</button> : <span className="muted">View only</span>}</td>
       </tr>)}
