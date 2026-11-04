@@ -204,8 +204,9 @@ select extensions.ok(
   'Verified installer AAL2 may prepare exactly their assigned Branch devices'
 ) from oa5_installer_fixture f;
 select extensions.lives_ok(
-  $test$select * from public.get_sellertray_accessible_registers(
-    f.tenant_id,f.branch_id) from oa5_installer_fixture f$test$,
+  $test$select r.id from oa5_installer_fixture f
+    cross join lateral public.get_sellertray_accessible_registers(
+      f.tenant_id,f.branch_id) r$test$,
   'AAL2 assigned installer may list Branch setup registers without merchant membership'
 );
 select extensions.ok(
