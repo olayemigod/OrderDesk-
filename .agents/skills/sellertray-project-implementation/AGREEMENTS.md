@@ -172,6 +172,11 @@ The Order Form confirmation button remains disabled until the exact governed Ord
 
 Order Form confirmation evidence must bind to the exact Order Form/commercial snapshot/package fingerprint or equivalent immutable evidence used by the implementation.
 
+For C2 Branch purchases, the **reviewed and executed Order Form PDF** must display the applicable frozen Branch payment commitments, not only total purchase lines: merchant-facing Branch name, cycle, setup inclusion, exact approved installment structure/version, each installment's amount and due date, and the Branch's amount due. The renderer uses the issuance-time immutable commercial snapshot, not a live settlement query or mutable Branch metadata. If a C2 Branch schedule is incomplete, the document must fail closed instead of offering a legally incomplete review/confirmation. The review and executed PDF use the same Order Form rendering path.
+
+Commercial V2 payment acceptance and entitlement activation remain separate: a confirmed Paystack payment must be recorded once against its exact Branch obligation, but the legacy C1 installment entitlement reconciler must not be invoked for native C2 obligations. Native C2 entitlement requires its own gated payment/setup/legal reconciliation before cutover.
+
+
 ## Agreement Package PDF
 
 SellerTray may generate an Agreement Package PDF for convenience, audit, download or execution evidence. Packaging documents together does **not** merge their legal authorities.
