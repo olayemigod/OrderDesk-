@@ -137,6 +137,36 @@ revoke all on function public.record_sellertray_inventory_cost_basis(uuid,uuid,n
 grant execute on function public.record_sellertray_inventory_cost_basis(uuid,uuid,numeric,text,text,uuid,uuid)
   to authenticated,service_role;
 
+-- A stock command's cost choice is immutable even if it is recovered through
+-- the merchant-facing reference with a new transport command identity. This
+-- table stores retry intent only. It is not inventory balance/valuation truth.
+create table if not exists public.sellertray_inventory_adjustment_cost_intents (
+  inventory_movement_id uuid primary key references public.inventory_movements(id),
+  tenant_id uuid not null references public.tenants(id),
+  actor_user_id uuid not null,
+  cost_present boolean not null,
+  stock_unit_cost numeric(24,8),
+  evidence_reference text,
+  evidence_reason text,
+  cost_command_id uuid not null,
+  created_at timestamptz not null default now(),
+  constraint adjustment_cost_intent_fields check (
+    (cost_present and stock_unit_cost is not null
+      and evidence_reference is not null and evidence_reason is not null)
+    or
+    (not cost_present and stock_unit_cost is null
+      and evidence_reference is null and evidence_reason is null)
+  ),
+  constraint adjustment_cost_intent_positive_cost check (
+    stock_unit_cost is null or stock_unit_cost>=0
+  ),
+  constraint adjustment_cost_intent_unique_cost_command unique (tenant_id,cost_command_id)
+);
+
+alter table public.sellertray_inventory_adjustment_cost_intents enable row level security;
+revoke all on table public.sellertray_inventory_adjustment_cost_intents from public,anon,authenticated;
+grant select,insert on table public.sellertray_inventory_adjustment_cost_intents to service_role;
+
 -- The mobile/web edge already verifies the bearer JWT and forwards the
 -- authenticated actor to service_role. Cost permission is checked BEFORE
 -- stock posting. If evidence write/replay fails, the whole movement rolls back.
@@ -165,6 +195,11 @@ declare
   v_movement_id uuid;
   v_evidence_id uuid;
   v_cost_command_id uuid;
+  v_saved_intent public.sellertray_inventory_adjustment_cost_intents%rowtype;
+  v_replayed boolean;
+  v_reference text := nullif(btrim(coalesce(p_cost_reference,'')),'');
+  v_reason text := nullif(btrim(coalesce(p_cost_reason,'')),'');
+  v_verified_cost numeric(24,8);
 begin
   if v_direction <> 'increase' and
     (v_has_cost or p_cost_reference is not null or p_cost_reason is not null) then
@@ -194,35 +229,73 @@ begin
     p_adjustment_direction,p_reference,p_reason,p_command_id,p_actor_user_id
   );
   v_movement_id := (v_result->>'movementId')::uuid;
+  v_replayed := coalesce((v_result->>'idempotentReplay')::boolean,false);
+  v_verified_cost := case when v_has_cost then round(p_stock_unit_cost,8) else null end;
 
-  -- This cost command is a stable extension of the immutable stock command.
-  -- Once the stock command has posted, neither adding previously absent
-  -- evidence nor dropping previously supplied evidence is a legal retry.
-  -- Older no-cost stock commands have no matching cost evidence identity and
-  -- continue to replay without cost. For later cost resolution, use the
-  -- separate governed historical-evidence command instead.
-  v_cost_command_id := pg_catalog.md5(
-    'sellertray:adjustment-cost:'||p_tenant_id::text||':'||p_command_id
-  )::uuid;
+  -- Stock authority has already matched canonical stock facts, including
+  -- merchant reference retries with a NEW transport command identity.
+  -- Bind the cost identity to the canonical movement, never the retry's ID.
+  select * into v_saved_intent
+  from public.sellertray_inventory_adjustment_cost_intents ci
+  where ci.tenant_id=p_tenant_id and ci.inventory_movement_id=v_movement_id
+  for update;
 
-  if coalesce((v_result->>'idempotentReplay')::boolean,false)
-     and (
-       exists(
-         select 1 from public.sellertray_inventory_cost_basis_evidence e
-         where e.tenant_id=p_tenant_id
-           and e.inventory_movement_id=v_movement_id
-           and e.command_id=v_cost_command_id
-       )
-     ) is distinct from v_has_cost then
-    raise exception 'Stock action retry cannot change the original cost evidence choice; use historical cost evidence to resolve missing cost'
-      using errcode='23505';
+  if v_replayed then
+    if found then
+      if v_saved_intent.actor_user_id is distinct from p_actor_user_id
+        or v_saved_intent.cost_present is distinct from v_has_cost
+        or (v_has_cost and (
+           v_saved_intent.stock_unit_cost is distinct from v_verified_cost
+           or v_saved_intent.evidence_reference is distinct from v_reference
+           or v_saved_intent.evidence_reason is distinct from v_reason
+        )) then
+        raise exception 'Stock action retry has different cost or operator facts; use historical cost evidence for later corrections'
+          using errcode='23505';
+      end if;
+      v_cost_command_id := v_saved_intent.cost_command_id;
+    else
+      -- A pre-Build-47 stock movement was originally submitted without
+      -- atomic cost evidence. Its separate historical cost record does not
+      -- retroactively turn this stock command into a cost-bearing submission.
+      if v_has_cost then
+        raise exception 'Historical stock adjustment cannot gain cost through a stock-command retry; use historical cost evidence'
+          using errcode='23505';
+      end if;
+    end if;
+  else
+    v_cost_command_id := pg_catalog.md5(
+      'sellertray:adjustment-cost:'||p_tenant_id::text||':'||p_command_id
+    )::uuid;
+    insert into public.sellertray_inventory_adjustment_cost_intents(
+      inventory_movement_id,tenant_id,actor_user_id,cost_present,
+      stock_unit_cost,evidence_reference,evidence_reason,cost_command_id
+    ) values (
+      v_movement_id,p_tenant_id,p_actor_user_id,v_has_cost,
+      v_verified_cost,case when v_has_cost then v_reference end,
+      case when v_has_cost then v_reason end,v_cost_command_id
+    );
   end if;
 
   if v_has_cost then
-    v_evidence_id := public.record_sellertray_inventory_cost_basis_for_actor(
-      p_tenant_id,v_movement_id,p_stock_unit_cost,
-      p_cost_reference,p_cost_reason,v_cost_command_id,null,p_actor_user_id
-    );
+    if v_replayed then
+      -- Return the original evidence instead of minting it a second time.
+      -- A later authorised historical correction may supersede that evidence;
+      -- retry must never roll valuation back to the original evidence.
+      select e.id into v_evidence_id
+      from public.sellertray_inventory_cost_basis_evidence e
+      where e.tenant_id=p_tenant_id
+        and e.inventory_movement_id=v_movement_id
+        and e.command_id=v_cost_command_id;
+      if v_evidence_id is null then
+        raise exception 'Original stock cost evidence is missing; manual reconciliation required'
+          using errcode='23514';
+      end if;
+    else
+      v_evidence_id := public.record_sellertray_inventory_cost_basis_for_actor(
+        p_tenant_id,v_movement_id,p_stock_unit_cost,
+        p_cost_reference,p_cost_reason,v_cost_command_id,null,p_actor_user_id
+      );
+    end if;
   else
     select cb.evidence_id into v_evidence_id
     from public.sellertray_current_inventory_cost_basis(p_tenant_id,v_movement_id) cb;

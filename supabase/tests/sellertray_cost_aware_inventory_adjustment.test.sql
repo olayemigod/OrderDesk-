@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(24);
+select extensions.plan(27);
 
 select extensions.ok(
  to_regprocedure('public.apply_sellertray_stock_adjustment_with_cost(uuid,uuid,uuid,uuid,numeric,text,text,text,text,uuid,numeric,text,text)') is not null,
@@ -21,7 +21,10 @@ create temp table cost_adjust_fixture (
  bad_decrease boolean default false,rolled_back boolean default false,
  bad_branch boolean default false,
  replay_dropped_cost_rejected boolean default false,
- replay_added_cost_rejected boolean default false
+ replay_added_cost_rejected boolean default false,
+ new_reference_replay jsonb,
+ new_reference_cost_dropped boolean default false,
+ new_reference_cost_added boolean default false
 ) on commit drop;
 insert into cost_adjust_fixture(tenant_id,actor_id,blocked_actor,product_id)
 values(gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid());
@@ -68,6 +71,37 @@ update cost_adjust_fixture f set replay=public.apply_sellertray_stock_adjustment
 select extensions.ok(
  (select replay->>'idempotentReplay'='true' and replay->>'costEvidenceId'=movement->>'costEvidenceId' from cost_adjust_fixture),
  'Exact-command replay is safe for stock and cost');
+
+-- A new transport ID may legitimately recover the original stock movement by
+-- business reference. The original cost-intent and evidence must still match.
+update cost_adjust_fixture f set new_reference_replay=public.apply_sellertray_stock_adjustment_with_cost(
+ f.tenant_id,f.branch_id,f.product_id,f.uom_id,5,'increase','COST-ADJ-001',
+ 'Data correction','cost-reference-retry-001',f.actor_id,20,'INVOICE-001',
+ 'Documented cost for recovered inventory'
+);
+select extensions.ok(
+ (select new_reference_replay->>'idempotentReplay'='true'
+   and new_reference_replay->>'costEvidenceId'=movement->>'costEvidenceId'
+  from cost_adjust_fixture),
+ 'Reference replay using a fresh transport command preserves the original cost evidence'
+);
+do $
+declare f record;
+begin
+ select * into f from cost_adjust_fixture;
+ begin
+   perform public.apply_sellertray_stock_adjustment_with_cost(
+     f.tenant_id,f.branch_id,f.product_id,f.uom_id,5,'increase',
+     'COST-ADJ-001','Data correction','cost-reference-retry-no-cost',f.actor_id,
+     null,null,null
+   );
+ exception when unique_violation then
+   update cost_adjust_fixture set new_reference_cost_dropped=true;
+ end;
+end $;
+select extensions.ok((select new_reference_cost_dropped from cost_adjust_fixture),
+ 'New transport command cannot omit cost on a reference-replayed valued stock movement'
+);
 
 -- Cost-bearing command must not be replayed as an unvalued command.
 do $
@@ -119,6 +153,24 @@ select extensions.is((select unknown->>'costEvidenceStatus' from cost_adjust_fix
 select extensions.is(
  (select v.unvalued_quantity_on_hand from public.sellertray_inventory_valuation_state v join cost_adjust_fixture f on v.tenant_id=f.tenant_id and v.catalog_item_id=f.product_id),
  2::numeric,'Unpriced positive quantity cannot inherit average cost');
+
+do $
+declare f record;
+begin
+ select * into f from cost_adjust_fixture;
+ begin
+   perform public.apply_sellertray_stock_adjustment_with_cost(
+     f.tenant_id,f.branch_id,f.product_id,f.uom_id,2,'increase',
+     'COST-ADJ-002','Inventory recovery','cost-reference-retry-with-cost',f.actor_id,
+     20,'RETRO-INV','Cost supplied only on a later reference replay'
+   );
+ exception when unique_violation then
+   update cost_adjust_fixture set new_reference_cost_added=true;
+ end;
+end $;
+select extensions.ok((select new_reference_cost_added from cost_adjust_fixture),
+ 'New transport command cannot retroactively add cost to an unvalued stock event'
+);
 
 -- Cost absent on first commit is immutable for this stock command even if the
 -- actor now knows the cost. Historical evidence has its own authorised command.
