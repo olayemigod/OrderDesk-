@@ -6,6 +6,9 @@ test('an omitted price derives using product-specific Stock UOM conversion', () 
   assert.equal(resolveSellerTrayUnitPrice(null, 500, 12), 6000);
   assert.equal(resolveSellerTrayUnitPrice(null, '250.00', '6'), 1500);
   assert.equal(resolveSellerTrayUnitPrice(null, 1.25, 0.5), 0.63);
+  assert.equal(resolveSellerTrayUnitPrice(null, 0.5, 0.29), 0.15);
+  assert.equal(resolveSellerTrayUnitPrice(null, 1.5, 0.01), 0.02);
+  assert.equal(resolveSellerTrayUnitPrice(null, 0.01, 0.5), 0.01);
 });
 
 test('an explicitly entered UOM price wins even if different from conversion', () => {

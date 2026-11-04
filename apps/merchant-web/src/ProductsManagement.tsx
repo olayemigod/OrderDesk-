@@ -422,9 +422,28 @@ function clean(value: string): string | null { const trimmed = value.trim(); ret
 function unitPriceDescription(unit: ProductUom, stockPrice: number | null, currency: string): string {
   if (unit.sellingPrice !== null) return money(unit.sellingPrice, currency);
   if (stockPrice === null || unit.conversionFactor <= 0) return 'No price';
-  const derivedCents = Math.round(Math.round(stockPrice * 100) * unit.conversionFactor + Number.EPSILON);
-  return Number.isFinite(derivedCents) ? `${money(derivedCents / 100, currency)} · Calculated` : 'No price';
+  const stockCents = scaledDecimal(stockPrice, 2);
+  const conversionMicros = scaledDecimal(unit.conversionFactor, 6);
+  if (stockCents === null || conversionMicros === null) return 'No price';
+  const derivedCents = (stockCents * conversionMicros + 500_000n) / 1_000_000n;
+  return derivedCents <= BigInt(Number.MAX_SAFE_INTEGER)
+    ? `${money(Number(derivedCents) / 100, currency)} · Calculated` : 'No price';
 }
+/**
+ * Catalog prices have 2 decimal places and Product UOM conversions have 6.
+ * Convert their decimal digits directly to integers so half-cent boundaries
+ * round exactly like PostgreSQL numeric, not binary floating point.
+ */
+export function scaledDecimal(value: number, places: number): bigint | null {
+  if (!Number.isFinite(value) || value < 0) return null;
+  const match = /^(\\d+)(?:\\.(\\d+))?$/.exec(String(value));
+  if (!match) return null;
+  const fraction = match[2] ?? '';
+  if (fraction.length > places && /[1-9]/.test(fraction.slice(places))) return null;
+  const scaled = `${match[1]}${fraction.padEnd(places, '0').slice(0, places)}`;
+  return BigInt(scaled);
+}
+
 function formatNumber(value: number): string { return new Intl.NumberFormat('en-NG', { maximumFractionDigits: 6 }).format(value); }
 function money(value: number, currency: string): string { try { return new Intl.NumberFormat('en-NG', { style: 'currency', currency: currency || 'NGN', maximumFractionDigits: 2 }).format(value); } catch { return `${currency || 'NGN'} ${new Intl.NumberFormat('en-NG', { maximumFractionDigits: 2 }).format(value)}`; } }
 function dateOnly(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium' }).format(date); }
