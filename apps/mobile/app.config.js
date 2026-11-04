@@ -17,21 +17,23 @@ const ATTESTATION_FILE = resolve(__dirname, '../../docs/qa/oa5-staging-backend-a
 // Shared with Merchant/Admin preview gate; fail closed until actual hosted
 // recovery and permission evidence is recorded in the checked-in attestation.
 // Lazy require means the production app identity needs no QA helper at boot.
-function reusedTestProjectApproved(attestation, endpoint) {
-  return require('../../scripts/qa/oa5-staging-attestation.cjs')
-    .reusedTestProjectApproved(attestation, endpoint);
-}
-function hasApprovedTestBackend(endpoint) {
+const { stagingBackendApproved, reusedTestProjectApproved } =
+  require('../../scripts/qa/oa5-staging-attestation.cjs');
+
+function hasApprovedTestBackend(endpoint, testEvidence) {
   try {
-    return reusedTestProjectApproved(
-      JSON.parse(readFileSync(ATTESTATION_FILE, 'utf8')), endpoint
-    );
+    // Production EAS/Expo only invokes this module with ({config}); the third
+    // argument is exclusively for deterministic synthetic source-only tests.
+    const evidence = testEvidence === undefined
+      ? JSON.parse(readFileSync(ATTESTATION_FILE, 'utf8'))
+      : testEvidence;
+    return stagingBackendApproved(evidence, endpoint);
   } catch {
     return false; // Missing, inaccessible or invalid evidence always blocks QA.
   }
 }
 
-function qaConfiguration({ config }, env = process.env) {
+function qaConfiguration({ config }, env = process.env, testEvidence = undefined) {
   const variant = env.SELLERTRAY_APP_VARIANT;
   if (!variant) return config; // Existing installed production app contract.
   if (variant !== 'qa-staging') throw new Error('Unsupported SellerTray build variant');
@@ -42,7 +44,7 @@ function qaConfiguration({ config }, env = process.env) {
   const publishableKey = env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   if (typeof endpoint !== 'string' || !/^https:\/\/[a-z0-9]{20}\.supabase\.co$/.test(endpoint)
       || endpoint === PRODUCTION_URL
-      || (endpoint === UNATTESTED_AGREEMENT_TEST_URL && !hasApprovedTestBackend(endpoint)))
+      || !hasApprovedTestBackend(endpoint, testEvidence))
     throw new Error('QA Android build is blocked until an attested, non-production Supabase backend is selected');
   if (typeof publishableKey !== 'string'
       || !/^sb_publishable_[A-Za-z0-9_-]{12,}$/.test(publishableKey)
