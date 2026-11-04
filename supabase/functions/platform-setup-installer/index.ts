@@ -108,7 +108,7 @@ Deno.serve(async (request) => {
     if (action === 'invite') {
       const email = cleanEmail(body.email);
       if (!email || !workerId) return json({ error: 'Installer email and setup worker are required' }, 400);
-      if (!INVITE_REDIRECT_URL || !/^https:\\/\\//.test(INVITE_REDIRECT_URL)) {
+      if (!INVITE_REDIRECT_URL || !/^https:\/\//.test(INVITE_REDIRECT_URL)) {
         return json({ error: 'ProcessEdge installer invitation destination is not configured' }, 503);
       }
       // Establish a durable internal identity claim before any external mail.
