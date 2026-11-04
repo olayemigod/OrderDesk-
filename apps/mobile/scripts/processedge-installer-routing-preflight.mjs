@@ -46,7 +46,11 @@ assert.match(printerWorkspace,/installerAppointmentId/);
 assert.match(printerRepository,/appointmentId: input\.installerAppointmentId/);
 assert.match(printExecutor,/installerAppointmentId/);
 assert.match(installer,/listPairedBluetoothPrinters/);
-assert.match(installer,/Device inspection is read-only/);
+assert.match(installer,/This records evidence only/);
+assert.match(installer,/action:'submit_handover'/);
+assert.match(installer,/AsyncStorage\.getItem/);
+assert.match(installer,/AsyncStorage\.setItem/);
+assert.match(installer,/status==='printed'/);
 assert.doesNotMatch(installer,/save_sellertray_register|save_sellertray_printer|sellertray_user_can_operate_branch/);
 
 assert.match(edge,/if\(action === 'profile'\)/);
