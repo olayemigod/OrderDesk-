@@ -391,8 +391,52 @@ select extensions.throws_ok(
   $test$update public.sellertray_installer_printer_events set after_state='{}'::jsonb$test$,
   '55000',null::text,'Installer printer before/after audit evidence cannot be rewritten'
 );
+-- A caller cannot set custom transaction GUCs to reuse an already recorded
+-- authorized installer command for a different receipt profile mutation.
+select set_config('sellertray.installer_printer_command_key',
+  'oa5-installer-receipt-profile-01',true);
+select set_config('sellertray.installer_printer_appointment_id',
+  appointment_id::text,true) from oa5_installer_fixture;
+select set_config('sellertray.installer_printer_assignment_id',
+  assignment_id::text,true) from oa5_installer_fixture;
+select extensions.throws_ok(
+  $test$select public.save_sellertray_printer_receipt_settings(
+    f.tenant_id,f.printer_id,
+    '[{"type":"customer","label":"Forged Audit Copy","enabled":true,"sortOrder":1}]'::jsonb,
+    'Forged printer footer'
+  ) from oa5_installer_fixture f$test$,
+  '23505',null::text,
+  'A forged reuse of an earlier installer command cannot disguise a receipt-profile change'
+);
+select set_config('sellertray.installer_printer_command_key','',true);
+select set_config('sellertray.installer_printer_appointment_id','',true);
+select set_config('sellertray.installer_printer_assignment_id','',true);
 select set_config('request.jwt.claims','{"role":"service_role"}',true);
 
+
+-- Creating a new default printer must audit the displaced default, too:
+-- changing a printer indirectly cannot lose the authorizing appointment.
+select extensions.lives_ok(
+  $test$select public.save_sellertray_installer_printer(
+    f.installer_id,f.tenant_id,f.branch_id,f.appointment_id,
+    null,
+    (select r.id from public.sellertray_registers r
+      where r.tenant_id=f.tenant_id and r.branch_id=f.branch_id
+        and r.code='OAI-SETUP-01'),
+    'Second Default Setup Printer','OA5-INSTALLER-HW-002',
+    58,true,true,'oa5-installer-printer-default-02'
+  ) from oa5_installer_fixture f$test$,
+  'Installer can configure a second same-register default under a distinct command'
+);
+select extensions.ok(
+  (select count(*) from public.sellertray_installer_printer_events e
+    join oa5_installer_fixture f on f.appointment_id=e.appointment_id
+    where e.command_key='oa5-installer-printer-default-02'
+      and e.actor_user_id=f.installer_id
+      and e.assignment_id=f.assignment_id
+      and e.event_type in ('registered','default_removed'))>=2,
+  'Both new printer registration and displaced-default side effect are appointment-audited'
+);
 
 update oa5_installer_fixture f set test_job_id=(
   public.request_sellertray_installer_test_print_job(
