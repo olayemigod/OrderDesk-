@@ -11,9 +11,11 @@ create or replace function public.sellertray_setup_installer_device_allowed(
   p_service_command boolean default false
 ) returns boolean language sql stable security definer set search_path='' as $scope$
   select p_tenant_id is not null and p_branch_id is not null and p_actor_user_id is not null
-    and (p_service_command or (
-      auth.uid()=p_actor_user_id and auth.jwt()->>'aal'='aal2'
-    ))
+    and (
+      (p_service_command and auth.jwt()->>'role'='service_role')
+      or (not p_service_command and auth.uid()=p_actor_user_id
+        and auth.jwt()->>'aal'='aal2')
+    )
     and public.sellertray_setup_installer_has_assignment(
       p_actor_user_id,p_tenant_id,p_branch_id,null,now()
     );
@@ -396,5 +398,26 @@ begin
   );
 end;
 $function$;
+
+-- Actor-parametrized printer mutations remain service-role-only. A browser
+-- cannot forge p_actor_user_id and invoke them directly as authenticated.
+revoke all on function public.save_sellertray_printer(
+ uuid,uuid,uuid,uuid,text,text,integer,boolean,boolean,uuid)
+ from public,anon,authenticated;
+grant execute on function public.save_sellertray_printer(
+ uuid,uuid,uuid,uuid,text,text,integer,boolean,boolean,uuid)
+ to service_role;
+revoke all on function public.request_sellertray_print_job(
+ uuid,uuid,text,uuid,text,uuid)
+ from public,anon,authenticated;
+grant execute on function public.request_sellertray_print_job(
+ uuid,uuid,text,uuid,text,uuid)
+ to service_role;
+revoke all on function public.transition_sellertray_print_job(
+ uuid,uuid,text,text,text,uuid)
+ from public,anon,authenticated;
+grant execute on function public.transition_sellertray_print_job(
+ uuid,uuid,text,text,text,uuid)
+ to service_role;
 
 commit;
