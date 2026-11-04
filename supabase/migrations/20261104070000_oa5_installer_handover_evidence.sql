@@ -94,10 +94,17 @@ begin
       using errcode='23514';
   end if;
   select j.* into v_test from public.sellertray_print_jobs j
+  join public.sellertray_installer_test_print_bindings b
+    on b.job_id=j.id and b.tenant_id=j.tenant_id
+    and b.branch_id=j.branch_id and b.printer_id=j.printer_id
+    and b.actor_user_id=p_actor_user_id
+    and b.appointment_id=p_appointment_id
   join public.sellertray_internal_setup_staff_assignments a
-    on a.staff_user_id=p_actor_user_id and a.tenant_id=j.tenant_id
-      and a.branch_id=j.branch_id and a.appointment_id=p_appointment_id
-      and a.revoked_at is null and a.valid_from<=j.requested_at
+    on a.id=b.assignment_id and a.staff_user_id=b.actor_user_id
+      and a.tenant_id=b.tenant_id and a.branch_id=b.branch_id
+      and a.appointment_id=b.appointment_id
+      and a.valid_from<=b.requested_at
+      and a.revoked_at is null
   where j.id=p_test_job_id and j.tenant_id=p_tenant_id
     and j.branch_id=p_branch_id and j.register_id=v_printer.register_id
     and j.printer_id=v_printer.id and j.job_type='test'
