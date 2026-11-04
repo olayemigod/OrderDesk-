@@ -1,5 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { copyFileSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   assessSecurityReleaseMigrationCoverage,
   REQUIRED_SECURITY_MIGRATIONS,
@@ -70,4 +75,25 @@ test('duplicate source version and version-only ledger mismatch fail closed',()=
   ],[{version:'20261104180648',name:'untracked_emergency_hotfix'}]);
   assert.equal(result.safeForSecurityOnlyReview,false);
   assert.ok(result.missingBeforeLast.some(x=>x.version==='20261104180647'));
+});
+
+test('CLI never silently succeeds when a checkout path contains URL fragment/query characters',()=>{
+  const dir=mkdtempSync(join(tmpdir(),'sellertray#release?guard-'));
+  const script=join(dir,'ledger-gate.mjs');
+  const symlink=join(dir,'via#link?.mjs');
+  try {
+    copyFileSync(fileURLToPath(new URL('./sellertray-security-production-ledger-gate.mjs',import.meta.url)),script);
+    symlinkSync(script,symlink);
+    for (const entry of [script,symlink]) {
+      const result=spawnSync(process.execPath,[entry,'--bogus'],{
+        encoding:'utf8',
+        env:{...process.env},
+      });
+      assert.equal(result.status,1,
+        'Mandatory release gate must never silently exit 0 for checkout '+entry);
+      assert.match(result.stderr,/Usage: node scripts\/qa\/sellertray-security-production-ledger-gate/);
+    }
+  } finally {
+    rmSync(dir,{recursive:true,force:true});
+  }
 });
