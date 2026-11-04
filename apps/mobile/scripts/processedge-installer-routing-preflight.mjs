@@ -29,6 +29,11 @@ assert.match(installer,/factorType:'totp'/);
 assert.match(installer,/challengeAndVerify/);
 assert.match(installer,/status==='active'/);
 assert.match(installer,/action:'mine'/);
+assert.match(installer,/action:'devices'/);
+assert.match(installer,/inspectAssignedDevices/);
+assert.match(installer,/deviceRequestEpoch/);
+assert.match(installer,/listPairedBluetoothPrinters/);
+assert.match(installer,/Device inspection and Bluetooth discovery are read-only/);
 assert.doesNotMatch(installer,/save_sellertray_register|save_sellertray_printer|sellertray_user_can_operate_branch/);
 
 assert.match(edge,/if\(action === 'profile'\)/);
