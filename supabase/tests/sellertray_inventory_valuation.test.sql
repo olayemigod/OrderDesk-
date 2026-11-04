@@ -2,6 +2,11 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select extensions.plan(20);
 
+-- This suite verifies stock/valuation mathematics via trusted service reads.
+-- Client-level Branch and capability denial is tested independently in
+-- sellertray_reporting_definer_caller_scope.test.sql.
+select set_config('request.jwt.claim.role','service_role',true);
+
 select extensions.ok(
   to_regclass('public.sellertray_inventory_valuation_entries') is not null
   and to_regclass('public.sellertray_inventory_valuation_state') is not null,
