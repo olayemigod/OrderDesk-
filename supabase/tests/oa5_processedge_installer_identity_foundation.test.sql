@@ -54,10 +54,8 @@ update oa5_installer_fixture f set branch_id=b.id
 from public.branches b where b.tenant_id=f.tenant_id and b.is_default=true;
 
 insert into public.sellertray_setup_workers(worker_code,display_name,active,max_concurrent_setups,travel_buffer_minutes)
-select 'OAI-W-'||left(worker_id::text,8),'ProcessEdge Test Installer',true,1,0
-from oa5_installer_fixture f
-cross join lateral (select f.installer_id as ignored) identity_probe
-returning id;
+select 'OAI-W-'||left(installer_id::text,8),'ProcessEdge Test Installer',true,1,0
+from oa5_installer_fixture f;
 -- Capture the exact worker created for this test.
 update oa5_installer_fixture f set worker_id=w.id
 from public.sellertray_setup_workers w where w.worker_code='OAI-W-'||left(f.installer_id::text,8);
