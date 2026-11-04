@@ -2,7 +2,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.115.0';
 
 type JsonRecord = Record<string, unknown>;
 type AdminAction = 'invite' | 'link_existing' | 'set_status' | 'assign' | 'revoke_assignment';
-type Action = AdminAction | 'mine';
+type Action = AdminAction | 'mine' | 'staff_list';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const INVITE_REDIRECT_URL = Deno.env.get('SETUP_INSTALLER_INVITE_REDIRECT_URL') ?? '';
@@ -64,6 +64,19 @@ Deno.serve(async (request) => {
     }
   } catch {
     return json({ error: 'ProcessEdge Platform Admin setup permission required' }, 403);
+  }
+
+  if (action === 'staff_list') {
+    try {
+      const roster = await rpc<JsonRecord>('platform_admin_list_setup_installer_staff', {
+        p_actor_user_id: identity.userId,
+        p_tenant_id: tenantId,
+      });
+      return json({ staff: Array.isArray(roster.staff) ? roster.staff : [],
+        assignments: Array.isArray(roster.assignments) ? roster.assignments : [] });
+    } catch {
+      return json({ error: 'Unable to load ProcessEdge installer accounts' }, 400);
+    }
   }
 
   const commandId = cleanUuid(body.commandId);
@@ -195,7 +208,7 @@ async function verifiedIdentity(authorization: string):
   } catch { return null; }
 }
 function cleanAction(value: unknown): Action | null {
-  const allowed: Action[] = ['invite','link_existing','set_status','assign','revoke_assignment','mine'];
+  const allowed: Action[] = ['invite','link_existing','set_status','assign','revoke_assignment','mine','staff_list'];
   return allowed.find(action => action === value) ?? null;
 }
 function cleanUuid(value: unknown): string | null {
