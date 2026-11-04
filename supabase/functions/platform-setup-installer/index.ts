@@ -108,11 +108,16 @@ Deno.serve(async (request) => {
     if (action === 'invite') {
       const email = cleanEmail(body.email);
       if (!email || !workerId) return json({ error: 'Installer email and setup worker are required' }, 400);
-      // Do not silently send ProcessEdge invitations to the merchant portal.
-      if (!INVITE_REDIRECT_URL || !/^https:\/\//.test(INVITE_REDIRECT_URL)) {
+      if (!INVITE_REDIRECT_URL || !/^https:\\/\\//.test(INVITE_REDIRECT_URL)) {
         return json({ error: 'ProcessEdge installer invitation destination is not configured' }, 503);
       }
-      // A retry of an already completed invite must not send a second email.
+      // Establish a durable internal identity claim before any external mail.
+      // A partially delivered invitation must never fall through to Merchant.
+      await rpc<string>('platform_admin_reserve_setup_installer_invitation', {
+        p_actor_user_id: identity.userId, p_email: email, p_worker_id: workerId,
+        p_command_id: commandId, p_reason: reason,
+      });
+
       const { data: event, error: eventError } = await client
         .from('sellertray_internal_setup_staff_events')
         .select('staff_user_id,actor_user_id,event_type,reason,details')
@@ -126,13 +131,29 @@ Deno.serve(async (request) => {
         return json({ staffUserId: event.staff_user_id, idempotentReplay: true });
       }
 
+      // Mark once *before* requesting Auth delivery. A timeout or partial
+      // failure requires explicit reconciliation, not an automatic resend.
+      const maySend = await rpc<boolean>('platform_admin_begin_setup_installer_delivery', {
+        p_actor_user_id: identity.userId, p_command_id: commandId,
+      });
+      if (!maySend) return json({
+        error: 'This installer invitation has already been attempted. Reconcile the reserved staff identity before trying again.',
+      }, 409);
+
       const { data: invitation, error: inviteError } = await client.auth.admin.inviteUserByEmail(email, {
         redirectTo: INVITE_REDIRECT_URL,
       });
       if (inviteError || !invitation.user?.id) {
-        return json({ error: 'Unable to send invitation. Check the staff email or reconcile an existing account.' }, 400);
+        return json({
+          error: 'Installer invitation delivery could not be confirmed. The internal identity is reserved; review it before another attempt.',
+        }, 409);
       }
       try {
+        // Preserve the Auth user ID even if account/worker linking fails.
+        await rpc<boolean>('platform_admin_bind_setup_installer_invitation', {
+          p_actor_user_id: identity.userId,
+          p_command_id: commandId, p_auth_user_id: invitation.user.id,
+        });
         const userId = await rpc<string>('platform_admin_link_setup_installer', {
           p_actor_user_id: identity.userId,
           p_staff_user_id: invitation.user.id,
@@ -142,9 +163,9 @@ Deno.serve(async (request) => {
         });
         return json({ staffUserId: userId, status: 'pending', invitationSent: true });
       } catch {
-        // External email is not rolled back if linkage fails. Do not retry
-        // invitation blindly; require an administrator to reconcile the user.
-        return json({ error: 'Invitation may have been delivered; staff account linkage requires review. Do not resend without checking.' }, 409);
+        return json({
+          error: 'Invitation may have been delivered. Installer identity remains reserved pending Admin reconciliation; do not resend.',
+        }, 409);
       }
     }
     if (action === 'link_existing') {
