@@ -33,6 +33,18 @@ PR [#218](https://github.com/olayemigod/OrderDesk-/pull/218) merged the correcti
 5. **Evidence of CI and role-matrix tests.** At the PR #218 security head `7b3608ae09f65a5385b8db45807428ddcba0bf7f`, Database CI `41923412841` and Mobile CI `41923412678` passed. Transactional QA tests cover Owner, Manager, explicit Manager report denial, Cashier default/wrong Branch, outsider, service role and immutable Branch snapshots. The merged Build 47 head and any later integrated release candidate require their **own** clean-history CI and release review; do not substitute older green status.
 6. **Keep the environment boundary.** No Tandar/real-merchant QA writes, no production merchant reassignment, no cross-boundary test APK, no third paid project, and no unsolicited WhatsApp, email, payment or printer output.
 
+## Full ledger-order verification (read-only)
+
+The existing OA5 high-water checker only accepts the *last applied version*. It cannot detect older C2/OA5 migrations that were skipped when a later POS-draft emergency migration was applied. This release needs **the complete current production migration ledger**.
+
+Export only the `version` and `name` metadata from the actual live Supabase migration list to a protected operator-local JSON file (either a JSON array of objects `[{"version":"20261104180647","name":"..."}]` or an object `{"migrations":[...]}`). Do not export SQL, passwords, session IDs, users, Business data, keys or payment details.
+
+```bash
+node scripts/qa/sellertray-security-production-ledger-gate.mjs --ledger-json /secure/local/applied-migrations.json
+```
+
+This command reads local files only. It refuses an absent/invalid/incomplete ledger, duplicated versions, **older source migrations missing from the live ledger**, outstanding C2 foundations, non-security pending changes or absent canonical security files. It is deliberately conservative: **a nonzero exit is a hard stop for any presumed in-order rollout**. A zero exit would mean only that the source/ledger shape is suitable for additional human review; it cannot authorize or apply a release.
+
 ## Read-only preflight (no deployment)
 
 The release operator checks source and current database separately. This SQL **only selects metadata**; it is safe to run against Production:
