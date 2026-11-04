@@ -649,6 +649,17 @@ For every SellerTray task:
 6. **Verify** — focused tests plus relevant regression tests. A change without verification is incomplete.
 7. **Report accurately** — state what changed, what was preserved, tests run/results, migration/build/deployment requirements, limitations and the next bounded milestone. Never report planned work as completed.
 
+## Live merchant protection and dedicated QA merchants — approved 04/11/2026
+
+SellerTray mobile operational testing, OA5 installation/activation acceptance and C2 lifecycle testing must use **dedicated synthetic test merchants**, test staff, and test Branches in a **separate verified non-production Supabase Test/Staging environment**. Real merchants (including Tandar Oil Solutions) must continue using the existing production-bound mobile app for day-to-day sales, stock, orders, receipts and payments without interruption.
+
+1. Do not run destructive/onboarding/activation/installer/payment/printer QA against a production merchant, even when that merchant volunteers to test. Keep production-bound Build 47 separate from any new staging-bound QA APK and do not treat an existing production-bound APK as a staging build.
+2. A Test/Staging merchant is created afresh with synthetic stock, customers, commercial obligations, Branches, roles, registers, transactions and verified test-only AAL2 staff identities. Do not clone production merchant data, auth accounts, Meta/WhatsApp connections, payment credentials, financial records or secrets into staging.
+3. Configure separate QA Mobile, Merchant Web and Admin Web targets and independently verify the exact compiled APK endpoint, build SHA, auth redirects, permissions, payment sandbox, email/push sinks, printers and no external live WhatsApp/merchant notification delivery. No QA client may silently fall back to the production API.
+4. Preserve realistic test cases for Owner/Manager/Cashier and ProcessEdge Installer, multi-Branch tenant isolation, POS and cash, offline/replay, UOM/inventory and receipt printing, partial/outstanding payments, agreement/settlement/setup lifecycle, and the future Branch subscription cutover. Test outcomes and immutable QA evidence must never be represented as production merchant records.
+5. The existing Agreement Package Test project is only a *candidate* for permanent Test/Staging. Its divergent test-only migration ledger and dependent Vercel previews must be safely archived/reconciled, and the database may be rebuilt only after separate explicit destructive-change approval. Until a verified clean rebuild and reviewed environment attestation, the existing fail-closed QA guard remains in force.
+6. New production release requires separate staged rollout approval and migration sequencing. OA5 acceptance remains a prerequisite for C2 runtime cutover. Existing production merchant use remains supported throughout staging preparation.
+
 # 17. Required QA gates
 
 Apply relevant gates to every slice.
