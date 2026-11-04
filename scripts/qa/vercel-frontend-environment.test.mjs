@@ -70,6 +70,17 @@ test('neither web surface can reuse the unrebuilt old agreement QA backend',()=>
  }
 });
 
+test('an attested Test preview still rejects the known Production publishable key',()=>{
+ const eas=JSON.parse(readFileSync(fileURLToPath(new URL('../../apps/mobile/eas.json',import.meta.url)),'utf8'));
+ const prodKey=eas.build.production.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+ for(const surface of ['merchant','admin']){
+  const r=check(surface,{...env('preview',surface),VITE_SUPABASE_PUBLISHABLE_KEY:prodKey},good());
+  assert.equal(r.ok,false);
+  assert.match(r.errors.join('\\n'),/separate non-production Supabase publishable key/);
+  assert.doesNotMatch(r.errors.join('\\n'),/sb_publishable_/);
+ }
+});
+
 test('new preview credentials cannot bypass unverified hosted staging',()=>{
  for(const surface of ['merchant','admin']){
   const x=check(surface,env('preview',surface));
