@@ -1,11 +1,12 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(16);
+select extensions.plan(22);
 
 -- Transaction-scoped authorization regression. No test merchant records persist.
 create temp table report_scope_fixture(
   tenant_id uuid default gen_random_uuid(),
   owner_id uuid default gen_random_uuid(),
+  manager_id uuid default gen_random_uuid(),
   staff_id uuid default gen_random_uuid(),
   outsider_id uuid default gen_random_uuid(),
   customer_id uuid default gen_random_uuid(),
@@ -17,6 +18,7 @@ insert into report_scope_fixture default values;
 
 insert into auth.users(id,email,aud,role)
 select owner_id,'report-owner-'||owner_id||'@example.com','authenticated','authenticated' from report_scope_fixture
+union all select manager_id,'report-manager-'||manager_id||'@example.com','authenticated','authenticated' from report_scope_fixture
 union all select staff_id,'report-staff-'||staff_id||'@example.com','authenticated','authenticated' from report_scope_fixture
 union all select outsider_id,'report-outsider-'||outsider_id||'@example.com','authenticated','authenticated' from report_scope_fixture;
 
@@ -41,6 +43,7 @@ update report_scope_fixture set other_branch_id=(select id from b);
 
 insert into public.tenant_members(tenant_id,user_id,role)
 select tenant_id,owner_id,'owner' from report_scope_fixture
+union all select tenant_id,manager_id,'manager' from report_scope_fixture
 union all select tenant_id,staff_id,'staff' from report_scope_fixture;
 
 insert into public.customers(id,tenant_id,wa_id)
@@ -93,6 +96,39 @@ select extensions.lives_ok(
 select extensions.lives_ok(
   format('select public.get_sellertray_order_profitability(%L::uuid,%L::uuid)',tenant_id,order_id),
   'Owner retains governed profitability read'
+) from report_scope_fixture;
+
+-- Normal Manager reporting is allowed; an explicit capability denial must
+-- supersede that default without removing ordinary Branch stock visibility.
+select set_config('request.jwt.claim.sub',(select manager_id::text from report_scope_fixture),true);
+select extensions.lives_ok(
+  format('select * from public.get_sellertray_branch_stock_as_of(%L::uuid,%L::uuid,now())',tenant_id,branch_id),
+  'Manager retains ordinary Branch stock read'
+) from report_scope_fixture;
+select extensions.lives_ok(
+  format('select * from public.get_sellertray_branch_stock_valuation(%L::uuid,%L::uuid,now())',tenant_id,branch_id),
+  'Manager can read allowed inventory valuation'
+) from report_scope_fixture;
+select extensions.lives_ok(
+  format('select public.get_sellertray_order_profitability(%L::uuid,%L::uuid)',tenant_id,order_id),
+  'Manager can read allowed sale profitability'
+) from report_scope_fixture;
+
+insert into public.tenant_member_capabilities(tenant_id,user_id,capability,allowed)
+select tenant_id,manager_id,'can_view_reports',false from report_scope_fixture;
+select extensions.throws_ok(
+  format('select * from public.get_sellertray_branch_stock_valuation(%L::uuid,%L::uuid,now())',tenant_id,branch_id),
+  '42501','You do not have permission to view inventory valuation for this Branch',
+  'explicit Manager report denial blocks valuation'
+) from report_scope_fixture;
+select extensions.throws_ok(
+  format('select public.get_sellertray_order_profitability(%L::uuid,%L::uuid)',tenant_id,order_id),
+  '42501','You do not have permission to view profitability for this sale',
+  'explicit Manager report denial blocks profitability'
+) from report_scope_fixture;
+select extensions.lives_ok(
+  format('select * from public.get_sellertray_branch_stock_as_of(%L::uuid,%L::uuid,now())',tenant_id,branch_id),
+  'explicit report denial does not remove Manager ordinary Branch stock read'
 ) from report_scope_fixture;
 
 select set_config('request.jwt.claim.sub',(select staff_id::text from report_scope_fixture),true);
