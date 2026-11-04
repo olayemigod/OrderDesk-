@@ -394,7 +394,9 @@ select extensions.ok(
       on f.tenant_id=h.tenant_id and f.appointment_id=h.appointment_id
     where h.actor_user_id=f.installer_id
       and h.test_job_id=f.test_job_id
-      and h.evidence->'equipment'->0->>'identifier'='OA5-INSTALLER-HW-001')
+      and h.evidence->'equipment'->0->>'identifier'='OA5-INSTALLER-HW-001'
+      and h.evidence#>>'{checklist,branchConfigured}'='false'
+      and h.evidence#>>'{checklist,merchantWalkthrough}'='false')
   and not exists(select 1 from public.sellertray_commercial_branch_setup_readiness r
     join oa5_installer_fixture f on r.tenant_id=f.tenant_id
     where r.branch_id=f.branch_id),
