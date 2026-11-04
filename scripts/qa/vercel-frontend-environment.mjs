@@ -8,6 +8,8 @@
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 
 const PRODUCTION_REF = 'eujxswjspolugrzlsjnn';
 const AGREEMENT_TEST_REF = 'iukgsukdoowvnhlfmpml';
@@ -29,24 +31,7 @@ const refForUrl = (raw) => {
   } catch { return null; }
 };
 
-export function attestationIsValid(a) {
-  if (!a || typeof a !== 'object' || Array.isArray(a)) return false;
-  const required = [
-    'clean_migration_replay_verified',
-    'historical_agreement_evidence_archived',
-    'restore_path_verified',
-    'vercel_preview_dependencies_reconciled',
-    'test_only_auth_and_provider_config_verified',
-    'qa_edge_functions_deployed_and_verified',
-  ];
-  return a.schema_version === 1 && a.state === 'verified'
-    && typeof a.approved_staging_project_ref === 'string'
-    && /^[a-z0-9]{20}$/.test(a.approved_staging_project_ref)
-    && ![PRODUCTION_REF].includes(a.approved_staging_project_ref)
-    && /^[0-9a-f]{40}$/.test(a.reviewed_source_sha ?? '')
-    && typeof a.approved_at === 'string' && /^\d{2}\/\d{2}\/20\d{2}$/.test(a.approved_at)
-    && required.every(key => a[key] === true);
-}
+export const attestationIsValid = require('./oa5-staging-attestation.cjs').attestationIsValid;
 
 export function verifyFrontendBuildEnvironment({ surface, env, attestation }) {
   const errors = [];
