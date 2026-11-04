@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(19);
+select extensions.plan(21);
 
 select extensions.ok(
  to_regprocedure('public.apply_sellertray_stock_adjustment_with_cost(uuid,uuid,uuid,uuid,numeric,text,text,text,text,uuid,numeric,text,text)') is not null,
@@ -16,7 +16,7 @@ select extensions.ok(
 create temp table cost_adjust_fixture (
  tenant_id uuid not null,actor_id uuid not null,blocked_actor uuid not null,
  product_id uuid not null,branch_id uuid,uom_id uuid,
- movement jsonb,replay jsonb,unknown jsonb,reduction jsonb,
+ movement jsonb,replay jsonb,zero_cost jsonb,unknown jsonb,reduction jsonb,
  conflicting boolean default false,blocked boolean default false,
  bad_decrease boolean default false,rolled_back boolean default false,
  bad_branch boolean default false
@@ -78,6 +78,17 @@ begin
 end $$;
 select extensions.ok((select conflicting from cost_adjust_fixture),'Changed cost on identical command is rejected');
 
+-- A documented cost of zero is explicit; it must not be treated as missing.
+update cost_adjust_fixture f set zero_cost=public.apply_sellertray_stock_adjustment_with_cost(
+ f.tenant_id,f.branch_id,f.product_id,f.uom_id,1,'increase','COST-ADJ-ZERO',
+ 'Data correction','cost-adjust-zero-001',f.actor_id,0,'VERIFIED-ZERO-COST','Evidence confirms a free replacement unit'
+);
+select extensions.is((select zero_cost->>'costEvidenceStatus' from cost_adjust_fixture),
+ 'valued','Verified zero unit cost is valid evidence, not missing cost');
+select extensions.is(
+ (select e.stock_unit_cost from public.sellertray_inventory_cost_basis_evidence e join cost_adjust_fixture f on e.id=(f.zero_cost->>'costEvidenceId')::uuid),
+ 0::numeric,'Verified zero cost is stored as zero, not an inferred average');
+
 update cost_adjust_fixture f set unknown=public.apply_sellertray_stock_adjustment_with_cost(
  f.tenant_id,f.branch_id,f.product_id,f.uom_id,2,'increase','COST-ADJ-002',
  'Inventory recovery','cost-adjust-002',f.actor_id,null,null,null
@@ -94,7 +105,7 @@ update cost_adjust_fixture f set reduction=public.apply_sellertray_stock_adjustm
 select extensions.is((select reduction->>'costEvidenceStatus' from cost_adjust_fixture),'not_required','Reduction draws from existing cost layers');
 select extensions.is(
  (select v.quantity_on_hand from public.sellertray_inventory_valuation_state v join cost_adjust_fixture f on v.tenant_id=f.tenant_id and v.catalog_item_id=f.product_id),
- 6::numeric,'Ledger quantity: five plus two minus one');
+ 7::numeric,'Ledger quantity: five valued, one zero-cost valued, two unknown, minus one');
 
 do $$
 declare f record;
@@ -123,7 +134,7 @@ select extensions.ok((select rolled_back from cost_adjust_fixture),'Cost rejecti
 select extensions.ok((select bad_branch from cost_adjust_fixture),'Branch isolation is preserved');
 select extensions.is(
  (select count(*)::int from public.inventory_movements m join cost_adjust_fixture f on m.tenant_id=f.tenant_id and m.catalog_item_id=f.product_id),
- 3,'Failures and retries add no extra stock movements');
+ 4,'Failures and retries add no extra stock movements');
 
 select * from extensions.finish();
 rollback;
