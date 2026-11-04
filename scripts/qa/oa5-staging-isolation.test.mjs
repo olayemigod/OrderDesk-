@@ -98,8 +98,8 @@ test('target-only does not pretend to verify native Android application identity
 test('can reuse the same standalone Agreement Test project after documented staged acceptance', () => {
   const project = 'iukgsukdoowvnhlfmpml';
   const attestation = {
-    schema_version:1,state:'approved',approved_staging_project_ref:project,
-    reviewed_source_sha:'a'.repeat(40),approved_at:'2026-11-04T20:00:00Z',
+    schema_version:1,state:'verified',approved_staging_project_ref:project,
+    reviewed_source_sha:'a'.repeat(40),approved_at:'04/11/2026',
     clean_migration_replay_verified:true,historical_agreement_evidence_archived:true,
     restore_path_verified:true,vercel_preview_dependencies_reconciled:true,
     test_only_auth_and_provider_config_verified:true,qa_edge_functions_deployed_and_verified:true,
