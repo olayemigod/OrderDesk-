@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.21"
+  version: "0.1.22"
   status: governing
 ---
 
@@ -400,6 +400,7 @@ Rules:
 8. Purchase stock enters inventory only when a physical receipt is posted for that Purchase Order. Partial receipts post only the physically received quantity.
 9. Stock needed by another branch must be received against that branch’s Purchase Order or moved through a governed Stock Transfer after receipt; do not create global phantom stock from placing a purchase.
 10. Generic direct stock receipt must not bypass Purchase Receiving or Stock Transfer receiving.
+11. Cost-aware stock adjustment uses one shared atomic command. Decreases consume the existing cost composition without extra cost entry. A positive correction may attach verified Stock-UOM cost and source evidence in that same posting if the actor has cost-management authority; if evidence is absent, the inbound quantity remains explicitly unvalued and is available for authorised Merchant Web reconciliation. Do not infer its cost from sales price or current average, and never mutate the posted stock ledger when adding historical evidence. Existing mobile versions must remain compatible and do not gain cost privilege from ordinary stock-edit authority.
 
 # 8. WhatsApp preservation and unification
 
