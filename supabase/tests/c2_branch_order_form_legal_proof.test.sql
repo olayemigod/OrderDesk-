@@ -694,14 +694,14 @@ select extensions.ok(
 -- external request is made and the test transaction rolls back.
 insert into public.sellertray_commercial_payment_method_versions(
  payment_method_id,version,display_name,method_type,confirmation_mode,
- provider_code,configuration,effective_from,change_reason,created_by_user_id
+ provider_code,configuration,effective_from,change_reason,created_by_user_id,command_id
 )
 select m.id,coalesce((select max(v.version)+1
  from public.sellertray_commercial_payment_method_versions v
  where v.payment_method_id=m.id),1),
  'C2 Branch Paystack test method','paystack','automatic',
  'paystack','{}'::jsonb,now()-interval '1 day',
- 'C2 latest payment selection checkout regression',f.admin_id
+ 'C2 latest payment selection checkout regression',f.admin_id,gen_random_uuid()
 from public.sellertray_commercial_payment_methods m
 cross join c2_legal_proof_fixture f
 where m.code='paystack';
