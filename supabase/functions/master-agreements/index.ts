@@ -270,9 +270,14 @@ async function ensureAgreementArtifact(input: {
   if (!currentMasterId) throw new Error('SellerTray Master Agreement is not yet published');
 
   const { data: form, error: formError } = await admin.from('sellertray_commercial_order_forms')
-    .select('id,tenant_id,commercial_order_id,order_form_template_version_id,template_version_code,order_form_reference,rendered_content,commercial_snapshot,commercial_snapshot_sha256,content_sha256,issued_at')
+    .select('id,tenant_id,commercial_order_id,order_form_template_version_id,template_version_code,order_form_reference,rendered_content,commercial_snapshot,commercial_snapshot_sha256,content_sha256,required_master_agreement_version_id,issued_at')
     .eq('tenant_id', input.tenantId).eq('id', input.orderFormId).single();
   if (formError || !form) throw new Error(formError?.message ?? 'Order Form not found');
+  // C2 purchases use the Master version frozen when this Order Form was issued.
+  // C1 remains bound to the current Master for review until a historical
+  // confirmed package is deliberately selected for an executed PDF.
+  const pinnedMasterId = cleanUuid(form.required_master_agreement_version_id);
+  const requiredMasterId = pinnedMasterId ?? currentMasterId;
 
   const { data: confirmation } = await admin.from('sellertray_order_form_confirmations')
     .select('id,agreement_package_id,confirmed_legal_name,confirmed_role,confirmed_at,confirmed_by_user_id,package_fingerprint')
@@ -280,7 +285,7 @@ async function ensureAgreementArtifact(input: {
 
   const { data: currentAcceptance } = await admin.from('sellertray_master_agreement_acceptances')
     .select('id,agreement_version_id,accepted_legal_name,accepted_role,accepted_at,accepted_by_user_id,request_evidence')
-    .eq('tenant_id', input.tenantId).eq('agreement_version_id', currentMasterId).maybeSingle();
+    .eq('tenant_id', input.tenantId).eq('agreement_version_id', requiredMasterId).maybeSingle();
 
   let packageId: string | null = null;
   if (!input.preferCurrentMaster && currentAcceptance) {
@@ -290,20 +295,24 @@ async function ensureAgreementArtifact(input: {
       const { data: evidencePackage } = await admin.from('sellertray_agreement_packages')
         .select('id,order_form_id,master_agreement_version_id')
         .eq('tenant_id', input.tenantId).eq('id', packageId).maybeSingle();
-      if (!evidencePackage || evidencePackage.order_form_id !== input.orderFormId) packageId = null;
+      if (!evidencePackage || evidencePackage.order_form_id !== input.orderFormId
+        || (pinnedMasterId && evidencePackage.master_agreement_version_id !== pinnedMasterId)) packageId = null;
     }
   }
   if (!packageId && !input.preferCurrentMaster && confirmation?.agreement_package_id) packageId = confirmation.agreement_package_id;
   if (!packageId) packageId = await rpc<string>('create_sellertray_agreement_package', {
     p_tenant_id: input.tenantId,
     p_order_form_id: input.orderFormId,
-    p_master_agreement_version_id: currentMasterId,
+    p_master_agreement_version_id: requiredMasterId,
   });
 
   const { data: packageRow, error: packageError } = await admin.from('sellertray_agreement_packages')
     .select('id,tenant_id,master_agreement_version_id,package_fingerprint,manifest,created_at')
     .eq('tenant_id', input.tenantId).eq('id', packageId).single();
   if (packageError || !packageRow) throw new Error(packageError?.message ?? 'Agreement Package not found');
+  if (pinnedMasterId && packageRow.master_agreement_version_id !== pinnedMasterId) {
+    throw new Error('The Agreement Package does not match the Master Agreement version required by this Order Form');
+  }
 
   const { data: master, error: masterError } = await admin.from('sellertray_master_agreement_versions')
     .select('id,version_code,title,content_body,content_sha256,effective_from')
