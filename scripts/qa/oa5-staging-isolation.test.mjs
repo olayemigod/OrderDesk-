@@ -7,7 +7,8 @@ const productionUrl = 'https://' + 'p'.repeat(20) + '.supabase.co';
 const stagingUrl = 'https://' + 's'.repeat(20) + '.supabase.co';
 const productionKey = 'sb_publishable_' + 'p'.repeat(25);
 const stagingKey = 'sb_publishable_' + 's'.repeat(25);
-const valid = { productionUrl, productionKey, qaUrl: stagingUrl, qaKey: stagingKey, stagingUrl, stagingKey };
+const valid = { productionUrl, productionKey, qaUrl: stagingUrl, qaKey: stagingKey, stagingUrl, stagingKey,
+  productionAndroidPackage:'ng.processedge.sellertray', qaAndroidPackage:'ng.processedge.sellertray.qa', qaAndroidName:'SellerTray QA' };
 
 test('accepts isolated and correctly bound synthetic staging configuration', () => {
   const r = verifyStagingIsolation(valid);
@@ -71,4 +72,25 @@ test('does not leak protected keys when rejecting current production-bound QA pr
   assert.match(result.stderr,/BLOCKED/);
   assert.doesNotMatch(result.stderr,/sb_publishable_/);
   assert.match(result.stderr,/QA app configuration still targets production/);
+});
+
+test('fails closed when QA APK would replace the installed production Android app', () => {
+  const samePackage = verifyStagingIsolation({
+    ...valid, qaAndroidPackage:'ng.processedge.sellertray',
+  });
+  assert.equal(samePackage.ok, false);
+  assert.match(samePackage.errors.join('\\n'), /production app replacement is forbidden/);
+});
+
+test('fails closed when QA identity is not visibly different from the live app', () => {
+  const productionName = verifyStagingIsolation({...valid, qaAndroidName:'SellerTray'});
+  assert.equal(productionName.ok, false);
+});
+
+test('target-only does not pretend to verify native Android application identity', () => {
+  const result = verifyStagingIsolation({
+    ...valid, qaAndroidPackage:'ng.processedge.sellertray',
+    qaAndroidName:'SellerTray', targetOnly:true
+  });
+  assert.equal(result.ok, true);
 });
