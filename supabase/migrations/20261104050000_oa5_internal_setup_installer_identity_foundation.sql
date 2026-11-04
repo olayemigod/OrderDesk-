@@ -195,6 +195,8 @@ declare
   v_current public.sellertray_internal_setup_staff%rowtype;
   v_existing public.sellertray_internal_setup_staff_events%rowtype;
   v_target text:=lower(btrim(coalesce(p_status,'')));
+  v_expected_event_type text:=case lower(btrim(coalesce(p_status,'')))
+    when 'active' then 'activated' when 'suspended' then 'suspended' else 'revoked' end;
 begin
   if p_actor_user_id is null or p_staff_user_id is null or p_command_id is null
      or v_target not in ('active','suspended','revoked')
@@ -209,8 +211,7 @@ begin
   select * into v_existing from public.sellertray_internal_setup_staff_events where command_id=p_command_id;
   if found then
     if v_existing.actor_user_id<>p_actor_user_id or v_existing.staff_user_id<>p_staff_user_id
-       or v_existing.event_type<>case v_target when 'active' then 'activated'
-          when 'suspended' then 'suspended' else 'revoked' end
+       or v_existing.event_type<>v_expected_event_type
        or v_existing.reason<>btrim(p_reason) then
       raise exception 'Installer status command already used for different facts' using errcode='23505';
     end if;
