@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.19"
+  version: "0.1.20"
   status: governing
 ---
 
@@ -504,6 +504,9 @@ Receipt copy rules:
 9. Initial Branch setup must allow an authorised Owner/Manager to create a register, assign/configure a Bluetooth printer and receipt-copy profile, and complete a real hardware test print **before** subscription activation; these preparation writes must not unlock selling, shifts, payments or stock posting.
 10. ProcessEdge field installers must use a distinct Branch/appointment-scoped, time-limited, audited setup permission with verified Admin capability and AAL2. Never impersonate merchants or bypass tenant/device checks.
 11. New setup readiness must link canonical same-Branch register/printer and successful test-print evidence **before** readiness, plus signed equipment handover; historical readiness evidence is immutable. Early appointment completion requires approved recorded exception or rescheduling evidence.
+
+12. A purchased setup Branch may still have `branches.is_active=false` before merchant activation. During genuine pre-C2 Business preparation, an authorised merchant Owner/Manager with device capability may configure registers, printers and print test receipts **only** when the Branch appears on a purchased `branch_setup` line. This setup-only allowance must not modify `sellertray_user_can_operate_branch`, expose an inactive Branch in operational POS/stock/payments, permit commercial receipts or apply to other tenants/retired/suspended Businesses.
+13. Merchant Web Branch management and Mobile's dedicated Printer workspace must expose the scoped setup Branch and its devices without switching the app-wide operational Branch. Server-verified native test-print success is required before new readiness; a checked form box cannot substitute for the print-job state. Early appointment completion is an explicit, audited override reason; no invisible advance completion.
 
 Critical invariant:
 

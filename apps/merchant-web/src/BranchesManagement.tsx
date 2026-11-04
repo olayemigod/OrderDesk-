@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import BranchRegistersManagement from './BranchRegistersManagement';
+import DevicesPrintersManagement from './DevicesPrintersManagement';
 import { SellerTrayInput } from './SellerTrayElements';
 import { errorMessage, supabase } from './supabase';
 
 type Branch = { id: string; code: string; name: string; isDefault: boolean; isActive: boolean; createdAt: string };
 type BranchDraft = { code: string; name: string; isDefault: boolean; isActive: boolean };
-type BranchTab = 'overview' | 'registers';
+type BranchTab = 'overview' | 'registers' | 'printers';
 const EMPTY_BRANCH: BranchDraft = { code: '', name: '', isDefault: false, isActive: true };
 
 export default function BranchesManagement({ tenantId, onBranchesChanged }: { tenantId: string; onBranchesChanged?: () => void | Promise<void> }) {
@@ -93,6 +94,7 @@ export default function BranchesManagement({ tenantId, onBranchesChanged }: { te
       <div className="management-tabs" role="tablist" aria-label={`${selected.name} management`}>
         <button type="button" role="tab" aria-selected={activeTab === 'overview'} className={activeTab === 'overview' ? 'active' : ''} onClick={() => setActiveTab('overview')}>Branch Overview</button>
         <button type="button" role="tab" aria-selected={activeTab === 'registers'} className={activeTab === 'registers' ? 'active' : ''} onClick={() => setActiveTab('registers')}>Registers</button>
+        <button type="button" role="tab" aria-selected={activeTab === 'printers'} className={activeTab === 'printers' ? 'active' : ''} onClick={() => setActiveTab('printers')}>Devices & Printers</button>
       </div>
       {activeTab === 'overview' ? <form className="panel form-stack" onSubmit={save}>
         <div><p className="eyebrow">Branch details</p><h3>{selected.name}</h3><p className="muted">Branch identity is shared by sales, inventory, purchasing, cash, permissions and reporting.</p></div>
@@ -101,7 +103,9 @@ export default function BranchesManagement({ tenantId, onBranchesChanged }: { te
         <label className="check-row"><SellerTrayInput type="checkbox" checked={draft.isDefault} onChange={(event) => setDraft((current) => ({ ...current, isDefault: event.target.checked }))} /><span>Default Branch</span></label>
         <label className="check-row"><SellerTrayInput type="checkbox" checked={draft.isActive} onChange={(event) => setDraft((current) => ({ ...current, isActive: event.target.checked }))} /><span>Active</span></label>
         <div className="topbar-actions"><button className="primary-button" disabled={saving}>{saving ? 'Saving' : 'Save Branch'}</button><button type="button" className="secondary-button" onClick={startNew}>Add another</button></div>
-      </form> : <BranchRegistersManagement tenantId={tenantId} branchId={selected.id} branchName={selected.name} />}
+      </form> : activeTab === 'registers'
+        ? <BranchRegistersManagement tenantId={tenantId} branchId={selected.id} branchName={selected.name} />
+        : <DevicesPrintersManagement tenantId={tenantId} branchId={selected.id} branchName={selected.name} />}
     </div> : <form className="panel form-stack" onSubmit={save}>
       <div><p className="eyebrow">New Branch</p><h3>Add Branch</h3><p className="muted">Create the Branch first, then manage its sales registers from Branch detail.</p></div>
       <label>Branch name<SellerTrayInput value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} maxLength={120} required /></label>
