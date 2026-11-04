@@ -129,6 +129,39 @@ Deno.serve(async (request) => {
     }
   }
 
+  if (action === 'submit_handover') {
+    // Only the bearer-verified AAL2 identity can submit to the same exact
+    // appointment that owns the immutable printed-test binding.
+    const tenantId = cleanUuid(body.tenantId);
+    const branchId = cleanUuid(body.branchId);
+    const appointmentId = cleanUuid(body.appointmentId);
+    const printerId = cleanUuid(body.printerId);
+    const testJobId = cleanUuid(body.testJobId);
+    const condition = cleanField(body.handoverCondition, 2, 500);
+    const recipient = cleanField(body.receivedBy, 2, 200);
+    const acknowledgement = cleanField(body.acknowledgement, 2, 1000);
+    const reason = cleanReason(body.reason);
+    const commandKey = cleanField(body.commandKey, 12, 128);
+    if (!tenantId || !branchId || !appointmentId || !printerId || !testJobId
+      || !condition || !recipient || !acknowledgement || !reason || !commandKey) {
+      return json({ error: 'Assigned appointment, successful print and handover details are required' }, 400);
+    }
+    try {
+      const result = await rpc<JsonRecord>('platform_installer_submit_handover', {
+        p_actor_user_id: identity.userId,
+        p_tenant_id: tenantId, p_branch_id: branchId,
+        p_appointment_id: appointmentId, p_printer_id: printerId,
+        p_test_job_id: testJobId, p_handover_condition: condition,
+        p_received_by: recipient, p_acknowledgement: acknowledgement,
+        p_reason: reason, p_command_key: commandKey,
+      });
+      return json({ ...result, status: 'pending_admin_review' });
+    } catch (cause) {
+      const error = cause instanceof Error ? cause.message : 'Unable to record handover';
+      return json({ error }, /authority|access|assignment|permission/i.test(error) ? 403 : 409);
+    }
+  }
+
   // A merchant user or an installer must never be able to grant themselves
   // an internal identity/role or assign/revoke their own appointment.
   const tenantId = cleanUuid(body.tenantId);
@@ -340,6 +373,11 @@ function cleanEmail(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const email = value.trim().toLowerCase();
   return email.length >= 5 && email.length <= 320 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null;
+}
+function cleanField(value: unknown, minimum: number, maximum: number): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length >= minimum && trimmed.length <= maximum ? trimmed : null;
 }
 function cleanReason(value: unknown): string | null {
   if (typeof value !== 'string') return null;
