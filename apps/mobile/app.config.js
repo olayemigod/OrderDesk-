@@ -71,7 +71,8 @@ function qaConfiguration({ config }, env = process.env, testEvidence = undefined
   return {
     ...config,
     name: 'SellerTray QA',
-    slug: 'sellertray-qa',
+    // The QA Android app has its own package but shares the existing EAS project.
+    slug: config.slug,
     scheme: ['sellertray-qa'],
     android: {
       ...config.android,
