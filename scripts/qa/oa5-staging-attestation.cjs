@@ -23,8 +23,13 @@ function attestationIsValid(a) {
     && /^[0-3][0-9][/][01][0-9][/]20[0-9]{2}$/.test(a.approved_at)
     && REQUIRED.every(key => a[key] === true);
 }
+function stagingBackendApproved(a, endpoint) {
+  if (!attestationIsValid(a) || typeof endpoint !== 'string') return false;
+  const match = /^https:\/\/([a-z0-9]{20})\.supabase\.co$/.exec(endpoint);
+  return match?.[1] === a.approved_staging_project_ref;
+}
 function reusedTestProjectApproved(a, endpoint) {
   return endpoint === 'https://' + AGREEMENT_REF + '.supabase.co'
-    && attestationIsValid(a) && a.approved_staging_project_ref === AGREEMENT_REF;
+    && stagingBackendApproved(a, endpoint);
 }
-module.exports = { attestationIsValid, reusedTestProjectApproved };
+module.exports = { attestationIsValid, stagingBackendApproved, reusedTestProjectApproved };
