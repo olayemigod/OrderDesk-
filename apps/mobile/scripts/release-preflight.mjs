@@ -235,9 +235,12 @@ requireValue(sendAuthEmailFunction.includes('Confirm your SellerTray email'), 'A
 requireValue(sendAuthEmailFunction.includes('Reset your SellerTray password'), 'Auth email hook recovery subject must be SellerTray-branded');
 
 const authGate = read(join(mobileRoot, 'src/components/AuthGate.tsx'));
-requireValue(authGate.includes('return `sellertray://'), 'Auth redirects must be generated with sellertray://');
-requireValue(authGate.includes("url.startsWith('sellertray://')"), 'AuthGate must accept sellertray://');
-requireValue(authGate.includes("url.startsWith('orderdesk://')"), 'AuthGate must retain legacy orderdesk:// compatibility');
+const nativeAuthScheme = read(join(mobileRoot, 'src/domain/nativeAuthScheme.ts'));
+requireValue(authGate.includes('nativeAuthRedirectUrl(path, Constants.expoConfig)'), 'Auth redirects must use resolved native app identity');
+requireValue(authGate.includes('isNativeSellerTrayAuthUrl(url, Constants.expoConfig)'), 'AuthGate must accept callbacks for the installed app only');
+requireValue(nativeAuthScheme.includes("['sellertray', 'orderdesk']"), 'Production Auth must retain current sellertray and legacy orderdesk schemes');
+requireValue(nativeAuthScheme.includes("const QA_SCHEME = 'sellertray-qa'"), 'QA Auth must use its distinct sellertray-qa scheme');
+requireValue(nativeAuthScheme.includes("if (isQA) return declared.includes(QA_SCHEME) ? [QA_SCHEME] : [];"), 'QA must never accept Production Auth deep links');
 requireValue(authGate.includes("__DEV__ && Platform.OS !== 'web'"), 'Manual recovery URL fallback must remain development-only');
 
 const provisionedApp = read(join(mobileRoot, 'src/ProvisionedApp.tsx'));
