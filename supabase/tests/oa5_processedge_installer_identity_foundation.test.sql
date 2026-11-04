@@ -431,6 +431,22 @@ select extensions.ok(
   'Handover evidence remains server-only until verified installer transport is wired'
 );
 
+select extensions.ok(
+  jsonb_array_length(public.platform_admin_list_installer_handovers(
+    f.admin_id,f.tenant_id))=1,
+  'Admin handover review returns bounded real evidence for the selected Business'
+) from oa5_installer_fixture f;
+select extensions.throws_ok(
+  $test$select public.platform_admin_list_installer_handovers(
+    f.support_id,f.tenant_id) from oa5_installer_fixture f$test$,
+  '42501',null::text,'ProcessEdge Support cannot bypass Admin installer evidence review'
+);
+select extensions.ok(
+  jsonb_array_length(public.platform_admin_list_installer_handovers(
+    f.admin_id,gen_random_uuid()))=0,
+  'An unrelated Business cannot expose another Branch handover submission'
+) from oa5_installer_fixture f;
+
 select set_config('request.jwt.claims','',true);
 select set_config('request.jwt.claim.sub','',true);
 
