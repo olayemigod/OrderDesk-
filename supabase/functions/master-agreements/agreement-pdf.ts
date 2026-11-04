@@ -1,6 +1,7 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'npm:pdf-lib@1.17.1';
 import { extractText, getDocumentProxy } from 'npm:unpdf@1.9.1';
 import { formatOrderFormInstallmentDueDate } from './installment-due-date.mjs';
+import { formatAgreementDate, formatAgreementDateTime } from './agreement-date-display.mjs';
 
 export type MasterSourceDocument = {
   filename: string;
@@ -154,7 +155,7 @@ function drawCover(page: PDFPage, regular: PDFFont, bold: PDFFont, input: Agreem
     ['Order Form', input.orderForm.reference],
     ['Master Agreement', `Version ${input.masterAgreement.versionCode}`],
     ['Package reference', shortHash(input.packageFingerprint, 24)],
-    ['Prepared', formatDate(input.generatedAt)],
+    ['Prepared', formatAgreementDateTime(input.generatedAt)],
   ] as const;
   for (const [label, value] of facts) {
     page.drawText(label.toUpperCase(), { x: 55, y, size: 8, font: bold, color: GREEN });
@@ -202,7 +203,7 @@ function drawOrderForm(doc: PDFDocument, regular: PDFFont, bold: PDFFont, input:
     ['Business email', stringValue(merchant.business_email) || '—'],
     ['Business phone', stringValue(merchant.business_phone) || '—'],
     ['Commercial order', stringValue(snapshot.order_reference) || '—'],
-    ['Order date', formatDate(stringValue(snapshot.ordered_at))],
+    ['Order date', formatAgreementDate(stringValue(snapshot.ordered_at))],
     ['Order total', money(numberValue(snapshot.total_gross_amount), stringValue(snapshot.currency) || 'NGN')],
     ['Approved adjustments', money(numberValue(settlement.approvedAdjustmentAmount), stringValue(snapshot.currency) || 'NGN')],
     ['Current amount due', money(numberValue(settlement.netAmountDue), stringValue(snapshot.currency) || 'NGN')],
@@ -315,7 +316,7 @@ function drawBranchCommitmentSchedules(
       // Some approved versioned templates have NO calendar due-date rule.
       // Reproduce that absence honestly, instead of fabricating a deadline
       // or refusing to render an otherwise valid reviewed/legal commitment.
-      const dueDateLabel = formatOrderFormInstallmentDueDate(installment.dueAt, formatDate);
+      const dueDateLabel = formatOrderFormInstallmentDueDate(installment.dueAt, formatAgreementDate);
       if (y < 87) {
         page = doc.addPage(A4);
         y = drawSectionHeader(page, bold, 'MERCHANT ORDER FORM', 'Branch installments (continued)');
@@ -370,8 +371,8 @@ function drawExecutionCertificate(doc: PDFDocument, page: PDFPage, regular: PDFF
   const rows: [string, string][] = [
     ['Business representative', confirmation.confirmedLegalName],
     ['Merchant authority', roleLabel(confirmation.confirmedRole)],
-    ['Master Agreement accepted', formatDate(acceptance.acceptedAt)],
-    ['Order Form confirmed', formatDate(confirmation.confirmedAt)],
+    ['Master Agreement accepted', formatAgreementDateTime(acceptance.acceptedAt)],
+    ['Order Form confirmed', formatAgreementDateTime(confirmation.confirmedAt)],
     ['Master acceptance actor', acceptance.acceptedByUserId],
     ['Order Form confirmation actor', confirmation.confirmedByUserId],
     ['Package fingerprint', input.packageFingerprint],
@@ -388,7 +389,7 @@ function drawExecutionCertificate(doc: PDFDocument, page: PDFPage, regular: PDFF
   page.drawText(confirmation.confirmedLegalName, { x: 74, y: y - 39, size: 18, font: italic, color: NAVY, maxWidth: 440 });
   page.drawLine({ start: { x: 74, y: y - 58 }, end: { x: 315, y: y - 58 }, thickness: 1, color: SLATE });
   page.drawText('Authenticated electronic signature', { x: 74, y: y - 76, size: 8.5, font: regular, color: SLATE });
-  page.drawText(formatDate(confirmation.confirmedAt), { x: 74, y: y - 91, size: 8.5, font: regular, color: SLATE });
+  page.drawText(formatAgreementDateTime(confirmation.confirmedAt), { x: 74, y: y - 91, size: 8.5, font: regular, color: SLATE });
 
   page.drawText('The typed signature is presentation. Legal evidence is the authenticated identity, merchant authority, immutable hashes, package fingerprint, command evidence and server timestamps.', {
     x: 55, y: 52, size: 8.2, font: regular, color: SLATE, maxWidth: 485, lineHeight: 11,
@@ -452,10 +453,6 @@ function stringValue(value: unknown): string { return typeof value === 'string' 
 function numberValue(value: unknown): number { const parsed = typeof value === 'number' ? value : Number(value); return Number.isFinite(parsed) ? parsed : 0; }
 function shortHash(value: string, length: number) { return value.replace(/[^0-9a-f]/gi, '').slice(0, length); }
 function roleLabel(value: string) { return value === 'owner' ? 'Business Owner' : value === 'manager' ? 'Authorised Manager' : value; }
-function formatDate(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Africa/Lagos' }).format(date);
-}
 function money(value: number, currency: string) {
   // Standard Helvetica only supports WinAnsi; the NGN currency symbol is not
   // encodable. Use the currency code so every reviewed amount remains legible.
