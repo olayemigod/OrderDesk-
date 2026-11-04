@@ -10,19 +10,21 @@ import { executePreparedPrintJob } from '../printing/printExecutor';
 import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
-type Props={tenantId:string;branch:CommerceBranch;activeShift:CashShift|null;onClose:()=>void};
+type Props={tenantId:string;branch:CommerceBranch;activeShift:CashShift|null;onClose:()=>void;installerAppointmentId?:string|null};
 type DeviceSetupBranch={id:string;name:string;isActive:boolean};
 const NO_CAPABILITIES:PrintingCapabilities={canPrintReceipt:false,canManageDevices:false};
 const COPY_TYPES:{type:ReceiptCopyType;label:string}[]=[{type:'customer',label:'Customer Copy'},{type:'store',label:'Store Copy'},{type:'audit',label:'Audit Copy'},{type:'accounts',label:'Accounts Copy'},{type:'dispatch',label:'Dispatch Copy'},{type:'production',label:'Production Copy'},{type:'custom',label:'Custom'}];
 const DEFAULT_COPY:ReceiptCopyDefinition={type:'customer',label:'Customer Copy',sortOrder:1};
 
-export function PrinterWorkspace({tenantId,branch,activeShift,onClose}:Props){
+export function PrinterWorkspace({tenantId,branch,activeShift,onClose,installerAppointmentId}:Props){
  const appearance=useSellerTrayAppearance();const dark=appearance.dark;
  const deviceEditEpoch=useRef(0);
  const[deviceBranchId,setDeviceBranchId]=useState(branch.id);
  const[deviceBranches,setDeviceBranches]=useState<DeviceSetupBranch[]>([{id:branch.id,name:branch.name,isActive:true}]);
  const deviceBranch=deviceBranches.find(row=>row.id===deviceBranchId)??deviceBranches[0];
  const[registers,setRegisters]=useState<CashRegister[]>([]);const[registerReloadKey,setRegisterReloadKey]=useState(0);const[registerId,setRegisterId]=useState(activeShift?.registerId??'');const[printers,setPrinters]=useState<SellerTrayPrinter[]>([]);const[capabilities,setCapabilities]=useState<PrintingCapabilities>(NO_CAPABILITIES);const[pairedDevices,setPairedDevices]=useState<BluetoothPrinterDevice[]>([]);const[loading,setLoading]=useState(true);const[discovering,setDiscovering]=useState(false);const[saving,setSaving]=useState(false);const[printingId,setPrintingId]=useState<string|null>(null);const[error,setError]=useState<string|null>(null);const[notice,setNotice]=useState<string|null>(null);const[editingId,setEditingId]=useState<string|null>(null);const[deviceAddress,setDeviceAddress]=useState('');const[displayName,setDisplayName]=useState('');const[paperWidthMm,setPaperWidthMm]=useState<58|80>(58);const[isDefault,setIsDefault]=useState(true);const[isActive,setIsActive]=useState(true);const[copies,setCopies]=useState<ReceiptCopyDefinition[]>([DEFAULT_COPY]);const[merchantFooter,setMerchantFooter]=useState('');
+ const [setupRegisterCode,setSetupRegisterCode]=useState('');
+ const [setupRegisterName,setSetupRegisterName]=useState('');
  const selectedRegister=useMemo(()=>registers.find(r=>r.id===registerId)??null,[registerId,registers]);
   useEffect(()=>{
     let mounted=true;
@@ -32,6 +34,8 @@ export function PrinterWorkspace({tenantId,branch,activeShift,onClose}:Props){
     setDeviceAddress('');setDisplayName('');setPaperWidthMm(58);
     setIsDefault(true);setIsActive(true);setCopies([DEFAULT_COPY]);setMerchantFooter('');
     setDeviceBranches([{id:branch.id,name:branch.name,isActive:true}]);
+    // ProcessEdge staff never enumerate merchant-managed Branches.
+    if(installerAppointmentId)return()=>{mounted=false};
     // Management-only Branches never enter the POS switcher.
     void supabase.rpc('get_sellertray_manageable_branches',{p_tenant_id:tenantId}).then(({data,error})=>{
       if(!mounted||error||!Array.isArray(data))return;
@@ -42,7 +46,7 @@ export function PrinterWorkspace({tenantId,branch,activeShift,onClose}:Props){
       if(rows.length)setDeviceBranches(rows);
     });
     return()=>{mounted=false};
-  },[tenantId,branch.id,branch.name]);
+  },[tenantId,branch.id,branch.name,installerAppointmentId]);
   function chooseDeviceBranch(nextId:string){
     if(nextId===deviceBranchId)return;
     deviceEditEpoch.current+=1;
@@ -84,7 +88,7 @@ export function PrinterWorkspace({tenantId,branch,activeShift,onClose}:Props){
   const saveTenant=tenantId,saveBranch=deviceBranchId,saveRegister=registerId;
   setSaving(true);setError(null);setNotice(null);
   try{
-   const p=await savePrinter({tenantId:saveTenant,printerId:editingId,branchId:saveBranch,registerId:saveRegister,displayName,hardwareIdentifier:deviceAddress,paperWidthMm,isDefault,isActive});
+   const p=await savePrinter({tenantId:saveTenant,printerId:editingId,branchId:saveBranch,registerId:saveRegister,displayName,hardwareIdentifier:deviceAddress,paperWidthMm,isDefault,isActive,installerAppointmentId});
    await savePrinterReceiptSettings({tenantId:saveTenant,printerId:p.id,copyDefinitions:copies,merchantFooter});
    if(deviceEditEpoch.current!==saveEpoch)return;
    await refreshPrinters(saveTenant,saveBranch,saveRegister,saveEpoch);
@@ -94,11 +98,30 @@ export function PrinterWorkspace({tenantId,branch,activeShift,onClose}:Props){
    if(deviceEditEpoch.current===saveEpoch)setError(e instanceof Error?e.message:'Unable to save this printer.');
   }finally{setSaving(false)}
  }
- async function testPrinter(p:SellerTrayPrinter){setPrintingId(p.id);setError(null);setNotice(null);try{const job=await requestPrintJob({tenantId,printerId:p.id,jobType:'test'});await executePreparedPrintJob(tenantId,job);setNotice(`Test receipt printed on ${p.displayName}.`);}catch(e){setError(e instanceof Error?e.message:'Test print failed.')}finally{setPrintingId(null)}}
+ async function createInstallationRegister(){
+  if(!installerAppointmentId||saving||!setupRegisterCode.trim()||!setupRegisterName.trim())return;
+  const epoch=deviceEditEpoch.current;
+  setSaving(true);setError(null);setNotice(null);
+  try{
+    const {error:requestError}=await supabase.rpc('save_sellertray_register',{
+      p_tenant_id:tenantId,p_register_id:null,p_branch_id:deviceBranchId,
+      p_code:setupRegisterCode.trim().toUpperCase(),p_name:setupRegisterName.trim(),
+      p_is_default:registers.length===0,p_is_active:true,
+    });
+    if(requestError)throw requestError;
+    if(deviceEditEpoch.current!==epoch)return;
+    setSetupRegisterCode('');setSetupRegisterName('');
+    setRegisterReloadKey(value=>value+1);
+    setNotice('Branch setup register created. You can now register and test the printer.');
+  }catch(cause){
+    if(deviceEditEpoch.current===epoch)setError(cause instanceof Error?cause.message:'Unable to prepare this register.');
+  }finally{setSaving(false)}
+ }
+ async function testPrinter(p:SellerTrayPrinter){setPrintingId(p.id);setError(null);setNotice(null);try{const job=await requestPrintJob({tenantId,printerId:p.id,jobType:'test',installerAppointmentId});await executePreparedPrintJob(tenantId,job,installerAppointmentId);setNotice(`Test receipt printed on ${p.displayName}.`);}catch(e){setError(e instanceof Error?e.message:'Test print failed.')}finally{setPrintingId(null)}}
  return <View style={styles.stack}>
-  <Pressable onPress={onClose} style={styles.backRow}><Ionicons name="chevron-back" size={20} color={dark?theme.colors.cloud:theme.colors.navy}/><Text style={[styles.backText,dark&&darkStyles.titleText]}>More</Text></Pressable>
+  <Pressable onPress={onClose} style={styles.backRow}><Ionicons name="chevron-back" size={20} color={dark?theme.colors.cloud:theme.colors.navy}/><Text style={[styles.backText,dark&&darkStyles.titleText]}>{installerAppointmentId?'My Installations':'More'}</Text></Pressable>
   <View style={styles.heading}><Text style={[styles.eyebrow,dark&&darkStyles.bodyText]}>DEVICES & PRINTERS</Text><Text style={[styles.title,dark&&darkStyles.titleText]}>Receipt printers</Text><Text style={[styles.subtitle,dark&&darkStyles.bodyText]}>Connect a Bluetooth thermal printer, choose receipt copies and test printing for this branch.</Text></View>
-  {deviceBranches.length>1?<View style={styles.section}>
+  {!installerAppointmentId&&deviceBranches.length>1?<View style={styles.section}>
     <Text style={[styles.sectionLabel,dark&&darkStyles.bodyText]}>PRINTER SETUP BRANCH</Text>
     <View style={styles.chipRow}>{deviceBranches.map(b=><Pressable key={b.id}
       accessibilityRole="button" disabled={saving} onPress={()=>chooseDeviceBranch(b.id)}
@@ -113,7 +136,7 @@ export function PrinterWorkspace({tenantId,branch,activeShift,onClose}:Props){
    {!bluetoothPrintingSupported()?<View style={[styles.infoCard,dark&&darkStyles.card]}><Ionicons name="information-circle-outline" size={21} color={theme.colors.greenDark}/><Text style={[styles.infoText,dark&&darkStyles.bodyText]}>Bluetooth printing requires the installed SellerTray Android build.</Text></View>:null}
   {error?<MessageCard tone="error" text={error} dark={dark}/>:null}{notice?<MessageCard tone="success" text={notice} dark={dark}/>:null}
   {loading?<View style={[styles.emptyCard,dark&&darkStyles.card]}><ActivityIndicator/><Text style={[styles.muted,dark&&darkStyles.bodyText]}>Loading printer settings…</Text></View>:null}
-  {!loading&&!registers.length?<View style={[styles.infoCard,dark&&darkStyles.card]}>
+  {!loading&&!registers.length&&!installerAppointmentId?<View style={[styles.infoCard,dark&&darkStyles.card]}>
    <Ionicons name="information-circle-outline" size={21} color={theme.colors.greenDark}/>
    <View style={styles.flexOne}>
     <Text style={[styles.emptyTitle,dark&&darkStyles.titleText]}>Create a register before pairing a printer</Text>
@@ -122,6 +145,16 @@ export function PrinterWorkspace({tenantId,branch,activeShift,onClose}:Props){
      <Text style={styles.outlineButtonText}>Refresh registers</Text>
     </Pressable>
    </View>
+  </View>:null}
+  {installerAppointmentId&&!loading?<View style={[styles.setupCard,dark&&darkStyles.card]}>
+    <Text style={[styles.sectionTitle,dark&&darkStyles.titleText]}>Create Branch setup register</Text>
+    <Text style={[styles.helper,dark&&darkStyles.bodyText]}>Registers are prepared only for the currently assigned installation. No cashier shift or sale is opened.</Text>
+    <Field label="Register code" value={setupRegisterCode} onChange={setSetupRegisterCode} dark={dark} placeholder="REG-01"/>
+    <Field label="Register name" value={setupRegisterName} onChange={setSetupRegisterName} dark={dark} placeholder="Front Counter"/>
+    <Pressable accessibilityRole="button" disabled={saving||!setupRegisterCode.trim()||!setupRegisterName.trim()} onPress={()=>void createInstallationRegister()}
+      style={[styles.saveButton,(saving||!setupRegisterCode.trim()||!setupRegisterName.trim())&&styles.disabled]}>
+      <Text style={styles.saveButtonText}>{saving?'Saving register…':'Create setup register'}</Text>
+    </Pressable>
   </View>:null}
   {registers.length?<View style={styles.section}><Text style={[styles.sectionLabel,dark&&darkStyles.bodyText]}>REGISTER</Text><View style={styles.chipRow}>{registers.map(r=><Pressable key={r.id} disabled={saving} onPress={()=>{if(r.id===registerId)return;deviceEditEpoch.current+=1;setRegisterId(r.id);setPrinters([]);resetForm(true)}} style={[styles.chip,r.id===registerId&&styles.chipActive,dark&&darkStyles.outline]}><Text style={[styles.chipText,r.id===registerId&&styles.chipTextActive]}>{r.name}</Text></Pressable>)}</View></View>:null}
   {selectedRegister?<View style={styles.section}><Text style={[styles.sectionTitle,dark&&darkStyles.titleText]}>{selectedRegister.name}</Text>{!printers.length?<View style={[styles.emptyCard,dark&&darkStyles.card]}><Text style={[styles.emptyTitle,dark&&darkStyles.titleText]}>No printer configured</Text></View>:printers.map(p=><View key={p.id} style={[styles.printerCard,dark&&darkStyles.card]}><View style={styles.printerMain}><Ionicons name="print-outline" size={22} color={theme.colors.greenDark}/><View style={styles.flexOne}><Text style={[styles.printerName,dark&&darkStyles.titleText]}>{p.displayName}</Text><Text style={[styles.printerMeta,dark&&darkStyles.bodyText]}>{p.paperWidthMm} mm · {p.isDefault?'Default':'Additional'} · {p.isActive?'Active':'Inactive'}</Text></View></View><View style={styles.actionRow}>{capabilities.canManageDevices?<Pressable disabled={saving} onPress={()=>void editPrinter(p)} style={[styles.smallButton,saving&&styles.disabled]}><Text style={styles.smallButtonText}>Edit</Text></Pressable>:null}{capabilities.canPrintReceipt&&p.isActive?<Pressable disabled={printingId!==null} onPress={()=>void testPrinter(p)} style={[styles.testButton,printingId!==null&&styles.disabled]}><Text style={styles.testButtonText}>{printingId===p.id?'Printing…':'Test print'}</Text></Pressable>:null}</View></View>)}</View>:null}
