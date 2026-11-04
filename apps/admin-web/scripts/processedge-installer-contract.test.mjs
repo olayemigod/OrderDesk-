@@ -63,6 +63,27 @@ test('Appointment-scope access is server-only, time and revocation bounded',()=>
 });
 
 
+test('Installer hardware work stays inside appointment-scoped shared printer authority',()=>{
+  assert.match(deviceMigration,/sellertray_setup_installer_device_allowed/);
+  assert.match(deviceMigration,/auth\.uid\(\)=p_actor_user_id/);
+  assert.match(deviceMigration,/auth\.jwt\(\)->>'aal'='aal2'/);
+  assert.match(deviceMigration,/auth\.jwt\(\)->>'role'='service_role'/);
+  assert.match(deviceMigration,/sellertray_setup_installer_has_assignment/);
+  assert.match(deviceMigration,/get_sellertray_accessible_registers/);
+  assert.match(deviceMigration,/save_sellertray_register/);
+  assert.match(deviceMigration,/save_sellertray_printer_receipt_settings/);
+  assert.match(deviceMigration,/request_sellertray_print_job/);
+  assert.match(deviceMigration,/transition_sellertray_print_job/);
+  assert.match(printerEdge,/if \(!membership\)/);
+  assert.match(printerEdge,/verifiedAal2\(token\)/);
+  assert.match(printerEdge,/p_appointment_id:appointmentId/);
+  assert.match(printerEdge,/action === 'request_business_document_print'/);
+  assert.match(printerEdge,/body\.jobType === 'test'/);
+  assert.match(printerEdge,/job\?\.job_type === 'test'/);
+  assert.doesNotMatch(deviceMigration,/create or replace function public\.orderdesk_subscription_can_write/i);
+  assert.doesNotMatch(deviceMigration,/create or replace function public\.sellertray_user_can_operate_branch/i);
+});
+
 test('Installer reservations protect identity even after partial invitation delivery',()=>{
   assert.match(edge,/platform_admin_reserve_setup_installer_invitation/);
   assert.match(edge,/platform_admin_begin_setup_installer_delivery/);
