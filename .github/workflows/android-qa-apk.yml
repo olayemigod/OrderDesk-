@@ -1,24 +1,20 @@
 name: Android QA APK
 
+# Intentional, milestone-only native APK build. Every automatic PR/push APK
+# used build minutes even when a cheap source/test check was sufficient.
+# This workflow is production-compatibility QA ONLY until independent staged
+# Firebase/backend + signed APK validation are ready. Not SellerTray QA staging.
 on:
-  push:
-    branches:
-      - feat/mvp-foundation
-      - feat/sellertray-brand-ui-v1
-      - feat/sellertray-mobile-shell-v2
-      - fix/sellertray-redesign-integration
-    paths:
-      - 'package.json'
-      - 'apps/mobile/**'
-      - 'supabase/**'
-      - '.github/workflows/android-qa-apk.yml'
-  pull_request:
-    paths:
-      - 'package.json'
-      - 'apps/mobile/**'
-      - 'supabase/**'
-      - '.github/workflows/android-qa-apk.yml'
   workflow_dispatch:
+    inputs:
+      source_sha:
+        description: "Exact 40-character accepted source commit to compile"
+        required: true
+        type: string
+      acceptance_reason:
+        description: "Named human/device acceptance milestone (no secrets)"
+        required: true
+        type: string
 
 concurrency:
   group: android-qa-${{ github.ref }}
@@ -40,18 +36,36 @@ jobs:
       SELLERTRAY_ANDROID_NDK_VERSION: 27.1.12297006
 
     steps:
-      - name: Checkout exact candidate source
+      - name: Validate explicit human acceptance intent before expensive setup
+        working-directory: .
+        env:
+          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
+          ACCEPTANCE_REASON: ${{ inputs.acceptance_reason }}
+        run: |
+          if ! [[ "$EXPECTED_SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "Supply an exact 40-character commit SHA, never a moving branch reference." >&2
+            exit 1
+          fi
+          if [ -z "${ACCEPTANCE_REASON//[[:space:]]/}" ]; then
+            echo "Human/device acceptance milestone is mandatory." >&2
+            exit 1
+          fi
+          echo "This legacy Android workflow is production-bound compatibility QA, not isolated Test/Staging."
+          echo "Acceptance milestone provided; no credentials echoed."
+
+      - name: Checkout approved exact source
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ inputs.source_sha }}
 
       - name: Verify exact candidate checkout
         id: source
+        env:
+          EXPECTED_SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
-          expected="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
           actual="$(git rev-parse HEAD)"
-          if [ "$actual" != "$expected" ]; then
-            echo "SellerTray QA source mismatch: expected $expected, checked out $actual" >&2
+          if [ "$actual" != "$EXPECTED_SOURCE_SHA" ]; then
+            echo "SellerTray QA source mismatch; expected exact source SHA" >&2
             exit 1
           fi
           printf 'sha=%s\n' "$actual" >> "$GITHUB_OUTPUT"
