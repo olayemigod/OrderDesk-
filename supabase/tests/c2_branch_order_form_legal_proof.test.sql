@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(25);
+select extensions.plan(29);
 
 -- C2-7: exercise real publication, Branch order, governed Order Form issue,
 -- separately accepted Master, confirmed package and native term registration.
@@ -361,6 +361,58 @@ select extensions.is(
   from c2_legal_proof_fixture f),
  '[]'::jsonb,
  'Legacy Admin billing reader ignores a native Branch installment obligation');
+
+-- Isolate the charge-waiver predicate using governed-shaped immutable
+-- readiness/payment facts. Full OA4 tests separately cover the authorised
+-- appointment -> structured completion -> readiness writer.
+select extensions.ok(
+ (select public.sellertray_branch_requires_commercial_setup(f.tenant_id,f.branch_id,null)
+  from c2_legal_proof_fixture f),
+ 'A confirmed C2 purchase without completed setup must still charge setup');
+
+insert into public.sellertray_commercial_branch_setup_readiness(
+ tenant_id,commercial_order_id,branch_id,command_id,evidence,
+ actor_user_id,reason,ready_at
+)
+select f.tenant_id,(f.order_result->>'commercialOrderId')::uuid,f.branch_id,
+ gen_random_uuid(),jsonb_build_object('test','completed-setup-readiness-fixture'),
+ f.admin_id,'Completed setup for Branch waiver predicate regression',now()
+from c2_legal_proof_fixture f;
+
+select extensions.ok(
+ (select public.sellertray_branch_requires_commercial_setup(f.tenant_id,f.branch_id,null)
+  from c2_legal_proof_fixture f),
+ 'Completed setup without any confirmed payment cannot waive a later setup fee');
+
+insert into public.sellertray_commercial_direct_payment_confirmations(
+ tenant_id,commercial_order_id,installment_obligation_id,
+ command_id,payment_reference,payment_method,amount,currency,
+ reason,evidence,actor_user_id,paid_at
+)
+select f.tenant_id,(f.order_result->>'commercialOrderId')::uuid,
+ (f.order_result->'subjects'->0->>'installmentObligationId')::uuid,
+ gen_random_uuid(),'c2-setup-settled-'||substr(f.tenant_id::text,1,8),
+ 'bank_transfer',5000,'NGN',
+ 'Qualified Branch setup payment for regression',
+ jsonb_build_object('test','confirmed-settlement-fixture'),f.admin_id,now()
+from c2_legal_proof_fixture f;
+
+select extensions.ok(
+ (select not public.sellertray_branch_requires_commercial_setup(f.tenant_id,f.branch_id,null)
+  from c2_legal_proof_fixture f),
+ 'Confirmed purchase plus Branch readiness and sufficient settled setup amount waive repeat setup');
+
+select extensions.is(
+ (select (public.create_sellertray_c2_branch_commercial_order(
+   f.tenant_id,'NGN',jsonb_build_array(jsonb_build_object(
+     'branchId',f.branch_id,'planProfileVersionId',f.plan_version_id,
+     'billingCycle','yearly','setupRequired',false)),
+   'c2-setup-complete-'||substr(f.tenant_id::text,1,8),
+   gen_random_uuid(),'system',f.admin_id
+  )->>'totalGrossAmount')::numeric
+  from c2_legal_proof_fixture f),
+ 10000::numeric,
+ 'A later Branch purchase charges subscription only after genuine completed and paid setup evidence');
 
 select * from extensions.finish();
 rollback;
