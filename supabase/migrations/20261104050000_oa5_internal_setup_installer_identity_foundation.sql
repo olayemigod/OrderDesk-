@@ -195,9 +195,9 @@ declare
   v_current public.sellertray_internal_setup_staff%rowtype;
   v_existing public.sellertray_internal_setup_staff_events%rowtype;
   v_target text:=lower(btrim(coalesce(p_status,'')));
-  v_expected_event_type text:=case lower(btrim(coalesce(p_status,'')))
-    when 'active' then 'activated' when 'suspended' then 'suspended' else 'revoked' end;
+  v_expected_event_type text;
 begin
+  v_expected_event_type:=case when v_target='active' then 'activated' else v_target end;
   if p_actor_user_id is null or p_staff_user_id is null or p_command_id is null
      or v_target not in ('active','suspended','revoked')
      or char_length(btrim(coalesce(p_reason,''))) not between 6 and 1000 then
@@ -243,7 +243,7 @@ begin
     command_id,staff_user_id,actor_user_id,event_type,reason,details
   ) values (
     p_command_id,p_staff_user_id,p_actor_user_id,
-    case v_target when 'active' then 'activated' when 'suspended' then 'suspended' else 'revoked' end,
+    v_expected_event_type,
     btrim(p_reason),jsonb_build_object('from',v_current.status,'to',v_target)
   );
   insert into public.platform_admin_audit(actor_user_id,tenant_id,action,detail)
