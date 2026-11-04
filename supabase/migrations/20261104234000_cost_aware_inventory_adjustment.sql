@@ -103,8 +103,7 @@ begin
 
   return v_id;
 end;
-$function$
-
+$function$;
 
 revoke all on function public.record_sellertray_inventory_cost_basis_for_actor(uuid,uuid,numeric,text,text,uuid,uuid,uuid)
   from public,anon,authenticated;
