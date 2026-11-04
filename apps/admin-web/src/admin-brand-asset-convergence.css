@@ -1,0 +1,7 @@
+/* SellerTray Admin approved brand asset correction.
+ * Loaded after the historical navigation layers so the legacy Admin mark
+ * cannot win the cascade in the authenticated shell.
+ */
+.workspace-sidebar .workspace-sidebar-brand::before {
+  background-image: url('/brand/sellertray-v2-mark.svg') !important;
+}
