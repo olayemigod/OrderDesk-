@@ -26,12 +26,12 @@ test('rejects a real-looking production URL even if the QA profile also uses it'
   assert.match(r.errors.join('\n'), /Production Supabase is forbidden/);
 });
 
-test('rejects the unrelated Agreement Package Test project as a substitute for an OA5 branch', () => {
+test('rejects unrebuilt Agreement Package Test project until independently attested', () => {
   const r = verifyStagingIsolation({
     ...valid, stagingUrl:'https://iukgsukdoowvnhlfmpml.supabase.co',
   });
   assert.equal(r.ok,false);
-  assert.match(r.errors.join('\\n'), /not an OA5 staging branch/);
+  assert.match(r.errors.join('\\n'), /requires full approved staging attestation/);
 });
 
 test('rejects staging reusing production publishable key', () => {
@@ -93,4 +93,29 @@ test('target-only does not pretend to verify native Android application identity
     qaAndroidName:'SellerTray', targetOnly:true
   });
   assert.equal(result.ok, true);
+});
+
+test('can reuse the same standalone Agreement Test project after documented staged acceptance', () => {
+  const project = 'iukgsukdoowvnhlfmpml';
+  const attestation = {
+    schema_version:1,state:'approved',approved_staging_project_ref:project,
+    reviewed_source_sha:'a'.repeat(40),approved_at:'2026-11-04T20:00:00Z',
+    clean_migration_replay_verified:true,historical_agreement_evidence_archived:true,
+    restore_path_verified:true,vercel_preview_dependencies_reconciled:true,
+    test_only_auth_and_provider_config_verified:true,qa_edge_functions_deployed_and_verified:true,
+  };
+  const url = 'https://' + project + '.supabase.co';
+  const approved = verifyStagingIsolation({
+    ...valid, stagingUrl:url, qaUrl:url,
+    stagingAttestation:attestation,
+  });
+  assert.equal(approved.ok,true,approved.errors.join(', '));
+  assert.equal(verifyStagingIsolation({
+    ...valid,stagingUrl:url,qaUrl:url,
+    stagingAttestation:{...attestation,restore_path_verified:false},
+  }).ok,false);
+  assert.equal(verifyStagingIsolation({
+    ...valid,stagingUrl:productionUrl,qaUrl:productionUrl,
+    stagingAttestation:attestation,
+  }).ok,false);
 });
