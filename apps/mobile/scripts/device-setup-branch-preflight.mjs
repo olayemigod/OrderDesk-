@@ -23,6 +23,15 @@ assert.ok((workspace.match(/if\(deviceEditEpoch\.current!==saveEpoch\)return/g)?
 assert.match(workspace,/disabled=\{saving\} onPress=\{\(\)=>chooseDeviceBranch\(b\.id\)\}/);
 assert.match(workspace,/disabled=\{saving\} onPress=\{\(\)=>\{if\(r\.id===registerId\)return;/);
 assert.match(workspace,/setPrinters\(\[\]\);resetForm\(true\)/);
+assert.match(workspace,/disabled=\{saving\|\|printingId!==null\} onPress=\{\(\)=>chooseDeviceBranch\(b\.id\)\}/);
+assert.match(workspace,/disabled=\{saving\|\|printingId!==null\} onPress=\{\(\)=>\{if\(r\.id===registerId\)return;/);
+assert.match(workspace,/const testEpoch=deviceEditEpoch\.current/);
+assert.match(workspace,/const testTenant=tenantId/);
+assert.match(workspace,/if\(deviceEditEpoch\.current===testEpoch\)setNotice/);
+assert.match(workspace,/if\(deviceEditEpoch\.current===testEpoch\)setError/);
+assert.match(workspace,/if\(nextId===deviceBranchId\|\|saving\|\|printingId!==null\)return/);
+assert.match(workspace,/disabled=\{saving\|\|printingId!==null\}/);
+
 assert.match(workspace,/if\(deviceEditEpoch\.current===saveEpoch\)setError/);
 assert.match(workspace,/loadCashRegisters\(tenantId,deviceBranchId\)/);
 assert.match(workspace,/loadPrintingCapabilities\(tenantId,deviceBranchId\)/);
