@@ -2,7 +2,7 @@
 -- Each assertion runs in a disposable pgTAP transaction and rolls back.
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(21);
+select extensions.plan(23);
 
 select extensions.ok(
   position('public.sellertray_effective_uom_selling_price(p_tenant_id,v_uom.catalog_item_id,v_uom.id)' in
@@ -94,6 +94,26 @@ select extensions.is(
   (select public.sellertray_effective_uom_selling_price(gen_random_uuid(),product_id,pack_uom_id) from sellertray_uom_price_fixture),
   null::numeric, 'Price lookup does not cross Business boundaries'
 );
+
+-- An entered Stock UOM price must govern the derived price even if the
+-- legacy product-base field has not yet been synchronised.
+update public.catalog_item_uoms u set selling_price=275
+from sellertray_uom_price_fixture f
+where u.tenant_id=f.tenant_id and u.catalog_item_id=f.product_id
+  and lower(btrim(u.uom_name))='bottle';
+
+select extensions.is(
+  (select public.sellertray_effective_uom_selling_price(tenant_id,product_id,pack_uom_id) from sellertray_uom_price_fixture),
+  1650::numeric, 'Calculated alternate price uses explicit Stock UOM pricing first'
+);
+select extensions.is(
+  (select ci.price_ngn from public.catalog_items ci join sellertray_uom_price_fixture f on ci.id=f.product_id),
+  250::numeric, 'A Stock UOM override does not silently rewrite the product base field'
+);
+update public.catalog_item_uoms u set selling_price=250
+from sellertray_uom_price_fixture f
+where u.tenant_id=f.tenant_id and u.catalog_item_id=f.product_id
+  and lower(btrim(u.uom_name))='bottle';
 
 update sellertray_uom_price_fixture f set order_id=public.create_sellertray_pos_order_atomic(
   f.tenant_id,f.branch_id,null,null,'Unit price calculation QA',

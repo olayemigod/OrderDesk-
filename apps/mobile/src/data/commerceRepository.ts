@@ -199,7 +199,12 @@ export async function loadCommerceProducts(tenantId: string, options?: { include
   if (!options?.includeInactive) query = query.eq('is_active', true);
   const { data, error } = await query.order('name', { ascending: true });
   if (error) throw error;
-  return ((data ?? []) as unknown as ProductRow[]).map((row) => ({
+  return ((data ?? []) as unknown as ProductRow[]).map((row) => {
+    const stockUnitRow = (row.catalog_item_uoms ?? []).find((uom) =>
+      uom.uom_name.trim().toLowerCase() === row.stock_uom.trim().toLowerCase(),
+    );
+    const stockUnitPrice = stockUnitRow?.selling_price ?? row.price_ngn;
+    return ({
     id: row.id,
     name: row.name,
     sku: row.sku,
@@ -213,7 +218,7 @@ export async function loadCommerceProducts(tenantId: string, options?: { include
         id: uom.id,
         name: uom.uom_name,
         conversionFactor: toNumber(uom.conversion_factor) ?? 1,
-        sellingPrice: resolveSellerTrayUnitPrice(uom.selling_price, row.price_ngn, uom.conversion_factor),
+        sellingPrice: resolveSellerTrayUnitPrice(uom.selling_price, stockUnitPrice, uom.conversion_factor),
         priceIsCalculated: uom.selling_price === null,
         barcode: uom.barcode,
         allowFractional: uom.allow_fractional,
@@ -227,7 +232,8 @@ export async function loadCommerceProducts(tenantId: string, options?: { include
         if (left.conversionFactor !== right.conversionFactor) return left.conversionFactor - right.conversionFactor;
         return left.name.localeCompare(right.name);
       }),
-  }));
+    });
+  });
 }
 
 export async function createPosDraft(input: CreatePosDraftInput): Promise<string> {

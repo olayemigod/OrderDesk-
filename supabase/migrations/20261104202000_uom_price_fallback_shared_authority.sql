@@ -17,10 +17,14 @@ stable
 security invoker
 set search_path = ''
 as $$
-  select coalesce(u.selling_price, round(ci.price_ngn * u.conversion_factor, 2))
+  select coalesce(u.selling_price,
+    round(coalesce(stock.selling_price, ci.price_ngn) * u.conversion_factor, 2))
   from public.catalog_item_uoms u
   join public.catalog_items ci
     on ci.tenant_id = u.tenant_id and ci.id = u.catalog_item_id
+  left join public.catalog_item_uoms stock
+    on stock.tenant_id = ci.tenant_id and stock.catalog_item_id = ci.id
+   and lower(btrim(stock.uom_name)) = lower(btrim(ci.stock_uom))
   where u.tenant_id = p_tenant_id
     and u.catalog_item_id = p_catalog_item_id
     and u.id = p_uom_id;
