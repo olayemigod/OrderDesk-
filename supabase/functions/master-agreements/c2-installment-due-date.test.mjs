@@ -2,11 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { formatOrderFormInstallmentDueDate } from './installment-due-date.mjs';
 
-const display = (dueAt) => new Intl.DateTimeFormat('en-NG', {
-  dateStyle: 'long',
-  timeStyle: 'short',
-  timeZone: 'Africa/Lagos',
-}).format(new Date(dueAt));
+import { formatAgreementDate } from './agreement-date-display.mjs';
+
+const display = (dueAt) => formatAgreementDate(dueAt);
 
 test('governed 70/30 and 60/20/20 alternatives render without invented deadlines', () => {
   const examples = [
