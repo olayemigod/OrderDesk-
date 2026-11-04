@@ -17,7 +17,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { reusedTestProjectApproved } = require('./oa5-staging-attestation.cjs');
+const { stagingBackendApproved } = require('./oa5-staging-attestation.cjs');
 const attestationUrl = new URL('../../docs/qa/oa5-staging-backend-attestation.json', import.meta.url);
 
 
@@ -56,9 +56,8 @@ export function verifyStagingIsolation({
   // The existing standalone Agreement Test project is reusable, but ONLY after
   // archival, clean rebuild and explicit source-controlled hosted attestation.
   // It is not a staging branch of Production and is currently blocked.
-  if (staging === 'https://iukgsukdoowvnhlfmpml.supabase.co'
-      && !reusedTestProjectApproved(stagingAttestation, staging))
-    errors.push('Agreement Test project reuse requires full approved staging attestation');
+  if (staging && !stagingBackendApproved(stagingAttestation, staging))
+    errors.push('Test project requires full approved staging attestation with matching backend identity');
   if (!plausiblePublishableKey(stagingKey))
     errors.push('Provide a valid staging publishable key through protected CI secrets');
   if (typeof productionKey === 'string' && productionKey === stagingKey)
