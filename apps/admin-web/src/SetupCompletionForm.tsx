@@ -1,13 +1,42 @@
 import { useState } from 'react';
 
-export default function SetupCompletionForm({ branchName, scheduledStartAt, saving, onSubmit, onClose }: {
+type ReviewableHandover = {
+  submissionId: string;
+  evidence: Record<string, unknown>;
+};
+
+function prefillText(record: Record<string, unknown>, key: string): string {
+  return typeof record[key] === 'string' ? record[key] as string : '';
+}
+function prefillFirstEquipment(evidence: Record<string, unknown>): Record<string, unknown> {
+  const rows = Array.isArray(evidence.equipment) ? evidence.equipment : [];
+  const first = rows[0];
+  return first && typeof first === 'object' && !Array.isArray(first)
+    ? first as Record<string, unknown> : {};
+}
+
+export default function SetupCompletionForm({ branchName, scheduledStartAt, saving, handover, onSubmit, onClose }: {
   branchName: string;
   scheduledStartAt: string;
   saving: boolean;
+  handover?: ReviewableHandover | null;
   onSubmit: (evidence: Record<string, unknown>, reason: string) => Promise<boolean>;
   onClose: () => void;
 }) {
-  const [draft, setDraft] = useState({ branchConfigured: false, merchantWalkthrough: false, paired: false, printed: false, provisioning: 'supplied', identifier: '', handoverCondition: '', receivedBy: '', acknowledgement: '', earlyCompletionReason: '', reason: '' });
+  const [draft, setDraft] = useState(() => {
+    const submitted = handover?.evidence ?? {};
+    const device = prefillFirstEquipment(submitted);
+    return {
+      branchConfigured: false, merchantWalkthrough: false,
+      paired: false, printed: false,
+      provisioning: prefillText(device,'provisioning') || 'supplied',
+      identifier: prefillText(device,'identifier'),
+      handoverCondition: prefillText(device,'handoverCondition'),
+      receivedBy: prefillText(submitted,'receivedBy'),
+      acknowledgement: prefillText(submitted,'acknowledgement'),
+      earlyCompletionReason:'', reason:'',
+    };
+  });
   const isEarly = Number.isFinite(Date.parse(scheduledStartAt)) && Date.now() < Date.parse(scheduledStartAt);
   const ready = (!isEarly || draft.earlyCompletionReason.trim().length >= 12) && draft.branchConfigured && draft.merchantWalkthrough && draft.paired && draft.printed && [draft.identifier, draft.handoverCondition, draft.receivedBy, draft.acknowledgement].every((value) => value.trim().length >= 2) && draft.reason.trim().length >= 6;
   async function submit() {
@@ -17,6 +46,7 @@ export default function SetupCompletionForm({ branchName, scheduledStartAt, savi
       checklist: { branchConfigured: draft.branchConfigured, merchantWalkthrough: draft.merchantWalkthrough },
       equipment: [{ kind: 'bluetooth_printer', provisioning: draft.provisioning, identifier: draft.identifier.trim(), pairingTestResult: 'passed', testReceiptPrinted: draft.printed, handoverCondition: draft.handoverCondition.trim() }],
       receivedBy: draft.receivedBy.trim(), acknowledgement: draft.acknowledgement.trim(),
+      ...(handover?.submissionId ? { installerHandoverSubmissionId: handover.submissionId } : {}),
       ...(isEarly ? { earlyCompletionApproval: { reason: draft.earlyCompletionReason.trim() } } : {}),
     };
     if (await onSubmit(evidence, draft.reason.trim())) onClose();
@@ -24,6 +54,8 @@ export default function SetupCompletionForm({ branchName, scheduledStartAt, savi
   return <section className="workspace-panel setup-completion-form" aria-label={`Complete setup for ${branchName}`}>
     <h3>Complete setup — {branchName}</h3>
     <p>Complete the merchant handover only after the registered Branch printer has passed a real SellerTray test print. The printer identifier must match the device registered for this Branch; a checked box is not sufficient proof.</p>
+    {handover ? <p className="workspace-banner info">ProcessEdge installer evidence is loaded for review, not approved.
+      Verify the actual merchant walkthrough, physical printer pairing/test and receiving representative before checking completion boxes.</p> : null}
     <fieldset className="workspace-form-stack" disabled={saving} style={{ border: 0, padding: 0, minWidth: 0 }}>
       <div className="workspace-filter-row">
         {([['branchConfigured', 'Branch configured'], ['merchantWalkthrough', 'Merchant walkthrough completed'], ['paired', 'Printer paired successfully'], ['printed', 'Test receipt printed']] as const).map(([field, label]) => <label className="workspace-check-pill" key={field}><input type="checkbox" checked={draft[field]} onChange={(event) => setDraft({ ...draft, [field]: event.target.checked })} />{label}</label>)}
