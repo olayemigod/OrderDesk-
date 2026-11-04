@@ -295,6 +295,79 @@ select extensions.ok(
     'public.transition_sellertray_print_job(uuid,uuid,text,text,text,uuid)','EXECUTE'),
   'Authenticated client cannot forge the installer actor in service-only printer commands'
 );
+-- Existing canonical printer and test-job authorities must work under
+-- service-only calls for the assigned installer; they must never allow a
+-- receipt/business order print or duplicate the same print request.
+alter table oa5_installer_fixture
+  add column printer_id uuid,
+  add column test_job_id uuid;
+
+update oa5_installer_fixture f set printer_id=(
+  public.save_sellertray_printer(
+    f.tenant_id,null,f.branch_id,
+    (select r.id from public.sellertray_registers r
+      where r.tenant_id=f.tenant_id and r.branch_id=f.branch_id
+        and r.code='OAI-SETUP-01'),
+    'Installer Bluetooth Test Printer','OA5-INSTALLER-HW-001',
+    58,true,true,f.installer_id
+  )->>'printerId')::uuid;
+
+select extensions.ok(
+  exists(select 1 from public.sellertray_printers p
+    join oa5_installer_fixture f on f.printer_id=p.id
+    where p.branch_id=f.branch_id and p.tenant_id=f.tenant_id
+      and p.hardware_identifier='OA5-INSTALLER-HW-001'),
+  'Assigned installer configures the canonical Branch printer without merchant membership'
+);
+
+update oa5_installer_fixture f set test_job_id=(
+  public.request_sellertray_print_job(
+    f.tenant_id,f.printer_id,'test',null,
+    'oa5-installer-physical-test-01',f.installer_id
+  )->>'jobId')::uuid;
+
+select extensions.ok(
+  (public.request_sellertray_print_job(
+    f.tenant_id,f.printer_id,'test',null,
+    'oa5-installer-physical-test-01',f.installer_id
+  )->>'idempotentReplay')::boolean,
+  'Installer test print request cannot duplicate job on retry'
+) from oa5_installer_fixture f;
+
+select extensions.throws_ok(
+  $test$select public.request_sellertray_print_job(
+    f.tenant_id,f.printer_id,'receipt',gen_random_uuid(),
+    'oa5-installer-forbidden-receipt-01',f.installer_id
+  ) from oa5_installer_fixture f$test$,
+  '42501',null::text,
+  'Assigned installer cannot request any order receipt or merchant financial print'
+);
+
+select public.transition_sellertray_print_job(
+  f.tenant_id,f.test_job_id,'printing',null,null,f.installer_id
+) from oa5_installer_fixture f;
+select public.transition_sellertray_print_job(
+  f.tenant_id,f.test_job_id,'printed',null,null,f.installer_id
+) from oa5_installer_fixture f;
+
+select extensions.ok(
+  exists(select 1 from public.sellertray_print_jobs j
+    join oa5_installer_fixture f on f.test_job_id=j.id
+    where j.status='printed' and j.job_type='test'
+      and j.order_id is null and j.financial_document_id is null
+      and j.requested_by_user_id=f.installer_id),
+  'Installer native test uses the canonical printed-job evidence state machine'
+);
+select extensions.lives_ok(
+  $test$select public.assert_sellertray_setup_printer_proof(
+    f.tenant_id,f.branch_id,
+    jsonb_build_object('equipment',jsonb_build_array(
+      jsonb_build_object('kind','bluetooth_printer','identifier','OA5-INSTALLER-HW-001'))),
+    now()
+  ) from oa5_installer_fixture f$test$,
+  'OA4 readiness hardware proof recognises a real printed installer test job'
+);
+
 select set_config('request.jwt.claims','',true);
 select set_config('request.jwt.claim.sub','',true);
 
