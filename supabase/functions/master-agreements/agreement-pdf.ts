@@ -230,6 +230,15 @@ function drawOrderForm(doc: PDFDocument, regular: PDFFont, bold: PDFFont, input:
     }
   }
 
+  // Every C2 Branch's exact installment schedule is part of the immutable
+  // merchant-reviewed Order Form. Never substitute a live settlement projection
+  // after the Order Form was issued.
+  if (stringValue(snapshot.orderKind) === 'branch_commercial_v2') {
+    const result = drawBranchCommitmentSchedules(doc, page, regular, bold, snapshot, y);
+    page = result.page;
+    y = result.y;
+  }
+
   y -= 12;
   if (y < 120) { page = doc.addPage(A4); y = drawSectionHeader(page, bold, 'MERCHANT ORDER FORM', 'Legal wording'); }
   page.drawText('ORDER FORM LEGAL WORDING', { x: 55, y, size: 9, font: bold, color: NAVY });
@@ -240,6 +249,80 @@ function drawOrderForm(doc: PDFDocument, regular: PDFFont, bold: PDFFont, input:
     const result = drawWrappedText(doc, page, regular, clean, 55, y, 485, 10, 14, SLATE);
     page = result.page; y = result.y - 10;
   }
+}
+
+
+function drawBranchCommitmentSchedules(
+  doc: PDFDocument,
+  startPage: PDFPage,
+  regular: PDFFont,
+  bold: PDFFont,
+  snapshot: Record<string, unknown>,
+  startY: number,
+): { page: PDFPage; y: number } {
+  const commitments = array(snapshot.branch_commitments);
+  if (!commitments.length) throw new Error('The Branch Order Form is missing its frozen commercial commitments');
+
+  const currency = stringValue(snapshot.currency) || 'NGN';
+  let page = startPage;
+  let y = startY - 15;
+  if (y < 138) {
+    page = doc.addPage(A4);
+    y = drawSectionHeader(page, bold, 'MERCHANT ORDER FORM', 'Branch payment commitments');
+  }
+  page.drawText('BRANCH PAYMENT COMMITMENTS', { x: 55, y, size: 9.5, font: bold, color: NAVY });
+  y -= 26;
+
+  for (const item of commitments) {
+    const branch = record(item);
+    const branchId = stringValue(branch.branch_id);
+    const branchName = stringValue(branch.branch_name) || (branchId ? `Branch ${branchId}` : '');
+    const settlement = record(branch.settlement);
+    const schedule = array(settlement.schedule);
+    if (!branchName || !schedule.length) {
+      throw new Error('The Branch Order Form is missing a Branch identity or its frozen payment schedule');
+    }
+
+    if (y < 155) {
+      page = doc.addPage(A4);
+      y = drawSectionHeader(page, bold, 'MERCHANT ORDER FORM', 'Branch payment commitments (continued)');
+    }
+    const branchHeading = drawWrappedText(doc, page, bold, branchName, 55, y, 485, 10.3, 14, NAVY);
+    page = branchHeading.page; y = branchHeading.y - 4;
+    const cycle = stringValue(branch.billing_cycle) || '—';
+    const structure = stringValue(branch.installment_template_code);
+    const version = numberValue(branch.installment_template_version);
+    const details = `Billing cycle: ${cycle} | Payment schedule: ${structure || 'Selected structure'}${version > 0 ? ` (version ${version})` : ''}`;
+    const detailRow = drawWrappedText(doc, page, regular, details, 65, y, 470, 9, 13, SLATE);
+    page = detailRow.page; y = detailRow.y - 3;
+    const dueRow = drawWrappedText(
+      doc, page, regular,
+      `Branch amount due: ${money(numberValue(settlement.netAmountDue), currency)} | Setup included: ${branch.setup_required === true ? 'Yes' : 'No'}`,
+      65, y, 470, 9.1, 13, SLATE,
+    );
+    page = dueRow.page; y = dueRow.y - 5;
+
+    for (const item of schedule) {
+      const installment = record(item);
+      const sequence = numberValue(installment.sequenceNo);
+      const allocation = stringValue(installment.allocationMode);
+      const percent = numberValue(installment.percentage);
+      const portion = allocation === 'fixed' ? 'fixed installment' : `${percent}%`;
+      const dueAt = stringValue(installment.dueAt);
+      if (sequence < 1 || !dueAt) {
+        throw new Error('The Branch Order Form is missing a required installment sequence or due date');
+      }
+      if (y < 87) {
+        page = doc.addPage(A4);
+        y = drawSectionHeader(page, bold, 'MERCHANT ORDER FORM', 'Branch installments (continued)');
+      }
+      const row = `Installment ${sequence} (${portion}): ${money(numberValue(installment.amountDue), currency)} | Due: ${formatDate(dueAt)}`;
+      const rendered = drawWrappedText(doc, page, regular, row, 75, y, 455, 9.2, 13.2, SLATE);
+      page = rendered.page; y = rendered.y - 5;
+    }
+    y -= 14;
+  }
+  return { page, y };
 }
 
 function drawIntegrityPage(doc: PDFDocument, page: PDFPage, regular: PDFFont, bold: PDFFont, input: AgreementPdfInput) {
@@ -370,6 +453,8 @@ function formatDate(value: string) {
   return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('en-NG', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Africa/Lagos' }).format(date);
 }
 function money(value: number, currency: string) {
-  try { return new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 2 }).format(value); }
+  // Standard Helvetica only supports WinAnsi; the NGN currency symbol is not
+  // encodable. Use the currency code so every reviewed amount remains legible.
+  try { return `${currency.toUpperCase()} ${new Intl.NumberFormat('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`; }
   catch { return `${currency} ${value.toFixed(2)}`; }
 }
