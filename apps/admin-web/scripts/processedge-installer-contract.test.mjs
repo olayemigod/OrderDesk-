@@ -8,6 +8,7 @@ const setup = read('../src/SetupSchedulingAdministration.tsx');
 const staff = read('../src/ProcessEdgeInstallerStaffManagement.tsx');
 const edge = read('../../../supabase/functions/platform-setup-installer/index.ts');
 const migration = read('../../../supabase/migrations/20261104050000_oa5_internal_setup_installer_identity_foundation.sql');
+const exclusion = read('../../../supabase/migrations/20261104053000_oa5_installer_invitation_and_merchant_exclusion.sql');
 
 test('ProcessEdge installer management uses the existing approved setup shell',()=>{
   assert.match(setup,/import ProcessEdgeInstallerStaffManagement from '.\/ProcessEdgeInstallerStaffManagement'/);
@@ -47,4 +48,21 @@ test('Appointment-scope access is server-only, time and revocation bounded',()=>
   assert.match(migration,/prevent_sellertray_internal_setup_staff_event_mutation/);
   assert.doesNotMatch(migration,/create or replace function public\.sellertray_user_can_operate_branch/i);
   assert.doesNotMatch(migration,/create or replace function public\.orderdesk_subscription_can_write/i);
+});
+
+
+test('Installer reservations protect identity even after partial invitation delivery',()=>{
+  assert.match(edge,/platform_admin_reserve_setup_installer_invitation/);
+  assert.match(edge,/platform_admin_begin_setup_installer_delivery/);
+  assert.match(edge,/platform_admin_bind_setup_installer_invitation/);
+  assert.match(edge,/platform_admin_reconcile_setup_installer_invitation/);
+  assert.match(edge,/reconcile_invite/);
+  assert.match(exclusion,/before insert or update of user_id on public\.tenant_members/);
+  assert.match(exclusion,/before insert or update of user_id on public\.platform_admins/);
+  assert.match(exclusion,/sellertray_internal_setup_invitation_reservations/);
+  assert.match(exclusion,/get_sellertray_setup_installer_profile/);
+  assert.match(staff,/pendingInvitations/);
+  assert.match(staff,/Reconcile account/);
+  assert.match(staff,/toLocalDateTimeInput\(end\)/);
+  assert.doesNotMatch(staff,/setAssignmentExpiresAt\(end\.toISOString\(\)\.slice/);
 });
