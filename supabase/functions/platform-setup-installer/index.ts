@@ -2,7 +2,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2.115.0';
 
 type JsonRecord = Record<string, unknown>;
 type AdminAction = 'invite' | 'link_existing' | 'set_status' | 'assign' | 'revoke_assignment';
-type Action = AdminAction | 'mine' | 'staff_list' | 'profile';
+type InstallerDeviceAction = 'devices' | 'create_register' | 'register_printer' | 'request_test' | 'transition_test' | 'get_job';
+type Action = AdminAction | InstallerDeviceAction | 'mine' | 'staff_list' | 'profile';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const INVITE_REDIRECT_URL = Deno.env.get('SETUP_INSTALLER_INVITE_REDIRECT_URL') ?? '';
@@ -60,6 +61,43 @@ Deno.serve(async (request) => {
       return json({ appointments: Array.isArray(work) ? work : [] });
     } catch {
       return json({ error: 'Unable to load assigned installations' }, 400);
+    }
+  }
+
+  // The only operational commands granted to ProcessEdge Setup Installers
+  // are dedicated setup device actions. No caller-controlled Business/Branch,
+  // order, payment or subscription arguments reach the service routine.
+  // PostgreSQL derives Business/Branch from the exact active appointment,
+  // rechecks the live assignment and records idempotent/audited device facts.
+  const installerDeviceActions: InstallerDeviceAction[] = [
+    'devices','create_register','register_printer',
+    'request_test','transition_test','get_job',
+  ];
+  if (installerDeviceActions.includes(action as InstallerDeviceAction)) {
+    const appointmentId = cleanUuid(body.appointmentId);
+    if (!appointmentId) return json({ error: 'Assigned installation appointment is required' }, 400);
+    const actionCode = action === 'devices' ? 'list_devices' : action;
+    const mutating = actionCode !== 'list_devices' && actionCode !== 'get_job';
+    const commandId = mutating ? cleanUuid(body.commandId) : null;
+    const payload = body.payload;
+    if (mutating && !commandId) return json({ error: 'Installation command ID is required' }, 400);
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      return json({ error: 'Installation device details must be an object' }, 400);
+    }
+    try {
+      const result = await rpc<JsonRecord>('sellertray_installer_setup_device', {
+        p_actor_user_id: identity.userId,
+        p_appointment_id: appointmentId,
+        p_action: actionCode,
+        p_payload: payload,
+        p_command_id: commandId,
+      });
+      return json({ result });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : 'Installation device operation was denied';
+      const status = /assignment|permission|access/i.test(message) ? 403
+        : /already|different facts/i.test(message) ? 409 : 400;
+      return json({ error: message }, status);
     }
   }
 
@@ -223,7 +261,7 @@ async function verifiedIdentity(authorization: string):
   } catch { return null; }
 }
 function cleanAction(value: unknown): Action | null {
-  const allowed: Action[] = ['invite','link_existing','set_status','assign','revoke_assignment','mine','staff_list','profile'];
+  const allowed: Action[] = ['invite','link_existing','set_status','assign','revoke_assignment','mine','staff_list','profile','devices','create_register','register_printer','request_test','transition_test','get_job'];
   return allowed.find(action => action === value) ?? null;
 }
 function cleanUuid(value: unknown): string | null {
