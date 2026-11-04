@@ -96,7 +96,12 @@ create or replace function public.sellertray_setup_installer_has_assignment(
         and ap.tenant_id=a.tenant_id and ap.branch_id=a.branch_id
       join public.tenants t on t.id=a.tenant_id and t.retired_at is null
       where s.user_id=p_actor_user_id and s.staff_role='setup_installer'
-        and s.status='active' and a.tenant_id=p_tenant_id
+        and s.status='active'
+        -- A later role grant must not silently merge the ProcessEdge
+        -- installer persona into platform Admin or merchant Team authority.
+        and not exists(select 1 from public.platform_admins pa where pa.user_id=s.user_id)
+        and not exists(select 1 from public.tenant_members tm where tm.user_id=s.user_id)
+        and a.tenant_id=p_tenant_id
         and a.branch_id=p_branch_id
         and (p_appointment_id is null or a.appointment_id=p_appointment_id)
         and a.revoked_at is null and a.valid_from<=p_as_of
@@ -223,6 +228,11 @@ begin
     select 1 from auth.users u where u.id=p_staff_user_id and u.email_confirmed_at is not null
   ) then raise exception 'Verified installer email is required before activation' using errcode='23514';
   end if;
+  if v_target='active' and (
+    exists(select 1 from public.platform_admins pa where pa.user_id=p_staff_user_id)
+    or exists(select 1 from public.tenant_members tm where tm.user_id=p_staff_user_id)
+  ) then raise exception 'Installer must use a separate ProcessEdge account' using errcode='23514';
+  end if;
   update public.sellertray_internal_setup_staff set
     status=v_target,
     activated_at=case when v_target='active' then coalesce(activated_at,now()) else activated_at end,
@@ -291,8 +301,10 @@ begin
 
   select * into strict v_staff from public.sellertray_internal_setup_staff
     where user_id=p_staff_user_id for share;
-  if v_staff.status<>'active' then
-    raise exception 'Only active verified ProcessEdge installers may be assigned' using errcode='23514';
+  if v_staff.status<>'active'
+     or exists(select 1 from public.platform_admins pa where pa.user_id=p_staff_user_id)
+     or exists(select 1 from public.tenant_members tm where tm.user_id=p_staff_user_id)
+  then raise exception 'Only dedicated active ProcessEdge installers may be assigned' using errcode='23514';
   end if;
   select * into strict v_appointment from public.sellertray_commercial_setup_appointments
     where id=p_appointment_id and tenant_id=p_tenant_id for share;
