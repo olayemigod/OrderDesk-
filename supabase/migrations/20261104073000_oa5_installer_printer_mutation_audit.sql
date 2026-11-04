@@ -218,6 +218,7 @@ declare
   v_actor uuid:=auth.uid();
   v_key text:=btrim(coalesce(p_command_key,''));
   v_branch uuid;
+  v_locked_branch uuid;
   v_assignment uuid;
   v_facts jsonb;
   v_prior public.sellertray_installer_printer_commands%rowtype;
@@ -256,12 +257,10 @@ begin
   perform pg_advisory_xact_lock(hashtextextended('installer-printer:'||v_key,0));
   -- Lock exclusively after acquiring the command lock. A second caller
   -- cannot hold a shared printer lock and wait for this same command.
-  if not exists(
-    select 1 from public.sellertray_printers p
+  select p.branch_id into v_locked_branch from public.sellertray_printers p
     where p.tenant_id=p_tenant_id and p.id=p_printer_id
-      and p.branch_id=v_branch
-    for update
-  ) then
+    for update;
+  if v_locked_branch is distinct from v_branch then
     raise exception 'Printer has changed Branch during installation setup'
       using errcode='42501';
   end if;
