@@ -18,6 +18,7 @@ import './brand.css';
 import './qa-convergence.css';
 import './shell-layout.css';
 import './notifications.css';
+import './merchant-commercial-journey.css';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('SellerTray could not start.');

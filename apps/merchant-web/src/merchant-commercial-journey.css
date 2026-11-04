@@ -1,0 +1,11 @@
+/* Restore approved merchant commercial navigation using existing SellerTray tokens. */
+.commercial-journey { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; border: 1px solid var(--border); background: var(--surface); border-radius: 14px; padding: 16px; box-shadow: var(--shadow-sm); }
+.commercial-journey-copy { display: grid; gap: 5px; min-width: 0; }
+.commercial-journey-copy .eyebrow { margin: 0; }
+.commercial-journey-copy strong { color: var(--navy); font-size: .98rem; }
+.commercial-journey-copy span { color: var(--muted); font-size: .79rem; line-height: 1.4; }
+.commercial-journey-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.commercial-journey-actions .secondary-button { white-space: nowrap; }
+.commercial-journey-actions .secondary-button.active { border-color: var(--green); background: var(--mint); color: #075e39; }
+:root[data-theme="dark"] .commercial-journey-actions .secondary-button.active { background: #123829; color: #75e0aa; }
+@media (max-width: 560px) { .commercial-journey { align-items: stretch; } .commercial-journey-actions { display: grid; grid-template-columns: 1fr; width: 100%; } .commercial-journey-actions .secondary-button { width: 100%; } }
