@@ -23,6 +23,10 @@ union all select outsider_id,'report-outsider-'||outsider_id||'@example.com','au
 insert into public.tenants(id,name,slug,merchant_code,subscription_status)
 select tenant_id,'Reporting scope test','report-scope-'||tenant_id,'RST','active'
 from report_scope_fixture;
+-- Test-only tenant must have a writable subscription under CI's strict guard.
+update public.tenant_subscriptions
+set status='active', trial_ends_at=null, grace_ends_at=null
+where tenant_id=(select tenant_id from report_scope_fixture);
 update report_scope_fixture f
 set branch_id=b.id from public.branches b
 where b.tenant_id=f.tenant_id and b.is_default;
