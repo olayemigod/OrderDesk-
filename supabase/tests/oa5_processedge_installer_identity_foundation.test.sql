@@ -182,6 +182,58 @@ select extensions.ok(
   ),'Active installer may access only their assigned purchased Branch appointment'
 ) from oa5_installer_fixture f;
 
+-- Device authority is separate from selling and is bound to both verified
+-- AAL2 JWT and the same active appointment. Check both direct Mobile RPC and
+-- service-only printer command boundaries.
+select set_config('request.jwt.claim.sub',installer_id::text,true),
+       set_config('request.jwt.claims',jsonb_build_object(
+         'sub',installer_id,'role','authenticated','aal','aal1')::text,true)
+from oa5_installer_fixture;
+select extensions.ok(
+  not public.sellertray_setup_installer_device_allowed(
+    f.tenant_id,f.branch_id,f.installer_id,false),
+  'Installer AAL1 cannot inspect or configure Branch devices'
+) from oa5_installer_fixture f;
+
+select set_config('request.jwt.claims',jsonb_build_object(
+  'sub',installer_id,'role','authenticated','aal','aal2')::text,true)
+from oa5_installer_fixture;
+select extensions.ok(
+  public.sellertray_setup_installer_device_allowed(
+    f.tenant_id,f.branch_id,f.installer_id,false),
+  'Verified installer AAL2 may prepare exactly their assigned Branch devices'
+) from oa5_installer_fixture f;
+select extensions.lives_ok(
+  $test$select * from public.get_sellertray_accessible_registers(
+    f.tenant_id,f.branch_id) from oa5_installer_fixture f$test$,
+  'AAL2 assigned installer may list Branch setup registers without merchant membership'
+);
+select extensions.ok(
+  not public.sellertray_setup_installer_device_allowed(
+    f.tenant_id,gen_random_uuid(),f.installer_id,false),
+  'AAL2 does not grant unrelated Branch hardware access'
+) from oa5_installer_fixture f;
+
+select set_config('request.jwt.claims','{"role":"service_role"}',true);
+select extensions.ok(
+  public.sellertray_setup_installer_device_allowed(
+    f.tenant_id,f.branch_id,f.installer_id,true)
+  and not public.sellertray_setup_installer_device_allowed(
+    f.tenant_id,gen_random_uuid(),f.installer_id,true),
+  'Service-only printer command uses real installer assignment and Branch scope'
+) from oa5_installer_fixture f;
+select extensions.ok(
+  not has_function_privilege('authenticated',
+    'public.save_sellertray_printer(uuid,uuid,uuid,uuid,text,text,integer,boolean,boolean,uuid)','EXECUTE')
+  and not has_function_privilege('authenticated',
+    'public.request_sellertray_print_job(uuid,uuid,text,uuid,text,uuid)','EXECUTE')
+  and not has_function_privilege('authenticated',
+    'public.transition_sellertray_print_job(uuid,uuid,text,text,text,uuid)','EXECUTE'),
+  'Authenticated client cannot forge the installer actor in service-only printer commands'
+);
+select set_config('request.jwt.claims','',true);
+select set_config('request.jwt.claim.sub','',true);
+
 select extensions.ok(
   not public.sellertray_setup_installer_has_assignment(
     f.installer_id,gen_random_uuid(),f.branch_id,f.appointment_id,now()
@@ -219,6 +271,13 @@ select extensions.ok(
     f.installer_id,f.tenant_id,f.branch_id,f.appointment_id,now()
   ),'Revoked installer assignment loses Branch access immediately'
 ) from oa5_installer_fixture f;
+select set_config('request.jwt.claims','{"role":"service_role"}',true);
+select extensions.ok(
+  not public.sellertray_setup_installer_device_allowed(
+    f.tenant_id,f.branch_id,f.installer_id,true),
+  'Revocation also blocks device/printer commands immediately'
+) from oa5_installer_fixture f;
+select set_config('request.jwt.claims','',true);
 
 select extensions.ok(
   public.platform_admin_revoke_setup_installer_assignment(
