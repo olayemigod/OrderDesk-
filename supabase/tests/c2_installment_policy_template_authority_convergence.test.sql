@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(27);
+select extensions.plan(31);
 
 -- C2 schedule choices are immutable policy-version data. Legacy C1 policies
 -- retain the same table and earlier resolution contract without intermixing.
@@ -182,6 +182,42 @@ select extensions.ok(
     'public.publish_sellertray_installment_policy_v2_admin(text,uuid,uuid,uuid,text,boolean,uuid,uuid[],timestamptz,timestamptz,text,uuid,uuid)',
     'EXECUTE'),
   'Only the platform service gateway can publish a new immutable installment policy version'
+);
+
+
+-- C2's approved alternative templates do not impose a calendar due date.
+-- NULL is an intentional contractual value, not a corrupt schedule.
+-- Order Form rendering must label these honestly instead of rejecting them
+-- or fabricating due dates in an immutable issued Form.
+select extensions.is(
+  (select count(*)::integer
+   from public.sellertray_installment_schedule_template_lines l
+   join public.sellertray_installment_schedule_templates t on t.id=l.template_id
+   where t.template_code='two_installment_70_30' and t.version=1),
+  2,
+  'Published 70/30 installment structure has two allocation lines'
+);
+select extensions.ok(
+  (select bool_and(l.due_offset_days is null)
+   from public.sellertray_installment_schedule_template_lines l
+   join public.sellertray_installment_schedule_templates t on t.id=l.template_id
+   where t.template_code='two_installment_70_30' and t.version=1),
+  'Published 70/30 installments intentionally have no calendar due dates'
+);
+select extensions.is(
+  (select count(*)::integer
+   from public.sellertray_installment_schedule_template_lines l
+   join public.sellertray_installment_schedule_templates t on t.id=l.template_id
+   where t.template_code='three_installment_60_20_20' and t.version=1),
+  3,
+  'Published 60/20/20 installment structure has three allocation lines'
+);
+select extensions.ok(
+  (select bool_and(l.due_offset_days is null)
+   from public.sellertray_installment_schedule_template_lines l
+   join public.sellertray_installment_schedule_templates t on t.id=l.template_id
+   where t.template_code='three_installment_60_20_20' and t.version=1),
+  'Published 60/20/20 installments intentionally have no calendar due dates'
 );
 
 select * from extensions.finish();
