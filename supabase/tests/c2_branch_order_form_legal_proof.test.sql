@@ -84,6 +84,11 @@ insert into public.sellertray_commercial_price_versions(
 select 'subscription','branch_subscription',null,plan_version_id,null::uuid,
  'yearly','NGN',10000,'2026-01-01T00:00:00Z'::timestamptz,'published',
  'C2 legal test Branch price',admin_id,admin_id,now(),'standard'
+from c2_legal_proof_fixture
+union all
+select 'branch_setup','branch_setup',null,null,null::uuid,
+ null,'NGN',5000,'2026-01-01T00:00:00Z'::timestamptz,'published',
+ 'C2 legal test setup price',admin_id,admin_id,now(),'standard'
 from c2_legal_proof_fixture;
 
 select set_config('request.jwt.claim.role','service_role',true);
@@ -91,7 +96,7 @@ update c2_legal_proof_fixture f
 set order_result=public.create_sellertray_c2_branch_commercial_order(
   f.tenant_id,'NGN',jsonb_build_array(jsonb_build_object(
     'branchId',f.branch_id,'planProfileVersionId',f.plan_version_id,
-    'billingCycle','yearly','setupRequired',false)),
+    'billingCycle','yearly','setupRequired',true)),
   'c2-legal-'||substr(f.tenant_id::text,1,8),
   gen_random_uuid(),'system',f.admin_id);
 
@@ -157,7 +162,7 @@ begin
    (f.order_result->>'commercialOrderId')::uuid,
    (f.order_result->'subjects'->0->>'branchSubscriptionLineId')::uuid,
    (f.order_result->'subjects'->0->>'installmentObligationId')::uuid,
-   false,f.master_id,f.form_id,null,'commercial_order',
+   true,f.master_id,f.form_id,null,'commercial_order',
    jsonb_build_object('test','unconfirmed-form'),gen_random_uuid(),
    'system',f.admin_id);
  exception when sqlstate '23514' then
