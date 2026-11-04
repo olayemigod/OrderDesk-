@@ -249,9 +249,9 @@ export default function ProcessEdgeInstallationsView({
               </Pressable>
               {pairedDevices.length?pairedDevices.map(p=><Text key={p.address} style={[styles.body,dark&&styles.textSecondary]}>{p.name} · {p.address}</Text>):null}
               <Text style={[styles.helper,dark&&styles.textSecondary]}>
-                Device inspection and Bluetooth discovery are read-only. The actual register/printer setup,
-                canonical test printing and merchant handover require the appointment-scoped setup command
-                before activation can be approved.
+                Device inspection is read-only. Use Configure register & printer above for authorised
+                Branch preparation and a native test print. Final handover and appointment completion
+                require separately verified evidence before activation.
               </Text>
             </View>:null}
           </View>:null}
