@@ -24,7 +24,7 @@ function reusedTestProjectApproved(attestation, endpoint) {
       attestation.approved_staging_project_ref !== 'iukgsukdoowvnhlfmpml' ||
       !/^[0-9a-f]{40}$/.test(attestation.reviewed_source_sha || '') ||
       typeof attestation.approved_at !== 'string' ||
-      !/^\\d{4}-\\d\\d-\\d\\dT/.test(attestation.approved_at) ||
+      !/^[0-9]{4}-[0-9]{2}-[0-9]{2}T/.test(attestation.approved_at) ||
       !Number.isFinite(Date.parse(attestation.approved_at))) return false;
   return [
     'clean_migration_replay_verified',
