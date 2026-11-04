@@ -151,19 +151,40 @@ Deno.serve(async (request) => {
         || !paperWidthMm || isDefault === null || isActive === null) {
       return json({ error: 'Branch, register, printer name, Bluetooth identity and paper width are required' }, 400);
     }
-    rpcName = 'save_sellertray_printer';
-    rpcArgs = {
-      p_tenant_id: tenantId,
-      p_printer_id: printerId,
-      p_branch_id: branchId,
-      p_register_id: registerId,
-      p_display_name: displayName,
-      p_hardware_identifier: hardwareIdentifier,
-      p_paper_width_mm: paperWidthMm,
-      p_is_default: isDefault,
-      p_is_active: isActive,
-      p_actor_user_id: userId,
-    };
+    const installerKey = installerAppointmentId ? cleanText(body.requestKey,128) : null;
+    if (installerAppointmentId && (!installerKey || installerKey.length < 12)) {
+      return json({ error: 'A unique installation command is required before configuring a printer' }, 400);
+    }
+    rpcName = installerAppointmentId
+      ? 'save_sellertray_installer_printer'
+      : 'save_sellertray_printer';
+    rpcArgs = installerAppointmentId
+      ? {
+          p_actor_user_id: userId,
+          p_tenant_id: tenantId,
+          p_branch_id: branchId,
+          p_appointment_id: installerAppointmentId,
+          p_printer_id: printerId,
+          p_register_id: registerId,
+          p_display_name: displayName,
+          p_hardware_identifier: hardwareIdentifier,
+          p_paper_width_mm: paperWidthMm,
+          p_is_default: isDefault,
+          p_is_active: isActive,
+          p_command_key: installerKey,
+        }
+      : {
+          p_tenant_id: tenantId,
+          p_printer_id: printerId,
+          p_branch_id: branchId,
+          p_register_id: registerId,
+          p_display_name: displayName,
+          p_hardware_identifier: hardwareIdentifier,
+          p_paper_width_mm: paperWidthMm,
+          p_is_default: isDefault,
+          p_is_active: isActive,
+          p_actor_user_id: userId,
+        };
   } else if (action === 'request_print') {
     const printerId = cleanUuid(body.printerId);
     const jobType = body.jobType === 'receipt' || body.jobType === 'test' ? body.jobType : null;
