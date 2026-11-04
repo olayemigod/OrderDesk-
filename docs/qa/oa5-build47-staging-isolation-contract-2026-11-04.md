@@ -27,6 +27,18 @@ The read-only local check `SELLERTRAY_PRODUCTION_LAST_APPLIED_MIGRATION=<fresh l
 - Test physical Android on 58mm/80mm Bluetooth printers, retry and failed-print state, immutable successful print-job provenance, Merchant/ProcessEdge separate roles, appointment expiration/revocation, Branch isolation, setup-completion signature and activation reconciliation. Verify receipt customer-contact safety and optional phone.
 - Only after full QA and approved operational change control, plan a **separate production rollout**; do not merge a staging branch into production as a substitute for reviewed PR/migration sequencing. Legacy Business/trial compatibility remains authoritative until a later C2 cutover.
 
+## Side-by-side Android QA application — source prepared, build blocked
+
+The current **legacy** `qa` profile and Android Build 47 have package `ng.processedge.sellertray` and production Supabase routing. They are **not valid for Test/Staging** and could replace an existing production installation on the same phone.
+
+A separately gated `qa-staging` profile and `apps/mobile/app.config.js` now reserve Android application ID `ng.processedge.sellertray.qa`, on-device name **SellerTray QA**, scheme `sellertray-qa`, and no claim on the production `https://app.sellertray.com` invitation deep-link host. The default production app config remains unchanged. The protected staging Android build must receive `SELLERTRAY_APP_VARIANT=qa-staging`, `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `SELLERTRAY_QA_GOOGLE_SERVICES_FILE` at build time; the latter must identify an independently registered Firebase Android app for `ng.processedge.sellertray.qa`. Do not check Firebase credentials, service secrets or test recipients into the repository.
+
+The variant deliberately rejects the live project and the **unrebuilt** Agreement Package Test project; it must not be bypassed with arbitrary settings. The existing staging guard additionally requires a distinct QA Android package in its full acceptance mode. `--target-only` verifies neither QA source binding nor Android app identity. Source configuration and offline tests are **not** evidence of a generated/installed QA APK.
+
+**Build closeout gate:** configure protected staging secrets and a QA Firebase Android app after the test backend is clean and attested; run `npx expo config --type public` for the explicit variant; inspect the generated native Android applicationId and the **actual signed APK package** using Android build tooling (`aapt dump badging` or `apkanalyzer manifest application-id`), verify distinct on-device installation, auth redirect, push delivery isolation, USB/Bluetooth receipt printing and exact embedded Supabase endpoint. The test APK must never overwrite the production SellerTray app. Without physical QA build and backend acceptance, Mobile testing remains blocked.
+
+The declarative fixtures in `docs/qa/oa5-test-merchant-fixtures.json` cover three synthetic Businesses and five Branch scenarios. Validate them with `node scripts/qa/oa5-test-merchant-fixtures.mjs --check`. This command **does not** create merchants; create them only after staged infrastructure is approved using governed signup, commercial, branch, catalogue, stock, payment and installer flows.
+
 ## Operator command safety
 
 `node --test scripts/qa/oa5-staging-isolation.test.mjs` tests the boundary entirely offline.
