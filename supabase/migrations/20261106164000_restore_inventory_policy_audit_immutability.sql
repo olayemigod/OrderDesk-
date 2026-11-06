@@ -25,6 +25,12 @@ begin
 end;
 $validate$;
 
+-- Keep audit history service-only and protected even if earlier migrations
+-- granted broad DML. TRUNCATE bypasses the row-level immutability trigger.
+alter table public.branch_inventory_policy_events enable row level security;
+revoke all on table public.branch_inventory_policy_events from public, anon, authenticated;
+revoke truncate on table public.branch_inventory_policy_events from service_role;
+
 create or replace function public.prevent_sellertray_inventory_policy_event_mutation()
 returns trigger
 language plpgsql
