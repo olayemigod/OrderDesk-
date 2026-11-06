@@ -12,7 +12,7 @@ function fixture(fn) {
     files:{},restore_target:'local_disposable',restore_verified:true,
     restore_completed_utc:'2026-11-04T19:00:00Z',secrets_committed_to_git:false,
     restore_counts:{auth_users:5,businesses:3,branches:3,commercial_orders:5,
-      agreement_packages:5,order_form_confirmations:5,migration_rows:52}};
+      agreement_packages:5,order_form_confirmations:5,migration_rows:54}};
   for(const name of FILES) {
     const bytes=Buffer.from('-- synthetic SQL; no real records\nselect 1;\n');
     writeFileSync(join(dir,name),bytes);
