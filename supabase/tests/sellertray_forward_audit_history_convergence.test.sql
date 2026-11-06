@@ -65,7 +65,9 @@ create temp table audit_history_fixture (
   branch_update_denied boolean not null default false,
   branch_delete_denied boolean not null default false,
   policy_update_denied boolean not null default false,
-  policy_delete_denied boolean not null default false
+  policy_delete_denied boolean not null default false,
+  first_reset_count integer,
+  repeated_reset_count integer
 ) on commit drop;
 
 insert into audit_history_fixture(tenant_id,foreign_tenant_id,owner_id,staff_id,product_id)
@@ -200,11 +202,16 @@ select extensions.ok(
   'cross-Business Branch grants are denied without additional audit records'
 );
 
+-- Execute the mutating RPC in its own statement. PostgreSQL may reorder
+-- boolean expression evaluation, so checking row counts inside the same
+-- extensions.ok(...) call can observe pre-reset history.
+update audit_history_fixture f
+set first_reset_count=public.reset_sellertray_member_branch_access(
+  f.tenant_id,f.staff_id
+);
+
 select extensions.ok(
-  public.reset_sellertray_member_branch_access(
-    (select tenant_id from audit_history_fixture),
-    (select staff_id from audit_history_fixture)
-  )=2
+  (select first_reset_count from audit_history_fixture)=2
   and not exists (
     select 1 from public.branch_user_access bua
     where bua.tenant_id=(select tenant_id from audit_history_fixture)
@@ -213,11 +220,14 @@ select extensions.ok(
        where e.tenant_id=(select tenant_id from audit_history_fixture))=5,
   'reset records both revoked explicit assignments and restores implicit fallback'
 );
+
+update audit_history_fixture f
+set repeated_reset_count=public.reset_sellertray_member_branch_access(
+  f.tenant_id,f.staff_id
+);
+
 select extensions.ok(
-  public.reset_sellertray_member_branch_access(
-    (select tenant_id from audit_history_fixture),
-    (select staff_id from audit_history_fixture)
-  )=0
+  (select repeated_reset_count from audit_history_fixture)=0
   and (select count(*) from public.sellertray_branch_access_events e
        where e.tenant_id=(select tenant_id from audit_history_fixture))=5,
   'replaying reset is idempotent and does not manufacture history'
