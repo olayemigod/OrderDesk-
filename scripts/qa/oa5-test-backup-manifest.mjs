@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 export const TEST_REF = 'iukgsukdoowvnhlfmpml';
 export const FILES = ['roles.sql','schema.sql','data.sql','history_schema.sql','history_data.sql'];
 const counts = {auth_users:5,businesses:3,branches:3,commercial_orders:5,
-  agreement_packages:5,order_form_confirmations:5,migration_rows:52};
+  agreement_packages:5,order_form_confirmations:5,migration_rows:54};
 const validUtc = x => typeof x==='string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(x) && Number.isFinite(Date.parse(x));
 
 export function checkTestArchive(directory) {
