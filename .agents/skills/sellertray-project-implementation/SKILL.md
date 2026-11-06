@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.22"
+  version: "0.1.23"
   status: governing
 ---
 
@@ -649,6 +649,18 @@ For every SellerTray task:
 5. **Implement shared behaviour once** — put cross-channel rules in shared/domain services.
 6. **Verify** — focused tests plus relevant regression tests. A change without verification is incomplete.
 7. **Report accurately** — state what changed, what was preserved, tests run/results, migration/build/deployment requirements, limitations and the next bounded milestone. Never report planned work as completed.
+
+## Solo-maintainer review and release governance — approved 06/11/2026
+
+SellerTray presently has one developer. The owner explicitly approved replacing the **mandatory second-developer GitHub APPROVED review** with a documented **sole-maintainer exception**. This replaces a staffing requirement, **not** the actual security, database, recovery, release, or operational gates. Apply the full policy at `docs/qa/sellertray-solo-maintainer-release-governance-2026-11-06.md` to every relevant future change.
+
+1. **Do not fabricate independence.** A self-review, owner decision, Codex review or AI security analysis must never be represented as an independent human `APPROVED` review. Where one qualified human maintainer is all that is available, document `OWNER-APPROVED SOLE-MAINTAINER HUMAN-REVIEW EXCEPTION` with residual risk; prefer outside expert review for high-risk work when available.
+2. **Exact source and verifiable technical gates still apply.** Run a separate automated exact-head code review, resolve substantive findings, and run focused and applicable CI, adversarial permission/Branch tests, ledger/payment/inventory protections and cross-channel regressions. Record exact commit, hash, CI IDs and what was or was not independently checked.
+3. **High-risk Production changes require a release-specific owner go-live decision**, not only approval of the policy: frozen source and versions, approved target and change window, proven identical deployment mechanism on isolated restored data, verified backups and appropriate recovery coverage, explicit remaining risk, operator/rollback owner, read-only Production preflight, fail-closed stop conditions and post-release acceptance. Do not quietly restore a vulnerable implementation as a rollback.
+4. **Keep expensive resources intentional.** Never trigger an Android build, Vercel preview, paid Supabase branch, live provider message or unrelated backend deployment merely to produce a GitHub review status. The SQL-only PR #219 emergency fix does not require Android Build 47.
+5. **PR #219 is a scoped emergency exception, not a Production release.** The owner's 06/11/2026 approval waives its otherwise impossible second-human-review gate for the only developer, but remaining Production-safe two-migration runner, current preflight, recovery and go-live signoff must still be completed. Exact SHA is `24f03e5fd3dcccdfb85324fa771d6cf1f49c68c7`; 36/36 local security assertions and 390→392 versioned local promotion passed; Production remains unpatched as recorded in Issue #222. Do not include OA5, C2, Build 47 or historical diagnostic placeholders.
+
+If an external contractual/regulatory independent-review requirement exists, this sole-maintainer policy does not waive it. Revisit the staffing exception when a second qualified maintainer is available.
 
 ## Environment and resource economy — approved 04/11/2026
 
