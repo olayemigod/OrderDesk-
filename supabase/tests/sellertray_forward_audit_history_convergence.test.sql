@@ -2,7 +2,7 @@
 -- No test identities, orders, or historical events should be inserted in Production.
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(17);
+select extensions.plan(18);
 
 select extensions.ok(
   to_regclass('public.sellertray_branch_access_events') is not null
@@ -16,6 +16,7 @@ select extensions.ok(
   and not has_table_privilege('authenticated','public.sellertray_branch_access_events','INSERT')
   and not has_table_privilege('authenticated','public.sellertray_branch_access_events','UPDATE')
   and not has_table_privilege('authenticated','public.sellertray_branch_access_events','DELETE')
+  and not has_table_privilege('service_role','public.sellertray_branch_access_events','TRUNCATE')
   and not has_function_privilege(
     'authenticated','public.prevent_sellertray_branch_access_event_mutation()','EXECUTE'),
   'browser roles cannot read, write, or invoke Branch access event internals'
@@ -44,6 +45,10 @@ select extensions.ok(
            and t.tgfoid='public.prevent_sellertray_inventory_policy_event_mutation()'::regprocedure
            and (t.tgtype & 2)=2 and (t.tgtype & 8)=8 and (t.tgtype & 16)=16),
   'inventory low-stock policy history has active immutable UPDATE/DELETE guard'
+);
+select extensions.ok(
+  not has_table_privilege('service_role','public.branch_inventory_policy_events','TRUNCATE'),
+  'service role cannot TRUNCATE inventory policy audit events around row guards'
 );
 
 create temp table audit_history_fixture (
