@@ -2,7 +2,7 @@
 -- No test identities, orders, or historical events should be inserted in Production.
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(18);
+select extensions.plan(20);
 
 select extensions.ok(
   to_regclass('public.sellertray_branch_access_events') is not null
@@ -125,6 +125,14 @@ select extensions.is(
   2,
   'first explicit nondefault grant emits both default-fallback and new-Branch history'
 );
+select extensions.ok(
+  not exists(
+    select 1 from public.sellertray_branch_access_events e
+    where e.tenant_id=(select tenant_id from audit_history_fixture)
+      and e.actor_user_id is distinct from (select owner_id from audit_history_fixture)
+  ),
+  'permission events attribute both inherited and explicit Branch grants to the Owner'
+);
 
 select public.set_sellertray_member_branch_access(
   (select tenant_id from audit_history_fixture),
@@ -204,6 +212,15 @@ select extensions.ok(
   and (select count(*) from public.sellertray_branch_access_events e
        where e.tenant_id=(select tenant_id from audit_history_fixture))=5,
   'reset records both revoked explicit assignments and restores implicit fallback'
+);
+select extensions.ok(
+  public.reset_sellertray_member_branch_access(
+    (select tenant_id from audit_history_fixture),
+    (select staff_id from audit_history_fixture)
+  )=0
+  and (select count(*) from public.sellertray_branch_access_events e
+       where e.tenant_id=(select tenant_id from audit_history_fixture))=5,
+  'replaying reset is idempotent and does not manufacture history'
 );
 
 do $immutable$
