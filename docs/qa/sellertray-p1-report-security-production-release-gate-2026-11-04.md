@@ -2,6 +2,18 @@
 
 **Checkpoint:** 04/11/2026 (dd/mm/yyyy). **Status:** verified source correction; **PRODUCTION NOT DEPLOYED**. This is a release-preparation record, not change authorization.
 
+## 06/11/2026 sole-maintainer owner decision — review exception, NOT go-live
+
+ProcessEdge confirmed SellerTray has a **single developer** and explicitly approved replacing the required second-developer review with the governed sole-maintainer process. Full rule: [solo-maintainer release governance](sellertray-solo-maintainer-release-governance-2026-11-06.md) and the governing skill, version 0.1.23.
+
+- **Exception granted:** only the previously required additional **independent human** GitHub `APPROVED` reviewer. This is recorded as `OWNER-APPROVED SOLE-MAINTAINER HUMAN-REVIEW EXCEPTION`. It is **not** an independent human security approval and does not satisfy any external legal or contractual independent-review requirement.
+- **Exact security head:** PR #219 `24f03e5fd3dcccdfb85324fa771d6cf1f49c68c7`. The separate exact-head Codex **code review** reported no major issues; do not label it a specialist security review. Database CI `41924752086` and Mobile CI `41924752285` passed. Local negative-path authorization evidence now includes **36/36** pgTAP assertions, and the second disposable Production restoration passed a two-file version-aware `390 -> 392` migration promotion while preserving all prior 390 history rows and business aggregates.
+- **Actual Production:** the two P1 migrations have **not** been deployed; as of 06/11/2026 live has 390 ledger entries, all three vulnerable reporting routines and both exposed trigger helpers. No operational cure has been claimed.
+- **Still blocked:** final Production-safe runner must be bounded to the two exact approved SQL blobs, independently inspected/adversarially reviewed under the owner exception, and rehearsed **as the final packaged mechanism** against disposable production-compatible restored data. Full live ledger/function/grant preflight, recovery/rollback/forward-fix ownership, untested Storage API/configuration recovery gaps, and explicit scope/target/window/operator go-live approval must be documented. Any mismatch halts rollout. The 390 local historical placeholders and ledger-recovered SQL are **not** canonical deployable source.
+- Keep PR #219 draft while resource-sensitive workflows may trigger an unnecessary Android QA build; no Build 47, C2, OA5, previews or unrelated migrations.
+
+The owner's approval to **adopt the governance exception** is not the separately required authorization to **execute live Production SQL**. The original pre-release controls below remain enforceable except for the now-explicitly-waived second-person staffing gate.
+
 ## Why urgent
 
 Three authenticated-callable `SECURITY DEFINER` report RPCs run as `postgres` and historically checked `current_user <> 'postgres'` before checking the requesting merchant. That condition is false inside a postgres-owned SECURITY DEFINER function even when the caller belongs to another Business. Their report/Branch checks were effectively bypassed.
