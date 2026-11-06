@@ -1,6 +1,6 @@
 # SellerTray OA5 Test project — archive and rebuild operator handover
 
-**Verified:** 04/11/2026 (dd/mm/yyyy). **Mode:** read-only due diligence only.
+**Verified:** 04/11/2026 (dd/mm/yyyy); read-only baseline refreshed 06/11/2026. **Mode:** read-only due diligence only.
 **Approval state:** **BLOCKED**. This document is NOT a backup, a reset approval, a staging attestation or permission to deploy.
 **Source dependency:** Build 47 PR #214 (candidate `7433447b7ac84931ba320a2155207af3ff9427e0`), based on environment PR #209. Follow `ENVIRONMENTS_RESOURCES.md` and `oa5-existing-test-project-reuse-assessment-2026-11-04.md`.
 
@@ -10,7 +10,7 @@
 - **Candidate reusable standalone Test project:** `iukgsukdoowvnhlfmpml` — SellerTray Agreement Package Test, `ACTIVE_HEALTHY`, region `eu-west-1`, Postgres 17.
 - This is an independent *project*, **not** a child Supabase branch of Production. Do not claim or set `parent_project_ref` for it.
 - Neither the old `qa` APK nor its EAS profile is isolated: both point to Production and use package `ng.processedge.sellertray`. Only an attested `qa-staging` build may use independent package `ng.processedge.sellertray.qa`, nonproduction publishable key and Firebase registration.
-- The Test project still has 52 historical, agreement-specific migration ledger entries (latest `20261101203725`) and cannot be treated as canonical migration parity. **Never spoof migration versions or do a bulk production `supabase db push`.**
+- The Test project still has 54 historical, agreement-specific migration ledger entries (latest `20261104214453`) and cannot be treated as canonical migration parity. **Never spoof migration versions or do a bulk production `supabase db push`.**
 
 ## Repeatable pre-archive read-only baseline
 
@@ -19,7 +19,7 @@ The following were rechecked through the connected Supabase read-only interfaces
 | Evidence category | Current count |
 | --- | ---: |
 | Public tables / functions | 132 / 479 |
-| Applied migrations | 52 |
+| Applied migrations | 54 |
 | Synthetic/test-labelled Businesses / Branches | 3 / 3 |
 | Auth users / sessions | 5 / 5 |
 | Historical Platform Admin audit events | 14 |
@@ -53,7 +53,7 @@ After the separate Test-only SQL dumps and **actual** disposable-local restore r
 - `files` mapping exactly `roles.sql`, `schema.sql`, `data.sql`, `history_schema.sql`, `history_data.sql` to their actual `sha256` and byte sizes;
 - `restore_target: "local_disposable"`, `restore_verified: true`, `secrets_committed_to_git: false` and `restore_counts` documenting the actual restored `auth_users`, `businesses`, `branches`, `commercial_orders`, `agreement_packages`, `order_form_confirmations`, `migration_rows` counts.
 
-The read-only baseline counts at 04/11/2026 are **5, 3, 3, 5, 5, 5, 52** respectively. If the historical Test project changes, stop and refresh/review this baseline rather than falsifying the manifest.
+The read-only baseline counts at 04/11/2026 are **5, 3, 3, 5, 5, 5, 54** respectively. If the historical Test project changes, stop and refresh/review this baseline rather than falsifying the manifest.
 
 The operator may check file integrity **locally** (never upload raw SQL to CI):
 
@@ -71,7 +71,7 @@ This checker is strictly offline: it confirms the named files' checksums and pre
 | Successful restore rehearsal | NOT PROVIDED | Disposable DB report and checksum |
 | Historical agreement/PR proof retention | NOT PROVIDED | Agreement/QA operator |
 | Five Vercel preview dependencies and auth callbacks reconciled | NOT PROVIDED | Vercel project operator |
-| Explicit approval to reset/rebuild `iukgsukdoowvnhlfmpml` | **NOT GRANTED** | Product owner/release authority |
+| Explicit approval to reset/rebuild `iukgsukdoowvnhlfmpml` | **GRANTED 06/11/2026, conditional on independently verified recoverable archive and reviewed rebuild plan** | Product owner/release authority |
 | Canonical clean migration/replay and safety attestation | NOT EXECUTED | DB/release reviewer |
 | Independent Test Firebase/auth/provider sinks | NOT VERIFIED | QA/release operator |
 | Build 47 exact-source QA APK + real hardware acceptance | NOT EXECUTED | Device QA |
@@ -79,4 +79,11 @@ This checker is strictly offline: it confirms the named files' checksums and pre
 
 ## Read-only review outcome
 
-Reuse of the Agreement Test project remains the preferred **cost-conscious** design, with **no new paid Supabase project or branch required at this stage**. It is blocked on archival and explicit destructive-change approval, not on missing app source code. Existing merchants remain on Production. There has been **no** data export, destructive operation, paid resource creation, deployment, APK build or tenant mutation during this assessment.
+Reuse of the Agreement Test project remains the preferred **cost-conscious** design, with **no new paid Supabase project or branch required at this stage**. It is blocked on archival and independent archive/restore verification, not on missing app source code. Existing merchants remain on Production. There has been **no** data export, destructive operation, paid resource creation, deployment, APK build or tenant mutation during this assessment.
+
+
+## 06/11/2026 owner decision and baseline refresh
+
+The owner authorised archiving the existing Agreement Package Test evidence and rebuilding this **same Test project** as the persistent isolated Test/Staging environment. This is conditional on verifiable encrypted Test-only backup, successful disposable restore, preservation of the five historical preview dependencies and a reviewed rebuild sequence. It does not authorise any Production change, uncontrolled bulk migration, new paid Supabase resource or QA notification to real contacts. No destructive operation may proceed until the archive gate is independently attested.
+
+The Test migration ledger advanced from 52 to **54** entries because the two PR219 security migrations were recorded; read-only verification on 06/11/2026 confirms 5 Auth users, 3 Businesses, 3 Branches, 5 commercial orders, 5 Agreement Packages, 5 Order Form confirmations, 5 Auth sessions and 14 Admin audit events. The offline archive checker and its synthetic tests now require 54 migration records, not the stale 52.
