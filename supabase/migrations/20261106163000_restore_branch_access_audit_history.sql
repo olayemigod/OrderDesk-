@@ -39,6 +39,26 @@ begin
   if not exists (
     select 1 from pg_constraint c
     where c.conrelid='public.sellertray_branch_access_events'::regclass
+      and c.contype='p'
+  ) then
+    raise exception 'Branch access audit history requires an immutable primary key'
+      using errcode='23514';
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint c
+    where c.conrelid='public.sellertray_branch_access_events'::regclass
+      and c.contype='f'
+      and c.confrelid='public.tenants'::regclass
+      and c.confdeltype='c'
+  ) then
+    raise exception 'Branch access audit history must cascade only on Business retirement'
+      using errcode='23514';
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint c
+    where c.conrelid='public.sellertray_branch_access_events'::regclass
       and c.conname='sellertray_branch_access_events_branch_same_tenant'
       and c.contype='f'
       and c.confrelid='public.branches'::regclass
