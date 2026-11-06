@@ -55,6 +55,8 @@ create index if not exists sellertray_branch_access_events_member_idx
 alter table public.sellertray_branch_access_events enable row level security;
 revoke all on table public.sellertray_branch_access_events from public, anon, authenticated;
 grant all on table public.sellertray_branch_access_events to service_role;
+-- TRUNCATE bypasses row triggers and is never a governed audit-write operation.
+revoke truncate on table public.sellertray_branch_access_events from service_role;
 
 create or replace function public.prevent_sellertray_branch_access_event_mutation()
 returns trigger
