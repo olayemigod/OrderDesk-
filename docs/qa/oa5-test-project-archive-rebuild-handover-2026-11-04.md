@@ -250,8 +250,9 @@ proof that all transitively called routines lack external effects.
    secrets, recipient identifiers or private backup contents to GitHub.
 3. During the approved maintenance window, block incoming Test clients,
    external webhooks and all callback routes **before** database teardown.
-   Using the independently reviewed Test-only maintenance procedure, disable
-   or unschedule the four jobs. Read back `cron.job` and check
+   Using the independently reviewed Test-only maintenance procedure, pause
+   the four jobs reversibly via the installed `cron.alter_job` capability;
+   do **not** unschedule/delete the job definitions by default. Read back `cron.job` and check
    `cron.job_run_details` for in-flight execution; do not treat a successful
    disable command as proof that already-running jobs have stopped.
 4. Recheck Test project identity immediately before each destructive
@@ -285,3 +286,38 @@ ORDER BY j.jobname;
 **Status: pre-reset cron inventory complete; actual job quiescence and
 post-rebuild reactivation NOT performed.** No Test or Production job was
 changed in this review.
+
+### Hosted remote-reset semantics — additional STOP condition
+
+The Supabase CLI reference for [`supabase db reset`](https://supabase.com/docs/reference/cli/supabase-db-reset)
+states that a remote reset with `--linked` or `--db-url` runs SQL
+to **drop user-created entities**. It does **not** equate to replacing the
+whole hosted Supabase project. Cluster-level custom roles persist, and the
+effects on managed Auth users/sessions, Storage metadata/objects, project
+Secrets, Edge deployments, cron state, Auth URL allowlists and external
+provider callbacks require independent verification. The historical Test
+users/session/agreements must **not** be assumed cleared simply because
+canonical `public` migrations replayed successfully. A source-only CI
+replay proves neither hosted wipe completeness nor provider isolation.
+
+The installed Test `pg_cron` version exposes
+`cron.alter_job(job_id bigint, ..., active boolean DEFAULT NULL)`;
+that supports a **reversible pause** instead of losing job definitions
+through `cron.unschedule`. The read-only snapshot found exact job IDs
+1, 2, 3 and 4, four active jobs, and **no unfinished runs in the
+preceding hour**. Those observations are not maintenance-window evidence:
+recheck immediately before approved execution and wait for all in-flight
+runs to complete after pausing. Restore/recreate schedules **only**
+from the reviewed canonical Test definition after the hosted rebuild.
+The two outbound worker routines explicitly return before
+`net.http_post` when their Test runtime-configured URL is absent;
+this does not make agreement/settlement database activity inert.
+
+**Do not run remote `supabase db reset`, `supabase db push`, custom
+`DROP` scripts, `cron.alter_job` or `cron.unschedule` from this
+handover.** The reviewed operator plan must identify the exact
+hosted Test-only cleanup mechanism, its Auth/Storage/secret scope,
+a preflight identity check for project `iukgsukdoowvnhlfmpml`,
+post-reset parity probes, rollback/restore owner, protected evidence
+retention and signed authorization. None of these commands was
+executed during this documentation review.
