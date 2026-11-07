@@ -87,3 +87,130 @@ Reuse of the Agreement Test project remains the preferred **cost-conscious** des
 The owner authorised archiving the existing Agreement Package Test evidence and rebuilding this **same Test project** as the persistent isolated Test/Staging environment. This is conditional on verifiable encrypted Test-only backup, successful disposable restore, preservation of the five historical preview dependencies and a reviewed rebuild sequence. It does not authorise any Production change, uncontrolled bulk migration, new paid Supabase resource or QA notification to real contacts. No destructive operation may proceed until the archive gate is independently attested.
 
 The Test migration ledger advanced from 52 to **54** entries because the two PR219 security migrations were recorded; read-only verification on 06/11/2026 confirms 5 Auth users, 3 Businesses, 3 Branches, 5 commercial orders, 5 Agreement Packages, 5 Order Form confirmations, 5 Auth sessions and 14 Admin audit events. The offline archive checker and its synthetic tests now require 54 migration records, not the stale 52.
+
+## 07/11/2026 recovery and hosted-readiness reconciliation
+
+This section supersedes only the **as-of-04/11** evidence status above. It does
+not erase the older audit trail, expand the 06/11 conditional owner approval, or
+authorise a destructive Test rebuild. The same two-environment resource policy
+and all production/live-merchant protections remain in force.
+
+### Evidence now completed
+
+- **Encrypted Test-only recovery archive:** 49 packaged files; encrypted
+  `sellertray-test-recovery-package-oa5-20261107.tar.gz.gpg` size
+  **2,908,531 bytes**, SHA-256
+  `38b28dd9f8ef4ed35b69f85b1f97fa2f52829512f11ab1961de0a55056238616`.
+  Five Supabase CLI-style SQL exports, their per-file checksums, separately
+  captured migration history and a disposable, offline PostgreSQL 17 restore
+  were independently verified. Archive bytes and credentials stay outside Git.
+- **OneDrive-synced archive:** operator's Windows PowerShell `Get-FileHash`
+  returned `ONEDRIVE_BACKUP_CHECKSUM=PASS` for the correctly named OA5 file;
+  the earlier 2,184,506-byte package without `-oa5-` is a different archive
+  and should not be deleted or substituted. A separately, freshly downloaded
+  cloud-object checksum was not performed. The encrypted backup/restore gate
+  therefore passes locally and on the synced OneDrive copy; cloud independent
+  download proof remains distinct.
+- **Consolidated source candidate:** draft PR #228, based on Build 47 integration,
+  combines PR #226's two forward-only Branch/inventory audit-history repairs
+  and its pgTAP suite with PR #227's three recovery-manifest changes. Source
+  before this documentation update is
+  `01b3b8776c01c7f9cb1890e510de09085f84d888`.
+  Its source contains **457 uniquely versioned SQL migrations**.
+  The exact prior source HEAD passed Database CI (full disposable local
+  migration replay plus database tests), Mobile CI and OA5 isolation CI.
+  Any subsequent document-only commit needs independent source-diff confirmation;
+  do not silently carry exact-HEAD CI attribution to a different SHA.
+- **Current Test baseline, read-only recheck:** 54 historical Test migration
+  entries, 132 public tables, 479 public functions, five Auth users and five
+  Auth sessions. Agreement proof remains archived; the existing hosted Test
+  ledger is **not** the canonical 457-migration source ledger.
+
+### Integration and dependency stop gates
+
+- **Historical Vercel Previews:** the following are the five known branch-scoped
+  agreement/visual evidence dependencies (latest READY deployment at this
+  checkpoint, as returned by the Vercel API). Preserve audit/visual evidence
+  before resetting data; do not use old builds for fresh Test acceptance until
+  the compiled Supabase endpoint is independently certified.
+
+  | Surface | Historical branch | Latest READY deployment ID |
+  | --- | --- | --- |
+  | Merchant | `codex/agreement-package-oa5c-convergence` | `dpl_Cfh7oAt9nHQkdUZtbXShj7jfhMfw` |
+  | Merchant | `codex/agreement-package-architecture` | `dpl_Gh9s6Rm2dJibEKuBDDcm7jZ3bGmz` |
+  | Admin | `fix/admin-visual-baseline-oa5-convergence-20261031` | `dpl_5UfqxbGpPuQqGkSu1rU4bpCFrQWZ` |
+  | Admin | `codex/agreement-package-oa5c-convergence` | `dpl_H1suGYapnAjZR9rAKBq8WLtHu5Uo` |
+  | Admin | `codex/agreement-package-architecture` | `dpl_J9nL3wiNKyXcJEoVjbb65kUw4JnA` |
+
+- **Current Test database provider state:** read-only SQL returned **zero**
+  WhatsApp connections, private WhatsApp credential rows, inbound webhook
+  receipts, WhatsApp catalogue settings, merchant payment methods, billing
+  payment authorisations, outbound notifications, merchant notifications,
+  notification-worker invocations, runtime configuration rows and order payment
+  events. These zero counts **do not prove** external Meta, Paystack,
+  Flutterwave, email or Auth callback registrations are disconnected.
+- **Scheduled work:** four active Test cron jobs exist: Agreement Package retry,
+  merchant push retry, WhatsApp notification retry (each every minute), and
+  usage settlement preparation (daily). Review and safely quiesce/reconfigure
+  their Test-only execution as part of the explicitly reviewed cutover.
+  Zero outbound runtime configuration is only a current safeguard, not a
+  permanent reset-time guarantee.
+- **Auth and separate devices:** Hosted Test redirect allowlist, Test site URL,
+  SMTP/safe email destination, callback owner and login/logout continuity
+  need fresh operator proof. Mandatory native return routes are
+  `sellertray-qa://auth-confirm` and
+  `sellertray-qa://reset-password`, never a Production auth redirect.
+  A separately registered QA Firebase app for
+  `ng.processedge.sellertray.qa` is required before a QA APK. Existing
+  `qa`/Build 47 Android is Production-bound.
+- **External integrations and secrets:** Test-only Meta/payment/API/email
+  secrets, callback registrations, signing/verifier configuration and controlled
+  notification sinks must be inventoried by the credential owners. Never read
+  secrets into Git or a PR, copy live Meta/PSP/OpenAI credentials by convenience,
+  or activate real-customer messages and payments for staging. Existing Test
+  has only five agreement-scoped Edge Functions; operational
+  WhatsApp/payment/parser/installer/printer functions are not yet deployed.
+- **Current staging attestation:** `docs/qa/oa5-staging-backend-attestation.json`
+  remains `state: "blocked"`. Do not mark it `verified` from source CI,
+  archive success or Vercel environment correction alone.
+
+### Reviewed execution sequence — STOP until outstanding gates close
+
+1. **Evidence custody and preflight:** an independent reviewer accepts the
+   encrypted archive, restore report, migration proof, historic Preview
+   preservation/cutover record, Test Auth/callback inventory, QA Firebase plan,
+   sandbox-only integrations, and four-cron-job quarantine plan.
+2. **Exact-scope operator sign-off:** record the agreed disposable proof
+   retention, expected **loss of the five existing Test Auth users/sessions**
+   and agreement-specific hosted dataset, the reviewed Test-only
+   cleanup/rebuild mechanism, exact reviewed source SHA, named operator,
+   rollback owner and explicit execution approval. The owner approved
+   same-project rebuild **conditionally on 06/11/2026**; that does not
+   override the remaining STOP checks.
+3. **Controlled Test-only cutover:** confirm Supabase project ref
+   `iukgsukdoowvnhlfmpml` twice immediately before any write; no Production
+   database connection, generic production `supabase db push`, migration
+   ledger rewriting, or blind restore of historic Test rows into the new
+   canonical schema. Quiesce Test workers/webhooks; execute the separately
+   reviewed clean-schema migration plan in canonical order and verify actual
+   hosted schema, migrations, policies, functions, grants, stock/Branch
+   governance and audit-history immutability.
+4. **Hosted acceptance (not yet executed):** deploy exact-source OA5-related
+   Edge Functions with Test-only configuration, configure Auth links and
+   external sandbox/mocked sinks, then seed only the governed synthetic
+   merchant fixtures. Verify separate Owner/Staff/Installer AAL2,
+   branch denials, UOM/stock-ledger/payment idempotency, installer handover,
+   WhatsApp fallback/no unwanted outbound notifications, and Merchant/Admin
+   exact-build identity. Keep C2 production runtime cutover out of scope.
+5. **Release evidence:** approve staging attestation only after hosted
+   invariants and reviewer sign-off. Create at most the purposeful
+   `qa-staging` APK with package `ng.processedge.sellertray.qa` after
+   isolated Firebase and embedded endpoint/commit attestation; validate
+   physical 58/80mm printers, normal/failure/reprint behavior and native
+   Auth callbacks. Production Build 47 needs an independent release plan.
+
+**Current decision: NO-GO for destructive Test reset, hosted migration,
+external webhook activation or QA APK.** Source/backup integrity is PASS;
+historical Preview retirement, provider/callback and cron safety, exact
+operator reset mechanism, and hosted acceptance remain OPEN. No Test/Production
+database mutations were performed in this reconciliation.
