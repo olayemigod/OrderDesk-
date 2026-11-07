@@ -61,3 +61,10 @@ The operator/agent records:
 ## OA5 / C2 status as of 04/11/2026
 
 OA5 staging is not ready; archived agreement evidence, five preview dependencies, hosted migration replay, QA auth/Firebase, exact QA APK and merchant/hardware visual acceptance remain pending. C2 production cutover stays blocked pending OA5C acceptance; legacy Business/trial runtime is still production authority. No environment reset, deployment, production migration or paid resource creation is authorised by this governance record alone.
+
+
+## 08/11/2026 — Firebase Test application isolation (approved identity)
+
+Operator-provided Firebase Console evidence confirms a **separate** SellerTray Test Firebase project with ID `sellertray-test`, messaging sender/project number `362913608913`, and the Android app `ng.processedge.sellertray.qa` registered as `SellerTray QA` (Firebase App ID `1:362913608913:android:622042be355ff1a94b41f0`). Existing Production Firebase remains `sellertray-d4b18` with Android package `ng.processedge.sellertray`.
+
+The staged Android config must validate **all** of the Test Firebase project ID, sender number, registered Android App ID, and Android package name against a protected Test-only `google-services.json` file. Do not commit this downloaded Test file to Git, overwrite the Production configuration, copy Production FCM/service-account keys, or claim hosted FCM delivery acceptance merely from registration screenshots. Only stage a protected Test Firebase config and dedicated FCM V1/Expo sender after the Test Supabase/backend/provider isolation gates have been independently attested. No build, push delivery or real-customer notification is authorised by this record.
