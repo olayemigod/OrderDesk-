@@ -214,3 +214,74 @@ external webhook activation or QA APK.** Source/backup integrity is PASS;
 historical Preview retirement, provider/callback and cron safety, exact
 operator reset mechanism, and hosted acceptance remain OPEN. No Test/Production
 database mutations were performed in this reconciliation.
+
+## 07/11/2026 scheduled-job preflight — current hosted Test
+
+Read-only `cron.job` / `cron.job_run_details` queries on the **Test ref only**
+(`iukgsukdoowvnhlfmpml`) identified the four active entries below. These
+are currently running normally; they must **not** be assumed inert merely
+because the connected Test provider tables and runtime configuration are empty.
+
+| Job ID | Job name | Schedule | Target function |
+| --- | --- | --- | --- |
+| 4 | `sellertray-agreement-package-retry` | Every minute | `public.process_sellertray_agreement_package_retries(integer)` |
+| 3 | `sellertray-merchant-push-retry` | Every minute | `sellertray_private.kick_merchant_push_worker()` |
+| 1 | `sellertray-prepare-usage-settlements` | Daily 01:15 (cron time zone) | `public.prepare_due_orderdesk_usage_settlements()` |
+| 2 | `sellertray-whatsapp-notification-retry` | Every minute | `sellertray_private.kick_whatsapp_notification_worker()` |
+
+At the read-only snapshot, the three per-minute jobs each reported 1,440
+recorded runs in the preceding 24 hours, while the daily job reported one;
+all reported zero failed runs in that window. Both notification worker
+functions are `SECURITY DEFINER`, contain `net.http` references and read
+`sellertray_private.runtime_config`; the latter had zero rows. The
+agreement retry and usage settlement entry functions are also
+`SECURITY DEFINER`. These findings describe the observed functions, **not**
+proof that all transitively called routines lack external effects.
+
+### Exact pre-reset freeze procedure (operator-reviewed, NOT executed)
+
+1. Confirm the project ID and the current `cron.job` names/IDs again from a
+   **read-only** Test connection, and compare current run counts, worker
+   definitions, `runtime_config` and provider row counts with the baseline.
+   Abort on any unexpected job, endpoint, secret, non-Test recipient or new
+   integration.
+2. Securely record schedule, job ID, owner, enabled state and source functions
+   so a verified Test-only schedule can later be recreated. Never copy
+   secrets, recipient identifiers or private backup contents to GitHub.
+3. During the approved maintenance window, block incoming Test clients,
+   external webhooks and all callback routes **before** database teardown.
+   Using the independently reviewed Test-only maintenance procedure, disable
+   or unschedule the four jobs. Read back `cron.job` and check
+   `cron.job_run_details` for in-flight execution; do not treat a successful
+   disable command as proof that already-running jobs have stopped.
+4. Recheck Test project identity immediately before each destructive
+   operation; **never** pass the Production ref `eujxswjspolugrzlsjnn`
+   to reset/migration tooling. This handover deliberately provides no
+   executable destructive reset or `cron.unschedule` command; the exact
+   mechanism needs independent operator review and rollback acceptance.
+5. Once canonical Test schema and test-safe secrets are deployed and
+   externally registered Test sinks are verified, restore only the reviewed
+   Test schedules. Verify zero real-customer/provider effects,
+   idempotency, and sampled job-run/audit records. Maintain an emergency
+   quiesce path for the new Test workers.
+
+**Read-only audit query** (run only when connected to the verified Test ref):
+
+```sql
+SELECT j.jobid, j.jobname, j.schedule, j.active,
+       count(d.runid) FILTER (
+         WHERE d.start_time >= now() - interval '24 hours'
+       ) AS runs_last_24h,
+       count(d.runid) FILTER (
+         WHERE d.start_time >= now() - interval '24 hours'
+           AND d.status = 'failed'
+       ) AS failures_last_24h
+FROM cron.job AS j
+LEFT JOIN cron.job_run_details AS d ON d.jobid = j.jobid
+GROUP BY j.jobid, j.jobname, j.schedule, j.active
+ORDER BY j.jobname;
+```
+
+**Status: pre-reset cron inventory complete; actual job quiescence and
+post-rebuild reactivation NOT performed.** No Test or Production job was
+changed in this review.
