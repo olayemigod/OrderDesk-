@@ -92,3 +92,27 @@ The staged Android config must validate **all** of the Test Firebase project ID,
   identity values. Expo QA application identifier/keystore/FCM sender are
   pending; no QA APK or live push was authorised. Maintain the existing
   `qa-staging` fail-closed attestation policy.
+
+## 08/11/2026 — Meta QA webhook source boundary (review only, not deployment)
+
+The two-production-environment resource model requires the existing
+Production Meta webhook to remain uninterrupted. Draft PR #228 adds a
+**Test-project-only** inbound callback configuration check for project
+`iukgsukdoowvnhlfmpml`: the Test function will fail closed unless
+`META_TEST_APP_ID=1429945732160146` and
+`META_TEST_PHONE_NUMBER_ID=1271836092686870` are configured on **Test
+only**. Every signed Test inbound callback must contain only the approved
+Phone Number ID; all other events are rejected **before webhook receipt
+persistence or message/commerce processing**. The usual HMAC verification,
+tenant retirement/connection and legal-consent checks continue. The
+Production project and local developer route retain their existing
+behavior.
+
+These QA resource IDs are **public provider identifiers, not tokens or
+secrets**. The Test project must use its own `META_APP_SECRET` and
+`META_WEBHOOK_VERIFY_TOKEN`; neither is recorded in Git. Meta App ID,
+phone-number ownership and credential separation remain subject to
+provider-side screenshot/hosted acceptance. Do not configure external
+callbacks or test traffic until the controlled Test rebuild, provider
+authorization and hosted guards are independently accepted. A source CI
+PASS alone is **not** an approved staging attestation.

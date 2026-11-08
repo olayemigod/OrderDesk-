@@ -68,6 +68,9 @@ jobs:
       - name: Verify WhatsApp retired and disconnected tenant routing isolation
         run: node --test supabase/functions/whatsapp-webhook/routing-boundary.test.mjs
 
+      - name: Verify Meta QA app and phone webhook isolation
+        run: node --test supabase/functions/whatsapp-webhook/test-environment-guard.test.mjs
+
       - name: Verify C1B installment checkout retry contract
         run: node supabase/functions/billing-checkout/c1b-contract.mjs
 

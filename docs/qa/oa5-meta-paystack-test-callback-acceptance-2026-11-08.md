@@ -129,3 +129,28 @@ callback or mapping. Do not generate access tokens, use live Meta
 credentials, or send messages under OA5 at this stage.
 
 **CI/release update (08/11/2026):** GitHub Actions runner-start/log issue #230 recovered and was closed, without a proven historical root cause. At exact head `c4f697ba32df828f0e5e5c806fdd247d94a89e4b`, Database CI, OA5 Staging Isolation and Environment Resource Governance passed, as did the Mobile verify job. **Mobile dependency audit remains FAIL** on the expired Expo CLI/Zod exception (#229). The WhatsApp retired/disconnected tenant lookup correction is source-only and tracked in #231 until hosted regression. No Test reset, webhook deployment or Production cutover is authorized.
+
+## 08/11/2026 — forward-only Test Meta webhook app/number guard
+
+Draft PR #228 now contains a bounded Test-only Meta webhook preflight
+and callback routing guard. When `SUPABASE_URL` identifies standalone Test
+`iukgsukdoowvnhlfmpml`, the function requires the approved **public**
+app ID `1429945732160146` via `META_TEST_APP_ID` and approved public
+phone ID `1271836092686870` via `META_TEST_PHONE_NUMBER_ID`. A missing or
+different setting blocks even GET subscription verification (HTTP 503).
+A signed POST with absent/mixed/different phone metadata is rejected
+before writing receipt/audit data to Test (HTTP 409). HMAC and the
+separate active-connected-tenant+legal-consent gates still apply.
+Existing Production/local WhatsApp webhook behavior is not changed.
+
+A separate Meta **QA app secret** and **QA verification token** remain
+required in Test's protected Edge secrets. Never use the existing
+Production secret or subscribe the live Meta app to the Test endpoint.
+The current separately supplied screenshots are insufficient for one
+independent screen proving Test App ID/phone ownership; no hosted
+verification, test-number registration, delivery or WABA association is
+claimed. No new Test Edge function has been deployed.
+
+Focused Node source/logic checks and full exact-head GitHub CI must
+pass before this source change can be considered tested. OA5 staging
+attestation and provider activation remain **NO-GO**.
