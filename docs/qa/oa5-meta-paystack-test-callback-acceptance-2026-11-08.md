@@ -128,8 +128,4 @@ relationship and QA app secret separation before creating any hosted
 callback or mapping. Do not generate access tokens, use live Meta
 credentials, or send messages under OA5 at this stage.
 
-**CI/release:** PR #228 exact-head workflows are currently blocked by
-GitHub Actions job-start/log failures (issue #230), and the Mobile
-dependency advisory exception is expired (#229). No Test reset,
-webhook deployment or Production cutover may proceed on source-only
-verification.
+**CI/release update (08/11/2026):** GitHub Actions runner-start/log issue #230 recovered and was closed, without a proven historical root cause. At exact head `c4f697ba32df828f0e5e5c806fdd247d94a89e4b`, Database CI, OA5 Staging Isolation and Environment Resource Governance passed, as did the Mobile verify job. **Mobile dependency audit remains FAIL** on the expired Expo CLI/Zod exception (#229). The WhatsApp retired/disconnected tenant lookup correction is source-only and tracked in #231 until hosted regression. No Test reset, webhook deployment or Production cutover is authorized.

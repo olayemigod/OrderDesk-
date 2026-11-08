@@ -385,3 +385,16 @@ Production Meta and Paystack targets must not be repointed. A separate
 Meta development/test app and number are proposed but **not authorised**,
 and no Test callback endpoint is currently deployed. Source-only Paystack
 checks do not close the real-provider hosted callback acceptance gate.
+
+## 08/11/2026 — five historical Vercel Preview identities verified
+
+Independent read-only Vercel deployment metadata reconfirmed all **five**
+preserved agreement/visual Preview IDs as `READY`, including the exact
+branches and source SHAs. The custody map and reviewed safety sequence
+are in `docs/qa/oa5-vercel-preview-custody-and-test-domain-protection-2026-11-08.md`. Compiled backend identity, signed-out reviewer access
+and authority to retire old proof remain **OPEN**. Merchant Preview
+authentication is currently OFF; Admin protection excludes custom domains;
+the QA domain records remain DNS-only, unbound and **not** protected by
+Cloudflare Access (the connected account reports Access not enabled).
+Do not change protection until historic reviewer continuity is approved;
+do not attach QA domains before the staged backend attestation.
