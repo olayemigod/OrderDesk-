@@ -7,3 +7,7 @@ coverage/
 dist/
 .DS_Store
 sellertray-*-firebase-adminsdk-*.json
+
+# QA Firebase Android config is supplied only through protected build inputs.
+# Production apps/mobile/google-services.json stays tracked as before.
+**/google-services.qa.json*
