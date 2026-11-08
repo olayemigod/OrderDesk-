@@ -68,3 +68,27 @@ OA5 staging is not ready; archived agreement evidence, five preview dependencies
 Operator-provided Firebase Console evidence confirms a **separate** SellerTray Test Firebase project with ID `sellertray-test`, messaging sender/project number `362913608913`, and the Android app `ng.processedge.sellertray.qa` registered as `SellerTray QA` (Firebase App ID `1:362913608913:android:622042be355ff1a94b41f0`). Existing Production Firebase remains `sellertray-d4b18` with Android package `ng.processedge.sellertray`.
 
 The staged Android config must validate **all** of the Test Firebase project ID, sender number, registered Android App ID, and Android package name against a protected Test-only `google-services.json` file. Do not commit this downloaded Test file to Git, overwrite the Production configuration, copy Production FCM/service-account keys, or claim hosted FCM delivery acceptance merely from registration screenshots. Only stage a protected Test Firebase config and dedicated FCM V1/Expo sender after the Test Supabase/backend/provider isolation gates have been independently attested. No build, push delivery or real-customer notification is authorised by this record.
+
+## 08/11/2026 — approved QA domains and current hosted isolation status
+
+- **Merchant Test:** `test.sellertray.com` (Cloudflare DNS-only CNAME to
+  `cname.vercel-dns.com`).
+- **Admin Test:** `test-admin.sellertray.com` (same DNS-only target).
+- Both names are fixed Test-only identifiers. At this checkpoint neither is
+  attached to the corresponding Vercel project or QA-branch deployment.
+  Never attach either as an unscoped Production alias, trigger an unapproved
+  Preview, or create a QA branch merely to bypass Vercel's branch requirement.
+- Existing Merchant Vercel password/SSO protection is off. Existing Admin SSO
+  is `all_except_custom_domains`; it does not protect the approved Test
+  custom domain. Review protection that explicitly covers **both custom
+  domains** before serving Test traffic; do not disrupt Production access
+  controls to solve this.
+- Test Supabase Auth Site URL and QA native redirects have operator screenshot
+  evidence, but the Site URL remains nonoperational until the protected
+  Merchant QA deployment exists. SMTP, provider callbacks, login flows and
+  legacy Preview compiled endpoint binding are **not** attested.
+- Firebase Test project/app identity and HTTP v1 availability were verified,
+  and uploaded Test Android client JSON matched all four configured QA
+  identity values. Expo QA application identifier/keystore/FCM sender are
+  pending; no QA APK or live push was authorised. Maintain the existing
+  `qa-staging` fail-closed attestation policy.

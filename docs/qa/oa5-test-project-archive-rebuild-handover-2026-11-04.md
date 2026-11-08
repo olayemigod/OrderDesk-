@@ -321,3 +321,56 @@ a preflight identity check for project `iukgsukdoowvnhlfmpml`,
 post-reset parity probes, rollback/restore owner, protected evidence
 retention and signed authorization. None of these commands was
 executed during this documentation review.
+
+## 08/11/2026 — Test/Firebase/domain refresh (read-only and source-only)
+
+This section supersedes the older **unknown** Firebase and Cloudflare
+configuration status, but **does not** change Test reset/rollback approval
+or hosted acceptance. Source candidate: draft PR #228, commit
+`5828af11c1afa362a690e50b18f22f9a060dcb1b` at this preflight.
+Any later documentation commit requires fresh exact-HEAD evidence.
+
+| Acceptance item | Latest verified evidence | Gate |
+| --- | --- | --- |
+| Owner-approved Merchant/Admin QA names | `test.sellertray.com` / `test-admin.sellertray.com` | Naming PASS |
+| Cloudflare | DNS-only CNAME to Vercel target on both; Vercel reports no DNS errors | DNS PASS |
+| Vercel domain/app binding | Neither Test domain attached; dedicated QA Git branches undeployed | OPEN |
+| Vercel Test custom-domain protection | Merchant protection disabled; Admin SSO excludes custom domains | OPEN — unsafe to serve Test traffic |
+| Supabase Test Auth redirects | Operator screenshot shows QA-native confirmation and recovery URLs | Config screenshot PASS; runtime/SMTP OPEN |
+| Supabase Test Auth Site URL | Operator screenshot shows `https://test.sellertray.com`; hostname not served | Runtime OPEN |
+| Test Firebase project and Android app | `sellertray-test`; `ng.processedge.sellertray.qa`; sender `362913608913`; App ID registered | Identity PASS |
+| Firebase HTTP v1 | Operator Cloud Messaging screenshot: enabled; legacy API disabled | API PASS |
+| Test `google-services.json` | Operator uploaded Android client JSON; QA project, sender, app ID, package matched source checks | Client identity PASS; protected EAS path OPEN |
+| Expo credentials and QA APK | Credential wizard exited without an approved QA keystore; sender not bound | OPEN |
+| External Meta/PSP/email/provider callbacks | No authoritative external provider-side verification | OPEN |
+| Source security gate | Expired Expo CLI/Zod advisory exception blocks Mobile dependency audit; tracked in issue #229 | OPEN |
+| Historical Preview compiled backends | Five dependencies preserved, compiled endpoint proof still outstanding | OPEN |
+| Exact hosted reset, cron freeze and rollback | Reviewed execution-signoff still outstanding | STOP |
+
+**Fresh Test-only Supabase read-only inventory:** project
+`iukgsukdoowvnhlfmpml` remains `ACTIVE_HEALTHY`, Postgres 17.11.
+Auth users/sessions `5/5`, applied migrations `54`, active scheduled jobs
+`4`, queued `net.http_request_queue` records `0`, push devices `0`,
+worker invocations `0`, runtime destination rows `0` and storage
+objects `0`. Current Edge list remains the five agreement-only deployed
+functions. The four scheduled jobs remain **active** and reported no
+failed executions in the inspected 24-hour window; **none was paused**.
+
+An additional count-only, Test-only census across **15** WhatsApp
+connections/credentials/webhook/catalogue, payment/checkout/provider,
+notification, push-dispatch and payment-event tables returned `0` rows
+in **every** inspected table. This is a **database-only inactivity
+observation**, not evidence that external Meta, Paystack, Flutterwave,
+Firebase/Expo, SMTP or authentication callbacks are disconnected.
+Do not copy provider secrets or live recipients into Test to pass a smoke
+test. No SQL/cron mutation was performed in this reconciliation.
+
+**Immediate operator priorities:** (1) verify SMTP/safe recipient and
+third-party callback ownership entirely outside Production, (2) preserve
+historic Preview compiled backend evidence, (3) define protected access
+for both Test custom domains, (4) finalise independent Test-only Auth,
+cron quiescence, hosted cleanup/restore and rollback sign-off. Then and
+only then conduct the controlled Test rebuild. Never use an unscoped
+Production domain binding, the legacy Production-bound `qa` APK/profile,
+or a generic remote `supabase db reset` as a substitute for the
+independently reviewed hosted reset plan.
