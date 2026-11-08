@@ -99,6 +99,7 @@ jobs:
       - name: Inspect Android export artifacts for legacy Zod 3
         run: |
           node --test scripts/android-bundle-zod-boundary.test.mjs
+          node --test scripts/expo-zod-advisory-contract.test.mjs
           node scripts/android-bundle-zod-boundary.mjs .ci-dist
 
       - name: SellerTray release preflight
