@@ -87,3 +87,49 @@ release authorisation.
 **Execution status:** no Meta app/number, payment setup, webhook test,
 secrets, QA APK, Vercel preview, Edge deployment, Test reset or Production
 change was performed as part of this source-only plan.
+
+## 08/11/2026 — discovered historical QA phone ID in Production
+
+A **read-only** check of both Supabase projects discovered that the
+owner-claimed Meta test Phone Number ID `1271836092686870` is **not**
+mapped in Test but **is** a historical `tenants.whatsapp_phone_number_id`
+mapping in Production. Its Production tenant is retired, marked
+`not_connected`, has a disconnected connection row and **no** stored
+WhatsApp connection credentials. Production nevertheless contains **117
+historical webhook receipts** for that identifier, all from 16–17/09/2026.
+There were zero receipts within seven days of inspection.
+
+The legal consent helper `sellertray_whatsapp_consent_active` still
+returned `true` on the retired tenant because it checks valid unrevoked
+policy acceptance rather than operational active-state. The pre-fix
+inbound webhook code looked up tenants by phone ID, then relied on this
+legal-consent helper, without excluding retired or disconnected tenants.
+A correctly signed callback could therefore have passed the
+**routing gate** for an obsolete mapping; no current callback or
+unauthorized delivery was observed or triggered.
+
+**Forward-only source correction:** `routing-boundary.mjs` now
+requires `retired_at=is.null` and
+`whatsapp_connection_status=eq.connected` at the tenant lookup
+boundary, before consent is checked. No historical legal consent or
+Production tenant row has been deleted or changed. Run the associated
+pure Node tests and full WhatsApp regression suite before any deployment;
+source changes do not prove hosted acceptance. Track follow-up in
+[issue #231](https://github.com/olayemigod/OrderDesk-/issues/231).
+
+**Meta QA stop gate:** separate QA App ID `1429945732160146` was
+verified in Development mode, and the screenshot sequence shows claimed
+test number `+1 (555) 676-6065` with Phone Number ID
+`1271836092686870` and Meta-labeled Messaging account ID
+`1082801377578061`. Because this Phone Number ID appears in
+Production history, do not assume exclusive QA app affiliation from
+separately cropped screens. Independently verify Meta app->phone
+relationship and QA app secret separation before creating any hosted
+callback or mapping. Do not generate access tokens, use live Meta
+credentials, or send messages under OA5 at this stage.
+
+**CI/release:** PR #228 exact-head workflows are currently blocked by
+GitHub Actions job-start/log failures (issue #230), and the Mobile
+dependency advisory exception is expired (#229). No Test reset,
+webhook deployment or Production cutover may proceed on source-only
+verification.

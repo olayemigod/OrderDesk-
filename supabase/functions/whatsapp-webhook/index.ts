@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from 'npm:pdf-lib@1.17.1';
 import { handleCustomerPaymentSelfService } from './payment.ts';
+import { activeWhatsAppTenantLookupQuery } from './routing-boundary.mjs';
 import {
   normalizeIntentText,
   resolveConversationIntent,
@@ -331,10 +332,11 @@ async function resolveConsentedWebhookPhoneNumbers(
   const allowed = new Set<string>();
 
   for (const phoneNumberId of extractWebhookPhoneNumberIds(payload)) {
+    // Signed webhook payloads still require an *operationally connected*,
+    // non-retired tenant. Historical policy consent is retained for audit,
+    // but is not by itself permission to route an incoming message.
     const tenants = await rest<Array<{ id: string }>>(
-      '/rest/v1/tenants?select=id' +
-        '&whatsapp_phone_number_id=eq.' + encodeURIComponent(phoneNumberId) +
-        '&limit=1',
+      activeWhatsAppTenantLookupQuery(phoneNumberId),
     );
     const tenantId = tenants[0]?.id ?? null;
 
