@@ -96,7 +96,7 @@ jobs:
             exit 1
           fi
 
-      - name: Inspect Android JS export for legacy Zod 3
+      - name: Inspect Android export artifacts for legacy Zod 3
         run: |
           node --test scripts/android-bundle-zod-boundary.test.mjs
           node scripts/android-bundle-zod-boundary.mjs .ci-dist
