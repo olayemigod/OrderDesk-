@@ -374,3 +374,14 @@ only then conduct the controlled Test rebuild. Never use an unscoped
 Production domain binding, the legacy Production-bound `qa` APK/profile,
 or a generic remote `supabase db reset` as a substitute for the
 independently reviewed hosted reset plan.
+
+
+## 08/11/2026 — Meta and Paystack provider acceptance proposal
+
+The current safe read-only provider-side audit, proposed separate Meta
+Test architecture and platform Paystack mode-hardening plan are recorded
+in `docs/qa/oa5-meta-paystack-test-callback-acceptance-2026-11-08.md`.
+Production Meta and Paystack targets must not be repointed. A separate
+Meta development/test app and number are proposed but **not authorised**,
+and no Test callback endpoint is currently deployed. Source-only Paystack
+checks do not close the real-provider hosted callback acceptance gate.
