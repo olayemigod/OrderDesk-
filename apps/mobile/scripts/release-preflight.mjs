@@ -137,7 +137,7 @@ requireValue(
     supabaseClient.includes('storage: nativeSecureStorage') &&
     supabaseClient.includes('AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY') &&
     !supabaseClient.includes('@react-native-async-storage/async-storage') &&
-    pkg.dependencies?.['expo-secure-store'] === '57.0.4',
+    pkg.dependencies?.['expo-secure-store'] === '~58.0.2',
   'Native Supabase auth sessions must remain encrypted in Expo SecureStore, never AsyncStorage',
 );
 const requiredBlockedAndroidPermissions = [
@@ -179,8 +179,8 @@ for (const permission of requiredBlockedAndroidPermissions) {
 }
 requireValue(app.android?.versionCode === 19, 'Android versionCode must be 19 for the merchant-reference QA line');
 requireValue(app.ios?.bundleIdentifier === 'ng.processedge.sellertray', 'iOS bundle ID must match SellerTray identity');
-requireValue(pkg.dependencies?.['expo-notifications'] === '57.0.18', 'SellerTray mobile must pin expo-notifications for native push');
-requireValue(pkg.dependencies?.['expo-constants'] === '57.0.17', 'SellerTray mobile must pin expo-constants for Expo push project identity');
+requireValue(pkg.dependencies?.['expo-notifications'] === '~58.1.8', 'SellerTray mobile must pin expo-notifications for native push');
+requireValue(pkg.dependencies?.['expo-constants'] === '~58.0.15', 'SellerTray mobile must pin expo-constants for Expo push project identity');
 requireValue(
   (app.plugins ?? []).some((plugin) => Array.isArray(plugin) ? plugin[0] === 'expo-notifications' : plugin === 'expo-notifications'),
   'Expo notifications config plugin must be enabled',
