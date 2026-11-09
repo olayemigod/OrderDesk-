@@ -125,6 +125,8 @@ jobs:
 
       - name: Check release R8 shrinking without assembling or signing an APK
         if: ${{ github.event_name == 'pull_request' && github.head_ref == 'chore/expo-sdk58-dependency-probe-20261108' }}
+        env:
+          SELLERTRAY_VERIFIED_KOTLIN_REPO: ${{ runner.temp }}/sellertray-kotlin-maven
         run: |
           cd android
           ./gradlew :app:minifyReleaseWithR8 --init-script ../../../scripts/qa/kotlin-verified-compiler-mirror.init.gradle --no-daemon --stacktrace --max-workers=2
