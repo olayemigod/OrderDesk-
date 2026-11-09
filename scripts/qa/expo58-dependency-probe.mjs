@@ -24,6 +24,7 @@ export const SDK58_PINS = Object.freeze({
   'expo-secure-store': '~58.0.2',
   'expo-font': '~58.0.11',
   'expo-splash-screen': '~58.0.13',
+  'expo-system-ui': '~58.0.6',
   react: '19.3.0',
   'react-dom': '19.3.0',
   'react-native': '0.88.1',
