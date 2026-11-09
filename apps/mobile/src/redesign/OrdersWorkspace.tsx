@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import {
   createPosCommandId,
@@ -17,6 +17,7 @@ import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import { OrderBalanceCollection } from './OrderBalanceCollection';
 import { OrderDocumentsPanel } from './OrderDocumentsPanel';
+import { DEFAULT_ORDER_FILTERS, matchesOrderSearch, type OrderSearchFilters, type OrderStatusFilter, type OrderPaymentFilter, type OrderSourceFilter, type OrderPeriodFilter } from './orderSearchFilters';
 
 type Props = {
   tenantId: string;
@@ -55,6 +56,12 @@ export function OrdersWorkspace({
   const [expandedOrderIds, setExpandedOrderIds] = useState<Record<string, boolean>>({});
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [draftQuantities, setDraftQuantities] = useState<Record<string, string>>({});
+  const [filters, setFilters] = useState<OrderSearchFilters>(DEFAULT_ORDER_FILTERS);
+  const [visibleOrderLimit, setVisibleOrderLimit] = useState(30);
+  const filteredOrders = useMemo(() => orders.filter((order) => matchesOrderSearch(order, filters)), [orders, filters]);
+  const hasFilters = filters.query.trim() !== '' || filters.status !== 'all' || filters.payment !== 'all' || filters.source !== 'all' || filters.period !== 'all';
+
+  useEffect(() => setVisibleOrderLimit(30), [filters]);
 
   function beginDelete(order: MerchantOrder) {
     setPending({ orderId: order.id, action: 'delete_draft', commandId: createPosCommandId('delete_draft', order.id) });
@@ -199,10 +206,34 @@ export function OrdersWorkspace({
         <Text style={[styles.pageSubtitle, dark && darkStyles.bodyText]}>Review order items, payment state and fulfilment progress.</Text>
       </View>
 
+      <View style={[styles.filterPanel, dark && darkStyles.card]}>
+        <View style={[styles.orderSearch, dark && darkStyles.input]}>
+          <Ionicons name="search-outline" size={19} color={theme.colors.muted} />
+          <TextInput
+            accessibilityLabel="Search orders"
+            value={filters.query}
+            onChangeText={(query) => setFilters((current) => ({ ...current, query }))}
+            placeholder="Order number, customer, phone or product"
+            placeholderTextColor={theme.colors.subtle}
+            style={[styles.orderSearchInput, dark && darkStyles.titleText]}
+          />
+        </View>
+        <OrderFilterPills<OrderStatusFilter> label="Status" value={filters.status} onChange={(status) => setFilters((current) => ({ ...current, status }))} dark={dark} options={[{ label: 'All', value: 'all' }, { label: 'Saved', value: 'draft' }, { label: 'Needs review', value: 'needs_review' }, { label: 'In progress', value: 'active' }, { label: 'Completed', value: 'completed' }, { label: 'Cancelled', value: 'cancelled' }]} />
+        <OrderFilterPills<OrderPaymentFilter> label="Payment" value={filters.payment} onChange={(payment) => setFilters((current) => ({ ...current, payment }))} dark={dark} options={[{ label: 'All', value: 'all' }, { label: 'Unpaid', value: 'unpaid' }, { label: 'Part paid', value: 'partially_paid' }, { label: 'Awaiting verification', value: 'awaiting_verification' }, { label: 'Paid', value: 'paid' }]} />
+        <OrderFilterPills<OrderSourceFilter> label="Channel" value={filters.source} onChange={(source) => setFilters((current) => ({ ...current, source }))} dark={dark} options={[{ label: 'All', value: 'all' }, { label: 'POS', value: 'pos' }, { label: 'WhatsApp', value: 'whatsapp' }, { label: 'Manual', value: 'manual' }]} />
+        <OrderFilterPills<OrderPeriodFilter> label="Date" value={filters.period} onChange={(period) => setFilters((current) => ({ ...current, period }))} dark={dark} options={[{ label: 'All', value: 'all' }, { label: 'Today', value: 'today' }, { label: 'Last 7 days', value: 'seven_days' }, { label: 'Last 30 days', value: 'thirty_days' }]} />
+        <View style={styles.filterSummary}>
+          <Text style={[styles.muted, dark && darkStyles.bodyText]}>{filteredOrders.length} of {orders.length} loaded orders</Text>
+          {hasFilters ? <Pressable accessibilityRole="button" onPress={() => setFilters(DEFAULT_ORDER_FILTERS)}><Text style={styles.clearFilters}>Clear filters</Text></Pressable> : null}
+        </View>
+      </View>
+
       {loading && orders.length === 0 ? <View style={[styles.emptyCard, dark && darkStyles.card]}><ActivityIndicator /><Text style={[styles.muted, dark && darkStyles.bodyText]}>Loading orders…</Text></View> : null}
       {!loading && orders.length === 0 ? <View style={[styles.emptyCard, dark && darkStyles.card]}><Ionicons name="receipt-outline" size={28} color={theme.colors.greenDark} /><Text style={[styles.emptyTitle, dark && darkStyles.titleText]}>No orders here yet</Text><Text style={[styles.emptyText, dark && darkStyles.bodyText]}>Walk-in, POS and WhatsApp orders for this branch will appear here.</Text></View> : null}
 
-      {orders.map((order) => {
+      {!loading && orders.length > 0 && filteredOrders.length === 0 ? <View style={[styles.emptyCard, dark && darkStyles.card]}><Text style={[styles.emptyTitle, dark && darkStyles.titleText]}>No matching orders</Text><Text style={[styles.emptyText, dark && darkStyles.bodyText]}>Change your search or clear the filters.</Text></View> : null}
+
+      {filteredOrders.slice(0, visibleOrderLimit).map((order) => {
         const total = orderTotal(order);
         const paymentLabel = orderPaymentLabel(order);
         const canManageDraft = order.source === 'pos' && order.status === 'draft' && order.paymentStatus === 'unpaid' && order.amountPaid === 0;
@@ -279,6 +310,7 @@ export function OrdersWorkspace({
           </View>
         );
       })}
+      {filteredOrders.length > visibleOrderLimit ? <Pressable accessibilityRole="button" style={[styles.loadMore, dark && darkStyles.outlineButton]} onPress={() => setVisibleOrderLimit((count) => count + 30)}><Text style={styles.clearFilters}>Show more orders</Text></Pressable> : null}
     </View>
   );
 }
@@ -319,12 +351,33 @@ function StatePill({ label, positive = false }: { label: string; positive?: bool
   return <View style={[styles.statePill, appearance.dark && darkStyles.subtleCard, positive && styles.statePillPositive]}><Text style={[styles.statePillText, appearance.dark && darkStyles.bodyText, positive && styles.statePillTextPositive]}>{label}</Text></View>;
 }
 
+function OrderFilterPills<T extends string>({ label, value, options, onChange, dark }: { label: string; value: T; options: ReadonlyArray<{ label: string; value: T }>; onChange: (value: T) => void; dark: boolean }) {
+  return <View style={styles.filterGroup}>
+    <Text style={[styles.filterLabel, dark && darkStyles.bodyText]}>{label}</Text>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChoices} keyboardShouldPersistTaps="handled">
+      {options.map((option) => <Pressable accessibilityRole="button" accessibilityState={{ selected: value === option.value }} key={option.value} onPress={() => onChange(option.value)} style={[styles.filterPill, dark && darkStyles.outlineButton, value === option.value && styles.filterPillSelected]}>
+        <Text style={[styles.filterPillText, dark && darkStyles.bodyText, value === option.value && styles.filterPillSelectedText]}>{option.label}</Text>
+      </Pressable>)}
+    </ScrollView>
+  </View>;
+}
+
 function sourceLabel(source: OrderSource): string { if (source === 'whatsapp') return 'WhatsApp'; if (source === 'pos') return 'POS'; return 'Manual'; }
 function titleCase(value: string): string { return value.replaceAll('_', ' ').split(' ').filter(Boolean).map((part) => part[0]?.toUpperCase() + part.slice(1)).join(' '); }
 function formatMoney(value: number, currency: string): string { try { return new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 2 }).format(value); } catch { return `${currency} ${value.toFixed(2)}`; } }
 function formatQuantity(value: number): string { return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(3))); }
 
 const styles = StyleSheet.create({
+  filterPanel: { backgroundColor: theme.colors.white, borderColor: theme.colors.border, borderRadius: 16, borderWidth: 1, gap: 11, padding: 12 },
+  orderSearch: { alignItems: 'center', borderColor: theme.colors.border, borderRadius: 12, borderWidth: 1, flexDirection: 'row', gap: 8, paddingHorizontal: 12 },
+  orderSearchInput: { color: theme.colors.navy, flex: 1, minHeight: 44, fontSize: 13 },
+  filterGroup: { gap: 5 }, filterLabel: { color: theme.colors.slate, fontSize: 12, fontWeight: '800' },
+  filterChoices: { gap: 7, paddingVertical: 2 }, filterPill: { borderColor: theme.colors.border, borderRadius: 999, borderWidth: 1, minHeight: 32, justifyContent: 'center', paddingHorizontal: 12 },
+  filterPillSelected: { backgroundColor: theme.colors.mintSoft, borderColor: theme.colors.greenDark },
+  filterPillText: { color: theme.colors.slate, fontSize: 12, fontWeight: '800' }, filterPillSelectedText: { color: theme.colors.greenDark },
+  filterSummary: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', gap: 9 },
+  clearFilters: { color: theme.colors.greenDark, fontSize: 12, fontWeight: '900' },
+  loadMore: { alignItems: 'center', borderColor: theme.colors.border, borderRadius: 12, borderWidth: 1, minHeight: 44, justifyContent: 'center' },
   stack: { gap: 14 }, heading: { gap: 4 }, eyebrow: { color: theme.colors.muted, fontSize: 11, fontWeight: '900', letterSpacing: 1.05 }, pageTitle: { color: theme.colors.navy, fontSize: 28, fontWeight: '900' }, pageSubtitle: { color: theme.colors.muted, fontSize: 14, lineHeight: 20 },
   emptyCard: { alignItems: 'center', borderColor: theme.colors.border, borderRadius: 18, borderWidth: 1, gap: 9, padding: 22 }, emptyTitle: { color: theme.colors.navy, fontSize: 17, fontWeight: '900' }, emptyText: { color: theme.colors.muted, fontSize: 13, lineHeight: 19, textAlign: 'center' }, muted: { color: theme.colors.muted, fontSize: 13 },
   orderCard: { backgroundColor: theme.colors.white, borderColor: theme.colors.border, borderRadius: 20, borderWidth: 1, gap: 13, padding: 16 }, orderTopRow: { alignItems: 'flex-start', flexDirection: 'row', gap: 12, justifyContent: 'space-between' }, orderIdentity: { flex: 1, gap: 3 }, customerName: { color: theme.colors.navy, fontSize: 16, fontWeight: '900' }, orderMeta: { color: theme.colors.muted, fontSize: 12, lineHeight: 18 }, orderAttribution: { color: theme.colors.slate, fontSize: 11, fontWeight: '700', lineHeight: 17 }, orderValueWrap: { alignItems: 'flex-end', flexDirection: 'row', flexShrink: 1, gap: 7, maxWidth: '48%' }, orderValue: { color: theme.colors.navy, flexShrink: 1, fontSize: 15, fontWeight: '900', textAlign: 'right' },
