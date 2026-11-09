@@ -180,6 +180,20 @@ export default function TeamPermissionsManagement({ tenantId }: { tenantId: stri
     }
   }
 
+  async function copyInvitationLink(invitation: Invitation) {
+    if (saving || (team.actorRole === 'manager' && invitation.role !== 'staff')) return;
+    const link = new URL('/join.html', window.location.origin);
+    link.searchParams.set('invitation', invitation.id);
+    try {
+      await navigator.clipboard.writeText(link.toString());
+      setError(null);
+      setMessage('Invitation review link copied. Share privately with the invited person; they must sign in using the invited email and explicitly accept.');
+    } catch {
+      setMessage(null);
+      setError('Unable to copy automatically. Check your browser permissions and try again.');
+    }
+  }
+
   async function cancelInvitation(invitation: Invitation) {
     setSaving(true); clearNotice();
     try {
@@ -260,7 +274,7 @@ export default function TeamPermissionsManagement({ tenantId }: { tenantId: stri
       <p className="muted">Every invitation remains pending until the invited person explicitly accepts it in SellerTray, including existing SellerTray users.</p>
     </section>
 
-    {team.invitations.length ? <article className="panel invitation-panel"><div className="panel-head"><div><p className="eyebrow">Pending</p><h3>Invitations</h3></div></div>{team.invitations.map((invitation) => <div className="invitation-row" key={invitation.id}><span><strong>{invitation.email}</strong><small>{roleLabel(invitation.role)} · expires {dateOnly(invitation.expiresAt)}</small></span><span className="topbar-actions"><button className="text-button" type="button" disabled={saving || (team.actorRole === 'manager' && invitation.role !== 'staff')} onClick={() => void resendInvitation(invitation)}>Resend email</button><button className="text-button" type="button" disabled={saving || (team.actorRole === 'manager' && invitation.role !== 'staff')} onClick={() => void cancelInvitation(invitation)}>Cancel</button></span></div>)}</article> : null}
+    {team.invitations.length ? <article className="panel invitation-panel"><div className="panel-head"><div><p className="eyebrow">Pending</p><h3>Invitations</h3></div></div>{team.invitations.map((invitation) => <div className="invitation-row" key={invitation.id}><span><strong>{invitation.email}</strong><small>{roleLabel(invitation.role)} · expires {dateOnly(invitation.expiresAt)}</small></span><span className="topbar-actions"><button className="text-button" type="button" disabled={saving || (team.actorRole === 'manager' && invitation.role !== 'staff')} onClick={() => void copyInvitationLink(invitation)}>Copy review link</button><button className="text-button" type="button" disabled={saving || (team.actorRole === 'manager' && invitation.role !== 'staff')} onClick={() => void resendInvitation(invitation)}>Resend email</button><button className="text-button" type="button" disabled={saving || (team.actorRole === 'manager' && invitation.role !== 'staff')} onClick={() => void cancelInvitation(invitation)}>Cancel</button></span></div>)}</article> : null}
 
     {history.length ? <article className="panel invitation-panel"><div className="panel-head"><div><p className="eyebrow">Audit trail</p><h3>Membership history</h3><p className="muted">Append-only history of invitations, acceptance, role changes, removals and ownership corrections.</p></div></div>{history.slice(0, 20).map((entry) => <div className="invitation-row" key={entry.id}><span><strong>{membershipEventLabel(entry)}</strong><small>{entry.subjectEmail ?? 'Unknown team member'} · by {entry.actorEmail ?? actorLabel(entry.actorKind)} · {dateTime(entry.createdAt)}{entry.reason ? ` · ${entry.reason}` : ''}</small></span></div>)}</article> : null}
 
