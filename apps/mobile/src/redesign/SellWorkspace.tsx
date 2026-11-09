@@ -129,6 +129,18 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
   const total = taxQuote.grossAmount;
   const unitCount = cartLines.reduce((sum, line) => sum + line.quantity, 0);
   const normalizedQuery = query.trim().toLowerCase();
+  // Derived index only: the governed commerce catalogue still owns barcode/UOM mappings.
+  // Keep the first matching configured UOM to preserve historic scan precedence.
+  const barcodeLookup = useMemo(() => {
+    const index = new Map<string, { product: CommerceProduct; uom: CommerceUom }>();
+    for (const product of products) {
+      for (const uom of product.uoms) {
+        const code = uom.barcode?.trim();
+        if (code && !index.has(code)) index.set(code, { product, uom });
+      }
+    }
+    return index;
+  }, [products]);
   const visibleProducts = useMemo(() => products.filter((product) => !normalizedQuery || [product.name, product.sku ?? '', product.category ?? '', ...product.uoms.map((uom) => uom.barcode ?? '')].join(' ').toLowerCase().includes(normalizedQuery)), [products, normalizedQuery]);
   const displayedProducts = useMemo(() => visibleProducts.slice(0, visibleProductLimit), [visibleProducts, visibleProductLimit]);
   useEffect(() => setVisibleProductLimit(40), [query, catalogueView, branch.id]);
@@ -302,7 +314,7 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
   function clearSale() { setCart({}); setQuantityDrafts({}); setPriceDrafts({}); setCustomer(null); setDraftOrderId(null); setSaleClientReference(null); setOfflinePaymentOpen(false); setStage('products'); setError(null); }
 
   function handleBarcode(barcode: string) {
-    const clean = barcode.trim(); const match = products.flatMap((product) => product.uoms.map((uom) => ({ product, uom }))).find(({ uom }) => uom.barcode?.trim() === clean);
+    const clean = barcode.trim(); const match = barcodeLookup.get(clean);
     if (match) setSelectedUomByProduct((current) => ({ ...current, [match.product.id]: match.uom.id }));
     setQuery(clean); setScannerOpen(false);
   }
