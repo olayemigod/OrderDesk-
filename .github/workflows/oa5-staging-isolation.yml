@@ -17,6 +17,8 @@ on:
       - 'scripts/qa/oa5-test-backup-manifest.test.mjs'
       - 'scripts/qa/oa5-test-cron-maintenance-gate.mjs'
       - 'scripts/qa/oa5-test-cron-maintenance-gate.test.mjs'
+      - 'scripts/qa/oa5-test-cron-freeze-candidate.mjs'
+      - 'scripts/qa/oa5-test-cron-freeze-candidate.test.mjs'
       - 'scripts/qa/oa5-test-rebuild-preflight.mjs'
       - 'scripts/qa/oa5-test-live-census.mjs'
       - 'scripts/qa/oa5-test-live-census.test.mjs'
@@ -66,6 +68,7 @@ jobs:
           node scripts/qa/oa5-test-merchant-fixtures.mjs --check
           node --test scripts/qa/oa5-test-backup-manifest.test.mjs
           node --test scripts/qa/oa5-test-cron-maintenance-gate.test.mjs
+          node --test scripts/qa/oa5-test-cron-freeze-candidate.test.mjs
           node --test scripts/qa/oa5-test-rebuild-preflight.test.mjs
           node --test scripts/qa/oa5-test-live-census.test.mjs
           node --test scripts/qa/oa5-test-managed-boundary.test.mjs
