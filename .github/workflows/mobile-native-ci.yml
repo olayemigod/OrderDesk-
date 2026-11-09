@@ -84,6 +84,12 @@ jobs:
             exit 1
           fi
 
+      - name: Verify Gradle wrapper direct CDN and canonical SHA256 (SDK58 CI only)
+        if: ${{ github.event_name == 'pull_request' && github.head_ref == 'chore/expo-sdk58-dependency-probe-20261108' }}
+        run: |
+          node --test ../../scripts/qa/gradle-verified-distribution.test.mjs
+          node ../../scripts/qa/gradle-verified-distribution.mjs
+
       - name: Verify Kotlin compiler fallback integrity (SDK58 CI only)
         if: ${{ github.event_name == 'pull_request' && github.head_ref == 'chore/expo-sdk58-dependency-probe-20261108' }}
         env:
