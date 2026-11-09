@@ -105,3 +105,11 @@ Queries counted records matching existing `auth.users.id` via `SELECT count(*)`,
 **Disposition:** This closes the *source-level occupancy investigation*, not the hosted cleanup-method approval. Test Auth, Storage, public data, schedules and provider configuration were not changed. The OA5 backend attestation stays blocked.
 
 Reference: [Supabase Auth user management and JWT limitations](https://supabase.com/docs/guides/auth/managing-user-data); [Storage API deletion semantics](https://supabase.com/docs/guides/storage/management/delete-objects).
+
+## 09/11/2026 — fresh Test-side provider deployment and data census
+
+A new connected **read-only Supabase Test** check confirmed that the **five** ACTIVE deployed Edge Functions are `master-agreements`, `platform-admin`, `commercial-agreements`, `agreement-pdf-runtime-probe` (historical acceptance custody) and `platform-admin-settlement`. In particular, **`whatsapp-webhook` and `paystack-webhook` are not deployed in this standalone Test project**.
+
+The current Test database aggregate also returned: `tenant_whatsapp_connections=0`, `sellertray_private.whatsapp_connection_credentials=0`, `merchant_payment_methods=0`, `merchant_push_devices=0`, `sellertray_private.runtime_config=0`; **four pg_cron jobs remain ACTIVE** and `net.http_request_queue=0`. These observations establish only Test project metadata/data state; they do **not** establish Meta/PSP/SMTP/FCM external callback ownership, absence of future ingress, external credential segregation, or transitive functions' side-effect safety. Do not assume that an absent Test webhook function or zero Test rows proves external providers are disconnected, and do not change live callbacks to manufacture QA evidence.
+
+**Review split:** Test-side callback deploy/data inventory is now read-only corroborated; external provider console and protected secret/sink attestations remain **OPEN**, as do exact managed Auth/Storage cleanup, cron pause and irreversible rollback authorization. No service operation, webhook invocation, SQL mutation, app build or provider configuration change occurred.
