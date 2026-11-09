@@ -11,7 +11,7 @@ import {
   type MerchantCustomer,
 } from '../data/customerRepository';
 
-export function CustomersView({ business }: { business: MerchantBusiness }) {
+export function CustomersView({ business, onOpenOrder }: { business: MerchantBusiness; onOpenOrder?: (orderId: string) => void }) {
   const appearance = useSellerTrayAppearance();
   const [customers, setCustomers] = useState<MerchantCustomer[]>([]);
   const [selectedId, setSelectedId] = useState('');
@@ -138,13 +138,14 @@ export function CustomersView({ business }: { business: MerchantBusiness }) {
         <View style={styles.detailCard}>
           <Text style={[styles.sectionTitle, appearance.dark && darkStyles.titleText]}>Order history</Text>
           {selected.orders.slice(0, 10).map((order) => (
-            <View key={order.id} style={[styles.orderRow, appearance.dark && darkStyles.rowBorder]}>
+            <Pressable key={order.id} accessibilityRole="button" accessibilityLabel={`Open order ${order.publicOrderId}`} disabled={!onOpenOrder} onPress={() => onOpenOrder?.(order.id)} style={[styles.orderRow, appearance.dark && darkStyles.rowBorder]}>
               <View style={styles.orderCopy}>
                 <Text style={styles.orderRef}>{order.publicOrderId}</Text>
                 <Text style={styles.meta}>{formatDate(order.createdAt)} · {humanize(order.status)}</Text>
               </View>
               <Text style={[styles.orderAmount, appearance.dark && darkStyles.titleText]}>{order.totalAmount === null ? 'Unpriced' : formatMoney(order.totalAmount, business.currency)}</Text>
-            </View>
+              {onOpenOrder ? <Ionicons name="chevron-forward" size={16} color={appearance.dark ? '#D0D5DD' : '#667085'} /> : null}
+            </Pressable>
           ))}
           {selected.orders.length === 0 ? <Text style={styles.muted}>No orders recorded for this customer.</Text> : null}
         </View>
