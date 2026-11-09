@@ -56,6 +56,8 @@ SELECT jsonb_build_object(
    'jobname',w.jobname,
    'function_identity',w.schema_name||'.'||w.func_name,
    'runtime_config_key',w.runtime_config_key,
+   'actual_runtime_config_key',(SELECT (regexp_match(p.prosrc, $where rc.key='([^']+)'$, 'i'))[1] FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname=w.schema_name AND p.proname=w.func_name),
+   'source_sha256',(SELECT encode(extensions.digest(p.prosrc::bytea,'sha256'),'hex') FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname=w.schema_name AND p.proname=w.func_name),
    'function_overloads',(SELECT count(*)::int FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname=w.schema_name AND p.proname=w.func_name),
    'security_definer',(SELECT coalesce(bool_and(p.prosecdef),false) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname=w.schema_name AND p.proname=w.func_name),
    'pg_net_http_post',(SELECT coalesce(bool_or(p.prosrc ~* 'net[.]http_post'),false) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname=w.schema_name AND p.proname=w.func_name),
@@ -67,7 +69,7 @@ SELECT jsonb_build_object(
 ) AS snapshot;
 ~~~
 
-The snapshot must include the exact 2 job IDs/function names/config keys, one overload each, SECURITY DEFINER plus indirect pg_net HTTP dispatch code, zero runtime_config rows and configured URLs, zero usage/Agreement processing rows, zero pending requests, no embedded Production reference/literal URL, correct Test project/purpose and an under-ten-minute UTC timestamp. The offline check rejects any unexpected key/field, missing function, new work row, configured worker route, changed source metadata, future/stale snapshot or wrong project:
+The snapshot must include the exact 2 job IDs/function names/**observed SQL configuration lookup keys** and **source SHA-256 digests** (frozen from actual Test function source), one overload each, SECURITY DEFINER plus indirect pg_net HTTP dispatch code, zero runtime_config rows and configured URLs, zero usage/Agreement processing rows, zero pending requests, no embedded Production reference/literal URL, correct Test project/purpose and an under-ten-minute UTC timestamp. The offline check rejects any unexpected key/field, missing function, new work row, configured worker route, changed source metadata, future/stale snapshot or wrong project:
 
 ~~~sh
 node scripts/qa/oa5-test-worker-egress.mjs --check /secure/private/test-worker-egress-census.json
@@ -84,3 +86,15 @@ This checker returns **worker_route_counts_quiescent** only. It always denies ac
 - A separately approved destructive Test-only operation after all evidence is accepted.
 
 **This report contains no worker URL value, secret, recipient, provider token or mutation statement.** Source PR #228 remains draft; hosted QA attestation remains blocked.
+
+
+## Actual Test function-source fingerprints
+
+The two existing Test private SQL function bodies were independently hashed through a **read-only** SELECT using extensions.digest(prosrc::bytea,'sha256'). No function body or literal config value is saved in source control. This closes a blind spot: simply expecting a function name and net.http_post in the source would not detect a changed implementation that read a different URL setting.
+
+| Function | Observed SQL function-source SHA-256 |
+| --- | --- |
+| sellertray_private.kick_whatsapp_notification_worker | 8e1f13dc854def4de0163809fc6a82227e1a5bf2daccba159fc66008e24d0520 |
+| sellertray_private.kick_merchant_push_worker | b052a9982fcd993ff5f4e5ba3a41eacd4f27c3335e775811a08d6aa16accb56c |
+
+Their actual parsed source lookup keys matched notification_worker_url and merchant_push_worker_url. The offline guard now requires both these digests and the **actual parsed source lookup key**, not merely the expected key copied into a snapshot. Any SQL code change must STOP the pre-maintenance review and be independently reconciled; do not silently update these digests to force a PASS. This is only a *fingerprint for two known functions*, not comprehensive code attestations of invoked SQL dependencies or all Test outbound routes.
