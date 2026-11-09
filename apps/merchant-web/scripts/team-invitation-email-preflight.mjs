@@ -4,13 +4,18 @@ import path from 'node:path';
 
 const merchantRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = path.resolve(merchantRoot, '../..');
-const [source, authEmailSource, inviteHtml, inviteJs, inviteCss, incomingInvitationsSource] = await Promise.all([
+const [source, authEmailSource, inviteHtml, joinHtml, inviteJs, inviteCss, incomingInvitationsSource, portalRootSource, merchantAuthSource, appJsonText, teamManagementSource] = await Promise.all([
   readFile(path.join(repoRoot, 'supabase/functions/team-management/index.ts'), 'utf8'),
   readFile(path.join(repoRoot, 'supabase/functions/send-auth-email/index.ts'), 'utf8'),
   readFile(path.join(merchantRoot, 'public/invite.html'), 'utf8'),
+  readFile(path.join(merchantRoot, 'public/join.html'), 'utf8'),
   readFile(path.join(merchantRoot, 'public/invite.js'), 'utf8'),
   readFile(path.join(merchantRoot, 'public/invite.css'), 'utf8'),
   readFile(path.join(merchantRoot, 'src/IncomingBusinessInvitations.tsx'), 'utf8'),
+  readFile(path.join(merchantRoot, 'src/MerchantPortalRoot.tsx'), 'utf8'),
+  readFile(path.join(merchantRoot, 'src/MerchantAuth.tsx'), 'utf8'),
+  readFile(path.join(repoRoot, 'apps/mobile/app.json'), 'utf8'),
+  readFile(path.join(merchantRoot, 'src/TeamPermissionsManagement.tsx'), 'utf8'),
 ]);
 
 const failures = [];
@@ -21,7 +26,7 @@ function expect(condition, message) {
 const configGuard = source.indexOf('if (!RESEND_API_KEY || !TEAM_INVITE_EMAIL_FROM)');
 const inviteRpc = source.indexOf("const result = await rpc<JsonRecord>('invite_orderdesk_team_member'");
 const emailSend = source.indexOf('await sendTeamInvitationEmail({');
-const successResponse = source.indexOf("return json({ result, emailDelivery: 'sent' }, 201)");
+const successResponse = source.indexOf("return json({ result, emailDelivery: 'sent', providerAccepted: true, recipientDeliveryVerified: false }, 201)");
 
 expect(source.includes("Deno.env.get('RESEND_API_KEY')"), 'team invitations must use the configured Resend provider');
 expect(source.includes("Deno.env.get('SELLERTRAY_EMAIL_FROM')"), 'team invitations must prefer the SellerTray sender configuration');
@@ -32,12 +37,21 @@ expect(configGuard >= 0 && inviteRpc >= 0 && configGuard < inviteRpc, 'known ema
 expect(inviteRpc >= 0 && emailSend > inviteRpc, 'the governed invitation record must be created before attempting external email delivery');
 expect(emailSend >= 0 && successResponse > emailSend, 'the API must report invitation success only after email delivery succeeds');
 expect(source.includes("fetch('https://api.resend.com/emails'"), 'team invitations must call the existing Resend transport');
-expect(source.includes('Invitation is pending, but the email could not be delivered.'), 'post-write delivery failures must report the pending invitation state explicitly');
-expect(source.includes('the existing pending invitation will be reused'), 'delivery failure copy must tell merchants that retry reuses the pending invitation');
+expect(source.includes('The invitation remains pending, but SellerTray could not confirm the email provider accepted the message.'), 'post-write provider errors must preserve the pending invitation and avoid claiming confirmed delivery or non-delivery');
+expect(source.includes('a retry reuses the existing pending invitation'), 'provider uncertainty copy must tell merchants that retries keep the same pending invitation');
 expect(source.includes("subject: `${subjectBusinessName} invited you to SellerTray`"), 'email subjects must use the normalized Business name');
 expect(source.includes('function cleanEmailHeader(value: string)'), 'merchant-controlled Business names must be normalized before entering email headers');
 expect(source.includes('const invitationId = cleanUuid(result.invitationId)'), 'email links must be bound to the governed invitation locator returned by the database authority');
-expect(source.includes('/invite.html?invitation=${encodeURIComponent(invitationId)}'), 'email CTA must use the canonical invitation-specific browser/app smart link');
+expect(source.includes('/join.html?invitation=${encodeURIComponent(invitationId)}'), 'new invitation emails must use the browser-first non-App-Link landing');
+const mobileApp = JSON.parse(appJsonText);
+const appLinkPatterns = (mobileApp.expo?.android?.intentFilters ?? []).flatMap((filter) => filter.data ?? []).filter((entry) => entry.host === 'app.sellertray.com' && entry.scheme === 'https');
+expect(appLinkPatterns.every((entry) => !('/join.html'.startsWith(entry.pathPrefix || '/'))), 'installed Production APKs must not intercept the browser-first invitation link');
+expect(joinHtml.includes('Review your SellerTray invitation') && joinHtml.includes('/invite.js') && joinHtml.includes('Continue in browser'), 'browser-first invitation landing must preserve explicit app/web actions');
+expect(inviteHtml.includes('Continue in browser'), 'old invitation links must retain their browser fallback');
+expect(source.includes('providerAccepted: true, recipientDeliveryVerified: false'), '2xx invitation response must not misrepresent mailbox delivery');
+expect(source.includes('provider_message_id: providerMessageId'), 'team invitation provider acknowledgment must be traceable without logging recipient email');
+expect(teamManagementSource.includes('async function resendInvitation(invitation: Invitation)') && teamManagementSource.includes('onClick={() => void resendInvitation(invitation)}'), 'Team management must offer an explicit governed resend for pending invitations');
+expect(teamManagementSource.includes("new URL('/join.html', window.location.origin)") && teamManagementSource.includes('navigator.clipboard.writeText(link.toString())') && teamManagementSource.includes('onClick={() => void copyInvitationLink(invitation)}'), 'Pending invitation owners must be able to copy a browser-first review link without calling the email provider');
 expect(source.includes('>Review invitation</a>'), 'invitation CTA must say Review invitation');
 expect(source.includes('Access starts only after you review and accept this invitation.'), 'email copy must preserve explicit invitation acceptance');
 expect(source.includes('The invitation expires after 7 days.'), 'email copy must communicate the governed invitation expiry');
@@ -50,6 +64,10 @@ expect(authEmailSource.includes("Deno.env.get('SELLERTRAY_EMAIL_FROM')"), 'authe
 expect(authEmailSource.includes('function sellerTraySender(value: string)'), 'authentication emails must normalize the visible sender identity');
 expect(authEmailSource.includes('`SellerTray <${address}>`'), 'authentication emails must display SellerTray rather than ProcessEdge');
 expect(authEmailSource.includes("'https://app.sellertray.com'"), 'authentication email fallback redirect must use canonical Merchant Web');
+expect(authEmailSource.includes('verifiedHookRequest = true') && authEmailSource.includes('verifiedHookRequest ? 503 : 401'), 'verified Auth email provider errors must be transient failures, not an invalid webhook signature');
+expect(authEmailSource.includes("event: verifiedHookRequest ? 'auth_email_provider_request_uncertain' : 'auth_email_hook_auth_failed'"), 'Auth email errors must distinguish signature failures from provider uncertainty');
+expect(authEmailSource.includes('providerMessageIds') && authEmailSource.includes('providerAccepted: true') && authEmailSource.includes('recipientDeliveryVerified: false'), 'Auth email hook must record accepted provider message IDs without claiming recipient delivery');
+expect(!authEmailSource.includes("message: error instanceof Error ? error.message"), 'Auth email hook must not log raw errors that can include sensitive URL or request contents');
 expect(authEmailSource.includes('https://sellertray.com/privacy'), 'authentication email footer must use canonical SellerTray privacy');
 expect(authEmailSource.includes('https://sellertray.com/terms'), 'authentication email footer must use canonical SellerTray terms');
 expect(!authEmailSource.includes('SellerTray by ProcessEdge</p>'), 'authentication emails must not use ProcessEdge as primary brand identity');
@@ -73,8 +91,17 @@ expect(incomingInvitationsSource.includes('setLoading(false);'), 'Merchant Web m
 expect(incomingInvitationsSource.includes('loading && focusedInvitationId && !error'), 'focused browser invitation must show a loading state while server status is unresolved');
 expect(incomingInvitationsSource.includes('!focusedInvitationIsPending && !loading && !error'), 'resolved invitation copy must not appear before a successful invitation fetch completes');
 expect(incomingInvitationsSource.includes('Loading invitation…'), 'Merchant Web must explain that invitation status is still being checked');
-expect(!inviteHtml.includes('<script>'), 'browser fallback must not require inline script under Merchant Web CSP');
-expect(!inviteHtml.includes('<style>'), 'browser fallback must not require inline style under Merchant Web CSP');
+expect(!inviteJs.includes('window.location.href = appUrl'), 'invitation landing must not auto-open an installed app that may lack invitation review');
+expect(portalRootSource.includes('if (invitationIntent)') && portalRootSource.includes('<IncomingBusinessInvitations'), 'authenticated invitees must reach governed invitation review before any workspace creation');
+expect(portalRootSource.includes('invitationContext') && portalRootSource.includes('hasIncomingInvitationLocator'), 'guest invitation must be routed to account sign-in/creation rather than generic merchant Business provisioning');
+expect(merchantAuthSource.includes("'join-invitation'") && merchantAuthSource.includes("emailRedirectTo: merchantPortalUrl('join-invitation')"), 'invitation-only signup must preserve link intent across email confirmation');
+const invitationSignup = merchantAuthSource.split('async function joinInvitation(event: FormEvent)')[1]?.split('async function createBusiness(event: FormEvent)')[0] ?? '';
+expect(invitationSignup.includes('supabase.auth.signUp') && !invitationSignup.includes("functions.invoke('provision-business'"), 'invited staff account creation must never implicitly provision a Business');
+expect(merchantAuthSource.includes('invitationLegalAccepted'), 'invited browser signup must enforce terms/privacy acknowledgement');
+expect(incomingInvitationsSource.includes('Invitation not available to this account') && incomingInvitationsSource.includes('Sign in with invited email'), 'wrong signed-in account must not falsely be told the invitation has expired');
+expect(incomingInvitationsSource.includes('onSwitchAccount') && portalRootSource.includes("supabase.auth.signOut({ scope: 'local' })"), 'wrong-account switch must be explicit and local');
+expect(!inviteHtml.includes('<script>') && !joinHtml.includes('<script>'), 'browser fallback must not require inline script under Merchant Web CSP');
+expect(!inviteHtml.includes('<style>') && !joinHtml.includes('<style>'), 'browser fallback must not require inline style under Merchant Web CSP');
 expect(inviteCss.length > 0, 'browser fallback must ship self-hosted styles');
 
 if (failures.length) {

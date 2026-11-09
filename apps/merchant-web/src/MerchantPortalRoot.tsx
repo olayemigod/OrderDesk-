@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import MerchantAuth, { merchantAuthModeFromLocation } from './MerchantAuth';
+import IncomingBusinessInvitations, { hasIncomingInvitationLocator } from './IncomingBusinessInvitations';
 import { SellerTrayMark } from './merchantShell';
 import { errorMessage, supabase } from './supabase';
 
@@ -12,6 +13,7 @@ export default function MerchantPortalRoot({ children }: { children: ReactNode }
   const [workspaceState, setWorkspaceState] = useState<WorkspaceState>('checking');
   const [workspaceError, setWorkspaceError] = useState('');
   const authIntent = merchantAuthModeFromLocation();
+  const invitationIntent = hasIncomingInvitationLocator();
 
   const inspectWorkspace = useCallback(async (nextSession: Session) => {
     setWorkspaceState('checking');
@@ -83,6 +85,26 @@ export default function MerchantPortalRoot({ children }: { children: ReactNode }
 
   if (authIntent === 'reset-password') {
     return <MerchantAuth session={session} initialMode="reset-password" onAuthenticated={(next) => void acceptAuthenticated(next)} />;
+  }
+
+  // Invitation acceptance precedes Merchant Web management access. Cashiers and
+  // recipients without any Business must never be redirected into Business creation.
+  if (invitationIntent) {
+    if (!session) {
+      return <MerchantAuth session={null} initialMode="sign-in" invitationContext onAuthenticated={(next) => void acceptAuthenticated(next)} />;
+    }
+    return <main className="status-page">
+      <section className="status-card">
+        <SellerTrayMark large />
+        <p className="eyebrow">SellerTray Business invitation</p>
+        <h1>Review your invitation</h1>
+        <p>Review the Business and assigned role before choosing Accept or Decline. If you are signed in with another account, switch to the invited email.</p>
+        <IncomingBusinessInvitations
+          onInvitationResolved={() => inspectWorkspace(session)}
+          onSwitchAccount={() => void supabase.auth.signOut({ scope: 'local' })}
+        />
+      </section>
+    </main>;
   }
 
   if (authIntent === 'create-business') {

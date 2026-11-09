@@ -163,12 +163,14 @@ Deno.serve(withObservability('team-management', async (request) => {
           error: sanitizeObservabilityError(error),
         }));
         return json({
-          error: 'Invitation is pending, but the email could not be delivered. Send the invitation again to retry email delivery; the existing pending invitation will be reused.',
+          error: 'The invitation remains pending, but SellerTray could not confirm the email provider accepted the message. Check the recipient inbox and Spam before resending; a retry reuses the existing pending invitation.',
           invitationPending: true,
         }, 503);
       }
 
-      return json({ result, emailDelivery: 'sent' }, 201);
+      // Keep the legacy emailDelivery field for existing clients, but never claim
+      // that provider acceptance means recipient mailbox delivery.
+      return json({ result, emailDelivery: 'sent', providerAccepted: true, recipientDeliveryVerified: false }, 201);
     }
 
     if (action === 'set_role') {
@@ -288,7 +290,7 @@ async function sendTeamInvitationEmail({
   const safeRole = escapeHtml(roleLabel);
   const safeEmail = escapeHtml(to);
   const subjectBusinessName = cleanEmailHeader(businessName) || 'A SellerTray business';
-  const actionUrl = `${SELLERTRAY_MERCHANT_URL}/invite.html?invitation=${encodeURIComponent(invitationId)}`;
+  const actionUrl = `${SELLERTRAY_MERCHANT_URL}/join.html?invitation=${encodeURIComponent(invitationId)}`;
   const html = `
     <!doctype html>
     <html>
@@ -342,9 +344,15 @@ async function sendTeamInvitationEmail({
     throw new Error(`Team invitation email provider failed with HTTP ${response.status}`);
   }
 
+  const providerReceipt = await response.json().catch(() => null) as JsonRecord | null;
+  const providerMessageId = typeof providerReceipt?.id === 'string' && /^[a-zA-Z0-9_-]{6,100}$/.test(providerReceipt.id)
+    ? providerReceipt.id
+    : null;
   console.info(JSON.stringify({
-    event: 'team_invitation_email_sent',
+    event: 'team_invitation_email_sent', // legacy event key; provider acceptance, not confirmed delivery
     provider: 'resend',
+    provider_message_id: providerMessageId,
+    recipient_delivery_verified: false,
   }));
 }
 

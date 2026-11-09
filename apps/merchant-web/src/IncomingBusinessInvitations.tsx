@@ -14,8 +14,12 @@ const INVITATION_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9
 
 export default function IncomingBusinessInvitations({
   onMembershipChanged,
+  onInvitationResolved,
+  onSwitchAccount,
 }: {
   onMembershipChanged?: () => Promise<void> | void;
+  onInvitationResolved?: () => Promise<void> | void;
+  onSwitchAccount?: () => void;
 }) {
   const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,6 +69,7 @@ export default function IncomingBusinessInvitations({
       if (focusedInvitationId === invitationId) clearInvitationLocator(false);
       await load();
       if (action === 'accept_invite') await onMembershipChanged?.();
+      await onInvitationResolved?.();
     } catch (cause) {
       setError(errorMessage(cause, action === 'accept_invite' ? 'Unable to accept this Business invitation.' : 'Unable to decline this Business invitation.'));
     } finally {
@@ -95,9 +100,10 @@ export default function IncomingBusinessInvitations({
     </div> : null}
     {focusedInvitationId && !focusedInvitationIsPending && !loading && !error ? <div className="invitation-row">
       <span>
-        <strong>This invitation is no longer pending</strong>
-        <small>It may already have been accepted, declined, expired or cancelled. Your current SellerTray access remains unchanged.</small>
+        <strong>Invitation not available to this account</strong>
+        <small>Check that you signed in with the invited email address. It may also have expired, been accepted, declined or cancelled. No Business access has changed.</small>
       </span>
+      {onSwitchAccount ? <button type="button" className="secondary-button" onClick={onSwitchAccount}>Sign in with invited email</button> : null}
       <button type="button" className="secondary-button" onClick={() => clearInvitationLocator(true)}>Continue</button>
     </div> : null}
     {!loading ? orderedInvitations.map((invitation) => {
@@ -115,6 +121,10 @@ export default function IncomingBusinessInvitations({
       </div>;
     }) : null}
   </article>;
+}
+
+export function hasIncomingInvitationLocator(): boolean {
+  return invitationIdFromBrowser() !== null;
 }
 
 function invitationIdFromBrowser(): string | null {

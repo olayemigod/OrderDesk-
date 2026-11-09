@@ -158,11 +158,13 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: 'email_hook_not_configured' }), { status: 503, headers: { ...jsonHeaders, 'retry-after': '5' } })
   }
 
+  let verifiedHookRequest = false
   try {
     const payloadText = await req.text()
     const headers = Object.fromEntries(req.headers)
     const secret = hookSecret.replace(/^v1,whsec_/, '')
     const verified = new Webhook(secret).verify(payloadText, headers) as HookPayload
+    verifiedHookRequest = true
 
     const data = verified.email_data
     const action = data?.email_action_type || ''
@@ -251,10 +253,38 @@ Deno.serve(async (req) => {
       )
     }
 
-    console.log(JSON.stringify({ event: 'auth_email_sent', provider: 'resend', action, messageCount: messages.length }))
+    // A provider HTTP 2xx means Resend accepted the message(s), not that a
+    // recipient's email provider delivered them to their mailbox.
+    const providerMessageIds = await Promise.all(providerResponses.map(async (response) => {
+      const receipt = await response.json().catch(() => null) as { id?: unknown } | null
+      return typeof receipt?.id === 'string' && /^[a-zA-Z0-9_-]{6,100}$/.test(receipt.id)
+        ? receipt.id
+        : null
+    }))
+    console.log(JSON.stringify({
+      event: 'auth_email_sent', // preserved event identifier for existing dashboards
+      provider: 'resend',
+      action,
+      messageCount: messages.length,
+      providerMessageIds,
+      providerAccepted: true,
+      recipientDeliveryVerified: false,
+    }))
     return new Response(JSON.stringify({}), { status: 200, headers: jsonHeaders })
   } catch (error) {
-    console.error(JSON.stringify({ event: 'auth_email_hook_error', message: error instanceof Error ? error.message : 'unknown_error' }))
-    return new Response(JSON.stringify({ error: 'invalid_hook_request' }), { status: 401, headers: jsonHeaders })
+    // Invalid signatures are auth failures; an error *after* verification is
+    // operational/provider uncertainty. Mislabeling a timeout as a 401 hides
+    // delivery failures and can prevent safe diagnosis/retry.
+    const responseStatus = verifiedHookRequest ? 503 : 401
+    console.error(JSON.stringify({
+      event: verifiedHookRequest ? 'auth_email_provider_request_uncertain' : 'auth_email_hook_auth_failed',
+      failureClass: error instanceof Error ? error.name : 'unknown',
+      providerAccepted: false,
+      recipientDeliveryVerified: false,
+    }))
+    return new Response(
+      JSON.stringify({ error: verifiedHookRequest ? 'email_provider_request_uncertain' : 'invalid_hook_request' }),
+      { status: responseStatus, headers: responseStatus === 503 ? { ...jsonHeaders, 'retry-after': '5' } : jsonHeaders },
+    )
   }
 })

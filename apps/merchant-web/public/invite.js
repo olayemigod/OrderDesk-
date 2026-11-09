@@ -31,13 +31,8 @@
   openApp.href = appUrl;
   continueWeb.href = `/?invitation=${encodeURIComponent(invitationId)}`;
 
-  // The email uses this HTTPS page so recipients without the app still have a safe browser
-  // fallback. On mobile, immediately try the registered SellerTray scheme; the visible button
-  // remains available when the browser blocks automatic scheme navigation.
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  if (isMobile) {
-    window.setTimeout(() => {
-      if (document.visibilityState === 'visible') window.location.href = appUrl;
-    }, 180);
-  }
+  // Do not auto-open an installed APK: an older app may not understand the
+  // invitation locator and will show ordinary Home with no activation action.
+  // Let the recipient deliberately choose App or the authenticated browser
+  // review instead. Neither choice grants membership by itself.
 })();
