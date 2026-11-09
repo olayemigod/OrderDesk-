@@ -322,6 +322,8 @@ Rules:
 5. Reuse shared components where behaviour is equivalent.
 6. Error messages must explain what happened and the next safe action.
 7. Merchants should not need to understand ledger, conversion, sync or payment internals.
+
+Orders search/filter controls on Mobile and Merchant Web must start **collapsed** to preserve selling screen space. Merchants deliberately expand them; active filters remain applied and indicated when collapsed, with a visible reset when expanded. Customer order-history entries must open the corresponding permitted order through the governed shared order model, with Branch scope preserved.
 8. Appearance uses a persisted font-size slider rather than only fixed Small/Large choices. The preference must apply consistently across appropriate SellerTray mobile text surfaces through a shared typography primitive or equivalent central mechanism; do not implement screen-specific font scaling that drifts between Home, Sell, Orders, Inventory and More.
 9. Font scaling must preserve usable layouts and touch targets; it changes readable text sizing, not business logic or transaction truth.
 

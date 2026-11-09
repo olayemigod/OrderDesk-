@@ -1,23 +1,23 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import AiInsights from './AiInsights';
-import BusinessExpensesManagement from './BusinessExpensesManagement';
-import CashShiftsManagement from './CashShiftsManagement';
-import CommercialAgreementsManagement from './CommercialAgreementsManagement';
-import CustomersManagement from './CustomersManagement';
-import DashboardOverview from './DashboardOverview';
-import InventoryManagement from './InventoryManagement';
-import ManagementPage from './ManagementPage';
-import MerchantNotificationsManagement from './MerchantNotificationsManagement';
-import OrdersManagement from './OrdersManagement';
-import PaymentsManagement from './PaymentsManagement';
-import PurchasingManagement from './PurchasingManagement';
-import ReportCenter from './ReportCenter';
-import ReturnsManagement from './ReturnsManagement';
-import SalesManagement from './SalesManagement';
-import SellerTrayBillingManagement from './SellerTrayBillingManagement';
-import SetupSchedulingManagement from './SetupSchedulingManagement';
-import WhatsAppManagement from './WhatsAppManagement';
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 import type { MerchantHandoffTarget } from './merchantHandoff';
 import { BUSINESS_PROFILE_UPDATED_EVENT, type BusinessProfileUpdatedDetail } from './businessProfileEvents';
 import { readMerchantPageFromLocation, rememberMerchantPage, resolveMerchantPage, syncMerchantPageUrl } from './merchantRouteState';
@@ -25,6 +25,27 @@ import { SellerTrayBrand, SellerTrayMark, NavIcon, ShellIcon } from './merchantS
 import { SellerTraySelect } from './SellerTrayElements';
 import { AVAILABLE_MERCHANT_PORTAL_NAVIGATION, MERCHANT_PORTAL_SECTIONS, type MerchantPortalPage, type MerchantPortalSection } from './portalNavigation';
 import { errorMessage, supabase } from './supabase';
+
+// Load the selected management page only when it is opened; the authenticated
+// Business/Branch shell remains mounted and does not incur all report/POS bundles.
+const AiInsights = lazy(() => import('./AiInsights'));
+const BusinessExpensesManagement = lazy(() => import('./BusinessExpensesManagement'));
+const CashShiftsManagement = lazy(() => import('./CashShiftsManagement'));
+const CommercialAgreementsManagement = lazy(() => import('./CommercialAgreementsManagement'));
+const CustomersManagement = lazy(() => import('./CustomersManagement'));
+const DashboardOverview = lazy(() => import('./DashboardOverview'));
+const InventoryManagement = lazy(() => import('./InventoryManagement'));
+const ManagementPage = lazy(() => import('./ManagementPage'));
+const MerchantNotificationsManagement = lazy(() => import('./MerchantNotificationsManagement'));
+const OrdersManagement = lazy(() => import('./OrdersManagement'));
+const PaymentsManagement = lazy(() => import('./PaymentsManagement'));
+const PurchasingManagement = lazy(() => import('./PurchasingManagement'));
+const ReportCenter = lazy(() => import('./ReportCenter'));
+const ReturnsManagement = lazy(() => import('./ReturnsManagement'));
+const SalesManagement = lazy(() => import('./SalesManagement'));
+const SellerTrayBillingManagement = lazy(() => import('./SellerTrayBillingManagement'));
+const SetupSchedulingManagement = lazy(() => import('./SetupSchedulingManagement'));
+const WhatsAppManagement = lazy(() => import('./WhatsAppManagement'));
 
 type MerchantRole = 'owner' | 'manager' | 'staff';
 type ManagementRole = 'owner' | 'manager';
@@ -239,11 +260,12 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
       {error ? <div className="error-banner">{error}<button onClick={() => setError(null)}>Dismiss</button></div> : null}
       <section className="context-bar" aria-label="Current business context"><Context label="Business code" value={business.merchantCode || '—'} /><Context label="Subscription" value={statusText(business.subscriptionStatus)} /><Context label="Active Branch" value={branch?.name ?? 'No active Branch'} /></section>
       {COMMERCIAL_JOURNEY_PAGES.includes(page) ? <CommercialJourneyNavigation activePage={page} onNavigate={navigate} /> : null}
+      <Suspense fallback={<article className="panel" role="status" aria-live="polite"><p className="muted">Opening {currentPageLabel}…</p></article>} key={business.id}>
       {page === 'overview' && <DashboardOverview tenantId={business.id} currency={business.currency} go={navigate} openBranch={openBranchPage} />}
       {page === 'notifications' && <MerchantNotificationsManagement key={business.id} tenantId={business.id} unreadCount={unreadCount} onUnreadChanged={() => void loadUnreadCount(business.id)} />}
-      {page === 'sales' && branch && <SalesManagement tenantId={business.id} branchId={branch.id} />}
+      {page === 'sales' && branch && <SalesManagement key={`${business.id}:${branch.id}`} tenantId={business.id} branchId={branch.id} />}
       {page === 'sales' && !branch && <PageTable eyebrow="Sales" title="Choose a Branch" note="Select a Branch to review completed sales."><Empty title="No active Branch" body="Sales are reviewed within a Branch so transaction and stock context remain clear." /></PageTable>}
-      {page === 'orders' && branch && <OrdersManagement tenantId={business.id} branchId={branch.id} currency={business.currency} />}
+      {page === 'orders' && branch && <OrdersManagement key={`${business.id}:${branch.id}`} tenantId={business.id} branchId={branch.id} currency={business.currency} />}
       {page === 'orders' && !branch && <PageTable eyebrow="Orders" title="Choose a Branch" note="Select a Branch to review open orders and POS drafts."><Empty title="No active Branch" body="Orders are reviewed within a Branch so fulfilment and transaction context remain clear." /></PageTable>}
       {page === 'customers' && <CustomersManagement tenantId={business.id} currency={business.currency} />}
       {page === 'returns' && branch && <ReturnsManagement tenantId={business.id} branchId={branch.id} />}
@@ -260,6 +282,7 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
       {page === 'agreements' && <CommercialAgreementsManagement tenantId={business.id} onContinueToBilling={() => navigate('sellertray_billing')} />}
       {page === 'setup' && <SetupSchedulingManagement key={business.id} tenantId={business.id} />}
       {managementPage && <ManagementPage page={page} tenantId={business.id} currency={business.currency} onBranchesChanged={refresh} />}
+      </Suspense>
     </main>
   </div>;
 }
