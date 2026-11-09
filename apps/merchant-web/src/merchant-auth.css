@@ -18,3 +18,8 @@
   .auth-links .text-button { width: 100%; text-align: left; }
   .password-toggle { min-height: 34px; }
 }
+
+/* Invitation-only registration is a compact consent control, not a full-width form input. */
+.auth-card .invitation-legal { display: flex; align-items: flex-start; gap: 9px; line-height: 1.55; font-weight: 500; }
+.auth-card .invitation-legal input[type="checkbox"] { width: 18px; min-width: 18px; height: 18px; min-height: 18px; margin: 2px 0 0; padding: 0; flex: none; }
+.auth-card .invitation-legal span { flex: 1; }
