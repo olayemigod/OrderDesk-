@@ -50,6 +50,7 @@ on:
       - 'scripts/qa/oa5-historical-preview-bundle-inspection.test.mjs'
       - 'scripts/qa/oa5-protected-preview-capture.mjs'
       - 'scripts/qa/oa5-protected-preview-capture.test.mjs'
+      - 'docs/qa/oa5-original-preview-alias-fingerprints-2026-11-09.json'
       - 'docs/qa/oa5-protected-vercel-compiled-preview-capture-operator-2026-11-09.md'
       - 'scripts/qa/oa5-vercel-anonymous-access.mjs'
       - 'scripts/qa/oa5-vercel-anonymous-access.test.mjs'
