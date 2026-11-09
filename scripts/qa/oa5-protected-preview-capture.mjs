@@ -9,7 +9,7 @@
  * HUMAN evidence; this tool NEVER attests either, even if files look correct.
  */
 import {readFileSync,writeFileSync,mkdirSync,existsSync,readdirSync} from 'node:fs';
-import {resolve,dirname,join} from 'node:path';
+import {resolve,dirname,join,sep} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
@@ -23,6 +23,10 @@ const exact=(obj,keys)=>!!obj&&typeof obj==='object'&&!Array.isArray(obj)&&
  Object.keys(obj).sort().join('|')===[...keys].sort().join('|');
 const refGood=x=>typeof x==='string'&&/^[A-Za-z0-9][A-Za-z0-9_-]{7,79}$/.test(x);
 const sha256=buffer=>createHash('sha256').update(buffer).digest('hex');
+const checkoutRoot=resolve(dirname(fileURLToPath(import.meta.url)),'../..');
+const insideCheckout=path=>existsSync(join(checkoutRoot,'.git'))&&
+  (path===checkoutRoot||path.startsWith(checkoutRoot+sep));
+
 
 export function validatePrivateCapturePlan(input){
  const reasons=[],normalized=[];
@@ -99,6 +103,7 @@ export function captureOriginalPreviewPlan(input,privateRoot,request=protectedVe
  if(!plan.valid)throw Error('BLOCKED: invalid original Preview capture mapping: '+plan.reasons.join('; '));
  if(typeof request!=='function')throw Error('BLOCKED: missing read-only capture transport');
  const root=resolve(privateRoot);
+ if(insideCheckout(root))throw Error('BLOCKED: historical compiled assets must never be stored inside the Git repository');
  if(existsSync(root)){
   if(readdirSync(root).length)throw Error('BLOCKED: never overwrite existing private historical capture');
  }else{
@@ -192,6 +197,10 @@ function main(){
     (mode==='--capture'&&!privateRoot)||(mode==='--check-plan'&&privateRoot)){
   console.error('BLOCKED: explicit capture mode and private plan/root required');
   process.exitCode=2;return;
+ }
+ if(insideCheckout(resolve(privatePlan))){
+  console.error('BLOCKED: do not store the private original Preview alias plan inside Git');
+  process.exitCode=1;return;
  }
  let plan;
  try{plan=JSON.parse(readFileSync(resolve(privatePlan),'utf8'));}
