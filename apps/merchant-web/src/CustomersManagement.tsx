@@ -363,11 +363,13 @@ function label(value: string) {
   return value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function money(value: number, currency: string) {
+function money(value: number | string, currency: string) {
+  const amount = Number(value);
+  const safeAmount = Number.isFinite(amount) ? amount : 0;
   try {
-    return new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 2 }).format(value);
+    return new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 2 }).format(safeAmount);
   } catch {
-    return `${currency} ${value.toLocaleString('en-NG', { maximumFractionDigits: 2 })}`;
+    return `${currency} ${safeAmount.toLocaleString('en-NG', { maximumFractionDigits: 2 })}`;
   }
 }
 
