@@ -4,13 +4,15 @@ import path from 'node:path';
 
 const merchantRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = path.resolve(merchantRoot, '../..');
-const [source, authEmailSource, inviteHtml, inviteJs, inviteCss, incomingInvitationsSource] = await Promise.all([
+const [source, authEmailSource, inviteHtml, inviteJs, inviteCss, incomingInvitationsSource, portalRootSource, merchantAuthSource] = await Promise.all([
   readFile(path.join(repoRoot, 'supabase/functions/team-management/index.ts'), 'utf8'),
   readFile(path.join(repoRoot, 'supabase/functions/send-auth-email/index.ts'), 'utf8'),
   readFile(path.join(merchantRoot, 'public/invite.html'), 'utf8'),
   readFile(path.join(merchantRoot, 'public/invite.js'), 'utf8'),
   readFile(path.join(merchantRoot, 'public/invite.css'), 'utf8'),
   readFile(path.join(merchantRoot, 'src/IncomingBusinessInvitations.tsx'), 'utf8'),
+  readFile(path.join(merchantRoot, 'src/MerchantPortalRoot.tsx'), 'utf8'),
+  readFile(path.join(merchantRoot, 'src/MerchantAuth.tsx'), 'utf8'),
 ]);
 
 const failures = [];
@@ -73,6 +75,15 @@ expect(incomingInvitationsSource.includes('setLoading(false);'), 'Merchant Web m
 expect(incomingInvitationsSource.includes('loading && focusedInvitationId && !error'), 'focused browser invitation must show a loading state while server status is unresolved');
 expect(incomingInvitationsSource.includes('!focusedInvitationIsPending && !loading && !error'), 'resolved invitation copy must not appear before a successful invitation fetch completes');
 expect(incomingInvitationsSource.includes('Loading invitation…'), 'Merchant Web must explain that invitation status is still being checked');
+expect(!inviteJs.includes('window.location.href = appUrl'), 'invitation landing must not auto-open an installed app that may lack invitation review');
+expect(portalRootSource.includes('if (invitationIntent)') && portalRootSource.includes('<IncomingBusinessInvitations'), 'authenticated invitees must reach governed invitation review before any workspace creation');
+expect(portalRootSource.includes('invitationContext') && portalRootSource.includes('hasIncomingInvitationLocator'), 'guest invitation must be routed to account sign-in/creation rather than generic merchant Business provisioning');
+expect(merchantAuthSource.includes("'join-invitation'") && merchantAuthSource.includes("emailRedirectTo: merchantPortalUrl('join-invitation')"), 'invitation-only signup must preserve link intent across email confirmation');
+const invitationSignup = merchantAuthSource.split('async function joinInvitation(event: FormEvent)')[1]?.split('async function createBusiness(event: FormEvent)')[0] ?? '';
+expect(invitationSignup.includes('supabase.auth.signUp') && !invitationSignup.includes("functions.invoke('provision-business'"), 'invited staff account creation must never implicitly provision a Business');
+expect(merchantAuthSource.includes('invitationLegalAccepted'), 'invited browser signup must enforce terms/privacy acknowledgement');
+expect(incomingInvitationsSource.includes('Invitation not available to this account') && incomingInvitationsSource.includes('Sign in with invited email'), 'wrong signed-in account must not falsely be told the invitation has expired');
+expect(incomingInvitationsSource.includes('onSwitchAccount') && portalRootSource.includes("supabase.auth.signOut({ scope: 'local' })"), 'wrong-account switch must be explicit and local');
 expect(!inviteHtml.includes('<script>'), 'browser fallback must not require inline script under Merchant Web CSP');
 expect(!inviteHtml.includes('<style>'), 'browser fallback must not require inline style under Merchant Web CSP');
 expect(inviteCss.length > 0, 'browser fallback must ship self-hosted styles');
