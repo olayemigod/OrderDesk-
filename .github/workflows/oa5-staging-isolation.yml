@@ -33,6 +33,7 @@ on:
       - 'docs/qa/oa5-test-edge-function-custody-2026-11-09.json'
       - 'scripts/qa/oa5-historical-preview-custody.test.mjs'
       - 'scripts/qa/oa5-historical-preview-bundle-inspection.mjs'
+      - 'scripts/qa/oa5-preview-module-graph.mjs'
       - 'scripts/qa/oa5-historical-preview-bundle-inspection.test.mjs'
       - 'scripts/qa/oa5-vercel-anonymous-access.mjs'
       - 'scripts/qa/oa5-vercel-anonymous-access.test.mjs'
