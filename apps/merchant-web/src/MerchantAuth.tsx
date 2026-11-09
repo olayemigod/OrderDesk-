@@ -5,7 +5,7 @@ import { SellerTrayMark } from './merchantShell';
 import { errorMessage, supabase } from './supabase';
 import './merchant-auth.css';
 
-export type MerchantAuthMode = 'sign-in' | 'forgot-password' | 'reset-password' | 'create-business';
+export type MerchantAuthMode = 'sign-in' | 'forgot-password' | 'reset-password' | 'create-business' | 'join-invitation';
 
 export function merchantAuthModeFromLocation(): MerchantAuthMode | null {
   if (typeof window === 'undefined') return null;
@@ -14,11 +14,13 @@ export function merchantAuthModeFromLocation(): MerchantAuthMode | null {
   return null;
 }
 
-function merchantPortalUrl(mode?: 'reset-password' | 'create-business'): string {
+function merchantPortalUrl(mode?: 'reset-password' | 'create-business' | 'join-invitation'): string {
   const url = new URL(window.location.href);
   url.hash = '';
+  const invitation = url.searchParams.get('invitation');
   url.search = '';
-  if (mode) url.searchParams.set('auth', mode);
+  if (mode === 'join-invitation' && invitation) url.searchParams.set('invitation', invitation);
+  else if (mode) url.searchParams.set('auth', mode);
   return url.toString();
 }
 
@@ -33,9 +35,11 @@ export default function MerchantAuth({
   initialMode,
   onAuthenticated,
   onBusinessCreated,
+  invitationContext = false,
 }: {
   session: Session | null;
   initialMode?: MerchantAuthMode;
+  invitationContext?: boolean;
   onAuthenticated?: (session: Session) => void;
   onBusinessCreated?: () => void | Promise<void>;
 }) {
@@ -48,6 +52,7 @@ export default function MerchantAuth({
   const [businessName, setBusinessName] = useState('');
   const [merchantCode, setMerchantCode] = useState('');
   const [businessPhone, setBusinessPhone] = useState('');
+  const [invitationLegalAccepted, setInvitationLegalAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [success, setSuccess] = useState(false);
@@ -138,6 +143,48 @@ export default function MerchantAuth({
     }
   }
 
+  async function joinInvitation(event: FormEvent) {
+    event.preventDefault();
+    if (!invitationContext) return;
+    if (password.length < 8 || password !== confirmPassword) {
+      setMessage(password.length < 8 ? 'Use at least 8 characters for your password.' : 'The passwords do not match.');
+      setSuccess(false);
+      return;
+    }
+    if (!invitationLegalAccepted) {
+      setMessage('Accept the Terms of Service and acknowledge the Privacy Policy to create an account.');
+      setSuccess(false);
+      return;
+    }
+    setBusy(true);
+    setMessage('');
+    setSuccess(false);
+    try {
+      // Sign-up establishes only an Auth identity. Business membership is granted
+      // separately by the recipient explicitly accepting the governed invitation.
+      const signup = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: { emailRedirectTo: merchantPortalUrl('join-invitation') },
+      });
+      if (signup.error) throw signup.error;
+      setSuccess(true);
+      if (signup.data.session) {
+        onAuthenticated?.(signup.data.session);
+        setMessage('Account created. Review your pending Business invitation before access is granted.');
+      } else {
+        setMessage('Check your email and confirm your SellerTray account. Return here, sign in with the invited email, and review the invitation.');
+        setMode('sign-in');
+        setPassword('');
+        setConfirmPassword('');
+      }
+    } catch (cause) {
+      setMessage(errorMessage(cause, 'Unable to create your SellerTray account.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function createBusiness(event: FormEvent) {
     event.preventDefault();
     if (!businessName.trim()) {
@@ -201,8 +248,10 @@ export default function MerchantAuth({
     }
   }
 
-  const title = mode === 'forgot-password'
-    ? 'Forgot password'
+  const title = mode === 'join-invitation'
+    ? 'Create account to review invitation'
+    : mode === 'forgot-password'
+      ? 'Forgot password'
     : mode === 'reset-password'
       ? 'Reset password'
       : mode === 'create-business'
@@ -217,11 +266,15 @@ export default function MerchantAuth({
       <p>Manage orders, stock, Branch performance, cash controls, WhatsApp and reporting from one merchant workspace.</p>
     </section>
 
-    <form className="login-card auth-card" onSubmit={mode === 'sign-in' ? signIn : mode === 'forgot-password' ? requestPasswordReset : mode === 'reset-password' ? resetPassword : createBusiness}>
+    <form className="login-card auth-card" onSubmit={mode === 'sign-in' ? signIn : mode === 'forgot-password' ? requestPasswordReset : mode === 'reset-password' ? resetPassword : mode === 'join-invitation' ? joinInvitation : createBusiness}>
       <div>
         <p className="eyebrow">Merchant Web</p>
         <h2>{title}</h2>
-        <p className="muted">{mode === 'forgot-password'
+        <p className="muted">{mode === 'join-invitation'
+          ? 'Create only a SellerTray account using the invited email. You will review the Business and role before accepting; no new Business is created.'
+          : invitationContext && mode === 'sign-in'
+            ? 'Sign in with the invited email address to review your pending Business invitation.'
+            : mode === 'forgot-password'
           ? 'Enter your account email and SellerTray will send recovery instructions.'
           : mode === 'reset-password'
             ? 'Choose a new password for your SellerTray account.'
@@ -230,12 +283,12 @@ export default function MerchantAuth({
               : 'Use the same SellerTray account you use for your business.'}</p>
       </div>
 
-      {(mode === 'sign-in' || mode === 'forgot-password' || (mode === 'create-business' && !session)) && <label>
+      {(mode === 'sign-in' || mode === 'forgot-password' || ((mode === 'create-business' || mode === 'join-invitation') && !session)) && <label>
         Email
         <SellerTrayInput type="email" autoComplete="email" inputMode="email" required value={email} onChange={(event) => setEmail(event.target.value)} />
       </label>}
 
-      {(mode === 'sign-in' || (mode === 'create-business' && !session)) && <PasswordField
+      {(mode === 'sign-in' || ((mode === 'create-business' || mode === 'join-invitation') && !session)) && <PasswordField
         label="Password"
         value={password}
         onChange={setPassword}
@@ -244,7 +297,7 @@ export default function MerchantAuth({
         autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
       />}
 
-      {(mode === 'reset-password' || (mode === 'create-business' && !session)) && <>
+      {(mode === 'reset-password' || ((mode === 'create-business' || mode === 'join-invitation') && !session)) && <>
         {mode === 'reset-password' && <PasswordField
           label="New password"
           value={password}
@@ -263,6 +316,10 @@ export default function MerchantAuth({
         />
       </>}
 
+      {mode === 'join-invitation' && <label className="field">
+        <span><SellerTrayInput type="checkbox" checked={invitationLegalAccepted} onChange={(event) => setInvitationLegalAccepted(event.target.checked)} required /> I accept the <a href="https://sellertray.com/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a> and acknowledge the <a href="https://sellertray.com/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</span>
+      </label>}
+
       {mode === 'create-business' && <>
         <label>Business name<SellerTrayInput autoComplete="organization" required value={businessName} onChange={(event) => setBusinessName(event.target.value)} /></label>
         <label>Merchant ID <span className="auth-optional">Optional · 3 letters or numbers</span><SellerTrayInput maxLength={3} autoCapitalize="characters" value={merchantCode} onChange={(event) => setMerchantCode(event.target.value.toUpperCase())} /></label>
@@ -272,13 +329,13 @@ export default function MerchantAuth({
       {message ? <div className={success ? 'auth-message success' : 'error-banner compact'} role="status">{message}</div> : null}
 
       <button className="primary-button" disabled={busy}>
-        {busy ? 'Please wait…' : mode === 'sign-in' ? 'Continue' : mode === 'forgot-password' ? 'Send reset instructions' : mode === 'reset-password' ? 'Update password' : 'Create My Business'}
+        {busy ? 'Please wait…' : mode === 'sign-in' ? 'Continue' : mode === 'forgot-password' ? 'Send reset instructions' : mode === 'reset-password' ? 'Update password' : mode === 'join-invitation' ? 'Create account to review' : 'Create My Business'}
       </button>
 
       <div className="auth-links">
         {mode === 'sign-in' && <>
           <button type="button" className="text-button" onClick={() => changeMode('forgot-password')}>Forgot password?</button>
-          <button type="button" className="text-button" onClick={() => changeMode('create-business')}>Create My Business</button>
+          {invitationContext ? <button type="button" className="text-button" onClick={() => changeMode('join-invitation')}>Create account to review invitation</button> : <button type="button" className="text-button" onClick={() => changeMode('create-business')}>Create My Business</button>}
         </>}
         {mode !== 'sign-in' && mode !== 'reset-password' && <button type="button" className="text-button" onClick={() => changeMode('sign-in')}>Back to sign in</button>}
         {mode === 'reset-password' && <button type="button" className="text-button" onClick={() => { clearAuthIntent(); void supabase.auth.signOut({ scope: 'local' }); changeMode('sign-in'); }}>Back to sign in</button>}
