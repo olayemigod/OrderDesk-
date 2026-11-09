@@ -8,8 +8,8 @@
  * URL-to-deployment provenance and historical reviewer authorization are
  * HUMAN evidence; this tool NEVER attests either, even if files look correct.
  */
-import {readFileSync,writeFileSync,mkdirSync,existsSync,readdirSync} from 'node:fs';
-import {resolve,dirname,join,sep} from 'node:path';
+import {readFileSync,writeFileSync,mkdirSync,existsSync,readdirSync,realpathSync} from 'node:fs';
+import {resolve,dirname,join,sep,basename} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
@@ -35,9 +35,25 @@ if(aliasCensus.schema_version!==1||
  throw Error('BLOCKED: original Vercel alias fingerprint census is invalid');
 export const EXPECTED_ALIAS_DIGESTS=Object.freeze(Object.fromEntries(aliasCensus.aliases.map(x=>[x.id,x.sha256])));
 const aliasDigest=(id,hostname)=>sha256(Buffer.from(id+'\n'+hostname.toLowerCase(),'utf8'));
-const checkoutRoot=resolve(dirname(fileURLToPath(import.meta.url)),'../..');
-const insideCheckout=path=>existsSync(join(checkoutRoot,'.git'))&&
-  (path===checkoutRoot||path.startsWith(checkoutRoot+sep));
+const checkoutRoot=realpathSync(resolve(dirname(fileURLToPath(import.meta.url)),'../..'));
+/** Canonicalize existing parents, including Windows junctions and symlinks. */
+function canonicalPlannedPath(path){
+ let cursor=resolve(path);
+ const remainder=[];
+ while(!existsSync(cursor)){
+  const parent=dirname(cursor);
+  if(parent===cursor)throw Error('BLOCKED: no existing private path ancestor');
+  remainder.unshift(basename(cursor));
+  cursor=parent;
+ }
+ return resolve(realpathSync(cursor),...remainder);
+}
+const insideCheckout=path=>{
+ const real=canonicalPlannedPath(path);
+ const left=process.platform==='win32'?real.toLowerCase():real;
+ const right=process.platform==='win32'?checkoutRoot.toLowerCase():checkoutRoot;
+ return left===right||left.startsWith(right+sep);
+};
 
 
 export function validatePrivateCapturePlan(input,expectedAliasDigests=EXPECTED_ALIAS_DIGESTS){
