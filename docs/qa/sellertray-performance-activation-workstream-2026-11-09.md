@@ -52,6 +52,14 @@ E. **Security and data**: server re-checks tenant, recipient identity, role, Bra
 
 F. **Environment and release**: PR #236 Mobile source requires a future approved APK, not OTA assumption. Merchant Web and Auth email changes need source checks, typecheck, managed Preview protection, isolated backend, synthetic QA inbox and explicit approval before deployment. Do not use Tandar as a Test fixture. Only after QA passes may a controlled Production release be proposed.
 
+## Source QA continuation (09/11/2026)
+
+- Merchant Web customer history total/line prices are returned as numeric or numeric-string values by the governed management RPC. Its local money formatter now handles both safely; prior source had a strict `number` signature that would reject the new detail typing in TypeScript.
+- When customer history opens a specific Mobile order, that explicit focused order bypasses the retained list filters. Expanding it does not silently clear the user's filters. The status controls also include rejected WhatsApp orders.
+- Invitation source PR #237 is stacked on PR #236, and source checks include a new `node:test` browser handoff suite. The four browser tests exercised a local matching copy of `invite.js` against valid ID, invalid ID, blocked storage and uppercase ID: **4/4 passed locally**. Four Mobile order-filter tests also **passed locally**. These are not exact-head complete app typechecks or hosted e2e tests.
+- Team & Permissions in #237 offers governed **Resend email** and **Copy review link** to the authorised Owner/Manager of an existing pending invitation. The copied link uses `/join.html` on the current Merchant Web origin, is non-authoritative by itself, and still requires the invited authenticated identity and explicit acceptance.
+- Both PRs remain draft and source-only. No recipient invitation was sent, no customer data was touched, and neither QA nor Production is deployed.
+
 ## Parallel implementation order / release dependency
 
 1. Continue OA5 isolation and Preview security attestation independently.
