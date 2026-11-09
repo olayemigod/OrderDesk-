@@ -81,6 +81,7 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
   const [notice, setNotice] = useState<string | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [catalogueView, setCatalogueView] = useState<'grid' | 'list'>('grid');
+  const [visibleProductLimit, setVisibleProductLimit] = useState(40);
   const [offlinePaymentOpen, setOfflinePaymentOpen] = useState(false);
   const [accessSubject, setAccessSubject] = useState<string | null>(null);
   const [accessRevision, setAccessRevision] = useState(0);
@@ -129,6 +130,8 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
   const unitCount = cartLines.reduce((sum, line) => sum + line.quantity, 0);
   const normalizedQuery = query.trim().toLowerCase();
   const visibleProducts = useMemo(() => products.filter((product) => !normalizedQuery || [product.name, product.sku ?? '', product.category ?? '', ...product.uoms.map((uom) => uom.barcode ?? '')].join(' ').toLowerCase().includes(normalizedQuery)), [products, normalizedQuery]);
+  const displayedProducts = useMemo(() => visibleProducts.slice(0, visibleProductLimit), [visibleProducts, visibleProductLimit]);
+  useEffect(() => setVisibleProductLimit(40), [query, catalogueView, branch.id]);
   const usingSavedData = usingCachedProducts || usingCachedStock || usingCachedPayments || usingCachedPolicy || usingCachedTax;
   const canOverridePrice = posPolicy?.allowPriceOverride === true && posPolicy.canOverridePrice === true;
   const hasPriceOverride = cartLines.some((line) => Math.abs(line.sellingPrice - (line.uom.sellingPrice ?? 0)) > 0.005);
@@ -321,7 +324,7 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
           <Pressable accessibilityLabel="List view" onPress={() => setCatalogueView('list')} style={[styles.viewButton, catalogueView === 'list' && (dark ? darkStyles.viewButtonActive : styles.viewButtonActive)]}><Ionicons name="list-outline" size={20} color={catalogueView === 'list' ? (dark ? theme.dark.accentText : theme.colors.greenDark) : (dark ? theme.dark.textSubtle : theme.colors.muted)} /></Pressable>
         </View>
       </View>
-      <View style={catalogueView === 'grid' ? styles.productGrid : styles.productList}>{visibleProducts.map((product) => {
+      <View style={catalogueView === 'grid' ? styles.productGrid : styles.productList}>{displayedProducts.map((product) => {
         const uom = selectedUom(product);
         const available = stockByProduct.get(product.id)?.quantityOnHand ?? 0;
         const remaining = Math.max(0, available - stockInCart(product.id));
@@ -364,6 +367,7 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
           <Pressable disabled={addDisabled} onPress={() => addToCart(product)} style={[styles.primary, styles.addButton, addDisabled && styles.disabled]}><Ionicons name={outOfStock ? 'ban-outline' : 'add'} size={18} color={theme.colors.white} /><Text style={styles.primaryText}>{outOfStock ? 'Out of stock' : 'Add'}</Text></Pressable>
         </View>;
       })}</View>
+      {visibleProducts.length > visibleProductLimit ? <Pressable accessibilityRole="button" onPress={() => setVisibleProductLimit((count) => count + 40)} style={[styles.secondary, dark && darkStyles.secondary]}><Text style={[styles.backText, dark && darkStyles.backText]}>Show more products · {displayedProducts.length} of {visibleProducts.length}</Text></Pressable> : null}
       {cartLines.length ? <Pressable onPress={() => setStage('cart')} style={styles.checkout}><View style={styles.checkoutCopy}><Text style={styles.primaryText}>{cartLines.length} product{cartLines.length === 1 ? '' : 's'} · {formatQuantity(unitCount)} units</Text><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.62} style={styles.checkoutTotal}>{formatMoney(total, currency)}</Text></View><Ionicons name="arrow-forward" size={22} color={theme.colors.white} /></Pressable> : null}
     </> : null}
 
