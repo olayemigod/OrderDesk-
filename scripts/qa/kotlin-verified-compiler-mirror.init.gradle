@@ -1,0 +1,17 @@
+// SDK58 PR CI ONLY. The caller verifies every JAR with Maven Central SHA256
+// before placing it in this ephemeral file Maven repository.
+// Only the Kotlin compiler module can resolve here; all other dependency
+// groups must retain their existing official repository configuration.
+def localRepo=System.getenv('SELLERTRAY_VERIFIED_KOTLIN_REPO')
+if(!localRepo || !new File(localRepo).isDirectory())
+  throw new GradleException('Missing checksum-verified Kotlin compiler CI repository')
+allprojects {
+  repositories {
+    maven {
+      name = 'SellerTrayVerifiedKotlinCompilerCI'
+      url = uri(localRepo)
+      content { includeModule('org.jetbrains.kotlin','kotlin-compiler-embeddable') }
+      metadataSources { mavenPom(); artifact() }
+    }
+  }
+}
