@@ -15,6 +15,7 @@ import {assessTestLiveCensus} from './oa5-test-live-census.mjs';
 import {assessTestManagedBoundary} from './oa5-test-managed-boundary.mjs';
 import {assessTestEdgeBundleDrift} from './oa5-test-edge-bundle-drift.mjs';
 import {assessExistingVercelProtection} from './oa5-vercel-project-protection.mjs';
+import {assessTestWorkerEgress} from './oa5-test-worker-egress.mjs';
 
 export const REQUIRED_EVIDENCE=Object.freeze([
   'archive_restore_reviewed',
@@ -43,7 +44,7 @@ const exactKeys=(obj,keys)=>!!obj&&typeof obj==='object'&&!Array.isArray(obj)&&
   Object.keys(obj).sort().join('|')===[...keys].sort().join('|');
 const sha=x=>typeof x==='string'&&/^[0-9a-f]{40}$/.test(x);
 
-export function assessRebuildPreflight(record,{sourceSha,archive,cron,liveCensus,managedBoundary,edgeBundles,vercelProtection}={}){
+export function assessRebuildPreflight(record,{sourceSha,archive,cron,liveCensus,managedBoundary,edgeBundles,vercelProtection,workerEgress}={}){
   const reasons=[];
   if(!exactKeys(record,['schema_version','project_ref','reviewed_source_sha','purpose','evidence']))
     return {preconditions_met:false,destructive_execution_authorized:false,
@@ -77,17 +78,19 @@ export function assessRebuildPreflight(record,{sourceSha,archive,cron,liveCensus
     reasons.push('Historical Test Edge bundle SHA/version/JWT metadata missing, stale or drifted');
   if(!vercelProtection?.protection_metadata_consistent)
     reasons.push('Existing Merchant/Admin Vercel protection metadata missing, stale or drifted');
+  if(!workerEgress?.worker_route_counts_quiescent)
+    reasons.push('Test indirect pg_net worker routing or scheduled-work counts missing, stale or drifted');
   const preconditions_met=reasons.length===0;
   return {preconditions_met,destructive_execution_authorized:false,reasons,
     next:'A human must separately authorize the exact Test-only operation and verify provider quiescence immediately before execution'};
 }
 
 function main(){
-  if((process.argv.length!==10&&process.argv.length!==11)||process.argv[2]!=='--check'){
-    console.error('Usage: node scripts/qa/oa5-test-rebuild-preflight.mjs --check <private-record.json> <private-archive-directory> <private-fresh-cron-snapshot.json> <private-fresh-live-census.json> <private-fresh-managed-state.json> <private-fresh-edge-bundle-snapshot.json> <private-fresh-vercel-project-snapshot.json> [private-reviewed-session-loss.json]');
+  if((process.argv.length!==11&&process.argv.length!==12)||process.argv[2]!=='--check'){
+    console.error('Usage: node scripts/qa/oa5-test-rebuild-preflight.mjs --check <private-record.json> <private-archive-directory> <private-fresh-cron-snapshot.json> <private-fresh-live-census.json> <private-fresh-managed-state.json> <private-fresh-edge-bundle-snapshot.json> <private-fresh-vercel-project-snapshot.json> <private-fresh-worker-egress-census.json> [private-reviewed-session-loss.json]');
     process.exitCode=2;return;
   }
-  let record,cronSnapshot,liveSnapshot,managedSnapshot,edgeSnapshot,vercelSnapshot,approvedSessionLoss=null,sourceSha;
+  let record,cronSnapshot,liveSnapshot,managedSnapshot,edgeSnapshot,vercelSnapshot,workerSnapshot,approvedSessionLoss=null,sourceSha;
   try{
     record=JSON.parse(readFileSync(resolve(process.argv[3]),'utf8'));
     cronSnapshot=JSON.parse(readFileSync(resolve(process.argv[5]),'utf8'));
@@ -95,7 +98,8 @@ function main(){
     managedSnapshot=JSON.parse(readFileSync(resolve(process.argv[7]),'utf8'));
     edgeSnapshot=JSON.parse(readFileSync(resolve(process.argv[8]),'utf8'));
     vercelSnapshot=JSON.parse(readFileSync(resolve(process.argv[9]),'utf8'));
-    if(process.argv[10])approvedSessionLoss=JSON.parse(readFileSync(resolve(process.argv[10]),'utf8'));
+    workerSnapshot=JSON.parse(readFileSync(resolve(process.argv[10]),'utf8'));
+    if(process.argv[11])approvedSessionLoss=JSON.parse(readFileSync(resolve(process.argv[11]),'utf8'));
     sourceSha=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8',timeout:10000}).trim();
   }catch{
     console.error('BLOCKED: private operator evidence, cron snapshot or Git identity unavailable');
@@ -107,11 +111,12 @@ function main(){
   const managedBoundary=assessTestManagedBoundary(managedSnapshot);
   const edgeBundles=assessTestEdgeBundleDrift(edgeSnapshot,new Date(),'recheck');
   const vercelProtection=assessExistingVercelProtection(vercelSnapshot,new Date(),'recheck');
-  const result=assessRebuildPreflight(record,{sourceSha,archive,cron,liveCensus,managedBoundary,edgeBundles,vercelProtection});
+  const workerEgress=assessTestWorkerEgress(workerSnapshot,new Date());
+  const result=assessRebuildPreflight(record,{sourceSha,archive,cron,liveCensus,managedBoundary,edgeBundles,vercelProtection,workerEgress});
   if(!result.preconditions_met){
     console.error('BLOCKED: OA5 Test rebuild pre-reset evidence is incomplete.');
     for(const reason of result.reasons)console.error(' - '+reason);
-    for(const reason of [...(archive.errors||[]),...(cron.reasons||[]),...(liveCensus.reasons||[]),...(managedBoundary.reasons||[]),...(edgeBundles.reasons||[]),...(vercelProtection.reasons||[])])
+    for(const reason of [...(archive.errors||[]),...(cron.reasons||[]),...(liveCensus.reasons||[]),...(managedBoundary.reasons||[]),...(edgeBundles.reasons||[]),...(vercelProtection.reasons||[]),...(workerEgress.reasons||[])])
       console.error(' - '+reason);
     process.exitCode=1;return;
   }
