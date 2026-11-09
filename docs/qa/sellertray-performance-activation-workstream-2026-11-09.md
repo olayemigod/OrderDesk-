@@ -60,6 +60,14 @@ F. **Environment and release**: PR #236 Mobile source requires a future approved
 - Team & Permissions in #237 offers governed **Resend email** and **Copy review link** to the authorised Owner/Manager of an existing pending invitation. The copied link uses `/join.html` on the current Merchant Web origin, is non-authoritative by itself, and still requires the invited authenticated identity and explicit acceptance.
 - Both PRs remain draft and source-only. No recipient invitation was sent, no customer data was touched, and neither QA nor Production is deployed.
 
+### Further P0 source remediation — loading, selling and saved-sale recovery
+
+- Mobile Orders refresh now **coalesces repeated realtime notifications** into one active read and at most one queued follow-up. Refreshing already loaded orders no longer switches the full list back into an initial loading state. State is tagged by Business so late reads cannot briefly expose another Business's previous records after account switching.
+- Merchant Web splits its authenticated management pages using `React.lazy` + `Suspense` (18 route modules) instead of importing every management workspace in the initial shell. The Business/Branch navigation and shared permissions are unchanged. Merchant security and AI preflight source guards were amended to accept explicit lazy imports **without weakening managed-read and authority assertions**.
+- Saved POS draft reopen offers a Retry action if the governed load fails, explains reconnect requirements, and guides the merchant back to Orders for unavailable products, missing UOM or duplicate lines. Trying to resume with no active Cashier shift opens a clear Shift prompt rather than silently showing an unrelated screen.
+- Added `apps/mobile/scripts/saved-sale-resume.test.mjs` (5 Node tests) covering status/payment gating, immutable original order/item/Branch/UOM identity, invalid product/UOM, duplicate line rejection and zero-quantity edits. Local matching-source runs **5/5 passed**. Existing order-filter tests **4/4 passed** and invitation browser tests **4/4 passed** in the previous local verification copies. No full exact-head typecheck or hosted/device QA yet.
+- This source slice is **not** full indexed Orders pagination, offline server-draft editing, full catalog caching optimisation or aggregate profitability reporting. Those still require separate governed data/read architecture and isolated QA; do not represent the stage-render limit as backend pagination.
+
 ## Parallel implementation order / release dependency
 
 1. Continue OA5 isolation and Preview security attestation independently.
