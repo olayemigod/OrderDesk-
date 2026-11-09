@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { loadActiveCashShift, type CashShift } from '../data/cashShiftRepository';
 import { loadAccessibleBranches, type CommerceBranch } from '../data/commerceRepository';
@@ -601,7 +601,22 @@ export default function RedesignWorkspace() {
             loading={ordersLoading}
             canReturnCompletedSale={canRefundSale && Boolean(activeCashShift) && (!focusedOrder || focusedOrder.branchId === activeBranch?.id)}
             onResumeDraft={(order) => {
-              if (order.branchId !== activeBranch?.id) return;
+              if (order.branchId !== activeBranch?.id) {
+                const targetBranch = branches.find((branch) => branch.id === order.branchId);
+                if (!targetBranch) {
+                  Alert.alert('Branch access required', 'You do not have access to the Branch that owns this saved sale.');
+                  return;
+                }
+                Alert.alert(
+                  'Switch Branch to resume',
+                  `This saved sale belongs to ${targetBranch.name}. Switch to that Branch, then open it again from Orders.`,
+                  [
+                    { text: 'Not now', style: 'cancel' },
+                    { text: 'Switch Branch', onPress: () => { setFocusedOrderId(null); setActiveBranchId(targetBranch.id); setTab('orders'); } },
+                  ],
+                );
+                return;
+              }
               setResumeDraftOrder(order);
               setFocusedOrderId(null);
               setTab('sell');
