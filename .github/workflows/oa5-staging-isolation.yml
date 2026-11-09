@@ -15,6 +15,8 @@ on:
       - 'scripts/qa/oa5-test-merchant-fixtures.test.mjs'
       - 'scripts/qa/oa5-test-backup-manifest.mjs'
       - 'scripts/qa/oa5-test-backup-manifest.test.mjs'
+      - 'scripts/qa/oa5-test-cron-maintenance-gate.mjs'
+      - 'scripts/qa/oa5-test-cron-maintenance-gate.test.mjs'
       - 'docs/qa/oa5-test-merchant-fixtures.json'
       - 'scripts/qa/oa5-android-qa-variant.test.mjs'
       - 'apps/mobile/src/domain/nativeAuthScheme.ts'
@@ -45,5 +47,6 @@ jobs:
           node --test scripts/qa/oa5-staging-isolation.test.mjs scripts/qa/oa5-migration-boundary.test.mjs scripts/qa/oa5-test-merchant-fixtures.test.mjs scripts/qa/oa5-android-qa-variant.test.mjs
           node scripts/qa/oa5-test-merchant-fixtures.mjs --check
           node --test scripts/qa/oa5-test-backup-manifest.test.mjs
+          node --test scripts/qa/oa5-test-cron-maintenance-gate.test.mjs
           node --test scripts/qa/vercel-frontend-environment.test.mjs
           node --experimental-strip-types --test apps/mobile/scripts/native-auth-scheme.test.mjs
