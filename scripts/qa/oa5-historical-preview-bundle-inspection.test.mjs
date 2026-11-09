@@ -118,3 +118,44 @@ test('missing private CLI manifest yields failure without network or secrets',()
  assert.match(run.stderr,/BLOCKED/);
  assert.doesNotMatch(run.stderr,/sk_live_|service_role/);
 });
+
+
+test('unreferenced JavaScript carrying the Test project ID cannot satisfy the HTML entrypoint gate',()=>{
+ const r=inspectChange(f=>{
+  writeFileSync(join(f.dir,'capture_0','assets','site.js'),'const endpoint="local";');
+  writeFileSync(join(f.dir,'capture_0','assets','decoy.js'),'const api="https://'+TEST_REF+'.supabase.co";');
+ });
+ assert.equal(r.content_consistent_with_test,false);
+ assert.match(r.errors.join(' '),/HTML-linked entrypoint/);
+});
+test('Test project string in HTML alone cannot satisfy compiled JS check',()=>{
+ const r=inspectChange(f=>{
+  writeFileSync(join(f.dir,'capture_1','index.html'),
+   '<html data-project="'+TEST_REF+'"><script src="/assets/site.js"></script></html>');
+  writeFileSync(join(f.dir,'capture_1','assets','site.js'),'const api="local";');
+ });
+ assert.equal(r.content_consistent_with_test,false);
+ assert.match(r.errors.join(' '),/compiled JavaScript/);
+});
+test('missing script referenced by HTML blocks even when another linked entrypoint looks valid',()=>{
+ const r=inspectChange(f=>{
+  writeFileSync(join(f.dir,'capture_2','index.html'),
+   '<html><script src="/assets/site.js"></script><script src="/assets/missing.js"></script></html>');
+ });
+ assert.equal(r.content_consistent_with_test,false);
+ assert.match(r.errors.join(' '),/absent\/unsafe compiled script/);
+});
+test('root index.html and safe script reference are mandatory',()=>{
+ for(const variant of ['root','traversal','external','nolink']){
+  const r=inspectChange(f=>{
+   const original=join(f.dir,'capture_0','index.html');
+   if(variant==='root')unlinkSync(original);
+   if(variant==='traversal')writeFileSync(original,
+    '<html><script src="../outside.js"></script></html>');
+   if(variant==='external')writeFileSync(original,
+    '<html><script src="https://example.invalid/app.js"></script></html>');
+   if(variant==='nolink')writeFileSync(original,'<html><body>Empty</body></html>');
+  });
+  assert.equal(r.content_consistent_with_test,false,variant);
+ }
+});
