@@ -23,12 +23,24 @@ const exact=(obj,keys)=>!!obj&&typeof obj==='object'&&!Array.isArray(obj)&&
  Object.keys(obj).sort().join('|')===[...keys].sort().join('|');
 const refGood=x=>typeof x==='string'&&/^[A-Za-z0-9][A-Za-z0-9_-]{7,79}$/.test(x);
 const sha256=buffer=>createHash('sha256').update(buffer).digest('hex');
+const aliasCensus=JSON.parse(readFileSync(
+ new URL('../../docs/qa/oa5-original-preview-alias-fingerprints-2026-11-09.json',import.meta.url),'utf8'));
+if(aliasCensus.schema_version!==1||
+   aliasCensus.purpose!=='original-five-vercel-preview-alias-fingerprints'||
+   aliasCensus.hash_input_format!=='sha256(utf8(deployment_id + LF + lowercase_preview_hostname))'||
+   !Array.isArray(aliasCensus.aliases)||aliasCensus.aliases.length!==EXPECTED.length||
+   aliasCensus.aliases.some(x=>!EXPECTED.some(d=>d.id===x.id&&d.surface===x.surface)||
+     !/^[a-f0-9]{64}$/.test(x.sha256))||
+   new Set(aliasCensus.aliases.map(x=>x.id)).size!==EXPECTED.length)
+ throw Error('BLOCKED: original Vercel alias fingerprint census is invalid');
+export const EXPECTED_ALIAS_DIGESTS=Object.freeze(Object.fromEntries(aliasCensus.aliases.map(x=>[x.id,x.sha256])));
+const aliasDigest=(id,hostname)=>sha256(Buffer.from(id+'\n'+hostname.toLowerCase(),'utf8'));
 const checkoutRoot=resolve(dirname(fileURLToPath(import.meta.url)),'../..');
 const insideCheckout=path=>existsSync(join(checkoutRoot,'.git'))&&
   (path===checkoutRoot||path.startsWith(checkoutRoot+sep));
 
 
-export function validatePrivateCapturePlan(input){
+export function validatePrivateCapturePlan(input,expectedAliasDigests=EXPECTED_ALIAS_DIGESTS){
  const reasons=[],normalized=[];
  const outcome=()=>({valid:reasons.length===0,reasons,deployments:normalized,
   original_vercel_origin_attested:false,authorized_reviewer_verified:false,
@@ -71,7 +83,8 @@ export function validatePrivateCapturePlan(input){
      (url.pathname!==''&&url.pathname!=='/')||url.search||url.hash||
      !url.hostname.startsWith(prefix)||
      !/^[a-z0-9-]+\.vercel\.app$/.test(url.hostname)||
-     seenOrigins.has(url.origin)){
+     seenOrigins.has(url.origin)||
+     aliasDigest(d.id,url.hostname)!==expectedAliasDigests[d.id]){
    reasons.push('Unsafe, shared or duplicated non-original Vercel Preview origin');
    continue;
   }
@@ -98,8 +111,10 @@ function protectedVercelCurl(url,maxBytes=MAX_ITEM){
  }
 }
 
-export function captureOriginalPreviewPlan(input,privateRoot,request=protectedVercelCurl,now=new Date()){
- const plan=validatePrivateCapturePlan(input);
+export function captureOriginalPreviewPlan(input,privateRoot,request=protectedVercelCurl,now=new Date(),syntheticTestAliasDigests=null){
+ if(syntheticTestAliasDigests&&request===protectedVercelCurl)
+  throw Error('BLOCKED: alias fingerprint override requires an injected synthetic test transport');
+ const plan=validatePrivateCapturePlan(input,syntheticTestAliasDigests||EXPECTED_ALIAS_DIGESTS);
  if(!plan.valid)throw Error('BLOCKED: invalid original Preview capture mapping: '+plan.reasons.join('; '));
  if(typeof request!=='function')throw Error('BLOCKED: missing read-only capture transport');
  const root=resolve(privateRoot);
