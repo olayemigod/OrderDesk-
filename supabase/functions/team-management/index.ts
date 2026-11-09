@@ -288,7 +288,7 @@ async function sendTeamInvitationEmail({
   const safeRole = escapeHtml(roleLabel);
   const safeEmail = escapeHtml(to);
   const subjectBusinessName = cleanEmailHeader(businessName) || 'A SellerTray business';
-  const actionUrl = `${SELLERTRAY_MERCHANT_URL}/invite.html?invitation=${encodeURIComponent(invitationId)}`;
+  const actionUrl = `${SELLERTRAY_MERCHANT_URL}/join.html?invitation=${encodeURIComponent(invitationId)}`;
   const html = `
     <!doctype html>
     <html>
