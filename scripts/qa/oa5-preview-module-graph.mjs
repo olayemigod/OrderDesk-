@@ -8,7 +8,7 @@ import {posix} from 'node:path';
 
 const JS=new Set(['.js','.mjs']);
 
-function localPath(from,raw,allowPlain){
+export function localPath(from,raw,allowPlain){
  if(typeof raw!=='string'||!raw||raw.trim()!==raw)return null;
  if(/^(?:[A-Za-z][A-Za-z0-9+.-]*:|\/\/)/.test(raw))return null;
  const path=raw.split(/[?#]/,1)[0];
@@ -22,11 +22,11 @@ function localPath(from,raw,allowPlain){
     result.startsWith('/')||!JS.has(posix.extname(result)))return null;
  return result;
 }
-function htmlScripts(html){
+export function htmlScripts(html){
  return [...html.matchAll(/<script\b[^>]*\bsrc\s*=\s*(?:"([^"]+)"|'([^']+)')[^>]*>/gi)]
   .map(m=>m[1]??m[2]);
 }
-function importedLiterals(js){
+export function importedLiterals(js){
  const refs=[];
  for(const regex of [
   /\b(?:import|export)\s*[A-Za-z0-9_$*{},\s]*\bfrom\s*(["'])([^"']+)\1/g,
