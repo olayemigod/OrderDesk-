@@ -11,11 +11,12 @@ import {
   type MerchantCustomer,
 } from '../data/customerRepository';
 
-export function CustomersView({ business, onOpenOrder }: { business: MerchantBusiness; onOpenOrder?: (orderId: string) => void }) {
+export function CustomersView({ business, onOpenOrder }: { business: MerchantBusiness; onOpenOrder?: (orderId: string) => Promise<void> | void }) {
   const appearance = useSellerTrayAppearance();
   const [customers, setCustomers] = useState<MerchantCustomer[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [query, setQuery] = useState('');
+  const [openingOrderId, setOpeningOrderId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +63,16 @@ export function CustomersView({ business, onOpenOrder }: { business: MerchantBus
   const canEdit =
     business.role !== 'staff' &&
     ['trial', 'active', 'grace'].includes(business.subscriptionStatus);
+
+  async function openHistoryOrder(orderId: string) {
+    if (!onOpenOrder || openingOrderId) return;
+    setOpeningOrderId(orderId);
+    try {
+      await onOpenOrder(orderId);
+    } finally {
+      setOpeningOrderId(null);
+    }
+  }
 
   async function save() {
     if (!selected || !canEdit || busy) return;
@@ -138,13 +149,13 @@ export function CustomersView({ business, onOpenOrder }: { business: MerchantBus
         <View style={styles.detailCard}>
           <Text style={[styles.sectionTitle, appearance.dark && darkStyles.titleText]}>Order history</Text>
           {selected.orders.slice(0, 10).map((order) => (
-            <Pressable key={order.id} accessibilityRole="button" accessibilityLabel={`Open order ${order.publicOrderId}`} disabled={!onOpenOrder} onPress={() => onOpenOrder?.(order.id)} style={[styles.orderRow, appearance.dark && darkStyles.rowBorder]}>
+            <Pressable key={order.id} accessibilityRole="button" accessibilityLabel={`Open order ${order.publicOrderId}`} disabled={!onOpenOrder || openingOrderId !== null} onPress={() => void openHistoryOrder(order.id)} style={[styles.orderRow, appearance.dark && darkStyles.rowBorder]}>
               <View style={styles.orderCopy}>
                 <Text style={styles.orderRef}>{order.publicOrderId}</Text>
                 <Text style={styles.meta}>{formatDate(order.createdAt)} · {humanize(order.status)}</Text>
               </View>
               <Text style={[styles.orderAmount, appearance.dark && darkStyles.titleText]}>{order.totalAmount === null ? 'Unpriced' : formatMoney(order.totalAmount, business.currency)}</Text>
-              {onOpenOrder ? <Ionicons name="chevron-forward" size={16} color={appearance.dark ? '#D0D5DD' : '#667085'} /> : null}
+              {openingOrderId === order.id ? <ActivityIndicator size="small" /> : onOpenOrder ? <Ionicons name="chevron-forward" size={16} color={appearance.dark ? '#D0D5DD' : '#667085'} /> : null}
             </Pressable>
           ))}
           {selected.orders.length === 0 ? <Text style={styles.muted}>No orders recorded for this customer.</Text> : null}
