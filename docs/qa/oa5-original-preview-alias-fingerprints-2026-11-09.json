@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "purpose": "original-five-vercel-preview-alias-fingerprints",
+  "observed_at_utc": "2026-11-09T23:19:10Z",
+  "hash_input_format": "sha256(utf8(deployment_id + LF + lowercase_preview_hostname))",
+  "aliases": [
+    {
+      "id": "dpl_Cfh7oAt9nHQkdUZtbXShj7jfhMfw",
+      "surface": "merchant",
+      "sha256": "6133c85adbb597317e0007c35de67e5e8392be928c14d0837d79372932e438d1"
+    },
+    {
+      "id": "dpl_Gh9s6Rm2dJibEKuBDDcm7jZ3bGmz",
+      "surface": "merchant",
+      "sha256": "2844af4c63af27addf0e891a6c0ef04e98b48009b8b92283de33ba14b16ea081"
+    },
+    {
+      "id": "dpl_5UfqxbGpPuQqGkSu1rU4bpCFrQWZ",
+      "surface": "admin",
+      "sha256": "bdd04ada0d6916ca0989ba48b79978817c78b6777909e3a621786f418e6383b0"
+    },
+    {
+      "id": "dpl_H1suGYapnAjZR9rAKBq8WLtHu5Uo",
+      "surface": "admin",
+      "sha256": "728a61d2b1480bfce79acb40fb19226807e7e56bbc5389bb569375729c9228fa"
+    },
+    {
+      "id": "dpl_J9nL3wiNKyXcJEoVjbb65kUw4JnA",
+      "surface": "admin",
+      "sha256": "c65e7baac326a47e108d394820176f121b48ed237b8b1f1d728ab3155b5a4076"
+    }
+  ]
+}
