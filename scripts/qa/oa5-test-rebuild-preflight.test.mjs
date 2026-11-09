@@ -6,7 +6,7 @@ import {assessTestLiveCensus,ARCHIVED_COUNTS,TEST_REF,REVIEWED_SESSION_LOSS_SCOP
 const ref='iukgsukdoowvnhlfmpml',sha='a'.repeat(40);
 const record=()=>({schema_version:2,project_ref:ref,reviewed_source_sha:sha,purpose:'pre-reset-human-review',
  evidence:Object.fromEntries(REQUIRED_EVIDENCE.map((k,i)=>[k,{reviewed:true,evidence_ref:'private-review-'+String(i+1).padStart(4,'0')}]))});
-const proof={sourceSha:sha,archive:{ok:true},cron:{ok:true},liveCensus:{ok:true},managedBoundary:{ok:true}};
+const proof={sourceSha:sha,archive:{ok:true},cron:{ok:true},liveCensus:{ok:true},managedBoundary:{ok:true},edgeBundles:{metadata_matches_historical_baseline:true,destructive_execution_authorized:false}};
 test('complete synthetic review never authorizes destructive Test execution',()=>{
   const result=assessRebuildPreflight(record(),proof);
   assert.equal(result.preconditions_met,true);
@@ -50,6 +50,7 @@ test('backup/restore and fresh cron/pg_net evidence are mandatory, independent s
     {...proof,archive:null},{...proof,cron:null},
     {...proof,liveCensus:null},{...proof,liveCensus:{ok:false,reasons:['6 Auth sessions']}},
     {...proof,managedBoundary:null},{...proof,managedBoundary:{ok:false,reasons:['stale managed state']}},
+    {...proof,edgeBundles:null},{...proof,edgeBundles:{metadata_matches_historical_baseline:false,reasons:['hash changed']}},
   ]){
     const r=assessRebuildPreflight(record(),q);
     assert.equal(r.preconditions_met,false);
@@ -57,7 +58,7 @@ test('backup/restore and fresh cron/pg_net evidence are mandatory, independent s
   }
 });
 test('CLI without private operator evidence cannot contact any hosted resource or approve reset',()=>{
-  const run=spawnSync(process.execPath,[new URL('./oa5-test-rebuild-preflight.mjs',import.meta.url).pathname,'--check','/nonexistent-record.json','/nonexistent-archive','/nonexistent-cron.json','/nonexistent-live.json','/nonexistent-managed.json'],{encoding:'utf8'});
+  const run=spawnSync(process.execPath,[new URL('./oa5-test-rebuild-preflight.mjs',import.meta.url).pathname,'--check','/nonexistent-record.json','/nonexistent-archive','/nonexistent-cron.json','/nonexistent-live.json','/nonexistent-managed.json','/nonexistent-edge-bundles.json'],{encoding:'utf8'});
   assert.equal(run.status,1);
   assert.match(run.stderr,/BLOCKED/);
   assert.doesNotMatch(run.stderr,/service_role|sk_live_/);
@@ -113,4 +114,18 @@ test('a single reused opaque ref cannot stand in for multiple independent provid
  assert.equal(result.preconditions_met,false);
  assert.equal(result.destructive_execution_authorized,false);
  assert.match(result.reasons.join(' '),/cannot reuse one evidence reference/);
+});
+
+test('historical Edge bundles are a separate mandatory evidence precondition, not a deployment approval',()=>{
+ const r=assessRebuildPreflight(record(),{
+  ...proof,edgeBundles:{metadata_matches_historical_baseline:false,
+                       edge_deployment_authorized:false,
+                       destructive_execution_authorized:false}
+ });
+ assert.equal(r.preconditions_met,false);
+ assert.equal(r.destructive_execution_authorized,false);
+ assert.match(r.reasons.join(' '),/Edge bundle SHA/);
+ const a=assessRebuildPreflight(record(),proof);
+ assert.equal(a.preconditions_met,true);
+ assert.equal(a.destructive_execution_authorized,false);
 });
