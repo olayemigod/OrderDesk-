@@ -68,3 +68,40 @@ The future operator change record must include: named executor and independent r
 - **Reviewed and documented:** Test identity and current managed-state counts; provider ingress and outbound safety criteria; Auth JWT/session/MFA pitfalls; API-only Storage deletion requirements; no-reset-without-reviewed-method boundary. This document intentionally makes **no hosted mutation**.
 - **Not accepted/closed:** external Meta ownership and all Test-only secret/sink attestations; exact Auth/Storage service-managed action design and its irreversibility review; historical Preview compiled backend and reviewer evidence; exact safe hosted schema rebuild and rollback; approved four-cron pause with fresh subsequent quiescence; independent post-archive private session-loss record; operation-specific destructive approval.
 - **Operational outcome:** OA5 Test rebuild remains **NO-GO**. `docs/qa/oa5-staging-backend-attestation.json` must remain `state: blocked`; C2 and Production/Tandar remain untouched. No Preview, APK or new paid resource is needed to review this plan.
+
+## 09/11/2026 — restricted Auth reference occupancy and safe cleanup order
+
+**Independent read-only Test catalog + row-count inspection** on `iukgsukdoowvnhlfmpml` (09/11/2026) found:
+
+- Exactly **64 public foreign-key constraints to `auth.users`** across **57 public tables**: **30 RESTRICT**, **8 CASCADE**, **26 SET NULL**. There are also **10 internal Auth** and **2 `sellertray_private`** foreign keys to Auth users, and **no non-internal trigger** on `auth.users` at this snapshot. These counts describe current Test, not canonical post-rebuild schema.
+- Of the **30 public RESTRICT relationships**, **10 reference existing Test Auth user rows** and **20 currently have zero matching references**.
+- The 10 populated relationships total **51 referenced rows across FK columns**, *not necessarily 51 distinct underlying application records*. The exact occupancy is:
+
+| Public table | Restricted FK column | Matching reference rows |
+| --- | --- | ---: |
+| `platform_admin_audit` | `actor_user_id` | 14 |
+| `sellertray_commercial_agreement_template_versions` | `published_by_user_id` | 3 |
+| `sellertray_commercial_installment_obligations` | `created_by_user_id` | 3 |
+| `sellertray_commercial_order_forms` | `issued_by_user_id` | 5 |
+| `sellertray_commercial_orders` | `created_by_user_id` | 5 |
+| `sellertray_commercial_price_versions` | `approved_by_user_id` | 6 |
+| `sellertray_commercial_price_versions` | `created_by_user_id` | 6 |
+| `sellertray_master_agreement_acceptances` | `accepted_by_user_id` | 3 |
+| `sellertray_master_agreement_versions` | `published_by_user_id` | 1 |
+| `sellertray_order_form_confirmations` | `confirmed_by_user_id` | 5 |
+| **Total across relationships** | | **51** |
+
+Queries counted records matching existing `auth.users.id` via `SELECT count(*)`, without returning any user ID, email, row content, access token or private Agreement data. No mutation was performed. The 51-count baseline is **not contained in the original archived restore checker**, so it must not be represented as independent row-by-row historical backup parity. A reviewer must repeat the protected count-only scope just before a separately approved maintenance operation and STOP on unreviewed drift.
+
+### Mandatory dependency-aware operation order — review proposal, not execution
+
+1. **Custody first:** preserve protected archived Agreement and audit evidence with manifest/hash and verified offline restore; document the five historic Preview dependencies and the operator's accepted irreversible losses. Confirm exact standalone Test project and target/source commit, not Production.
+2. **Freeze Test ingress/egress separately:** independently verify safe SMTP, Meta, PSP, Firebase and any AI/notification sink, and arrange a Test-only ingress block. Request specific authority to pause the exact four Test cron schedules; afterward verify recent zero-active/zero-unfinished/all-age and `pg_net` queue evidence plus already dispatched provider requests. No change to live Production provider callbacks.
+3. **Review the historical user-created schema cleanup** (including `public` Agreement, commercial, audit and invitation artifacts; nonpublic SellerTray schema; existing 54-row migration ledger; historical Edge probe), preserving immutable evidence first. Explicitly decide whether to remove Test-only linked user-created records and constraints as part of a controlled canonical-schema replacement. **Never loosen production FK constraints, manually falsify migration history or selectively erase audit rows merely to make Auth deletion work.** The exact schema/ledger cleanup operation, privileges, failure boundaries and recovery route remain unapproved.
+4. **After the old application references have been safely removed and verified**, a separately authorized Test operator may use supported Supabase Auth administration to decommission old synthetic Auth accounts/sessions/MFA enrollment. Check that Storage object ownership and bucket metadata have been independently reviewed first. Do not interpret the owner's single additional session-loss approval as account-deletion permission. JWT access tokens may remain usable until expiry unless appropriately constrained; block legacy Test clients during the transition.
+5. **Apply the separately approved canonical migration set in order**, verify RLS, grants, tenancy, branch/ledger and audit invariants and re-create only approved Test-specific service configuration and synthetic new Auth identities. Deploy only explicitly reviewed Edge functions and sandbox sinks in phases; never deploy all 50 solely for roster parity.
+6. **Rollback boundary:** database restore proof alone cannot undo an Auth hard delete, reinstate the same MFA/session credentials, retract a provider callback or restore already emitted messages/payments. The operator record must identify exactly which steps permit a Test restore versus which require a new synthetic identity or manual provider recovery, and require explicit separate approval for irreversible steps.
+
+**Disposition:** This closes the *source-level occupancy investigation*, not the hosted cleanup-method approval. Test Auth, Storage, public data, schedules and provider configuration were not changed. The OA5 backend attestation stays blocked.
+
+Reference: [Supabase Auth user management and JWT limitations](https://supabase.com/docs/guides/auth/managing-user-data); [Storage API deletion semantics](https://supabase.com/docs/guides/storage/management/delete-objects).
