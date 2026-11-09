@@ -51,6 +51,7 @@ expect(inviteHtml.includes('Continue in browser'), 'old invitation links must re
 expect(source.includes('providerAccepted: true, recipientDeliveryVerified: false'), '2xx invitation response must not misrepresent mailbox delivery');
 expect(source.includes('provider_message_id: providerMessageId'), 'team invitation provider acknowledgment must be traceable without logging recipient email');
 expect(teamManagementSource.includes('async function resendInvitation(invitation: Invitation)') && teamManagementSource.includes('onClick={() => void resendInvitation(invitation)}'), 'Team management must offer an explicit governed resend for pending invitations');
+expect(teamManagementSource.includes("new URL('/join.html', window.location.origin)") && teamManagementSource.includes('navigator.clipboard.writeText(link.toString())') && teamManagementSource.includes('onClick={() => void copyInvitationLink(invitation)}'), 'Pending invitation owners must be able to copy a browser-first review link without calling the email provider');
 expect(source.includes('>Review invitation</a>'), 'invitation CTA must say Review invitation');
 expect(source.includes('Access starts only after you review and accept this invitation.'), 'email copy must preserve explicit invitation acceptance');
 expect(source.includes('The invitation expires after 7 days.'), 'email copy must communicate the governed invitation expiry');
