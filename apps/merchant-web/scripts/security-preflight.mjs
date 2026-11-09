@@ -12,6 +12,8 @@ const cashReview = read('src/CashShiftsReview.tsx');
 const businessExpenses = read('src/BusinessExpensesManagement.tsx');
 const inventory = read('src/InventoryManagement.tsx');
 const management = read('src/ManagementPage.tsx');
+const customers = read('src/CustomersManagement.tsx');
+const customerBranchLink = read('../../supabase/migrations/20261109230000_customer_history_order_branch_scope.sql');
 const products = read('src/ProductsManagement.tsx');
 const suppliers = read('src/SuppliersManagement.tsx');
 const branches = read('src/BranchesManagement.tsx');
@@ -33,7 +35,7 @@ const vercel = read('vercel.json');
 const cashSource = [cash, cashReview, businessExpenses].join('\n');
 const settingsSource = [settings, posPolicySettings, taxSettings].join('\n');
 const reportSource = [reports, salesReports, taxReports, procurementReports].join('\n');
-const browserSource = [supabaseClient, main, app, dashboard, cash, cashReview, businessExpenses, inventory, management, products, suppliers, branches, team, whatsapp, devices, reports, salesReports, taxReports, procurementReports, settings, posPolicySettings, taxSettings, purchasing, purchasingOperations, supplierPayments, supplierPaymentsCenter].join('\n');
+const browserSource = [supabaseClient, main, app, dashboard, cash, cashReview, businessExpenses, inventory, management, customers, products, suppliers, branches, team, whatsapp, devices, reports, salesReports, taxReports, procurementReports, settings, posPolicySettings, taxSettings, purchasing, purchasingOperations, supplierPayments, supplierPaymentsCenter].join('\n');
 const hasPageImport = (component) =>
   app.includes(`import ${component} from './${component}'`) ||
   app.includes(`const ${component} = lazy(() => import('./${component}'))`);
@@ -52,6 +54,16 @@ requireValue(excludes(cashSource, ["from('sellertray_cash_shifts')", "from('sell
 
 requireValue(management.includes('<ProductsManagement') && ['save_sellertray_product', 'set_sellertray_product_active', 'save_sellertray_product_uom', 'delete_sellertray_product_uom'].every((name) => products.includes(`rpc('${name}'`)), 'Products and Pricing must use governed product and UOM commands.');
 requireValue(excludes(products, ["from('catalog_item_uoms').insert", "from('catalog_item_uoms').update", "from('catalog_item_uoms').delete", "from('catalog_items').insert", "from('catalog_items').update", "from('catalog_items').delete"]), 'Merchant Web must not bypass product and UOM commands with raw writes.');
+
+requireValue(
+  customers.includes("rpc('get_sellertray_customer_management_detail'")
+    && customers.includes("rpc('get_sellertray_order_management_detail'")
+    && customers.includes('p_branch_id: order.branchId')
+    && !customers.includes(".from('orders')")
+    && customerBranchLink.includes("'branchId',q.branch_id")
+    && customerBranchLink.includes('select o.id,o.branch_id,o.public_order_id'),
+  'Customer order history must obtain the original Branch from the governed customer RPC and open details only through the authorised order-detail RPC.'
+);
 
 requireValue(management.includes('<SuppliersManagement') && suppliers.includes("rpc('get_sellertray_suppliers_management_list'") && suppliers.includes("rpc('get_sellertray_supplier_management_detail'") && suppliers.includes("rpc('save_sellertray_supplier'"), 'Suppliers must use governed supplier management reads and save command.');
 
