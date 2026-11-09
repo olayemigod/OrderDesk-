@@ -1,0 +1,70 @@
+# OA5 — independent Test-only provider isolation and managed Auth/Storage cleanup review (09/11/2026)
+
+**Scope:** Source/documentation review only for standalone Test `iukgsukdoowvnhlfmpml`, building on draft PR #228 at source head `fb1733cb0a60f7b780f67ef4d1810518bf59ac8e`. **Decision: NO-GO** for hosted cleanup, cron pause, migration, Edge deployment, callbacks, Preview, APK, or C2 cutover. Production `eujxswjspolugrzlsjnn`, all live merchants including Tandar, the live Meta/PSP integrations, and existing production web domains are excluded.
+
+This document **closes the review definition, not the external acceptance gate**. Provider-console attestation, exact Auth/Storage service operation, recovery feasibility, maintenance approval and separate destructive authorization remain open. It does not contain executable reset, user-deletion, webhook-repointing or secret-rotation commands.
+
+## Current independent read-only Test snapshot
+
+On 09/11/2026 the connected Supabase Test project was confirmed `ACTIVE_HEALTHY` (PostgreSQL 17). Count-only SQL, with **no identifiers, secrets, email addresses, recipient lists or object paths read**, returned:
+
+| Managed surface | Count |
+| --- | ---: |
+| `auth.users` | 5 |
+| `auth.sessions` | 6 |
+| `auth.identities` | 1 |
+| `auth.refresh_tokens` | 21 |
+| `auth.mfa_factors` | 1 |
+| `auth.mfa_challenges` | 8 |
+| `auth.one_time_tokens` / `auth.flow_state` | 0 / 0 |
+| `auth.oauth_clients` / `auth.sso_providers` | 0 / 0 |
+| `storage.buckets` / `storage.objects` | 3 / 0 |
+| Storage multipart uploads/parts, analytics/vector buckets and abandoned-artifact rows | 0 |
+| Active Test `cron.job` / pending `net.http_request_queue` | 4 / 0 |
+
+These are **point-in-time counts**, not a signed post-pause census, a complete row-level diff or proof that the underlying object store has no orphaned files. The existing encrypted 07/11 recovery archive has five Auth sessions; the owner approved disposal of **only the extra sixth post-archive session** in a future separately approved rebuild. The other managed-state counts are **not** additions to that approval, and their presence does not by itself prove post-archive drift. The existing private exact-scope short-lived review and fresh census rules remain mandatory. Do **not** rewrite archived baseline counts or reinterpret the session approval to cover other unknown losses.
+
+## Provider and ingress review — deny until independently attested
+
+| Surface | Source/previous evidence | Mandatory external decision/evidence | Status |
+| --- | --- | --- | --- |
+| Meta/WhatsApp inbound | Test-only source guard requires QA app `1429945732160146`, phone `1271836092686870`, matching signed payload phone IDs; production routing code unchanged. **This phone ID also appears in retired Production tenant history**, so screenshots from separate screens do not prove exclusive QA ownership. | One independently reviewed Meta app-to-number/WABA association, *distinct* Test app secret/verify token, current callback/subscription inventory, Test-only synthetic recipient policy and a way to stop incoming callbacks before teardown. Do not repoint live Meta or recycle a merchant phone. | **OPEN — callback forbidden** |
+| Paystack platform billing | Test guard requires canonical Test backend plus `sk_test_` and matching signed event mode; live uses `sk_live_`. Earlier Test provider callback was unset. This prefix check is not proof of an isolated provider account or deployed bundle. | Provider-side Test-key ownership/mode, Test-only signed callback destination, no live settlement/customer effect, HMAC/replay/idempotency and charge-domain denial evidence; keep live callback unchanged. | **OPEN — callback forbidden** |
+| Flutterwave/merchant payments | Previously inspected Test/live callback fields were empty. This does not establish secret isolation. | Confirm whether OA5 needs Flutterwave; if not, explicitly disabled in Test. If needed, verify sandbox-only key, callback/signature and test recipient/merchant configuration before activation; no live change. | **OPEN — do not enable** |
+| SMTP/email/invitations | Test Auth redirect configuration was visually reviewed, but SMTP sender credentials, recipient containment, provider identity and real callback behavior were not attested. | Protected Test-specific mail transport or a non-delivering capture/sandbox sink, synthetic recipient allowlist, redirect/PKCE/deep-link verification and no outbound live customer mail. Test merchant invitation and password-reset links must resolve to protected Test domains/QA native URI, never Production. | **OPEN — no real email tests** |
+| Firebase/FCM/Expo push | Dedicated Firebase `sellertray-test` and Android `ng.processedge.sellertray.qa` registered; protected QA sender/Expo transport and delivered-device proof are pending. | Independently verify Test-only FCM credentials, sender, application identity and permitted QA devices; no Production credentials or real-merchant tokens. | **OPEN — no push activation** |
+| AI/order parser, notification workers and other Edge transports | The current WhatsApp function can invoke `ORDER_PARSER_URL` and Test workers may use `net.http_post`. Current Test is four active jobs and five historical Edge deployments, not a certified 50-function runtime. | Document all transitive external destinations and cost-bearing secrets, disable or mock in Test until safe, check outbound network queues and provider traffic. Deploy only a separate reviewed Test function allowlist after canonical schema. | **OPEN** |
+| Merchant/Admin domains and Auth redirects | Owner confirmed Standard Vercel Authentication for historic deployment URLs and public canonical Production domains. The two Test custom domains remain unattached; historical compiled Preview backend identity is unknown. | Preserve historical five Preview records/reviewer continuity, protect `test.sellertray.com` / `test-admin.sellertray.com` before any binding, prove both point exclusively to verified Test and redirects do not fall back to Production. | **OPEN** |
+
+**Fail-closed rule:** a zero provider data-table count, an unset callback field, a provider-key prefix, a screenshot of a different console page or a successful source test **is not** Test-only provider isolation. Collect protected, independently reviewer-signed, non-secret evidence; publish only opaque reference IDs in the PR/operator record. Never run external test events against a Production merchant or phone number.
+
+## Managed Auth cleanup contract (future operation only)
+
+1. **Preserve and scope first:** Confirm the Test project twice, archive/restore evidence and exact source SHA. Privately reconcile the Auth user, identity, session, refresh-token, MFA factor/challenge, invitation/OTP, OAuth and Auth configuration inventories against the archived snapshot where available. Count-only results do not establish all row contents are unchanged. Identify Auth-linked public tables, storage ownership and foreign-key/triggers before choosing deletion order.
+2. **Contain ingress and issuance:** Independently approve the Test ingress freeze and stop new sign-ins/invites/reset links before any data clearing. Reversible pause of the four exact Test cron schedules is a different explicit authorization. Capture the **fresh post-pause** all-age unfinished-run and `pg_net` zero-queue snapshot (<10 minutes old), and independently verify no already-dispatched outbound request remains. Existing live snapshots with four active jobs do not pass.
+3. **Choose a supported service-managed Auth operation:** Review Test-only administrative Auth API/Console operations for old synthetic identities, sessions and associated MFA state, with explicit operator credentials, permission boundaries, one-way effects, identity cleanup and post-action verification. Do **not** assume a remote SQL schema reset deletes `auth.*`. Do **not** delete rows directly from Supabase-managed Auth tables as a substitute for supported service operations. The existing approval to discard one additional session is not permission to delete accounts now.
+4. **Treat JWTs as a separate post-deletion exposure:** Supabase documents that hard-deleting an Auth user removes their sessions/refresh authority but previously issued stateless access JWTs may remain valid until expiry. The reviewer must record Test JWT expiry, block legacy Test clients during transition, and verify protection for sensitive API/RPC paths where session revocation must take effect immediately. A new QA identity cannot be assumed to inherit the old Auth identity/session/2FA enrollment.
+5. **Prove the outcome independently:** After a separately authorised rebuild, confirm only new synthetic Owner/Staff/Installer identities exist, no retired Test session can refresh or write, MFA/AAL2 works with the new setup and Test invitation/reset links reach Test-only endpoints. No user ID, refresh token, credential, session token or private Auth row belongs in Git.
+
+References: [Supabase User Management](https://supabase.com/docs/guides/auth/managing-user-data) and [User sessions](https://supabase.com/docs/guides/auth/sessions).
+
+## Managed Storage cleanup contract (future operation only)
+
+- Three existing buckets and zero `storage.objects` rows are **not** proof that all backing blobs, signed URLs, stale multipart uploads, cached CDN content or legacy bucket configuration are harmless. Independently review bucket ownership, public/private flags, policy/grants and API-level object listings in protected Test only. Current ancillary multipart/analytics/vector/abandoned-artifact counts are zero.
+- **Use the supported Storage API / Console** for any future object removal and verify actual object-store consequences. Supabase explicitly warns that direct SQL deletion of `storage.objects` leaves orphaned backend files. Do not blindly drop or edit managed `storage` schemas, buckets, metadata, policies or internal migrations with remote `db reset`.
+- With zero current objects, **no object-delete operation is presently justified**. Preserve the three bucket definitions until the canonical Test configuration is reviewed. If an API-level listing disagrees or new objects appear, STOP and re-archive/re-review; no silent delete.
+- Treat existing signed URLs, tokens, CDN caching, object retention and Storage-owned Auth dependencies as independent security checks. After the future authorised clean Test setup, verify only canonical Test buckets/policies exist, no Production access, and synthetic upload/read/delete permissions work under RLS.
+
+References: [Supabase Storage object deletion](https://supabase.com/docs/guides/storage/management/delete-objects) and [Storage schema ownership](https://supabase.com/docs/guides/storage/schema/design).
+
+## Exact rebuild / rollback review boundary
+
+**Do not nominate generic remote `supabase db reset --linked` as a complete hosted-project wipe.** Its user-created-database-entity behavior does not imply managed Auth, Storage, secrets, Edge deployments, scheduled jobs or external provider callbacks are erased. A separate reviewed Test-specific operation design must enumerate user-created schemas/grants/triggers, the historical 54-row migration ledger, canonical 457-migration replay, 5 legacy functions (including Agreement PDF probe), Auth/Storage management actions, worker schedules, provider settings and external identity redirects. Do not spoof history or deploy all 50 Edge functions at once.
+
+The future operator change record must include: named executor and independent reviewer; exact Test project identity and source; full scope of irreversible Test-only loss; protected archive SHA and independent restore logs; precise per-service supported operations and privileges; ordered pre/post-condition queries; failure/abort points; a tested rollback or explicitly accepted *non-recoverable* Auth/session/Storage/provider side-effect boundary; and **a separate operation-specific destructive execution approval**. An encrypted SQL/Agreement archive does **not** establish that deleted Auth sessions/MFA credentials, physical objects, secrets, provider routing or historical Preview artifacts can be restored as they were.
+
+## Final independent review disposition
+
+- **Reviewed and documented:** Test identity and current managed-state counts; provider ingress and outbound safety criteria; Auth JWT/session/MFA pitfalls; API-only Storage deletion requirements; no-reset-without-reviewed-method boundary. This document intentionally makes **no hosted mutation**.
+- **Not accepted/closed:** external Meta ownership and all Test-only secret/sink attestations; exact Auth/Storage service-managed action design and its irreversibility review; historical Preview compiled backend and reviewer evidence; exact safe hosted schema rebuild and rollback; approved four-cron pause with fresh subsequent quiescence; independent post-archive private session-loss record; operation-specific destructive approval.
+- **Operational outcome:** OA5 Test rebuild remains **NO-GO**. `docs/qa/oa5-staging-backend-attestation.json` must remain `state: blocked`; C2 and Production/Tandar remain untouched. No Preview, APK or new paid resource is needed to review this plan.
