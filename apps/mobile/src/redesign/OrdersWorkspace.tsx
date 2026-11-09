@@ -66,7 +66,9 @@ export function OrdersWorkspace({
   const [filters, setFilters] = useState<OrderSearchFilters>(DEFAULT_ORDER_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [visibleOrderLimit, setVisibleOrderLimit] = useState(30);
-  const filteredOrders = useMemo(() => orders.filter((order) => matchesOrderSearch(order, filters)), [orders, filters]);
+  // Opening a customer-history transaction is an explicit navigation action.
+  // Keep that one permitted order visible even when the merchant's saved list filters differ.
+  const filteredOrders = useMemo(() => orders.filter((order) => order.id === focusedOrderId || matchesOrderSearch(order, filters)), [orders, filters, focusedOrderId]);
   const hasFilters = filters.query.trim() !== '' || filters.status !== 'all' || filters.payment !== 'all' || filters.source !== 'all' || filters.period !== 'all';
 
   useEffect(() => setVisibleOrderLimit(30), [filters]);
