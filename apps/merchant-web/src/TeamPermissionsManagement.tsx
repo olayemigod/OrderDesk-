@@ -138,7 +138,7 @@ export default function TeamPermissionsManagement({ tenantId }: { tenantId: stri
       await invokeTeam({ action: 'invite', tenantId, email, role: team.actorRole === 'manager' ? 'staff' : inviteRole });
       setInviteEmail('');
       await loadAll(selectedMemberId);
-      setMessage('Invitation sent. Access begins only after the invited person accepts it in SellerTray.');
+      setMessage('Invitation submitted to the email provider. Ask the recipient to check Inbox and Spam. Access begins only when they sign in with the invited email and accept the invitation.');
     } catch (cause) { setError(errorMessage(cause, 'Unable to invite this team member.')); }
     finally { setSaving(false); }
   }
