@@ -316,8 +316,9 @@ export default function MerchantAuth({
         />
       </>}
 
-      {mode === 'join-invitation' && <label className="field">
-        <span><SellerTrayInput type="checkbox" checked={invitationLegalAccepted} onChange={(event) => setInvitationLegalAccepted(event.target.checked)} required /> I accept the <a href="https://sellertray.com/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a> and acknowledge the <a href="https://sellertray.com/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</span>
+      {mode === 'join-invitation' && <label className="invitation-legal">
+        <input type="checkbox" checked={invitationLegalAccepted} onChange={(event) => setInvitationLegalAccepted(event.target.checked)} required />
+        <span>I accept the <a href="https://sellertray.com/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a> and acknowledge the <a href="https://sellertray.com/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</span>
       </label>}
 
       {mode === 'create-business' && <>
