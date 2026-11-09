@@ -6,7 +6,15 @@
 
 The original five Vercel Git-deployment metadata records still show READY and their known commit hashes. Vercel's source file-tree endpoint gave a 404 for these Git deployments, but that API is not a reliable way to obtain the *original compiled browser HTML/JavaScript*. The current branch-specific VITE_SUPABASE_URL settings point to standalone Test; current settings are not sufficient evidence of what Vercel actually compiled and served in October/November.
 
-Vercel's documented CLI command vc curl can use the operator's current Vercel identity when reading protected Preview URLs. It requires **no Vercel Pro subscription, new Preview build, disabled authentication or long-lived bypass token**. Official source: https://vercel.com/docs/cli/curl. A protected browser flow may alternatively use a short-lived Trusted Sources OIDC development token, but do not print or persist that token and do not broaden Trusted Sources.
+Vercel's documented CLI command vercel curl can use the operator's current Vercel identity when reading protected Preview URLs. It requires **no Vercel Pro subscription, new Preview build, disabled authentication or long-lived bypass token**. Official source: https://vercel.com/docs/cli/curl. A protected browser flow may alternatively use a short-lived Trusted Sources OIDC development token, but do not print or persist that token and do not broaden Trusted Sources.
+
+## Verified CLI behavior and Windows compatibility
+
+Vercel officially supports full URL syntax for \`vercel curl\` (introduced in its 15 May 2026 CLI update) and forwards curl flags to the system curl executable. The command uses the current Vercel identity to **obtain or generate an ephemeral deployment-protection bypass token internally** when needed. The operator does not supply, print, store or commit a bypass secret. This does **not** justify disabling Vercel Authentication or changing access rights. The local CLI must be new enough to support full URL \`vercel curl\`; check \`vercel --version\` and \`vercel curl --help\` before making any requests. If unsupported, STOP; do not use \`vercel deploy\` or relink the project to work around it.
+
+For Windows PowerShell, Node cannot directly \`execFileSync\` an npm-installed \`.cmd\` shim. The guarded capture utility now invokes \`vercel.cmd\` through \`cmd.exe\` **only** for \`whoami\` and a constrained, read-only \`curl\` request to one of the exact pinned original Vercel hosts. It rejects shell metacharacters, query strings, fragments, encoded paths, host/port overrides, redirects to unknown destinations and all other commands. On Linux/WSL it runs the \`vercel\` executable directly without a shell. This fixes a Windows execution defect in the initial capture helper. GitHub CI tests **command construction and synthetic capture only**; a real operator-authenticated Windows capture remains pending.
+
+References: [Vercel CLI curl](https://vercel.com/docs/cli/curl), [full-URL curl syntax release](https://vercel.com/changelog/use-native-curl-syntax-with-vercel-cli), and [Node.js Windows .cmd process behavior](https://nodejs.org/api/child_process.html#spawning-bat-and-cmd-files-on-windows).
 
 ## Exact five historical deployments to capture
 
@@ -22,14 +30,14 @@ Obtain exact aliases privately from the original deployment entries in the Verce
 
 ## Read-only Windows PowerShell steps (existing authenticated Vercel identity)
 
-First verify identity with vc whoami. A user who lacks historical reviewer authorization must STOP; do not disable or bypass SSO to make the check pass.
+First verify identity with vercel whoami. A user who lacks historical reviewer authorization must STOP; do not disable or bypass SSO to make the check pass.
 
 ~~~powershell
-vc whoami
+vercel whoami
 $Root = "C:\SellerTray Private OA5\historical-preview-captures"
 $Origin = "https://<ORIGINAL-VERIFIED-DEPLOYMENT-ALIAS>.vercel.app"
 New-Item -ItemType Directory -Force -Path "$Root\capture_0\assets" | Out-Null
-vc curl "$Origin/" --fail --silent --show-error -o "$Root\capture_0\index.html"
+vercel curl "$Origin/" --fail --silent --show-error -o "$Root\capture_0\index.html"
 ~~~
 
 The origin above is intentionally a placeholder. Use the *exact original alias tied to capture_0*; then repeat separately for capture_1 through capture_4 with their own original aliases. Check that saved index.html is the actual SellerTray application HTML, not a Vercel login/SSO page, redirect, error or blank placeholder. A successful response alone is not historical reviewer or deployed origin acceptance.
@@ -38,7 +46,7 @@ From each genuine index.html, enumerate the script src paths referencing compile
 
 ~~~powershell
 # Replace the placeholder using the script src path actually present in the HTML.
-vc curl "$Origin/assets/<REAL-HTML-ENTRYPOINT>.js" --fail --silent --show-error -o "$Root\capture_0\assets\<REAL-HTML-ENTRYPOINT>.js"
+vercel curl "$Origin/assets/<REAL-HTML-ENTRYPOINT>.js" --fail --silent --show-error -o "$Root\capture_0\assets\<REAL-HTML-ENTRYPOINT>.js"
 ~~~
 
 Recursively capture any *literal local* static, export-from, or dynamic-literal JavaScript imports in the downloaded chunks. Do not invent or rewrite any file containing the Test backend project string. If a chunk is missing, imports use computed paths or other nontrivial module bundling, or SSO blocks a capture, STOP and retain the raw evidence for manual reviewer analysis rather than weakening the inspector. Do not automatically fetch untrusted third-party URLs.
@@ -77,7 +85,7 @@ No fresh deployment, domain binding, Vercel Pro upgrade, new Test project, fallb
 
 ## Automated, guarded private original-asset capture (preferred over manual chunk copying)
 
-A new **explicitly invoked, read-only** local Node utility, \`scripts/qa/oa5-protected-preview-capture.mjs\`, can collect the original compiled JavaScript modules without manually copying each import. It has no cloud credentials of its own and relies on the operator's existing authenticated \`vc curl\` Vercel CLI identity. Its synthetic tests run in CI with a **mock request transport**, so CI never contacts a Preview deployment.
+A new **explicitly invoked, read-only** local Node utility, \`scripts/qa/oa5-protected-preview-capture.mjs\`, can collect the original compiled JavaScript modules without manually copying each import. It has no cloud credentials of its own and relies on the operator's existing authenticated \`vercel curl\` Vercel CLI identity. Its synthetic tests run in CI with a **mock request transport**, so CI never contacts a Preview deployment.
 
 **Before attempting a capture:** obtain a private Vercel original-alias-to-deployment-ID mapping from the existing five historical deployment records, and confirm the reviewer is already authorized. The provider read-only alias inventory currently shows **exactly one project-specific .vercel.app alias for each of all five original deployments**, but this is **metadata-only**, not an actual compiled asset capture or reviewer authorization. Do not publish those hostnames in a PR.
 
@@ -104,7 +112,7 @@ The following single-entry skeleton documents the private record's field shape; 
 In the source checkout on the operator's Windows workstation, **only with existing Vercel authentication**, run:
 
 ~~~powershell
-vc whoami
+vercel whoami
 node scripts/qa/oa5-protected-preview-capture.mjs --check-plan "C:\SellerTray Private OA5\historical-preview-private-plan.json"
 node scripts/qa/oa5-protected-preview-capture.mjs --capture "C:\SellerTray Private OA5\historical-preview-private-plan.json" "C:\SellerTray Private OA5\original-compilation-20261110"
 ~~~
@@ -115,7 +123,7 @@ On successful Test-only **content** inspection, the tool saves \`private-capture
 
 The collector is intentionally bounded: computed dynamic imports, unusual bundler preload indirections, third-party JavaScript and imported CSS/assets are not automatically fetched. If any such dependencies affect the actual app/backend identity, mark the evidence **incomplete** rather than creating a new build or weakening inspection. A new *private* capture that passes the script is only evidence of content consistency, not an accepted historical Agreement reviewer/callback or data-recovery gate. Preserve all actual bytes and screenshots privately, never in GitHub or project CI.
 
-The **manual vc curl commands above** remain an alternative for an expert operator who needs to investigate a block. The fully guarded tool is preferred when the original Vite modules are within the supported literal-local graph. A hostile URL, protection page, failed request or unexpected deployment identity is a STOP, not permission to bypass authentication.
+The **manual vercel curl commands above** remain an alternative for an expert operator who needs to investigate a block. The fully guarded tool is preferred when the original Vite modules are within the supported literal-local graph. A hostile URL, protection page, failed request or unexpected deployment identity is a STOP, not permission to bypass authentication.
 
 
 ### Original Vercel alias fingerprint reconciliation — source-only safeguard
