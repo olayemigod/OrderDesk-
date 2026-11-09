@@ -144,3 +144,23 @@ node scripts/qa/oa5-historical-preview-custody.mjs --check docs/qa/oa5-historica
 The checker fails closed on missing/replaced deployments, source or Branch drift, a Production custom-domain alias, Production URL bindings, mutated/late variable records or unsupported claims that browser, custom-domain protection or compiled JS were verified. It is an **immutable audit snapshot**, not live Vercel monitoring. A passing metadata check does not confirm that Vercel actually built those variable values into archived JavaScript assets. Vercel's Git deployment source tree/file-content APIs returned 404, and external direct-URL retrieval was not available to the reviewer; compiled-bundle verification and historic reviewer authentication remain outstanding.
 
 **Current Vercel account:** Hobby, not Pro. Merchant Preview protection is OFF. Admin SSO scope `all_except_custom_domains` cannot be trusted as protection for Test custom domains. Neither QA custom hostname is currently attached. The shared staging attestation's `qa_preview_access_protection_preflight_verified` remains **false**, so the source continues to reject QA clients. No Vercel configuration, DNS, Test/Production DB, cron, provider or APK mutation occurred.
+
+## 09/11/2026 — Read-only signed-out Preview/Production HTTP acceptance probe
+
+The Vercel team has exactly **one Owner member** as of the 09/11 read-only connected team-member check. This does **not** establish that no historical deployment was shared through a separate access grant or bypass link, so access continuity still needs explicit reviewer confirmation before any Vercel project configuration mutation.
+
+Vercel's documented **Standard Protection** setting is Vercel Authentication with `ssoProtection.deploymentType = "prod_deployment_urls_and_all_previews"`. It is available on the existing Hobby plan. Unlike `"all"`, it is designed to leave canonical Production custom domains public while protecting generated deployment URLs, including old review links. The current Merchant project has SSO disabled; Admin has SSO scope `all_except_custom_domains`. Neither is approved Test access protection. Enabling Standard also restricts generated Production deployment URLs, so verify no integration or external reviewer depends on a public generated URL first. Do not run a deployment to test this setting.
+
+**Source-only executable preflight added:** `scripts/qa/oa5-vercel-anonymous-access.mjs`. After separately authorized Standard Vercel Authentication is applied, use an operator-owned shell with two approved historical Preview URLs supplied through local environment variables (values stay outside Git and CI):
+
+```bash
+SELLERTRAY_OA5_MERCHANT_HISTORICAL_PREVIEW_URL='<existing-merchant-deployment-url>' \
+SELLERTRAY_OA5_ADMIN_HISTORICAL_PREVIEW_URL='<existing-admin-deployment-url>' \
+node scripts/qa/oa5-vercel-anonymous-access.mjs --live
+```
+
+The opt-in script makes exactly **four anonymous GETs**, manually prevents following redirects, sends no cookies/auth headers, and never exposes supplied URL values. It requires both Preview URLs to belong to their expected Vercel project hostnames and redirect to Vercel authentication, while both canonical Production domains return HTTP 200 HTML without a redirect. The instrument is intentionally stricter than broad HTTP 2xx/3xx: a 200 login-lookalike, 401 without the expected redirect, or redirect to another domain is **not** accepted as proof. A failure is a STOP and needs operator diagnosis, not weakening the checker.
+
+**This probe is NOT an acceptance by itself.** Independently (1) use a private browser to verify the Vercel challenge, (2) sign in as the authorized historic reviewer and verify the exact legacy deployment is viewable, (3) verify production remains accessible outside a Vercel session, (4) inspect and preserve historic compiled JS backend identity separately, and (5) complete explicit Test callback/cron/reset sign-off. Only an authorized, reviewed scope change may set `qa_preview_access_protection_preflight_verified` true. New `test.sellertray.com` and `test-admin.sellertray.com` would still require separate post-binding protected-hostname and Test backend checks. No protection settings, Vercel domains, Git branches, hosted database or API provider callbacks changed during source work.
+
+Source: [Vercel Deployment Protection](https://vercel.com/docs/deployment-protection) and [Vercel Authentication](https://vercel.com/docs/deployment-protection/methods-to-protect-deployments/vercel-authentication).
