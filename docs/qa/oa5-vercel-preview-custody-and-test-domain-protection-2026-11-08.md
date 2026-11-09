@@ -4,6 +4,8 @@
 **Approval:** NO-GO. This is **not** permission to deploy, bind QA domains,
 change authentication policies, reset the Test database, or reconfigure DNS.
 
+> **Latest read-only Vercel evidence, 09/11/2026:** The earlier 08/11 project-authentication observations below are a **historical before-change snapshot**, not current configuration. Both existing Merchant/Admin projects now show Standard Vercel Authentication enabled for `prod_deployment_urls_and_all_previews`, while canonical Production domains remain attached and future Test custom domains remain unattached. Read-only Vercel API checks of **all nine frontend backend URL scopes** (Production, default Preview and branch-specific historical overrides) returned expected **Test-only Preview** vs **Production-only Production** project identity, with distinct Test/Production publishable keys. The branch overrides preceded the five historical deployment creation timestamps; the earliest Admin override preceded its deployment by only ~27 seconds. This verifies provider-side **configured environment scopes**, **not historically served compiled JS**, original reviewer access, or provider callback safety. See [verified Test/Production environment scope and deployment chronology](oa5-vercel-preview-env-provider-read-2026-11-09.md). OA5 remains **NO-GO**.
+
 ## Five preserved historical agreement/visual deployments
 
 The **exact deployment IDs** from the 07/11/2026 handover were re-read
