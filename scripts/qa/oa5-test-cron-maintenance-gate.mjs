@@ -22,7 +22,7 @@ export function assessCronMaintenance(snapshot, now=new Date()) {
   if (!snapshot || typeof snapshot!=='object' || Array.isArray(snapshot)) {
     return {ok:false,reasons:['Missing valid Test cron snapshot']};
   }
-  if(snapshot.schema_version!==1 || snapshot.project_ref!==TEST_PROJECT)
+  if(snapshot.schema_version!==2 || snapshot.project_ref!==TEST_PROJECT)
     reasons.push('Wrong or unknown Test project identity');
   const captured=snapshot.captured_at_utc;
   const ts=typeof captured==='string'&&/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(captured)?Date.parse(captured):NaN;
@@ -51,6 +51,11 @@ export function assessCronMaintenance(snapshot, now=new Date()) {
     reasons.push('Unreviewed scheduled job exists: '+name);
   if(snapshot.all_jobs_count!==EXPECTED_JOBS.length)
     reasons.push('All-job census missing or inconsistent');
+  // pg_cron can enqueue asynchronous outbound HTTP work through pg_net.
+  // A paused schedule and zero active runs do not drain an already queued
+  // HTTP request. Reject missing/unknown/positive queue depth.
+  if(!Number.isSafeInteger(snapshot.pending_pg_net_http_requests) || snapshot.pending_pg_net_http_requests!==0)
+    reasons.push('Pending or unknown pg_net HTTP request queue; outbound work not quiescent');
   // Passing checks only the observed database cron precondition.
   // It NEVER approves destructive operations, provider secrets or callbacks.
   return {ok:reasons.length===0,reasons};
