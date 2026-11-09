@@ -10,7 +10,7 @@ const edge=read('../../../supabase/functions/platform-setup-installer/index.ts')
 const sql=read('../../../supabase/migrations/20261104050000_oa5_internal_setup_installer_identity_foundation.sql');
 
 assert.match(entry,/import \{ ProcessEdgeIdentityGate \} from '\.\/components\/ProcessEdgeIdentityGate'/);
-assert.match(entry,/<AuthGate>\s*<ProcessEdgeIdentityGate>\s*<LegalAcceptanceGate>/);
+assert.match(entry,/<AuthGate hasPendingInvitation=\{Boolean\(invitationLink\.invitationId\)\}>\s*<ProcessEdgeIdentityGate>\s*<LegalAcceptanceGate>/);
 assert.match(identity,/action: 'profile'/);
 assert.match(identity,/if \(profile\.isInstaller\)/);
 assert.match(identity,/state\.kind === 'installer'/);
