@@ -39,7 +39,7 @@ The operator-review JSON shape is:
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "project_ref": "iukgsukdoowvnhlfmpml",
   "reviewed_source_sha": "THE_EXACT_40_CHARACTER_GIT_HEAD",
   "purpose": "pre-reset-human-review",
@@ -51,7 +51,13 @@ The operator-review JSON shape is:
     "production_custom_domains_public": {"reviewed": false, "evidence_ref": ""},
     "vercel_preview_auth_protection": {"reviewed": false, "evidence_ref": ""},
     "test_only_ingress_freeze_reviewed": {"reviewed": false, "evidence_ref": ""},
-    "test_only_provider_callbacks_and_sinks": {"reviewed": false, "evidence_ref": ""},
+    "meta_test_app_phone_webhook_ownership": {"reviewed": false, "evidence_ref": ""},
+    "paystack_test_keys_callbacks_and_replay": {"reviewed": false, "evidence_ref": ""},
+    "flutterwave_test_disabled_or_sandbox_only": {"reviewed": false, "evidence_ref": ""},
+    "smtp_safe_sink_recipients_and_auth_redirects": {"reviewed": false, "evidence_ref": ""},
+    "firebase_fcm_test_sender_and_qa_devices": {"reviewed": false, "evidence_ref": ""},
+    "ai_parser_and_notification_worker_egress": {"reviewed": false, "evidence_ref": ""},
+    "test_admin_merchant_domains_and_auth_redirects": {"reviewed": false, "evidence_ref": ""},
     "test_auth_sessions_storage_scope": {"reviewed": false, "evidence_ref": ""},
     "reversible_four_job_pause_approved": {"reviewed": false, "evidence_ref": ""},
     "reviewed_cleanup_method_and_scope": {"reviewed": false, "evidence_ref": ""},
@@ -233,3 +239,12 @@ This is documentation of a read-only investigation, not authority to reset, paus
 The detailed count-only schema and grant review is maintained in [OA5 hosted Test cleanup scope and replay review](oa5-test-hosted-cleanup-scope-and-replay-review-2026-11-09.md). The legacy Test database currently has 132 public tables, 8 private SellerTray tables, 479 public routines (348 SECURITY DEFINER), 176 public custom triggers, 54 historical migration records and four active background jobs. Supabase-managed Auth, Storage, cron, net, Vault, Realtime and extension-owned objects must not be swept into an unscoped user-schema reset. Historic effective role grants (including 143 SECURITY DEFINER public functions callable by authenticated users) demand explicit post-replay security verification, **not** an automatic claim of vulnerability or permission to copy old grants.
 
 That scope map is **not an approved cleanup recipe**. The exact supported operation, chronological dependency closure, Auth/Storage irreversibility, reviewer/operator identity, provider isolation, zero-queue after-pause evidence and separately signed Test-only destructive authorization are still outstanding. Keep PR #228 draft, QA attestation blocked and Production/Tandar untouched.
+
+
+## 09/11/2026 — independent provider evidence, schema v2 (source-only)
+
+The pre-reset operator evidence contract now requires **seven separately reviewed provider/sink categories** in addition to the original ingress, archive, historical-Preview, managed-service and migration/rollback checks. The previous single `test_only_provider_callbacks_and_sinks` assertion is insufficient, and v1 records now intentionally **fail closed**. The separate private references must be unique across every evidence category: sharing a `private-review-...` reference across Meta and Paystack, or reusing it for unrelated archive/QA checks, is rejected. This is an evidence-chain discipline, not a cryptographic proof or an automated provider-console attestation.
+
+Required individual reviews: Meta app/phone/WABA/webhook ownership (including the historical Production phone-reference collision); Paystack sandbox keys, signed callback and idempotency; Flutterwave explicitly disabled *or* isolated sandbox; SMTP non-delivering/captive recipients and Auth activation/reset redirects; Firebase/FCM QA sender and devices; AI parser/worker egress; and Merchant/Admin protected Test domains plus Auth redirects. Every entry must be `reviewed:true` with its own independently held, non-secret opaque evidence reference; **no flags should be asserted from SQL counts or source configuration alone**. If a provider is disabled, its independent evidence must prove that disabled state rather than simply marking it reviewed.
+
+Private evidence must remain outside GitHub/CI and must not contain actual API keys, phone secrets, recipient lists, Auth tokens, or provider callback URLs. This schema change does not expand the owner's approval to pause four Test jobs, delete Auth state, deploy, or reset. The existing follow-up one-session-loss decision remains narrowly scoped and is **not** a substitute for provider-isolation attestation. The preflight always returns `destructive_execution_authorized:false` even when synthetically all evidence is true. **Current review status: BLOCKED.**
