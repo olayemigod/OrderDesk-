@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(16);
+select extensions.plan(17);
 
 select extensions.ok(
   (
@@ -183,6 +183,16 @@ select extensions.is(
   jsonb_array_length((select detail_result->'orders' from sellertray_customer_management_fixture)),
   4,
   'Customer order history excludes soft-deleted drafts without hiding active drafts'
+);
+
+select extensions.ok(
+  not exists (
+    select 1
+    from sellertray_customer_management_fixture f,
+         jsonb_array_elements(f.detail_result->'orders') o
+    where o->>'branchId' is distinct from f.branch_id::text
+  ),
+  'Every customer-history order carries its server-governed original Branch identifier'
 );
 
 select extensions.ok(
