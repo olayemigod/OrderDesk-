@@ -69,7 +69,7 @@ Operator-provided Firebase Console evidence confirms a **separate** SellerTray T
 
 The staged Android config must validate **all** of the Test Firebase project ID, sender number, registered Android App ID, and Android package name against a protected Test-only `google-services.json` file. Do not commit this downloaded Test file to Git, overwrite the Production configuration, copy Production FCM/service-account keys, or claim hosted FCM delivery acceptance merely from registration screenshots. Only stage a protected Test Firebase config and dedicated FCM V1/Expo sender after the Test Supabase/backend/provider isolation gates have been independently attested. No build, push delivery or real-customer notification is authorised by this record.
 
-## 08/11/2026 — approved QA domains and current hosted isolation status
+## 08/11/2026 — approved QA domains and historical hosted isolation snapshot (superseded where noted)
 
 - **Merchant Test:** `test.sellertray.com` (Cloudflare DNS-only CNAME to
   `cname.vercel-dns.com`).
@@ -116,3 +116,47 @@ provider-side screenshot/hosted acceptance. Do not configure external
 callbacks or test traffic until the controlled Test rebuild, provider
 authorization and hosted guards are independently accepted. A source CI
 PASS alone is **not** an approved staging attestation.
+
+
+## 09/11/2026 — owner-approved Standard Vercel Authentication is now active
+
+This later explicit user-approved security configuration **supersedes the 08/11
+statement that Merchant Preview protection was disabled and Admin scope was
+`all_except_custom_domains`**. The user authorized a narrow protection-only
+change to the two **existing** Vercel projects; no Vercel Pro subscription,
+build, new Preview, DNS binding or application deployment was authorized.
+
+The project API now confirms both `sellertray-merchant` and
+`sellertray-admin` with `ssoProtection.enabled=true` and
+`ssoProtection.deploymentType="prod_deployment_urls_and_all_previews"`.
+Their existing verified Production custom domains
+`app.sellertray.com` and `admin.sellertray.com` remain attached. The
+user personally verified, using Incognito/signed-out browsing, that both
+preserved historical Merchant and Admin Preview URLs redirect to Vercel
+Authentication; after signing in as the Vercel Owner, **both original
+Preview pages opened**. The user confirmed that both canonical Production
+domains open publicly without Vercel login. All five historical Agreement
+Preview deployments remain `READY` with their original Git SHAs and aliases.
+
+These observations **do not** establish any unrelated external reviewer
+grant, the original historical Preview's compiled Supabase endpoint identity,
+the exact anonymous four-GET status/redirect script, or protection of the
+yet-unbound Test custom domains. Specifically, `test.sellertray.com` and
+`test-admin.sellertray.com` remain **unattached** and must be independently
+tested for access protection *after* their separately authorized Test-only
+binding. Do not loosen production access or use `all` deployment protection
+in place of the confirmed Standard scope.
+
+The OA5 backend attestation remains `state:blocked` and
+`qa_preview_access_protection_preflight_verified:false`. The successful
+owner-access checks alone do **not** authorize a Test reset, cron pause,
+Edge Function deployment, sandbox provider callback, new preview, QA APK or
+C2 production runtime cutover. The existing Production/Tandar core retains
+its current authority. See the exact provider evidence and owner browser
+acceptance notes on draft PR #228.
+
+A later Test-only archive-census review also identified one new Auth session
+(archive 5 versus hosted Test 6). The Test-only pre-reset gate allows a
+**proposed** exact-scope reviewed exception only when separately approved;
+this recorded project policy is not approval to discard that session or
+any other archived historical Test evidence.
