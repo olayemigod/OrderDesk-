@@ -57,7 +57,7 @@ test('backup/restore and fresh cron/pg_net evidence are mandatory, independent s
   }
 });
 test('CLI without private operator evidence cannot contact any hosted resource or approve reset',()=>{
-  const run=spawnSync(process.execPath,[new URL('./oa5-test-rebuild-preflight.mjs',import.meta.url).pathname,'--check','/nonexistent-record.json','/nonexistent-archive','/nonexistent-cron.json','/nonexistent-live.json'],{encoding:'utf8'});
+  const run=spawnSync(process.execPath,[new URL('./oa5-test-rebuild-preflight.mjs',import.meta.url).pathname,'--check','/nonexistent-record.json','/nonexistent-archive','/nonexistent-cron.json','/nonexistent-live.json','/nonexistent-managed.json'],{encoding:'utf8'});
   assert.equal(run.status,1);
   assert.match(run.stderr,/BLOCKED/);
   assert.doesNotMatch(run.stderr,/service_role|sk_live_/);
