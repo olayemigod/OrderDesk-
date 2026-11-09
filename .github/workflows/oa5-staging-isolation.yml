@@ -48,6 +48,9 @@ on:
       - 'scripts/qa/oa5-historical-preview-bundle-inspection.mjs'
       - 'scripts/qa/oa5-preview-module-graph.mjs'
       - 'scripts/qa/oa5-historical-preview-bundle-inspection.test.mjs'
+      - 'scripts/qa/oa5-protected-preview-capture.mjs'
+      - 'scripts/qa/oa5-protected-preview-capture.test.mjs'
+      - 'docs/qa/oa5-protected-vercel-compiled-preview-capture-operator-2026-11-09.md'
       - 'scripts/qa/oa5-vercel-anonymous-access.mjs'
       - 'scripts/qa/oa5-vercel-anonymous-access.test.mjs'
       - 'scripts/qa/oa5-vercel-project-protection.mjs'
@@ -93,6 +96,7 @@ jobs:
           node --test scripts/qa/oa5-test-auth-decommission-boundary.test.mjs
           node --test scripts/qa/oa5-historical-preview-custody.test.mjs
           node --test scripts/qa/oa5-historical-preview-bundle-inspection.test.mjs
+          node --test scripts/qa/oa5-protected-preview-capture.test.mjs
           node --test scripts/qa/oa5-test-edge-inventory.test.mjs
           node --test scripts/qa/oa5-test-edge-bundle-drift.test.mjs
           node scripts/qa/oa5-test-edge-bundle-drift.mjs --baseline docs/qa/oa5-test-edge-bundle-custody-2026-11-09.json --offline
