@@ -164,3 +164,45 @@ The opt-in script makes exactly **four anonymous GETs**, manually prevents follo
 **This probe is NOT an acceptance by itself.** Independently (1) use a private browser to verify the Vercel challenge, (2) sign in as the authorized historic reviewer and verify the exact legacy deployment is viewable, (3) verify production remains accessible outside a Vercel session, (4) inspect and preserve historic compiled JS backend identity separately, and (5) complete explicit Test callback/cron/reset sign-off. Only an authorized, reviewed scope change may set `qa_preview_access_protection_preflight_verified` true. New `test.sellertray.com` and `test-admin.sellertray.com` would still require separate post-binding protected-hostname and Test backend checks. No protection settings, Vercel domains, Git branches, hosted database or API provider callbacks changed during source work.
 
 Source: [Vercel Deployment Protection](https://vercel.com/docs/deployment-protection) and [Vercel Authentication](https://vercel.com/docs/deployment-protection/methods-to-protect-deployments/vercel-authentication).
+
+
+## 09/11/2026 — offline five historical compiled-bundle inspection (unverified origin)
+
+The owner has already verified Standard Vercel Authentication on both existing projects, signed-out login challenges on the historic generated deployment URLs, and public reachability on canonical Production domains. A fresh read-only Vercel project/domain check reconfirmed the Standard scope on both existing projects and that test.sellertray.com / test-admin.sellertray.com remain **unattached**. No Vercel/DNS settings or deployments changed.
+
+**Access limitation:** Vercel's deployment-files API still returns **404 File tree not found** for all five exact historic Git deployments. Metadata and branch-scoped variable records do **not** prove the backend embedded in previously compiled browser JavaScript. Do not create a replacement Preview, reconstruct an old build from Git and claim it is the historic deployed artifact, or repurpose the preserved old pages as clean QA.
+
+**New non-destructive helper:** scripts/qa/oa5-historical-preview-bundle-inspection.mjs. Its synthetic regression tests are wired to the OA5 source workflow. It takes five privately captured historical HTML+JS trees and rejects an incorrect/missing deployment identity, SHA, surface or evidence reference; missing HTML/compiled JS; absent Test Supabase project identity; any Production project reference; any unknown Supabase endpoint; unsafe/symlinked artifact trees; and missing or secret-bearing manifest fields. It performs no HTTP/provider, browser, database, Git or deployed-site operation.
+
+### Protected operator capture (not yet performed)
+
+1. An authorised historical Vercel reviewer opens each original preserved deployment page through its old generated deployment URL and the existing Vercel Authentication. Record authenticated reviewer, exact original deployment ID, source SHA, timestamp and original page URL privately. Never commit URL lists, cookies, HAR, tokens, publishable-key values, browser session archives or private captures.
+2. Privately capture the **served HTML and all loaded compiled JavaScript chunks**, including dynamically loaded Agreement and Admin routes, from the **original** five deployments. The operator must independently verify that these are actual original served assets, not a Vercel login HTML page, browser cache, a newly compiled source checkout or the Production custom domain. The offline tool cannot establish origin or exhaustively discover assets missing from the supplied capture.
+3. Create one private JSON manifest with EXACTLY the five immutable deployment IDs/source SHAs/surfaces already documented in oa5-historical-vercel-preview-custody-2026-11-09.json, their unique relative directory names and opaque non-secret capture evidence references. Example structure for one record (the actual private manifest must have five):
+
+~~~json
+{
+  "schema_version": 1,
+  "scope": "historical-preview-bundle-content-only",
+  "captured_at_utc": "2026-11-09T20:00:00Z",
+  "deployments": [
+    {
+      "id": "dpl_Cfh7oAt9nHQkdUZtbXShj7jfhMfw",
+      "sha": "3f0df8f16455572cd0d1c079a3ac2327cc5bcd88",
+      "surface": "merchant",
+      "directory": "capture_merchant_1",
+      "capture_evidence_ref": "private-evidence-0001"
+    }
+  ]
+}
+~~~
+
+4. Run this content-only tool, with private paths, on an isolated operator computer:
+
+~~~sh
+node scripts/qa/oa5-historical-preview-bundle-inspection.mjs --check /secure/private/five-bundle-manifest.json /secure/private/five-original-preview-assets
+~~~
+
+5. An offline PASS means ONLY the **supplied** text files look consistent with Test backend references and none contain an identifiable Production/unknown Supabase project. The tool ALWAYS returns historical_artifact_origin_verified:false, hosted_compiled_bundle_accepted:false and destructive_execution_authorized:false. Independent historic reviewer access, artifact provenance/completeness, running app/redirect identity and preservation must be reviewed outside the tool. A 404 source tree means **STOP** rather than automatically waiving the old bundle gate.
+
+**Current gate remains OPEN:** no protected original bundles or five-record private manifest have been provided, so no actual archived compiled-bundle acceptance was run. No Auth/Storage, cron, SQL, provider, preview, APK, Production/Tandar or C2 change was authorized or performed. Source-only preparation needs no paid resource.
