@@ -163,6 +163,23 @@ export default function TeamPermissionsManagement({ tenantId }: { tenantId: stri
     finally { setSaving(false); }
   }
 
+  async function resendInvitation(invitation: Invitation) {
+    if (saving || (team.actorRole === 'manager' && invitation.role !== 'staff')) return;
+    setSaving(true);
+    clearNotice();
+    try {
+      // The existing invite command reuses the pending record for this recipient.
+      // A provider acknowledgment does not prove receipt in their mailbox.
+      await invokeTeam({ action: 'invite', tenantId, email: invitation.email, role: invitation.role });
+      await loadAll(selectedMemberId);
+      setMessage('Invitation submitted again to the email provider. Delivery to the recipient is not yet confirmed. Ask them to check Inbox and Spam, or share the invitation through an approved channel.');
+    } catch (cause) {
+      setError(errorMessage(cause, 'Unable to resend this invitation. Its pending state has not been cancelled.'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function cancelInvitation(invitation: Invitation) {
     setSaving(true); clearNotice();
     try {
@@ -243,7 +260,7 @@ export default function TeamPermissionsManagement({ tenantId }: { tenantId: stri
       <p className="muted">Every invitation remains pending until the invited person explicitly accepts it in SellerTray, including existing SellerTray users.</p>
     </section>
 
-    {team.invitations.length ? <article className="panel invitation-panel"><div className="panel-head"><div><p className="eyebrow">Pending</p><h3>Invitations</h3></div></div>{team.invitations.map((invitation) => <div className="invitation-row" key={invitation.id}><span><strong>{invitation.email}</strong><small>{roleLabel(invitation.role)} · expires {dateOnly(invitation.expiresAt)}</small></span><button className="text-button" type="button" disabled={saving || (team.actorRole === 'manager' && invitation.role !== 'staff')} onClick={() => void cancelInvitation(invitation)}>Cancel</button></div>)}</article> : null}
+    {team.invitations.length ? <article className="panel invitation-panel"><div className="panel-head"><div><p className="eyebrow">Pending</p><h3>Invitations</h3></div></div>{team.invitations.map((invitation) => <div className="invitation-row" key={invitation.id}><span><strong>{invitation.email}</strong><small>{roleLabel(invitation.role)} · expires {dateOnly(invitation.expiresAt)}</small></span><span className="topbar-actions"><button className="text-button" type="button" disabled={saving || (team.actorRole === 'manager' && invitation.role !== 'staff')} onClick={() => void resendInvitation(invitation)}>Resend email</button><button className="text-button" type="button" disabled={saving || (team.actorRole === 'manager' && invitation.role !== 'staff')} onClick={() => void cancelInvitation(invitation)}>Cancel</button></span></div>)}</article> : null}
 
     {history.length ? <article className="panel invitation-panel"><div className="panel-head"><div><p className="eyebrow">Audit trail</p><h3>Membership history</h3><p className="muted">Append-only history of invitations, acceptance, role changes, removals and ownership corrections.</p></div></div>{history.slice(0, 20).map((entry) => <div className="invitation-row" key={entry.id}><span><strong>{membershipEventLabel(entry)}</strong><small>{entry.subjectEmail ?? 'Unknown team member'} · by {entry.actorEmail ?? actorLabel(entry.actorKind)} · {dateTime(entry.createdAt)}{entry.reason ? ` · ${entry.reason}` : ''}</small></span></div>)}</article> : null}
 
