@@ -18,6 +18,7 @@ const approvedReuse = {
   historical_agreement_evidence_archived:true,
   restore_path_verified:true,
   vercel_preview_dependencies_reconciled:true,
+  qa_preview_access_protection_preflight_verified:true,
   test_only_auth_and_provider_config_verified:true,
   qa_edge_functions_deployed_and_verified:true,
 };
@@ -162,4 +163,9 @@ test('the same reused Test project is build-eligible only with matching reviewed
     {...validEnv(), EXPO_PUBLIC_SUPABASE_URL:reuseUrl}, approvedReuse);
   assert.equal(accepted.android.package, 'ng.processedge.sellertray.qa');
   assert.equal(accepted.name, 'SellerTray QA');
+});
+
+test('Test QA native backend identity cannot be approved before web Preview access preflight', () => {
+  const denied={...approvedReuse,qa_preview_access_protection_preflight_verified:false};
+  assert.equal(reusedTestProjectApproved(denied,'https://iukgsukdoowvnhlfmpml.supabase.co'),false);
 });

@@ -26,6 +26,7 @@ const good=()=>({
  historical_agreement_evidence_archived:true,
  restore_path_verified:true,
  vercel_preview_dependencies_reconciled:true,
+ qa_preview_access_protection_preflight_verified:true,
  test_only_auth_and_provider_config_verified:true,
  qa_edge_functions_deployed_and_verified:true,
  approved_at:'04/11/2026',
@@ -110,6 +111,7 @@ test('rejects missing migration replay, archive or separate-provider proof',()=>
  for(const prop of [
   'clean_migration_replay_verified','historical_agreement_evidence_archived',
   'restore_path_verified','vercel_preview_dependencies_reconciled',
+  'qa_preview_access_protection_preflight_verified',
   'test_only_auth_and_provider_config_verified','qa_edge_functions_deployed_and_verified'
  ]){
   const a=good();a[prop]=false;
@@ -171,4 +173,12 @@ test('production build CLI passes known production URL (release approval still s
 
 test('unknown surface fails closed',()=>{
  assert.equal(check('website',env('production','merchant')).ok,false);
+});
+
+test('unverified QA preview protection prevents both Merchant and Admin QA builds',()=>{
+ for(const surface of ['merchant','admin']){
+  const attestation=good();
+  attestation.qa_preview_access_protection_preflight_verified=false;
+  assert.equal(check(surface,env('preview',surface),attestation).ok,false);
+ }
 });

@@ -7,8 +7,9 @@
   "historical_agreement_evidence_archived": false,
   "restore_path_verified": false,
   "vercel_preview_dependencies_reconciled": false,
+  "qa_preview_access_protection_preflight_verified": false,
   "test_only_auth_and_provider_config_verified": false,
   "qa_edge_functions_deployed_and_verified": false,
   "approved_at": null,
-  "evidence_note": "Not yet attested. Do not bind any Merchant Web/Admin Web preview or mobile QA build to this project. Source file must be reviewed and updated with actual evidence before Test/Staging acceptance."
+  "evidence_note": "Not yet attested. Vercel Preview access protection preflight is unverified, including historical reviewer continuity and public Production reachability. Do not bind any Merchant Web/Admin Web preview or mobile QA build to this project. Source file must be reviewed and updated with actual evidence before Test/Staging acceptance."
 }
