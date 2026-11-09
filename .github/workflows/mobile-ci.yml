@@ -85,8 +85,10 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Expo SDK package and config doctor
-        run: npx --yes expo-doctor
+      - name: Expo SDK Doctor with fail-closed workspace lockfile check
+        run: |
+          node --test scripts/expo-doctor-workspace-gate.test.mjs
+          node scripts/expo-doctor-workspace-gate.mjs
 
       - name: Production Android bundle smoke
         env:
