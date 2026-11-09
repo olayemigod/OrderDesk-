@@ -113,3 +113,56 @@ A new connected **read-only Supabase Test** check confirmed that the **five** AC
 The current Test database aggregate also returned: `tenant_whatsapp_connections=0`, `sellertray_private.whatsapp_connection_credentials=0`, `merchant_payment_methods=0`, `merchant_push_devices=0`, `sellertray_private.runtime_config=0`; **four pg_cron jobs remain ACTIVE** and `net.http_request_queue=0`. These observations establish only Test project metadata/data state; they do **not** establish Meta/PSP/SMTP/FCM external callback ownership, absence of future ingress, external credential segregation, or transitive functions' side-effect safety. Do not assume that an absent Test webhook function or zero Test rows proves external providers are disconnected, and do not change live callbacks to manufacture QA evidence.
 
 **Review split:** Test-side callback deploy/data inventory is now read-only corroborated; external provider console and protected secret/sink attestations remain **OPEN**, as do exact managed Auth/Storage cleanup, cron pause and irreversible rollback authorization. No service operation, webhook invocation, SQL mutation, app build or provider configuration change occurred.
+
+
+## 09/11/2026 — separate pre-Auth-decommission dependency safety gate
+
+This is an **additional offline safety precondition before a future separately approved Auth-admin user deletion**, NOT a requirement that historic App-to-Auth FKs be zero before the separately approved *earlier* Test user-created-schema cleanup. In the current, unreconstructed Test project, these counts are deliberately nonzero and this guard **MUST FAIL**.
+
+**Read-only standalone Test census (09/11/2026):** 66 foreign keys from non-Auth schemas to \`auth.users\`: 30 RESTRICT, eight CASCADE, 28 SET NULL, zero other actions; zero non-internal triggers directly on \`auth.users\`. This includes the 64 public FKs plus two from \`sellertray_private\`. The ten populated public RESTRICT relationships with 51 matching FK references are separately documented above. None of these counts are an authorization to erase the old agreement/audit data.
+
+New offline script: \`scripts/qa/oa5-test-auth-decommission-boundary.mjs\`; regression suite: \`scripts/qa/oa5-test-auth-decommission-boundary.test.mjs\` (wired to OA5 source-only CI). The script requires an **exact Test project ID**, exact purpose/schema, a **fresh under-ten-minutes** private aggregate, zero *all* externally referencing FKs (including CASCADE, SET NULL and future schemas), zero non-internal \`auth.users\` triggers and internally consistent counts. It checks **only** the post-legacy-cleanup database dependency prerequisite. It always returns \`auth_user_deletion_authorized:false\` and \`destructive_execution_authorized:false\`, even if the metadata precondition passes.
+
+### Future protected snapshot — SQL is SELECT-only and does not delete anything
+
+The review operator must independently confirm the connected **standalone Test** project is \`iukgsukdoowvnhlfmpml\` before running the following SELECT. Return only an aggregate JSON object, privately held outside Git/CI. Verify the target and historic archive custody again when capturing it for a future Test-only handover.
+
+~~~sql
+WITH f AS (
+  SELECT con.confdeltype AS delete_code, srcns.nspname AS referencing_schema
+  FROM pg_constraint con
+  JOIN pg_class src ON src.oid=con.conrelid
+  JOIN pg_namespace srcns ON srcns.oid=src.relnamespace
+  JOIN pg_class dst ON dst.oid=con.confrelid
+  JOIN pg_namespace dstns ON dstns.oid=dst.relnamespace
+  WHERE con.contype='f' AND dstns.nspname='auth' AND dst.relname='users'
+    AND srcns.nspname <> 'auth'
+)
+SELECT jsonb_build_object(
+  'schema_version', 1,
+  'project_ref', 'iukgsukdoowvnhlfmpml',
+  'purpose', 'pre-auth-decommission-dependency-only',
+  'captured_at_utc',
+    to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+  'counts', jsonb_build_object(
+    'external_auth_user_fks', (SELECT count(*)::int FROM f),
+    'external_restrict_fks', (SELECT count(*)::int FROM f WHERE delete_code='r'),
+    'external_cascade_fks', (SELECT count(*)::int FROM f WHERE delete_code='c'),
+    'external_set_null_fks', (SELECT count(*)::int FROM f WHERE delete_code='n'),
+    'external_other_fks', (SELECT count(*)::int FROM f WHERE delete_code NOT IN ('r','c','n')),
+    'auth_users_custom_triggers', (
+      SELECT count(*)::int FROM pg_trigger t
+      JOIN pg_class c ON c.oid=t.tgrelid
+      JOIN pg_namespace ns ON ns.oid=c.relnamespace
+      WHERE ns.nspname='auth' AND c.relname='users' AND NOT t.tgisinternal)
+  )
+) AS snapshot;
+~~~
+
+When a separately authorized, reviewed legacy App-schema cleanup has actually been completed, an independent reviewer can perform this isolated offline check with the protected snapshot:
+
+~~~sh
+node scripts/qa/oa5-test-auth-decommission-boundary.mjs --check /secure/private/test-auth-decommission-fk-snapshot.json
+~~~
+
+**CURRENT OUTCOME: BLOCKED**, since the untouched Test schema contains 66 external Auth-user FKs. Never set these counts to zero artificially or drop constraints just to satisfy the checker. Before a future Auth-admin action, the independent reviewer must separately verify the encrypted/restore-tested archive and immutability of Agreement/audit evidence, the approved historical App-schema retirement result, remaining Storage/signed-URL ownership, existing provider callbacks/secrets, old JWT expiry/session revocation, irreversible MFA/session loss, operator access and operation-specific approval. A zero-FK snapshot is **necessary but not sufficient** for Auth deletion. Any changed schema, time, counts or unexpected metadata forces a fresh review. No service mutation or Auth API/Console action was performed as part of this gate.
