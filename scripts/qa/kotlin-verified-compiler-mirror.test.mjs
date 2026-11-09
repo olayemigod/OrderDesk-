@@ -30,7 +30,7 @@ test('SDK58 release-mode R8 reuses the exact verified Kotlin compiler CI reposit
   const section=workflow.split('      - name: Check release R8 shrinking without assembling or signing an APK\n')[1]?.split('\n      - name: ')[0];
   assert.ok(section,'native R8 step must remain present');
   assert.match(section,/^\s*env:\n\s*SELLERTRAY_VERIFIED_KOTLIN_REPO: \$\{\{ runner\.temp \}\}\/sellertray-kotlin-maven/m);
-  assert.match(section,/\b:app:minifyReleaseWithR8\b/);
+  assert.match(section,/:app:minifyReleaseWithR8\b/);
   assert.match(section,/kotlin-verified-compiler-mirror\.init\.gradle/);
   assert.doesNotMatch(section,/:\s*app:(?:assemble|bundle)Release\b/);
 });
