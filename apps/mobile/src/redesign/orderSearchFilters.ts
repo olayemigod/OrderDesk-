@@ -1,6 +1,6 @@
 import type { MerchantOrder } from '../domain/order';
 
-export type OrderStatusFilter = 'all' | 'draft' | 'needs_review' | 'active' | 'completed' | 'cancelled';
+export type OrderStatusFilter = 'all' | 'draft' | 'needs_review' | 'active' | 'completed' | 'rejected' | 'cancelled';
 export type OrderPaymentFilter = 'all' | 'unpaid' | 'partially_paid' | 'awaiting_verification' | 'paid';
 export type OrderSourceFilter = 'all' | 'pos' | 'whatsapp' | 'manual';
 export type OrderPeriodFilter = 'all' | 'today' | 'seven_days' | 'thirty_days';
