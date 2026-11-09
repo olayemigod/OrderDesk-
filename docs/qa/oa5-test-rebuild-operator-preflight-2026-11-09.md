@@ -143,3 +143,11 @@ A passing operator review is only one prerequisite. The independently approved f
 pause, outbound-callback isolation, hosted Auth/session token revocation, exact cleanup
 method and specific destructive Test execution authorization remain separate STOP gates.
 Production and Tandar are excluded. No hosted operations are performed by these scripts.
+
+## 09/11/2026 — independent provider / managed Auth and Storage review (source-only)
+
+See [the Test-only provider and managed cleanup review](oa5-test-provider-auth-storage-isolation-review-2026-11-09.md) before considering the operator record's `test_only_provider_callbacks_and_sinks`, `test_auth_sessions_storage_scope`, `test_only_ingress_freeze_reviewed` or `reviewed_cleanup_method_and_scope` assertions. This review is **not** independent hosted/provider attestation and must not be used as the sole `reviewed:true` evidence reference.
+
+Read-only Test counts on 09/11 additionally identify 21 Auth refresh-token rows, one Auth identity, one MFA factor and eight MFA challenges, alongside the already recorded five users and six sessions. There are three Storage buckets and zero metadata object rows; ancillary multipart/vector/analytics/abandoned-artifact rows returned zero. These facts expand the **cleanup review surface**, not the owner's approved session-loss scope, and do not prove Storage backing-object emptiness. Do not assume a remote SQL schema reset clears managed Auth, JWTs, physical Storage objects, secrets, callbacks or already-dispatched outbound work.
+
+Until the external Meta/Paystack/Flutterwave/SMTP/FCM/AI and historical preview endpoint evidence is reviewed, service-managed Auth/Storage operation and irreversible rollback boundary are accepted, and the separate four-job pause plus fresh private evidence are authorized, the preflight must remain **NO-GO**. Production/Tandar, hosted Test, Vercel and provider configuration remain unchanged by this documentation update.
