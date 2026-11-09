@@ -1,7 +1,8 @@
 /**
  * CI-only checksum-verified fallback for the Kotlin compiler artifacts Maven
  * Central redirects to GitHub Releases. Never trust a mirror checksum:
- * compare downloaded bytes to canonical Maven Central published SHA256.
+ * compare downloaded bytes to SHA256 published on official JetBrains GitHub
+ * release asset metadata (v2.2.0 and v2.2.10); fail if any byte differs.
  * Fail closed if either source is missing, times out, or disagrees.
  */
 import { mkdtempSync, mkdirSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs';
@@ -10,7 +11,13 @@ import { createHash } from 'node:crypto';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const VERSIONS=Object.freeze(['2.2.0','2.2.10']);
+// Official GitHub JetBrains/kotlin Releases API assets[].digest, checked 09/11/2026.
+// These are reviewed immutable expected hashes, not checksums from the mirror.
+export const OFFICIAL_DIGESTS=Object.freeze({
+  '2.2.0':'b2f743ea5ba12f69e0f35e5d8d46069d74c8e2861087548a7e0e14a784bc4cf1',
+  '2.2.10':'79628fd5d64b4692a62f98962baab00e9076a37e2cffd6ace33cd0b7be7d1cdf',
+});
+const VERSIONS=Object.freeze(Object.keys(OFFICIAL_DIGESTS));
 const ARTIFACT='kotlin-compiler-embeddable';
 const PATH='org/jetbrains/kotlin/'+ARTIFACT;
 const CENTRAL='https://repo.maven.apache.org/maven2';
@@ -53,11 +60,9 @@ export function main() {
   try{
     for(const version of VERSIONS){
       const base=PATH+'/'+version+'/'+ARTIFACT+'-'+version;
-      const checksumFile=join(scratch,version+'.sha256');
       const pomFile=join(scratch,version+'.pom');
       const jarFile=join(scratch,version+'.jar');
-      download(CENTRAL+'/'+base+'.jar.sha256',checksumFile,20);
-      const expected=parseOfficialSha256(readFileSync(checksumFile,'utf8'));
+      const expected=OFFICIAL_DIGESTS[version];
       download(CENTRAL+'/'+base+'.pom',pomFile,30);
       if(!/^<\?xml|^<project[\s>]/.test(readFileSync(pomFile,'utf8').trim()))
         throw new Error('Official Maven POM response invalid for '+version);
@@ -67,7 +72,7 @@ export function main() {
       const dir=join(root,PATH,version);mkdirSync(dir,{recursive:true});
       renameSync(pomFile,join(dir,ARTIFACT+'-'+version+'.pom'));
       renameSync(jarFile,join(dir,ARTIFACT+'-'+version+'.jar'));
-      console.log('Verified official SHA256 for '+ARTIFACT+' '+version+
+      console.log('Verified pinned JetBrains release SHA256 for '+ARTIFACT+' '+version+
         ' from JetBrains cache ('+statSync(join(dir,ARTIFACT+'-'+version+'.jar')).size+' bytes)');
     }
     console.log('Compiler mirror accepted for isolated CI runner only; no release inputs changed');

@@ -1,4 +1,5 @@
-// SDK58 PR CI ONLY. The caller verifies every JAR with Maven Central SHA256
+// SDK58 PR CI ONLY. The caller verifies every JAR with the pinned SHA256
+// published on the official JetBrains Kotlin GitHub release asset metadata
 // before placing it in this ephemeral file Maven repository.
 // Only the Kotlin compiler module can resolve here; all other dependency
 // groups must retain their existing official repository configuration.
