@@ -89,3 +89,34 @@ jobs:
           chmod +x android/gradlew
           cd android
           ./gradlew :app:compileDebugKotlin --no-daemon --stacktrace
+
+      # One bounded SDK58 native release-readiness gate on this review branch.
+      # R8 task does not package or sign an APK/AAB; no EAS or provider calls.
+      # Keep ordinary Mobile PRs on the original debug Kotlin gate for cost control.
+      - name: Verify SDK58 R8 release configuration
+        if: ${{ github.event_name == 'pull_request' && github.head_ref == 'chore/expo-sdk58-dependency-probe-20261108' }}
+        run: |
+          grep -qx 'android.enableMinifyInReleaseBuilds=true' android/gradle.properties
+          grep -Fq 'SellerTrayBluetoothPrinterModule' modules/sellertray-bluetooth-printer/expo-module.config.json
+          if grep -R -F 'android.enableMinifyInReleaseBuilds=false' android/gradle.properties android/app/build.gradle; then
+            echo 'SDK58 release R8 optimization must not be silently disabled' >&2
+            exit 1
+          fi
+
+      - name: Check release R8 shrinking without assembling or signing an APK
+        if: ${{ github.event_name == 'pull_request' && github.head_ref == 'chore/expo-sdk58-dependency-probe-20261108' }}
+        run: |
+          cd android
+          ./gradlew :app:minifyReleaseWithR8 --no-daemon --stacktrace --max-workers=2
+          mapping='app/build/outputs/mapping/release/mapping.txt'
+          test -s "$mapping"
+          if ! grep -Fq 'ng.processedge.sellertray.bluetooth.SellerTrayBluetoothPrinterModule' "$mapping"; then
+            echo 'R8 output does not prove SellerTray Bluetooth printer module class retention' >&2
+            exit 1
+          fi
+          if find app/build/outputs/apk app/build/outputs/bundle -type f \
+              \( -name '*.apk' -o -name '*.aab' \) 2>/dev/null | grep -q .; then
+            echo 'Release R8 verification must not create a distributable APK or AAB' >&2
+            exit 1
+          fi
+          echo 'Release-mode R8 mapping contains local Bluetooth printer module; no APK/AAB generated.'
