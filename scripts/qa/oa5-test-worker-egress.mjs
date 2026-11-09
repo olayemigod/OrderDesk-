@@ -21,10 +21,12 @@ const MAX_AGE_MS=10*60*1000;
 export const WORKERS=Object.freeze([
  Object.freeze({jobid:2,jobname:'sellertray-whatsapp-notification-retry',
    function_identity:'sellertray_private.kick_whatsapp_notification_worker',
-   runtime_config_key:'notification_worker_url'}),
+   runtime_config_key:'notification_worker_url',
+   source_sha256:'8e1f13dc854def4de0163809fc6a82227e1a5bf2daccba159fc66008e24d0520'}),
  Object.freeze({jobid:3,jobname:'sellertray-merchant-push-retry',
    function_identity:'sellertray_private.kick_merchant_push_worker',
-   runtime_config_key:'merchant_push_worker_url'}),
+   runtime_config_key:'merchant_push_worker_url',
+   source_sha256:'b052a9982fcd993ff5f4e5ba3a41eacd4f27c3335e775811a08d6aa16accb56c'}),
 ]);
 const exact=(o,keys)=>!!o&&typeof o==='object'&&!Array.isArray(o)&&
   Object.keys(o).sort().join('|')===[...keys].sort().join('|');
@@ -71,6 +73,7 @@ export function assessTestWorkerEgress(snapshot,now=new Date()){
  for(const worker of snapshot.workers){
   if(!exact(worker,[
     'jobid','jobname','function_identity','runtime_config_key',
+    'actual_runtime_config_key','source_sha256',
     'function_overloads','security_definer','pg_net_http_post',
     'source_has_production_ref','source_has_literal_url','configured_url_rows'
   ])){
@@ -83,7 +86,9 @@ export function assessTestWorkerEgress(snapshot,now=new Date()){
   seen.add(worker.jobid);
   if(worker.jobname!==want.jobname||
      worker.function_identity!==want.function_identity||
-     worker.runtime_config_key!==want.runtime_config_key)
+     worker.runtime_config_key!==want.runtime_config_key||
+     worker.actual_runtime_config_key!==want.runtime_config_key||
+     worker.source_sha256!==want.source_sha256)
    reasons.push('Worker function/job/config-key mapping changed');
   if(worker.function_overloads!==1||worker.security_definer!==true||
      worker.pg_net_http_post!==true||
