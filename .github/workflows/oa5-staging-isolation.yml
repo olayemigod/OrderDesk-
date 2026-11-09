@@ -30,6 +30,8 @@ on:
       - 'scripts/qa/oa5-test-edge-inventory.test.mjs'
       - 'docs/qa/oa5-test-edge-function-custody-2026-11-09.json'
       - 'scripts/qa/oa5-historical-preview-custody.test.mjs'
+      - 'scripts/qa/oa5-historical-preview-bundle-inspection.mjs'
+      - 'scripts/qa/oa5-historical-preview-bundle-inspection.test.mjs'
       - 'scripts/qa/oa5-vercel-anonymous-access.mjs'
       - 'scripts/qa/oa5-vercel-anonymous-access.test.mjs'
       - 'docs/qa/oa5-historical-vercel-preview-custody-2026-11-09.json'
@@ -69,6 +71,7 @@ jobs:
           node --test scripts/qa/oa5-test-managed-boundary.test.mjs
           node --test scripts/qa/oa5-test-auth-decommission-boundary.test.mjs
           node --test scripts/qa/oa5-historical-preview-custody.test.mjs
+          node --test scripts/qa/oa5-historical-preview-bundle-inspection.test.mjs
           node --test scripts/qa/oa5-test-edge-inventory.test.mjs
           node scripts/qa/oa5-test-edge-inventory.mjs --baseline docs/qa/oa5-test-edge-function-custody-2026-11-09.json
           node --test scripts/qa/oa5-vercel-anonymous-access.test.mjs
