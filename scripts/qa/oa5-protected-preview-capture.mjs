@@ -96,18 +96,47 @@ export function validatePrivateCapturePlan(input,expectedAliasDigests=EXPECTED_A
  return outcome();
 }
 
+/**
+ * Windows npm CLIs normally use a .cmd launcher. Node execFileSync cannot
+ * launch a .cmd file directly. cmd.exe is needed only on Windows, and only
+ * with a strictly validated, argument-free-of-shell-metacharacters read.
+ * The standalone Vercel CLI authenticates and may manage a short-lived
+ * deployment-protection bypass token internally; this runner never prints it.
+ */
+export function planVercelReadOnlyCommand(action,url=null,platform=process.platform){
+ if(action!=='curl'&&action!=='whoami')
+  throw Error('BLOCKED: unsupported Vercel CLI action');
+ if(action==='whoami'&&url!==null)
+  throw Error('BLOCKED: whoami does not take a target URL');
+ if(action==='curl'){
+  if(typeof url!=='string'||
+     !/^https:\/\/[a-z0-9-]+\.vercel\.app\/[A-Za-z0-9._/-]*$/.test(url)||
+     url.split('/').some(segment=>segment==='..'||segment==='.')||
+     url.includes('//',8))
+   throw Error('BLOCKED: unsafe Vercel read target');
+ }
+ const args=action==='curl'
+  ?['curl',url,'--fail','--silent','--show-error','--max-time','30']
+  :['whoami'];
+ if(platform==='win32'){
+  // All arguments are fixed literals or already constrained to a simple
+  // HTTPS Vercel URL without spaces, shell operators, quotes or percent.
+  return {file:'cmd.exe',args:['/d','/s','/c','vercel.cmd '+args.join(' ')]};
+ }
+ return {file:'vercel',args};
+}
 function protectedVercelCurl(url,maxBytes=MAX_ITEM){
- // No shell interpolation; errors intentionally never print URLs or tokens.
  try{
-  const out=execFileSync('vc',['curl',url,'--fail','--silent','--show-error',
-      '--max-time','30'],{
-      timeout:45000,maxBuffer:maxBytes+1024,
-      windowsHide:true,stdio:['ignore','pipe','pipe']
+  const {file,args}=planVercelReadOnlyCommand('curl',url);
+  const out=execFileSync(file,args,{
+   timeout:45000,maxBuffer:maxBytes+1024,
+   windowsHide:true,stdio:['ignore','pipe','pipe']
   });
-  if(out.length===0||out.length>maxBytes)throw Error('empty/large');
+  if(!Buffer.isBuffer(out)||out.length===0||out.length>maxBytes)
+   throw Error('empty or oversized');
   return out;
  }catch{
-  throw new Error('Authenticated read-only Vercel capture failed; inspect your original Preview access privately');
+  throw new Error('Authenticated read-only Vercel capture failed; inspect original Preview access privately');
  }
 }
 
@@ -232,7 +261,8 @@ function main(){
  try{
   // The CLI must already be signed in with the owner's authorized account.
   // No auth refresh, login or Vercel project mutation is attempted.
-  execFileSync('vc',['whoami'],{timeout:10000,maxBuffer:4096,
+  const {file,args}=planVercelReadOnlyCommand('whoami');
+  execFileSync(file,args,{timeout:10000,maxBuffer:4096,
    stdio:['ignore','pipe','pipe'],windowsHide:true});
  }catch{
   console.error('BLOCKED: local Vercel CLI is not authenticated as a reviewer');
