@@ -22,6 +22,8 @@ export const SDK58_PINS = Object.freeze({
   'expo-image-picker': '~58.0.10',
   'expo-notifications': '~58.1.8',
   'expo-secure-store': '~58.0.2',
+  'expo-font': '~58.0.11',
+  'expo-splash-screen': '~58.0.13',
   react: '19.3.0',
   'react-dom': '19.3.0',
   'react-native': '0.88.1',

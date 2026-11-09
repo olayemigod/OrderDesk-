@@ -52,9 +52,13 @@ requireValue(
   expo.android?.adaptiveIcon?.foregroundImage === ADAPTIVE_ICON,
   'Android adaptive icon must use the bundled approved SellerTray adaptive icon instead of a remote deployment alias',
 );
+const splashPlugin = (expo.plugins ?? []).find((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-splash-screen');
+const splashOptions = splashPlugin?.[1] ?? {};
 requireValue(
-  expo.splash?.image === APP_ICON,
-  'Mobile splash branding must use the bundled approved SellerTray icon instead of a remote deployment alias',
+  expo.splash === undefined && splashOptions.image === APP_ICON &&
+    splashOptions.backgroundColor === '#102A43' && splashOptions.resizeMode === 'contain' &&
+    splashOptions.imageWidth === 200,
+  'Mobile SDK 58 splash plugin must retain the approved SellerTray icon and navy background',
 );
 requireValue(
   !JSON.stringify(appConfig).includes('vercel.app'),
