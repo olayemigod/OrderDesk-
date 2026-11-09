@@ -64,6 +64,10 @@ expect(authEmailSource.includes("Deno.env.get('SELLERTRAY_EMAIL_FROM')"), 'authe
 expect(authEmailSource.includes('function sellerTraySender(value: string)'), 'authentication emails must normalize the visible sender identity');
 expect(authEmailSource.includes('`SellerTray <${address}>`'), 'authentication emails must display SellerTray rather than ProcessEdge');
 expect(authEmailSource.includes("'https://app.sellertray.com'"), 'authentication email fallback redirect must use canonical Merchant Web');
+expect(authEmailSource.includes('verifiedHookRequest = true') && authEmailSource.includes('verifiedHookRequest ? 503 : 401'), 'verified Auth email provider errors must be transient failures, not an invalid webhook signature');
+expect(authEmailSource.includes("event: verifiedHookRequest ? 'auth_email_provider_request_uncertain' : 'auth_email_hook_auth_failed'"), 'Auth email errors must distinguish signature failures from provider uncertainty');
+expect(authEmailSource.includes('providerMessageIds') && authEmailSource.includes('providerAccepted: true') && authEmailSource.includes('recipientDeliveryVerified: false'), 'Auth email hook must record accepted provider message IDs without claiming recipient delivery');
+expect(!authEmailSource.includes("message: error instanceof Error ? error.message"), 'Auth email hook must not log raw errors that can include sensitive URL or request contents');
 expect(authEmailSource.includes('https://sellertray.com/privacy'), 'authentication email footer must use canonical SellerTray privacy');
 expect(authEmailSource.includes('https://sellertray.com/terms'), 'authentication email footer must use canonical SellerTray terms');
 expect(!authEmailSource.includes('SellerTray by ProcessEdge</p>'), 'authentication emails must not use ProcessEdge as primary brand identity');
