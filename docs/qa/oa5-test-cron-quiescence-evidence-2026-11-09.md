@@ -27,8 +27,7 @@ SELECT jsonb_build_object(
       'unfinished_runs', (
         SELECT count(*)::integer FROM cron.job_run_details AS d
         WHERE d.jobid = j.jobid AND
-          (d.status IN ('running','starting') OR
-           (d.end_time IS NULL AND d.start_time > now() - interval '1 hour'))
+          (d.status IN ('running','starting') OR d.end_time IS NULL)
       )
     ) ORDER BY j.jobid), '[]'::jsonb)
     FROM cron.job AS j
@@ -44,7 +43,7 @@ Run locally:
 node scripts/qa/oa5-test-cron-maintenance-gate.mjs --check /secure/local/test-cron-snapshot.json
 ```
 
-The checker refuses a wrong project, snapshots older than ten minutes, unknown/missing/duplicated jobs, mismatched job IDs/schedules/SHA256 fingerprints, any active job, unfinished or unknown job execution count, and **any pending or unverified pg_net HTTP queue depth**. Snapshots now require schema version 2; a legacy cron-only snapshot cannot assert outbound quiescence. The checker is **offline**: it never changes a cron schedule, makes an HTTP call or manipulates database rows.
+The checker refuses a wrong project, snapshots older than ten minutes, unknown/missing/duplicated jobs, mismatched job IDs/schedules/SHA256 fingerprints, any active job, **any unfinished execution regardless of age**, unknown job execution count, and **any pending or unverified pg_net HTTP queue depth**. Snapshots now require schema version 2; a legacy cron-only snapshot cannot assert outbound quiescence. The checker is **offline**: it never changes a cron schedule, makes an HTTP call or manipulates database rows.
 
 ## Maintenance-window sequence requiring separate approval
 
@@ -65,3 +64,9 @@ The official [pg_net documentation](https://supabase.com/docs/guides/database/ex
 The 09/11/2026 hosted **Test-only** read returned `active_jobs=4`, `unfinished_cron_runs=0`, `queued_http_requests=0`, and zero completed `net._http_response` rows in the previous 30 minutes. The live state still **fails** the gate because all four schedules are active. Zero queued work is only a point-in-time condition; it does not prove that an already-dispatched request is complete or that external webhooks, PSP, Meta, SMTP or Auth callbacks are isolated. Additional browser/provider evidence and independently approved reversible pausing and Test-only reset are mandatory.
 
 If the `net` schema/table is absent, SQL fails closed; do **not** silently substitute zero. Refresh the snapshot after any pause or configuration change. No SQL updates, cron pause, service activation or Test reset occurred.
+
+## 09/11/2026 addendum — remove the one-hour unfinished-execution blind spot
+
+The initial maintenance inventory checked historical rows with `end_time IS NULL` only if started in the preceding hour. This could incorrectly report **zero** unfinished runs if a worker was abandoned or stalled more than an hour ago. The reviewed read-only SQL above now counts **every** `cron.job_run_details` row for the four expected jobs with `status IN ('running','starting') OR end_time IS NULL`, **without a time cutoff**. A paused-but-previously-started job remains a maintenance stop condition until independently investigated; do not delete history to make the gate pass.
+
+The isolated Test-only read at 09/11/2026 found 56,579 historical cron execution rows and **zero** `end_time IS NULL` rows (including none older than one hour); `running`/`starting` statuses were also zero. This read has no effect on scheduled jobs or their pending HTTP work. Four active Test schedules still block reset, and a point-in-time inventory is not external-provider quiescence proof.

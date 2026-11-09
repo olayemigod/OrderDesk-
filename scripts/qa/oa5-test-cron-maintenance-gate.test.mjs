@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
+import {readFileSync} from 'node:fs';
 import {writeFileSync,mkdtempSync,rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
@@ -62,4 +63,15 @@ test('rejects asynchronous pg_net queued work and unavailable queue census, even
 test('v1 cron-only snapshots cannot claim outbound HTTP quiescence',()=>{
  const s=safe();delete s.pending_pg_net_http_requests;s.schema_version=1;
  assert.equal(assessCronMaintenance(s,now).ok,false);
+});
+
+test('protected operator SQL counts all unfinished cron runs without one-hour cutoff',()=>{
+  const document=readFileSync(new URL('../../docs/qa/oa5-test-cron-quiescence-evidence-2026-11-09.md',import.meta.url),'utf8');
+  const sql=document.split('```sql\n')[1]?.split('\n```')[0];
+  assert.ok(sql,'reviewed Test-only operator SQL must exist');
+  assert.match(sql,/d\.status IN \('running','starting'\)/);
+  assert.match(sql,/d\.end_time IS NULL/);
+  assert.doesNotMatch(sql,/d\.start_time\s*>/);
+  assert.doesNotMatch(sql,/interval\s*'1 hour'/);
+  assert.match(sql,/net\.http_request_queue/);
 });

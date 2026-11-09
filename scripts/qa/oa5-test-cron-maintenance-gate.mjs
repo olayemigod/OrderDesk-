@@ -44,6 +44,8 @@ export function assessCronMaintenance(snapshot, now=new Date()) {
     if(j.jobid!==spec.jobid || j.schedule!==spec.schedule || j.command_sha256!==spec.command_sha256)
       reasons.push('Job ID, schedule or command fingerprint drift: '+spec.jobname);
     if(j.active!==false) reasons.push('Scheduled job still active: '+spec.jobname);
+    // Caller must count ALL open cron history (end_time IS NULL), without a
+    // rolling lookback that would conceal an abandoned long-running worker.
     if(!Number.isSafeInteger(j.unfinished_runs) || j.unfinished_runs!==0)
       reasons.push('Job has unfinished or unknown runs: '+spec.jobname);
   }
