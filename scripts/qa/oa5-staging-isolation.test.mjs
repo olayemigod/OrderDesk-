@@ -12,6 +12,7 @@ const approvedStaging = {
   reviewed_source_sha:'a'.repeat(40),approved_at:'04/11/2026',
   clean_migration_replay_verified:true,historical_agreement_evidence_archived:true,
   restore_path_verified:true,vercel_preview_dependencies_reconciled:true,
+  qa_preview_access_protection_preflight_verified:true,
   test_only_auth_and_provider_config_verified:true,qa_edge_functions_deployed_and_verified:true,
 };
 const valid = { productionUrl, productionKey, qaUrl: stagingUrl, qaKey: stagingKey, stagingUrl, stagingKey,
@@ -110,6 +111,7 @@ test('can reuse the same standalone Agreement Test project after documented stag
     reviewed_source_sha:'a'.repeat(40),approved_at:'04/11/2026',
     clean_migration_replay_verified:true,historical_agreement_evidence_archived:true,
     restore_path_verified:true,vercel_preview_dependencies_reconciled:true,
+  qa_preview_access_protection_preflight_verified:true,
     test_only_auth_and_provider_config_verified:true,qa_edge_functions_deployed_and_verified:true,
   };
   const url = 'https://' + project + '.supabase.co';
@@ -139,4 +141,12 @@ test('unapproved new Test project is not accepted merely because it is not Produ
   assert.equal(verifyStagingIsolation({
     ...valid,stagingAttestation:{...approvedStaging,approved_staging_project_ref:'t'.repeat(20)}
   }).ok,false);
+});
+
+test('verified Test backend still rejects absent Preview access-protection preflight', () => {
+  const result = verifyStagingIsolation({
+    ...valid,stagingAttestation:{...approvedStaging,qa_preview_access_protection_preflight_verified:false},
+  });
+  assert.equal(result.ok,false);
+  assert.match(result.errors.join('\\n'),/requires full approved staging attestation/);
 });

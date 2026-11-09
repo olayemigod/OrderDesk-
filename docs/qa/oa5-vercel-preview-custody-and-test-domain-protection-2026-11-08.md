@@ -120,3 +120,13 @@ Cloudflare [Access on proxied custom domain](https://developers.cloudflare.com/a
 **No Test/Production database mutation, Vercel config write, Cloudflare
 DNS/proxy/write, preview deployment, APK or provider callback occurred
 during this read-only preservation pass.**
+
+## 09/11/2026 — closed *source* gap for Preview protection preflight, NOT hosted activation
+
+Review candidate draft PR #228 now includes a required `qa_preview_access_protection_preflight_verified` boolean in the shared Test staging attestation. The source-controlled value is **false**. Only an independently approved, documented **pre-binding Preview security check** may set it true. This is consumed by the common gate for Mobile QA, Merchant QA Preview and Admin QA Preview; it does not add a second business truth or turn a test screenshot into automatic hosted approval.
+
+**Pre-binding meaning (all required before approving the flag):** preserve the five historical deployment proofs and reviewer continuity; enable only reviewed Preview-scoped protection on the existing two Vercel projects without disrupting Production; verify in a signed-out browser that existing Preview URLs challenge unauthorised visitors, that authorised historic reviewers can still view retained evidence, and that `app.sellertray.com` and `admin.sellertray.com` remain publicly reachable as intended. Record the responsible security reviewer, timestamp, project settings and rollback mechanism. Do not infer protection from branch name or SSO enabled for `all_except_custom_domains`.
+
+**Separate post-binding stop gate:** The boolean is **not** evidence that the new `test.sellertray.com` or `test-admin.sellertray.com` custom hostnames are protected. Those URLs remain unbound. After explicit Test backend and preview approvals, deployment and hostname association, verify signed-out unauthorized rejection and authorized access at **both** QA custom hostnames and their distinct generated Preview URLs, as well as backend identity and QA Auth callbacks. Keep external provider ingress disabled and do not expose QA traffic until that subsequent independent proof is accepted. Any failed protection check requires reverting the Preview scope or leaving QA hostname routing disabled.
+
+No Vercel protection, project, DNS or domain settings were changed by this source-only update; no preview was created. The checked-in attestation remains `blocked`. This extension adds a precondition, not release authorization.
