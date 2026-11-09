@@ -11,7 +11,7 @@ const snapshot=()=>({
  captured_at_utc:'2026-11-09T23:18:30Z',
  runtime_config_total_rows:0,usage_events_rows:0,
  agreement_processing_rows:0,pending_pg_net_requests:0,
- workers:WORKERS.map(w=>({...w,function_overloads:1,security_definer:true,
+ workers:WORKERS.map(w=>({...w,actual_runtime_config_key:w.runtime_config_key,function_overloads:1,security_definer:true,
   pg_net_http_post:true,source_has_production_ref:false,
   source_has_literal_url:false,configured_url_rows:0}))
 });
@@ -54,6 +54,8 @@ test('worker URL configuration or any scheduled work/pg_net count cannot silentl
   x=>x.workers[1].configured_url_rows=null,
   x=>x.workers[0].source_has_production_ref=true,
   x=>x.workers[1].source_has_literal_url=true,
+  x=>x.workers[0].source_sha256='a'.repeat(64),
+  x=>x.workers[1].actual_runtime_config_key='unknown-destination-key',
   x=>x.workers[0].pg_net_http_post=false,
   x=>x.workers[1].security_definer=false,
   x=>x.workers[0].function_overloads=2,
