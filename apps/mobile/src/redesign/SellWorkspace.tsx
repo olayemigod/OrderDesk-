@@ -253,13 +253,18 @@ export function SellWorkspace({ tenantId, actorUserId, branch, currency, onDraft
     setSaving(true); setError(null);
     const clientReference = saleClientReference ?? createPosClientReference(); setSaleClientReference(clientReference);
     try {
-      const currentTaxQuote = await loadSellerTrayTaxQuote(tenantId, subtotal);
+      // Fetch current tax and stock concurrently; the authoritative draft command still
+      // validates both before the sale can advance to payment.
+      const [currentTaxQuote, latest] = await Promise.all([
+        loadSellerTrayTaxQuote(tenantId, subtotal),
+        loadBranchStock(tenantId, branch.id),
+      ]);
       const currentTaxContext = taxContextFromQuote(currentTaxQuote);
       setTaxContext(currentTaxContext); setUsingCachedTax(false);
-      await saveTaxContextCache(tenantId, currentTaxContext).catch(() => undefined);
-
-      const latest = await loadBranchStock(tenantId, branch.id);
-      setStockRows(latest); setUsingCachedStock(false); await saveBranchStockCache(tenantId, branch.id, latest).catch(() => undefined);
+      setStockRows(latest); setUsingCachedStock(false);
+      // Cache writes improve the next offline session but must not block live checkout.
+      void saveTaxContextCache(tenantId, currentTaxContext).catch(() => undefined);
+      void saveBranchStockCache(tenantId, branch.id, latest).catch(() => undefined);
       const shortage = findStockShortage(cartLines, latest);
       if (shortage) throw new Error(`Not enough ${shortage.productName} at ${branch.name}. ${formatQuantity(shortage.available)} ${shortage.stockUom} is available; ${formatQuantity(shortage.required)} is needed.`);
       const orderId = await prepareGovernedPosDraft(draftInput(clientReference));
