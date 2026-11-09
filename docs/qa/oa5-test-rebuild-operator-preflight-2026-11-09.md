@@ -213,3 +213,13 @@ The final session-loss argument is optional only if the independently archived c
 ### CLI-version pin safeguard
 
 Supabase CLI v3 became the default through install channels on **02/11/2026**. Its remote targeting and hosted mutation confirmation differ from v2. SellerTray Database CI explicitly pins v2.117.0 and has not been changed. The future independently reviewed Test operator procedure must identify the exact installed CLI version, inspect its command help, verify the explicit Test-only remote/project target twice, and never rely on defaults. Do not convert this document to an unattended destructive command. References: https://supabase.com/docs/guides/local-development/cli/migrating-to-v3 and https://supabase.com/changelog/supabase-cli-v3.
+
+## 09/11/2026 — populated historical Auth references (read-only review)
+
+The connected Test project has **30 `RESTRICT` public FKs to `auth.users`**; a fresh metadata-and-count-only investigation confirmed **10 populated relationships totaling 51 matching FK references** (some application rows may be counted through multiple FKs). The populated tables include `platform_admin_audit`, commercial agreement/price/order records, and signed Agreement/Order Form artifacts. **20 RESTRICT FKs currently have zero matching Auth references.** No identifier or record body was queried.
+
+Detailed Test-only counts and the dependency-aware *proposed* ordering are recorded in [the provider, Auth and Storage isolation review](oa5-test-provider-auth-storage-isolation-review-2026-11-09.md#09112026--restricted-auth-reference-occupancy-and-safe-cleanup-order).
+
+**New explicit STOP condition:** Do not delete the five Test Auth users using the Supabase Dashboard or Admin API while the old user-created schema still contains these references. Independently review preservation of old Agreement/audit data, the chosen exact cleanup of user-created schemas and migration history, and proof that the old references are absent **before** any separately approved Auth-user decommission. Auth hard deletes, JWT validity, the three Storage buckets and their object ownership remain separate managed-service boundaries. Do not weaken FKs or erase audit rows as a shortcut.
+
+This is documentation of a read-only investigation, not authority to reset, pause four jobs, delete users, change Test providers, deploy or affect Production/Tandar. Operator preflight remains NO-GO.
