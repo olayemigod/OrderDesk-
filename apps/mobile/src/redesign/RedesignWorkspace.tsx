@@ -53,6 +53,7 @@ export default function RedesignWorkspace() {
   const [whatsappRouteKey, setWhatsappRouteKey] = useState(0);
   const [syncRouteKey, setSyncRouteKey] = useState(0);
   const [resumeDraftOrder, setResumeDraftOrder] = useState<MerchantOrder | null>(null);
+  const [pendingCustomerOrderId, setPendingCustomerOrderId] = useState<string | null>(null);
 
   const {
     orders,
@@ -118,6 +119,14 @@ export default function RedesignWorkspace() {
     setResumeDraftOrder(null);
     setFocusedOrderId(null);
   }, [activeBranchId]);
+
+  useEffect(() => {
+    if (!pendingCustomerOrderId || !activeBranchId) return;
+    const targetOrder = orders.find((order) => order.id === pendingCustomerOrderId);
+    if (targetOrder?.branchId !== activeBranchId) return;
+    setFocusedOrderId(targetOrder.id);
+    setPendingCustomerOrderId(null);
+  }, [activeBranchId, pendingCustomerOrderId, orders]);
 
   const activeBranch = useMemo(
     () => branches.find((branch) => branch.id === activeBranchId) ?? branches[0] ?? null,
@@ -585,7 +594,7 @@ export default function RedesignWorkspace() {
           {focusedOrder ? (
             <View style={[styles.focusedOrderCard, appearance.dark && darkStyles.card]}>
               <View style={styles.focusedOrderCopy}>
-                <Text style={[styles.focusedOrderEyebrow, appearance.dark && darkStyles.bodyText]}>OPENED FROM NOTIFICATION</Text>
+                <Text style={[styles.focusedOrderEyebrow, appearance.dark && darkStyles.bodyText]}>ORDER DETAILS</Text>
                 <Text style={[styles.focusedOrderTitle, appearance.dark && darkStyles.titleText]}>{focusedOrder.publicOrderId}</Text>
                 <Text style={[styles.focusedOrderMeta, appearance.dark && darkStyles.bodyText]}>{focusedOrder.customerName} · {focusedOrder.branchName}</Text>
               </View>
@@ -659,6 +668,27 @@ export default function RedesignWorkspace() {
               setResumeDraftOrder(null);
               setFocusedOrderId(null);
               setTab('orders');
+            }}
+            onOpenCustomerOrder={(orderId) => {
+              const order = orders.find((row) => row.id === orderId);
+              if (!order) {
+                Alert.alert('Order unavailable', 'Refresh Orders to find this transaction. It may be outside the loaded history.');
+                void refreshOrders();
+                return;
+              }
+              if (!branches.some((branch) => branch.id === order.branchId)) {
+                Alert.alert('Branch access required', 'This order belongs to a Branch you cannot access.');
+                return;
+              }
+              setShowNotifications(false);
+              setResumeDraftOrder(null);
+              setTab('orders');
+              if (order.branchId !== activeBranch?.id) {
+                setPendingCustomerOrderId(order.id);
+                setActiveBranchId(order.branchId);
+              } else {
+                setFocusedOrderId(order.id);
+              }
             }}
             onSyncOfflineSales={() => offline.syncNow()}
             onDiscardOfflineSale={offline.discard}
