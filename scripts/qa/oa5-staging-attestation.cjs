@@ -9,6 +9,11 @@ const REQUIRED = [
   'historical_agreement_evidence_archived',
   'restore_path_verified',
   'vercel_preview_dependencies_reconciled',
+  // Before allowing Test QA clients, independently verify that existing
+  // Preview protection challenges signed-out viewers while Production
+  // remains reachable, and that historic reviewer access is preserved.
+  // This is a PRE-BINDING checkpoint, not post-binding hostname proof.
+  'qa_preview_access_protection_preflight_verified',
   'test_only_auth_and_provider_config_verified',
   'qa_edge_functions_deployed_and_verified',
 ];
