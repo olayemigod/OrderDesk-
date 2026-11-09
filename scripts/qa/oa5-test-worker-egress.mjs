@@ -45,12 +45,12 @@ export function assessTestWorkerEgress(snapshot,now=new Date()){
  if(!exact(snapshot,[
    'schema_version','project_ref','purpose','captured_at_utc',
    'runtime_config_total_rows','usage_events_rows',
-   'agreement_processing_rows','pending_pg_net_requests','workers'
+   'agreement_processing_rows','pending_pg_net_requests','workers','sql_network_surface'
  ])){
    reasons.push('Missing or secret-bearing Test worker egress census');
    return report();
  }
- if(snapshot.schema_version!==1||snapshot.project_ref!==TEST_PROJECT||snapshot.purpose!==PURPOSE)
+ if(snapshot.schema_version!==2||snapshot.project_ref!==TEST_PROJECT||snapshot.purpose!==PURPOSE)
   reasons.push('Wrong isolated Test identity or worker-census purpose');
  const captured=typeof snapshot.captured_at_utc==='string'&&
    /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(snapshot.captured_at_utc)
@@ -64,6 +64,28 @@ export function assessTestWorkerEgress(snapshot,now=new Date()){
   ['pending_pg_net_requests','Pending HTTP queue']
  ]){
   if(snapshot[field]!==0)reasons.push('Unexpected '+label+' count; inspect Test privately before pause');
+ }
+ const network=snapshot.sql_network_surface;
+ if(!exact(network,[
+  'public_function_count','private_function_count',
+  'public_direct_http_functions','private_direct_http_functions',
+  'public_literal_endpoint_functions','private_literal_endpoint_functions',
+  'retained_pgnet_responses'
+ ])){
+  reasons.push('Missing or overbroad Test SQL network surface inventory');
+ }else{
+  for(const [field,expected] of [
+   ['public_function_count',479],
+   ['private_function_count',8],
+   ['public_direct_http_functions',0],
+   ['private_direct_http_functions',2],
+   ['public_literal_endpoint_functions',3],
+   ['private_literal_endpoint_functions',0],
+   ['retained_pgnet_responses',0]
+  ]){
+   if(network[field]!==expected)
+    reasons.push('Test SQL outbound source or retained pg_net response census drift: '+field);
+  }
  }
  if(!Array.isArray(snapshot.workers)||snapshot.workers.length!==WORKERS.length){
   reasons.push('Worker URL census must include exactly two known jobs');
