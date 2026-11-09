@@ -63,15 +63,16 @@ export function assessRebuildPreflight(record,{sourceSha,archive,cron,liveCensus
 }
 
 function main(){
-  if(process.argv.length!==7||process.argv[2]!=='--check'){
-    console.error('Usage: node scripts/qa/oa5-test-rebuild-preflight.mjs --check <private-record.json> <private-archive-directory> <private-fresh-cron-snapshot.json> <private-fresh-live-census.json>');
+  if((process.argv.length!==7&&process.argv.length!==8)||process.argv[2]!=='--check'){
+    console.error('Usage: node scripts/qa/oa5-test-rebuild-preflight.mjs --check <private-record.json> <private-archive-directory> <private-fresh-cron-snapshot.json> <private-fresh-live-census.json> [private-reviewed-session-loss.json]');
     process.exitCode=2;return;
   }
-  let record,cronSnapshot,liveSnapshot,sourceSha;
+  let record,cronSnapshot,liveSnapshot,approvedSessionLoss=null,sourceSha;
   try{
     record=JSON.parse(readFileSync(resolve(process.argv[3]),'utf8'));
     cronSnapshot=JSON.parse(readFileSync(resolve(process.argv[5]),'utf8'));
     liveSnapshot=JSON.parse(readFileSync(resolve(process.argv[6]),'utf8'));
+    if(process.argv[7])approvedSessionLoss=JSON.parse(readFileSync(resolve(process.argv[7]),'utf8'));
     sourceSha=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8',timeout:10000}).trim();
   }catch{
     console.error('BLOCKED: private operator evidence, cron snapshot or Git identity unavailable');
@@ -79,7 +80,7 @@ function main(){
   }
   const archive=checkTestArchive(resolve(process.argv[4]));
   const cron=assessCronMaintenance(cronSnapshot);
-  const liveCensus=assessTestLiveCensus(liveSnapshot);
+  const liveCensus=assessTestLiveCensus(liveSnapshot,new Date(),approvedSessionLoss);
   const result=assessRebuildPreflight(record,{sourceSha,archive,cron,liveCensus});
   if(!result.preconditions_met){
     console.error('BLOCKED: OA5 Test rebuild pre-reset evidence is incomplete.');

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {assessTestLiveCensus,ARCHIVED_COUNTS,TEST_REF} from './oa5-test-live-census.mjs';
+import {assessTestLiveCensus,ARCHIVED_COUNTS,TEST_REF,REVIEWED_SESSION_LOSS_SCOPE} from './oa5-test-live-census.mjs';
 const now=new Date('2026-11-09T11:05:00Z');
 const safe=()=>({schema_version:1,project_ref:TEST_REF,captured_at_utc:'2026-11-09T11:04:10Z',counts:{...ARCHIVED_COUNTS}});
 test('archived count match does not authorize reset',()=>{
@@ -38,4 +38,44 @@ test('missing, stale and future timestamps fail closed',()=>{
 test('CLI missing protected JSON refuses access and never calls Supabase',()=>{
  const r=spawnSync(process.execPath,[new URL('./oa5-test-live-census.mjs',import.meta.url).pathname,'--check','/nonexistent-live-counts.json'],{encoding:'utf8'});
  assert.equal(r.status,1);assert.match(r.stderr,/BLOCKED/);
+});
+
+const reviewed=()=>({
+ schema_version:1,project_ref:TEST_REF,scope:REVIEWED_SESSION_LOSS_SCOPE,
+ archive_auth_sessions:5,current_auth_sessions:6,approved_loss:true,
+ reviewed_at_utc:'2026-11-09T11:04:45Z',evidence_ref:'private-review-0001'
+});
+test('separately reviewed exact Test session loss is count-accepted, not reset-authorized',()=>{
+ const s=safe();s.counts.auth_sessions=6;
+ const r=assessTestLiveCensus(s,now,reviewed());
+ assert.equal(r.ok,true,r.reasons.join('\n'));
+ assert.equal(r.reviewed_session_loss_accepted,true);
+ assert.equal(r.may_reset,false);
+ assert.deepEqual(r.drift,[{category:'auth_sessions',archive_count:5,current_count:6}]);
+});
+test('session review cannot waive other drift, another session, wrong project or stale approval',()=>{
+ for(const change of [
+   (s,a)=>s.counts.auth_sessions=7,
+   (s,a)=>s.counts.auth_users=6,
+   (s,a)=>s.counts.migration_rows=55,
+   (s,a)=>a.project_ref='eujxswjspolugrzlsjnn',
+   (s,a)=>a.archive_auth_sessions=4,
+   (s,a)=>a.current_auth_sessions=7,
+   (s,a)=>a.scope='all-test-data',
+   (s,a)=>a.approved_loss=false,
+   (s,a)=>a.evidence_ref='https://example.org/secret',
+   (s,a)=>a.access_token='private',
+   (s,a)=>a.reviewed_at_utc='2026-11-09T11:04:09Z',
+   (s,a)=>a.reviewed_at_utc='2026-11-09T11:05:01Z',
+ ]){
+  const s=safe();s.counts.auth_sessions=6;
+  const a=reviewed();change(s,a);
+  const r=assessTestLiveCensus(s,now,a);
+  assert.equal(r.ok,false,JSON.stringify(a));
+  assert.equal(r.may_reset,false);
+ }
+});
+test('review document cannot be used if sixth session has not appeared',()=>{
+ const s=safe();
+ assert.equal(assessTestLiveCensus(s,now,reviewed()).ok,false);
 });

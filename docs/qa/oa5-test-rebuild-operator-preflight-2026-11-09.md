@@ -103,3 +103,40 @@ SELECT jsonb_build_object(
 
 Supabase reference: https://supabase.com/docs/reference/cli/supabase-db-reset
 and https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore.
+
+## 09/11/2026 — bounded post-archive Test Auth session loss alternative
+
+The existing encrypted Test archive is intact and independently restore-tested. A fresh archive
+does not have to be the only *proposed* remedy for the extra Test Auth session, but no
+session-loss permission has been given. The default census still fails on 5 archived vs
+6 current sessions. A separately approved private record can permit that **one** exact
+Test-only session-count difference through the offline preflight. This does not delete
+the session, permit a database reset, or prove that unchanged row counts mean unchanged data.
+
+The optional private reviewed-session-loss record must contain exactly these fields:
+
+~~~json
+{ "schema_version": 1, "project_ref": "iukgsukdoowvnhlfmpml",
+  "scope": "one-post-archive-test-auth-session",
+  "archive_auth_sessions": 5, "current_auth_sessions": 6,
+  "approved_loss": false, "reviewed_at_utc": "2026-11-09T11:04:45Z",
+  "evidence_ref": "private-review-0001" }
+~~~
+
+The example deliberately has approved_loss=false and will not pass. Only the owner
+can approve that precise Test-only loss, after a fresh count-only SQL snapshot, and
+the protected reviewed_at_utc must fall between capture and the present moment.
+All other counts must still equal the original archive, and 7 sessions will not pass
+using a six-session approval. Never copy identifiers, emails, tokens or URLs into this file.
+
+After separate owner review, an operator may run:
+
+~~~sh
+node scripts/qa/oa5-test-live-census.mjs --check /secure/private/test-live-counts.json /secure/private/reviewed-session-loss.json
+node scripts/qa/oa5-test-rebuild-preflight.mjs --check /secure/private/operator-review.json /secure/private/test-archive /secure/private/post-pause-cron-v2.json /secure/private/test-live-counts.json /secure/private/reviewed-session-loss.json
+~~~
+
+A passing operator review is only one prerequisite. The independently approved four-job
+pause, outbound-callback isolation, hosted Auth/session token revocation, exact cleanup
+method and specific destructive Test execution authorization remain separate STOP gates.
+Production and Tandar are excluded. No hosted operations are performed by these scripts.

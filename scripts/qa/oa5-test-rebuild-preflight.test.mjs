@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import {assessRebuildPreflight,REQUIRED_EVIDENCE} from './oa5-test-rebuild-preflight.mjs';
+import {assessTestLiveCensus,ARCHIVED_COUNTS,TEST_REF,REVIEWED_SESSION_LOSS_SCOPE} from './oa5-test-live-census.mjs';
 const ref='iukgsukdoowvnhlfmpml',sha='a'.repeat(40);
 const record=()=>({schema_version:1,project_ref:ref,reviewed_source_sha:sha,purpose:'pre-reset-human-review',
  evidence:Object.fromEntries(REQUIRED_EVIDENCE.map(k=>[k,{reviewed:true,evidence_ref:'private-review-0001'}]))});
@@ -59,4 +60,19 @@ test('CLI without private operator evidence cannot contact any hosted resource o
   assert.equal(run.status,1);
   assert.match(run.stderr,/BLOCKED/);
   assert.doesNotMatch(run.stderr,/service_role|sk_live_/);
+});
+
+test('preflight can consume narrowly reviewed one-session count but never authorizes cleanup',()=>{
+ const now=new Date('2026-11-09T11:05:00Z');
+ const s={schema_version:1,project_ref:TEST_REF,captured_at_utc:'2026-11-09T11:04:10Z',
+   counts:{...ARCHIVED_COUNTS,auth_sessions:6}};
+ const a={schema_version:1,project_ref:TEST_REF,scope:REVIEWED_SESSION_LOSS_SCOPE,
+   archive_auth_sessions:5,current_auth_sessions:6,approved_loss:true,
+   reviewed_at_utc:'2026-11-09T11:04:45Z',evidence_ref:'private-review-0001'};
+ const counted=assessTestLiveCensus(s,now,a);
+ assert.equal(counted.ok,true);
+ const gate=assessRebuildPreflight(record(),{...proof,liveCensus:counted});
+ assert.equal(gate.preconditions_met,true);
+ assert.equal(gate.destructive_execution_authorized,false);
+ assert.equal(assessRebuildPreflight(record(),{...proof,cron:{ok:false},liveCensus:counted}).preconditions_met,false);
 });
