@@ -57,6 +57,7 @@ export function OrdersWorkspace({
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [draftQuantities, setDraftQuantities] = useState<Record<string, string>>({});
   const [filters, setFilters] = useState<OrderSearchFilters>(DEFAULT_ORDER_FILTERS);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [visibleOrderLimit, setVisibleOrderLimit] = useState(30);
   const filteredOrders = useMemo(() => orders.filter((order) => matchesOrderSearch(order, filters)), [orders, filters]);
   const hasFilters = filters.query.trim() !== '' || filters.status !== 'all' || filters.payment !== 'all' || filters.source !== 'all' || filters.period !== 'all';
@@ -206,7 +207,13 @@ export function OrdersWorkspace({
         <Text style={[styles.pageSubtitle, dark && darkStyles.bodyText]}>Review order items, payment state and fulfilment progress.</Text>
       </View>
 
-      <View style={[styles.filterPanel, dark && darkStyles.card]}>
+      <Pressable accessibilityRole="button" accessibilityLabel={filtersOpen ? 'Hide order search and filters' : 'Show order search and filters'} accessibilityState={{ expanded: filtersOpen }} onPress={() => setFiltersOpen((current) => !current)} style={[styles.filterToggle, dark && darkStyles.card]}>
+        <Ionicons name="options-outline" size={19} color={theme.colors.greenDark} />
+        <Text style={[styles.filterToggleText, dark && darkStyles.titleText]}>{filtersOpen ? 'Hide search & filters' : 'Search & filter orders'}</Text>
+        {hasFilters ? <Text style={styles.activeFiltersLabel}>Active</Text> : null}
+        <Ionicons name={filtersOpen ? 'chevron-up' : 'chevron-down'} size={17} color={theme.colors.muted} />
+      </Pressable>
+      {filtersOpen ? <View style={[styles.filterPanel, dark && darkStyles.card]}>
         <View style={[styles.orderSearch, dark && darkStyles.input]}>
           <Ionicons name="search-outline" size={19} color={theme.colors.muted} />
           <TextInput
@@ -226,7 +233,7 @@ export function OrdersWorkspace({
           <Text style={[styles.muted, dark && darkStyles.bodyText]}>{filteredOrders.length} of {orders.length} loaded orders</Text>
           {hasFilters ? <Pressable accessibilityRole="button" onPress={() => setFilters(DEFAULT_ORDER_FILTERS)}><Text style={styles.clearFilters}>Clear filters</Text></Pressable> : null}
         </View>
-      </View>
+      </View> : null}
 
       {loading && orders.length === 0 ? <View style={[styles.emptyCard, dark && darkStyles.card]}><ActivityIndicator /><Text style={[styles.muted, dark && darkStyles.bodyText]}>Loading orders…</Text></View> : null}
       {!loading && orders.length === 0 ? <View style={[styles.emptyCard, dark && darkStyles.card]}><Ionicons name="receipt-outline" size={28} color={theme.colors.greenDark} /><Text style={[styles.emptyTitle, dark && darkStyles.titleText]}>No orders here yet</Text><Text style={[styles.emptyText, dark && darkStyles.bodyText]}>Walk-in, POS and WhatsApp orders for this branch will appear here.</Text></View> : null}
@@ -368,6 +375,9 @@ function formatMoney(value: number, currency: string): string { try { return new
 function formatQuantity(value: number): string { return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(3))); }
 
 const styles = StyleSheet.create({
+  filterToggle: { alignItems: 'center', backgroundColor: theme.colors.white, borderColor: theme.colors.border, borderRadius: 14, borderWidth: 1, flexDirection: 'row', gap: 9, minHeight: 44, paddingHorizontal: 12 },
+  filterToggleText: { color: theme.colors.navy, flex: 1, fontSize: 13, fontWeight: '800' },
+  activeFiltersLabel: { color: theme.colors.greenDark, backgroundColor: theme.colors.mintSoft, borderRadius: 10, fontSize: 11, fontWeight: '800', overflow: 'hidden', paddingHorizontal: 8, paddingVertical: 3 },
   filterPanel: { backgroundColor: theme.colors.white, borderColor: theme.colors.border, borderRadius: 16, borderWidth: 1, gap: 11, padding: 12 },
   orderSearch: { alignItems: 'center', borderColor: theme.colors.border, borderRadius: 12, borderWidth: 1, flexDirection: 'row', gap: 8, paddingHorizontal: 12 },
   orderSearchInput: { color: theme.colors.navy, flex: 1, minHeight: 44, fontSize: 13 },
