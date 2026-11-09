@@ -7,7 +7,7 @@ Status: SOURCE DEVELOPMENT; NO TEST OR PRODUCTION RELEASE APPROVED
 - Commerce/performance UX: `fix/sell-orders-customer-speed-source-20261109`, based on Build47 integration `5d1228a018de76ca2ec5e550c04450c1e5ee23e7`.
 - Invitation Mobile repair: draft PR #236 `fix/mobile-invitation-guest-review-20261109`; source-only, no APK or OTA.
 - Invitation browser/auth continuation: `fix/invitation-activation-browser-handoff-20261109`, built on PR #236 exact head `48f7b9432ad3ed7ba3b694f261d3c457153d9be8`. Keep review/reconciliation separate from commerce optimisations.
-- OA5 Test isolation: draft PR #228, independent and not approved for destructive rebuild. Its Test backend attestation and Preview security gates must pass before hosted end-to-end QA. **No Production database/provider, Vercel preview, DNS, Edge function, APK or OTA mutation by either workstream.** Tandar stays in Production with pending invitation unchanged until intended recipient acceptance.
+- OA5 Test isolation: draft PR #228, independent and not approved for destructive rebuild. Its Test backend attestation and Preview security gates must pass before hosted end-to-end QA. **No Production database/provider, Vercel preview, DNS, Edge function, APK or OTA mutation by either workstream.** Tandar remains exclusively in Production. Read-only evidence taken 2026-11-09 shows its earlier Cashier invitation is now **accepted** with confirmed Auth identity and matching staff membership; no change was made by this development work.
 
 ## P0 workstream A — Selling and operational performance
 
@@ -20,7 +20,7 @@ Status: SOURCE DEVELOPMENT; NO TEST OR PRODUCTION RELEASE APPROVED
 
 ## P0 workstream B — Email invitation and account activation **blocks QA handoff**
 
-Observed Production report (09/11/2026): a Tandar Cashier invitation was pending; email provider accepted a send request, but receipt in the recipient mailbox was not proven. A manually shared invitation link opened the app without actionable invitation review. A pending invite is **not** proof of delivery, email confirmation, identity verification or membership.
+Initially reported (09/11/2026): Tandar Cashier invitation was pending, provider accepted an email request, but inbox delivery was not established. A manually shared link opened an old app without actionable review. Subsequent **read-only Production checks** verified the invitation as **accepted** at last update 2026-11-09 13:47:03 UTC, matching confirmed Auth email and staff membership; this occurred independently of the unmerged repair PRs. Provider acceptance still does not prove inbox delivery. See the redacted PR #237 email diagnostic.
 
 This includes **two distinct email paths**:
 - Team invitation: `team-management` -> Resend -> `/invite.html?invitation=<opaque ID>` -> browser or Mobile -> invited identity -> explicit accept/decline -> governed membership.
@@ -88,7 +88,7 @@ Merchant Web's historical customer-order drilldown was using a direct `orders` t
 2. Continue code-only P0 operational performance and source tests.
 3. Complete dedicated invitation browser/auth source repair alongside PR #236; preserve individual patch lineage.
 4. Run automated preflights/typechecks and small-device/UI accessibility checks on exact reconciled source head.
-5. Once OA5 clears, run synthetic end-to-end Test invitation and selling regressions. If email delivery or link-to-review fails, mark **STOP**; do not accept Tandar invitation on recipient's behalf or deploy around it.
+5. Once OA5 clears, run synthetic end-to-end Test invitation and selling regressions. If synthetic QA email delivery or link-to-review fails, mark **STOP**; do not reuse completed Tandar invitation as a Test fixture or deploy around it.
 6. Consolidate reviewed Android changes into a single approved build after device testing; make web/backend rollout independently gated.
 7. Profitability aggregate and deeper offline/caching work follow as separately verified slices.
 
