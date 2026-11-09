@@ -7,10 +7,16 @@ import {
 
 const now=new Date('2026-11-09T23:19:00Z');
 const snapshot=()=>({
- schema_version:1,project_ref:TEST_PROJECT,purpose:PURPOSE,
+ schema_version:2,project_ref:TEST_PROJECT,purpose:PURPOSE,
  captured_at_utc:'2026-11-09T23:18:30Z',
  runtime_config_total_rows:0,usage_events_rows:0,
  agreement_processing_rows:0,pending_pg_net_requests:0,
+ sql_network_surface:{
+  public_function_count:479,private_function_count:8,
+  public_direct_http_functions:0,private_direct_http_functions:2,
+  public_literal_endpoint_functions:3,private_literal_endpoint_functions:0,
+  retained_pgnet_responses:0
+ },
  workers:WORKERS.map(w=>({...w,actual_runtime_config_key:w.runtime_config_key,function_overloads:1,security_definer:true,
   pg_net_http_post:true,source_has_production_ref:false,
   source_has_literal_url:false,configured_url_rows:0}))
@@ -29,7 +35,7 @@ test('wrong project, older snapshot schema, purpose and overbroad fields fail cl
   x=>x.project_ref='eujxswjspolugrzlsjnn',
   x=>x.project_ref='test',
   x=>x.purpose='authorize-remote-reset',
-  x=>x.schema_version=2,
+  x=>x.schema_version=1,
   x=>x.private_key='secret',
   x=>x.workers[0].configured_url='https://example.invalid',
   x=>x.workers[0].secret='secret',
@@ -95,4 +101,25 @@ test('operator without private Test snapshot cannot contact providers or bypass 
  assert.equal(r.status,1);
  assert.match(r.stderr,/BLOCKED/);
  assert.doesNotMatch(r.stderr,/service_role|sk_live_|recipient/);
+});
+
+test('whole-Test SQL egress inventory rejects a third SQL HTTP path, retained response, function drift or extra evidence field',()=>{
+ for(const change of [
+  x=>x.sql_network_surface.public_direct_http_functions=1,
+  x=>x.sql_network_surface.private_direct_http_functions=3,
+  x=>x.sql_network_surface.public_function_count=480,
+  x=>x.sql_network_surface.private_function_count=9,
+  x=>x.sql_network_surface.public_literal_endpoint_functions=4,
+  x=>x.sql_network_surface.private_literal_endpoint_functions=1,
+  x=>x.sql_network_surface.retained_pgnet_responses=1,
+  x=>x.sql_network_surface.retained_pgnet_responses='0',
+  x=>x.sql_network_surface.secret_value='token',
+  x=>delete x.sql_network_surface,
+ ]){
+  const x=snapshot();change(x);
+  const result=assessTestWorkerEgress(x,now);
+  assert.equal(result.worker_route_counts_quiescent,false);
+  assert.equal(result.provider_destination_verified,false);
+  assert.equal(result.destructive_execution_authorized,false);
+ }
 });
