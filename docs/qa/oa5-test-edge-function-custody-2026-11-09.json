@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "project_ref": "iukgsukdoowvnhlfmpml",
+  "observation_type": "read-only-metadata",
+  "observed_at_utc": "2026-11-09T10:11:35Z",
+  "source_inventory_commit": "ed5023e577cb1f6d25c1fabbc1a519f7f2c563ba",
+  "source_tree_sha": "eecf916c79e0e0da9d1ac09f180f9ab829ce9183",
+  "canonical_slugs": [
+    "account-lifecycle",
+    "billing-checkout",
+    "cash-shift",
+    "catalogue-from-chat",
+    "channel-consent",
+    "commercial-agreements",
+    "commercial-billing",
+    "commercial-price-controls",
+    "commercial-price-overrides",
+    "financial-document",
+    "flutterwave-payment-webhook",
+    "inventory-operation",
+    "master-agreement-prepurchase",
+    "master-agreements",
+    "merchant-ai",
+    "merchant-enquiry-action",
+    "merchant-order",
+    "merchant-payment-operations",
+    "merchant-web-handoff",
+    "money-operation",
+    "order-change-request",
+    "order-draft-action",
+    "order-fulfillment",
+    "order-parser",
+    "payment-runtime",
+    "payment-settings",
+    "paystack-payment-webhook",
+    "paystack-webhook",
+    "platform-admin",
+    "platform-admin-commercial",
+    "platform-admin-settlement",
+    "platform-admin-setup-scheduling",
+    "platform-admin-team",
+    "platform-merchant-message",
+    "platform-payment-readiness",
+    "platform-setup-installer",
+    "pos-checkout",
+    "pos-return",
+    "printer",
+    "provision-business",
+    "send-auth-email",
+    "send-merchant-push",
+    "send-whatsapp-notifications",
+    "stock-count",
+    "stock-transfer",
+    "team-management",
+    "usage-settlement",
+    "whatsapp-catalog",
+    "whatsapp-connection",
+    "whatsapp-webhook"
+  ],
+  "hosted_functions": [
+    {
+      "slug": "agreement-pdf-runtime-probe",
+      "status": "ACTIVE",
+      "version": 5,
+      "verify_jwt": true
+    },
+    {
+      "slug": "commercial-agreements",
+      "status": "ACTIVE",
+      "version": 4,
+      "verify_jwt": true
+    },
+    {
+      "slug": "master-agreements",
+      "status": "ACTIVE",
+      "version": 6,
+      "verify_jwt": true
+    },
+    {
+      "slug": "platform-admin",
+      "status": "ACTIVE",
+      "version": 5,
+      "verify_jwt": true
+    },
+    {
+      "slug": "platform-admin-settlement",
+      "status": "ACTIVE",
+      "version": 4,
+      "verify_jwt": true
+    }
+  ]
+}
