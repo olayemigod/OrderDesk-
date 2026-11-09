@@ -640,6 +640,21 @@ export default function RedesignWorkspace() {
                 );
                 return;
               }
+              if (cashShiftLoading) {
+                Alert.alert('Checking your shift', 'SellerTray is checking your Cashier shift. Try Resume sale again once the check finishes.');
+                return;
+              }
+              if (!activeCashShift) {
+                Alert.alert(
+                  'Open a shift to resume',
+                  'Your saved sale is still available. Open a Cashier shift for this Branch, then return to Orders and resume it.',
+                  [
+                    { text: 'Not now', style: 'cancel' },
+                    { text: 'Open Cash & Shift', onPress: openCashWorkspace },
+                  ],
+                );
+                return;
+              }
               setResumeDraftOrder(order);
               setFocusedOrderId(null);
               setTab('sell');
