@@ -70,3 +70,50 @@ If the `net` schema/table is absent, SQL fails closed; do **not** silently subst
 The initial maintenance inventory checked historical rows with `end_time IS NULL` only if started in the preceding hour. This could incorrectly report **zero** unfinished runs if a worker was abandoned or stalled more than an hour ago. The reviewed read-only SQL above now counts **every** `cron.job_run_details` row for the four expected jobs with `status IN ('running','starting') OR end_time IS NULL`, **without a time cutoff**. A paused-but-previously-started job remains a maintenance stop condition until independently investigated; do not delete history to make the gate pass.
 
 The isolated Test-only read at 09/11/2026 found 56,579 historical cron execution rows and **zero** `end_time IS NULL` rows (including none older than one hour); `running`/`starting` statuses were also zero. This read has no effect on scheduled jobs or their pending HTTP work. Four active Test schedules still block reset, and a point-in-time inventory is not external-provider quiescence proof.
+
+
+## 09/11/2026 — Test-only pre-pause fingerprint readiness (not pause authorization)
+
+The post-pause schema-v2 snapshot earlier in this document remains mandatory **after** a separately authorized Test-only pause. A new independent **pre-pause** offline checker, scripts/qa/oa5-test-cron-freeze-candidate.mjs, allows an operator to establish that the **current active** four-job roster is exactly the reviewed one **before** requesting a pause. A passing pre-pause guard does **not** authorize that pause, prove outbound provider quiescence or substitute for post-pause evidence.
+
+### Read-only pre-pause operator snapshot
+
+Independently verify that the connected Supabase project is **standalone Test** iukgsukdoowvnhlfmpml and issue only this SELECT. It returns aggregate job identities, schedules, SHA-256 fingerprints and counts: no command bodies, tokens, recipient addresses or private provider configuration.
+
+~~~sql
+SELECT jsonb_build_object(
+ 'schema_version',1,
+ 'project_ref','iukgsukdoowvnhlfmpml',
+ 'purpose','pre-pause-readonly-candidate',
+ 'captured_at_utc',to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+ 'all_jobs_count',(SELECT count(*)::integer FROM cron.job),
+ 'pending_pg_net_http_requests',(SELECT count(*)::integer FROM net.http_request_queue),
+ 'jobs',(
+  SELECT coalesce(jsonb_agg(jsonb_build_object(
+   'jobid',j.jobid,'jobname',j.jobname,'schedule',j.schedule,
+   'command_sha256',encode(extensions.digest(j.command::bytea,'sha256'),'hex'),
+   'active',j.active,
+   'unfinished_runs',(
+     SELECT count(*)::integer FROM cron.job_run_details d
+     WHERE d.jobid=j.jobid AND (d.status IN ('running','starting') OR d.end_time IS NULL)
+   ),
+   'running_runs',(
+     SELECT count(*)::integer FROM cron.job_run_details d
+     WHERE d.jobid=j.jobid AND d.status IN ('running','starting')
+   )
+  ) ORDER BY j.jobid),'[]'::jsonb) FROM cron.job j
+ )
+) AS snapshot;
+~~~
+
+Keep the resulting single JSON snapshot in protected operator-controlled storage outside Git/CI. Validate it offline using:
+
+~~~sh
+node scripts/qa/oa5-test-cron-freeze-candidate.mjs --check /secure/private/test-pre-pause-cron-census.json
+~~~
+
+The helper requires **exactly** the four recorded IDs, names, schedules and command hashes; all four **active** at pre-pause; zero unfinished/running executions across **all history**; zero pg_net pending requests; no unknown jobs/secret-bearing fields; correct Test project and purpose; and a snapshot under ten minutes old. Even on success, the checker returns cron_pause_authorized:false, post_pause_quiescence_verified:false and destructive_execution_authorized:false. It never makes an API, SQL or provider call.
+
+**Direct live Test read-only observation, 09/11/2026 21:10:31 UTC:** four ACTIVE jobs, all IDs/names/schedules/command fingerprints match the frozen roster, zero unfinished or running executions, and zero queued pg_net HTTP requests. This is **only** a point-in-time pre-pause census. It does not establish absence of already dispatched requests or real-recipient isolation, and grants no authority to pause.
+
+**Immutable order:** historical Agreement/Preview custody and externally verified Test-only provider ingress isolation, named operator and specific four-job pause approval; repeat a fresh pre-pause snapshot; execute only separately approved reversible Test-only pause; capture a new schema-v2 **POST-pause** snapshot via the earlier SQL; run the existing post-pause checker; independently confirm external provider quiescence; then seek **separate** Test rebuild approval. Any changed fingerprint, new job, active job after pause or queued HTTP requires STOP. Production/Tandar and all hosted Test resources remain unchanged in this review.
