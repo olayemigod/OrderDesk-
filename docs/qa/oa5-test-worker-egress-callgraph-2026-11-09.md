@@ -42,7 +42,7 @@ WITH workers(jobid,jobname,schema_name,func_name,runtime_config_key) AS (
  (3,'sellertray-merchant-push-retry','sellertray_private','kick_merchant_push_worker','merchant_push_worker_url')
 )
 SELECT jsonb_build_object(
- 'schema_version',1,
+ 'schema_version',2,
  'project_ref','iukgsukdoowvnhlfmpml',
  'purpose','pre-maintenance-worker-egress-census',
  'captured_at_utc',to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"'),
@@ -50,6 +50,15 @@ SELECT jsonb_build_object(
  'usage_events_rows',(SELECT count(*)::int FROM public.usage_events),
  'agreement_processing_rows',(SELECT count(*)::int FROM public.sellertray_agreement_package_processing),
  'pending_pg_net_requests',(SELECT count(*)::int FROM net.http_request_queue),
+ 'sql_network_surface',jsonb_build_object(
+  'public_function_count',(SELECT count(*)::int FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public'),
+  'private_function_count',(SELECT count(*)::int FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='sellertray_private'),
+  'public_direct_http_functions',(SELECT count(*)::int FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.prosrc ~* '(net[.]http_(post|get|delete|patch)|extensions[.]http|http[.]http_)'),
+  'private_direct_http_functions',(SELECT count(*)::int FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='sellertray_private' AND p.prosrc ~* '(net[.]http_(post|get|delete|patch)|extensions[.]http|http[.]http_)'),
+  'public_literal_endpoint_functions',(SELECT count(*)::int FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.prosrc ~* '(https?://|[.]supabase[.]co|[.]facebook[.]com)'),
+  'private_literal_endpoint_functions',(SELECT count(*)::int FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='sellertray_private' AND p.prosrc ~* '(https?://|[.]supabase[.]co|[.]facebook[.]com)'),
+  'retained_pgnet_responses',(SELECT count(*)::int FROM net._http_response)
+ ),
  'workers',(
   SELECT jsonb_agg(jsonb_build_object(
    'jobid',w.jobid,
@@ -98,3 +107,24 @@ The two existing Test private SQL function bodies were independently hashed thro
 | sellertray_private.kick_merchant_push_worker | b052a9982fcd993ff5f4e5ba3a41eacd4f27c3335e775811a08d6aa16accb56c |
 
 Their actual parsed source lookup keys matched notification_worker_url and merchant_push_worker_url. The offline guard now requires both these digests and the **actual parsed source lookup key**, not merely the expected key copied into a snapshot. Any SQL code change must STOP the pre-maintenance review and be independently reconciled; do not silently update these digests to force a PASS. This is only a *fingerprint for two known functions*, not comprehensive code attestations of invoked SQL dependencies or all Test outbound routes.
+
+
+## Full Test SQL outbound surface and retained HTTP telemetry — limited census
+
+A separate **read-only** scan of the Test catalog (public + sellertray_private schemas) identified **479 public** and **8 private** SQL functions. It found **zero** direct SQL HTTP-call syntax references in public functions and **two** in private functions, exactly the existing WhatsApp/push workers inspected above. Three public functions contain literal URL-related syntax (mostly validations/metadata), but **none** invokes the scanned direct pg_net/HTTP routines. The private routines contain no literal HTTP URL. The current net._http_response table retains **zero** rows (successful/failed HTTP responses), and the net.http_request_queue currently contains **zero** requests.
+
+| Bounded catalog metric | Current Test observation |
+| --- | ---: |
+| Public SQL functions | 479 |
+| Private SQL functions | 8 |
+| Direct SQL HTTP-dispatch references: public | 0 |
+| Direct SQL HTTP-dispatch references: private | 2 |
+| Functions mentioning literal URL/domain syntax: public | 3 |
+| Functions mentioning literal URL/domain syntax: private | 0 |
+| Retained pg_net HTTP responses | 0 |
+
+**Versioned change:** the combined SELECT above now produces **worker-egress snapshot schema v2** with a strict nested sql_network_surface object. The offline gate fails closed if the SQL function-count inventory changes, any newly directly HTTP-calling routine appears, a known worker function is modified, private URL configuration appears, the pg_net response table acquires a row, or required metadata goes missing. This is a deliberate *legacy Test pre-maintenance drift* check; these exact old counts are **not** a canonical post-rebuild target.
+
+**Important limits:** source-regex matches are *not* full SQL call-graph proof, and cannot detect dynamically constructed SQL, every indirect external action, activity in an imported extension or prior network deliveries after pg_net response retention expires. Zero retained responses **does not prove zero historical dispatch**. Four schedules are still ACTIVE and the verified private worker functions can send HTTP if a URL appears later. Real Meta, PSP, SMTP, FCM, AI and Vercel provider-side isolation remain independent, **unaccepted** gates. This snapshot neither authorizes a cron pause nor a Test reset.
+
+Read-only run-history counts indicate that the three minutely jobs each retained **20,097** completed runs and ran **1,440 times in the last 24 hours** at the observation, with zero recorded failures/unfinished runs; the daily usage-settlement job retained 14 completed runs. These operational counters show that the schedules **continue consuming execution resources**, even while primary work tables/worker URL settings are empty. They are not evidence of failed delivery or safe to unschedule. Any reversible Test-only pause remains a separately approved, all-four-job operation.
