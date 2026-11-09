@@ -17,6 +17,8 @@ export function CustomersView({ business, onOpenOrder }: { business: MerchantBus
   const [selectedId, setSelectedId] = useState('');
   const [query, setQuery] = useState('');
   const [openingOrderId, setOpeningOrderId] = useState<string | null>(null);
+  const [visibleHistoryLimit, setVisibleHistoryLimit] = useState(10);
+  useEffect(() => setVisibleHistoryLimit(10), [selectedId, business.id]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -148,7 +150,7 @@ export function CustomersView({ business, onOpenOrder }: { business: MerchantBus
 
         <View style={styles.detailCard}>
           <Text style={[styles.sectionTitle, appearance.dark && darkStyles.titleText]}>Order history</Text>
-          {selected.orders.slice(0, 10).map((order) => (
+          {selected.orders.slice(0, visibleHistoryLimit).map((order) => (
             <Pressable key={order.id} accessibilityRole="button" accessibilityLabel={`Open order ${order.publicOrderId}`} disabled={!onOpenOrder || openingOrderId !== null} onPress={() => void openHistoryOrder(order.id)} style={[styles.orderRow, appearance.dark && darkStyles.rowBorder]}>
               <View style={styles.orderCopy}>
                 <Text style={styles.orderRef}>{order.publicOrderId}</Text>
@@ -158,6 +160,11 @@ export function CustomersView({ business, onOpenOrder }: { business: MerchantBus
               {openingOrderId === order.id ? <ActivityIndicator size="small" /> : onOpenOrder ? <Ionicons name="chevron-forward" size={16} color={appearance.dark ? '#D0D5DD' : '#667085'} /> : null}
             </Pressable>
           ))}
+          {selected.orders.length > visibleHistoryLimit ? (
+            <Pressable accessibilityRole="button" onPress={() => setVisibleHistoryLimit((count) => count + 10)} style={styles.refresh}>
+              <Text style={styles.refreshText}>Show older orders · {Math.min(visibleHistoryLimit, selected.orders.length)} of {selected.orders.length}</Text>
+            </Pressable>
+          ) : null}
           {selected.orders.length === 0 ? <Text style={styles.muted}>No orders recorded for this customer.</Text> : null}
         </View>
       </View>
