@@ -159,3 +159,69 @@ test('root index.html and safe script reference are mandatory',()=>{
   assert.equal(r.content_consistent_with_test,false,variant);
  }
 });
+
+
+test('Vite static import graph accepts Test backend in a reachable secondary chunk only',()=>{
+ const r=inspectChange(f=>{
+  writeFileSync(join(f.dir,'capture_0','assets','site.js'),
+   'import{endpoint}from"./backend-xyz.js";console.log(endpoint);');
+  writeFileSync(join(f.dir,'capture_0','assets','backend-xyz.js'),
+   'export const endpoint="https://'+TEST_REF+'.supabase.co";');
+ });
+ assert.equal(r.content_consistent_with_test,true);
+ assert.equal(r.details[0].html_linked_entrypoints,1);
+ assert.equal(r.details[0].reachable_js_files,2);
+ assert.equal(r.details[0].reachable_test_ref,true);
+ assert.equal(r.historical_artifact_origin_verified,false);
+});
+test('Vite dynamic import literal graph reaches a lazily loaded Test-only module',()=>{
+ const r=inspectChange(f=>{
+  writeFileSync(join(f.dir,'capture_2','assets','site.js'),
+   'const lazy=()=>import("./agreement-dynamic.mjs");');
+  writeFileSync(join(f.dir,'capture_2','assets','agreement-dynamic.mjs'),
+   'export default "https://'+TEST_REF+'.supabase.co";');
+ });
+ assert.equal(r.content_consistent_with_test,true);
+ assert.equal(r.details[2].reachable_js_files,2);
+});
+test('a transitive imported Production or unknown Supabase project chunk always blocks',()=>{
+ for(const variant of ['production','unknown']){
+  const r=inspectChange(f=>{
+   writeFileSync(join(f.dir,'capture_1','assets','site.js'),
+    'import "./nested.js";');
+   writeFileSync(join(f.dir,'capture_1','assets','nested.js'),
+    'const endpoint="https://'+(variant==='production'?PROD_REF:'aaaaaaaaaaaaaaaaaaaa')+'.supabase.co";');
+  });
+  assert.equal(r.content_consistent_with_test,false,variant);
+ }
+});
+test('a missing imported chunk fails closed even with a Test identity in the entrypoint',()=>{
+ const r=inspectChange(f=>{
+  writeFileSync(join(f.dir,'capture_4','assets','site.js'),
+   'const target="https://'+TEST_REF+'.supabase.co";import("./missing-agreement.js");');
+ });
+ assert.equal(r.content_consistent_with_test,false);
+ assert.match(r.errors.join(' '),/Unresolved or unsafe locally imported JavaScript module/);
+});
+test('orphan Test JS cannot satisfy an entrypoint with a separate imported non-Test module',()=>{
+ const r=inspectChange(f=>{
+  writeFileSync(join(f.dir,'capture_3','assets','site.js'),
+   'import{endpoint}from"./unrelated.js";');
+  writeFileSync(join(f.dir,'capture_3','assets','unrelated.js'),
+   'export const endpoint="none";');
+  writeFileSync(join(f.dir,'capture_3','assets','orphan.js'),
+   'const endpoint="https://'+TEST_REF+'.supabase.co";');
+ });
+ assert.equal(r.content_consistent_with_test,false);
+ assert.match(r.errors.join(' '),/HTML-linked entrypoint or reachable imported JavaScript/);
+});
+test('circular but wholly captured Vite imports are bounded and safe',()=>{
+ const r=inspectChange(f=>{
+  writeFileSync(join(f.dir,'capture_4','assets','site.js'),
+   'import "./loop.js";');
+  writeFileSync(join(f.dir,'capture_4','assets','loop.js'),
+   'import "./site.js";export const endpoint="https://'+TEST_REF+'.supabase.co";');
+ });
+ assert.equal(r.content_consistent_with_test,true);
+ assert.equal(r.details[4].reachable_js_files,2);
+});
