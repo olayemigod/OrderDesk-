@@ -28,9 +28,12 @@
 ```sh
 node scripts/qa/oa5-test-backup-manifest.mjs --check /secure/private/test-archive
 node scripts/qa/oa5-test-cron-maintenance-gate.mjs --check /secure/private/post-pause-cron-v2.json
-node scripts/qa/oa5-test-live-census.mjs --check /secure/private/post-pause-live-counts.json /secure/private/test-managed-state.json
-node scripts/qa/oa5-test-rebuild-preflight.mjs --check /secure/private/operator-review.json /secure/private/test-archive /secure/private/post-pause-cron-v2.json /secure/private/post-pause-live-counts.json
+node scripts/qa/oa5-test-managed-boundary.mjs --check /secure/private/test-managed-state.json
+node scripts/qa/oa5-test-live-census.mjs --check /secure/private/post-pause-live-counts.json /secure/private/reviewed-one-session-loss.json
+node scripts/qa/oa5-test-rebuild-preflight.mjs --check /secure/private/operator-review.json /secure/private/test-archive /secure/private/post-pause-cron-v2.json /secure/private/post-pause-live-counts.json /secure/private/test-managed-state.json /secure/private/reviewed-one-session-loss.json
 ```
+
+**Corrected exact CLI argument order (09/11/2026):** the archived-to-live census takes its optional independently approved **one-session-loss** evidence as its second argument, **not** the managed-state census. The combined preflight also requires the managed-state snapshot as a **separate mandatory fifth file argument** after the operator record, archive, cron and live snapshots. The last one-session-loss file is optional *only if* the current Auth session count matches the independently restored archive (5); current Test has 6 and requires the separately reviewed, short-lived private loss record. Every individual check is offline and grants **no** hosted execution permission.
 
 The operator-review JSON shape is:
 
@@ -223,3 +226,10 @@ Detailed Test-only counts and the dependency-aware *proposed* ordering are recor
 **New explicit STOP condition:** Do not delete the five Test Auth users using the Supabase Dashboard or Admin API while the old user-created schema still contains these references. Independently review preservation of old Agreement/audit data, the chosen exact cleanup of user-created schemas and migration history, and proof that the old references are absent **before** any separately approved Auth-user decommission. Auth hard deletes, JWT validity, the three Storage buckets and their object ownership remain separate managed-service boundaries. Do not weaken FKs or erase audit rows as a shortcut.
 
 This is documentation of a read-only investigation, not authority to reset, pause four jobs, delete users, change Test providers, deploy or affect Production/Tandar. Operator preflight remains NO-GO.
+
+
+## 09/11/2026 — exact Test database cleanup-scope inventory
+
+The detailed count-only schema and grant review is maintained in [OA5 hosted Test cleanup scope and replay review](oa5-test-hosted-cleanup-scope-and-replay-review-2026-11-09.md). The legacy Test database currently has 132 public tables, 8 private SellerTray tables, 479 public routines (348 SECURITY DEFINER), 176 public custom triggers, 54 historical migration records and four active background jobs. Supabase-managed Auth, Storage, cron, net, Vault, Realtime and extension-owned objects must not be swept into an unscoped user-schema reset. Historic effective role grants (including 143 SECURITY DEFINER public functions callable by authenticated users) demand explicit post-replay security verification, **not** an automatic claim of vulnerability or permission to copy old grants.
+
+That scope map is **not an approved cleanup recipe**. The exact supported operation, chronological dependency closure, Auth/Storage irreversibility, reviewer/operator identity, provider isolation, zero-queue after-pause evidence and separately signed Test-only destructive authorization are still outstanding. Keep PR #228 draft, QA attestation blocked and Production/Tandar untouched.
