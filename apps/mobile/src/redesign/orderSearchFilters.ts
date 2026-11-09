@@ -24,12 +24,18 @@ export const DEFAULT_ORDER_FILTERS: OrderSearchFilters = {
 export function matchesOrderSearch(order: MerchantOrder, filters: OrderSearchFilters, now = Date.now()): boolean {
   const query = filters.query.trim().toLocaleLowerCase();
 
-  if (query && ![
+  const searchable = [
     order.publicOrderId,
     order.customerName,
     order.customerPhone,
     ...order.items.map((item) => item.name),
-  ].join(' ').toLocaleLowerCase().includes(query)) return false;
+  ].join(' ').toLocaleLowerCase();
+  const phoneDigits = order.customerPhone.replace(/\D/g, '');
+  const queryDigits = query.replace(/\D/g, '');
+  const localPhoneQuery = queryDigits.startsWith('0') ? queryDigits.slice(1) : queryDigits;
+  const matchesPhone = queryDigits.length >= 5
+    && (phoneDigits.includes(queryDigits) || (localPhoneQuery.length >= 5 && phoneDigits.endsWith(localPhoneQuery)));
+  if (query && !searchable.includes(query) && !matchesPhone) return false;
 
   if (filters.source !== 'all' && order.source !== filters.source) return false;
 
