@@ -27,6 +27,8 @@ on:
       - 'scripts/qa/oa5-test-auth-decommission-boundary.mjs'
       - 'scripts/qa/oa5-test-auth-decommission-boundary.test.mjs'
       - 'scripts/qa/oa5-test-rebuild-preflight.test.mjs'
+      - 'docs/qa/oa5-test-rebuild-operator-preflight-2026-11-09.md'
+      - 'docs/qa/oa5-test-provider-auth-storage-isolation-review-2026-11-09.md'
       - 'scripts/qa/oa5-historical-preview-custody.mjs'
       - 'scripts/qa/oa5-test-edge-inventory.mjs'
       - 'scripts/qa/oa5-test-edge-inventory.test.mjs'
