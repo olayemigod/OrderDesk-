@@ -163,7 +163,7 @@ Deno.serve(withObservability('team-management', async (request) => {
           error: sanitizeObservabilityError(error),
         }));
         return json({
-          error: 'Invitation is pending, but the email could not be delivered. Send the invitation again to retry email delivery; the existing pending invitation will be reused.',
+          error: 'The invitation remains pending, but SellerTray could not confirm the email provider accepted the message. Check the recipient inbox and Spam before resending; a retry reuses the existing pending invitation.',
           invitationPending: true,
         }, 503);
       }
