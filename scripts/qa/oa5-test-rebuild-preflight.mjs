@@ -22,7 +22,13 @@ export const REQUIRED_EVIDENCE=Object.freeze([
   'production_custom_domains_public',
   'vercel_preview_auth_protection',
   'test_only_ingress_freeze_reviewed',
-  'test_only_provider_callbacks_and_sinks',
+  'meta_test_app_phone_webhook_ownership',
+  'paystack_test_keys_callbacks_and_replay',
+  'flutterwave_test_disabled_or_sandbox_only',
+  'smtp_safe_sink_recipients_and_auth_redirects',
+  'firebase_fcm_test_sender_and_qa_devices',
+  'ai_parser_and_notification_worker_egress',
+  'test_admin_merchant_domains_and_auth_redirects',
   'test_auth_sessions_storage_scope',
   'reversible_four_job_pause_approved',
   'reviewed_cleanup_method_and_scope',
@@ -40,20 +46,26 @@ export function assessRebuildPreflight(record,{sourceSha,archive,cron,liveCensus
   if(!exactKeys(record,['schema_version','project_ref','reviewed_source_sha','purpose','evidence']))
     return {preconditions_met:false,destructive_execution_authorized:false,
       reasons:['Missing or malformed private Test operator record']};
-  if(record.schema_version!==1||record.project_ref!==TEST_PROJECT||
+  if(record.schema_version!==2||record.project_ref!==TEST_PROJECT||
      record.purpose!=='pre-reset-human-review')
     reasons.push('Wrong Test project, purpose or schema');
   if(!sha(sourceSha)||record.reviewed_source_sha!==sourceSha)
     reasons.push('Reviewed Git source commit must equal the exact local checkout');
   if(!exactKeys(record.evidence,REQUIRED_EVIDENCE))
     reasons.push('Every named manual evidence category is required; no extras');
+  const usedEvidenceRefs=new Set();
   for(const key of REQUIRED_EVIDENCE){
     const x=record.evidence?.[key];
     if(!exactKeys(x,['reviewed','evidence_ref'])||
        x.reviewed!==true||
        typeof x.evidence_ref!=='string'||
-       !/^[a-zA-Z0-9][a-zA-Z0-9_-]{7,79}$/.test(x.evidence_ref))
+       !/^[a-zA-Z0-9][a-zA-Z0-9_-]{7,79}$/.test(x.evidence_ref)){
       reasons.push('Independent protected evidence not reviewed: '+key);
+      continue;
+    }
+    if(usedEvidenceRefs.has(x.evidence_ref))
+      reasons.push('Different review categories cannot reuse one evidence reference: '+key);
+    usedEvidenceRefs.add(x.evidence_ref);
   }
   if(!archive?.ok)reasons.push('Encrypted Test archive or disposable restore offline guard failed');
   if(!cron?.ok)reasons.push('Test cron all-age run / pg_net quiescence guard failed');
