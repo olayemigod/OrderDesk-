@@ -24,7 +24,7 @@ export default function ProvisionedApp() {
   const invitationLink = useInvitationLink();
 
   return (
-    <AuthGate>
+    <AuthGate hasPendingInvitation={Boolean(invitationLink.invitationId)}>
       <ProcessEdgeIdentityGate>
         <LegalAcceptanceGate>
           <ProvisioningGate
@@ -128,6 +128,7 @@ function ProvisioningGate({
             onDecline={(id) => void handleInvitation(id, 'decline')}
             onRetry={() => void refreshInvitations()}
             onDismissFocus={() => void onResolveInvitation()}
+            onSwitchAccount={() => void supabase.auth.signOut({ scope: 'local' })}
           />
           <PlatformAdminView
             overview={platformAdmin.overview}
@@ -177,6 +178,7 @@ function ProvisioningGate({
                 onDecline={(id) => void handleInvitation(id, 'decline')}
                 onRetry={() => void refreshInvitations()}
                 onDismissFocus={() => void onResolveInvitation()}
+            onSwitchAccount={() => void supabase.auth.signOut({ scope: 'local' })}
               />
               {invitations.length === 0 && !focusedInvitationId ? <CreateBusinessView onCreate={createBusiness} /> : null}
             </>
@@ -215,6 +217,7 @@ function ProvisioningGate({
             onDecline={(id) => void handleInvitation(id, 'decline')}
             onRetry={() => void refreshInvitations()}
             onDismissFocus={() => void onResolveInvitation()}
+            onSwitchAccount={() => void supabase.auth.signOut({ scope: 'local' })}
           />
         </SafeAreaView>
         <View style={styles.workspaceContent}>{workspace}</View>
@@ -236,6 +239,7 @@ type PendingInvitationsPanelProps = {
   onDecline: (invitationId: string) => void;
   onRetry: () => void;
   onDismissFocus: () => void;
+  onSwitchAccount: () => void;
 };
 
 function PendingInvitationsPanel({
@@ -249,6 +253,7 @@ function PendingInvitationsPanel({
   onDecline,
   onRetry,
   onDismissFocus,
+  onSwitchAccount,
 }: PendingInvitationsPanelProps) {
   const orderedInvitations = useMemo(() => {
     if (!focusedInvitationId) return invitations;
@@ -286,8 +291,15 @@ function PendingInvitationsPanel({
       ) : null}
       {focusedInvitationId && !hasFocusedInvitation && !focusedInvitationRefreshing && !error ? (
         <View style={styles.invitationResolvedCard}>
-          <Text style={styles.invitationBusiness}>This invitation is no longer pending</Text>
-          <Text style={styles.invitationMeta}>It may already have been accepted, declined, expired or cancelled. Your current SellerTray Business access remains unchanged.</Text>
+          <Text style={styles.invitationBusiness}>Invitation not available to this account</Text>
+          <Text style={styles.invitationMeta}>
+            Make sure you are signed in with the email address that received the invitation.
+            It may also have expired, been accepted, declined or cancelled. Your existing
+            Business access is unchanged.
+          </Text>
+          <Pressable onPress={onSwitchAccount} style={styles.resolvedButton}>
+            <Text style={styles.resolvedButtonText}>Sign in with invited email</Text>
+          </Pressable>
           <Pressable onPress={onDismissFocus} style={styles.resolvedButton}>
             <Text style={styles.resolvedButtonText}>Continue to SellerTray</Text>
           </Pressable>

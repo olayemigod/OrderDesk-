@@ -26,7 +26,7 @@ type AuthMode = 'welcome' | 'sign-in' | 'sign-up' | 'forgot-password' | 'reset-p
 const SELLERTRAY_PRIVACY_URL = 'https://sellertray.com/privacy';
 const SELLERTRAY_TERMS_URL = 'https://sellertray.com/terms';
 
-export function AuthGate({ children }: { children: ReactNode }) {
+export function AuthGate({ children, hasPendingInvitation = false }: { children: ReactNode; hasPendingInvitation?: boolean }) {
   const [session, setSession] = useState<Session | null>(null);
   const [booting, setBooting] = useState(true);
   const [mode, setMode] = useState<AuthMode>('welcome');
@@ -283,6 +283,28 @@ export function AuthGate({ children }: { children: ReactNode }) {
     );
   }
 
+  // An invitation is a request for governed Business membership, not a sign-in
+  // credential, and never an instruction to create another Business.
+  // The invitation locator is retained by ProvisionedApp through auth.
+  if (!session && hasPendingInvitation && mode === 'welcome') {
+    return (
+      <AuthCard
+        title="Review your Business invitation"
+        subtitle="Sign in or create a SellerTray account using the email address that received this invitation."
+      >
+        <Text style={styles.note}>
+          Opening the link does not join the Business automatically. After you sign in,
+          review the Business and your Cashier or Manager role, then choose Accept or Decline.
+          You do not need to create another Business.
+        </Text>
+        <PrimaryButton label="Create an account to review" submitting={false} onPress={() => showMode('sign-up')} />
+        <Pressable onPress={() => showMode('sign-in')} style={styles.linkButton}>
+          <Text style={styles.linkText}>Already have an account? Sign in</Text>
+        </Pressable>
+      </AuthCard>
+    );
+  }
+
   if (!session && mode === 'welcome') {
     return (
       <SafeAreaView style={styles.welcomeScreen}>
@@ -364,7 +386,12 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   if (!session && mode === 'sign-up') {
     return (
-      <AuthCard title="Create your SellerTray account" subtitle="Tell us who you are. Your business workspace comes next.">
+      <AuthCard
+        title="Create your SellerTray account"
+        subtitle={hasPendingInvitation
+          ? 'Use the email address that received the Business invitation. You will review it after signing in; do not create another Business.'
+          : 'Tell us who you are. Your business workspace comes next.'}
+      >
         <AuthField label="Your name" hint="Used for greetings and your personal SellerTray account.">
           <TextInput
             autoCapitalize="words"
@@ -416,7 +443,12 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   if (!session) {
     return (
-      <AuthCard title="Sign In" subtitle="Secure access for every merchant.">
+      <AuthCard
+        title="Sign In"
+        subtitle={hasPendingInvitation
+          ? 'Use the invited email address to review your pending Business invitation.'
+          : 'Secure access for every merchant.'}
+      >
         <EmailInput email={email} onChange={setEmail} />
         <PasswordField
           label="Password"
