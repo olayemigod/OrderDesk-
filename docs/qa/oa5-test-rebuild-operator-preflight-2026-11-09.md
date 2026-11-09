@@ -28,7 +28,7 @@
 ```sh
 node scripts/qa/oa5-test-backup-manifest.mjs --check /secure/private/test-archive
 node scripts/qa/oa5-test-cron-maintenance-gate.mjs --check /secure/private/post-pause-cron-v2.json
-node scripts/qa/oa5-test-live-census.mjs --check /secure/private/post-pause-live-counts.json
+node scripts/qa/oa5-test-live-census.mjs --check /secure/private/post-pause-live-counts.json /secure/private/test-managed-state.json
 node scripts/qa/oa5-test-rebuild-preflight.mjs --check /secure/private/operator-review.json /secure/private/test-archive /secure/private/post-pause-cron-v2.json /secure/private/post-pause-live-counts.json
 ```
 
@@ -135,7 +135,7 @@ using a six-session approval. Never copy identifiers, emails, tokens or URLs int
 After separate owner review, an operator may run:
 
 ~~~sh
-node scripts/qa/oa5-test-live-census.mjs --check /secure/private/test-live-counts.json /secure/private/reviewed-session-loss.json
+node scripts/qa/oa5-test-live-census.mjs --check /secure/private/test-live-counts.json /secure/private/test-managed-state.json /secure/private/reviewed-session-loss.json
 node scripts/qa/oa5-test-rebuild-preflight.mjs --check /secure/private/operator-review.json /secure/private/test-archive /secure/private/post-pause-cron-v2.json /secure/private/test-live-counts.json /secure/private/reviewed-session-loss.json
 ~~~
 
