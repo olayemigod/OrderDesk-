@@ -43,3 +43,19 @@ Vercel's provider read returned the same five immutable IDs, source Git SHAs and
 5. **Production untouched.** No Vercel variables, published keys, project domains, authenticated previews, database objects, scheduled jobs, third-party callbacks or production merchants were changed.
 
 **Release disposition:** PR #228 remains **draft**; OA5 backend attestation and hosted Test clean rebuild remain **NO-GO**, pending the distinct original-bundle and provider-console acceptance evidence, staged cleanup/rollback review and operation-specific approval.
+
+
+## Independent Cloudflare DNS evidence, 09/11/2026
+
+A separate **read-only** check on the connected Cloudflare zone sellertray.com confirmed the zone is **active** on its existing **Free Website** plan. Exact-name DNS queries returned one record for each of the four approved public hostnames:
+
+| Hostname | Record | Current DNS target | Proxied | Meaning |
+|---|---|---|---|---|
+| test.sellertray.com | CNAME | cname.vercel-dns.com | false (DNS only) | **DNS pre-staged, not attached to Vercel Merchant project** |
+| test-admin.sellertray.com | CNAME | cname.vercel-dns.com | false (DNS only) | **DNS pre-staged, not attached to Vercel Admin project** |
+| app.sellertray.com | CNAME | 086772467cd80d17.vercel-dns-017.com | false (DNS only) | Existing Production Merchant routing |
+| admin.sellertray.com | CNAME | 4c389925aaffc5aa.vercel-dns-017.com | false (DNS only) | Existing Production Admin routing |
+
+Both Test DNS record comments explicitly describe **QA branch binding pending**. Their Cloudflare DNS-only state **does not provide Cloudflare Access protection**; Vercel's pre-binding project Standard Authentication does not itself prove that a subsequently bound *custom domain* will be protected. No DNS query here verified any HTTP page, authenticated session, TLS certificate, redirect flow or deployed backend.
+
+**Disposition:** the **Cloudflare DNS configuration pre-stage is independently observed** and requires **no new paid resource, record creation or change** at this stage. Test custom domain binding stays **forbidden** until canonical Test backend attestation, source branch / published key isolation, signed-out custom-domain protection, provider callback isolation and explicit deployment authorization. Do not point these existing DNS entries at Production, change the live CNAMEs, enable a new proxy or create a Cloudflare Access subscription merely to pass source QA. This was a GET-only inspection with no host mutation.
