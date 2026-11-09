@@ -6,7 +6,7 @@ import {assessTestLiveCensus,ARCHIVED_COUNTS,TEST_REF,REVIEWED_SESSION_LOSS_SCOP
 const ref='iukgsukdoowvnhlfmpml',sha='a'.repeat(40);
 const record=()=>({schema_version:1,project_ref:ref,reviewed_source_sha:sha,purpose:'pre-reset-human-review',
  evidence:Object.fromEntries(REQUIRED_EVIDENCE.map(k=>[k,{reviewed:true,evidence_ref:'private-review-0001'}]))});
-const proof={sourceSha:sha,archive:{ok:true},cron:{ok:true},liveCensus:{ok:true}};
+const proof={sourceSha:sha,archive:{ok:true},cron:{ok:true},liveCensus:{ok:true},managedBoundary:{ok:true}};
 test('complete synthetic review never authorizes destructive Test execution',()=>{
   const result=assessRebuildPreflight(record(),proof);
   assert.equal(result.preconditions_met,true);
@@ -49,6 +49,7 @@ test('backup/restore and fresh cron/pg_net evidence are mandatory, independent s
     {...proof,cron:{ok:false,reasons:['4 active jobs']}},
     {...proof,archive:null},{...proof,cron:null},
     {...proof,liveCensus:null},{...proof,liveCensus:{ok:false,reasons:['6 Auth sessions']}},
+    {...proof,managedBoundary:null},{...proof,managedBoundary:{ok:false,reasons:['stale managed state']}},
   ]){
     const r=assessRebuildPreflight(record(),q);
     assert.equal(r.preconditions_met,false);
