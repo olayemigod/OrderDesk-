@@ -130,3 +130,17 @@ Review candidate draft PR #228 now includes a required `qa_preview_access_protec
 **Separate post-binding stop gate:** The boolean is **not** evidence that the new `test.sellertray.com` or `test-admin.sellertray.com` custom hostnames are protected. Those URLs remain unbound. After explicit Test backend and preview approvals, deployment and hostname association, verify signed-out unauthorized rejection and authorized access at **both** QA custom hostnames and their distinct generated Preview URLs, as well as backend identity and QA Auth callbacks. Keep external provider ingress disabled and do not expose QA traffic until that subsequent independent proof is accepted. Any failed protection check requires reverting the Preview scope or leaving QA hostname routing disabled.
 
 No Vercel protection, project, DNS or domain settings were changed by this source-only update; no preview was created. The checked-in attestation remains `blocked`. This extension adds a precondition, not release authorization.
+
+## 09/11/2026 — repeatable sanitized historical Vercel metadata custody proof
+
+The read-only `get_deployment`, `list_deployment_aliases`, `filter_project_envs` and `get_project_env` checks verified the **five exact archived Git deployments** in the table above are still READY. Their only aliases were generated `*.vercel.app` Preview aliases, not `app.sellertray.com`, `admin.sellertray.com`, `test.sellertray.com` or `test-admin.sellertray.com`. Every historical branch has **separate, Preview-scoped** `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` records; the URL in all five records is the independent Test project `iukgsukdoowvnhlfmpml`. No value of a publishable key, secret or historical Preview hostname is committed.
+
+A sanitized, non-secret `docs/qa/oa5-historical-vercel-preview-custody-2026-11-09.json` captures exact deployment IDs, Git SHAs, creation timestamps, variable **identifiers** and creation/update times, alias counts and current access-protection posture. Recheck it offline with:
+
+```bash
+node scripts/qa/oa5-historical-preview-custody.mjs --check docs/qa/oa5-historical-vercel-preview-custody-2026-11-09.json
+```
+
+The checker fails closed on missing/replaced deployments, source or Branch drift, a Production custom-domain alias, Production URL bindings, mutated/late variable records or unsupported claims that browser, custom-domain protection or compiled JS were verified. It is an **immutable audit snapshot**, not live Vercel monitoring. A passing metadata check does not confirm that Vercel actually built those variable values into archived JavaScript assets. Vercel's Git deployment source tree/file-content APIs returned 404, and external direct-URL retrieval was not available to the reviewer; compiled-bundle verification and historic reviewer authentication remain outstanding.
+
+**Current Vercel account:** Hobby, not Pro. Merchant Preview protection is OFF. Admin SSO scope `all_except_custom_domains` cannot be trusted as protection for Test custom domains. Neither QA custom hostname is currently attached. The shared staging attestation's `qa_preview_access_protection_preflight_verified` remains **false**, so the source continues to reject QA clients. No Vercel configuration, DNS, Test/Production DB, cron, provider or APK mutation occurred.

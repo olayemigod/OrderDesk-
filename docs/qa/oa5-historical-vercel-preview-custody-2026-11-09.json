@@ -1,0 +1,154 @@
+{
+  "schema_version": 1,
+  "captured_at_utc": "2026-11-09T08:35:00Z",
+  "project_ref": "iukgsukdoowvnhlfmpml",
+  "evidence_class": "vercel_historical_deployment_metadata_only",
+  "account_plan": "hobby",
+  "test_custom_domains_attached": false,
+  "unauthorized_browser_access_verified": false,
+  "authorized_reviewer_access_verified": false,
+  "compiled_bundle_backend_verified": false,
+  "live_projects": [
+    {
+      "project": "sellertray-merchant",
+      "production_domain": "app.sellertray.com",
+      "password_enabled": false,
+      "sso_enabled": false,
+      "sso_scope": null
+    },
+    {
+      "project": "sellertray-admin",
+      "production_domain": "admin.sellertray.com",
+      "password_enabled": false,
+      "sso_enabled": true,
+      "sso_scope": "all_except_custom_domains"
+    }
+  ],
+  "deployments": [
+    {
+      "project": "sellertray-merchant",
+      "branch": "codex/agreement-package-oa5c-convergence",
+      "id": "dpl_Cfh7oAt9nHQkdUZtbXShj7jfhMfw",
+      "sha": "3f0df8f16455572cd0d1c079a3ac2327cc5bcd88",
+      "created_at_ms": 1793337065562,
+      "state": "READY",
+      "alias_count": 1,
+      "production_or_qa_custom_alias_count": 0,
+      "preview_backend_ref": "iukgsukdoowvnhlfmpml",
+      "scoped_vars": [
+        {
+          "kind": "VITE_SUPABASE_URL",
+          "id": "SPn7904Z10ioAsRC",
+          "created_at_ms": 1793101508524,
+          "updated_at_ms": 1793101508524
+        },
+        {
+          "kind": "VITE_SUPABASE_PUBLISHABLE_KEY",
+          "id": "qSLsbXbNdPwuFRAe",
+          "created_at_ms": 1793101508524,
+          "updated_at_ms": 1793101508524
+        }
+      ]
+    },
+    {
+      "project": "sellertray-merchant",
+      "branch": "codex/agreement-package-architecture",
+      "id": "dpl_Gh9s6Rm2dJibEKuBDDcm7jZ3bGmz",
+      "sha": "bbee34e999971b5c87e7274428ee655e4ff36d4d",
+      "created_at_ms": 1793064694519,
+      "state": "READY",
+      "alias_count": 1,
+      "production_or_qa_custom_alias_count": 0,
+      "preview_backend_ref": "iukgsukdoowvnhlfmpml",
+      "scoped_vars": [
+        {
+          "kind": "VITE_SUPABASE_URL",
+          "id": "V9BCgxQBzzuu2eZ4",
+          "created_at_ms": 1793058795534,
+          "updated_at_ms": 1793058795534
+        },
+        {
+          "kind": "VITE_SUPABASE_PUBLISHABLE_KEY",
+          "id": "OGPEncfQopEJFMpP",
+          "created_at_ms": 1793058795535,
+          "updated_at_ms": 1793058795535
+        }
+      ]
+    },
+    {
+      "project": "sellertray-admin",
+      "branch": "fix/admin-visual-baseline-oa5-convergence-20261031",
+      "id": "dpl_5UfqxbGpPuQqGkSu1rU4bpCFrQWZ",
+      "sha": "7ba66274068ee75a2341a9adcccde338b1545f90",
+      "created_at_ms": 1793568069642,
+      "state": "READY",
+      "alias_count": 1,
+      "production_or_qa_custom_alias_count": 0,
+      "preview_backend_ref": "iukgsukdoowvnhlfmpml",
+      "scoped_vars": [
+        {
+          "kind": "VITE_SUPABASE_URL",
+          "id": "rq1ElEvdQpM5D4fo",
+          "created_at_ms": 1793565511264,
+          "updated_at_ms": 1793565511264
+        },
+        {
+          "kind": "VITE_SUPABASE_PUBLISHABLE_KEY",
+          "id": "W8JXKFUTZMyAcnvJ",
+          "created_at_ms": 1793565511264,
+          "updated_at_ms": 1793565511264
+        }
+      ]
+    },
+    {
+      "project": "sellertray-admin",
+      "branch": "codex/agreement-package-oa5c-convergence",
+      "id": "dpl_H1suGYapnAjZR9rAKBq8WLtHu5Uo",
+      "sha": "3f0df8f16455572cd0d1c079a3ac2327cc5bcd88",
+      "created_at_ms": 1793337065624,
+      "state": "READY",
+      "alias_count": 1,
+      "production_or_qa_custom_alias_count": 0,
+      "preview_backend_ref": "iukgsukdoowvnhlfmpml",
+      "scoped_vars": [
+        {
+          "kind": "VITE_SUPABASE_URL",
+          "id": "NJd4SiTriKRnvNGv",
+          "created_at_ms": 1793101500109,
+          "updated_at_ms": 1793101500109
+        },
+        {
+          "kind": "VITE_SUPABASE_PUBLISHABLE_KEY",
+          "id": "B92ykHdaiPtBk60A",
+          "created_at_ms": 1793101500109,
+          "updated_at_ms": 1793101500109
+        }
+      ]
+    },
+    {
+      "project": "sellertray-admin",
+      "branch": "codex/agreement-package-architecture",
+      "id": "dpl_J9nL3wiNKyXcJEoVjbb65kUw4JnA",
+      "sha": "3c6e338ef7743c270023e791034c321294c70e6f",
+      "created_at_ms": 1793058819998,
+      "state": "READY",
+      "alias_count": 1,
+      "production_or_qa_custom_alias_count": 0,
+      "preview_backend_ref": "iukgsukdoowvnhlfmpml",
+      "scoped_vars": [
+        {
+          "kind": "VITE_SUPABASE_URL",
+          "id": "kyfn3E9FoGhIOZsZ",
+          "created_at_ms": 1793058793120,
+          "updated_at_ms": 1793058793120
+        },
+        {
+          "kind": "VITE_SUPABASE_PUBLISHABLE_KEY",
+          "id": "n02s2tTyqLCiEaEi",
+          "created_at_ms": 1793058793120,
+          "updated_at_ms": 1793058793120
+        }
+      ]
+    }
+  ]
+}
