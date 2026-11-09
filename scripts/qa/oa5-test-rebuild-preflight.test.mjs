@@ -5,7 +5,7 @@ import {assessRebuildPreflight,REQUIRED_EVIDENCE} from './oa5-test-rebuild-prefl
 const ref='iukgsukdoowvnhlfmpml',sha='a'.repeat(40);
 const record=()=>({schema_version:1,project_ref:ref,reviewed_source_sha:sha,purpose:'pre-reset-human-review',
  evidence:Object.fromEntries(REQUIRED_EVIDENCE.map(k=>[k,{reviewed:true,evidence_ref:'private-review-0001'}]))});
-const proof={sourceSha:sha,archive:{ok:true},cron:{ok:true}};
+const proof={sourceSha:sha,archive:{ok:true},cron:{ok:true},liveCensus:{ok:true}};
 test('complete synthetic review never authorizes destructive Test execution',()=>{
   const result=assessRebuildPreflight(record(),proof);
   assert.equal(result.preconditions_met,true);
@@ -47,6 +47,7 @@ test('backup/restore and fresh cron/pg_net evidence are mandatory, independent s
     {...proof,archive:{ok:false,errors:['invalid checksum']}},
     {...proof,cron:{ok:false,reasons:['4 active jobs']}},
     {...proof,archive:null},{...proof,cron:null},
+    {...proof,liveCensus:null},{...proof,liveCensus:{ok:false,reasons:['6 Auth sessions']}},
   ]){
     const r=assessRebuildPreflight(record(),q);
     assert.equal(r.preconditions_met,false);
@@ -54,7 +55,7 @@ test('backup/restore and fresh cron/pg_net evidence are mandatory, independent s
   }
 });
 test('CLI without private operator evidence cannot contact any hosted resource or approve reset',()=>{
-  const run=spawnSync(process.execPath,[new URL('./oa5-test-rebuild-preflight.mjs',import.meta.url).pathname,'--check','/nonexistent-record.json','/nonexistent-archive','/nonexistent-cron.json'],{encoding:'utf8'});
+  const run=spawnSync(process.execPath,[new URL('./oa5-test-rebuild-preflight.mjs',import.meta.url).pathname,'--check','/nonexistent-record.json','/nonexistent-archive','/nonexistent-cron.json','/nonexistent-live.json'],{encoding:'utf8'});
   assert.equal(run.status,1);
   assert.match(run.stderr,/BLOCKED/);
   assert.doesNotMatch(run.stderr,/service_role|sk_live_/);

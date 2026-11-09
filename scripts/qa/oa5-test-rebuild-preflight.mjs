@@ -11,6 +11,7 @@ import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {checkTestArchive} from './oa5-test-backup-manifest.mjs';
 import {assessCronMaintenance,TEST_PROJECT} from './oa5-test-cron-maintenance-gate.mjs';
+import {assessTestLiveCensus} from './oa5-test-live-census.mjs';
 
 export const REQUIRED_EVIDENCE=Object.freeze([
   'archive_restore_reviewed',
@@ -27,12 +28,13 @@ export const REQUIRED_EVIDENCE=Object.freeze([
   'rollback_operator_and_recovery_plan',
   'exact_source_migration_order_and_parity',
   'synthetic_fixture_and_retention_plan',
+  'archive_to_current_live_state_reconciled',
 ]);
 const exactKeys=(obj,keys)=>!!obj&&typeof obj==='object'&&!Array.isArray(obj)&&
   Object.keys(obj).sort().join('|')===[...keys].sort().join('|');
 const sha=x=>typeof x==='string'&&/^[0-9a-f]{40}$/.test(x);
 
-export function assessRebuildPreflight(record,{sourceSha,archive,cron}={}){
+export function assessRebuildPreflight(record,{sourceSha,archive,cron,liveCensus}={}){
   const reasons=[];
   if(!exactKeys(record,['schema_version','project_ref','reviewed_source_sha','purpose','evidence']))
     return {preconditions_met:false,destructive_execution_authorized:false,
@@ -54,20 +56,22 @@ export function assessRebuildPreflight(record,{sourceSha,archive,cron}={}){
   }
   if(!archive?.ok)reasons.push('Encrypted Test archive or disposable restore offline guard failed');
   if(!cron?.ok)reasons.push('Test cron all-age run / pg_net quiescence guard failed');
+  if(!liveCensus?.ok)reasons.push('Archived Test dataset diverges from current hosted Test census');
   const preconditions_met=reasons.length===0;
   return {preconditions_met,destructive_execution_authorized:false,reasons,
     next:'A human must separately authorize the exact Test-only operation and verify provider quiescence immediately before execution'};
 }
 
 function main(){
-  if(process.argv.length!==6||process.argv[2]!=='--check'){
-    console.error('Usage: node scripts/qa/oa5-test-rebuild-preflight.mjs --check <private-record.json> <private-archive-directory> <private-fresh-cron-snapshot.json>');
+  if(process.argv.length!==7||process.argv[2]!=='--check'){
+    console.error('Usage: node scripts/qa/oa5-test-rebuild-preflight.mjs --check <private-record.json> <private-archive-directory> <private-fresh-cron-snapshot.json> <private-fresh-live-census.json>');
     process.exitCode=2;return;
   }
-  let record,cronSnapshot,sourceSha;
+  let record,cronSnapshot,liveSnapshot,sourceSha;
   try{
     record=JSON.parse(readFileSync(resolve(process.argv[3]),'utf8'));
     cronSnapshot=JSON.parse(readFileSync(resolve(process.argv[5]),'utf8'));
+    liveSnapshot=JSON.parse(readFileSync(resolve(process.argv[6]),'utf8'));
     sourceSha=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8',timeout:10000}).trim();
   }catch{
     console.error('BLOCKED: private operator evidence, cron snapshot or Git identity unavailable');
@@ -75,11 +79,12 @@ function main(){
   }
   const archive=checkTestArchive(resolve(process.argv[4]));
   const cron=assessCronMaintenance(cronSnapshot);
-  const result=assessRebuildPreflight(record,{sourceSha,archive,cron});
+  const liveCensus=assessTestLiveCensus(liveSnapshot);
+  const result=assessRebuildPreflight(record,{sourceSha,archive,cron,liveCensus});
   if(!result.preconditions_met){
     console.error('BLOCKED: OA5 Test rebuild pre-reset evidence is incomplete.');
     for(const reason of result.reasons)console.error(' - '+reason);
-    for(const reason of [...(archive.errors||[]),...(cron.reasons||[])])
+    for(const reason of [...(archive.errors||[]),...(cron.reasons||[]),...(liveCensus.reasons||[])])
       console.error(' - '+reason);
     process.exitCode=1;return;
   }

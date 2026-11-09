@@ -28,7 +28,8 @@
 ```sh
 node scripts/qa/oa5-test-backup-manifest.mjs --check /secure/private/test-archive
 node scripts/qa/oa5-test-cron-maintenance-gate.mjs --check /secure/private/post-pause-cron-v2.json
-node scripts/qa/oa5-test-rebuild-preflight.mjs --check /secure/private/operator-review.json /secure/private/test-archive /secure/private/post-pause-cron-v2.json
+node scripts/qa/oa5-test-live-census.mjs --check /secure/private/post-pause-live-counts.json
+node scripts/qa/oa5-test-rebuild-preflight.mjs --check /secure/private/operator-review.json /secure/private/test-archive /secure/private/post-pause-cron-v2.json /secure/private/post-pause-live-counts.json
 ```
 
 The operator-review JSON shape is:
@@ -53,7 +54,8 @@ The operator-review JSON shape is:
     "reviewed_cleanup_method_and_scope": {"reviewed": false, "evidence_ref": ""},
     "rollback_operator_and_recovery_plan": {"reviewed": false, "evidence_ref": ""},
     "exact_source_migration_order_and_parity": {"reviewed": false, "evidence_ref": ""},
-    "synthetic_fixture_and_retention_plan": {"reviewed": false, "evidence_ref": ""}
+    "synthetic_fixture_and_retention_plan": {"reviewed": false, "evidence_ref": ""},
+    "archive_to_current_live_state_reconciled": {"reviewed": false, "evidence_ref": ""}
   }
 }
 ```
@@ -61,3 +63,43 @@ The operator-review JSON shape is:
 Use only protected, non-secret **opaque evidence references** such as `private-review-0001`; no actual passwords, email addresses, URLs, personal records, key values or file paths in the record. An asserted `reviewed=true` is **not** cryptographic proof; independent human review remains mandatory. The CLI always prints that **destructive execution is NOT authorized**, even if all offline preconditions are met, and it cannot contact or mutate a hosted service.
 
 **Cross-surface effects:** This package touches QA release governance only. After approval, the single shared commerce core must be verified through Mobile, Merchant Web, Admin Web, WhatsApp, AI, reporting and offline before declaring full acceptance. No runtime logic was modified here.
+
+## 09/11/2026 — archived versus live Test state reconciliation
+
+Fresh count-only Test read at 11:04 UTC returned auth_users=5, auth_sessions=6, public_tables=132,
+public_functions=479, migration_rows=54, storage_buckets=3 and storage_objects=0.
+The independently verified 07/11 recovery archive has five, not six, Auth sessions.
+Read-only Auth session creation-day totals show one new session created 09/11 at 10:35:01 UTC.
+No user identity, IP, session ID, token or customer record was inspected or copied.
+Do not infer who created that session. A new session is post-archive data and must not silently disappear.
+
+New offline-only script scripts/qa/oa5-test-live-census.mjs compares fresh Test counts with the
+frozen archived counts and fails closed on any drift, unknown/Production project ref, missing or
+extra fields, or evidence more than ten minutes old. The combined rebuild preflight now requires
+this independent check in addition to verified archive/restore and the cron plus pg_net stop gate.
+An operator must explicitly review post-archive changes and either produce and independently restore
+a refreshed encrypted Test-only archive with a newly reviewed baseline, or approve the precise
+post-archive Test-only loss through a reviewed control change. Never merely change expected counts
+to force a green preflight. Even when the snapshot matches, no destructive execution is authorized.
+
+Run the following read-only SELECT only from project iukgsukdoowvnhlfmpml, not Production.
+Keep the returned JSON in private operator storage, not Git:
+
+```sql
+SELECT jsonb_build_object(
+  'schema_version',1,'project_ref','iukgsukdoowvnhlfmpml',
+  'captured_at_utc',to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+  'counts',jsonb_build_object(
+    'auth_users',(SELECT count(*)::int FROM auth.users),
+    'auth_sessions',(SELECT count(*)::int FROM auth.sessions),
+    'public_tables',(SELECT count(*)::int FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind IN ('r','p')),
+    'public_functions',(SELECT count(*)::int FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public'),
+    'migration_rows',(SELECT count(*)::int FROM supabase_migrations.schema_migrations),
+    'storage_buckets',(SELECT count(*)::int FROM storage.buckets),
+    'storage_objects',(SELECT count(*)::int FROM storage.objects)
+  )
+) AS snapshot;
+```
+
+Supabase reference: https://supabase.com/docs/reference/cli/supabase-db-reset
+and https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore.
