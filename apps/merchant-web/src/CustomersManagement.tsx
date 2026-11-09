@@ -15,6 +15,7 @@ type Customer = {
 
 type CustomerOrder = {
   id: string;
+  branchId: string | null;
   publicOrderId: string;
   status: string;
   paymentStatus: string;
@@ -148,22 +149,19 @@ export default function CustomersManagement({ tenantId, currency }: { tenantId: 
     }
   }
 
-  async function openCustomerOrder(orderId: string) {
+  async function openCustomerOrder(order: CustomerOrder) {
+    const orderId = order.id;
     const requestId = ++orderRequestRef.current;
     setOpenedOrder(null);
     setOpenedOrderLoadingId(orderId);
     setOpenedOrderError(null);
     try {
-      // History covers all business branches. Resolve only the order's Branch under existing RLS,
-      // then use the same permission-checked details RPC as the Orders and Sales pages.
-      const { data: orderScope, error: scopeError } = await supabase.from('orders')
-        .select('branch_id').eq('tenant_id', tenantId).eq('id', orderId).is('deleted_at', null).maybeSingle();
-      if (scopeError) throw scopeError;
-      const branchId = orderScope?.branch_id;
-      if (typeof branchId !== 'string' || !branchId) throw new Error('This order is unavailable in your permitted branches.');
+      // The governed customer history response supplies the original Branch.
+      // Do not re-read raw orders just to find Branch attribution.
+      if (!order.branchId) throw new Error('This order is missing its Branch reference. Refresh customer history and try again.');
       const { data, error: detailError } = await supabase.rpc('get_sellertray_order_management_detail', {
         p_tenant_id: tenantId,
-        p_branch_id: branchId,
+        p_branch_id: order.branchId,
         p_order_id: orderId,
       });
       if (detailError) throw detailError;
@@ -289,7 +287,7 @@ export default function CustomersManagement({ tenantId, currency }: { tenantId: 
         {selected ? <article className="panel">
           <div className="panel-head"><div><p className="eyebrow">History</p><h3>Recent orders</h3></div></div>
           {detailLoading ? <p className="muted">Loading orders…</p> : detail?.orders.length ? <div className="table-wrap"><table><thead><tr><th>Order</th><th>Source</th><th>Status</th><th>Payment</th><th>Total</th><th>Collected</th><th>Outstanding</th><th>Created</th></tr></thead><tbody>
-            {detail.orders.map((order) => <tr key={order.id}><td><button type="button" className="text-button" disabled={openedOrderLoadingId !== null} onClick={() => void openCustomerOrder(order.id)} aria-label={`Open order ${order.publicOrderId}`}>{order.publicOrderId}</button></td><td>{label(order.source)}</td><td>{label(order.status)}</td><td>{label(order.paymentStatus)}</td><td>{money(order.totalAmount, currency)}</td><td>{money(order.amountPaid, currency)}</td><td>{money(order.outstandingBalance, currency)}</td><td>{dateTime(order.createdAt)}</td></tr>)}
+            {detail.orders.map((order) => <tr key={order.id}><td><button type="button" className="text-button" disabled={openedOrderLoadingId !== null} onClick={() => void openCustomerOrder(order)} aria-label={`Open order ${order.publicOrderId}`}>{order.publicOrderId}</button></td><td>{label(order.source)}</td><td>{label(order.status)}</td><td>{label(order.paymentStatus)}</td><td>{money(order.totalAmount, currency)}</td><td>{money(order.amountPaid, currency)}</td><td>{money(order.outstandingBalance, currency)}</td><td>{dateTime(order.createdAt)}</td></tr>)}
           </tbody></table></div> : <div className="empty-state"><strong>No linked orders</strong><p>Orders attributed to this customer will appear here.</p></div>}
           {openedOrderLoadingId ? <p className="muted" role="status">Opening order…</p> : null}
           {openedOrderError ? <div className="error-banner" role="alert">{openedOrderError}<button type="button" onClick={() => setOpenedOrderError(null)}>Dismiss</button></div> : null}
@@ -342,6 +340,7 @@ function parseCustomerDetail(value: unknown): CustomerDetail {
       const row = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
       return {
         id: String(row.id ?? ''),
+        branchId: typeof row.branchId === 'string' ? row.branchId : null,
         publicOrderId: String(row.publicOrderId ?? 'Order'),
         status: String(row.status ?? ''),
         paymentStatus: String(row.paymentStatus ?? ''),
