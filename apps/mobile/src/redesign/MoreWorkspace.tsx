@@ -35,7 +35,7 @@ type Props = {
   onSaveBusiness: (businessId: string, input: BusinessProfileInput) => Promise<void>;
   onShiftChanged: (shift: CashShift | null) => void;
   onOpenOrders?: (customerId?: string) => void;
-  onOpenCustomerOrder?: (orderId: string) => void;
+  onOpenCustomerOrder?: (orderId: string) => Promise<void> | void;
   onSyncOfflineSales: () => Promise<void>;
   onDiscardOfflineSale: (clientReference: string) => Promise<void>;
 };
