@@ -6,7 +6,7 @@ import {assessTestLiveCensus,ARCHIVED_COUNTS,TEST_REF,REVIEWED_SESSION_LOSS_SCOP
 const ref='iukgsukdoowvnhlfmpml',sha='a'.repeat(40);
 const record=()=>({schema_version:2,project_ref:ref,reviewed_source_sha:sha,purpose:'pre-reset-human-review',
  evidence:Object.fromEntries(REQUIRED_EVIDENCE.map((k,i)=>[k,{reviewed:true,evidence_ref:'private-review-'+String(i+1).padStart(4,'0')}]))});
-const proof={sourceSha:sha,archive:{ok:true},cron:{ok:true},liveCensus:{ok:true},managedBoundary:{ok:true},edgeBundles:{metadata_matches_historical_baseline:true,destructive_execution_authorized:false}};
+const proof={sourceSha:sha,archive:{ok:true},cron:{ok:true},liveCensus:{ok:true},managedBoundary:{ok:true},edgeBundles:{metadata_matches_historical_baseline:true,destructive_execution_authorized:false},vercelProtection:{protection_metadata_consistent:true,hosted_change_authorized:false}};
 test('complete synthetic review never authorizes destructive Test execution',()=>{
   const result=assessRebuildPreflight(record(),proof);
   assert.equal(result.preconditions_met,true);
@@ -51,6 +51,7 @@ test('backup/restore and fresh cron/pg_net evidence are mandatory, independent s
     {...proof,liveCensus:null},{...proof,liveCensus:{ok:false,reasons:['6 Auth sessions']}},
     {...proof,managedBoundary:null},{...proof,managedBoundary:{ok:false,reasons:['stale managed state']}},
     {...proof,edgeBundles:null},{...proof,edgeBundles:{metadata_matches_historical_baseline:false,reasons:['hash changed']}},
+    {...proof,vercelProtection:null},{...proof,vercelProtection:{protection_metadata_consistent:false,reasons:['SSO disabled']}},
   ]){
     const r=assessRebuildPreflight(record(),q);
     assert.equal(r.preconditions_met,false);
@@ -58,7 +59,7 @@ test('backup/restore and fresh cron/pg_net evidence are mandatory, independent s
   }
 });
 test('CLI without private operator evidence cannot contact any hosted resource or approve reset',()=>{
-  const run=spawnSync(process.execPath,[new URL('./oa5-test-rebuild-preflight.mjs',import.meta.url).pathname,'--check','/nonexistent-record.json','/nonexistent-archive','/nonexistent-cron.json','/nonexistent-live.json','/nonexistent-managed.json','/nonexistent-edge-bundles.json'],{encoding:'utf8'});
+  const run=spawnSync(process.execPath,[new URL('./oa5-test-rebuild-preflight.mjs',import.meta.url).pathname,'--check','/nonexistent-record.json','/nonexistent-archive','/nonexistent-cron.json','/nonexistent-live.json','/nonexistent-managed.json','/nonexistent-edge-bundles.json','/nonexistent-vercel-protection.json'],{encoding:'utf8'});
   assert.equal(run.status,1);
   assert.match(run.stderr,/BLOCKED/);
   assert.doesNotMatch(run.stderr,/service_role|sk_live_/);
@@ -128,4 +129,18 @@ test('historical Edge bundles are a separate mandatory evidence precondition, no
  const a=assessRebuildPreflight(record(),proof);
  assert.equal(a.preconditions_met,true);
  assert.equal(a.destructive_execution_authorized,false);
+});
+
+test('Vercel Standard Authentication and domain metadata is mandatory, not actual HTTP or reviewer approval',()=>{
+ const missing=assessRebuildPreflight(record(),{...proof,vercelProtection:undefined});
+ assert.equal(missing.preconditions_met,false);
+ assert.match(missing.reasons.join('\n'),/Vercel protection metadata/);
+ const weakened=assessRebuildPreflight(record(),{...proof,
+  vercelProtection:{protection_metadata_consistent:false,
+                    signed_out_preview_challenge_verified:false,hosted_change_authorized:false}
+ });
+ assert.equal(weakened.preconditions_met,false);
+ const ok=assessRebuildPreflight(record(),proof);
+ assert.equal(ok.preconditions_met,true);
+ assert.equal(ok.destructive_execution_authorized,false);
 });
