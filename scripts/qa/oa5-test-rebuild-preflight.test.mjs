@@ -4,8 +4,8 @@ import {spawnSync} from 'node:child_process';
 import {assessRebuildPreflight,REQUIRED_EVIDENCE} from './oa5-test-rebuild-preflight.mjs';
 import {assessTestLiveCensus,ARCHIVED_COUNTS,TEST_REF,REVIEWED_SESSION_LOSS_SCOPE} from './oa5-test-live-census.mjs';
 const ref='iukgsukdoowvnhlfmpml',sha='a'.repeat(40);
-const record=()=>({schema_version:1,project_ref:ref,reviewed_source_sha:sha,purpose:'pre-reset-human-review',
- evidence:Object.fromEntries(REQUIRED_EVIDENCE.map(k=>[k,{reviewed:true,evidence_ref:'private-review-0001'}]))});
+const record=()=>({schema_version:2,project_ref:ref,reviewed_source_sha:sha,purpose:'pre-reset-human-review',
+ evidence:Object.fromEntries(REQUIRED_EVIDENCE.map((k,i)=>[k,{reviewed:true,evidence_ref:'private-review-'+String(i+1).padStart(4,'0')}]))});
 const proof={sourceSha:sha,archive:{ok:true},cron:{ok:true},liveCensus:{ok:true},managedBoundary:{ok:true}};
 test('complete synthetic review never authorizes destructive Test execution',()=>{
   const result=assessRebuildPreflight(record(),proof);
@@ -14,7 +14,7 @@ test('complete synthetic review never authorizes destructive Test execution',()=
 });
 test('missing/wrong project, purpose, source, schema and unexpected fields block',()=>{
   for(const change of [
-    x=>x.project_ref='eujxswjspolugrzlsjnn',x=>x.schema_version=2,
+    x=>x.project_ref='eujxswjspolugrzlsjnn',x=>x.schema_version=1,
     x=>x.purpose='destructive-reset',x=>x.reviewed_source_sha='b'.repeat(40),
     x=>x.project_ref='test',x=>x.secret='do-not-save-secrets',
   ]){
@@ -76,4 +76,41 @@ test('preflight can consume narrowly reviewed one-session count but never author
  assert.equal(gate.preconditions_met,true);
  assert.equal(gate.destructive_execution_authorized,false);
  assert.equal(assessRebuildPreflight(record(),{...proof,cron:{ok:false},liveCensus:counted}).preconditions_met,false);
+});
+
+test('legacy combined provider review schema cannot satisfy seven independent provider evidence gates',()=>{
+ const old=record();
+ old.schema_version=1;
+ old.evidence.test_only_provider_callbacks_and_sinks={reviewed:true,evidence_ref:'private-review-old'};
+ for(const key of [
+  'meta_test_app_phone_webhook_ownership','paystack_test_keys_callbacks_and_replay',
+  'flutterwave_test_disabled_or_sandbox_only','smtp_safe_sink_recipients_and_auth_redirects',
+  'firebase_fcm_test_sender_and_qa_devices','ai_parser_and_notification_worker_egress',
+  'test_admin_merchant_domains_and_auth_redirects',
+ ])delete old.evidence[key];
+ const result=assessRebuildPreflight(old,proof);
+ assert.equal(result.preconditions_met,false);
+ assert.equal(result.destructive_execution_authorized,false);
+});
+test('each provider surface requires independent evidence even when all other categories pass',()=>{
+ for(const key of [
+  'meta_test_app_phone_webhook_ownership','paystack_test_keys_callbacks_and_replay',
+  'flutterwave_test_disabled_or_sandbox_only','smtp_safe_sink_recipients_and_auth_redirects',
+  'firebase_fcm_test_sender_and_qa_devices','ai_parser_and_notification_worker_egress',
+  'test_admin_merchant_domains_and_auth_redirects',
+ ]){
+  const missing=record();delete missing.evidence[key];
+  assert.equal(assessRebuildPreflight(missing,proof).preconditions_met,false,key);
+  const unchecked=record();unchecked.evidence[key].reviewed=false;
+  assert.equal(assessRebuildPreflight(unchecked,proof).preconditions_met,false,key);
+ }
+});
+test('a single reused opaque ref cannot stand in for multiple independent provider and custody reviews',()=>{
+ const duplicate=record();
+ duplicate.evidence.meta_test_app_phone_webhook_ownership.evidence_ref=
+    duplicate.evidence.paystack_test_keys_callbacks_and_replay.evidence_ref;
+ const result=assessRebuildPreflight(duplicate,proof);
+ assert.equal(result.preconditions_met,false);
+ assert.equal(result.destructive_execution_authorized,false);
+ assert.match(result.reasons.join(' '),/cannot reuse one evidence reference/);
 });
