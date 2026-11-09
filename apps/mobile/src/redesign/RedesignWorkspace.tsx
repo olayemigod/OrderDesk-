@@ -682,11 +682,10 @@ export default function RedesignWorkspace() {
               setFocusedOrderId(null);
               setTab('orders');
             }}
-            onOpenCustomerOrder={(orderId) => {
+            onOpenCustomerOrder={async (orderId) => {
               const requestId = ++customerOrderRequestRef.current;
               const tenantId = activeBusiness.id;
-              void (async () => {
-                try {
+              try {
                   const existing = orders.find((row) => row.id === orderId);
                   const order = existing ?? await loadOrderById(tenantId, orderId);
                   if (requestId !== customerOrderRequestRef.current || currentBusinessIdRef.current !== tenantId) return;
@@ -713,7 +712,6 @@ export default function RedesignWorkspace() {
                     Alert.alert('Unable to open order', 'Check your connection and Branch access, then try again.');
                   }
                 }
-              })();
             }}
             onSyncOfflineSales={() => offline.syncNow()}
             onDiscardOfflineSale={offline.discard}
