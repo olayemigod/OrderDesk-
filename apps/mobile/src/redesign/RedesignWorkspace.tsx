@@ -621,6 +621,7 @@ export default function RedesignWorkspace() {
             businessCurrency={activeBusiness.currency}
             orders={ordersForWorkspace}
             loading={ordersLoading}
+            focusedOrderId={focusedOrder?.id ?? null}
             canReturnCompletedSale={canRefundSale && Boolean(activeCashShift) && (!focusedOrder || focusedOrder.branchId === activeBranch?.id)}
             onResumeDraft={(order) => {
               if (order.branchId !== activeBranch?.id) {
