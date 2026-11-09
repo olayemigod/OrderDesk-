@@ -28,6 +28,16 @@ This includes **two distinct email paths**:
 
 Root-cause scope: PR #236 addresses Mobile invite-aware welcome/sign-in and wrong-session account switching, while the existing Merchant Web `IncomingBusinessInvitations` code was not mounted by the portal root when no Business existed. A new dedicated browser source change must mount that flow for correctly authenticated invitees, allow account-only signup (with no `provision-business` action), retain the invitation across email confirmation, support wrong-account sign-out and avoid auto-opening an obsolete APK. No invitation token alone authorises membership.
 
+### Source continuation and important App Link correction
+
+Additional browser-first activation branch `fix/invitation-activation-browser-handoff-20261109` builds upon Mobile PR #236:
+- New invitation emails now point to `/join.html?invitation=<id>`. This path is deliberately **outside** Production Android's already-installed HTTPS App Link `pathPrefix='/invite'`, so a recipient's old APK cannot silently intercept the email URL and open Home without invitation review.
+- Legacy `/invite.html` remains supported for prior emails; the deliberate `Open SellerTray app` button still uses the existing `sellertray://invite/<id>` scheme. The browser option remains available.
+- Merchant portal mounts governed invitation review even without a Business membership; isolated account-only signup preserves the invitation across Auth confirmation; no `provision-business` write.
+- Team & Permissions now offers **Resend email** for existing pending invitations using the original governed invitation command. The provider response is now traceable via provider message ID, and explicitly does **not** establish mailbox delivery. Test actual delivery/bounce separately.
+- Merchant Web Vercel production deployment and backend Edge function deployment must be coordinated and verified: **do not send the new `join.html` link through a deployed Edge function before the `join.html` page exists on the production Merchant domain**. Same QA environment first, human release authorization later.
+- Invites that were already sent with `/invite.html` cannot be retroactively changed; the recipient can request a fresh email only after the approved rollout.
+
 ### Acceptance gates
 
 A. **Email dispatch vs receipt**: use synthetic Test recipient. Verify provider request and provider message/delivery events separately, inbox/spam receipt, sender identity, bounce/complaint suppression and documented retry/resend behavior. A Resend API 2xx proves provider acceptance, **not mailbox delivery**.
