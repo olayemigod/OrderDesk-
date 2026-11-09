@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync,writeFileSync,mkdtempSync,rmSync,existsSync,mkdirSync} from 'node:fs';
+import {readFileSync,writeFileSync,mkdtempSync,rmSync,existsSync,mkdirSync,symlinkSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {spawnSync} from 'node:child_process';
@@ -252,4 +252,31 @@ test('Windows command planner rejects arbitrary commands and shell/URL injection
   assert.throws(()=>planVercelReadOnlyCommand(action,url,'win32'),/BLOCKED/,
    action+':'+String(url));
  }
+});
+
+test('symlinked outside path into SellerTray Git checkout cannot receive private Preview files',()=>{
+ const w=makeWorkspace();
+ try{
+  const link=join(w.parent,'linked-checkout');
+  symlinkSync(process.cwd(),link,'dir');
+  let calls=0;
+  assert.throws(()=>captureOriginalPreviewPlan(plan(),join(link,'secret-preview'),()=>{
+   calls++;return Buffer.from('should-not-fetch');
+  },at,syntheticAliasDigests),/BLOCKED/);
+  assert.equal(calls,0);
+  assert.equal(existsSync(join(process.cwd(),'secret-preview')),false);
+ }finally{w.cleanup();}
+});
+test('symlinked plan outside checkout pointing into Git checkout is rejected by CLI',()=>{
+ const w=makeWorkspace();
+ try{
+  const link=join(w.parent,'alias-plan-link.json');
+  const repoSource=new URL('../../docs/qa/oa5-original-preview-alias-fingerprints-2026-11-09.json',import.meta.url).pathname;
+  symlinkSync(repoSource,link,'file');
+  const cli=new URL('./oa5-protected-preview-capture.mjs',import.meta.url).pathname;
+  const result=spawnSync(process.execPath,[cli,'--check-plan',link],{encoding:'utf8'});
+  assert.equal(result.status,1);
+  assert.match(result.stderr,/BLOCKED/);
+  assert.match(result.stderr,/inside Git/);
+ }finally{w.cleanup();}
 });
