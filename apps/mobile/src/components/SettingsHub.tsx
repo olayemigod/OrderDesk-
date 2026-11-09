@@ -50,6 +50,7 @@ type Section =
 type Props = {
   business: MerchantBusiness;
   onSaveBusiness: (businessId: string, input: BusinessProfileInput) => Promise<void>;
+  onOpenCustomerOrder?: (orderId: string) => void;
   initialSection?: 'whatsapp';
   routeKey?: number;
 };
@@ -57,6 +58,7 @@ type Props = {
 export function SettingsHub({
   business,
   onSaveBusiness,
+  onOpenCustomerOrder,
   initialSection,
   routeKey = 0,
 }: Props) {
@@ -117,7 +119,7 @@ export function SettingsHub({
         </Pressable>
 
         {section === 'business' ? <BusinessProfileView business={business} onSave={onSaveBusiness} /> : null}
-        {section === 'customers' ? <CustomersView business={business} /> : null}
+        {section === 'customers' ? <CustomersView business={business} onOpenOrder={onOpenCustomerOrder} /> : null}
         {section === 'enquiries' ? <CustomerEnquiriesView business={business} /> : null}
         {section === 'whatsapp' ? <WhatsAppConnectionView business={business} /> : null}
         {section === 'notifications' ? <CustomerNotificationSettings business={business} /> : null}
