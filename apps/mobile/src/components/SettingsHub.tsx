@@ -50,7 +50,7 @@ type Section =
 type Props = {
   business: MerchantBusiness;
   onSaveBusiness: (businessId: string, input: BusinessProfileInput) => Promise<void>;
-  onOpenCustomerOrder?: (orderId: string) => void;
+  onOpenCustomerOrder?: (orderId: string) => Promise<void> | void;
   initialSection?: 'whatsapp';
   routeKey?: number;
 };
