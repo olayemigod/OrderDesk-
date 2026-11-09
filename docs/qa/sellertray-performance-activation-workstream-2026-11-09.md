@@ -68,6 +68,10 @@ F. **Environment and release**: PR #236 Mobile source requires a future approved
 - Added `apps/mobile/scripts/saved-sale-resume.test.mjs` (5 Node tests) covering status/payment gating, immutable original order/item/Branch/UOM identity, invalid product/UOM, duplicate line rejection and zero-quantity edits. Local matching-source runs **5/5 passed**. Existing order-filter tests **4/4 passed** and invitation browser tests **4/4 passed** in the previous local verification copies. No full exact-head typecheck or hosted/device QA yet.
 - This source slice is **not** full indexed Orders pagination, offline server-draft editing, full catalog caching optimisation or aggregate profitability reporting. Those still require separate governed data/read architecture and isolated QA; do not represent the stage-render limit as backend pagination.
 
+### Merchant screen state isolation on Business/Branch change
+
+Authenticated Merchant Web management routes are now keyed to the active Business within their existing Suspense boundary; switching Business remounts the selected management screen rather than allowing a previous Business's customer, sales, or reporting state to linger while a new request is pending. Orders and Sales are additionally keyed by active Branch. No permission or transactional truth is relaxed. The actual UI transition still requires browser QA on both newly loaded and cached routes.
+
 ### Governed customer-history Branch link — migration required, NOT applied
 
 Merchant Web's historical customer-order drilldown was using a direct `orders` table read merely to discover the order's original Branch. The authoritative customer-history RPC already enumerates the same orders for permitted Owners/Managers. A new **source-only** migration `20261109230000_customer_history_order_branch_scope.sql` extends the existing authenticated, tenant-scoped `get_sellertray_customer_management_detail` response with each history entry's `branchId`. The client now consumes that Branch ID and calls the already governed `get_sellertray_order_management_detail` RPC; it no longer reads raw `orders`.
