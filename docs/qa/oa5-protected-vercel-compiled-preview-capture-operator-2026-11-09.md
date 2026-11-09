@@ -73,3 +73,46 @@ A reviewer must independently bind the captured original bytes, file hashes, URL
 ## Scope limitations and NO-GO
 
 No fresh deployment, domain binding, Vercel Pro upgrade, new Test project, fallback to Production, cron pause or Auth deletion is authorized by these steps. The five protected original compiled Preview bundles and reviewer proof remain OPEN until an authenticated local operator actually captures and reviews them; this document does not claim that work happened. External Meta/PSP/SMTP/FCM/AI provider isolation, managed Auth/Storage treatment, source migration replay and a separate explicit destructive Test-only approval remain blocked.
+
+
+## Automated, guarded private original-asset capture (preferred over manual chunk copying)
+
+A new **explicitly invoked, read-only** local Node utility, \`scripts/qa/oa5-protected-preview-capture.mjs\`, can collect the original compiled JavaScript modules without manually copying each import. It has no cloud credentials of its own and relies on the operator's existing authenticated \`vc curl\` Vercel CLI identity. Its synthetic tests run in CI with a **mock request transport**, so CI never contacts a Preview deployment.
+
+**Before attempting a capture:** obtain a private Vercel original-alias-to-deployment-ID mapping from the existing five historical deployment records, and confirm the reviewer is already authorized. The provider read-only alias inventory currently shows **exactly one project-specific .vercel.app alias for each of all five original deployments**, but this is **metadata-only**, not an actual compiled asset capture or reviewer authorization. Do not publish those hostnames in a PR.
+
+Prepare an **untracked, protected JSON input** outside the repository. The top-level keys must be exactly \`schema_version\`, \`purpose\` and \`deployments\`. Set version \`1\` and purpose \`read-only-original-preview-capture\`. Each of **five** deployments has exactly \`id\`, \`sha\`, \`surface\`, \`origin\` and \`capture_evidence_ref\`. Use the five original IDs/Git SHAs/surfaces in the table above. \`origin\` must be the exact independently verified original HTTPS deployment alias in the expected \`sellertray-merchant-…vercel.app\` or \`sellertray-admin-…vercel.app\` format, with no path, query, fragment or credentials. Each private evidence reference must be a different opaque identifier. Do **not** substitute a Production domain, generic project root alias, Test custom domain, newly created Preview or unreviewed third-party URL.
+
+The following single-entry skeleton documents the private record's field shape; a real manifest **must have all five** entries and actual verified original aliases, not placeholder values:
+
+~~~json
+{
+  "schema_version": 1,
+  "purpose": "read-only-original-preview-capture",
+  "deployments": [
+    {
+      "id": "dpl_Cfh7oAt9nHQkdUZtbXShj7jfhMfw",
+      "sha": "3f0df8f16455572cd0d1c079a3ac2327cc5bcd88",
+      "surface": "merchant",
+      "origin": "https://<REAL-ORIGINAL-MERCHANT-ALIAS>.vercel.app",
+      "capture_evidence_ref": "private-review-unique-0001"
+    }
+  ]
+}
+~~~
+
+In the source checkout on the operator's Windows workstation, **only with existing Vercel authentication**, run:
+
+~~~powershell
+vc whoami
+node scripts/qa/oa5-protected-preview-capture.mjs --check-plan "C:\SellerTray Private OA5\historical-preview-private-plan.json"
+node scripts/qa/oa5-protected-preview-capture.mjs --capture "C:\SellerTray Private OA5\historical-preview-private-plan.json" "C:\SellerTray Private OA5\original-compilation-20261110"
+~~~
+
+The destination must be a **new, otherwise empty private folder**. The parent must exist and be access-controlled; the utility refuses to overwrite a prior capture. It accepts only five exact immutable original IDs/SHAs and correct project-specific Vercel Preview hostnames. It reads only the original deployment root HTML and **local literal JavaScript script-src/import graph** from the same origin. It rejects external script URLs, unsafe local paths, missing files, SSO HTML masquerading as JavaScript, oversized content, Production/other Supabase backend references and malformed input. It never runs \`vc login\`, changes permissions, triggers application APIs, deploys, creates a Preview, binds a domain, or accesses Supabase.
+
+On successful Test-only **content** inspection, the tool saves \`private-capture-manifest.json\` and \`private-capture-hashes.json\` under the private destination, plus the original HTML/JS files in \`capture_0\` through \`capture_4\`. The hash file contains file paths and SHA-256 checksums but no original alias URLs. The tool's own flags remain \`original_vercel_origin_attested:false\`, \`authorized_reviewer_verified:false\`, \`hosted_compiled_bundle_accepted:false\`, \`destructive_execution_authorized:false\`. **The operator must separately prove that the privately supplied alias actually belongs to each original deployment ID and that original authorized reviewers still have access.**
+
+The collector is intentionally bounded: computed dynamic imports, unusual bundler preload indirections, third-party JavaScript and imported CSS/assets are not automatically fetched. If any such dependencies affect the actual app/backend identity, mark the evidence **incomplete** rather than creating a new build or weakening inspection. A new *private* capture that passes the script is only evidence of content consistency, not an accepted historical Agreement reviewer/callback or data-recovery gate. Preserve all actual bytes and screenshots privately, never in GitHub or project CI.
+
+The **manual vc curl commands above** remain an alternative for an expert operator who needs to investigate a block. The fully guarded tool is preferred when the original Vite modules are within the supported literal-local graph. A hostile URL, protection page, failed request or unexpected deployment identity is a STOP, not permission to bypass authentication.
