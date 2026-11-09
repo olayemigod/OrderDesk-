@@ -4,6 +4,7 @@ import {readFileSync,writeFileSync,mkdtempSync,rmSync,existsSync,mkdirSync} from
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {spawnSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import {EXPECTED,TEST_REF,PROD_REF} from './oa5-historical-preview-bundle-inspection.mjs';
 import {validatePrivateCapturePlan,captureOriginalPreviewPlan} from './oa5-protected-preview-capture.mjs';
 
@@ -14,6 +15,10 @@ const plan=()=>({
   origin:'https://sellertray-'+d.surface+'-git-oa5-evidence-'+i+'.vercel.app',
   capture_evidence_ref:'private-original-review-'+i}))
 });
+const syntheticAliasDigests=Object.fromEntries(plan().deployments.map(x=>[
+ x.id,createHash('sha256').update(x.id+'\n'+new URL(x.origin).hostname).digest('hex')
+]));
+const checkSynthetic=x=>validatePrivateCapturePlan(x,syntheticAliasDigests);
 const makeWorkspace=()=>{
  const parent=mkdtempSync(join(tmpdir(),'oa5-original-preview-'));
  return {parent,root:join(parent,'protected-capture'),
@@ -30,7 +35,7 @@ function mockedRequest(url){
  throw Error('Unexpected network path in synthetic test: '+parsed.pathname);
 }
 test('private five-deployment plan accepts exact IDs and restricted Vercel hostnames but never claims historical origin',()=>{
- const r=validatePrivateCapturePlan(plan());
+ const r=checkSynthetic(plan());
  assert.equal(r.valid,true,r.reasons.join('\n'));
  assert.equal(r.deployments.length,5);
  assert.equal(r.original_vercel_origin_attested,false);
@@ -52,7 +57,7 @@ test('original ID, SHA, surface, evidence and duplicate aliases are fail-closed'
   x=>x.schema_version=2
  ]){
   const x=plan();mutate(x);
-  assert.equal(validatePrivateCapturePlan(x).valid,false);
+  assert.equal(checkSynthetic(x).valid,false);
  }
 });
 test('only original project-specific Preview URLs; no Production, custom, arbitrary, tokenized or unsafe origins',()=>{
@@ -70,7 +75,7 @@ test('only original project-specific Preview URLs; no Production, custom, arbitr
   'https://sellertray-merchant-git-safe.vercel.app.evil.invalid',
  ]){
   const x=plan();x.deployments[0].origin=origin;
-  assert.equal(validatePrivateCapturePlan(x).valid,false,origin);
+  assert.equal(checkSynthetic(x).valid,false,origin);
  }
 });
 test('synthetic original HTML plus reachable JS is privately captured and SHA-hashed without accepting hosted provenance',()=>{
@@ -80,7 +85,7 @@ test('synthetic original HTML plus reachable JS is privately captured and SHA-ha
   const r=captureOriginalPreviewPlan(plan(),w.root,(url,max)=>{
    requests.push(new URL(url).pathname);
    return mockedRequest(url);
-  },at);
+  },at,syntheticAliasDigests);
   assert.equal(r.content_consistent_with_test,true);
   assert.equal(r.capture_count,5);
   assert.equal(r.total_file_count,15);
@@ -109,7 +114,7 @@ test('outside-domain script src blocked without fetching untrusted remote host',
    if(url.endsWith('/'))return Buffer.from(
     '<html><script src="https://untrusted.invalid/external.js"></script></html>');
    return mockedRequest(url);
-  },at),/BLOCKED/);
+  },at,syntheticAliasDigests),/BLOCKED/);
   assert.equal(calls.length,1);
   assert.equal(calls.every(x=>x.endsWith('.vercel.app/')),true);
   assert.equal(existsSync(join(w.root,'private-capture-manifest.json')),false);
@@ -121,7 +126,7 @@ test('missing imported compiled chunk fails closed and never produces accepted m
   assert.throws(()=>captureOriginalPreviewPlan(plan(),w.root,(url)=>{
    if(url.endsWith('/assets/sub.js'))throw Error('private 404 URL should not leak');
    return mockedRequest(url);
-  },at),/BLOCKED/);
+  },at,syntheticAliasDigests),/BLOCKED/);
   assert.equal(existsSync(join(w.root,'private-capture-manifest.json')),false);
  }finally{w.cleanup();}
 });
@@ -129,7 +134,7 @@ test('SSO HTML challenge at root fails without trusting a successful HTTP respon
  const w=makeWorkspace();
  try{
   assert.throws(()=>captureOriginalPreviewPlan(plan(),w.root,()=>Buffer.from(
-   '<html><body>Sign in to Vercel</body></html>'),at),/BLOCKED/);
+   '<html><body>Sign in to Vercel</body></html>'),at,syntheticAliasDigests),/BLOCKED/);
  }finally{w.cleanup();}
 });
 test('unexpected Production backend in captured JavaScript fails whole five-deployment content check',()=>{
@@ -140,7 +145,7 @@ test('unexpected Production backend in captured JavaScript fails whole five-depl
     'export const prod="https://'+PROD_REF+'.supabase.co";'+
     'export const test="https://'+TEST_REF+'.supabase.co";');
    return mockedRequest(url);
-  },at),/BLOCKED/);
+  },at,syntheticAliasDigests),/BLOCKED/);
   assert.equal(existsSync(join(w.root,'private-capture-manifest.json')),false);
  }finally{w.cleanup();}
 });
@@ -152,7 +157,7 @@ test('no overwritten historical capture; no download occurs if private output is
   let called=0;
   assert.throws(()=>captureOriginalPreviewPlan(plan(),w.root,()=>{
    called++;return Buffer.from('test');
-  },at),/BLOCKED/);
+  },at,syntheticAliasDigests),/BLOCKED/);
   assert.equal(called,0);
  }finally{w.cleanup();}
 });
@@ -163,8 +168,8 @@ test('CLI checks private plan offline without vc CLI; malformed capture is rejec
   writeFileSync(good,JSON.stringify(plan()));
   const cli=new URL('./oa5-protected-preview-capture.mjs',import.meta.url).pathname;
   const check=spawnSync(process.execPath,[cli,'--check-plan',good],{encoding:'utf8'});
-  assert.equal(check.status,0,check.stderr);
-  assert.match(check.stdout,/NOT VERIFIED/);
+  assert.equal(check.status,1);
+  assert.match(check.stderr,/BLOCKED/);
   const invalid=plan();invalid.deployments[0].origin='https://app.sellertray.com';
   const bad=join(w.parent,'invalid-plan.json');
   writeFileSync(bad,JSON.stringify(invalid));
@@ -180,7 +185,7 @@ test('never writes private Preview files inside Git and never reads an alias pla
  const forbidden=join(process.cwd(),'oa5-no-private-capture-in-source');
  assert.throws(()=>captureOriginalPreviewPlan(plan(),forbidden,()=>{
   called++;return Buffer.from('unreachable');
- },at),/BLOCKED/);
+ },at,syntheticAliasDigests),/BLOCKED/);
  assert.equal(called,0);
  assert.equal(existsSync(forbidden),false);
  const cli=new URL('./oa5-protected-preview-capture.mjs',import.meta.url).pathname;
@@ -188,4 +193,19 @@ test('never writes private Preview files inside Git and never reads an alias pla
  const check=spawnSync(process.execPath,[cli,'--check-plan',inRepo],{encoding:'utf8'});
  assert.equal(check.status,1);
  assert.match(check.stderr,/BLOCKED/);
+});
+
+test('a plausible Vercel Preview alias never passes the actual provider-pinned fingerprint unless it belongs to the original deployment',()=>{
+ const fake=plan();
+ const result=validatePrivateCapturePlan(fake);
+ assert.equal(result.valid,false);
+ assert.match(result.reasons.join(' '),/original Vercel Preview origin/);
+ assert.equal(result.original_vercel_origin_attested,false);
+});
+test('synthetic fingerprint override is forbidden with the real Vercel CLI transport',()=>{
+ const w=makeWorkspace();
+ try{
+  assert.throws(()=>captureOriginalPreviewPlan(plan(),w.root,undefined,at,syntheticAliasDigests),/BLOCKED/);
+  assert.equal(existsSync(w.root),false);
+ }finally{w.cleanup();}
 });
