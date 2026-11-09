@@ -168,7 +168,9 @@ Deno.serve(withObservability('team-management', async (request) => {
         }, 503);
       }
 
-      return json({ result, emailDelivery: 'sent' }, 201);
+      // Keep the legacy emailDelivery field for existing clients, but never claim
+      // that provider acceptance means recipient mailbox delivery.
+      return json({ result, emailDelivery: 'sent', providerAccepted: true, recipientDeliveryVerified: false }, 201);
     }
 
     if (action === 'set_role') {
@@ -342,9 +344,15 @@ async function sendTeamInvitationEmail({
     throw new Error(`Team invitation email provider failed with HTTP ${response.status}`);
   }
 
+  const providerReceipt = await response.json().catch(() => null) as JsonRecord | null;
+  const providerMessageId = typeof providerReceipt?.id === 'string' && /^[a-zA-Z0-9_-]{6,100}$/.test(providerReceipt.id)
+    ? providerReceipt.id
+    : null;
   console.info(JSON.stringify({
-    event: 'team_invitation_email_sent',
+    event: 'team_invitation_email_sent', // legacy event key; provider acceptance, not confirmed delivery
     provider: 'resend',
+    provider_message_id: providerMessageId,
+    recipient_delivery_verified: false,
   }));
 }
 
