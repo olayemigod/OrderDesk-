@@ -9,6 +9,9 @@ const orders = readFileSync(resolve(appRoot, 'src/OrdersManagement.tsx'), 'utf8'
 const orderReads = readFileSync(resolve(appRoot, '../../supabase/migrations/20261018003000_sales_orders_management_reads.sql'), 'utf8');
 const ai = readFileSync(resolve(appRoot, 'src/AiInsights.tsx'), 'utf8');
 const edge = readFileSync(resolve(appRoot, '../../supabase/functions/merchant-ai/index.ts'), 'utf8');
+const hasPageImport = (component) =>
+  app.includes(`import ${component} from './${component}'`) ||
+  app.includes(`const ${component} = lazy(() => import('./${component}'))`);
 const failures = [];
 
 function requireValue(condition, message) {
@@ -16,14 +19,14 @@ function requireValue(condition, message) {
 }
 
 requireValue(
-  app.includes("import AiInsights from './AiInsights'") &&
+  hasPageImport('AiInsights') &&
     navigation.includes("{ id: 'ai', label: 'Ask SellerTray', section: 'Insights', available: true }") &&
     app.includes("page === 'ai' && <AiInsights tenantId={business.id}"),
   'Merchant Web must expose Ask SellerTray through the management shell.',
 );
 
 requireValue(
-  app.includes("import PurchasingManagement from './PurchasingManagement'") &&
+  hasPageImport('PurchasingManagement') &&
     navigation.includes("{ id: 'purchasing', label: 'Purchase Orders & Receiving', section: 'Purchasing', available: true }") &&
     app.includes("page === 'purchasing' && <PurchasingManagement tenantId={business.id} currency={business.currency}"),
   'Merchant Web must expose the governed Purchasing workspace.',
@@ -39,7 +42,7 @@ requireValue(
 );
 
 requireValue(
-  app.includes("import OrdersManagement from './OrdersManagement'") &&
+  hasPageImport('OrdersManagement') &&
     navigation.includes("{ id: 'orders', label: 'Orders', section: 'Sales', available: true }") &&
     app.includes("page === 'orders' && branch && <OrdersManagement tenantId={business.id} branchId={branch.id} currency={business.currency}") &&
     orders.includes("functions.invoke('order-draft-action'") &&
