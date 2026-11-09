@@ -85,6 +85,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Expo SDK package and config doctor
+        run: npx --yes expo-doctor
+
       - name: Production Android bundle smoke
         env:
           EXPO_PUBLIC_SUPABASE_URL: https://eujxswjspolugrzlsjnn.supabase.co
