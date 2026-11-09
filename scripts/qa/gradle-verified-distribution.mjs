@@ -23,9 +23,13 @@ export function validateSha256(value) {
 export function prepareWrapperProperties(text,officialDigest){
   const digest=validateSha256(officialDigest);
   if(typeof text!=='string'||text.split(ORIGINAL).length!==2 ||
+     !/^networkTimeout=10000$/m.test(text) ||
      /^distributionSha256Sum=/m.test(text) || text.includes(DIRECT))
      throw new Error('Unexpected Android wrapper distribution: refuse update');
-  const output=text.replace(ORIGINAL,DIRECT);
+  // 10s is inadequate for an official 131 MB SDK58 Gradle distribution
+  // on a cold GitHub Actions runner; retain one attempt, fail on timeout.
+  const output=text.replace(ORIGINAL,DIRECT)
+    .replace(/^networkTimeout=10000$/m,'networkTimeout=180000');
   return output.replace(/\s*$/, '\n')+'distributionSha256Sum='+digest+'\n';
 }
 function fetchOfficialChecksum(){
