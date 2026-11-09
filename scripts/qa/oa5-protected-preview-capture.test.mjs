@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {EXPECTED,TEST_REF,PROD_REF} from './oa5-historical-preview-bundle-inspection.mjs';
-import {validatePrivateCapturePlan,captureOriginalPreviewPlan} from './oa5-protected-preview-capture.mjs';
+import {validatePrivateCapturePlan,captureOriginalPreviewPlan,planVercelReadOnlyCommand} from './oa5-protected-preview-capture.mjs';
 
 const at=new Date('2026-11-09T23:50:00Z');
 const plan=()=>({
@@ -208,4 +208,48 @@ test('synthetic fingerprint override is forbidden with the real Vercel CLI trans
   assert.throws(()=>captureOriginalPreviewPlan(plan(),w.root,undefined,at,syntheticAliasDigests),/BLOCKED/);
   assert.equal(existsSync(w.root),false);
  }finally{w.cleanup();}
+});
+
+test('Windows Vercel npm .cmd shim uses cmd.exe only for constrained read-only GET and whoami',()=>{
+ const url='https://sellertray-merchant-git-test-evidence.vercel.app/assets/index-AB_19.js';
+ const win=planVercelReadOnlyCommand('curl',url,'win32');
+ assert.deepEqual(win,{
+  file:'cmd.exe',
+  args:['/d','/s','/c','vercel.cmd curl '+url+' --fail --silent --show-error --max-time 30']
+ });
+ const who=planVercelReadOnlyCommand('whoami',null,'win32');
+ assert.deepEqual(who,{file:'cmd.exe',args:['/d','/s','/c','vercel.cmd whoami']});
+ assert.equal(win.args[3].includes('--protection-bypass'),false);
+ assert.equal(win.args[3].includes('--token'),false);
+});
+test('Linux/WSL Vercel launcher avoids shell and never falls back to Production',()=>{
+ const url='https://sellertray-admin-git-test-evidence.vercel.app/';
+ assert.deepEqual(planVercelReadOnlyCommand('curl',url,'linux'),{
+  file:'vercel',args:['curl',url,'--fail','--silent','--show-error','--max-time','30']
+ });
+ assert.deepEqual(planVercelReadOnlyCommand('whoami',null,'linux'),{
+  file:'vercel',args:['whoami']
+ });
+});
+test('Windows command planner rejects arbitrary commands and shell/URL injection before launching cmd',()=>{
+ for(const [action,url] of [
+  ['deploy',null],['env','ls'],['whoami','https://sellertray-admin-git-test.vercel.app/'],
+  ['curl',null],['curl','https://app.sellertray.com/'],
+  ['curl','https://test.sellertray.com/'],
+  ['curl','http://sellertray-admin-git-test.vercel.app/'],
+  ['curl','https://sellertray-admin-git-test.vercel.app/hello?token=x'],
+  ['curl','https://sellertray-admin-git-test.vercel.app/one%20two.js'],
+  ['curl','https://sellertray-admin-git-test.vercel.app/assets/../../other.js'],
+  ['curl','https://sellertray-admin-git-test.vercel.app/assets/hello.js&&whoami'],
+  ['curl','https://sellertray-admin-git-test.vercel.app/assets/hello.js|more'],
+  ['curl','https://sellertray-admin-git-test.vercel.app/assets/hello.js>out'],
+  ['curl','https://sellertray-admin-git-test.vercel.app/assets/hello.js" --token secret'],
+  ['curl','https://sellertray-admin-git-test.vercel.app@evil.invalid/'],
+  ['curl','https://sellertray-admin-git-test.vercel.app/asset.js#frag'],
+  ['curl','https://sellertray-admin-git-test.vercel.app:8443/'],
+  ['curl','https://sellertray-admin-git-test.vercel.app/assets/foo;bar.js']
+ ]){
+  assert.throws(()=>planVercelReadOnlyCommand(action,url,'win32'),/BLOCKED/,
+   action+':'+String(url));
+ }
 });
