@@ -20,6 +20,7 @@ import type { MerchantOrder, OrderStatus } from '../domain/order';
 
 export function useOrders(tenantId: string | null) {
   const [orders, setOrders] = useState<MerchantOrder[]>([]);
+  const [ordersScope, setOrdersScope] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,6 +35,7 @@ export function useOrders(tenantId: string | null) {
   const refresh = useCallback(async () => {
     if (!tenantId) {
       setOrders([]);
+      setOrdersScope(null);
       setLoading(false);
       setError(null);
       return;
@@ -55,6 +57,7 @@ export function useOrders(tenantId: string | null) {
             const next = await loadOrders(tenantId);
             if (currentTenantRef.current !== tenantId) break;
             setOrders(next);
+            setOrdersScope(tenantId);
             loadedTenantRef.current = tenantId;
             setError(null);
           } catch (err) {
@@ -75,6 +78,7 @@ export function useOrders(tenantId: string | null) {
     // Prevent showing another merchant's records during an account switch.
     loadedTenantRef.current = null;
     setOrders([]);
+    setOrdersScope(null);
     setError(null);
     setLoading(Boolean(tenantId));
     void refresh();
@@ -205,7 +209,8 @@ export function useOrders(tenantId: string | null) {
   );
 
   return {
-    orders,
+    // Reject even a single render of stale records during an account/Business switch.
+    orders: ordersScope === tenantId ? orders : [],
     loading,
     error,
     refresh,
