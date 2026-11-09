@@ -37,14 +37,14 @@ export function buildResumedPosDraft(order: MerchantOrder, products: CommercePro
     }
     const product = productsById.get(item.catalogItemId);
     if (!product || !product.isActive) {
-      throw new Error(`${item.name} is no longer available for sale.`);
+      throw new Error(`${item.name} is no longer available for sale. Return to Orders and use Edit draft to remove or correct this item.`);
     }
 
     const uomName = item.selectedUom.trim().toLowerCase();
     const matches = product.uoms.filter((candidate) => candidate.name.trim().toLowerCase() === uomName);
     const uom = matches[0];
     if (matches.length !== 1 || !uom || uom.sellingPrice === null) {
-      throw new Error(`The selling unit for ${item.name} is no longer available.`);
+      throw new Error(`The selling unit for ${item.name} is no longer available. Return to Orders and use Edit draft to remove this item before resuming.`);
     }
     if (!Number.isFinite(item.quantity) || item.quantity <= 0) {
       throw new Error(`${item.name} has an invalid quantity.`);
@@ -55,7 +55,7 @@ export function buildResumedPosDraft(order: MerchantOrder, products: CommercePro
 
     const key = `${product.id}:${uom.id}`;
     if (usedKeys.has(key)) {
-      throw new Error(`${product.name} has duplicate ${uom.name} lines. Edit this draft from Orders before resuming it.`);
+      throw new Error(`${product.name} has duplicate ${uom.name} lines. Return to Orders, choose Edit draft, and remove the duplicate before resuming.`);
     }
     usedKeys.add(key);
     return { key, orderItemId: item.id, product, uom, quantity: item.quantity };
