@@ -68,6 +68,16 @@ F. **Environment and release**: PR #236 Mobile source requires a future approved
 - Added `apps/mobile/scripts/saved-sale-resume.test.mjs` (5 Node tests) covering status/payment gating, immutable original order/item/Branch/UOM identity, invalid product/UOM, duplicate line rejection and zero-quantity edits. Local matching-source runs **5/5 passed**. Existing order-filter tests **4/4 passed** and invitation browser tests **4/4 passed** in the previous local verification copies. No full exact-head typecheck or hosted/device QA yet.
 - This source slice is **not** full indexed Orders pagination, offline server-draft editing, full catalog caching optimisation or aggregate profitability reporting. Those still require separate governed data/read architecture and isolated QA; do not represent the stage-render limit as backend pagination.
 
+### Governed customer-history Branch link — migration required, NOT applied
+
+Merchant Web's historical customer-order drilldown was using a direct `orders` table read merely to discover the order's original Branch. The authoritative customer-history RPC already enumerates the same orders for permitted Owners/Managers. A new **source-only** migration `20261109230000_customer_history_order_branch_scope.sql` extends the existing authenticated, tenant-scoped `get_sellertray_customer_management_detail` response with each history entry's `branchId`. The client now consumes that Branch ID and calls the already governed `get_sellertray_order_management_detail` RPC; it no longer reads raw `orders`.
+
+- Source pgTAP assertion added to `sellertray_customer_management_reads.test.sql` with the existing tenant isolation, Cashier denial, soft-deletion and sales aggregation fixtures.
+- Merchant Web security source preflight now refuses to allow raw `orders` reads for this drilldown.
+- **Required rollout order:** after OA5 Test isolation is accepted, apply the additive/replacement SQL migration in isolated Test; run pgTAP and permission/Branch history QA; then verify the matching Merchant Web build. Do not deploy the new client before the RPC exposes `branchId`. Production SQL and Merchant Web deployment require later independent approval.
+- Compatibility: an older server without the new Branch reference causes the changed client to show a clear Refresh instruction, not to issue a less-governed fallback query.
+- This change does not adjust stock movements, payments, UOM, WhatsApp orders, financial report totals, or order membership permissions.
+
 ## Parallel implementation order / release dependency
 
 1. Continue OA5 isolation and Preview security attestation independently.
