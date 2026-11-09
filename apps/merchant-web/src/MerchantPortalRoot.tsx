@@ -100,7 +100,6 @@ export default function MerchantPortalRoot({ children }: { children: ReactNode }
         <h1>Review your invitation</h1>
         <p>Review the Business and assigned role before choosing Accept or Decline. If you are signed in with another account, switch to the invited email.</p>
         <IncomingBusinessInvitations
-          onMembershipChanged={() => inspectWorkspace(session)}
           onInvitationResolved={() => inspectWorkspace(session)}
           onSwitchAccount={() => void supabase.auth.signOut({ scope: 'local' })}
         />
