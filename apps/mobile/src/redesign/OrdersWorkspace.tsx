@@ -24,6 +24,7 @@ type Props = {
   businessCurrency: string;
   orders: MerchantOrder[];
   loading: boolean;
+  focusedOrderId?: string | null;
   canReturnCompletedSale: boolean;
   onChanged: () => Promise<void>;
   onResumeDraft: (order: MerchantOrder) => void;
@@ -40,6 +41,7 @@ export function OrdersWorkspace({
   businessCurrency,
   orders,
   loading,
+  focusedOrderId = null,
   onChanged,
   onResumeDraft,
 }: Props) {
@@ -56,6 +58,11 @@ export function OrdersWorkspace({
   const [expandedOrderIds, setExpandedOrderIds] = useState<Record<string, boolean>>({});
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [draftQuantities, setDraftQuantities] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (focusedOrderId) {
+      setExpandedOrderIds((current) => current[focusedOrderId] ? current : { ...current, [focusedOrderId]: true });
+    }
+  }, [focusedOrderId]);
   const [filters, setFilters] = useState<OrderSearchFilters>(DEFAULT_ORDER_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [visibleOrderLimit, setVisibleOrderLimit] = useState(30);
