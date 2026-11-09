@@ -56,7 +56,7 @@ SELECT jsonb_build_object(
    'jobname',w.jobname,
    'function_identity',w.schema_name||'.'||w.func_name,
    'runtime_config_key',w.runtime_config_key,
-   'actual_runtime_config_key',(SELECT (regexp_match(p.prosrc, $where rc.key='([^']+)'$, 'i'))[1] FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname=w.schema_name AND p.proname=w.func_name),
+   'actual_runtime_config_key',(SELECT (regexp_match(p.prosrc, 'where rc[.]key=''([^'']+)''', 'i'))[1] FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname=w.schema_name AND p.proname=w.func_name),
    'source_sha256',(SELECT encode(extensions.digest(p.prosrc::bytea,'sha256'),'hex') FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname=w.schema_name AND p.proname=w.func_name),
    'function_overloads',(SELECT count(*)::int FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname=w.schema_name AND p.proname=w.func_name),
    'security_definer',(SELECT coalesce(bool_and(p.prosecdef),false) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname=w.schema_name AND p.proname=w.func_name),
