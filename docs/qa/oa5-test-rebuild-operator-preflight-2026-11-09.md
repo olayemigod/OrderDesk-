@@ -107,11 +107,13 @@ and https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-r
 ## 09/11/2026 — bounded post-archive Test Auth session loss alternative
 
 The existing encrypted Test archive is intact and independently restore-tested. A fresh archive
-does not have to be the only *proposed* remedy for the extra Test Auth session, but no
-session-loss permission has been given. The default census still fails on 5 archived vs
-6 current sessions. A separately approved private record can permit that **one** exact
-Test-only session-count difference through the offline preflight. This does not delete
-the session, permit a database reset, or prove that unchanged row counts mean unchanged data.
+does not have to be the only remedy for the extra Test Auth session. On 09/11/2026, the owner
+explicitly approved discarding **exactly the one additional post-archive Test Auth session**
+(archive 5 versus hosted Test 6), and only during a future separately authorised controlled
+Test rebuild. The default census still fails on 5 archived versus 6 current sessions unless
+the protected private reviewed-loss record is supplied. This approval does not delete or revoke
+the session now, permit a database reset or cron pause, change providers, touch Production or
+Tandar, or prove that unchanged row counts mean unchanged data.
 
 The optional private reviewed-session-loss record must contain exactly these fields:
 
@@ -123,9 +125,10 @@ The optional private reviewed-session-loss record must contain exactly these fie
   "evidence_ref": "private-review-0001" }
 ~~~
 
-The example deliberately has approved_loss=false and will not pass. Only the owner
-can approve that precise Test-only loss, after a fresh count-only SQL snapshot, and
-the protected reviewed_at_utc must fall between capture and the present moment.
+The example deliberately has approved_loss=false and will not pass. The owner decision above
+approves only the precise Test-only loss; after a fresh count-only SQL snapshot, an operator
+must still create the protected private record for that exact reviewed snapshot, with
+approved_loss=true and reviewed_at_utc between capture and the present moment.
 All other counts must still equal the original archive, and 7 sessions will not pass
 using a six-session approval. Never copy identifiers, emails, tokens or URLs into this file.
 

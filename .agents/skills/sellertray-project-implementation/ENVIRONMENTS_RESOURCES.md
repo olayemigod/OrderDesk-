@@ -156,7 +156,18 @@ its current authority. See the exact provider evidence and owner browser
 acceptance notes on draft PR #228.
 
 A later Test-only archive-census review also identified one new Auth session
-(archive 5 versus hosted Test 6). The Test-only pre-reset gate allows a
-**proposed** exact-scope reviewed exception only when separately approved;
-this recorded project policy is not approval to discard that session or
-any other archived historical Test evidence.
+(archive 5 versus hosted Test 6). On 09/11/2026, the owner explicitly approved
+discarding **exactly that one additional post-archive Test Auth session** only
+during a future, separately authorised controlled rebuild of Test project
+`iukgsukdoowvnhlfmpml`. This approval does not delete or revoke the session
+now, pause cron, reset Test, change providers, deploy code, touch Production or
+Tandar, or waive any other archive-to-live difference.
+
+The approval remains fail-closed at execution time. After a fresh Test-only
+count snapshot, the protected private review record must still identify the
+exact 5-to-6 session scope and satisfy the short-lived after-capture review
+window enforced by `scripts/qa/oa5-test-live-census.mjs`. Every other governed
+count must match the verified archive, and the separate provider-isolation,
+four-job pause, Auth/Storage cleanup, rollback and operation-specific
+destructive-authorisation gates remain mandatory. No private session identity,
+token or review record belongs in Git.
