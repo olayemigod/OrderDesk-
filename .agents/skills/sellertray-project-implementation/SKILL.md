@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.22"
+  version: "0.1.23"
   status: governing
 ---
 
@@ -419,6 +419,14 @@ Rules:
 3. Merchant can take over an AI-generated or WhatsApp-generated order.
 4. UOM and branch stock checks use the same shared services as POS.
 5. Shared commerce changes require WhatsApp regression tests.
+
+## Team invitation, email confirmation and recipient activation
+
+SellerTray Team invitation is an **identity and membership workflow**, distinct from Business subscription/commercial activation. A recipient who follows a Team invitation must be able to sign in or create an Auth account **without** creating a new Business. The invitation locator survives email confirmation, browser/mobile handoff and account switch. Existing Business memberships are not replaced.
+
+Provider API acceptance is not mailbox delivery; a pending invitation is not recipient acceptance. No link, email confirmation or account registration may auto-accept Business membership. Server-side recipient email, tenant, role, Branch and explicit accept/decline remain authoritative. The UI must guide a wrong signed-in identity to switch accounts safely rather than imply the invitation has expired. Browser fallback must not force-open an older installed APK with no invitation-aware UX.
+
+No Team-invitation or email-activation change is release-ready without isolated Test coverage of delivered/undelivered emails, new and existing recipients, wrong signed-in identity, email confirmation, expired/revoked links, multiple Business memberships, app cold/warm links, browser continuation, duplicate retries and production/Test identity isolation.
 
 # 9. Payments, cash, expenses and tax
 
