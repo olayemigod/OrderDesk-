@@ -6,7 +6,7 @@
  * No network requests, deployment actions or secrets ever accepted or output.
  */
 import {readFileSync,readdirSync,lstatSync} from 'node:fs';
-import {resolve,join,relative,isAbsolute,sep,extname} from 'node:path';
+import {resolve,join,relative,isAbsolute,sep,extname,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 export const TEST_REF='iukgsukdoowvnhlfmpml';
@@ -39,7 +39,7 @@ function contentFiles(root,subdir){
    if(!st.isFile())throw Error('Unsupported capture node');
    total+=st.size;
    if(total>MAX_BYTES)throw Error('Capture too large');
-   files.push({path:p,type:extname(p).toLowerCase()});
+   files.push({path:p,type:extname(p).toLowerCase(),relative:relative(dir,p).replaceAll('\\','/')});
  }
  walk(dir);
  return files;
@@ -84,26 +84,62 @@ export function inspectPreviewBundleCapture(manifest,root,now=new Date()){
    try{files=contentFiles(root,entry.directory);}
    catch{errors.push('Missing/unsafe/incomplete private artifact tree: '+entry.id);continue;}
    const textFiles=files.filter(x=>['.html','.js','.mjs'].includes(x.type));
+   const byRelative=new Map(files.map(file=>[file.relative,file]));
+   if(!byRelative.has('index.html')) {
+     errors.push('Historical capture missing original root index.html: '+entry.id);continue;
+   }
    if(!textFiles.some(x=>x.type==='.html')||!textFiles.some(x=>x.type==='.js')){
      errors.push('Historical capture requires HTML and compiled JS: '+entry.id);continue;
    }
-   let matchedTest=0,matchedOther=0,production=false, unreadable=false;
+   // Ensure a Test string in an unrelated captured file cannot satisfy this gate.
+   // The operator must still independently prove original deployment provenance.
+   const linkedScripts=new Set();
+   const scriptPath=(htmlFile,raw)=>{
+     if(typeof raw!=='string'||!raw||/^(?:https?:)?\/\//i.test(raw)
+       ||raw.startsWith('data:')||raw.startsWith('javascript:'))return null;
+     let decoded;
+     try{decoded=decodeURIComponent(raw.split(/[?#]/)[0]);}catch{return null;}
+     if(!decoded||decoded.includes('\\')||decoded.includes('\0'))return null;
+     const rel=decoded.startsWith('/')?decoded.slice(1):join(dirname(htmlFile.relative),decoded);
+     const normalized=rel.replaceAll('\\','/');
+     if(!normalized||normalized.startsWith('../')||normalized==='..'||isAbsolute(normalized))return null;
+     return normalized.replace(/^\.\//,'');
+   };
+   for(const page of textFiles.filter(f=>f.type==='.html')){
+     let html;
+     try{html=readFileSync(page.path,'utf8');}
+     catch{errors.push('Unreadable original HTML: '+entry.id);continue;}
+     for(const m of html.matchAll(/<script\b[^>]*\bsrc\s*=\s*(?:"([^"]+)"|'([^']+)')[^>]*>/gi)){
+       const linked=scriptPath(page,m[1]??m[2]);
+       if(!linked||!byRelative.has(linked)||!['.js','.mjs'].includes(byRelative.get(linked).type))
+         errors.push('Historical HTML references absent/unsafe compiled script: '+entry.id);
+       else linkedScripts.add(linked);
+     }
+   }
+   if(linkedScripts.size===0)errors.push('Historical page has no captured linked JavaScript entrypoint: '+entry.id);
+   let matchedTest=0,matchedTestJS=0,linkedTest=0,matchedOther=0,production=false, unreadable=false;
    for(const f of textFiles){
      let t;
      try{t=readFileSync(f.path,'utf8');}
      catch{unreadable=true;break;}
-     if(t.includes(TEST_REF))matchedTest++;
+     if(t.includes(TEST_REF)){
+       matchedTest++;
+       if(f.type==='.js'||f.type==='.mjs')matchedTestJS++;
+       if(linkedScripts.has(f.relative))linkedTest++;
+     }
      if(t.includes(PROD_REF))production=true;
      // Unrecognized Supabase project URLs must not be treated as Test.
      const urls=t.matchAll(/https?:\/\/([a-z0-9]{20})\.supabase\.co\b/g);
      for(const m of urls)if(m[1]!==TEST_REF)matchedOther++;
    }
    if(unreadable)errors.push('Unreadable compiled text asset: '+entry.id);
-   if(!matchedTest)errors.push('Test backend project ref not visible in compiled capture: '+entry.id);
+   if(!matchedTest||!matchedTestJS)errors.push('Test backend project ref not visible in compiled JavaScript: '+entry.id);
+   if(!linkedTest)errors.push('Test backend project ref not visible in an HTML-linked entrypoint: '+entry.id);
    if(production)errors.push('Production project ref found in historical compiled capture: '+entry.id);
    if(matchedOther)errors.push('Unexpected Supabase project URL in compiled capture: '+entry.id);
    details.push({id:entry.id,surface:entry.surface,scanned_files:files.length,compiled_text_files:textFiles.length,
-      test_ref_file_count:matchedTest,contains_production_ref:production});
+      test_ref_file_count:matchedTest,html_linked_entrypoints:linkedScripts.size,linked_test_entrypoints:linkedTest,
+      contains_production_ref:production});
  }
  if(seen.size!==EXPECTED.length)errors.push('Incomplete historical deployment roster');
  return outcome();
