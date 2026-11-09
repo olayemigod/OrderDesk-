@@ -174,3 +174,18 @@ test('CLI checks private plan offline without vc CLI; malformed capture is rejec
   assert.equal(existsSync(w.root),false);
  }finally{w.cleanup();}
 });
+
+test('never writes private Preview files inside Git and never reads an alias plan from tracked source',()=>{
+ let called=0;
+ const forbidden=join(process.cwd(),'oa5-no-private-capture-in-source');
+ assert.throws(()=>captureOriginalPreviewPlan(plan(),forbidden,()=>{
+  called++;return Buffer.from('unreachable');
+ },at),/BLOCKED/);
+ assert.equal(called,0);
+ assert.equal(existsSync(forbidden),false);
+ const cli=new URL('./oa5-protected-preview-capture.mjs',import.meta.url).pathname;
+ const inRepo=new URL('../../docs/qa/oa5-historical-vercel-preview-custody-2026-11-09.json',import.meta.url).pathname;
+ const check=spawnSync(process.execPath,[cli,'--check-plan',inRepo],{encoding:'utf8'});
+ assert.equal(check.status,1);
+ assert.match(check.stderr,/BLOCKED/);
+});
