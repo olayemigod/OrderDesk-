@@ -151,3 +151,65 @@ See [the Test-only provider and managed cleanup review](oa5-test-provider-auth-s
 Read-only Test counts on 09/11 additionally identify 21 Auth refresh-token rows, one Auth identity, one MFA factor and eight MFA challenges, alongside the already recorded five users and six sessions. There are three Storage buckets and zero metadata object rows; ancillary multipart/vector/analytics/abandoned-artifact rows returned zero. These facts expand the **cleanup review surface**, not the owner's approved session-loss scope, and do not prove Storage backing-object emptiness. Do not assume a remote SQL schema reset clears managed Auth, JWTs, physical Storage objects, secrets, callbacks or already-dispatched outbound work.
 
 Until the external Meta/Paystack/Flutterwave/SMTP/FCM/AI and historical preview endpoint evidence is reviewed, service-managed Auth/Storage operation and irreversible rollback boundary are accepted, and the separate four-job pause plus fresh private evidence are authorized, the preflight must remain **NO-GO**. Production/Tandar, hosted Test, Vercel and provider configuration remain unchanged by this documentation update.
+
+
+## 09/11/2026 — managed-service and Auth FK pre-reset census (source only)
+
+The independent Test-only metadata review found **64 public foreign keys** to Auth users across **57 public tables** (30 RESTRICT, 8 CASCADE and 26 SET NULL). Agreement, commercial, invitation and audit tables include RESTRICT links. Deleting managed Auth users before the approved application-data cleanup can fail or erase linked evidence. Do not directly edit managed Auth records. The protected Agreement archive and public schema/ledger cleanup remain independently reviewed boundaries.
+
+The dated read-only Test metadata baseline includes **five Auth users, six sessions, one identity, 21 refresh-token records, one MFA factor, eight MFA challenges, three Storage buckets (one public/two private), zero Storage objects, three Storage policies and zero multipart uploads/parts**. These counts do not establish row equality, physically empty object storage, token revocation, or provider isolation. They expand the review scope but **do not** expand the owner's narrow approval to discard the *one* additional session.
+
+The new offline source-only tool scripts/qa/oa5-test-managed-boundary.mjs requires a recent (under ten minutes), count-only private Test snapshot that matches this dated baseline. A count drift or a missing/extra/secret-bearing field fails closed. The existing 07/11 encrypted archive baseline remains unchanged and is reconciled separately by oa5-test-live-census.mjs. The combined operator preflight now requires the managed-state result in addition to the archive, Test cron and live-count checks. Passing any of them **never authorizes deletion or reset**.
+
+### Private count-only snapshot SQL — read-only Test project only
+
+Run the following SELECT only after verifying the standalone Test project identity iukgsukdoowvnhlfmpml. The query reads no identities, user records, Auth token values, recipient addresses or secret payloads.
+
+~~~sql
+WITH fk AS (
+  SELECT con.confdeltype
+  FROM pg_constraint AS con
+  JOIN pg_class AS srct ON srct.oid=con.conrelid
+  JOIN pg_namespace AS srcns ON srcns.oid=srct.relnamespace
+  JOIN pg_class AS reft ON reft.oid=con.confrelid
+  JOIN pg_namespace AS refns ON refns.oid=reft.relnamespace
+  WHERE con.contype='f' AND srcns.nspname='public'
+    AND refns.nspname='auth' AND reft.relname='users'
+)
+SELECT jsonb_build_object(
+  'schema_version', 1, 'project_ref', 'iukgsukdoowvnhlfmpml',
+  'captured_at_utc', to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+  'counts', jsonb_build_object(
+    'auth_users', (SELECT count(*)::int FROM auth.users),
+    'auth_sessions', (SELECT count(*)::int FROM auth.sessions),
+    'auth_identities', (SELECT count(*)::int FROM auth.identities),
+    'auth_refresh_tokens', (SELECT count(*)::int FROM auth.refresh_tokens),
+    'auth_mfa_factors', (SELECT count(*)::int FROM auth.mfa_factors),
+    'auth_mfa_challenges', (SELECT count(*)::int FROM auth.mfa_challenges),
+    'storage_buckets', (SELECT count(*)::int FROM storage.buckets),
+    'storage_public_buckets', (SELECT count(*)::int FROM storage.buckets WHERE public),
+    'storage_private_buckets', (SELECT count(*)::int FROM storage.buckets WHERE NOT public),
+    'storage_objects', (SELECT count(*)::int FROM storage.objects),
+    'storage_policies', (SELECT count(*)::int FROM pg_policies WHERE schemaname='storage'),
+    'storage_multipart_uploads', (SELECT count(*)::int FROM storage.s3_multipart_uploads),
+    'storage_multipart_parts', (SELECT count(*)::int FROM storage.s3_multipart_uploads_parts),
+    'public_auth_user_foreign_keys', (SELECT count(*)::int FROM fk),
+    'public_auth_user_restrict_foreign_keys', (SELECT count(*)::int FROM fk WHERE confdeltype='r'),
+    'public_auth_user_cascade_foreign_keys', (SELECT count(*)::int FROM fk WHERE confdeltype='c'),
+    'public_auth_user_set_null_foreign_keys', (SELECT count(*)::int FROM fk WHERE confdeltype='n')
+  )
+) AS snapshot;
+~~~
+
+Save the returned single JSON object in protected private storage outside CI/Git, then run:
+
+~~~sh
+node scripts/qa/oa5-test-managed-boundary.mjs --check /secure/private/test-managed-state.json
+node scripts/qa/oa5-test-rebuild-preflight.mjs --check /secure/private/operator-review.json /secure/private/test-archive /secure/private/post-pause-cron-v2.json /secure/private/test-live-counts.json /secure/private/test-managed-state.json /secure/private/reviewed-session-loss.json
+~~~
+
+The final session-loss argument is optional only if the independently archived count baseline matches. The observed sixth session requires the narrow, separate, fresh private reviewed-loss file. Four Test cron schedules are still ACTIVE; the operator preflight must remain **NO-GO** without a separately authorized pause and a fresh after-pause all-age cron / pg_net snapshot. The managed check is a count/shape precondition, not evidence of provider-console verification or a substitute for operator sign-off.
+
+### CLI-version pin safeguard
+
+Supabase CLI v3 became the default through install channels on **02/11/2026**. Its remote targeting and hosted mutation confirmation differ from v2. SellerTray Database CI explicitly pins v2.117.0 and has not been changed. The future independently reviewed Test operator procedure must identify the exact installed CLI version, inspect its command help, verify the explicit Test-only remote/project target twice, and never rely on defaults. Do not convert this document to an unattended destructive command. References: https://supabase.com/docs/guides/local-development/cli/migrating-to-v3 and https://supabase.com/changelog/supabase-cli-v3.
