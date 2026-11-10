@@ -276,3 +276,45 @@ test('offline admin HTML CLI rejects unsafe or absent private source without pri
   assert.equal(bad.stderr.includes(root),false);
  }
 }));
+
+test('admin third-party script metadata is counted without emitting source URL or tag attributes',()=>withPrivateFixture(({root})=>{
+ const dir=join(root,'capture_2');mkdirSync(dir);
+ const privateToken='very-private-script-token';
+ writeFileSync(join(dir,'index.html'),[
+  '<!doctype html><html>',
+  '<script type="module" src="/assets/admin.js"></script>',
+  '<script async src="https://www.googletagmanager.com/gtm.js?key='+privateToken+'"></script>',
+  '<script type="module" defer crossorigin integrity="sha384-private" src="https://js.paystack.co/v1/inline.js"></script>',
+  '<script nonce="private-nonce" src="https://www.googletagmanager.com.evil.invalid/malicious.js"></script>',
+  '</html>'
+ ].join(''));
+ const report=diagnoseSavedPreviewHTML(root,2);
+ const e=report.outside_https_script_signals;
+ assert.equal(e.total,3);
+ assert.equal(e.module_tags,1);
+ assert.equal(e.classic_tags,2);
+ assert.equal(e.async_tags,1);
+ assert.equal(e.defer_tags,1);
+ assert.equal(e.integrity_tags,1);
+ assert.equal(e.crossorigin_tags,1);
+ assert.equal(e.nonce_tags,1);
+ assert.equal(e.exact_host_family_hints.analytics_telemetry,1);
+ assert.equal(e.exact_host_family_hints.payment_widget,1);
+ assert.equal(e.exact_host_family_hints.unknown_or_other,1);
+ assert.equal(report.html_entrypoint_gate_passed,false);
+ assert.equal(report.hosted_compiled_bundle_accepted,false);
+ assert.equal(report.destructive_execution_authorized,false);
+ for(const x of [privateToken,'paystack.co','googletagmanager.com','private-nonce',root])
+  assert.equal(JSON.stringify(report).includes(x),false);
+}));
+test('unknown off-origin script is never classified as safe or accepted',()=>withPrivateFixture(({root})=>{
+ const dir=join(root,'capture_2');mkdirSync(dir);
+ writeFileSync(join(dir,'index.html'),
+  '<html><script src="https://arbitrary.third-party.invalid/merchant.js"></script></html>');
+ const report=diagnoseSavedPreviewHTML(root,2);
+ assert.equal(report.outside_https_script_signals.total,1);
+ assert.equal(report.outside_https_script_signals.exact_host_family_hints.unknown_or_other,1);
+ assert.equal(report.unsafe_or_nonlocal_src_count,1);
+ assert.equal(report.original_source_accepted,false);
+ assert.equal(report.html_entrypoint_gate_passed,false);
+}));
