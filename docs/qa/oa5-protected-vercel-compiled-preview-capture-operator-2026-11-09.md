@@ -195,3 +195,19 @@ Interpret the label conservatively:
 - \`ROOT_HTML_ONLY\` or \`ROOT_HTML_NOT_SAVED\`: source capture stopped earlier than the two-JS state currently observed; this would require reviewing whether the operator selected the same original \`$Output\`.
 
 **QA posture:** all five original compiled bundles remain unaccepted, no Test/Production operations were authorized or performed by this offline diagnosis, and both the Vercel original-URL credential boundary and active Test cron schedules remain unchanged.
+
+
+## 10/11/2026 — capture_0 saved module graph: one unsupported import, seven unavailable files
+
+The owner performed the **offline** diagnosis against the preserved, failed private capture directory. Verified output: capture_0/index.html present, **2 saved JavaScript files**, **one safe HTML entry**, **9 literal JS import strings parsed**, **1 already saved imported module**, **7 missing local import targets**, **1 unsupported or remote import**, **1 saved JS referencing the Test Supabase ID**, and **0 saved JS referencing the Production ID**. None of the other four original deployment capture directories was created. This is evidence of incomplete capture_0, **not** a claim that the unexpected module is necessarily from a remote URL, or that the 7 missing modules returned HTTP errors. The parser can misidentify ESM-looking syntax inside compiled/minified JS; it is not complete dynamic import analysis.
+
+The active capture tool rejects that unsupported import; it should remain fail-closed instead of silently skipping an external dependency or weakening the Test-backend compiled check. The offline diagnostic has now been enhanced with fixed **rejected_import_shape_counts** labels: remote_http, protocol_relative, other_scheme, bare_specifier, non_js_local_target, unsafe_local_path, malformed, malformed_encoded_path, invalid_or_outside_local_path. These reveal **only category counts**, never external domains, path names, package specifiers, asset text or token/credential strings.
+
+The operator can repeat the **offline-only** command (without fetching or overwriting anything):
+
+~~~powershell
+git -C "$Source" pull --ff-only
+node "$Diagnostic" --check "$Output"
+~~~
+
+If the rejected import is bare_specifier or remote_http, inspect its significance in the private environment; **do not automatically fetch it, substitute a local package, skip it or accept the original Preview as isolated**. If it is non_js_local_target, distinguish an actual stylesheet/asset reference from an unexpected module import before changing graph policy. If it is invalid_or_outside_local_path or unsafe_local_path, STOP for a security review. Seven missing literal local JS targets remain incomplete even after the unsupported reference is classified. A new remote attempt is not authorized merely by this offline observation. Original compiled artifact origin, historical reviewer continuity and provider isolation remain independent blocked gates.
