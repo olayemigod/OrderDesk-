@@ -5,6 +5,7 @@
  * It cannot prove that captures came from Vercel or include every loaded chunk.
  */
 import {posix} from 'node:path';
+import * as vm from 'node:vm';
 
 const JS=new Set(['.js','.mjs']);
 
@@ -61,7 +62,60 @@ export function importedLiterals(js){
  }
  return [...new Set(refs)];
 }
-export function traceCapturedModuleGraph(byRelative,readText,testRef){
+/**
+ * Parse-only authenticated-capture import audit. VM SourceTextModule proves
+ * real static imports, while deliberately malformed in-memory substitutions
+ * distinguish regex hits inside comments/strings/regexes from active syntax.
+ * Active literal dynamic imports remain in the dependency graph, including
+ * unsafe bare/remote forms, which downstream localPath always rejects.
+ *
+ * This NEVER links/evaluates a module, reads a package, imports a specifier,
+ * writes an asset or accesses the network. A parse failure, unavailable VM,
+ * or excessive uncorroborated hits always fails closed when requireParser=true.
+ * The legacy conservative matcher remains available for offline CI fixtures.
+ */
+export function auditedImportLiterals(js,{requireParser=false}={}){
+ if(typeof js!=='string')throw Error('BLOCKED: invalid captured JavaScript source');
+ if(typeof vm.SourceTextModule!=='function'){
+  if(requireParser)throw Error('BLOCKED: parse-only V8 modules required for original capture');
+  return importedLiterals(js);
+ }
+ let parsed;
+ try{parsed=new vm.SourceTextModule(js,{identifier:'private-preview-parse-only'});}
+ catch{
+  if(requireParser)throw Error('BLOCKED: captured JS cannot be parsed as a module');
+  return importedLiterals(js);
+ }
+ const statics=[...parsed.dependencySpecifiers];
+ const refs=new Set(statics);
+ const staticsSet=new Set(statics);
+ let uncertain=0;
+ for(const regex of [
+  /\b(?:import|export)\s*[A-Za-z0-9_$*{},\s]*\bfrom\s*(["'])([^"']+)\1/g,
+  /\bimport\s*(["'])([^"']+)\1/g,
+  /\bimport\s*\(\s*(["'])([^"']+)\1\s*\)/g
+ ]){
+  for(const match of js.matchAll(regex)){
+   const ref=match[2];
+   if(staticsSet.has(ref))continue;
+   if(++uncertain>128)throw Error('BLOCKED: excessive unverified literal module references');
+   // An impossible control token invalidates an actual expression, but
+   // remains syntactically legal when substituted into inert JS source text.
+   // If the result STILL parses, the candidate was not active import syntax.
+   const tampered=js.slice(0,match.index)+'\u0001'+js.slice(match.index+match[0].length);
+   let inert=false;
+   try{
+    new vm.SourceTextModule(tampered,{identifier:'private-preview-parse-only'});
+    inert=true;
+   }catch{
+    // Could be real dynamic syntax or an unsafe/ambiguous match. Retain it.
+   }
+   if(!inert)refs.add(ref);
+  }
+ }
+ return [...refs];
+}
+export function traceCapturedModuleGraph(byRelative,readText,testRef,requireAuditedParser=false){
  const errors=[],reachable=new Set(),entrypoints=new Set();
  const outcome=()=>({
   errors,
@@ -111,7 +165,10 @@ export function traceCapturedModuleGraph(byRelative,readText,testRef){
    errors.push('Unreadable HTML-linked or imported compiled JavaScript');
    continue;
   }
-  for(const raw of importedLiterals(text)){
+  let imports;
+  try{imports=auditedImportLiterals(text,{requireParser:requireAuditedParser});}
+  catch{errors.push('Unverifiable import syntax in captured compiled JavaScript');continue;}
+  for(const raw of imports){
    const path=localPath(current,raw,false);
    if(!path||!byRelative.has(path)){
     errors.push('Unresolved or unsafe locally imported JavaScript module');
