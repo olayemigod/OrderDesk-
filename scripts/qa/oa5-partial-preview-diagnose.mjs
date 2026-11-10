@@ -139,22 +139,113 @@ export function diagnosePartialPreview(root){
   output.failure_stage_inferred='ROOT_HTML_ONLY';
  return output;
 }
+
+/**
+ * Inspect an existing failed capture's HTML script sources, not its JS.
+ * Reports only bounded counts/types; never original src attributes, hosts,
+ * file paths, HTML, credentials or compiled bytes. Does not fetch or write.
+ */
+export function diagnoseSavedPreviewHTML(root,index){
+ if(!Number.isInteger(index)||index<0||index>4)
+  throw Error('BLOCKED: original capture index must be 0..4');
+ const result={...NO_AUTH,capture_index:index,
+  capture_directory_present:false,root_html_present:false,
+  html_script_src_count:0,html_script_without_src_count:0,
+  safe_local_js_src_count:0,safe_local_js_already_saved_count:0,
+  unsafe_or_nonlocal_src_count:0,query_or_fragment_src_count:0,
+  src_shape_counts:{
+   root_relative_js:0,dot_relative_js:0,bare_relative_js:0,
+   absolute_https_vercel_app:0,absolute_https_other:0,
+   absolute_http:0,protocol_relative:0,other_scheme:0,
+   non_js_target:0,unsafe_or_unclassified:0
+  },
+  original_source_accepted:false,
+  html_entrypoint_gate_passed:false
+ };
+ const captureRoot=resolve(root);
+ if(!existsSync(captureRoot)||lstatSync(captureRoot).isSymbolicLink()||
+    !lstatSync(captureRoot).isDirectory())
+  throw Error('BLOCKED: private capture root is not a normal existing directory');
+ const dir=join(captureRoot,'capture_'+index);
+ if(!existsSync(dir))return result;
+ if(lstatSync(dir).isSymbolicLink()||!lstatSync(dir).isDirectory())
+  throw Error('BLOCKED: partial capture directory is unsafe');
+ result.capture_directory_present=true;
+ const file=join(dir,'index.html');
+ if(!existsSync(file))return result;
+ const st=lstatSync(file);
+ if(!st.isFile()||st.isSymbolicLink()||st.size>2*1024*1024)
+  throw Error('BLOCKED: partial HTML source is unsafe or oversized');
+ result.root_html_present=true;
+ const html=readFileSync(file,'utf8');
+ const srcs=htmlScripts(html);
+ result.html_script_src_count=srcs.length;
+ result.html_script_without_src_count=Math.max(
+  0,[...html.matchAll(/<script\b[^>]*>/gi)].length-srcs.length
+ );
+ for(const raw of srcs){
+  if(typeof raw!=='string'||raw.length>4096){
+   result.src_shape_counts.unsafe_or_unclassified++;
+   result.unsafe_or_nonlocal_src_count++;
+   continue;
+  }
+  if(/[?#]/.test(raw))result.query_or_fragment_src_count++;
+  const local=localPath('index.html',raw,true);
+  if(local){
+   result.safe_local_js_src_count++;
+   const shape=raw.startsWith('/')?'root_relative_js':
+    raw.startsWith('.')?'dot_relative_js':'bare_relative_js';
+   result.src_shape_counts[shape]++;
+   const asset=join(dir,...local.split('/'));
+   if(existsSync(asset)){
+    const as=lstatSync(asset);
+    if(as.isFile()&&!as.isSymbolicLink())result.safe_local_js_already_saved_count++;
+   }
+   continue;
+  }
+  result.unsafe_or_nonlocal_src_count++;
+  let kind='unsafe_or_unclassified';
+  if(raw.startsWith('//'))kind='protocol_relative';
+  else if(/^https?:\/\//i.test(raw)){
+   try{
+    const u=new URL(raw);
+    if(u.protocol==='http:')kind='absolute_http';
+    else if(u.protocol==='https:'){
+     kind=/^[a-z0-9-]+\.vercel\.app$/.test(u.hostname)?
+      'absolute_https_vercel_app':'absolute_https_other';
+    }
+   }catch{/* an invalid URL must stay unsafe */}
+  }else if(/^[a-z][a-z0-9+.-]*:/i.test(raw))kind='other_scheme';
+  else if(!/\.(?:m?js)(?:[?#].*)?$/i.test(raw))kind='non_js_target';
+  result.src_shape_counts[kind]++;
+ }
+ // These are diagnostic-only. A matching suffix is not origin proof.
+ return result;
+}
+
 function main(){
- if(process.argv.length!==4||process.argv[2]!=='--check'){
-  console.error('Usage: node scripts/qa/oa5-partial-preview-diagnose.mjs --check <existing-private-capture-root>');
+ const [mode,privateRoot,indexRaw]=process.argv.slice(2);
+ if((mode!=='--check'&&mode!=='--check-html')||
+    (mode==='--check'&&process.argv.length!==4)||
+    (mode==='--check-html'&&process.argv.length!==5)){
+  console.error('Usage: node scripts/qa/oa5-partial-preview-diagnose.mjs --check <existing-private-capture-root> | --check-html <existing-private-capture-root> <capture-index 0..4>');
   process.exitCode=2;return;
  }
  try{
-  const root=resolve(process.argv[3]);
-  // Only read an existing local folder, never create it or fetch files.
+  const root=resolve(privateRoot);
+  // Only read existing local files, never create them or contact a provider.
   if(!existsSync(root)||!lstatSync(root).isDirectory()||lstatSync(root).isSymbolicLink())
    throw Error('BLOCKED: private capture root missing or unsafe');
-  const result=diagnosePartialPreview(root);
+  let result;
+  if(mode==='--check-html'){
+   if(!/^[0-4]$/.test(indexRaw))throw Error('BLOCKED: invalid original capture index');
+   result=diagnoseSavedPreviewHTML(root,Number(indexRaw));
+  }else result=diagnosePartialPreview(root);
   console.log(JSON.stringify(result,null,2));
-  console.log('NOT VERIFIED: failure cause, original compiled origin, historical reviewer access.');
-  console.log('NOT AUTHORIZED: no remote retry, hosted change, cron pause or Test reset.');
+  console.log('NOT VERIFIED: original HTML script origin, historical reviewer access or full compiled content.');
+  console.log('NOT AUTHORIZED: no external asset fetch, remote retry, hosted change, cron pause or Test reset.');
  }catch{
-  console.error('BLOCKED: private capture cannot be inspected safely; original files and paths were not printed.');
+  console.error('BLOCKED: private capture cannot be inspected safely; original HTML, URLs and local paths were not printed.');
   process.exitCode=1;
  }
 }
