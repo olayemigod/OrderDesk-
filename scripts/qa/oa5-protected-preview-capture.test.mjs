@@ -335,3 +335,66 @@ test('capture GET failures identify original deployment and root/chunk stage wit
   assert.equal(JSON.stringify(result).includes('token'),false);
  }finally{w.cleanup();}
 });
+
+test('only exact Vercel Preview Toolbar script is excluded from app JS fetch and recorded as unverified',()=>{
+ const w=makeWorkspace();
+ try{
+  const received=[];
+  const result=captureOriginalPreviewPlan(plan(),w.root,(url)=>{
+   received.push(url);
+   if(new URL(url).pathname==='/'&&received.length>=7) return Buffer.from(
+    '<!doctype html><html><script type="module" src="/assets/site.js"></script>'+
+    '<script async src="https://vercel.live/_next-live/feedback/feedback.js"></script></html>');
+   return mockedRequest(url);
+  },at,syntheticAliasDigests);
+  assert.equal(result.content_consistent_with_test,true);
+  assert.equal(result.capture_count,5);
+  assert.equal(result.original_vercel_origin_attested,false);
+  assert.equal(result.hosted_compiled_bundle_accepted,false);
+  assert.equal(result.destructive_execution_authorized,false);
+  assert.equal(received.length,15);
+  assert.equal(received.every(url=>new URL(url).hostname.endsWith('.vercel.app')),true);
+  assert.equal(received.some(url=>url.includes('vercel.live')),false);
+  assert.ok(result.unverified_external_toolbar_references>=1);
+  const hashes=JSON.parse(readFileSync(result.hash_inventory_path,'utf8'));
+  assert.equal(hashes.captures.length,5);
+  assert.ok(hashes.captures.some(c=>c.unverified_external_vercel_toolbar_ref_count===1));
+  assert.equal(JSON.stringify(hashes).includes('vercel.live'),false);
+ }finally{w.cleanup();}
+});
+test('spoofed Vercel Toolbar, query, protocol, alternate host and second injection all fail closed',()=>{
+ const bad=[
+  'https://vercel.live/_next-live/feedback/feedback.js?token=private',
+  'http://vercel.live/_next-live/feedback/feedback.js',
+  'https://vercel.live.evil.invalid/_next-live/feedback/feedback.js',
+  'https://www.vercel.live/_next-live/feedback/feedback.js',
+  'https://vercel.live/_next-live/feedback/other.js'
+ ];
+ for(const script of bad){
+  const w=makeWorkspace();
+  try{
+   let count=0;
+   assert.throws(()=>captureOriginalPreviewPlan(plan(),w.root,url=>{
+    count++;
+    if(new URL(url).pathname==='/')return Buffer.from(
+     '<html><script src="/assets/site.js"></script><script src="'+script+'"></script></html>');
+    throw Error('SHOULD NOT FETCH AN EXTERNAL SCRIPT');
+   },at,syntheticAliasDigests),/BLOCKED/);
+   assert.equal(count,1);
+   assert.equal(existsSync(join(w.root,'private-capture-manifest.json')),false);
+  }finally{w.cleanup();}
+ }
+ const w=makeWorkspace();
+ try{
+  let count=0;
+  assert.throws(()=>captureOriginalPreviewPlan(plan(),w.root,url=>{
+   count++;
+   if(new URL(url).pathname==='/')return Buffer.from(
+    '<html><script src="/assets/site.js"></script>'+
+    '<script src="https://vercel.live/_next-live/feedback/feedback.js"></script>'+
+    '<script src="https://vercel.live/_next-live/feedback/feedback.js"></script></html>');
+   return mockedRequest(url);
+  },at,syntheticAliasDigests),/BLOCKED/);
+  assert.equal(count,1);
+ }finally{w.cleanup();}
+});
