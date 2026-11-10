@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {EXPECTED,TEST_REF,PROD_REF} from './oa5-historical-preview-bundle-inspection.mjs';
-import {validatePrivateCapturePlan,captureOriginalPreviewPlan,planVercelReadOnlyCommand} from './oa5-protected-preview-capture.mjs';
+import {validatePrivateCapturePlan,captureOriginalPreviewPlan,planVercelReadOnlyCommand,classifyProtectedCaptureFailure} from './oa5-protected-preview-capture.mjs';
 
 const at=new Date('2026-11-09T23:50:00Z');
 const plan=()=>({
@@ -289,4 +289,49 @@ test('Vercel 65 forwards HTTP curl flags only after the separator and never chan
   assert.match(text,/curl https:\/\/sellertray-merchant-git-test-evidence[.]vercel[.]app\/ -- --fail --silent --show-error --max-time 30/);
   assert.doesNotMatch(text,/--request|--data|--header|--protection-bypass|deploy|env\s+add/);
  }
+});
+
+test('safe public capture failure classification distinguishes GET, HTML, script graph, and Test content failures',()=>{
+ const id=EXPECTED[0].id;
+ for(const [message,code] of [
+  ['BLOCKED: original Preview root HTML GET failed for '+id,'ROOT_GET_FAILED'],
+  ['BLOCKED: original Preview JavaScript asset GET failed for '+id,'JS_GET_FAILED'],
+  ['BLOCKED: root document is not original application HTML for '+id,'ROOT_NOT_APP_HTML'],
+  ['BLOCKED: compiled JS is an HTML challenge/redirect for '+id,'JS_IS_HTML_CHALLENGE'],
+  ['BLOCKED: original HTML has missing/unsafe JavaScript entrypoints for '+id,'HTML_SCRIPT_REFERENCE_UNSAFE'],
+  ['BLOCKED: unsupported/unsafe original local module dependency for '+id,'JS_IMPORT_UNSUPPORTED'],
+  ['BLOCKED: captured original Preview content failed offline Test-only inspection','COMPILED_CONTENT_MISMATCH'],
+  ['BLOCKED: never overwrite existing private historical capture','CAPTURE_ALREADY_EXISTS'],
+  ['BLOCKED: private parent workspace is missing','PRIVATE_PARENT_MISSING']
+ ]){
+  const r=classifyProtectedCaptureFailure(new Error(message));
+  assert.equal(r.code,code,message);
+  assert.equal(r.original_deployment_id,message.includes(id)?id:null);
+ }
+});
+test('secret-bearing lower level runtime errors never leak into user-visible diagnostic',()=>{
+ const raw='Error: https://private-preview.vercel.app/?x=sk_live_secret C:\\Users\\Mathew\\token.txt';
+ const result=classifyProtectedCaptureFailure(new Error(raw));
+ assert.deepEqual(result,{code:'UNCLASSIFIED_PRIVATE_FAILURE',original_deployment_id:null});
+ assert.equal(JSON.stringify(result).includes('sk_live'),false);
+ assert.equal(JSON.stringify(result).includes('private-preview'),false);
+});
+test('capture GET failures identify original deployment and root/chunk stage without exposing private URL',()=>{
+ const x=plan(),w=makeWorkspace();
+ try{
+  let requestCount=0;
+  let thrown;
+  try{
+   captureOriginalPreviewPlan(x,w.root,()=>{
+    requestCount++;
+    throw Error('private original URL or Vercel authentication token never print');
+   },at,syntheticAliasDigests);
+  }catch(error){thrown=error;}
+  assert.equal(requestCount,1);
+  assert.ok(thrown instanceof Error);
+  const result=classifyProtectedCaptureFailure(thrown);
+  assert.equal(result.code,'ROOT_GET_FAILED');
+  assert.equal(result.original_deployment_id,EXPECTED[0].id);
+  assert.equal(JSON.stringify(result).includes('token'),false);
+ }finally{w.cleanup();}
 });
