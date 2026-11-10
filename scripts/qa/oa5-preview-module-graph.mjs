@@ -22,6 +22,30 @@ export function localPath(from,raw,allowPlain){
     result.startsWith('/')||!JS.has(posix.extname(result)))return null;
  return result;
 }
+/**
+ * Categorize a rejected import by *shape only*. Never return the original
+ * specifier, hostname, path, query, module name or compiled source.
+ *
+ * This is a diagnostic, NOT an instruction to fetch/skip the dependency.
+ * Rejected imports remain blockers for the protected original capture.
+ */
+export function classifyUnsupportedImport(raw){
+ if(typeof raw!=='string'||!raw||raw.trim()!==raw)return 'malformed';
+ if(/^https?:\/\//i.test(raw))return 'remote_http';
+ if(raw.startsWith('//'))return 'protocol_relative';
+ if(/^[a-z][a-z0-9+.-]*:/i.test(raw))return 'other_scheme';
+ if(!raw.startsWith('.')&&!raw.startsWith('/'))return 'bare_specifier';
+ if(raw.includes('\\')||raw.includes('\0'))return 'unsafe_local_path';
+ const path=raw.split(/[?#]/,1)[0];
+ let decoded;
+ try{decoded=decodeURIComponent(path);}
+ catch{return 'malformed_encoded_path';}
+ if(decoded!==path&&(decoded.includes('\\')||decoded.includes('\0')))
+  return 'unsafe_local_path';
+ if(!/\.(?:js|mjs)$/i.test(decoded))return 'non_js_local_target';
+ return 'invalid_or_outside_local_path';
+}
+
 export function htmlScripts(html){
  return [...html.matchAll(/<script\b[^>]*\bsrc\s*=\s*(?:"([^"]+)"|'([^']+)')[^>]*>/gi)]
   .map(m=>m[1]??m[2]);
