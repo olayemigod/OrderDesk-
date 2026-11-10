@@ -137,3 +137,35 @@ The guarded local collector now **rejects any plausible-looking but wrong .verce
 **Important scope:** SHA-256 equality confirms the private plan's alias was in the Vercel provider's frozen deployment-alias response; it does not by itself prove that the alias is **still** bound to the deployment at capture time, that the originally served bytes were captured, or that authorized historical reviewers retain access. The operator still has to confirm those properties using the original deployment in the Vercel UI, byte checksums and actual signed-in/signed-out browser evidence. The tool deliberately continues returning \`original_vercel_origin_attested:false\`, \`authorized_reviewer_verified:false\` and \`hosted_compiled_bundle_accepted:false\`.
 
 Offline CI uses fake Preview hostname fixtures with **injected test-only digest policy and mocked HTTP**, never real aliases or a real Vercel authenticated request. That synthetic override is rejected if the capture is using the genuine Vercel CLI transport. Real CLI entrypoints always use the fixed five-alias fingerprint baseline.
+
+
+## 10/11/2026 — first real Windows capture returned generic BLOCKED; preserve partial evidence
+
+After the private plan returned PASS under the operator's Vercel CLI 65.14.0 Hobby account, the first real read-only capture returned the previous catch-all message: "original protected Preview capture is missing, unsafe, or content-inconsistent." **No cause can be established from that message.** Do not claim SSO failure, a missing Vercel file, wrong backend, or historical reviewer success based on it. Existing files are deliberately retained when a download fails.
+
+**New source-only fix:** the runner now emits a fixed safe code (for example ROOT_GET_FAILED, JS_GET_FAILED, ROOT_NOT_APP_HTML, JS_IMPORT_UNSUPPORTED, or COMPILED_CONTENT_MISMATCH) and an original deployment ID if applicable. Raw CLI stderr, original URLs, authenticated cookies, access tokens and local paths remain suppressed. Regression tests cover the classification and non-disclosure. This diagnostic upgrade does not perform a new hosted request or authorize a bypass. To use it, the operator must pull the updated draft PR HEAD and, after reviewing the existing capture's partial status, use a **new** empty private output directory. Never overwrite or delete the original partial directory just to retry.
+
+**First perform offline, read-only inspection of the existing private partial directory in PowerShell:**
+
+~~~powershell
+0..4 | ForEach-Object {
+  $d = Join-Path $Output "capture_$_"
+  [pscustomobject]@{
+    Capture = "capture_$_"
+    Exists = Test-Path -LiteralPath $d -PathType Container
+    IndexHTML = Test-Path -LiteralPath (Join-Path $d "index.html") -PathType Leaf
+    JSFiles = if (Test-Path -LiteralPath $d -PathType Container) {
+      @(Get-ChildItem -LiteralPath $d -Recurse -File -ErrorAction SilentlyContinue |
+        Where-Object Extension -In ".js", ".mjs").Count
+    } else { 0 }
+  }
+} | Format-Table -AutoSize
+[pscustomobject]@{
+  PrivateManifestPresent = Test-Path -LiteralPath (Join-Path $Output "private-capture-manifest.json")
+  PrivateHashesPresent = Test-Path -LiteralPath (Join-Path $Output "private-capture-hashes.json")
+}
+~~~
+
+These summary counts alone do not prove the cause, but show how far the attempted capture progressed. Do not display, upload, paste or commit downloaded HTML/JS, complete private plan, Vercel URL, token or original capture. If all five capture folders have some content but both manifests are absent, the offline compiled backend content inspection may have failed; it cannot be accepted without evaluating the protected files.
+
+**Only if the first capture directory lacks index.html**, the operator can perform a single fresh, explicitly read-only diagnostic GET of the first original alias from the protected plan. Keep the body private and share only the shell exit code and non-sensitive file-shape metadata. Use \`vercel.cmd curl\` with its v65 \`--\` option separator; do not alter Vercel SSO or create another Preview. If the GET fails, capture and retain the full CLI output privately, but do not paste tokens/URLs in a public issue. Do not attempt a destructive Test maintenance operation while this gate is open.
