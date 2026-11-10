@@ -318,3 +318,33 @@ test('unknown off-origin script is never classified as safe or accepted',()=>wit
  assert.equal(report.original_source_accepted,false);
  assert.equal(report.html_entrypoint_gate_passed,false);
 }));
+
+test('saved Admin HTML exact Preview Toolbar script is flagged but never attested',()=>withPrivateFixture(({root})=>{
+ const dir=join(root,'capture_2');mkdirSync(dir);
+ const app='<script type="module" src="/assets/app.js"></script>';
+ const toolbar='<script async src="https://vercel.live/_next-live/feedback/feedback.js"></script>';
+ writeFileSync(join(dir,'index.html'),'<html>'+app+toolbar+'</html>');
+ const r=diagnoseSavedPreviewHTML(root,2);
+ assert.equal(r.html_script_src_count,2);
+ assert.equal(r.safe_local_js_src_count,1);
+ assert.equal(r.exact_vercel_toolbar_script_src_count,1);
+ assert.equal(r.outside_https_script_signals.total,1);
+ assert.equal(r.outside_https_script_signals.classic_tags,1);
+ assert.equal(r.outside_https_script_signals.async_tags,1);
+ assert.equal(r.external_toolbar_runtime_attested,false);
+ assert.equal(r.original_source_accepted,false);
+ assert.equal(r.html_entrypoint_gate_passed,false);
+ assert.equal(r.destructive_execution_authorized,false);
+ assert.equal(JSON.stringify(r).includes('vercel.live'),false);
+}));
+test('similar looking externally hosted toolbar URLs never count as exact',()=>withPrivateFixture(({root})=>{
+ const dir=join(root,'capture_2');mkdirSync(dir);
+ writeFileSync(join(dir,'index.html'),'<html>'+
+  '<script src="https://vercel.live/_next-live/feedback/feedback.js?secret=value"></script>'+
+  '<script src="https://vercel.live.evil.invalid/_next-live/feedback/feedback.js"></script>'+
+  '</html>');
+ const r=diagnoseSavedPreviewHTML(root,2);
+ assert.equal(r.exact_vercel_toolbar_script_src_count,0);
+ assert.equal(r.outside_https_script_signals.total,2);
+ assert.equal(r.external_toolbar_runtime_attested,false);
+}));
