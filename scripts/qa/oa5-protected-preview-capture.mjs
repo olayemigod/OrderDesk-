@@ -132,7 +132,7 @@ export function planVercelReadOnlyCommand(action,url=null,platform=process.platf
    throw Error('BLOCKED: unsafe Vercel read target');
  }
  const args=action==='curl'
-  ?['curl',url,'--fail','--silent','--show-error','--max-time','30']
+  ?['curl',url,'--','--fail','--silent','--show-error','--max-time','30']
   :['whoami'];
  if(platform==='win32'){
   // All arguments are fixed literals or already constrained to a simple
