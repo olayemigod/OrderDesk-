@@ -169,3 +169,29 @@ After the private plan returned PASS under the operator's Vercel CLI 65.14.0 Hob
 These summary counts alone do not prove the cause, but show how far the attempted capture progressed. Do not display, upload, paste or commit downloaded HTML/JS, complete private plan, Vercel URL, token or original capture. If all five capture folders have some content but both manifests are absent, the offline compiled backend content inspection may have failed; it cannot be accepted without evaluating the protected files.
 
 **Only if the first capture directory lacks index.html**, the operator can perform a single fresh, explicitly read-only diagnostic GET of the first original alias from the protected plan. Keep the body private and share only the shell exit code and non-sensitive file-shape metadata. Use \`vercel.cmd curl\` with its v65 \`--\` option separator; do not alter Vercel SSO or create another Preview. If the GET fails, capture and retain the full CLI output privately, but do not paste tokens/URLs in a public issue. Do not attempt a destructive Test maintenance operation while this gate is open.
+
+
+## 10/11/2026 — first private capture stopped inside capture_0; offline module diagnosis
+
+**Actual Windows operator observation:** the first read-only original-Preview capture stopped after creating **capture_0/index.html and two JavaScript files**, before any capture_1, capture_2, capture_3 or capture_4 directory. This narrows the failure to capture_0. It does **not** identify the exact failed request or whether the old runner blocked an unsupported import. It also does not prove that the first HTML or scripts are from their historical Vercel origin, nor that historical reviewer access remains valid.
+
+**New safe offline diagnosis (source-only):** \`scripts/qa/oa5-partial-preview-diagnose.mjs\` inspects **the existing failed capture directory without any HTTP, Vercel command, writes, token reads, source printing, file name output or new artifact fetch**. It reports only: root HTML present, saved JS count, HTML script references missing/unsafe, locally imported modules already saved/missing, unsupported or remote imports, and *counts* of saved JS containing either Test or Production Supabase refs. It avoids claiming a specific failed GET if the saved graph cannot prove one. A captured module with a Production ref remains an explicit STOP for further review.
+
+From the existing PowerShell session, where \`$Source\`, \`$Runner\` and \`$Output\` were already set:
+
+~~~powershell
+git -C "$Source" pull --ff-only
+$Diagnostic = Join-Path (Split-Path -Parent "$Runner") "oa5-partial-preview-diagnose.mjs"
+node "$Diagnostic" --check "$Output"
+~~~
+
+Do **not** use \`--capture\` or retry against the same \`$Output\` folder. Preserve the existing partial files, their timestamps, and any actual original-content evidence privately. Only share the fixed JSON count fields and diagnosis label; the diagnostic never prints any original hostname, filename, JS, HTML, token, raw URL, local private directory or access credentials. It always reports \`hosted_compiled_bundle_accepted:false\` and \`destructive_execution_authorized:false\`.
+
+Interpret the label conservatively:
+- \`HTML_JS_ENTRY_NOT_CAPTURED_OR_UNSAFE\`: at least one HTML-referenced script is not present or has an unsupported source URL; cannot conclude HTTP failure rather than an unsafe link.
+- \`UNSUPPORTED_IMPORT_PRESENT\`: the two already saved JS files include a literal import the bounded parser cannot safely resolve. Could be an external import; **do not fetch that origin**.
+- \`LOCAL_JS_IMPORT_NOT_CAPTURED\`: a literal local import refers to a not-yet-captured JS file, possibly the next failed GET; still **not proof** of HTTP status or origin.
+- \`NO_OBVIOUS_UNRESOLVED_REFERENCE_IN_SAVED_FILES\`: no unsupported/missing literal import in the saved files; the cause could be a parser gap, byte-limit failure, lost network response or another unobserved boundary. Do not infer success.
+- \`ROOT_HTML_ONLY\` or \`ROOT_HTML_NOT_SAVED\`: source capture stopped earlier than the two-JS state currently observed; this would require reviewing whether the operator selected the same original \`$Output\`.
+
+**QA posture:** all five original compiled bundles remain unaccepted, no Test/Production operations were authorized or performed by this offline diagnosis, and both the Vercel original-URL credential boundary and active Test cron schedules remain unchanged.
