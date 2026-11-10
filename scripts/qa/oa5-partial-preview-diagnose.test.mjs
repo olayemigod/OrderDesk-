@@ -6,6 +6,7 @@ import {tmpdir} from 'node:os';
 import {spawnSync} from 'node:child_process';
 import {TEST_REF,PROD_REF} from './oa5-historical-preview-bundle-inspection.mjs';
 import {diagnosePartialPreview} from './oa5-partial-preview-diagnose.mjs';
+import {classifyUnsupportedImport} from './oa5-preview-module-graph.mjs';
 
 function withPrivateFixture(run){
  const root=mkdtempSync(join(tmpdir(),'oa5-partial-inspect-'));
@@ -45,6 +46,7 @@ test('unknown remote/computed-style imported URL is counted, never fetched or re
  writeFileSync(join(assets,'a.js'),'import "https://secret.external.invalid/lib.js";export const x=1;');
  const r=diagnosePartialPreview(root);
  assert.equal(r.unsupported_or_remote_imports,1);
+ assert.equal(r.rejected_import_shape_counts.remote_http,1);
  assert.equal(r.failure_stage_inferred,'UNSUPPORTED_IMPORT_PRESENT');
  assert.equal(JSON.stringify(r).includes('secret.external.invalid'),false);
 }));
@@ -97,3 +99,35 @@ test('CLI rejects missing or unexpected flags without reading provider data',()=
   assert.match(r.stderr,/(Usage:|BLOCKED:)/);
  }
 });
+
+test('rejected JS import shape classifier never emits a secret-bearing URL, bare package or path',()=>{
+ const fixtures=[
+  ['https://private.example.invalid/token?api_key=secret','remote_http'],
+  ['//private.example.invalid/secret.js','protocol_relative'],
+  ['data:text/javascript,secret','other_scheme'],
+  ['@secret/package','bare_specifier'],
+  ['passwords/private-package','bare_specifier'],
+  ['../outside/../../../private.js','invalid_or_outside_local_path'],
+  ['./secret\\.js','unsafe_local_path'],
+  ['./secret.css','non_js_local_target'],
+  ['./invalid%ZZ.js','malformed_encoded_path'],
+  [' ','malformed']
+ ];
+ for(const [raw,expected] of fixtures){
+  const kind=classifyUnsupportedImport(raw);
+  assert.equal(kind,expected,raw);
+  assert.equal(kind.includes('secret'),false);
+  assert.equal(kind.includes('private'),false);
+  assert.equal(kind.includes('example'),false);
+ }
+});
+test('partial original capture classifies a bare module without disclosing package name',()=>withPrivateFixture(({root,first,assets})=>{
+ const packageName='extremely-private-test-package';
+ writeFileSync(join(first,'index.html'),'<html><script src="/assets/a.js"></script></html>');
+ writeFileSync(join(assets,'a.js'),'import "'+packageName+'";console.log("safe")');
+ const r=diagnosePartialPreview(root);
+ assert.equal(r.unsupported_or_remote_imports,1);
+ assert.equal(r.rejected_import_shape_counts.bare_specifier,1);
+ assert.equal(r.failure_stage_inferred,'UNSUPPORTED_IMPORT_PRESENT');
+ assert.equal(JSON.stringify(r).includes(packageName),false);
+}));
