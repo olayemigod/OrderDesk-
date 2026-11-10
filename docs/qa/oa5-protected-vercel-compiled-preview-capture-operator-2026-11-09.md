@@ -271,3 +271,17 @@ node "$Diagnostic" --check-html "$FreshOutput" 2
 Keep both failed capture directories untouched; **do not retry or overwrite the same location**, switch off Vercel authentication, whitelist external origins, edit deployment aliases or fetch outside hosts. If the output indicates a Vercel-hosted absolute script source, first verify its original alias and allowed historical provenance privately before changing URL normalization. If it indicates a different-origin script, determine whether it is a nonessential external script or an app-critical module; no automatic skip/acceptance without explicit evidence. Any genuine unknown/unsafe JS entry remains blocked. Preserve the existing 0.0 Production-ref evidence scope: that finding applies only to the saved files, not all missing Admin assets or all five historical original Previews.
 
 **All hosting, Auth/Storage, cron, migration and Production/Tandar change gates remain NO-GO.** This diagnostic is strictly local and read-only.
+
+
+## 10 November 2026 — first Admin Preview HTML contains an off-origin HTTPS script
+
+**Actual owner-provided offline evidence** from \`node "$Diagnostic" --check-html "$FreshOutput" 2\`: first Admin \`capture_2/index.html\` has **two** \`script src\` entries. One is a root-relative JS file that was **not downloaded**, and one is an **absolute HTTPS URL on a non-Vercel host**. Neither has a query or fragment. No script was already captured inside this Admin directory. The strict original-Preview capture correctly stopped with \`HTML_SCRIPT_REFERENCE_UNSAFE\` before making a request to that external host. The outside URL and original HTML must stay private. These facts do **not** prove the source is safe, dispensable, analytics, a payment widget, or even known to SellerTray.
+
+**New bounded offline source-only enhancement:** the same \`--check-html\` command now reports \`outside_https_script_signals\` with aggregate counts of \`type="module"\`, classic script, \`async\`, \`defer\`, \`integrity\`, \`crossorigin\`, and \`nonce\` attributes. Exact-host (not suffix) comparisons yield provider-*family hints* \`analytics_telemetry\`, \`payment_widget\`, \`captcha_security\`, \`unknown_or_other\`, but **none grants trust or permission to fetch/skip the script**. The diagnostic never emits source URL, host, HTML, JS, token, file path, query or attribute values.
+
+~~~powershell
+git -C "$Source" pull --ff-only
+node "$Diagnostic" --check-html "$FreshOutput" 2
+~~~
+
+**Do not rerun \`--capture\`** until the external-script trust/functionality boundary has been explicitly reviewed. No cross-origin asset may be fetched automatically, and the capture/inspection must keep this unresolved external dependency visible instead of claiming full original compiled acceptance. Both partial original-Preview directories remain private and unchanged. Test database/cron/Auth/Storage/external-provider isolation are still blocked, and Production/Tandar remain protected.
