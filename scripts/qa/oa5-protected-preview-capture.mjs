@@ -187,7 +187,8 @@ export function captureOriginalPreviewPlan(input,privateRoot,request=protectedVe
    const endpoint=new URL(rel==='index.html'?'/':'/'+rel,d.origin).href;
    let buffer;
    try{buffer=request(endpoint,cap);}
-   catch{throw Error('BLOCKED: missing/unauthorized original Preview asset for '+d.id);}
+   catch{throw Error('BLOCKED: original Preview '+(rel==='index.html'?'root HTML':'JavaScript asset')+
+       ' GET failed for '+d.id);}
    if(!Buffer.isBuffer(buffer)||buffer.length===0||buffer.length>cap)
     throw Error('BLOCKED: empty, oversize or invalid protected Preview file for '+d.id);
    bytes+=buffer.length;
@@ -247,6 +248,37 @@ export function captureOriginalPreviewPlan(input,privateRoot,request=protectedVe
   capture_count:hashes.length,total_file_count:hashes.reduce((sum,h)=>sum+h.files.length,0),
   manifest_path:manifestPath,hash_inventory_path:hashesPath};
 }
+/**
+ * Print only a fixed reason code and a frozen deployment ID, never a
+ * deployment URL, downloaded JS/HTML, CLI stderr, access token or local path.
+ * An unrecognized exception always maps to a non-specific safe code.
+ */
+export function classifyProtectedCaptureFailure(error){
+ const message=error instanceof Error?error.message:'';
+ const id=EXPECTED.find(x=>message.includes(x.id))?.id??null;
+ let code='UNCLASSIFIED_PRIVATE_FAILURE';
+ for(const [test,safeCode] of [
+  [/^BLOCKED: original Preview root HTML GET failed for dpl_[A-Za-z0-9]+$/, 'ROOT_GET_FAILED'],
+  [/^BLOCKED: original Preview JavaScript asset GET failed for dpl_[A-Za-z0-9]+$/, 'JS_GET_FAILED'],
+  [/^BLOCKED: root document is not original application HTML for dpl_[A-Za-z0-9]+$/, 'ROOT_NOT_APP_HTML'],
+  [/^BLOCKED: compiled JS is an HTML challenge\/redirect for dpl_[A-Za-z0-9]+$/, 'JS_IS_HTML_CHALLENGE'],
+  [/^BLOCKED: original HTML has missing\/unsafe JavaScript entrypoints for dpl_[A-Za-z0-9]+$/, 'HTML_SCRIPT_REFERENCE_UNSAFE'],
+  [/^BLOCKED: unsupported\/unsafe original local module dependency for dpl_[A-Za-z0-9]+$/, 'JS_IMPORT_UNSUPPORTED'],
+  [/^BLOCKED: captured original Preview content failed offline Test-only inspection$/, 'COMPILED_CONTENT_MISMATCH'],
+  [/^BLOCKED: invalid original Preview capture mapping:/, 'PRIVATE_CAPTURE_PLAN_INVALID'],
+  [/^BLOCKED: historical compiled assets must never be stored inside the Git repository$/, 'CAPTURE_LOCATION_UNSAFE'],
+  [/^BLOCKED: private parent workspace is missing$/, 'PRIVATE_PARENT_MISSING'],
+  [/^BLOCKED: never overwrite existing private historical capture$/, 'CAPTURE_ALREADY_EXISTS'],
+  [/^BLOCKED: original Preview file count\/size exceeded for dpl_[A-Za-z0-9]+$/, 'CAPTURE_SIZE_LIMIT'],
+  [/^BLOCKED: excessive original module graph for dpl_[A-Za-z0-9]+$/, 'JS_GRAPH_TOO_LARGE'],
+  [/^BLOCKED: empty, oversize or invalid protected Preview file for dpl_[A-Za-z0-9]+$/, 'EMPTY_OR_OVERSIZE_FILE'],
+  [/^BLOCKED: original Preview file count\/size exceeded/, 'CAPTURE_SIZE_LIMIT'],
+  [/^BLOCKED: captured original Preview content failed offline Test-only inspection/, 'COMPILED_CONTENT_MISMATCH']
+ ]){
+  if(test.test(message)){code=safeCode;break;}
+ }
+ return {code,original_deployment_id:id};
+}
 function main(){
  if(process.argv.length!==4&&process.argv.length!==5){
   console.error('Usage: node scripts/qa/oa5-protected-preview-capture.mjs --check-plan <private-plan.json> | --capture <private-plan.json> <new-private-output-directory>');
@@ -290,9 +322,13 @@ function main(){
   console.log('Private manifest and checksums written only under the requested protected output directory.');
   console.log('NOT VERIFIED: true original alias-to-deployment provenance or authorized reviewer access.');
   console.log('NOT AUTHORIZED: no deployment, Test reset, provider callback, cron pause or Production change.');
- }catch{
-  // Refuse to print URL-bearing provider errors or the contents of captures.
-  console.error('BLOCKED: original protected Preview capture is missing, unsafe, or content-inconsistent. Review the private workspace without publishing it.');
+ }catch(error){
+  // Only fixed reason labels and frozen Vercel deployment IDs are printed.
+  const reason=classifyProtectedCaptureFailure(error);
+  console.error('BLOCKED: '+reason.code+
+    (reason.original_deployment_id?' at '+reason.original_deployment_id:'')+
+    '. No URL, token, downloaded HTML or local path disclosed.');
+  console.error('Preserve the partial private output directory for offline inspection; do not retry into the same folder.');
   process.exitCode=1;
  }
 }
