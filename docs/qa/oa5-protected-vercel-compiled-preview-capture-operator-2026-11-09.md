@@ -285,3 +285,32 @@ node "$Diagnostic" --check-html "$FreshOutput" 2
 ~~~
 
 **Do not rerun \`--capture\`** until the external-script trust/functionality boundary has been explicitly reviewed. No cross-origin asset may be fetched automatically, and the capture/inspection must keep this unresolved external dependency visible instead of claiming full original compiled acceptance. Both partial original-Preview directories remain private and unchanged. Test database/cron/Auth/Storage/external-provider isolation are still blocked, and Production/Tandar remain protected.
+
+
+## 10 November 2026 — exact Vercel Preview Toolbar is the only permitted platform-script exclusion
+
+**Owner's latest original HTML evidence:** in retained \`capture_2/index.html\`, two script sources: one local JS entry and one **classic asynchronous external HTTPS script** with no SRI, crossorigin, nonce, query or fragment. The previous offline host-family classifier reported \`unknown_or_other=1\`; no exact identity is yet verified from those counts. This is a *strong candidate* for the Vercel Preview Toolbar script, which Vercel documents as a platform-injected script at the public fixed URL \`https://vercel.live/_next-live/feedback/feedback.js\`. **The exact signature must still be checked in the private saved HTML.**
+
+The historical source \`apps/admin-web/index.html\` at original Admin deployment commit \`7ba66274068ee75a2341a9adcccde338b1545f90\` contains only the single local Vite application module script, not a remote asynchronous script. This supports, but does **not** prove, the hypothesis that Vercel injected platform Preview tooling after build.
+
+The private-only HTML diagnostic has gained a boolean-safe **\`exact_vercel_toolbar_script_src_count\`** (and \`external_toolbar_runtime_attested:false\`). A count of **1** means the original saved HTML has a byte-for-byte match for Vercel's published script URL. It does not attest execution, load safety, reviewer access, current hosting provenance or which process inserted the script. Lookalikes, alternate paths, query/fragment variants, redirect targets and duplicated scripts are not accepted.
+
+The protected capture and offline compiled graph now recognize **only that exact published script source** as a *separate unverified Vercel Preview runtime dependency*, preserved in the original saved HTML and recorded by count in the private SHA-256 inventory. That script is **never fetched, executed or considered application JS**. Any other third-party script remains a **hard block**. The local app module must still be fetched from each original authenticated Vercel Preview; its local imports and all compiled backend refs must still pass the Test-only check across **all five** originals. The resulting content pass is an **application HTML/JS-only** assessment, not a complete attestation of the external Vercel Toolbar/runtime; this external script requires separate documented reviewer judgment. Provider and Test/Production isolation gates are unaffected.
+
+**Operator sequence: first verify the exact source on the already saved second capture, offline:**
+
+~~~powershell
+git -C "$Source" pull --ff-only
+node "$Diagnostic" --check-html "$FreshOutput" 2
+~~~
+
+Review \`exact_vercel_toolbar_script_src_count\`. If it is **not exactly 1**, STOP; do not attempt another capture or relax the script policy. If it is **1**, and the OA5 Isolation CI on the new PR HEAD is PASS, an original same-origin Vercel GET-only capture to a **fresh distinct private output folder** can be attempted:
+
+~~~powershell
+$Runner = Join-Path $Source "scripts\qa\oa5-protected-preview-capture.mjs"
+node --experimental-vm-modules "$Runner" --check-plan "$Plan"
+$ThirdOutput = Join-Path $Private ("historical-preview-toolbar-" + (Get-Date -Format "yyyyMMdd-HHmmss"))
+node --experimental-vm-modules "$Runner" --capture "$Plan" "$ThirdOutput"
+~~~
+
+Do not delete or overwrite earlier \`$Output\` or \`$FreshOutput\`; no host changes, new Vercel deployment, paid resources or external JavaScript fetches are authorized. The manifest hash inventory records \`unverified_external_vercel_toolbar_ref_count\` per original deployment. Even a local content PASS does **not** authorize OA5 Test reset, cron pause, Auth/Storage deletion, external payment/WhatsApp/provider callbacks or production cutover.
