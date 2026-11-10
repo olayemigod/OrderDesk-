@@ -211,3 +211,21 @@ node "$Diagnostic" --check "$Output"
 ~~~
 
 If the rejected import is bare_specifier or remote_http, inspect its significance in the private environment; **do not automatically fetch it, substitute a local package, skip it or accept the original Preview as isolated**. If it is non_js_local_target, distinguish an actual stylesheet/asset reference from an unexpected module import before changing graph policy. If it is invalid_or_outside_local_path or unsafe_local_path, STOP for a security review. Seven missing literal local JS targets remain incomplete even after the unsupported reference is classified. A new remote attempt is not authorized merely by this offline observation. Original compiled artifact origin, historical reviewer continuity and provider isolation remain independent blocked gates.
+
+
+## 10/11/2026 — verify bare specifier as real compiled ESM import, without executing downloaded code
+
+**Actual second offline operator check:** among the nine regex-detected import strings in two retained JavaScript files, exactly **one** was classified as a \`bare_specifier\`; remote_http, protocol_relative, other_scheme, invalid/outside paths and non-JavaScript import categories were all zero. Seven missing local JS files remain. The presence of a bare import **may be genuine ESM or a regex match inside compiled source text/comment**. Neither possibility proves that an original deployed browser module was broken, and no external fetch is justified by that count alone.
+
+The offline diagnostic now optionally invokes Node's **V8 JavaScript module parser** to distinguish genuine static \`import … from 'package'\`, \`import 'package'\` and \`export … from 'package'\` dependencies from incidental regex matches in JS strings/comments. This parser is **parse-only**: it neither links nor evaluates any captured JavaScript, imports any module, or contacts a network. Using it does not accept the capture or weaken the original importer/production isolation gate.
+
+On the owner's Windows PowerShell session, with the existing private \`$Output\` preserved:
+
+~~~powershell
+git -C "$Source" pull --ff-only
+node --experimental-vm-modules "$Diagnostic" --check "$Output"
+~~~
+
+Share only the fixed boolean/count JSON fields, especially \`static_module_parser_available\`, \`static_module_files_parsed\`, \`static_module_parse_errors\`, \`proven_static_bare_imports\`, and \`rejected_import_shape_counts.bare_specifier\`. The CLI deliberately suppresses parser error detail or source text, and the parser may emit a harmless Node experimental-feature warning to stderr. **If \`proven_static_bare_imports > 0\`, STOP and assess the actual dependency's original browser-resolution mechanism privately (import map, externalized package or similar). Do not skip it, fetch an arbitrary package, create a new Preview or claim successful compiled isolation.** If the number is zero, the regex hit may be a dynamic import or incidental quoted text/comment; this still needs bounded graph validation and does **not** make the seven missing original JS files acceptable.
+
+The V8 check is deliberately optional, so normal QA CI can run unchanged on Node without experimental VM module support. Its isolated regression tests invoke the experimental parser explicitly against **synthetic files only**; no original Preview bytes enter CI.
