@@ -11,7 +11,7 @@ import {existsSync,lstatSync,readdirSync,readFileSync} from 'node:fs';
 import {resolve,join,relative,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import * as vm from 'node:vm';
-import {htmlScripts,importedLiterals,localPath,classifyUnsupportedImport} from './oa5-preview-module-graph.mjs';
+import {htmlScripts,importedLiterals,localPath,classifyUnsupportedImport,VERCEL_TOOLBAR_SCRIPT} from './oa5-preview-module-graph.mjs';
 import {TEST_REF,PROD_REF} from './oa5-historical-preview-bundle-inspection.mjs';
 
 const MAX_FILES=2000,MAX_BYTES=80*1024*1024,MAX_JS_BYTES=12*1024*1024;
@@ -153,6 +153,8 @@ export function diagnoseSavedPreviewHTML(root,index){
   html_script_src_count:0,html_script_without_src_count:0,
   safe_local_js_src_count:0,safe_local_js_already_saved_count:0,
   unsafe_or_nonlocal_src_count:0,query_or_fragment_src_count:0,
+  exact_vercel_toolbar_script_src_count:0,
+  external_toolbar_runtime_attested:false,
   // Provider-family hints are not trust or authorization to fetch.
   outside_https_script_signals:{
    total:0,module_tags:0,classic_tags:0,async_tags:0,
@@ -199,6 +201,7 @@ export function diagnoseSavedPreviewHTML(root,index){
    continue;
   }
   if(/[?#]/.test(raw))result.query_or_fragment_src_count++;
+  if(raw===VERCEL_TOOLBAR_SCRIPT)result.exact_vercel_toolbar_script_src_count++;
   const local=localPath('index.html',raw,true);
   if(local){
    result.safe_local_js_src_count++;
