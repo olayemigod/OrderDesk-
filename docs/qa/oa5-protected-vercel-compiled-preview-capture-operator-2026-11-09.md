@@ -229,3 +229,27 @@ node --experimental-vm-modules "$Diagnostic" --check "$Output"
 Share only the fixed boolean/count JSON fields, especially \`static_module_parser_available\`, \`static_module_files_parsed\`, \`static_module_parse_errors\`, \`proven_static_bare_imports\`, and \`rejected_import_shape_counts.bare_specifier\`. The CLI deliberately suppresses parser error detail or source text, and the parser may emit a harmless Node experimental-feature warning to stderr. **If \`proven_static_bare_imports > 0\`, STOP and assess the actual dependency's original browser-resolution mechanism privately (import map, externalized package or similar). Do not skip it, fetch an arbitrary package, create a new Preview or claim successful compiled isolation.** If the number is zero, the regex hit may be a dynamic import or incidental quoted text/comment; this still needs bounded graph validation and does **not** make the seven missing original JS files acceptable.
 
 The V8 check is deliberately optional, so normal QA CI can run unchanged on Node without experimental VM module support. Its isolated regression tests invoke the experimental parser explicitly against **synthetic files only**; no original Preview bytes enter CI.
+
+
+## 10 November 2026 — V8 confirmed eight genuine static local imports and no genuine static bare import
+
+The owner ran \`node --experimental-vm-modules "$Diagnostic" --check "$Output"\` on the **preserved first, failed original Merchant capture**. Both saved JS files parsed successfully with V8 (**static_module_files_parsed=2**, **static_module_parse_errors=0**). The compiled modules contain **8 genuine static local imports**, **0 genuine static bare imports** and **0 genuine static remote imports**. The earlier regex matcher found 9 strings: 8 local and one \`bare_specifier\`. Thus **the bare regex hit is not a static import**, though it could still be real dynamic \`import('...')\` or inert source text. Seven genuine local JS imports were not yet captured. One already saved JS file references the Test backend and none the Production backend; this is insufficient to attest all five original compiled bundles.
+
+### Source-only correction: parse-only syntax perturbation, no unsafe import bypass
+
+\`auditedImportLiterals()\` in \`scripts/qa/oa5-preview-module-graph.mjs\` now uses V8's unexecuted \`SourceTextModule\` to enumerate *real static module dependencies*. For every regex-detected reference V8 does not recognize as static, it compiles **an in-memory copy** with a deliberately invalid control token in place of the alleged import expression. If the modified copy **still parses**, the match was inert text/comment/regex rather than executable module syntax and is omitted from the fetch graph. If it fails to parse, the candidate stays **untrusted and in the graph**, so a genuine local dynamic import must still be captured, and an external/bare/unsafe one remains a hard **BLOCK**. Any invalid original JS, unavailable VM parser or excessive ambiguous references also blocks.
+
+There is **no execution, evaluation, module linking, package install, network access or write** during this syntactic check. The original Test-only compiled backend check and Production ref rejection remain unchanged. The same audited dependency graph now feeds both the protected original Vercel capture and its offline inspector, preventing a false regex hit from causing inconsistent acceptance. The helper **requires** Node's V8 module parser for a real authenticated capture; mock CI fixtures remain compatible with the original conservative offline fallback.
+
+**Before a new read-only capture:** verify the new PR head passes the OA5 Isolation CI suite, including \`node --experimental-vm-modules --test scripts/qa/oa5-preview-module-graph-vm.test.mjs\`. The tests use *synthetic* source only: eight real local imports plus inert import-like strings, real dynamic bare and remote imports (blocked), real dynamic local imports (retained), module parse failure, and five complete mock Preview captures. The operator's two-file partial evidence is never sent to GitHub or copied into CI.
+
+**Operator commands after CI passes:**
+
+~~~powershell
+git -C "$Source" pull --ff-only
+node --experimental-vm-modules "$Runner" --check-plan "$Plan"
+$FreshOutput = Join-Path $Private ("historical-preview-vm-" + (Get-Date -Format "yyyyMMdd-HHmmss"))
+node --experimental-vm-modules "$Runner" --capture "$Plan" "$FreshOutput"
+~~~
+
+Always use a **new**, empty output path; do not delete, overwrite or rename the first failed \`$Output\`. Even if all five original bundles pass their backend-content checks, original deployment provenance, the historical reviewer-access test, and the external-provider/cron/Auth/Storage isolation gates remain separate **NO-GO** items. No production domain, Vercel protection rule, paid plan, Test/Production SQL or Tandar operations are modified by these source/CLI actions.
