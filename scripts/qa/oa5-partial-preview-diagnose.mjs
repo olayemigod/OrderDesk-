@@ -10,7 +10,7 @@
 import {existsSync,lstatSync,readdirSync,readFileSync} from 'node:fs';
 import {resolve,join,relative,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {SourceTextModule} from 'node:vm';
+import * as vm from 'node:vm';
 import {htmlScripts,importedLiterals,localPath,classifyUnsupportedImport} from './oa5-preview-module-graph.mjs';
 import {TEST_REF,PROD_REF} from './oa5-historical-preview-bundle-inspection.mjs';
 
@@ -35,7 +35,7 @@ export function diagnosePartialPreview(root){
   unsupported_or_remote_imports:0,
   // Parse-only V8 module syntax proof is optional and requires
   // --experimental-vm-modules. Construction NEVER links or evaluates code.
-  static_module_parser_available:typeof SourceTextModule==='function',
+  static_module_parser_available:typeof vm.SourceTextModule==='function',
   static_module_files_parsed:0,
   static_module_parse_errors:0,
   proven_static_bare_imports:0,
@@ -101,7 +101,7 @@ export function diagnosePartialPreview(root){
   // actual *static* module imports/exports without executing captured code.
   if(output.static_module_parser_available){
    try{
-    const mod=new SourceTextModule(text,{identifier:'untrusted-captured-js'});
+    const mod=new vm.SourceTextModule(text,{identifier:'untrusted-captured-js'});
     output.static_module_files_parsed++;
     for(const dep of mod.dependencySpecifiers){
      const shape=classifyUnsupportedImport(dep);
