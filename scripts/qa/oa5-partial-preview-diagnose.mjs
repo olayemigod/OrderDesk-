@@ -153,6 +153,15 @@ export function diagnoseSavedPreviewHTML(root,index){
   html_script_src_count:0,html_script_without_src_count:0,
   safe_local_js_src_count:0,safe_local_js_already_saved_count:0,
   unsafe_or_nonlocal_src_count:0,query_or_fragment_src_count:0,
+  // Provider-family hints are not trust or authorization to fetch.
+  outside_https_script_signals:{
+   total:0,module_tags:0,classic_tags:0,async_tags:0,
+   defer_tags:0,integrity_tags:0,crossorigin_tags:0,nonce_tags:0,
+   exact_host_family_hints:{
+    analytics_telemetry:0,payment_widget:0,captcha_security:0,
+    unknown_or_other:0
+   }
+  },
   src_shape_counts:{
    root_relative_js:0,dot_relative_js:0,bare_relative_js:0,
    absolute_https_vercel_app:0,absolute_https_other:0,
@@ -218,6 +227,44 @@ export function diagnoseSavedPreviewHTML(root,index){
   }else if(/^[a-z][a-z0-9+.-]*:/i.test(raw))kind='other_scheme';
   else if(!/\.(?:m?js)(?:[?#].*)?$/i.test(raw))kind='non_js_target';
   result.src_shape_counts[kind]++;
+ }
+ // Report only bounded tag attribute counts and exact-host family hints.
+ // Never report full src, host, path, URL, query, tokens, or script contents.
+ const signal=result.outside_https_script_signals;
+ for(const match of html.matchAll(/<script\b[^>]*>/gi)){
+  const tag=match[0];
+  const srcMatch=tag.match(/\bsrc\s*=\s*(?:"([^"]+)"|'([^']+)')/i);
+  const src=srcMatch?.[1]??srcMatch?.[2];
+  if(typeof src!=='string'||src.length>4096)continue;
+  let host;
+  try{
+   const url=new URL(src);
+   if(url.protocol!=='https:'||/^[a-z0-9-]+\.vercel\.app$/.test(url.hostname))
+    continue;
+   host=url.hostname;
+  }catch{continue;}
+  signal.total++;
+  if(/\btype\s*=\s*(?:"module"|'module')/i.test(tag))
+   signal.module_tags++;
+  else signal.classic_tags++;
+  if(/\sasync(?:\s|=|>)/i.test(tag))signal.async_tags++;
+  if(/\sdefer(?:\s|=|>)/i.test(tag))signal.defer_tags++;
+  if(/\bintegrity\s*=\s*["'][^"']+["']/i.test(tag))
+   signal.integrity_tags++;
+  if(/\bcrossorigin(?:\s|=|>)/i.test(tag))signal.crossorigin_tags++;
+  if(/\bnonce\s*=\s*["'][^"']+["']/i.test(tag))signal.nonce_tags++;
+  // Exact host comparison; a recognized family is NOT an allowlist.
+  const family=[
+   'www.googletagmanager.com','www.google-analytics.com',
+   'static.cloudflareinsights.com','va.vercel-scripts.com'
+  ].includes(host)?'analytics_telemetry':
+   ['js.paystack.co','checkout.flutterwave.com',
+    'js.stripe.com','checkout.paystack.com'].includes(host)?
+    'payment_widget':
+   ['www.google.com','www.recaptcha.net',
+    'challenges.cloudflare.com','js.hcaptcha.com'].includes(host)?
+    'captcha_security':'unknown_or_other';
+  signal.exact_host_family_hints[family]++;
  }
  // These are diagnostic-only. A matching suffix is not origin proof.
  return result;
