@@ -14,7 +14,7 @@ import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {EXPECTED,inspectPreviewBundleCapture} from './oa5-historical-preview-bundle-inspection.mjs';
-import {localPath,htmlScripts,auditedImportLiterals} from './oa5-preview-module-graph.mjs';
+import {localPath,htmlScripts,auditedImportLiterals,classifyOriginalPreviewScripts} from './oa5-preview-module-graph.mjs';
 import * as vm from 'node:vm';
 
 const MAX_FILES=2000;
@@ -212,10 +212,13 @@ export function captureOriginalPreviewPlan(input,privateRoot,request=protectedVe
    return text;
   }
   const html=fetchLocal('index.html');
-  const jsPaths=htmlScripts(html).map(src=>localPath('index.html',src,true));
-  if(!jsPaths.length||jsPaths.some(x=>!x))
+  const scriptPlan=classifyOriginalPreviewScripts(html);
+  if(!scriptPlan.localScripts.length||scriptPlan.unsafe_or_unreviewed_script_count)
    throw Error('BLOCKED: original HTML has missing/unsafe JavaScript entrypoints for '+d.id);
-  const visited=new Set(),queue=[...jsPaths];
+  // External Vercel Toolbar script is a declared unverified runtime
+  // dependency, not part of the self-contained application module graph.
+  // Never fetch it, accept it as attested, or delete it from original HTML.
+  const visited=new Set(),queue=[...scriptPlan.localScripts];
   while(queue.length){
    const rel=queue.pop();
    if(visited.has(rel))continue;
@@ -230,7 +233,9 @@ export function captureOriginalPreviewPlan(input,privateRoot,request=protectedVe
   }
   manifest.deployments.push({id:d.id,sha:d.sha,surface:d.surface,
    directory:d.directory,capture_evidence_ref:d.capture_evidence_ref});
-  hashes.push({deployment_id:d.id,surface:d.surface,files:fileHashes});
+  hashes.push({deployment_id:d.id,surface:d.surface,
+   unverified_external_vercel_toolbar_ref_count:scriptPlan.vercel_toolbar_script_count,
+   files:fileHashes});
  }
  const inspection=inspectPreviewBundleCapture(manifest,root,now,realCapture);
  if(!inspection.content_consistent_with_test){
@@ -250,6 +255,7 @@ export function captureOriginalPreviewPlan(input,privateRoot,request=protectedVe
   hosted_compiled_bundle_accepted:false,
   destructive_execution_authorized:false,
   capture_count:hashes.length,total_file_count:hashes.reduce((sum,h)=>sum+h.files.length,0),
+  unverified_external_toolbar_references:hashes.reduce((sum,h)=>sum+h.unverified_external_vercel_toolbar_ref_count,0),
   manifest_path:manifestPath,hash_inventory_path:hashesPath};
 }
 /**
@@ -327,6 +333,7 @@ function main(){
   const result=captureOriginalPreviewPlan(plan,privateRoot);
   console.log('PASS: privately captured '+result.capture_count+' supplied Preview trees and '+result.total_file_count+' local files.');
   console.log('Private manifest and checksums written only under the requested protected output directory.');
+  console.log('NOT VERIFIED: '+result.unverified_external_toolbar_references+' separate Vercel Preview Toolbar script references were never fetched or attested.');
   console.log('NOT VERIFIED: true original alias-to-deployment provenance or authorized reviewer access.');
   console.log('NOT AUTHORIZED: no deployment, Test reset, provider callback, cron pause or Production change.');
  }catch(error){
