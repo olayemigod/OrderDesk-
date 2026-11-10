@@ -51,6 +51,38 @@ export function htmlScripts(html){
  return [...html.matchAll(/<script\b[^>]*\bsrc\s*=\s*(?:"([^"]+)"|'([^']+)')[^>]*>/gi)]
   .map(m=>m[1]??m[2]);
 }
+/**
+ * The *only* approved non-app HTML script is the exact, documented Vercel
+ * Preview Toolbar injection. It is excluded from the app module graph, but
+ * remains in the original saved HTML and is reported as an external runtime
+ * dependency. No cross-origin HTTP request is ever made.
+ *
+ * This does not attest who injected the script or whether reviewer access,
+ * the external runtime, or a hosted frontend is safe.
+ */
+export const VERCEL_TOOLBAR_SCRIPT='https://vercel.live/_next-live/feedback/feedback.js';
+export function classifyOriginalPreviewScripts(html){
+ const refs=htmlScripts(html),localScripts=[];
+ let toolbarCount=0,unsafeCount=0;
+ for(const src of refs){
+  if(src===VERCEL_TOOLBAR_SCRIPT){
+   toolbarCount++;
+   continue;
+  }
+  const local=localPath('index.html',src,true);
+  if(local)localScripts.push(local);
+  else unsafeCount++;
+ }
+ // Multiple injections are not a supported historical shape.
+ if(toolbarCount>1)unsafeCount++;
+ return {
+  localScripts:[...new Set(localScripts)],
+  vercel_toolbar_script_count:toolbarCount,
+  unsafe_or_unreviewed_script_count:unsafeCount,
+  html_script_src_count:refs.length
+ };
+}
+
 export function importedLiterals(js){
  const refs=[];
  for(const regex of [
@@ -117,9 +149,11 @@ export function auditedImportLiterals(js,{requireParser=false}={}){
 }
 export function traceCapturedModuleGraph(byRelative,readText,testRef,requireAuditedParser=false){
  const errors=[],reachable=new Set(),entrypoints=new Set();
+ let htmlPlan=null;
  const outcome=()=>({
   errors,
   html_linked_entrypoints:entrypoints.size,
+  exact_vercel_toolbar_injection_seen:htmlPlan?.vercel_toolbar_script_count===1,
   reachable_js_count:reachable.size,
   reachable_test_ref:[...reachable].some(p=>{
     try{return readText(p).includes(testRef);}catch{return false;}
@@ -139,12 +173,14 @@ export function traceCapturedModuleGraph(byRelative,readText,testRef,requireAudi
   errors.push('Unreadable original root HTML');
   return outcome();
  }
- const refs=htmlScripts(html);
- if(!refs.length)errors.push('Historical root HTML has no script src');
+ htmlPlan=classifyOriginalPreviewScripts(html);
+ if(!htmlPlan.html_script_src_count||!htmlPlan.localScripts.length)
+  errors.push('Historical root HTML has no local application JS entrypoint');
+ if(htmlPlan.unsafe_or_unreviewed_script_count)
+  errors.push('Historical HTML includes unreviewed non-local script');
  const queue=[];
- for(const raw of refs){
-  const path=localPath('index.html',raw,true);
-  if(!path||!byRelative.has(path)){
+ for(const path of htmlPlan.localScripts){
+  if(!byRelative.has(path)){
    errors.push('Historical HTML references absent/unsafe compiled script');
    continue;
   }
