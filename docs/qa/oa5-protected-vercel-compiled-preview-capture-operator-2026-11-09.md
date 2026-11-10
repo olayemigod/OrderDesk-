@@ -314,3 +314,24 @@ node --experimental-vm-modules "$Runner" --capture "$Plan" "$ThirdOutput"
 ~~~
 
 Do not delete or overwrite earlier \`$Output\` or \`$FreshOutput\`; no host changes, new Vercel deployment, paid resources or external JavaScript fetches are authorized. The manifest hash inventory records \`unverified_external_vercel_toolbar_ref_count\` per original deployment. Even a local content PASS does **not** authorize OA5 Test reset, cron pause, Auth/Storage deletion, external payment/WhatsApp/provider callbacks or production cutover.
+
+
+## 10 November 2026 — all five original HTML/JS trees captured; preserve and independently recheck SHA custody
+
+**Operator-confirmed CLI PASS:** the third, fresh protected read-only historical capture under \`$ThirdOutput\` reported **5 original Preview trees / 38 local files**, with private manifest and SHA-256 inventory written inside the private workspace. **Three exact Vercel Preview Toolbar HTML script references were deliberately not fetched or attested.** The output explicitly says alias-to-deployment provenance and authorized historical browser-reviewer access are not verified by the capture, and explicitly authorizes **no deployment, Test reset, provider callback, cron pause or Production change**. Do not describe the local capture as end-to-end browser acceptance or as a hosted cutover approval.
+
+**Independent provider metadata recheck (read-only connected Vercel account):** all five frozen original deployment IDs returned \`READY\`, the expected pinned Git commit and SellerTray Merchant/Admin project, the original GitHub repository, and a **single exact original immutable Preview alias** that is present in both deployment metadata and the provider's deployment-alias list. This confirms the *current provider metadata identity/alias mapping*, not that the local capture bytes are cryptographically signed by Vercel or that a historical reviewer can still sign in. The encrypted private plan, original aliases and compiled file contents must remain outside Git.
+
+**New separate, read-only local integrity verifier:** \`scripts/qa/oa5-private-capture-integrity.mjs\` replays \`private-capture-hashes.json\` against each existing file's SHA-256, declared byte count, exact frozen deployment ID/source SHA, root file inventory, five capture directories, file-path confinement and symlink safety. It independently re-runs the strict V8-only offline application HTML/JS Test-backend graph inspector. It does **not** fetch original Vercel or external Toolbar scripts, change files, print original URLs, source bytes, SHA digests, paths or tokens, or confer user/browser authorization. The inspector does not fully model nonliteral runtime-loaded chunks, so an offline content pass must retain this scope limitation.
+
+Use the existing Windows PowerShell session and run **only**:
+
+~~~powershell
+git -C "$Source" pull --ff-only
+$Integrity = Join-Path $Source "scripts\qa\oa5-private-capture-integrity.mjs"
+node --experimental-vm-modules "$Integrity" --check "$ThirdOutput"
+~~~
+
+Successful output should report five identities and the same **38 files**, the per-capture file counts and **3** separate unverified Toolbar script refs. A \`BLOCKED\` result means stop and privately inspect the preserved custody files; never upload or overwrite them. The private hash-inventory and manifest filenames must not be exposed in issue comments with full absolute local paths, and the inventory itself must not be uploaded to Git.
+
+**Remaining acceptance boundaries:** (1) integrity replay and private artifact custody, (2) historical reviewer signed-in/signed-out browser proof with approved protection boundaries, (3) independent frontend external Toolbar/runtime and dynamic-module scope review, (4) Test/Production ingress and provider routes, tenant and Auth/Storage, cron quiescence/reversibility, Test archive/fresh census/restore, and exact migration parity. A successful local integrity replay resolves only the local artifact/hash check. PR #228 stays DRAFT; hosted OA5 Test rebuild **NO-GO**; no production, Tandar, customer or provider changes.
