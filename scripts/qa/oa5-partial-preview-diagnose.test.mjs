@@ -5,7 +5,7 @@ import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {spawnSync} from 'node:child_process';
 import {TEST_REF,PROD_REF} from './oa5-historical-preview-bundle-inspection.mjs';
-import {diagnosePartialPreview} from './oa5-partial-preview-diagnose.mjs';
+import {diagnosePartialPreview,diagnoseSavedPreviewHTML} from './oa5-partial-preview-diagnose.mjs';
 import {classifyUnsupportedImport} from './oa5-preview-module-graph.mjs';
 
 function withPrivateFixture(run){
@@ -185,4 +185,93 @@ test('V8 parser errors never print the private JS syntax or weaken blocked captu
  assert.equal(report.hosted_compiled_bundle_accepted,false);
  assert.equal(proc.stdout.includes('secretMarker'),false);
  assert.equal(proc.stdout.includes('private-broken-package'),false);
+}));
+
+test('saved admin capture_2 HTML counts local JS and remote scripts without revealing URL or source',()=>withPrivateFixture(({root})=>{
+ const dir=join(root,'capture_2');
+ const secret='protected-admin-script-secret';
+ mkdirSync(join(dir,'assets'),{recursive:true});
+ writeFileSync(join(dir,'index.html'),'<html>'+
+  '<script type="module" src="/assets/admin.js"></script>'+
+  '<script src="https://third-party.invalid/'+secret+'.js?auth=private"></script>'+
+  '<script>window.important="do not print"</script></html>');
+ writeFileSync(join(dir,'assets','admin.js'),'export const x="private JS never prints"');
+ const report=diagnoseSavedPreviewHTML(root,2);
+ assert.equal(report.capture_index,2);
+ assert.equal(report.capture_directory_present,true);
+ assert.equal(report.root_html_present,true);
+ assert.equal(report.html_script_src_count,2);
+ assert.equal(report.html_script_without_src_count,1);
+ assert.equal(report.safe_local_js_src_count,1);
+ assert.equal(report.safe_local_js_already_saved_count,1);
+ assert.equal(report.unsafe_or_nonlocal_src_count,1);
+ assert.equal(report.query_or_fragment_src_count,1);
+ assert.equal(report.src_shape_counts.absolute_https_other,1);
+ assert.equal(report.src_shape_counts.root_relative_js,1);
+ assert.equal(report.html_entrypoint_gate_passed,false);
+ assert.equal(report.original_source_accepted,false);
+ assert.equal(report.hosted_compiled_bundle_accepted,false);
+ assert.equal(report.destructive_execution_authorized,false);
+ for(const secretPart of [secret,'third-party.invalid','do not print','private JS never prints',root]){
+  assert.equal(JSON.stringify(report).includes(secretPart),false);
+ }
+}));
+test('saved HTML categorizes immutable Vercel suffix and root, relative, and non-JS refs without accepting them',()=>withPrivateFixture(({root})=>{
+ const dir=join(root,'capture_2');
+ mkdirSync(dir);
+ writeFileSync(join(dir,'index.html'),[
+  '<html>',
+  '<script src="https://sellertray-admin-git-private.vercel.app/assets/script.js"></script>',
+  '<script src="https://sellertray-admin-git-private.vercel.app.evil.invalid/evil.js"></script>',
+  '<script src="//hidden.example.invalid/script.js"></script>',
+  '<script src="http://hidden.example.invalid/script.js"></script>',
+  '<script src="data:application/javascript,private"></script>',
+  '<script src="./relative.mjs"></script>',
+  '<script src="app.js"></script>',
+  '<script src="/assets/app.css"></script>',
+  '</html>'
+ ].join(''));
+ const report=diagnoseSavedPreviewHTML(root,2);
+ assert.equal(report.src_shape_counts.absolute_https_vercel_app,1);
+ assert.equal(report.src_shape_counts.absolute_https_other,1);
+ assert.equal(report.src_shape_counts.protocol_relative,1);
+ assert.equal(report.src_shape_counts.absolute_http,1);
+ assert.equal(report.src_shape_counts.other_scheme,1);
+ assert.equal(report.src_shape_counts.dot_relative_js,1);
+ assert.equal(report.src_shape_counts.bare_relative_js,1);
+ assert.equal(report.src_shape_counts.non_js_target,1);
+ assert.equal(report.safe_local_js_src_count,2);
+ assert.equal(report.unsafe_or_nonlocal_src_count,6);
+ assert.equal(report.html_entrypoint_gate_passed,false);
+}));
+test('offline admin HTML CLI emits only whitelisted counts and never the original script src',()=>withPrivateFixture(({root})=>{
+ const dir=join(root,'capture_2');
+ mkdirSync(dir);
+ const secret='secret-query-never-print';
+ writeFileSync(join(dir,'index.html'),'<html><script src="https://private.example.invalid/script.js?'+secret+'"></script></html>');
+ const bin=new URL('./oa5-partial-preview-diagnose.mjs',import.meta.url).pathname;
+ const proc=spawnSync(process.execPath,[bin,'--check-html',root,'2'],{encoding:'utf8'});
+ assert.equal(proc.status,0,proc.stderr);
+ const report=JSON.parse(proc.stdout.split('\nNOT VERIFIED:')[0]);
+ assert.equal(report.capture_index,2);
+ assert.equal(report.src_shape_counts.absolute_https_other,1);
+ assert.equal(proc.stdout.includes(secret),false);
+ assert.equal(proc.stdout.includes('private.example.invalid'),false);
+ assert.equal(proc.stdout.includes(root),false);
+ assert.match(proc.stdout,/NOT AUTHORIZED:/);
+}));
+test('offline admin HTML CLI rejects unsafe or absent private source without printing its path',()=>withPrivateFixture(({root})=>{
+ const dir=join(root,'capture_2');
+ mkdirSync(dir);
+ symlinkSync(join(root,'capture_0','index.html'),join(dir,'index.html'),'file');
+ const bin=new URL('./oa5-partial-preview-diagnose.mjs',import.meta.url).pathname;
+ const proc=spawnSync(process.execPath,[bin,'--check-html',root,'2'],{encoding:'utf8'});
+ assert.equal(proc.status,1);
+ assert.match(proc.stderr,/BLOCKED:/);
+ assert.equal(proc.stderr.includes(root),false);
+ for(const value of ['-1','5','./2','2;evil']){
+  const bad=spawnSync(process.execPath,[bin,'--check-html',root,value],{encoding:'utf8'});
+  assert.equal(bad.status,1,value);
+  assert.equal(bad.stderr.includes(root),false);
+ }
 }));
