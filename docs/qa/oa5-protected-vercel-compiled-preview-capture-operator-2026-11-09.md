@@ -253,3 +253,21 @@ node --experimental-vm-modules "$Runner" --capture "$Plan" "$FreshOutput"
 ~~~
 
 Always use a **new**, empty output path; do not delete, overwrite or rename the first failed \`$Output\`. Even if all five original bundles pass their backend-content checks, original deployment provenance, the historical reviewer-access test, and the external-provider/cron/Auth/Storage isolation gates remain separate **NO-GO** items. No production domain, Vercel protection rule, paid plan, Test/Production SQL or Tandar operations are modified by these source/CLI actions.
+
+
+## 10 November 2026 — first Merchant Previews retrieved, Admin original script entry rejected
+
+After the owner pulled \`ffa83b6\`, the updated authenticated Vercel capture passed the private plan check and advanced to **capture_2** (the first Admin historical Preview). It failed with the fixed public code **\`HTML_SCRIPT_REFERENCE_UNSAFE\`** at original deployment **\`dpl_5UfqxbGpPuQqGkSu1rU4bpCFrQWZ\`**. The historical original \`capture_0\` and \`capture_1\` directories were created first, but **no five-Preview content manifest was written or accepted**. Because the failure occurs *after saving capture_2/index.html, before processing any script asset*, it indicates at least one HTML \`script src\` did not satisfy the same-origin local JavaScript path policy; it does **not** establish whether the source is Vercel-native, external analytics, an absolute same-origin alias, an extensionless path, or malformed input.
+
+**New read-only offline diagnostic** extends \`scripts/qa/oa5-partial-preview-diagnose.mjs\` with \`--check-html <existing-capture-root> 2\`. It reads only the already saved \`capture_2/index.html\`, never fetches the source of any external script, and emits only bounded counts of script-source shapes. Categories include root/dot/bare-relative JS, absolute HTTPS \`*.vercel.app\`, absolute HTTPS other, HTTP, protocol-relative, other schemes, non-JS targets and unsafe/unknown. It also counts script tags without \`src\`, the number of local JS references already saved, and query/fragment-bearing sources. It **never emits** full URLs, hostnames, script code or filenames, paths, authentication information, metadata credentials or HTML content. A \`*.vercel.app\` suffix alone **does not** establish that the script is same-origin, authorized or part of the historical compiled bundle.
+
+On the owner's **existing Windows PowerShell** session, where \`$Source\`, \`$Diagnostic\` and \`$FreshOutput\` are already set:
+
+~~~powershell
+git -C "$Source" pull --ff-only
+node "$Diagnostic" --check-html "$FreshOutput" 2
+~~~
+
+Keep both failed capture directories untouched; **do not retry or overwrite the same location**, switch off Vercel authentication, whitelist external origins, edit deployment aliases or fetch outside hosts. If the output indicates a Vercel-hosted absolute script source, first verify its original alias and allowed historical provenance privately before changing URL normalization. If it indicates a different-origin script, determine whether it is a nonessential external script or an app-critical module; no automatic skip/acceptance without explicit evidence. Any genuine unknown/unsafe JS entry remains blocked. Preserve the existing 0.0 Production-ref evidence scope: that finding applies only to the saved files, not all missing Admin assets or all five historical original Previews.
+
+**All hosting, Auth/Storage, cron, migration and Production/Tandar change gates remain NO-GO.** This diagnostic is strictly local and read-only.
