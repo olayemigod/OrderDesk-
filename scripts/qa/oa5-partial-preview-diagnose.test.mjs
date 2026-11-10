@@ -131,3 +131,58 @@ test('partial original capture classifies a bare module without disclosing packa
  assert.equal(r.failure_stage_inferred,'UNSUPPORTED_IMPORT_PRESENT');
  assert.equal(JSON.stringify(r).includes(packageName),false);
 }));
+
+test('V8 offline module parser separates real static bare imports from regex hits in comments and strings',()=>withPrivateFixture(({root,first,assets})=>{
+ writeFileSync(join(first,'index.html'),'<html><script type="module" src="/assets/app.js"></script></html>');
+ writeFileSync(join(assets,'app.js'),[
+   "import 'actual-bare-package';",
+   "const text = 'import \"fake-package\"';",
+   "// import 'another-fake-package'",
+   "import './another.js';",
+   'export const configured="https://'+TEST_REF+'.supabase.co";'
+ ].join('\n'));
+ writeFileSync(join(assets,'another.js'),'export const value=3;');
+ const bin=new URL('./oa5-partial-preview-diagnose.mjs',import.meta.url).pathname;
+ const proc=spawnSync(process.execPath,['--experimental-vm-modules',bin,'--check',root],{encoding:'utf8'});
+ assert.equal(proc.status,0,proc.stderr);
+ const report=JSON.parse(proc.stdout.split('\nNOT VERIFIED:')[0]);
+ assert.equal(report.static_module_parser_available,true);
+ assert.equal(report.static_module_files_parsed,2);
+ assert.equal(report.static_module_parse_errors,0);
+ assert.equal(report.proven_static_bare_imports,1);
+ assert.equal(report.proven_static_local_imports,1);
+ assert.equal(report.proven_static_external_imports,0);
+ assert.equal(report.hosted_compiled_bundle_accepted,false);
+ assert.equal(report.destructive_execution_authorized,false);
+ for(const str of ['actual-bare-package','fake-package','another-fake-package',TEST_REF,root]){
+  assert.equal(proc.stdout.includes(str),false,str);
+ }
+}));
+test('V8 parser treats captured dynamic import as non-static; cannot excuse unsupported literal',()=>withPrivateFixture(({root,first,assets})=>{
+ writeFileSync(join(first,'index.html'),'<html><script type="module" src="/assets/app.js"></script></html>');
+ writeFileSync(join(assets,'app.js'),"const fetchModule=()=>import('private-dynamic-package');");
+ const bin=new URL('./oa5-partial-preview-diagnose.mjs',import.meta.url).pathname;
+ const proc=spawnSync(process.execPath,['--experimental-vm-modules',bin,'--check',root],{encoding:'utf8'});
+ assert.equal(proc.status,0,proc.stderr);
+ const report=JSON.parse(proc.stdout.split('\nNOT VERIFIED:')[0]);
+ assert.equal(report.proven_static_bare_imports,0);
+ assert.equal(report.static_module_files_parsed,1);
+ assert.equal(report.rejected_import_shape_counts.bare_specifier,1);
+ assert.equal(report.failure_stage_inferred,'UNSUPPORTED_IMPORT_PRESENT');
+ assert.equal(report.hosted_compiled_bundle_accepted,false);
+ assert.equal(proc.stdout.includes('private-dynamic-package'),false);
+}));
+test('V8 parser errors never print the private JS syntax or weaken blocked capture',()=>withPrivateFixture(({root,first,assets})=>{
+ writeFileSync(join(first,'index.html'),'<html><script type="module" src="/assets/app.js"></script></html>');
+ writeFileSync(join(assets,'app.js'),"import { secretMarker from 'private-broken-package';");
+ const bin=new URL('./oa5-partial-preview-diagnose.mjs',import.meta.url).pathname;
+ const proc=spawnSync(process.execPath,['--experimental-vm-modules',bin,'--check',root],{encoding:'utf8'});
+ assert.equal(proc.status,0,proc.stderr);
+ const report=JSON.parse(proc.stdout.split('\nNOT VERIFIED:')[0]);
+ assert.equal(report.static_module_files_parsed,0);
+ assert.equal(report.static_module_parse_errors,1);
+ assert.equal(report.original_vercel_origin_attested,false);
+ assert.equal(report.hosted_compiled_bundle_accepted,false);
+ assert.equal(proc.stdout.includes('secretMarker'),false);
+ assert.equal(proc.stdout.includes('private-broken-package'),false);
+}));
