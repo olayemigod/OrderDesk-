@@ -10,6 +10,7 @@
 import {existsSync,lstatSync,readdirSync,readFileSync} from 'node:fs';
 import {resolve,join,relative,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {SourceTextModule} from 'node:vm';
 import {htmlScripts,importedLiterals,localPath,classifyUnsupportedImport} from './oa5-preview-module-graph.mjs';
 import {TEST_REF,PROD_REF} from './oa5-historical-preview-bundle-inspection.mjs';
 
@@ -32,6 +33,15 @@ export function diagnosePartialPreview(root){
   local_imports_already_saved:0,
   local_imports_missing_from_capture:0,
   unsupported_or_remote_imports:0,
+  // Parse-only V8 module syntax proof is optional and requires
+  // --experimental-vm-modules. Construction NEVER links or evaluates code.
+  static_module_parser_available:typeof SourceTextModule==='function',
+  static_module_files_parsed:0,
+  static_module_parse_errors:0,
+  proven_static_bare_imports:0,
+  proven_static_local_imports:0,
+  proven_static_external_imports:0,
+  probable_dynamic_bare_imports:0,
   rejected_import_shape_counts:{
    remote_http:0,protocol_relative:0,other_scheme:0,bare_specifier:0,
    unsafe_local_path:0,malformed:0,malformed_encoded_path:0,
@@ -87,6 +97,24 @@ export function diagnosePartialPreview(root){
   const text=readFileSync(file.path,'utf8');
   if(text.includes(TEST_REF))output.saved_js_with_test_ref++;
   if(text.includes(PROD_REF))output.saved_js_with_production_ref++;
+  // The existing regex intentionally errs on the side of blocking potential
+  // imports, but can match comments and strings. V8 can independently prove
+  // actual *static* module imports/exports without executing captured code.
+  if(output.static_module_parser_available){
+   try{
+    const mod=new SourceTextModule(text,{identifier:'untrusted-captured-js'});
+    output.static_module_files_parsed++;
+    for(const dep of mod.dependencySpecifiers){
+     const shape=classifyUnsupportedImport(dep);
+     if(shape==='bare_specifier')output.proven_static_bare_imports++;
+     else if(dep.startsWith('./')||dep.startsWith('../')||dep.startsWith('/'))
+      output.proven_static_local_imports++;
+     else output.proven_static_external_imports++;
+    }
+   }catch{
+    output.static_module_parse_errors++;
+   }
+  }
   for(const raw of importedLiterals(text)){
    output.scanned_literal_js_imports++;
    const target=localPath(file.rel,raw,false);
@@ -94,6 +122,9 @@ export function diagnosePartialPreview(root){
     output.unsupported_or_remote_imports++;
     const reason=classifyUnsupportedImport(raw);
     output.rejected_import_shape_counts[reason]++;
+    if(reason==='bare_specifier'&&
+       /\bimport\s*\(\s*(?:"[^"\n]*"|'[^'\n]*')\s*\)/.test(text))
+     output.probable_dynamic_bare_imports++;
     continue;
    }
    if(map.has(target))output.local_imports_already_saved++;
