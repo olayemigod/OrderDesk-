@@ -10,7 +10,7 @@
 import {existsSync,lstatSync,readdirSync,readFileSync} from 'node:fs';
 import {resolve,join,relative,sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {htmlScripts,importedLiterals,localPath} from './oa5-preview-module-graph.mjs';
+import {htmlScripts,importedLiterals,localPath,classifyUnsupportedImport} from './oa5-preview-module-graph.mjs';
 import {TEST_REF,PROD_REF} from './oa5-historical-preview-bundle-inspection.mjs';
 
 const MAX_FILES=2000,MAX_BYTES=80*1024*1024,MAX_JS_BYTES=12*1024*1024;
@@ -32,6 +32,11 @@ export function diagnosePartialPreview(root){
   local_imports_already_saved:0,
   local_imports_missing_from_capture:0,
   unsupported_or_remote_imports:0,
+  rejected_import_shape_counts:{
+   remote_http:0,protocol_relative:0,other_scheme:0,bare_specifier:0,
+   unsafe_local_path:0,malformed:0,malformed_encoded_path:0,
+   non_js_local_target:0,invalid_or_outside_local_path:0
+  },
   saved_js_with_test_ref:0,
   saved_js_with_production_ref:0,
   failure_stage_inferred:'INDETERMINATE',
@@ -85,7 +90,12 @@ export function diagnosePartialPreview(root){
   for(const raw of importedLiterals(text)){
    output.scanned_literal_js_imports++;
    const target=localPath(file.rel,raw,false);
-   if(!target){output.unsupported_or_remote_imports++;continue;}
+   if(!target){
+    output.unsupported_or_remote_imports++;
+    const reason=classifyUnsupportedImport(raw);
+    output.rejected_import_shape_counts[reason]++;
+    continue;
+   }
    if(map.has(target))output.local_imports_already_saved++;
    else output.local_imports_missing_from_capture++;
   }
