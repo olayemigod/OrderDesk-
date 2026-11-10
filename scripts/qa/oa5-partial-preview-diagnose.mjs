@@ -41,7 +41,6 @@ export function diagnosePartialPreview(root){
   proven_static_bare_imports:0,
   proven_static_local_imports:0,
   proven_static_external_imports:0,
-  probable_dynamic_bare_imports:0,
   rejected_import_shape_counts:{
    remote_http:0,protocol_relative:0,other_scheme:0,bare_specifier:0,
    unsafe_local_path:0,malformed:0,malformed_encoded_path:0,
@@ -122,9 +121,6 @@ export function diagnosePartialPreview(root){
     output.unsupported_or_remote_imports++;
     const reason=classifyUnsupportedImport(raw);
     output.rejected_import_shape_counts[reason]++;
-    if(reason==='bare_specifier'&&
-       /\bimport\s*\(\s*(?:"[^"\n]*"|'[^'\n]*')\s*\)/.test(text))
-     output.probable_dynamic_bare_imports++;
     continue;
    }
    if(map.has(target))output.local_imports_already_saved++;
