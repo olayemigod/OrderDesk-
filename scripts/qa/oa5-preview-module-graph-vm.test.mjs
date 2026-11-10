@@ -13,7 +13,7 @@ test('V8 parse-only audit removes inert bare regex match but retains all eight r
  assert.equal(typeof vm.SourceTextModule,'function');
  const refs=Array.from({length:8},(_,n)=>'./chunk'+n+'.js');
  const source=refs.map(ref=>'import "'+ref+'";').join('\n')+
-   '\nconst sample = "import(\\\'not-an-active-import\\\')";';
+   `\nconst sample = "import('not-an-active-import')";`;
  // String above is not active ESM import syntax.
  const actual=auditedImportLiterals(source,{requireParser:true});
  assert.deepEqual(actual,refs);
@@ -29,7 +29,7 @@ test('V8 parse-only audit still rejects real dynamic bare and remote module requ
 });
 test('V8 audit preserves real dynamic local dependency and does not follow inert local references',()=>{
  const source="const f=()=>import('./lazy.js');"+
-   'const text="import(\\\'./not-real.js\\\')";'+
+   `const text="import('./not-real.js')";`+
    "export const ready=true;";
  const actual=auditedImportLiterals(source,{requireParser:true});
  assert.equal(actual.includes('./lazy.js'),true);
@@ -53,7 +53,7 @@ test('synthetic protected five-Preview capture succeeds with inert regex hit and
  const plan={schema_version:1,purpose:'read-only-original-preview-capture',deployments:expected};
  const src=Array.from({length:8},(_,i)=>'./chunk'+i+'.js')
    .map(r=>'import "'+r+'";').join('\n')+
-   '\nconst docs="import(\\\'not-an-active-bare-import\\\')";'+
+   `\nconst docs="import('not-an-active-bare-import')";`+
    '\nexport const backend="https://'+TEST_REF+'.supabase.co";';
  const work=mkdtempSync(join(tmpdir(),'oa5-vm-audit-'));
  try{
