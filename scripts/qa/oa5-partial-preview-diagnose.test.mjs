@@ -263,6 +263,7 @@ test('offline admin HTML CLI emits only whitelisted counts and never the origina
 test('offline admin HTML CLI rejects unsafe or absent private source without printing its path',()=>withPrivateFixture(({root})=>{
  const dir=join(root,'capture_2');
  mkdirSync(dir);
+ writeFileSync(join(root,'capture_0','index.html'),'<html></html>');
  symlinkSync(join(root,'capture_0','index.html'),join(dir,'index.html'),'file');
  const bin=new URL('./oa5-partial-preview-diagnose.mjs',import.meta.url).pathname;
  const proc=spawnSync(process.execPath,[bin,'--check-html',root,'2'],{encoding:'utf8'});
