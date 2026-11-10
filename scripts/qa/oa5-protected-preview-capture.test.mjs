@@ -215,7 +215,7 @@ test('Windows Vercel npm .cmd shim uses cmd.exe only for constrained read-only G
  const win=planVercelReadOnlyCommand('curl',url,'win32');
  assert.deepEqual(win,{
   file:'cmd.exe',
-  args:['/d','/s','/c','vercel.cmd curl '+url+' --fail --silent --show-error --max-time 30']
+  args:['/d','/s','/c','vercel.cmd curl '+url+' -- --fail --silent --show-error --max-time 30']
  });
  const who=planVercelReadOnlyCommand('whoami',null,'win32');
  assert.deepEqual(who,{file:'cmd.exe',args:['/d','/s','/c','vercel.cmd whoami']});
@@ -225,7 +225,7 @@ test('Windows Vercel npm .cmd shim uses cmd.exe only for constrained read-only G
 test('Linux/WSL Vercel launcher avoids shell and never falls back to Production',()=>{
  const url='https://sellertray-admin-git-test-evidence.vercel.app/';
  assert.deepEqual(planVercelReadOnlyCommand('curl',url,'linux'),{
-  file:'vercel',args:['curl',url,'--fail','--silent','--show-error','--max-time','30']
+  file:'vercel',args:['curl',url,'--','--fail','--silent','--show-error','--max-time','30']
  });
  assert.deepEqual(planVercelReadOnlyCommand('whoami',null,'linux'),{
   file:'vercel',args:['whoami']
@@ -279,4 +279,14 @@ test('symlinked plan outside checkout pointing into Git checkout is rejected by 
   assert.match(result.stderr,/BLOCKED/);
   assert.match(result.stderr,/inside Git/);
  }finally{w.cleanup();}
+});
+
+test('Vercel 65 forwards HTTP curl flags only after the separator and never changes request method',()=>{
+ const url='https://sellertray-merchant-git-test-evidence.vercel.app/';
+ for(const platform of ['win32','linux']){
+  const req=planVercelReadOnlyCommand('curl',url,platform);
+  const text=req.args.join(' ');
+  assert.match(text,/curl https:\/\/sellertray-merchant-git-test-evidence[.]vercel[.]app\/ -- --fail --silent --show-error --max-time 30/);
+  assert.doesNotMatch(text,/--request|--data|--header|--protection-bypass|deploy|env\s+add/);
+ }
 });
