@@ -65,3 +65,15 @@ Original five Preview local custody is separately documented at `docs/qa/oa5-his
 ## Cross-surface impact
 
 No application or shared commerce behavior changed: this is infrastructure evidence gathering. Merchant/Admin Web protections were **read-only rechecked**; Mobile, WhatsApp, payments, AI, inventory, reports and offline/sync runtime logic were **not modified**. Existing code still governs all commercial and merchant activity. No migration, build, deployment or provider mutation was needed.
+
+
+## Additional exact cron and worker-egress SQL fingerprints (same read-only review)
+
+The four active jobs' **job ID, job name, schedule, and SHA-256 of their SQL command text** all match the frozen values in \`scripts/qa/oa5-test-cron-maintenance-gate.mjs\`. All-age \`cron.job_run_details\` shows **0 unfinished runs** for each of jobs 1–4. These observations reduce uncertainty about *which* jobs would require the authorized reversible maintenance action, but **do not** establish the mandatory \`active:false\` maintenance condition: **all four are still \`active:true\`**. The 10-minute freshness window is not prolonged by this historical documentation.
+
+The two private notification/push dispatch functions were inspected by metadata-only SQL (no SQL source text, URL, API token or destination values returned). Both are \`SECURITY DEFINER\`, both call \`net.http_post\`, neither contains the Production Supabase project ref, and the SHA-256 of their **\`pg_proc.prosrc\` body** matches the two expected fingerprints in \`scripts/qa/oa5-test-worker-egress.mjs\`. This is significant: hashing the formatted \`pg_get_functiondef\` output yields **different** digests, so the frozen fingerprints must be compared to **\`prosrc\`**, not the formatted definition.
+
+The complete count-only worker egress surface also matched its archived expectations at observation time: \`runtime_config_total_rows=0\`, \`usage_events_rows=0\`, \`agreement_processing_rows=0\`, \`pending_pg_net_requests=0\`, \`retained_pgnet_responses=0\`, \`public_function_count=479\`, \`private_function_count=8\`, \`public_direct_http_functions=0\`, \`private_direct_http_functions=2\`, \`public_literal_endpoint_functions=3\`, \`private_literal_endpoint_functions=0\`. Neither of the two worker functions has a literal external endpoint in its source, and the private config table holds zero configured destination rows. No code or DB state changed.
+
+**Interpretation:** current counts and source fingerprints match the Test worker egress **point-in-time source metadata baseline**, but the external provider route/sandbox check is **not** signed off and the cron pause prerequisite is **definitely not satisfied**. This is not a permission to invoke the workers, pause them, empty their queues, or start Test maintenance. Before any contemplated rebuild, repeat fresh Test-only snapshots and independently review authorized callback ownership, worker egress, and the reversible four-job plan.
+
