@@ -14,7 +14,8 @@ import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {EXPECTED,inspectPreviewBundleCapture} from './oa5-historical-preview-bundle-inspection.mjs';
-import {localPath,htmlScripts,importedLiterals} from './oa5-preview-module-graph.mjs';
+import {localPath,htmlScripts,auditedImportLiterals} from './oa5-preview-module-graph.mjs';
+import * as vm from 'node:vm';
 
 const MAX_FILES=2000;
 const MAX_BYTES=80*1024*1024;
@@ -159,6 +160,9 @@ function protectedVercelCurl(url,maxBytes=MAX_ITEM){
 export function captureOriginalPreviewPlan(input,privateRoot,request=protectedVercelCurl,now=new Date(),syntheticTestAliasDigests=null){
  if(syntheticTestAliasDigests&&request===protectedVercelCurl)
   throw Error('BLOCKED: alias fingerprint override requires an injected synthetic test transport');
+ const realCapture=request===protectedVercelCurl;
+ if(realCapture&&typeof vm.SourceTextModule!=='function')
+  throw Error('BLOCKED: parse-only V8 modules required for original capture');
  const plan=validatePrivateCapturePlan(input,syntheticTestAliasDigests||EXPECTED_ALIAS_DIGESTS);
  if(!plan.valid)throw Error('BLOCKED: invalid original Preview capture mapping: '+plan.reasons.join('; '));
  if(typeof request!=='function')throw Error('BLOCKED: missing read-only capture transport');
@@ -218,7 +222,7 @@ export function captureOriginalPreviewPlan(input,privateRoot,request=protectedVe
    visited.add(rel);
    if(visited.size>MAX_FILES)throw Error('BLOCKED: excessive original module graph for '+d.id);
    const source=fetchLocal(rel);
-   for(const raw of importedLiterals(source)){
+   for(const raw of auditedImportLiterals(source,{requireParser:realCapture})){
     const child=localPath(rel,raw,false);
     if(!child)throw Error('BLOCKED: unsupported/unsafe original local module dependency for '+d.id);
     if(!visited.has(child))queue.push(child);
@@ -228,7 +232,7 @@ export function captureOriginalPreviewPlan(input,privateRoot,request=protectedVe
    directory:d.directory,capture_evidence_ref:d.capture_evidence_ref});
   hashes.push({deployment_id:d.id,surface:d.surface,files:fileHashes});
  }
- const inspection=inspectPreviewBundleCapture(manifest,root,now);
+ const inspection=inspectPreviewBundleCapture(manifest,root,now,realCapture);
  if(!inspection.content_consistent_with_test){
   // Keep authentic bytes privately for operator review, but do not emit
   // a complete/accepted manifest on any missing/unexpected backend asset.
@@ -265,6 +269,9 @@ export function classifyProtectedCaptureFailure(error){
   [/^BLOCKED: original HTML has missing\/unsafe JavaScript entrypoints for dpl_[A-Za-z0-9]+$/, 'HTML_SCRIPT_REFERENCE_UNSAFE'],
   [/^BLOCKED: unsupported\/unsafe original local module dependency for dpl_[A-Za-z0-9]+$/, 'JS_IMPORT_UNSUPPORTED'],
   [/^BLOCKED: captured original Preview content failed offline Test-only inspection$/, 'COMPILED_CONTENT_MISMATCH'],
+  [/^BLOCKED: parse-only V8 modules required for original capture$/, 'VM_MODULE_PARSER_REQUIRED'],
+  [/^BLOCKED: captured JS cannot be parsed as a module$/, 'JS_VM_PARSE_FAILED'],
+  [/^BLOCKED: excessive unverified literal module references$/, 'JS_UNVERIFIED_REFERENCES_LIMIT'],
   [/^BLOCKED: invalid original Preview capture mapping:/, 'PRIVATE_CAPTURE_PLAN_INVALID'],
   [/^BLOCKED: historical compiled assets must never be stored inside the Git repository$/, 'CAPTURE_LOCATION_UNSAFE'],
   [/^BLOCKED: private parent workspace is missing$/, 'PRIVATE_PARENT_MISSING'],
