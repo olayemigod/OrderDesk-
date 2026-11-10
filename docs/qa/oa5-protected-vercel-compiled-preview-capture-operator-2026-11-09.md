@@ -8,6 +8,8 @@ The original five Vercel Git-deployment metadata records still show READY and th
 
 Vercel's documented CLI command vercel curl can use the operator's current Vercel identity when reading protected Preview URLs. It requires **no Vercel Pro subscription, new Preview build, disabled authentication or long-lived bypass token**. Official source: https://vercel.com/docs/cli/curl. A protected browser flow may alternatively use a short-lived Trusted Sources OIDC development token, but do not print or persist that token and do not broaden Trusted Sources.
 
+**Operator confirmation (10 November 2026):** Vercel CLI **65.14.0** is installed and authenticated as `olayemigod` in the existing `olayemigods-projects` Hobby team. Its actual `vercel curl --help` shows the `--` separator before flags forwarded to curl. The protected capture runner and manual examples now use `vercel curl <URL> -- --fail --silent --show-error ...`. No user-side deployment or external callback has been executed by these confirmations.
+
 ## Verified CLI behavior and Windows compatibility
 
 Vercel officially supports full URL syntax for \`vercel curl\` (introduced in its 15 May 2026 CLI update) and forwards curl flags to the system curl executable. The command uses the current Vercel identity to **obtain or generate an ephemeral deployment-protection bypass token internally** when needed. The operator does not supply, print, store or commit a bypass secret. This does **not** justify disabling Vercel Authentication or changing access rights. The local CLI must be new enough to support full URL \`vercel curl\`; check \`vercel --version\` and \`vercel curl --help\` before making any requests. If unsupported, STOP; do not use \`vercel deploy\` or relink the project to work around it.
@@ -37,7 +39,7 @@ vercel whoami
 $Root = "C:\SellerTray Private OA5\historical-preview-captures"
 $Origin = "https://<ORIGINAL-VERIFIED-DEPLOYMENT-ALIAS>.vercel.app"
 New-Item -ItemType Directory -Force -Path "$Root\capture_0\assets" | Out-Null
-vercel curl "$Origin/" --fail --silent --show-error -o "$Root\capture_0\index.html"
+vercel curl "$Origin/" -- --fail --silent --show-error --output "$Root\capture_0\index.html"
 ~~~
 
 The origin above is intentionally a placeholder. Use the *exact original alias tied to capture_0*; then repeat separately for capture_1 through capture_4 with their own original aliases. Check that saved index.html is the actual SellerTray application HTML, not a Vercel login/SSO page, redirect, error or blank placeholder. A successful response alone is not historical reviewer or deployed origin acceptance.
@@ -46,7 +48,7 @@ From each genuine index.html, enumerate the script src paths referencing compile
 
 ~~~powershell
 # Replace the placeholder using the script src path actually present in the HTML.
-vercel curl "$Origin/assets/<REAL-HTML-ENTRYPOINT>.js" --fail --silent --show-error -o "$Root\capture_0\assets\<REAL-HTML-ENTRYPOINT>.js"
+vercel curl "$Origin/assets/<REAL-HTML-ENTRYPOINT>.js" -- --fail --silent --show-error --output "$Root\capture_0\assets\<REAL-HTML-ENTRYPOINT>.js"
 ~~~
 
 Recursively capture any *literal local* static, export-from, or dynamic-literal JavaScript imports in the downloaded chunks. Do not invent or rewrite any file containing the Test backend project string. If a chunk is missing, imports use computed paths or other nontrivial module bundling, or SSO blocks a capture, STOP and retain the raw evidence for manual reviewer analysis rather than weakening the inspector. Do not automatically fetch untrusted third-party URLs.
