@@ -45,7 +45,7 @@ function contentFiles(root,subdir){
  walk(dir);
  return files;
 }
-export function inspectPreviewBundleCapture(manifest,root,now=new Date()){
+export function inspectPreviewBundleCapture(manifest,root,now=new Date(),requireAuditedParser=false){
  const errors=[],details=[];
  const outcome=()=>({
    content_consistent_with_test:errors.length===0,
@@ -99,7 +99,7 @@ export function inspectPreviewBundleCapture(manifest,root,now=new Date()){
      const file=byRelative.get(rel);
      if(!file)throw Error('Capture module missing');
      return readFileSync(file.path,'utf8');
-   },TEST_REF);
+   },TEST_REF,requireAuditedParser);
    for(const reason of graph.errors)errors.push(reason+': '+entry.id);
    let matchedTest=0,matchedTestJS=0,matchedOther=0,production=false, unreadable=false;
    for(const f of textFiles){
