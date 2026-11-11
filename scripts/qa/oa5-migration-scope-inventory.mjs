@@ -24,7 +24,7 @@ export function classifyOa5Candidate(name){
   return 'oa5_candidate';
  return 'unclassified';
 }
-export function inventoryOa5SourceMigrationScope(directory){
+export function inventoryOa5SourceMigrationScope(directory,{reviewWindow=false}={}){
  const reasons=[],rows=[],versions=new Set();
  const failure=(code)=>{reasons.push(code);};
  try{
@@ -71,7 +71,7 @@ export function inventoryOa5SourceMigrationScope(directory){
  const c2Within=nonOa5.filter(r=>r.group==='c2_candidate');
  const otherWithin=nonOa5.filter(r=>r.group==='unclassified');
  const totalFingerprint=sha(rows.map(r=>r.file+':'+r.digest+'\n').join(''));
- return {
+ const result={
   source_migrations_scanned:rows.length,
   source_inventory_sha256:totalFingerprint,
   structural_source_check_passed:reasons.length===0,
@@ -90,13 +90,20 @@ export function inventoryOa5SourceMigrationScope(directory){
   hosted_test_reset_authorized:false,
   failure_codes:[...new Set(reasons)]
  };
+ if(reviewWindow===true){
+  // Source filenames and SHA-256 are review metadata, never SQL bodies/paths.
+  // The review interval itself is NOT an approved or executable migration set.
+  result.review_window_files=within.map(r=>({version:r.version,file:r.file,
+   label:r.group,content_sha256:r.digest}));
+ }
+ return result;
 }
 function main(){
- if(process.argv.length!==4||process.argv[2]!=='--inventory'){
-  console.error('Usage: node scripts/qa/oa5-migration-scope-inventory.mjs --inventory <local-source-migration-directory>');
+ if(process.argv.length!==4||!['--inventory','--review-window'].includes(process.argv[2])){
+  console.error('Usage: node scripts/qa/oa5-migration-scope-inventory.mjs --inventory|--review-window <local-source-migration-directory>');
   process.exitCode=2;return;
  }
- const report=inventoryOa5SourceMigrationScope(process.argv[3]);
+ const report=inventoryOa5SourceMigrationScope(process.argv[3],{reviewWindow:process.argv[2]==='--review-window'});
  console.log(JSON.stringify(report,null,2));
  console.log('NOT VERIFIED: file naming does not prove SQL dependencies, OA5/C2 isolation, clean baseline or disposable-local migration replay.');
  console.log('NOT AUTHORIZED: no Supabase Test/Production migration, ledger repair, cron pause, provider callback or hosted reset.');
