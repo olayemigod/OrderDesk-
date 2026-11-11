@@ -16,6 +16,8 @@ import {assessTestManagedBoundary} from './oa5-test-managed-boundary.mjs';
 import {assessTestEdgeBundleDrift} from './oa5-test-edge-bundle-drift.mjs';
 import {assessExistingVercelProtection} from './oa5-vercel-project-protection.mjs';
 import {assessTestWorkerEgress} from './oa5-test-worker-egress.mjs';
+import {assessArchiveCanonicalTransition} from './oa5-archive-canonical-transition.mjs';
+import {inventoryOa5SourceMigrationScope} from './oa5-migration-scope-inventory.mjs';
 
 export const REQUIRED_EVIDENCE=Object.freeze([
   'archive_restore_reviewed',
@@ -39,12 +41,13 @@ export const REQUIRED_EVIDENCE=Object.freeze([
   'exact_source_migration_order_and_parity',
   'synthetic_fixture_and_retention_plan',
   'archive_to_current_live_state_reconciled',
+  'historical_archive_to_canonical_review',
 ]);
 const exactKeys=(obj,keys)=>!!obj&&typeof obj==='object'&&!Array.isArray(obj)&&
   Object.keys(obj).sort().join('|')===[...keys].sort().join('|');
 const sha=x=>typeof x==='string'&&/^[0-9a-f]{40}$/.test(x);
 
-export function assessRebuildPreflight(record,{sourceSha,archive,cron,liveCensus,managedBoundary,edgeBundles,vercelProtection,workerEgress}={}){
+export function assessRebuildPreflight(record,{sourceSha,archive,cron,liveCensus,managedBoundary,edgeBundles,vercelProtection,workerEgress,archiveTransition}={}){
   const reasons=[];
   if(!exactKeys(record,['schema_version','project_ref','reviewed_source_sha','purpose','evidence']))
     return {preconditions_met:false,destructive_execution_authorized:false,
@@ -78,6 +81,8 @@ export function assessRebuildPreflight(record,{sourceSha,archive,cron,liveCensus
     reasons.push('Historical Test Edge bundle SHA/version/JWT metadata missing, stale or drifted');
   if(!vercelProtection?.protection_metadata_consistent)
     reasons.push('Existing Merchant/Admin Vercel protection metadata missing, stale or drifted');
+  if(!archiveTransition?.review_package_consistent)
+    reasons.push('Historical archive-to-clean-canonical evidence/disposition review missing or blocked');
   if(!workerEgress?.worker_route_counts_quiescent)
     reasons.push('Test indirect pg_net worker routing or scheduled-work counts missing, stale or drifted');
   const preconditions_met=reasons.length===0;
@@ -86,11 +91,11 @@ export function assessRebuildPreflight(record,{sourceSha,archive,cron,liveCensus
 }
 
 function main(){
-  if((process.argv.length!==11&&process.argv.length!==12)||process.argv[2]!=='--check'){
-    console.error('Usage: node scripts/qa/oa5-test-rebuild-preflight.mjs --check <private-record.json> <private-archive-directory> <private-fresh-cron-snapshot.json> <private-fresh-live-census.json> <private-fresh-managed-state.json> <private-fresh-edge-bundle-snapshot.json> <private-fresh-vercel-project-snapshot.json> <private-fresh-worker-egress-census.json> [private-reviewed-session-loss.json]');
+  if((process.argv.length!==12&&process.argv.length!==13)||process.argv[2]!=='--check'){
+    console.error('Usage: node scripts/qa/oa5-test-rebuild-preflight.mjs --check <private-record.json> <private-archive-directory> <private-fresh-cron-snapshot.json> <private-fresh-live-census.json> <private-fresh-managed-state.json> <private-fresh-edge-bundle-snapshot.json> <private-fresh-vercel-project-snapshot.json> <private-fresh-worker-egress-census.json> <private-archive-to-canonical-transition-review.json> [private-reviewed-session-loss.json]');
     process.exitCode=2;return;
   }
-  let record,cronSnapshot,liveSnapshot,managedSnapshot,edgeSnapshot,vercelSnapshot,workerSnapshot,approvedSessionLoss=null,sourceSha;
+  let record,cronSnapshot,liveSnapshot,managedSnapshot,edgeSnapshot,vercelSnapshot,workerSnapshot,approvedSessionLoss=null,transitionRecord,sourceSha;
   try{
     record=JSON.parse(readFileSync(resolve(process.argv[3]),'utf8'));
     cronSnapshot=JSON.parse(readFileSync(resolve(process.argv[5]),'utf8'));
@@ -99,7 +104,8 @@ function main(){
     edgeSnapshot=JSON.parse(readFileSync(resolve(process.argv[8]),'utf8'));
     vercelSnapshot=JSON.parse(readFileSync(resolve(process.argv[9]),'utf8'));
     workerSnapshot=JSON.parse(readFileSync(resolve(process.argv[10]),'utf8'));
-    if(process.argv[11])approvedSessionLoss=JSON.parse(readFileSync(resolve(process.argv[11]),'utf8'));
+    transitionRecord=JSON.parse(readFileSync(resolve(process.argv[11]),'utf8'));
+    if(process.argv[12])approvedSessionLoss=JSON.parse(readFileSync(resolve(process.argv[12]),'utf8'));
     sourceSha=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8',timeout:10000}).trim();
   }catch{
     console.error('BLOCKED: private operator evidence, cron snapshot or Git identity unavailable');
@@ -112,11 +118,14 @@ function main(){
   const edgeBundles=assessTestEdgeBundleDrift(edgeSnapshot,new Date(),'recheck');
   const vercelProtection=assessExistingVercelProtection(vercelSnapshot,new Date(),'recheck');
   const workerEgress=assessTestWorkerEgress(workerSnapshot,new Date());
-  const result=assessRebuildPreflight(record,{sourceSha,archive,cron,liveCensus,managedBoundary,edgeBundles,vercelProtection,workerEgress});
+  const archiveTransition=assessArchiveCanonicalTransition(transitionRecord,{
+    archive,sourceInventory:inventoryOa5SourceMigrationScope(resolve('supabase/migrations')),sourceSha
+  });
+  const result=assessRebuildPreflight(record,{sourceSha,archive,cron,liveCensus,managedBoundary,edgeBundles,vercelProtection,workerEgress,archiveTransition});
   if(!result.preconditions_met){
     console.error('BLOCKED: OA5 Test rebuild pre-reset evidence is incomplete.');
     for(const reason of result.reasons)console.error(' - '+reason);
-    for(const reason of [...(archive.errors||[]),...(cron.reasons||[]),...(liveCensus.reasons||[]),...(managedBoundary.reasons||[]),...(edgeBundles.reasons||[]),...(vercelProtection.reasons||[]),...(workerEgress.reasons||[])])
+    for(const reason of [...(archive.errors||[]),...(cron.reasons||[]),...(liveCensus.reasons||[]),...(managedBoundary.reasons||[]),...(edgeBundles.reasons||[]),...(vercelProtection.reasons||[]),...(workerEgress.reasons||[]),...(archiveTransition.reasons||[])])
       console.error(' - '+reason);
     process.exitCode=1;return;
   }

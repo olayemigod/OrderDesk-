@@ -11,6 +11,9 @@ on:
       - 'scripts/qa/oa5-staging-isolation.test.mjs'
       - 'scripts/qa/oa5-migration-boundary.mjs'
       - 'scripts/qa/oa5-migration-boundary.test.mjs'
+      - 'scripts/qa/oa5-archive-canonical-transition.mjs'
+      - 'scripts/qa/oa5-archive-canonical-transition.test.mjs'
+      - 'docs/qa/oa5-archive-canonical-transition-2026-11-11.md'
       - 'scripts/qa/oa5-test-migration-order-census.mjs'
       - 'scripts/qa/oa5-test-migration-order-census.test.mjs'
       - 'scripts/qa/oa5-migration-scope-inventory.mjs'
@@ -101,6 +104,7 @@ jobs:
           node --test scripts/qa/oa5-test-cron-freeze-candidate.test.mjs
           node --test scripts/qa/oa5-test-worker-egress.test.mjs
           node --test scripts/qa/oa5-test-rebuild-preflight.test.mjs
+          node --test scripts/qa/oa5-archive-canonical-transition.test.mjs
           node --test scripts/qa/oa5-test-migration-order-census.test.mjs
           node --test scripts/qa/oa5-migration-scope-inventory.test.mjs
           node scripts/qa/oa5-migration-scope-inventory.mjs --review-window supabase/migrations
