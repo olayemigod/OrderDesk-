@@ -28,6 +28,9 @@ const names=[
 test('name classification is conservative: candidates are not approved migrations',()=>{
  assert.equal(classifyOa5Candidate('oa5_lifecycle'),'oa5_candidate');
  assert.equal(classifyOa5Candidate('pre_c2_bridge'),'oa5_candidate');
+ assert.equal(classifyOa5Candidate('oa5a_notification_intent'),'oa5_candidate');
+ assert.equal(classifyOa5Candidate('oa5b_onboarding_report'),'oa5_candidate');
+ assert.equal(classifyOa5Candidate('oa5c_historical_agreement_package_verifier_convergence'),'oa5_candidate');
  assert.equal(classifyOa5Candidate('legacy_commercial_adjustment_confirmed_payment_guard'),'oa5_candidate');
  assert.equal(classifyOa5Candidate('c2_branch_plan'),'c2_candidate');
  assert.equal(classifyOa5Candidate('commercial_oa5_unprefixed'),'unclassified');
