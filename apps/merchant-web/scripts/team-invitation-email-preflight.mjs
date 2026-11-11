@@ -78,14 +78,6 @@ expect(!inviteHtml.includes('<script>'), 'browser fallback must not require inli
 expect(!inviteHtml.includes('<style>'), 'browser fallback must not require inline style under Merchant Web CSP');
 expect(inviteCss.length > 0, 'browser fallback must ship self-hosted styles');
 
-if (failures.length) {
-  console.error('SellerTray team invitation email preflight failed:');
-  for (const failure of failures) console.error(`- ${failure}`);
-  process.exit(1);
-}
-
-console.log('SellerTray team invitation email preflight passed.');
-
 // Regression: Production once bundled the review component but never mounted it.
 // The recipient could sign in yet could not accept, so the invite stayed pending.
 expect(merchantAppSource.includes("import IncomingBusinessInvitations, { pendingInvitationIdFromBrowser } from './IncomingBusinessInvitations'"), 'Production Merchant Web must mount the existing governed invitation review UI');
@@ -95,3 +87,12 @@ expect(merchantAppSource.includes('supabase.auth.signUp({') && merchantAppSource
 expect(merchantAppSource.includes('verificationUrl.searchParams.set(\'invitation\', invitationId)'), 'Sign-up confirmation must preserve the validated invitation locator');
 expect(incomingInvitationsSource.includes('export function pendingInvitationIdFromBrowser'), 'Invitation focus must use the existing shared validated browser-locator reader');
 expect(incomingInvitationsSource.includes("body: { action, invitationId }"), 'Acceptance/decline must remain server-authoritative');
+
+
+if (failures.length) {
+  console.error('SellerTray team invitation email preflight failed:');
+  for (const failure of failures) console.error(`- ${failure}`);
+  process.exit(1);
+}
+
+console.log('SellerTray team invitation email preflight passed.');
