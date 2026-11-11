@@ -23,14 +23,22 @@ const own=(obj,keys)=>obj&&typeof obj==='object'&&!Array.isArray(obj)&&
  Object.keys(obj).sort().join('|')===[...keys].sort().join('|');
 export function scanMigrationOrder(directory,snapshot=null){
  const errors=[];
+ // Source structure and historical Test ledger reconciliation are distinct.
+ // An unrelated Test ledger drift must not be reported as a filename error.
+ let sourceValidationPassed=false;
+ let exactNameMatches=null,versionNameConflicts=null,newerUnapplied=null;
  const result=()=>({
   source_file_count:versions.size,
   applied_migration_count:snapshot?.migrations?.length??null,
   source_applied_version_overlap:matched,
+  source_applied_version_and_name_matches:exactNameMatches,
+  source_applied_version_name_conflicts:versionNameConflicts,
   applied_versions_absent_from_source:extra,
   source_versions_not_in_applied_ledger:unapplied,
   retroactive_unapplied_versions:retroactive,
-  local_naming_and_uniqueness_passed:errors.length===0,
+  unapplied_versions_after_latest_test_migration:newerUnapplied,
+  local_naming_and_uniqueness_passed:sourceValidationPassed,
+  local_applied_ledger_reconciliation_passed:snapshot===null?null:errors.length===0,
   live_ledger_parity_established:false,
   restoration_verified:false,
   direct_replay_authorized:false,
@@ -61,6 +69,7 @@ export function scanMigrationOrder(directory,snapshot=null){
   return result();
  }
  if(versions.size===0)errors.push('NO_SOURCE_MIGRATIONS');
+ sourceValidationPassed=errors.length===0;
  if(snapshot!==null){
   if(!own(snapshot,['schema_version','project_ref','migrations'])||
      snapshot.schema_version!==1||snapshot.project_ref!==TEST_PROJECT||
@@ -68,7 +77,7 @@ export function scanMigrationOrder(directory,snapshot=null){
    errors.push('INVALID_PRIVATE_TEST_APPLIED_LEDGER');
    return result();
   }
-  const applied=new Set();
+  const applied=new Map();
   for(const m of snapshot.migrations){
    if(!own(m,['version','name'])||
       typeof m.version!=='string'||!VERSION.test(m.version)||
@@ -76,16 +85,21 @@ export function scanMigrationOrder(directory,snapshot=null){
       applied.has(m.version)){
     errors.push('INVALID_OR_DUPLICATE_APPLIED_MIGRATION');continue;
    }
-   applied.add(m.version);
+   applied.set(m.version,m.name);
   }
-  matched=[...applied].filter(v=>versions.has(v)).length;
-  extra=[...applied].filter(v=>!versions.has(v)).length;
+  matched=[...applied.keys()].filter(v=>versions.has(v)).length;
+  extra=[...applied.keys()].filter(v=>!versions.has(v)).length;
   unapplied=[...versions.keys()].filter(v=>!applied.has(v)).length;
-  const maxApplied=[...applied].sort().at(-1);
+  versionNameConflicts=[...applied.entries()].filter(([version,name])=>
+   versions.has(version)&&versions.get(version)!==name).length;
+  exactNameMatches=matched-versionNameConflicts;
+  const maxApplied=[...applied.keys()].sort().at(-1);
   retroactive=[...versions.keys()].filter(v=>!applied.has(v)&&maxApplied&&v<maxApplied).length;
+  newerUnapplied=[...versions.keys()].filter(v=>!applied.has(v)&&maxApplied&&v>maxApplied).length;
   // Historical standalone Test may intentionally hold snapshot-ledger versions
   // absent from the canonical source: do not automatically "repair" history.
   if(extra)errors.push('HISTORICAL_APPLIED_VERSION_NOT_IN_SOURCE');
+  if(versionNameConflicts)errors.push('APPLIED_VERSION_NAME_CONFLICT');
   if(retroactive)errors.push('FORWARD_ONLY_MIGRATION_ORDER_HAZARD');
   if(unapplied)errors.push('CURRENT_SOURCE_NOT_YET_APPLIED_TO_TEST');
  }
@@ -109,7 +123,7 @@ function main(){
  console.log(JSON.stringify(r,null,2));
  console.log('NOT VERIFIED: hosted Test migration ledger parity, migration SQL compatibility or local restore.');
  console.log('NOT AUTHORIZED: no migration apply, production change, Test cleanup, cron pause or reset.');
- if(!r.local_naming_and_uniqueness_passed)
+ if(r.failure_codes.length)
   process.exitCode=1;
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))main();
