@@ -11,6 +11,9 @@ on:
       - 'scripts/qa/oa5-staging-isolation.test.mjs'
       - 'scripts/qa/oa5-migration-boundary.mjs'
       - 'scripts/qa/oa5-migration-boundary.test.mjs'
+      - 'scripts/qa/oa5-test-rebuild-method-review.mjs'
+      - 'scripts/qa/oa5-test-rebuild-method-review.test.mjs'
+      - 'docs/qa/oa5-test-rebuild-method-b-retained-auth-2026-11-11.md'
       - 'scripts/qa/oa5-test-post-canonical-auth-quarantine.mjs'
       - 'scripts/qa/oa5-test-post-canonical-auth-quarantine.test.mjs'
       - 'docs/qa/oa5-test-post-canonical-auth-quarantine-2026-11-11.md'
@@ -113,6 +116,7 @@ jobs:
           node --test scripts/qa/oa5-test-cron-freeze-candidate.test.mjs
           node --test scripts/qa/oa5-test-provider-containment.test.mjs
           node --test scripts/qa/oa5-test-worker-egress.test.mjs
+          node --test scripts/qa/oa5-test-rebuild-method-review.test.mjs
           node --test scripts/qa/oa5-test-post-canonical-auth-quarantine.test.mjs
           node --test scripts/qa/oa5-test-historical-auth-lineage.test.mjs
           node --test scripts/qa/oa5-test-rebuild-preflight.test.mjs
