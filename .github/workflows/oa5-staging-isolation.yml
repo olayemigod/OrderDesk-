@@ -13,6 +13,8 @@ on:
       - 'scripts/qa/oa5-migration-boundary.test.mjs'
       - 'scripts/qa/oa5-test-migration-order-census.mjs'
       - 'scripts/qa/oa5-test-migration-order-census.test.mjs'
+      - 'scripts/qa/oa5-migration-scope-inventory.mjs'
+      - 'scripts/qa/oa5-migration-scope-inventory.test.mjs'
       - 'scripts/qa/oa5-test-merchant-fixtures.mjs'
       - 'scripts/qa/oa5-test-merchant-fixtures.test.mjs'
       - 'scripts/qa/oa5-test-backup-manifest.mjs'
@@ -100,6 +102,7 @@ jobs:
           node --test scripts/qa/oa5-test-worker-egress.test.mjs
           node --test scripts/qa/oa5-test-rebuild-preflight.test.mjs
           node --test scripts/qa/oa5-test-migration-order-census.test.mjs
+          node --test scripts/qa/oa5-migration-scope-inventory.test.mjs
           node --test scripts/qa/oa5-test-live-census.test.mjs
           node --test scripts/qa/oa5-test-managed-boundary.test.mjs
           node --test scripts/qa/oa5-test-auth-decommission-boundary.test.mjs
