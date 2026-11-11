@@ -4,7 +4,7 @@ description: "Governing skill for every SellerTray redesign, implementation, ref
 metadata:
   author: ProcessEdge Solutions Limited
   product: SellerTray
-  version: "0.1.22"
+  version: "0.1.24"
   status: governing
 ---
 
@@ -649,6 +649,30 @@ For every SellerTray task:
 5. **Implement shared behaviour once** — put cross-channel rules in shared/domain services.
 6. **Verify** — focused tests plus relevant regression tests. A change without verification is incomplete.
 7. **Report accurately** — state what changed, what was preserved, tests run/results, migration/build/deployment requirements, limitations and the next bounded milestone. Never report planned work as completed.
+
+## Solo-maintainer review and release governance — approved 06/11/2026
+
+SellerTray presently has one developer. The owner explicitly approved replacing the **mandatory second-developer GitHub APPROVED review** with a documented **sole-maintainer exception**. This replaces a staffing requirement, **not** the actual security, database, recovery, release, or operational gates. Apply the full policy at `docs/qa/sellertray-solo-maintainer-release-governance-2026-11-06.md` to every relevant future change.
+
+1. **Do not fabricate independence.** A self-review, owner decision, Codex review or AI security analysis must never be represented as an independent human `APPROVED` review. Where one qualified human maintainer is all that is available, document `OWNER-APPROVED SOLE-MAINTAINER HUMAN-REVIEW EXCEPTION` with residual risk; prefer outside expert review for high-risk work when available.
+2. **Exact source and verifiable technical gates still apply.** Run a separate automated exact-head code review, resolve substantive findings, and run focused and applicable CI, adversarial permission/Branch tests, ledger/payment/inventory protections and cross-channel regressions. Record exact commit, hash, CI IDs and what was or was not independently checked.
+3. **High-risk Production changes require a release-specific owner go-live decision**, not only approval of the policy: frozen source and versions, approved target and change window, proven identical deployment mechanism on isolated restored data, verified backups and appropriate recovery coverage, explicit remaining risk, operator/rollback owner, read-only Production preflight, fail-closed stop conditions and post-release acceptance. Do not quietly restore a vulnerable implementation as a rollback.
+4. **Keep expensive resources intentional.** Never trigger an Android build, Vercel preview, paid Supabase branch, live provider message or unrelated backend deployment merely to produce a GitHub review status. The SQL-only PR #219 emergency fix does not require Android Build 47.
+5. **PR #219 emergency Production security release was completed on 06/11/2026.** The two exact reviewed migrations were separately applied under `PR219-20261106-ISSUE222`; Production versioned ledger advanced **390 → 392** and post-release role/Branch scope checks passed. The PR itself remains draft/unmerged; source-control convergence is distinct from already-deployed SQL. Never repeat either applied migration, and do not use this emergency exception to release OA5/C2/Build 47. See Issue #222. Solo-maintainer approval remains a review-policy exception, not a blanket release authorisation.
+
+If an external contractual/regulatory independent-review requirement exists, this sole-maintainer policy does not waive it. Revisit the staffing exception when a second qualified maintainer is available.
+
+## Accelerated defect-release separation — approved 11/11/2026
+
+The owner explicitly approved an **accelerated SellerTray release plan** to correct urgent Production defects independently of the later **C2** runtime cutover. This changes release sequencing, **not** the shared SellerTray commerce model or merchant safety requirements.
+
+1. **Urgent Production-compatible correction lane:** Isolate a bounded fix against the **actual deployed** Production Web/Mobile/database source and current Production migration ledger. Verify the exact deployment/source SHA and prevent C2/OA5 installer or Branch-subscription schema changes from silently entering a defect hotfix. Prefer individually reviewable, forward-only, version-aware deltas. Never generic `supabase db push`, fabricate historical ledger equivalence, replay PR219's deployed SQL, or test against Tandar/live merchants.
+2. **Parallel permanent Test/Staging lane:** Reuse the existing Agreement Test project `iukgsukdoowvnhlfmpml`. The owner selected **reconstruction Method B for final verification**: preserve the five historical managed Test Auth identities and prove zero inherited canonical Business/Branch/installer/Admin authority. Preserve archived Agreement history, original protected Vercel Previews and reviewed managed Auth/Storage boundaries. Method B does **not** authorise a hosted Test reset, old-Auth deletion, session loss beyond separately approved scope, a four-job pause, Edge deployments or provider callback writes.
+3. **Separate release decisions:** Approval of this plan permits repository code edits, source migration reconciliation, disposable-local verification, focused CI and preparation of release candidates. A **fresh, exact-operation approval** remains mandatory before destructive Test work, provider/cron changes, hosted QA domain binding, APK build/distribution when separately gated, or **any Production deployment or migration**.
+4. **QA and rollback:** Before release, pass focused and relevant cross-channel tests (especially tenant/Branch, UOM/stock ledger, payment idempotency, offline and WhatsApp regression as applicable); preserve encrypted backup custody and current live customer continuity. Production compatibility must be checked against the 392-row post-PR219 ledger or its independently observed later state. Do not interpret clean canonical CI as proof of hosted Production migration parity.
+5. **Practical sequencing:** Fix urgent inventory/UOM, POS sale recovery/performance, activation and invitations, order/customer navigation and reporting in bounded lanes. Ship individually accepted changes when safe; **OA5 controlled Test acceptance remains mandatory before C2 runtime cutover**, but does not force unrelated urgent Production hotfixes to wait for the full C2 migration programme.
+
+The live Production Merchant Web last inspected 11/11/2026 used deployment `dpl_CfBFKGKgFdSUBJtceMsCZUVCBgY5`, Git SHA `d8024c215850e0e9a3a0ce1496d1d0dd5d7cd150`. This is a dated observation; always recheck the latest served deployment before a future release. The dedicated invitation-acceptance correction is tracked separately from the Test reconstruction candidate.
 
 ## Environment and resource economy — approved 04/11/2026
 
