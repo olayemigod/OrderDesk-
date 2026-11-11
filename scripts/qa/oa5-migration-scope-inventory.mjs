@@ -19,7 +19,7 @@ const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 
 export function classifyOa5Candidate(name){
  if(name.startsWith('c2_'))return 'c2_candidate';
- if(name.startsWith('oa5_')||name.startsWith('pre_c2_')||
+ if(/^oa5(?:[abc])?_/.test(name)||name.startsWith('pre_c2_')||
     name==='legacy_commercial_adjustment_confirmed_payment_guard')
   return 'oa5_candidate';
  return 'unclassified';
