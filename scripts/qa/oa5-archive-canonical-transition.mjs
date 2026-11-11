@@ -29,6 +29,21 @@ export const PRESERVE_COUNTS=Object.freeze({
   deployed_edge_functions:5,
   historical_vercel_previews:5
 });
+// Managed service state and reviewer access must NOT be implicitly removed
+// because an old SQL archive has been checksummed.
+export const PRESERVE_DISPOSITIONS=Object.freeze({
+  applied_migration_ledger:'encrypted_archive_only',
+  agreement_packages:'encrypted_archive_only',
+  order_form_confirmations:'encrypted_archive_only',
+  commercial_orders:'encrypted_archive_only',
+  platform_admin_audit_events:'encrypted_archive_only',
+  auth_users:'retain_hosted_pending_separate_auth_review',
+  auth_sessions:'retain_hosted_pending_separate_auth_review',
+  storage_buckets:'retain_hosted_pending_separate_storage_review',
+  storage_objects:'retain_hosted_pending_separate_storage_review',
+  deployed_edge_functions:'retain_hosted_and_preserve_bundle',
+  historical_vercel_previews:'retain_reviewer_access_and_preserve_capture'
+});
 const exact=(o,keys)=>o!==null && typeof o==='object' && !Array.isArray(o) &&
   Object.keys(o).sort().join('|')===[...keys].sort().join('|');
 const digest=s=>typeof s==='string'&&/^[a-f0-9]{64}$/.test(s);
@@ -80,7 +95,7 @@ export function assessArchiveCanonicalTransition(record,{archive,sourceInventory
   for(const [category,count] of Object.entries(PRESERVE_COUNTS)){
     const row=record.preservation?.[category];
     if(!exact(row,['archive_count','disposition','custody_reviewed','evidence_ref'])||
-       row.archive_count!==count||row.disposition!=='encrypted_archive_only'||
+       row.archive_count!==count||row.disposition!==PRESERVE_DISPOSITIONS[category]||
        row.custody_reviewed!==true||!opaque(row.evidence_ref)){
       reasons.push('Unaccepted historical evidence disposition: '+category);
       continue;

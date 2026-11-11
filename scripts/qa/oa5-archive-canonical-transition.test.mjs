@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-import {assessArchiveCanonicalTransition,PRESERVE_COUNTS,TEST_REF,SOURCE_MIGRATIONS} from './oa5-archive-canonical-transition.mjs';
+import {assessArchiveCanonicalTransition,PRESERVE_COUNTS,PRESERVE_DISPOSITIONS,TEST_REF,SOURCE_MIGRATIONS} from './oa5-archive-canonical-transition.mjs';
 
 const sha='a'.repeat(40), inventory='b'.repeat(64);
 const src={structural_source_check_passed:true,
@@ -15,7 +15,7 @@ const valid=()=>({
     database_ci_success_reviewed:true,legacy_business_authority_reviewed:true,
     c2_runtime_not_activated_reviewed:true,evidence_ref:'private-db-ci-evidence'},
   preservation:Object.fromEntries(Object.entries(PRESERVE_COUNTS).map(([key,count],i)=>[
-    key,{archive_count:count,disposition:'encrypted_archive_only',
+    key,{archive_count:count,disposition:PRESERVE_DISPOSITIONS[key],
       custody_reviewed:true,evidence_ref:'private-archive-class-'+String(i).padStart(3,'0')}
   ])),
   transition:{strategy:'retain-historical-evidence-build-clean-canonical',
@@ -90,4 +90,14 @@ test('missing private record CLI fails without printing secret names, paths or c
  assert.equal(p.status,1);
  assert.match(p.stderr,/BLOCKED/);
  assert.equal(p.stderr.includes(secret),false);
+});
+
+test('live Auth, Storage, Edge bundles and Preview reviewer access stay preserved',()=>{
+ for(const key of ['auth_users','auth_sessions','storage_buckets','storage_objects',
+    'deployed_edge_functions','historical_vercel_previews']){
+  const r=valid();r.preservation[key].disposition='encrypted_archive_only';
+  assert.equal(assessArchiveCanonicalTransition(r,checks).review_package_consistent,false,key);
+ }
+ const a=valid();a.preservation.historical_vercel_previews.custody_reviewed=false;
+ assert.equal(assessArchiveCanonicalTransition(a,checks).review_package_consistent,false);
 });
