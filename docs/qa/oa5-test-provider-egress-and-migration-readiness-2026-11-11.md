@@ -77,3 +77,34 @@ The current connected read-only Test migration provider inventory independently 
 A private, dated JSON ledger snapshot generated from this read-only Supabase list is being delivered directly to the owner **outside Git**, to run the source utility's optional third argument. This file contains only the 54 migration version/name pairs, Test project identifier, and snapshot schema; it contains **no database password, URL, user identities, JWTs or migration SQL**. Do not put this private snapshot in Git, public issue comments or Vercel preview artifacts. The filename of that private artifact is intentionally not an input to CI.
 
 **Follow-up operator-only read-only check:** `node "$MigrationScan" --scan "$MigrationDir" "$LedgerPrivate"`. If any `HISTORICAL_APPLIED_VERSION_NOT_IN_SOURCE` or `FORWARD_ONLY_MIGRATION_ORDER_HAZARD` code appears, **stop any direct current-Test migration replay**. Even if counts happen to match, archive/restore and full schema parity remain separate requirements. No production state or Test data was mutated by this check.
+
+
+## 11 November 2026 — actual 457-source versus 54-Test-ledger reconciliation: direct replay HARD BLOCK
+
+**Owner-operated local private ledger comparison** using \`node "$MigrationScan" --scan "$MigrationDir" "$LedgerPrivate"\` and the privately preserved SHA-256-verified 54-entry Test ledger returned:
+
+| Measured version category | Exact count |
+| --- | ---: |
+| Canonical repository migration filenames | **457** |
+| Historical applied Test migration versions | **54** |
+| Same numeric migration version on both sides | **2** |
+| Historical Test versions absent from current canonical source | **52** |
+| Canonical source versions not recorded in Test ledger | **455** |
+| Unapplied canonical source versions older than the Test ledger's highest version | **452** |
+| Unapplied canonical source versions newer than the Test ledger's highest version | **3** (derived: 455 minus 452) |
+
+Original CLI reported the three **blocking codes**: \`HISTORICAL_APPLIED_VERSION_NOT_IN_SOURCE\`, \`FORWARD_ONLY_MIGRATION_ORDER_HAZARD\`, and \`CURRENT_SOURCE_NOT_YET_APPLIED_TO_TEST\`. This is decisive evidence that the existing Agreement Test project has a **historical snapshot/import migration ledger**, not a canonical 457-file applied ledger. These counts represent migration-version records, **not** the number of missing tables/functions or SQL changes: snapshot batches may include logic now present in multiple canonical files. Do **NOT** attempt \`supabase db push\`, bulk migration repair/mark-as-applied, forward-only update of the existing project, or replay of all 457 source files. Neither a filename match nor a count proves equivalent SQL/schema; even the two common numeric versions require name/content comparison before being treated as comparable history.
+
+**Diagnostic wording correction in the same draft PR:** the first version of the tool returned \`local_naming_and_uniqueness_passed:false\` merely because *historical Test ledger mismatches* shared its error accumulator. This incorrectly suggests the 457 source filenames failed structural validation. The tool and synthetic tests now distinguish \`local_naming_and_uniqueness_passed\` (the original source-only PASS), \`local_applied_ledger_reconciliation_passed\` (false), numeric-version overlap, exact version+name matches, version/name collisions, and newer-versus-retroactive unapplied source versions. CLI remains **nonzero/fail-closed** for any ledger drift. The previous 457 source-only PASS remains valid; this is a correction to the reporting taxonomy, **not** a waiver of the migration-replay block.
+
+**Reconstruction decision boundary:** the result supports evaluating a **separately authorized and rehearsed Test-only reconstruction**, rather than attempting to repair the 54-entry ledger in place. Do not select the exact cleanup mechanism, drop/reset schema, discard managed Auth/Storage or mark migrations until the protected OA5 archive/restore, Test-only provider/ingress freeze, named four-cron reversible pause, exact target/source migration subset and interleaved C2 boundary, rollback/recovery and permission/audit evidence have been reviewed. The earlier 07 November disposable PostgreSQL restore/checksum proof is already recorded; preserve and validate its scope rather than demanding that the owner repeat identical work without a specific new reason. C2 Production authority remains blocked by OA5 controlled acceptance. Production/Tandar are excluded from the entire reconstruction decision.
+
+**Next local read-only diagnostic after source update (optional, no new private files):**
+
+~~~powershell
+git -C "$Source" pull --ff-only
+node "$MigrationScan" --scan "$MigrationDir" "$LedgerPrivate"
+~~~
+
+Expected: source naming PASS, applied-ledger reconciliation FAIL, 457/54/2/52/455/452, 3 newer source versions; the new version+name match/conflict counts will clarify the two overlapping version IDs without revealing names or SQL. A nonzero exit is **expected** and correct. It is **not** a request to keep retrying the same blocked migration operation.
+
