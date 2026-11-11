@@ -1,3 +1,15 @@
+## 11/11/2026 provider review — structured pre-rebuild containment gate (current CLI)
+
+A new independent, private, provider-owner-attested **seven-surface review record** is required in addition to the existing individual review flags: Meta/WhatsApp, Paystack, Flutterwave, SMTP/Auth email, Firebase/FCM, AI/notification workers and Merchant/Admin redirect endpoints. The file must be source-SHA-matched and captured within 24 hours, and all Test ingress/outbound delivery must be quarantined. An isolated non-production configuration may remain stored only with confirmed Test-only destinations and credentials; this is **not** authorization for delivery. Disabled providers must have no active Test route/credentials. See `docs/qa/oa5-test-provider-containment-review-2026-11-11.md` and `scripts/qa/oa5-test-provider-containment.mjs`.
+
+The **current** local preflight command is:
+
+```sh
+node scripts/qa/oa5-test-rebuild-preflight.mjs --check /secure/private/operator-review.json /secure/private/test-archive /secure/private/post-pause-cron-v2.json /secure/private/post-pause-live-counts.json /secure/private/test-managed-state.json /secure/private/test-edge-bundle-recheck.json /secure/private/vercel-project-protection-recheck.json /secure/private/test-worker-egress-census.json /secure/private/archive-to-canonical-transition-review.json /secure/private/fresh-historical-test-auth-lineage.json /secure/private/fresh-provider-containment.json /secure/private/reviewed-one-session-loss.json
+```
+
+The reviewed one-session-loss file remains narrowly optional only with five *current* sessions (historical Test most recently has six). A structurally valid provider review file does **not** establish independent provider-console truth: the human operator must inspect its private evidence references, personally verify real production routes are unchanged and refresh quiescence immediately before any separately approved operation. All earlier command snippets below are superseded. Do not mark any provider status verified from source, SQL zero counts, or an unexecuted sample JSON.
+
 # OA5 Test-only rebuild — operator preflight and human authorization boundary (09/11/2026)
 
 **Decision: NO-GO for any destructive hosted action.** No SQL reset, `cron.alter_job`, Vercel deployment, Edge deployment, callback or APK is authorized by this document. The approved 06/11/2026 **conditional** decision permits reuse of the existing Agreement Test project only after recoverable archive and reviewed operator scope. It is **not** a blanket authorization for a remote wipe.

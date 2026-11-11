@@ -32,6 +32,9 @@ on:
       - 'scripts/qa/oa5-test-cron-maintenance-gate.test.mjs'
       - 'scripts/qa/oa5-test-cron-freeze-candidate.mjs'
       - 'scripts/qa/oa5-test-cron-freeze-candidate.test.mjs'
+      - 'scripts/qa/oa5-test-provider-containment.mjs'
+      - 'scripts/qa/oa5-test-provider-containment.test.mjs'
+      - 'docs/qa/oa5-test-provider-containment-review-2026-11-11.md'
       - 'scripts/qa/oa5-test-worker-egress.mjs'
       - 'scripts/qa/oa5-test-worker-egress.test.mjs'
       - 'docs/qa/oa5-test-worker-egress-callgraph-2026-11-09.md'
@@ -108,6 +111,7 @@ jobs:
           node --test scripts/qa/oa5-test-backup-manifest.test.mjs
           node --test scripts/qa/oa5-test-cron-maintenance-gate.test.mjs
           node --test scripts/qa/oa5-test-cron-freeze-candidate.test.mjs
+          node --test scripts/qa/oa5-test-provider-containment.test.mjs
           node --test scripts/qa/oa5-test-worker-egress.test.mjs
           node --test scripts/qa/oa5-test-post-canonical-auth-quarantine.test.mjs
           node --test scripts/qa/oa5-test-historical-auth-lineage.test.mjs
