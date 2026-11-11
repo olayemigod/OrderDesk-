@@ -62,3 +62,18 @@ The Test backup's existing encrypted copy/checksum observations and aggregate ar
 ## 4. QA and cross-surface impact
 
 This continuation adds a **read-only local migration inventory tool and documentation**, not a new business rule. QA synthetic tests cover duplicate/invalid version names, forward-only retroactive timing hazard, Test snapshot record validation and no source/SQL/path disclosure; the OA5 Isolation workflow runs them. No shared-commerce schema, migration, payment, Merchant Web, Admin Web, Mobile, WhatsApp, AI, reporting, printing, POS, inventory, offline/sync or production runtime behavior changed. There is no new preview/APK/billing requirement. All provider-side behavior and entire app runtime remain subject to later hosted acceptance.
+
+## 11 November 2026 — canonical source migration filenames verified locally by owner
+
+Owner executed `node "$MigrationScan" --scan "$MigrationDir"` against the exact checked-out QA candidate source and returned:
+
+- **457** canonical SQL migration files detected.
+- **Local naming and version uniqueness PASS**; no invalid filenames, duplicate versions, or unsafe directory entries reported by this scan.
+- **Applied ledger comparison NOT RUN** in this invocation (all overlap/missing/retroactive fields `null`).
+- Restore, hosted ledger parity, direct replay and destructive authorization all **false**.
+
+The current connected read-only Test migration provider inventory independently lists **54** applied historical migration versions, 18 from the special standalone Test `sellertray_schema_batch_*` import sequence and 36 named Test history changes. **Do not assume 457 - 54 = 403 pending canonical migrations.** Some historical Test versions may have no matching canonical source file; some canonical files may be retroactive relative to the latest Test migration; a full version-level reconciliation is required before selecting a replay strategy.
+
+A private, dated JSON ledger snapshot generated from this read-only Supabase list is being delivered directly to the owner **outside Git**, to run the source utility's optional third argument. This file contains only the 54 migration version/name pairs, Test project identifier, and snapshot schema; it contains **no database password, URL, user identities, JWTs or migration SQL**. Do not put this private snapshot in Git, public issue comments or Vercel preview artifacts. The filename of that private artifact is intentionally not an input to CI.
+
+**Follow-up operator-only read-only check:** `node "$MigrationScan" --scan "$MigrationDir" "$LedgerPrivate"`. If any `HISTORICAL_APPLIED_VERSION_NOT_IN_SOURCE` or `FORWARD_ONLY_MIGRATION_ORDER_HAZARD` code appears, **stop any direct current-Test migration replay**. Even if counts happen to match, archive/restore and full schema parity remain separate requirements. No production state or Test data was mutated by this check.
