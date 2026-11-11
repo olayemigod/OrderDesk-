@@ -109,3 +109,28 @@ test('CLI fails on nonexistent path without leaking it',()=>{
  assert.equal(p.stdout.includes(privatePath),false);
  assert.match(p.stdout,/SOURCE_MIGRATION_DIRECTORY_UNAVAILABLE/);
 });
+
+test('explicit review-window mode yields only ordered file identities and content hashes, never SQL',()=>fixture(names,root=>{
+ const r=inventoryOa5SourceMigrationScope(root,{reviewWindow:true});
+ assert.equal(r.review_window_files.length,5);
+ assert.deepEqual(r.review_window_files.map(x=>x.version),[
+  '20261101010102','20261101010103','20261101010104',
+  '20261101010105','20261101010106'
+ ]);
+ assert.equal(r.review_window_files.filter(x=>x.label==='c2_candidate').length,1);
+ for(const row of r.review_window_files){
+  assert.match(row.file,/^[a-zA-Z0-9_.-]+\.sql$/);
+  assert.match(row.content_sha256,/^[0-9a-f]{64}$/);
+  assert.equal(JSON.stringify(row).includes('-- synthetic SQL'),false);
+ }
+ const noReview=inventoryOa5SourceMigrationScope(root);
+ assert.equal(Object.hasOwn(noReview,'review_window_files'),false);
+ const cli=new URL('./oa5-migration-scope-inventory.mjs',import.meta.url).pathname;
+ const p=spawnSync(process.execPath,[cli,'--review-window',root],{encoding:'utf8'});
+ assert.equal(p.status,0,p.stderr);
+ const o=JSON.parse(p.stdout.split('\nNOT VERIFIED:')[0]);
+ assert.equal(o.review_window_files.length,5);
+ assert.equal(p.stdout.includes(root),false);
+ assert.equal(p.stdout.includes('-- synthetic SQL'),false);
+ assert.equal(o.hosted_test_reset_authorized,false);
+}));
