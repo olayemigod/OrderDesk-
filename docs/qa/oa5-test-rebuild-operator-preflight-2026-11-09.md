@@ -2,6 +2,18 @@
 
 **Decision: NO-GO for any destructive hosted action.** No SQL reset, `cron.alter_job`, Vercel deployment, Edge deployment, callback or APK is authorized by this document. The approved 06/11/2026 **conditional** decision permits reuse of the existing Agreement Test project only after recoverable archive and reviewed operator scope. It is **not** a blanket authorization for a remote wipe.
 
+## 11/11/2026 late update — real historical Test Auth/merchant/admin authority census
+
+The **pre-reset Test baseline** now has a new fail-closed independent count-only guard `scripts/qa/oa5-test-historical-auth-lineage.mjs`. Current *read-only hosted Test* observations show **five Auth users, six sessions, three tenant membership rows linked to three Auth users, three platform-admin rows also linked to three Auth users, zero Branch-user access and capability-grant rows, three Businesses, three Branches, five Agreement Packages and 54 historical migration records**. There is **existing historical Test business/admin authority**; do not mislabel it as already quarantined or assume a clean schema reset automatically invalidates old Auth JWT sessions. Nothing was deleted or paused.
+
+The new preflight argument order is now:
+
+```sh
+node scripts/qa/oa5-test-rebuild-preflight.mjs --check /secure/private/operator-review.json /secure/private/test-archive /secure/private/post-pause-cron-v2.json /secure/private/post-pause-live-counts.json /secure/private/test-managed-state.json /secure/private/test-edge-bundle-recheck.json /secure/private/vercel-project-protection-recheck.json /secure/private/test-worker-egress-census.json /secure/private/archive-to-canonical-transition-review.json /secure/private/fresh-historical-test-auth-lineage.json /secure/private/reviewed-one-session-loss.json
+```
+
+The one-session-loss file is optional only if current Test Auth sessions equal archive baseline five; hosted Test currently has six. The `historic_test_auth_authority_lineage_review` independent evidence category is now mandatory. **Old command examples below are historical.** No current dated source record is fresh enough for a future pre-reset ten-minute census. Archive-to-canonical clean-room regression remains separate from actual deployed Auth/session/preview reconciliation.
+
 ## 11/11/2026 update — new required archive-to-canonical review gate
 
 The current preflight script additionally requires `historical_archive_to_canonical_review` in the private operator record's `evidence` (independent opaque reference with `reviewed:true`). It also requires the **new mandatory private transition review JSON after the worker-egress snapshot**. This is the current CLI order; the older 09 November command examples further below are historical and **must not be used**:

@@ -6,7 +6,7 @@ import {assessTestLiveCensus,ARCHIVED_COUNTS,TEST_REF,REVIEWED_SESSION_LOSS_SCOP
 const ref='iukgsukdoowvnhlfmpml',sha='a'.repeat(40);
 const record=()=>({schema_version:2,project_ref:ref,reviewed_source_sha:sha,purpose:'pre-reset-human-review',
  evidence:Object.fromEntries(REQUIRED_EVIDENCE.map((k,i)=>[k,{reviewed:true,evidence_ref:'private-review-'+String(i+1).padStart(4,'0')}]))});
-const proof={sourceSha:sha,archive:{ok:true},cron:{ok:true},liveCensus:{ok:true},managedBoundary:{ok:true},edgeBundles:{metadata_matches_historical_baseline:true,destructive_execution_authorized:false},vercelProtection:{protection_metadata_consistent:true,hosted_change_authorized:false},workerEgress:{worker_route_counts_quiescent:true,destructive_execution_authorized:false},archiveTransition:{review_package_consistent:true}};
+const proof={sourceSha:sha,archive:{ok:true},cron:{ok:true},liveCensus:{ok:true},managedBoundary:{ok:true},edgeBundles:{metadata_matches_historical_baseline:true,destructive_execution_authorized:false},vercelProtection:{protection_metadata_consistent:true,hosted_change_authorized:false},workerEgress:{worker_route_counts_quiescent:true,destructive_execution_authorized:false},archiveTransition:{review_package_consistent:true},historicAuthLineage:{historical_baseline_consistent:true}};
 test('complete synthetic review never authorizes destructive Test execution',()=>{
   const result=assessRebuildPreflight(record(),proof);
   assert.equal(result.preconditions_met,true);
@@ -54,6 +54,7 @@ test('backup/restore and fresh cron/pg_net evidence are mandatory, independent s
     {...proof,vercelProtection:null},{...proof,vercelProtection:{protection_metadata_consistent:false,reasons:['SSO disabled']}},
     {...proof,workerEgress:null},{...proof,workerEgress:{worker_route_counts_quiescent:false,reasons:['indirect URL configured']}},
     {...proof,archiveTransition:null},{...proof,archiveTransition:{review_package_consistent:false}},
+    {...proof,historicAuthLineage:null},{...proof,historicAuthLineage:{historical_baseline_consistent:false}},
   ]){
     const r=assessRebuildPreflight(record(),q);
     assert.equal(r.preconditions_met,false);
@@ -61,7 +62,7 @@ test('backup/restore and fresh cron/pg_net evidence are mandatory, independent s
   }
 });
 test('CLI without private operator evidence cannot contact any hosted resource or approve reset',()=>{
-  const run=spawnSync(process.execPath,[new URL('./oa5-test-rebuild-preflight.mjs',import.meta.url).pathname,'--check','/nonexistent-record.json','/nonexistent-archive','/nonexistent-cron.json','/nonexistent-live.json','/nonexistent-managed.json','/nonexistent-edge-bundles.json','/nonexistent-vercel-protection.json','/nonexistent-worker-egress.json','/nonexistent-transition-review.json'],{encoding:'utf8'});
+  const run=spawnSync(process.execPath,[new URL('./oa5-test-rebuild-preflight.mjs',import.meta.url).pathname,'--check','/nonexistent-record.json','/nonexistent-archive','/nonexistent-cron.json','/nonexistent-live.json','/nonexistent-managed.json','/nonexistent-edge-bundles.json','/nonexistent-vercel-protection.json','/nonexistent-worker-egress.json','/nonexistent-transition-review.json','/nonexistent-auth-lineage.json'],{encoding:'utf8'});
   assert.equal(run.status,1);
   assert.match(run.stderr,/BLOCKED/);
   assert.doesNotMatch(run.stderr,/service_role|sk_live_/);
@@ -160,4 +161,14 @@ test('direct cron has no URL but indirectly callable worker URL settings are an 
  const safe=assessRebuildPreflight(record(),proof);
  assert.equal(safe.preconditions_met,true);
  assert.equal(safe.destructive_execution_authorized,false);
+});
+
+test('historical Test Auth/admin/merchant membership grant lineage is independently required',()=>{
+ const missing=assessRebuildPreflight(record(),{...proof,historicAuthLineage:null});
+ assert.equal(missing.preconditions_met,false);
+ assert.match(missing.reasons.join(' '),/Historical Test Auth/);
+ assert.equal(missing.destructive_execution_authorized,false);
+ const allowed=assessRebuildPreflight(record(),proof);
+ assert.equal(allowed.preconditions_met,true);
+ assert.equal(allowed.destructive_execution_authorized,false);
 });
