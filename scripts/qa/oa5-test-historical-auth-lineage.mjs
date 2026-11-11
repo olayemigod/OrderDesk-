@@ -23,6 +23,8 @@ export const HISTORICAL_BASELINE=Object.freeze({
   active_branch_access:0,
   platform_admins:3,
   platform_admin_users_matching_auth:3,
+  auth_users_with_any_member_or_platform_admin_authority:5,
+  auth_users_with_both_member_and_platform_admin_authority:1,
   admin_capability_grants:0,
   member_capability_rows:0,
   businesses:3,

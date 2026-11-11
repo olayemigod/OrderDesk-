@@ -11,11 +11,13 @@
 | Tenant-member rows lacking corresponding Auth user | 0 |
 | Branch user access / active access | 0 / 0 |
 | Platform-admin rows / rows linked to Auth user | 3 / 3 |
+| Distinct Auth users holding either a business membership or platform-admin role | **5 of 5** |
+| Distinct Auth users holding **both** business membership and platform-admin roles | **1** |
 | Member capabilities / platform-admin capability-grant versions | 0 / 0 |
 | Businesses / Branches | 3 / 3 |
 | Historical Agreement Packages / applied migrations | 5 / 54 |
 
-**Security interpretation:** Historic Test retains operational **membership and administrator assignments**. These are legitimate historical Test artifacts but cannot be treated as inert credentials after reconstructing a *new* canonical business schema. Deleting or resetting SQL by itself does not prove Auth identity/session revocation; the old five Auth users and six active session records exist independently. Do not remove current old member/admin rows, reset Auth or revoke sessions merely from this observation. Historical Vercel Preview reviewer access must remain preserved until independently addressed.
+**Security interpretation:** Historic Test retains operational **membership and administrator assignments**. These are legitimate historical Test artifacts but cannot be treated as inert credentials after reconstructing a *new* canonical business schema. Deleting or resetting SQL by itself does not prove Auth identity/session revocation; the old five Auth users and six active session records exist independently. Do not remove current old member/admin rows, reset Auth or revoke sessions merely from this observation. All **five** historical Auth users hold at least one business or platform-admin assignment, and one identity holds both. That makes a blanket claim that historical Auth identities are already inert **incorrect**. Historical Vercel Preview reviewer access must remain preserved until independently addressed.
 
 ## Exact read-only census SQL
 
@@ -38,6 +40,14 @@ select jsonb_build_object(
   'active_branch_access',(select count(*)::int from public.branch_user_access where can_operate),
   'platform_admins',(select count(*)::int from public.platform_admins),
   'platform_admin_users_matching_auth',(select count(*)::int from public.platform_admins p join auth.users u on u.id=p.user_id),
+  'auth_users_with_any_member_or_platform_admin_authority',(select count(distinct user_id)::int from (
+    select tm.user_id from public.tenant_members tm join auth.users u on u.id=tm.user_id
+    union select pa.user_id from public.platform_admins pa join auth.users u on u.id=pa.user_id
+  ) known_auth),
+  'auth_users_with_both_member_and_platform_admin_authority',
+    (select count(distinct tm.user_id)::int from public.tenant_members tm
+     join public.platform_admins pa on pa.user_id=tm.user_id
+     join auth.users u on u.id=tm.user_id),
   'admin_capability_grants',(select count(*)::int from public.platform_admin_capability_grant_versions),
   'member_capability_rows',(select count(*)::int from public.tenant_member_capabilities),
   'businesses',(select count(*)::int from public.tenants),

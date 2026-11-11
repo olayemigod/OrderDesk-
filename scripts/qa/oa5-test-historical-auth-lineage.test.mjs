@@ -51,3 +51,12 @@ test('CLI with missing private snapshot never reveals its path or sends provider
  assert.match(p.stderr,/BLOCKED/);
  assert.equal(p.stderr.includes(privatePath),false);
 });
+
+test('overlapping Admin and Business authority for one historic Auth actor cannot be ignored',()=>{
+ const x=fresh();x.counts.auth_users_with_both_member_and_platform_admin_authority=0;
+ const out=assessHistoricalTestAuthLineage(x,now);
+ assert.equal(out.historical_baseline_consistent,false);
+ assert.equal(out.historical_users_quarantined_in_canonical_schema,false);
+ const y=fresh();y.counts.auth_users_with_any_member_or_platform_admin_authority=4;
+ assert.equal(assessHistoricalTestAuthLineage(y,now).historical_baseline_consistent,false);
+});
