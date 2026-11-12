@@ -36,8 +36,8 @@ begin
   from public.tenant_members tm
   where tm.tenant_id=p_tenant_id and tm.user_id=v_user_id;
 
-  if v_role not in ('owner','manager')
-     or not public.sellertray_user_has_capability(p_tenant_id,v_user_id,'can_view_reports') then
+  if coalesce(v_role,'') not in ('owner','manager')
+     or not coalesce(public.sellertray_user_has_capability(p_tenant_id,v_user_id,'can_view_reports'),false) then
     raise exception 'Merchant Web reports are available to Owners and Managers'
       using errcode='42501';
   end if;
@@ -65,7 +65,7 @@ begin
                   where b.tenant_id=p_tenant_id and b.id=p_branch_id) then
       raise exception 'Branch not found' using errcode='P0002';
     end if;
-    if not public.sellertray_user_can_read_report_branch(p_tenant_id,p_branch_id,v_user_id) then
+    if not coalesce(public.sellertray_user_can_read_report_branch(p_tenant_id,p_branch_id,v_user_id),false) then
       raise exception 'You do not have access to reports for this Branch'
         using errcode='42501';
     end if;
@@ -113,13 +113,15 @@ begin
   order_movements as materialized (
     select s.id as order_id,im.id as movement_id,im.movement_type
     from completed_sales s
-    join public.inventory_movements im on im.tenant_id=p_tenant_id
-      and (
-        (im.movement_type='sale'
-          and im.reference_type='order' and im.reference_id=s.id::text)
-        or (im.movement_type in ('sale_return','reversal')
-          and im.metadata->>'order_id'=s.id::text)
-      )
+    join public.inventory_movements im
+      on im.tenant_id=p_tenant_id and im.movement_type='sale'
+     and im.reference_type='order' and im.reference_id=s.id::text
+    union all
+    select s.id as order_id,im.id as movement_id,im.movement_type
+    from completed_sales s
+    join public.inventory_movements im
+      on im.tenant_id=p_tenant_id and im.movement_type in ('sale_return','reversal')
+     and im.metadata->>'order_id'=s.id::text
   ),
   historical_cost as (
     select m.order_id,
