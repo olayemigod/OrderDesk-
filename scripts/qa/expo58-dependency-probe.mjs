@@ -16,7 +16,7 @@ const packagePath = resolve(mobileRoot, 'package.json');
 const lockPath = resolve(mobileRoot, 'package-lock.json');
 
 export const SDK58_PINS = Object.freeze({
-  expo: '~58.0.24',
+  expo: '~58.0.25',
   '@expo/metro-runtime': '~58.0.17',
   'expo-camera': '~58.0.14',
   'expo-constants': '~58.0.16',
