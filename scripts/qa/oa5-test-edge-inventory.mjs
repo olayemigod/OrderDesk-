@@ -15,6 +15,13 @@ export const TEST_PROJECT_REF='iukgsukdoowvnhlfmpml';
 export const LEGACY_PROBE='agreement-pdf-runtime-probe';
 const FRESH_MS=10*60*1000;
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'../..');
+// Immutable 09 Nov historical roster provenance. Never rewrite its source
+// tree SHA because a later reviewed source change (e.g., a security fix) made
+// the current tree different. A historical snapshot is NOT current QA runtime.
+export const FROZEN_HISTORICAL_SOURCE=Object.freeze({
+  commit:'ed5023e577cb1f6d25c1fabbc1a519f7f2c563ba',
+  treeSha:'eecf916c79e0e0da9d1ac09f180f9ab829ce9183',
+});
 
 const equals=(a,b)=>a.length===b.length&&a.every((x,i)=>x===b[i]);
 const exactKeys=(obj,keys)=>Object.keys(obj).sort().join('|')===[...keys].sort().join('|');
@@ -31,7 +38,7 @@ export function sourceInventory(root=ROOT){
   if(!/^[0-9a-f]{40}$/.test(treeSha))throw new Error('Cannot pin source Edge Function Git tree');
   return {slugs,treeSha};
 }
-export function evaluateTestEdgeInventory(snapshot,source,now=new Date()){
+export function evaluateTestEdgeInventory(snapshot,source,now=new Date(),{historicalBaseline=false}={}){
   const errors=[];
   if(!snapshot||typeof snapshot!=='object'||Array.isArray(snapshot))
     return {ok:false,errors:['Missing Test-only sanitized Edge inventory'],inventory_complete:false,hosted_acceptance:false};
@@ -42,8 +49,17 @@ export function evaluateTestEdgeInventory(snapshot,source,now=new Date()){
     errors.push('Not the reviewed isolated Test metadata boundary');
   if(typeof snapshot.source_inventory_commit!=='string'||!/^[0-9a-f]{40}$/.test(snapshot.source_inventory_commit))
     errors.push('Source inventory provenance commit malformed');
-  if(!source||!Array.isArray(source.slugs)||typeof source.treeSha!=='string'||snapshot.source_tree_sha!==source.treeSha)
+  const currentSourceMatches=!!source&&Array.isArray(source.slugs)
+    && typeof source.treeSha==='string'&&snapshot.source_tree_sha===source.treeSha;
+  if(historicalBaseline){
+    // The old Test census is documentary evidence, not a pre-acceptance
+    // binding to today's source. It must match the original immutable pin.
+    if(snapshot.source_inventory_commit!==FROZEN_HISTORICAL_SOURCE.commit||
+       snapshot.source_tree_sha!==FROZEN_HISTORICAL_SOURCE.treeSha)
+      errors.push('Historical Edge roster provenance was changed');
+  } else if(!currentSourceMatches) {
     errors.push('Reviewed source Edge Function tree SHA does not match current checkout');
+  }
   const expected=Array.isArray(snapshot.canonical_slugs)?snapshot.canonical_slugs:[];
   if(!expected.length||!equals(expected,[...new Set(expected)].sort())||
       !equals(expected,source?.slugs||[]))
@@ -74,8 +90,11 @@ export function evaluateTestEdgeInventory(snapshot,source,now=new Date()){
   const legacy=hosted.filter(x=>x?.slug===LEGACY_PROBE).map(x=>x.slug);
   const unexpected=hosted.filter(x=>typeof x?.slug==='string'&&!sourceSet.has(x.slug)&&x.slug!==LEGACY_PROBE).map(x=>x.slug);
   const notActive=hosted.filter(x=>sourceSet.has(x?.slug)&&x.status!=='ACTIVE').map(x=>x.slug);
-  const inventory_complete=errors.length===0&&fresh&&missing.length===0&&legacy.length===0&&unexpected.length===0&&notActive.length===0;
+  const inventory_complete=!historicalBaseline&&currentSourceMatches&&errors.length===0
+    &&fresh&&missing.length===0&&legacy.length===0&&unexpected.length===0&&notActive.length===0;
   return {ok:errors.length===0,errors,fresh,missing,legacy,unexpected,notActive,
+    historical_baseline_only:historicalBaseline,
+    current_source_tree_matches_baseline:currentSourceMatches,
     canonical_count:(source?.slugs||[]).length,hosted_count:hosted.length,
     inventory_complete,hosted_acceptance:false,
     caveat:'Metadata cannot prove deployed code/version hash, environment secrets, callback isolation or tenant-safe runtime'};
@@ -95,7 +114,7 @@ function main(){
     console.error('BLOCKED: sanitized metadata snapshot or Git source inventory not available');
     process.exitCode=1;return;
   }
-  const result=evaluateTestEdgeInventory(snapshot,source);
+  const result=evaluateTestEdgeInventory(snapshot,source,new Date(),{historicalBaseline:mode==='--baseline'});
   if(!result.ok){
     console.error('BLOCKED: Test Edge inventory evidence malformed or source provenance drifted');
     for(const error of result.errors)console.error(' - '+error);
@@ -110,8 +129,10 @@ function main(){
       console.error('BLOCKED: historical Edge baseline census no longer matches reviewed evidence');
       process.exitCode=1;return;
     }
-    console.log('PASS: immutable pre-rebuild Test Edge metadata census, 4/50 canonical, 46 absent, 1 historical probe.');
-    console.log('NO-GO: metadata baseline is not an active Test deployment approval.');
+    console.log('PASS: frozen 09-Nov Test Edge metadata roster (4/50 canonical, 46 absent, 1 historical probe).');
+    if(!result.current_source_tree_matches_baseline)
+      console.log('CURRENT SOURCE CHANGED: historical baseline is preserved, NOT an accepted current Edge inventory.');
+    console.log('NO-GO: historical metadata never authorizes deployed source, provider callbacks or Test acceptance.');
   } else if(!result.inventory_complete){
     console.error('BLOCKED: Test Edge function slug inventory is incomplete, stale or contains legacy/unreviewed functions.');
     console.error('Canonical '+result.canonical_count+' / hosted '+result.hosted_count+'; missing '+result.missing.length+
