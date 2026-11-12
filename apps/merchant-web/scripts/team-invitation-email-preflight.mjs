@@ -4,13 +4,16 @@ import path from 'node:path';
 
 const merchantRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = path.resolve(merchantRoot, '../..');
-const [source, authEmailSource, inviteHtml, inviteJs, inviteCss, incomingInvitationsSource] = await Promise.all([
+const [source, authEmailSource, inviteHtml, inviteJs, inviteCss, incomingInvitationsSource, merchantAppSource, merchantAuthSource, portalRootSource] = await Promise.all([
   readFile(path.join(repoRoot, 'supabase/functions/team-management/index.ts'), 'utf8'),
   readFile(path.join(repoRoot, 'supabase/functions/send-auth-email/index.ts'), 'utf8'),
   readFile(path.join(merchantRoot, 'public/invite.html'), 'utf8'),
   readFile(path.join(merchantRoot, 'public/invite.js'), 'utf8'),
   readFile(path.join(merchantRoot, 'public/invite.css'), 'utf8'),
   readFile(path.join(merchantRoot, 'src/IncomingBusinessInvitations.tsx'), 'utf8'),
+  readFile(path.join(merchantRoot, 'src/MerchantApp.tsx'), 'utf8'),
+  readFile(path.join(merchantRoot, 'src/MerchantAuth.tsx'), 'utf8'),
+  readFile(path.join(merchantRoot, 'src/MerchantPortalRoot.tsx'), 'utf8'),
 ]);
 
 const failures = [];
@@ -76,6 +79,18 @@ expect(incomingInvitationsSource.includes('Loading invitation…'), 'Merchant We
 expect(!inviteHtml.includes('<script>'), 'browser fallback must not require inline script under Merchant Web CSP');
 expect(!inviteHtml.includes('<style>'), 'browser fallback must not require inline style under Merchant Web CSP');
 expect(inviteCss.length > 0, 'browser fallback must ship self-hosted styles');
+
+// Regression: Production once bundled the review component but never mounted it.
+// The recipient could sign in yet could not accept, so the invite stayed pending.
+expect(merchantAppSource.includes("import IncomingBusinessInvitations, { pendingInvitationIdFromBrowser } from './IncomingBusinessInvitations'"), 'Production Merchant Web must mount the existing governed invitation review UI');
+expect(merchantAppSource.includes('if (!business) return <InvitationAccess') && merchantAppSource.includes('managementBusinesses.length === 0) return <InvitationAccess'), 'Invited users with zero Businesses or Cashier-only membership must be allowed to review invitations');
+expect(merchantAppSource.includes('pendingInvitationIdFromBrowser() && <IncomingBusinessInvitations onMembershipChanged={loadBusinesses} />'), 'Existing Owner/Manager users must also be able to review a focused second-Business invitation');
+expect(merchantAuthSource.includes('async function createInviteAccount(') && merchantAuthSource.includes('supabase.auth.signUp({') && merchantAuthSource.includes('emailRedirectTo: verificationUrl.toString()') && !merchantAuthSource.slice(merchantAuthSource.indexOf('async function createInviteAccount('), merchantAuthSource.indexOf('async function createBusiness(')).includes("functions.invoke('provision-business'"), 'New invitees must register using the existing verified Auth gate without provisioning a Business');
+expect(merchantAuthSource.includes("verificationUrl.searchParams.set('invitation', invitationId)"), 'Sign-up confirmation must preserve the validated invitation locator');
+expect(portalRootSource.includes("workspaceState === 'none' && pendingInvitationIdFromBrowser()") && portalRootSource.includes('<IncomingBusinessInvitations onMembershipChanged={() => inspectWorkspace(session)} />'), 'After account verification, the governed Auth portal must show invitation review instead of forced Business creation');
+expect(incomingInvitationsSource.includes('export function pendingInvitationIdFromBrowser'), 'Invitation focus must use the existing shared validated browser-locator reader');
+expect(incomingInvitationsSource.includes("body: { action, invitationId }"), 'Acceptance/decline must remain server-authoritative');
+
 
 if (failures.length) {
   console.error('SellerTray team invitation email preflight failed:');

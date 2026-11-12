@@ -6,6 +6,7 @@ import CashShiftsManagement from './CashShiftsManagement';
 import CommercialAgreementsManagement from './CommercialAgreementsManagement';
 import CustomersManagement from './CustomersManagement';
 import DashboardOverview from './DashboardOverview';
+import IncomingBusinessInvitations, { pendingInvitationIdFromBrowser } from './IncomingBusinessInvitations';
 import InventoryManagement from './InventoryManagement';
 import ManagementPage from './ManagementPage';
 import MerchantNotificationsManagement from './MerchantNotificationsManagement';
@@ -205,8 +206,18 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
   if (booting) return <Status title="Opening SellerTray" body="Checking your merchant session." />;
   if (!session) return <Status title="Session ended" body="Sign in again to access SellerTray Merchant Web." />;
   if (loading && businesses.length === 0) return <Status title="Opening your business" body="Loading SellerTray management." />;
-  if (businesses.length > 0 && managementBusinesses.length === 0) return <Status title="Use SellerTray mobile for daily operations" body="Merchant Web management is available to business Owners and Managers. Staff access remains available in the SellerTray mobile app for permitted Branch operations." action={<button className="secondary-button" onClick={() => void signOut()}>Sign out</button>} />;
-  if (!business) return <Status title="No management workspace" body={error || 'No Owner or Manager business is available for this account.'} action={<button className="secondary-button" onClick={() => void signOut()}>Sign out</button>} />;
+  if (businesses.length > 0 && managementBusinesses.length === 0) return <InvitationAccess
+    title="Use SellerTray mobile for daily operations"
+    description="Merchant Web management is available to Business Owners and Managers. Review another Business invitation without changing Cashier access."
+    onMembershipChanged={loadBusinesses}
+    onSignOut={() => void signOut()}
+  />;
+  if (!business) return <InvitationAccess
+    title="Review your Business invitation"
+    description={error || 'If you were invited to a Business, accept your invitation below. You do not need to create another Business.'}
+    onMembershipChanged={loadBusinesses}
+    onSignOut={() => void signOut()}
+  />;
 
   const displayBusinessName = businessIdentity?.name || business.name;
   const managementRole = business.role as ManagementRole;
@@ -237,6 +248,7 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
       </header>
 
       {error ? <div className="error-banner">{error}<button onClick={() => setError(null)}>Dismiss</button></div> : null}
+      {pendingInvitationIdFromBrowser() && <IncomingBusinessInvitations onMembershipChanged={loadBusinesses} />}
       <section className="context-bar" aria-label="Current business context"><Context label="Business code" value={business.merchantCode || '—'} /><Context label="Subscription" value={statusText(business.subscriptionStatus)} /><Context label="Active Branch" value={branch?.name ?? 'No active Branch'} /></section>
       {COMMERCIAL_JOURNEY_PAGES.includes(page) ? <CommercialJourneyNavigation activePage={page} onNavigate={navigate} /> : null}
       {page === 'overview' && <DashboardOverview tenantId={business.id} currency={business.currency} go={navigate} openBranch={openBranchPage} />}
@@ -285,6 +297,29 @@ function parseBusinessIdentity(value: unknown): BusinessIdentity {
   const row = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
   return { name:String(row.name ?? ''), logoUrl:typeof (row.logoUrl ?? row.logo_url)==='string' ? String(row.logoUrl ?? row.logo_url) : '',currency:String(row.currency ?? 'NGN') };
 }
+function InvitationAccess({
+  title: heading,
+  description,
+  onMembershipChanged,
+  onSignOut,
+}: {
+  title: string;
+  description: string;
+  onMembershipChanged: () => Promise<void>;
+  onSignOut: () => void;
+}) {
+  return <main className="status-page">
+    <section className="status-card">
+      <SellerTrayMark large />
+      <p className="eyebrow">SellerTray Business access</p>
+      <h1>{heading}</h1>
+      <p>{description}</p>
+      <IncomingBusinessInvitations onMembershipChanged={onMembershipChanged} />
+      <button type="button" className="secondary-button" onClick={onSignOut}>Sign out</button>
+    </section>
+  </main>;
+}
+
 function Select({ label, value, onChange, disabled, children }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean; children: ReactNode }) { return <label className="select-field"><span>{label}</span><SellerTraySelect value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled}>{children}</SellerTraySelect></label>; }
 function Context({ label, value }: { label: string; value: string }) { return <div><span>{label}</span><strong>{value}</strong></div>; }
 function Heading({ eyebrow, title: heading, note }: { eyebrow: string; title: string; note?: string }) { return <div className="section-heading"><div><p className="eyebrow">{eyebrow}</p><h2>{heading}</h2></div>{note ? <p className="muted">{note}</p> : null}</div>; }
