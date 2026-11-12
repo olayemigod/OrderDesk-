@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import MerchantAuth, { merchantAuthModeFromLocation } from './MerchantAuth';
+import IncomingBusinessInvitations, { pendingInvitationIdFromBrowser } from './IncomingBusinessInvitations';
 import { SellerTrayMark } from './merchantShell';
 import { errorMessage, supabase } from './supabase';
 
@@ -100,6 +101,19 @@ export default function MerchantPortalRoot({ children }: { children: ReactNode }
 
   if (workspaceState === 'checking') {
     return <PortalStatus title="Opening your Business" body="Confirming your SellerTray workspace and access." />;
+  }
+
+  // No Business is *not* permission to create one automatically. For a
+  // verified invitation locator the existing Business is joined explicitly.
+  if (workspaceState === 'none' && pendingInvitationIdFromBrowser()) {
+    return <PortalStatus
+      title="Review your Business invitation"
+      body="Join the inviting Business using your existing SellerTray account. Accept before Business access begins."
+      action={<div className="page-stack">
+        <IncomingBusinessInvitations onMembershipChanged={() => inspectWorkspace(session)} />
+        <button type="button" className="secondary-button" onClick={() => void supabase.auth.signOut({ scope: 'local' })}>Sign out</button>
+      </div>}
+    />;
   }
 
   if (workspaceState === 'none') {

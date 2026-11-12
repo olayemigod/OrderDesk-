@@ -21,6 +21,7 @@ requireValue(auth.includes('aria-pressed={visible}') && auth.includes("type={vis
 requireValue(auth.includes("url.searchParams.set('auth', mode)") && auth.includes('new URL(window.location.href)'), 'Auth redirects must preserve the live portal origin/path so Vercel and custom-domain entrypoints use the same flow.');
 requireValue(supabase.includes('persistSession: true') && supabase.includes('autoRefreshToken: true') && supabase.includes('detectSessionInUrl: true'), 'Merchant Web must retain one persisted shared Supabase Auth session with recovery URL detection.');
 requireValue(!merchantApp.includes('function Login()') && !merchantApp.includes('<Login />'), 'Old, unmanaged password login must not remain as an alternate portal route.');
+requireValue(auth.includes('async function createInviteAccount(') && auth.includes("verificationUrl.searchParams.set('invitation', invitationId)") && gate.includes('pendingInvitationIdFromBrowser()') && gate.includes('<IncomingBusinessInvitations'), 'Invited account creation and no-workspace invitation review must use the single governed Merchant Portal Auth gate.');
 requireValue(main.includes("import './notifications.css'") && merchantApp.includes('MerchantNotificationsManagement') && merchantApp.includes('notificationScope'), 'Portal login recovery must preserve later OA5 notification behavior.');
 requireValue(![main, gate, auth, supabase].join('\n').match(/SERVICE_ROLE|SUPABASE_SERVICE_ROLE_KEY|sb_secret_/), 'Merchant Web authentication must never expose service-role credentials.');
 
