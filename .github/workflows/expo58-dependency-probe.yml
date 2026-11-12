@@ -1,0 +1,77 @@
+name: Expo SDK58 dependency-only resolution (no APK)
+# Disposable SDK58 probe. This workflow is deliberately restricted to one
+# review branch and never deploys, builds APKs or touches Supabase/Meta/PSPs.
+on:
+  push:
+    branches:
+      - chore/expo-sdk58-dependency-probe-20261108
+    paths:
+      - 'scripts/qa/expo58-dependency-probe.mjs'
+      - '.github/workflows/expo58-dependency-probe.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: expo58-one-off-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  resolve-lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: true
+
+      - name: Check pinned source
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+
+      - name: Node 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Prepare official SDK58 dependency pins in disposable checkout
+        run: node scripts/qa/expo58-dependency-probe.mjs --prepare
+
+      - name: Resolve published packages and regenerate lock (no install scripts)
+        run: npm --prefix apps/mobile install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Install from the newly resolved exact lock (no native build)
+        run: npm --prefix apps/mobile ci --ignore-scripts --no-audit --no-fund
+
+      - name: Enforce SDK58 CLI and Zod dependency boundary
+        run: node scripts/qa/expo58-dependency-probe.mjs --verify
+
+      - name: Run unchanged SellerTray production dependency audit
+        run: npm --prefix apps/mobile run audit:dependencies
+
+      - name: Validate Expo compatibility recommendations
+        working-directory: apps/mobile
+        run: npx --no-install expo install --check
+
+      - name: Run existing Zod source boundary tests
+        working-directory: apps/mobile
+        run: node --test scripts/expo-zod-advisory-contract.test.mjs
+
+      - name: Commit generated candidate manifests only after gates pass
+        env:
+          BRANCH: chore/expo-sdk58-dependency-probe-20261108
+        run: |
+          git add apps/mobile/package.json apps/mobile/package-lock.json
+          if git diff --cached --quiet; then
+            echo 'No version changes resulted; refusing empty candidate'
+            exit 1
+          fi
+          git -c user.name='sellertray-ci' -c user.email='sellertray-ci@users.noreply.github.com' \
+            commit -m 'chore(mobile): resolve SDK58 Expo-compatible candidate lockfile [no APK]'
+          git push origin "HEAD:refs/heads/$BRANCH"
+
+      - name: Explicit scope reminder
+        run: |
+          echo 'Review-only mobile manifest/lock change. No APK, release, QA reset, previews, payment or Meta side effects.'
+          echo 'Full candidate typecheck, Metro export, preflight, SDK58 API compatibility and physical QA remain mandatory.'

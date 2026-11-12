@@ -137,7 +137,7 @@ requireValue(
     supabaseClient.includes('storage: nativeSecureStorage') &&
     supabaseClient.includes('AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY') &&
     !supabaseClient.includes('@react-native-async-storage/async-storage') &&
-    pkg.dependencies?.['expo-secure-store'] === '57.0.4',
+    pkg.dependencies?.['expo-secure-store'] === '~58.0.2',
   'Native Supabase auth sessions must remain encrypted in Expo SecureStore, never AsyncStorage',
 );
 const requiredBlockedAndroidPermissions = [
@@ -179,8 +179,8 @@ for (const permission of requiredBlockedAndroidPermissions) {
 }
 requireValue(app.android?.versionCode === 19, 'Android versionCode must be 19 for the merchant-reference QA line');
 requireValue(app.ios?.bundleIdentifier === 'ng.processedge.sellertray', 'iOS bundle ID must match SellerTray identity');
-requireValue(pkg.dependencies?.['expo-notifications'] === '57.0.18', 'SellerTray mobile must pin expo-notifications for native push');
-requireValue(pkg.dependencies?.['expo-constants'] === '57.0.17', 'SellerTray mobile must pin expo-constants for Expo push project identity');
+requireValue(pkg.dependencies?.['expo-notifications'] === '~58.1.8', 'SellerTray mobile must pin expo-notifications for native push');
+requireValue(pkg.dependencies?.['expo-constants'] === '~58.0.15', 'SellerTray mobile must pin expo-constants for Expo push project identity');
 requireValue(
   (app.plugins ?? []).some((plugin) => Array.isArray(plugin) ? plugin[0] === 'expo-notifications' : plugin === 'expo-notifications'),
   'Expo notifications config plugin must be enabled',
@@ -189,15 +189,17 @@ requireValue(eas.build?.qa?.android?.buildType === 'apk', 'EAS QA profile must b
 requireValue(eas.build?.preview?.android?.buildType === 'apk', 'EAS preview profile must build an APK');
 requireValue(eas.build?.production?.android?.buildType === 'app-bundle', 'EAS production profile must build an AAB');
 
+const splashEntry = (app.plugins ?? []).find((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-splash-screen');
+const splashConfig = Array.isArray(splashEntry) ? splashEntry[1] : null;
 const brandGate = releaseAcceptance.gates.find((gate) => gate.id === 'sellertray_brand_assets');
 if (brandGate?.status === 'accepted') {
   requireValue(app.icon === './assets/brand/icon.png', 'Accepted brand gate requires SellerTray launcher icon in Expo config');
   requireValue(app.android?.adaptiveIcon?.foregroundImage === './assets/brand/adaptive-icon.png', 'Accepted brand gate requires Android adaptive icon foreground');
   requireValue(Boolean(app.android?.adaptiveIcon?.backgroundColor), 'Accepted brand gate requires Android adaptive icon background colour');
-  requireValue(app.splash?.image === './assets/brand/splash-icon.png', 'Accepted brand gate requires SellerTray splash icon');
-  requireValue(app.splash?.resizeMode === 'contain', 'Accepted brand gate requires contain splash resize mode');
-  requireValue(Boolean(app.splash?.backgroundColor), 'Accepted brand gate requires splash background colour');
-  for (const path of [app.icon, app.android?.adaptiveIcon?.foregroundImage, app.splash?.image]) {
+  requireValue(splashConfig?.image === './assets/brand/splash-icon.png', 'Accepted brand gate requires SellerTray splash icon');
+  requireValue(splashConfig?.resizeMode === 'contain', 'Accepted brand gate requires contain splash resize mode');
+  requireValue(Boolean(splashConfig?.backgroundColor), 'Accepted brand gate requires splash background colour');
+  for (const path of [app.icon, app.android?.adaptiveIcon?.foregroundImage, splashConfig?.image]) {
     if (path) requireValue(existsSync(join(mobileRoot, path)), 'Accepted brand asset file is missing: '+path);
   }
 }
