@@ -497,7 +497,7 @@ function extractInboundMessages(
 
 async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[number]) {
   const tenants = await rest<Array<{ id: string; currency: string | null; name: string }>>(
-    `/rest/v1/tenants?select=id,currency,name&whatsapp_phone_number_id=eq.${encodeURIComponent(event.phoneNumberId)}&limit=1`,
+    activeWhatsAppTenantLookupQuery(event.phoneNumberId, true),
   );
   const tenant = tenants[0];
   const tenantId = tenant?.id;

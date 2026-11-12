@@ -14,6 +14,31 @@ test('inbound WhatsApp lookup excludes retired and disconnected tenants', () => 
   assert.equal(parsed.searchParams.get('limit'), '1');
 });
 
+test('actual ingestion cannot re-route a retired or disconnected tenant after consent', () => {
+  const q = activeWhatsAppTenantLookupQuery('123&retired_at=not.is.null', true);
+  const url = new URL('https://dummy.example' + q);
+  assert.equal(url.pathname, '/rest/v1/tenants');
+  assert.equal(url.searchParams.get('select'), 'id,currency,name');
+  assert.equal(url.searchParams.get('whatsapp_phone_number_id'), 'eq.123&retired_at=not.is.null');
+  assert.equal(url.searchParams.get('retired_at'), 'is.null');
+  assert.equal(url.searchParams.get('whatsapp_connection_status'), 'eq.connected');
+
+  const src = readFileSync(new URL('./index.ts', import.meta.url), 'utf8');
+  const consentStart = src.indexOf('async function resolveConsentedWebhookPhoneNumbers(');
+  const consentEnd = src.indexOf('\nfunction extractInboundMessages(', consentStart);
+  const ingestStart = src.indexOf('async function ingestMessage(');
+  const ingestEnd = src.indexOf('\nasync function ', ingestStart + 30);
+  assert.ok(consentStart > 0 && consentEnd > consentStart);
+  assert.ok(ingestStart > consentEnd);
+  const consent = src.slice(consentStart, consentEnd);
+  const ingestion = src.slice(ingestStart, ingestEnd > ingestStart ? ingestEnd : undefined);
+  assert.match(consent, /activeWhatsAppTenantLookupQuery\(phoneNumberId\)/);
+  assert.match(ingestion, /activeWhatsAppTenantLookupQuery\(event\.phoneNumberId, true\)/);
+  assert.doesNotMatch(src, /whatsapp_phone_number_id=eq\./);
+  assert.throws(() => activeWhatsAppTenantLookupQuery('123', 'true'), TypeError);
+  assert.throws(() => activeWhatsAppTenantLookupQuery('123', null), TypeError);
+});
+
 test('lookups escape provider IDs and reject empty/non-string IDs', () => {
   assert.equal(new URL('https://dummy.example' + activeWhatsAppTenantLookupQuery('id&retired_at=not.is.null'))
     .searchParams.get('whatsapp_phone_number_id'), 'eq.id&retired_at=not.is.null');
