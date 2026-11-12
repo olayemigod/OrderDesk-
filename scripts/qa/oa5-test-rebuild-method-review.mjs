@@ -13,7 +13,7 @@ import {fileURLToPath} from 'node:url';
 export const TEST_REF='iukgsukdoowvnhlfmpml';
 export const PRODUCTION_REF='eujxswjspolugrzlsjnn';
 export const INTENT='test-only-retain-managed-auth-canonical-replay-method-review';
-export const MIGRATIONS=457;
+export const MIGRATIONS=461;
 export const STAGES=Object.freeze([
  'archive_and_disposable_restore_proven',
  'legacy_preview_and_reviewer_custody_verified',
@@ -37,7 +37,7 @@ export const BOUNDARIES=Object.freeze({
   vercel_previews:'preserve_five_original_previews_and_reviewer_access',
   providers:'no_external_delivery_during_reconstruction',
   production:'excluded_completely',
-  migration_replay:'all_457_original_order_no_repair_no_omission',
+  migration_replay:'all_461_original_order_no_repair_no_omission',
   initial_seed:'no_automatic_seed_only_later_reviewed_synthetic_fixture',
   subscription_runtime:'legacy_business_authority_c2_inert'
 });
