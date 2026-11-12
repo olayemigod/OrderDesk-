@@ -44,9 +44,12 @@ from profitability_fixture;
 insert into public.orders(tenant_id,customer_id,branch_id,public_order_id,status,source,currency,total_amount,payment_status,amount_paid,fulfillment_status)
 select tenant_id,customer_id,branch_a,'PFQ/A/'||substr(branch_a::text,1,8),'completed','pos','NGN',100,'paid',100,'collected' from profitability_fixture
 union all
-select tenant_id,customer_id,branch_b,'PFQ/B/'||substr(branch_b::text,1,8),'completed','whatsapp','NGN',220,'paid',220,'collected' from profitability_fixture
-union all
-select tenant_id,customer_id,branch_a,'PFQ/D/'||substr(branch_a::text,1,8),'draft','pos','NGN',500,'unpaid',0,'pending' from profitability_fixture;
+select tenant_id,customer_id,branch_b,'PFQ/B/'||substr(branch_b::text,1,8),'completed','whatsapp','NGN',220,'paid',220,'collected' from profitability_fixture;
+
+-- Draft uses the governed default fulfilment state; it is never treated as a sale.
+insert into public.orders(tenant_id,customer_id,branch_id,public_order_id,status,source,currency,total_amount,payment_status,amount_paid)
+select tenant_id,customer_id,branch_a,'PFQ/D/'||substr(branch_a::text,1,8),'draft','pos','NGN',500,'unpaid',0
+from profitability_fixture;
 
 select extensions.ok(
   to_regprocedure('public.get_sellertray_profitability_report(uuid,date,date,uuid,text)') is not null,
