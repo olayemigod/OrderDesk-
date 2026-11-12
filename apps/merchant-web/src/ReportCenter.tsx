@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import InventoryReportCenter from './InventoryReportCenter';
+import ProfitabilityReportCenter from './ProfitabilityReportCenter';
 import ProcurementReportCenter from './ProcurementReportCenter';
 import SalesReportCenter from './SalesReportCenter';
 import TaxReportCenter from './TaxReportCenter';
 import type { MerchantPortalPage } from './portalNavigation';
 
-type ReportView = 'sales' | 'tax' | 'inventory' | 'purchasing';
+type ReportView = 'sales' | 'tax' | 'inventory' | 'purchasing' | 'profitability';
 type BranchOption = { id: string; name: string };
 
 export default function ReportCenter({ tenantId, currency, branches, go, openBranch }: { tenantId: string; currency: string; branches: BranchOption[]; go: (page: MerchantPortalPage) => void; openBranch: (page: MerchantPortalPage, branchId: string) => void }) {
@@ -17,6 +18,7 @@ export default function ReportCenter({ tenantId, currency, branches, go, openBra
       <button type="button" role="tab" aria-selected={view === 'tax'} className={view === 'tax' ? 'active' : ''} onClick={() => setView('tax')}>Tax</button>
       <button type="button" role="tab" aria-selected={view === 'inventory'} className={view === 'inventory' ? 'active' : ''} onClick={() => setView('inventory')}>Inventory Value</button>
       <button type="button" role="tab" aria-selected={view === 'purchasing'} className={view === 'purchasing' ? 'active' : ''} onClick={() => setView('purchasing')}>Purchasing</button>
+      <button type="button" role="tab" aria-selected={view === 'profitability'} className={view === 'profitability' ? 'active' : ''} onClick={() => setView('profitability')}>Profitability</button>
     </div>
     {view === 'sales'
       ? <SalesReportCenter tenantId={tenantId} currency={currency} branches={branches} go={go} openBranch={openBranch} />
@@ -24,6 +26,8 @@ export default function ReportCenter({ tenantId, currency, branches, go, openBra
         ? <TaxReportCenter tenantId={tenantId} currency={currency} branches={branches} />
         : view === 'inventory'
           ? <InventoryReportCenter tenantId={tenantId} currency={currency} />
-          : <ProcurementReportCenter tenantId={tenantId} currency={currency} />}
+          : view === 'profitability'
+            ? <ProfitabilityReportCenter tenantId={tenantId} currency={currency} branches={branches} onReviewValuation={() => setView('inventory')} />
+            : <ProcurementReportCenter tenantId={tenantId} currency={currency} />}
   </div>;
 }
