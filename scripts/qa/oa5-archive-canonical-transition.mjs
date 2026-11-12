@@ -15,7 +15,7 @@ import {checkTestArchive} from './oa5-test-backup-manifest.mjs';
 import {inventoryOa5SourceMigrationScope} from './oa5-migration-scope-inventory.mjs';
 
 export const TEST_REF='iukgsukdoowvnhlfmpml';
-export const SOURCE_MIGRATIONS=457;
+export const SOURCE_MIGRATIONS=461;
 export const PRESERVE_COUNTS=Object.freeze({
   applied_migration_ledger:54,
   agreement_packages:5,
