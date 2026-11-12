@@ -171,3 +171,11 @@ count must match the verified archive, and the separate provider-isolation,
 four-job pause, Auth/Storage cleanup, rollback and operation-specific
 destructive-authorisation gates remain mandatory. No private session identity,
 token or review record belongs in Git.
+
+## 12/11/2026 — Test Meta phone collision found in Production (later authoritative safety finding)
+
+A read-only **Production** SQL census on `eujxswjspolugrzlsjnn` identified the previously proposed Test Meta Phone Number ID `1271836092686870` in **one** historical `public.tenant_whatsapp_connections` row **and one** `public.tenants.whatsapp_phone_number_id` legacy Business mapping. The connection row says `disconnected` but has no `disconnected_at`; webhook subscription status is `unknown`, and its credential mode is `platform_system_user`. No private credentials are attached to that connection at this checkpoint. This evidence does **not** establish current Meta Console ownership/callback release and does not authorize editing Production mappings.
+
+**Safety consequence:** the Test-only `whatsapp-webhook/test-environment-guard.mjs` must **reject every Test webhook verification and inbound event** until a distinctly owned, independently provider-verified Test Meta phone with **no Production historical/live mapping** is approved and pinned to a reviewed source allowlist. The previously proposed QA ID is **not approved for use** solely because it was shown in a Test configuration screenshot. A Test environment variable, a disconnected status flag, or an empty Test webhook queue may not override the no-cross-environment-phone rule. The webhook on Production and local development retains its existing behavior.
+
+**Operational gate:** independently confirm Meta App ownership, phone registration, callback subscription and HMAC credentials and obtain a newly isolated Test phone identity (or an independently verified release-and-remapping plan), then update the Test allowlist and security tests under a separate reviewed source change. Never detach a Production phone, rotate Production credentials or modify Tandar as a shortcut. This collision finding supersedes the provisional 08/11 Test phone-identity presumption without changing the approved two-environment policy, Test Firebase identity, DNS, Auth or payment-provider decisions.
