@@ -64,10 +64,21 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - name: Typecheck offline payment Edge Functions
+      - name: Typecheck offline payment Edge Functions without unrelated Expo workspace resolution
         run: |
-          deno check --node-modules-dir=auto supabase/functions/merchant-order/index.ts
-          deno check --node-modules-dir=auto supabase/functions/pos-checkout/index.ts
+          set -euo pipefail
+          # Deno 2.9+ enforces its default 24-hour minimum dependency age.
+          # Resolve only the two Edge entrypoints (they import pinned Supabase
+          # npm APIs), never the unrelated Mobile/Expo workspace manifest.
+          # This preserves the supply-chain gate: NO --min-dep-age=0 waiver.
+          isolated="$(mktemp -d)"
+          trap 'rm -rf "$isolated"' EXIT
+          cp supabase/functions/merchant-order/index.ts "$isolated/merchant-order.ts"
+          cp supabase/functions/pos-checkout/index.ts "$isolated/pos-checkout.ts"
+          (
+            cd "$isolated"
+            deno check --node-modules-dir=auto merchant-order.ts pos-checkout.ts
+          )
 
   mobile-offline-contract:
     runs-on: ubuntu-latest
