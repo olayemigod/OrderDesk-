@@ -222,11 +222,10 @@ function mapOrder(
   };
 }
 
-export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
+export async function loadOrders(tenantId: string, orderId?: string): Promise<MerchantOrder[]> {
   if (!tenantId) return [];
 
-  const [ordersResult, notificationsResult, paymentsResult] = await Promise.all([
-    supabase
+  const orderQuery = supabase
       .from('orders')
       .select(`
         id,
@@ -269,16 +268,27 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
       `)
       .eq('tenant_id', tenantId)
       .is('deleted_at', null)
-      .order('created_at', { ascending: false }),
-    supabase
+      .order('created_at', { ascending: false });
+  const notificationsQuery = supabase
       .from('outbound_notifications')
       .select('id, order_id, event_key, delivery_status, message_body, created_at, sent_at')
       .eq('tenant_id', tenantId)
-      .order('created_at', { ascending: false }),
-    supabase
+      .order('created_at', { ascending: false });
+  const paymentsQuery = supabase
       .from('order_payments')
       .select('order_id,method_type,provider,status,amount,currency')
-      .eq('tenant_id', tenantId),
+      .eq('tenant_id', tenantId);
+
+  // A targeted read avoids reloading every historical order when opening a customer history entry.
+  if (orderId) {
+    orderQuery.eq('id', orderId);
+    notificationsQuery.eq('order_id', orderId);
+    paymentsQuery.eq('order_id', orderId);
+  }
+  const [ordersResult, notificationsResult, paymentsResult] = await Promise.all([
+    orderQuery,
+    notificationsQuery,
+    paymentsQuery,
   ]);
 
   if (ordersResult.error) throw ordersResult.error;
@@ -314,6 +324,11 @@ export async function loadOrders(tenantId: string): Promise<MerchantOrder[]> {
       paymentsByOrder.get(row.id) ?? [],
     ),
   );
+}
+
+export async function loadOrderById(tenantId: string, orderId: string): Promise<MerchantOrder | null> {
+  const result = await loadOrders(tenantId, orderId);
+  return result.find((order) => order.id === orderId) ?? null;
 }
 
 export async function createManualOrder(input: ManualOrderInput): Promise<string> {
