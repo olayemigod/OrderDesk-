@@ -2,7 +2,8 @@
  * EXACT SDK58 dependency resolution experiment, not an APK or release.
  * Runs only on an isolated GitHub Actions runner, never against Production.
  * Compatible versions are from expo/expo sdk-58 bundledNativeModules.json
- * inspected on 08/11/2026. Npm resolves the actual published packages.
+ * initially inspected on 08/11/2026; patch refresh derived from exact-head
+ * Expo Doctor 12/11/2026 mismatch evidence. Npm resolves published packages.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -15,15 +16,15 @@ const packagePath = resolve(mobileRoot, 'package.json');
 const lockPath = resolve(mobileRoot, 'package-lock.json');
 
 export const SDK58_PINS = Object.freeze({
-  expo: '~58.0.23',
+  expo: '~58.0.24',
   '@expo/metro-runtime': '~58.0.17',
   'expo-camera': '~58.0.14',
-  'expo-constants': '~58.0.15',
+  'expo-constants': '~58.0.16',
   'expo-image-picker': '~58.0.10',
-  'expo-notifications': '~58.1.8',
-  'expo-secure-store': '~58.0.2',
-  'expo-font': '~58.0.11',
-  'expo-splash-screen': '~58.0.13',
+  'expo-notifications': '~58.1.9',
+  'expo-secure-store': '~58.0.3',
+  'expo-font': '~58.0.12',
+  'expo-splash-screen': '~58.0.14',
   'expo-system-ui': '~58.0.6',
   react: '19.3.0',
   'react-dom': '19.3.0',
