@@ -85,6 +85,11 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Expo SDK Doctor with fail-closed workspace lockfile check
+        run: |
+          node --test scripts/expo-doctor-workspace-gate.test.mjs
+          node scripts/expo-doctor-workspace-gate.mjs
+
       - name: Production Android bundle smoke
         env:
           EXPO_PUBLIC_SUPABASE_URL: https://eujxswjspolugrzlsjnn.supabase.co
@@ -99,6 +104,7 @@ jobs:
       - name: Inspect Android export artifacts for legacy Zod 3
         run: |
           node --test scripts/android-bundle-zod-boundary.test.mjs
+          node --test scripts/expo-zod-advisory-contract.test.mjs
           node scripts/android-bundle-zod-boundary.mjs .ci-dist
 
       - name: SellerTray release preflight
