@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "scope": "existing-vercel-project-protection-baseline",
+  "captured_at_utc": "2026-11-09T22:05:25Z",
+  "projects": [
+    {
+      "surface": "merchant",
+      "project_id": "prj_ArmFvWkLeNRLRieJLGV5YVY4nRf4",
+      "name": "sellertray-merchant",
+      "sso_enabled": true,
+      "sso_deployment_type": "prod_deployment_urls_and_all_previews",
+      "domains": [
+        "app.sellertray.com",
+        "sellertray-merchant.vercel.app",
+        "sellertray-merchant-git-fix-oa5-bil-821570-olayemigods-projects.vercel.app"
+      ]
+    },
+    {
+      "surface": "admin",
+      "project_id": "prj_Dewd7IMRMjDpUCcZmBjvV6o0uxvO",
+      "name": "sellertray-admin",
+      "sso_enabled": true,
+      "sso_deployment_type": "prod_deployment_urls_and_all_previews",
+      "domains": [
+        "admin.sellertray.com",
+        "sellertray-admin.vercel.app",
+        "order-desk-eight.vercel.app",
+        "sellertray-admin-git-fix-oa5-billin-7cfeb5-olayemigods-projects.vercel.app"
+      ]
+    }
+  ]
+}

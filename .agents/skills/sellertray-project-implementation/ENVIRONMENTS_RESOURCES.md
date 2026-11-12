@@ -61,3 +61,121 @@ The operator/agent records:
 ## OA5 / C2 status as of 04/11/2026
 
 OA5 staging is not ready; archived agreement evidence, five preview dependencies, hosted migration replay, QA auth/Firebase, exact QA APK and merchant/hardware visual acceptance remain pending. C2 production cutover stays blocked pending OA5C acceptance; legacy Business/trial runtime is still production authority. No environment reset, deployment, production migration or paid resource creation is authorised by this governance record alone.
+
+
+## 08/11/2026 — Firebase Test application isolation (approved identity)
+
+Operator-provided Firebase Console evidence confirms a **separate** SellerTray Test Firebase project with ID `sellertray-test`, messaging sender/project number `362913608913`, and the Android app `ng.processedge.sellertray.qa` registered as `SellerTray QA` (Firebase App ID `1:362913608913:android:622042be355ff1a94b41f0`). Existing Production Firebase remains `sellertray-d4b18` with Android package `ng.processedge.sellertray`.
+
+The staged Android config must validate **all** of the Test Firebase project ID, sender number, registered Android App ID, and Android package name against a protected Test-only `google-services.json` file. Do not commit this downloaded Test file to Git, overwrite the Production configuration, copy Production FCM/service-account keys, or claim hosted FCM delivery acceptance merely from registration screenshots. Only stage a protected Test Firebase config and dedicated FCM V1/Expo sender after the Test Supabase/backend/provider isolation gates have been independently attested. No build, push delivery or real-customer notification is authorised by this record.
+
+## 08/11/2026 — approved QA domains and historical hosted isolation snapshot (superseded where noted)
+
+- **Merchant Test:** `test.sellertray.com` (Cloudflare DNS-only CNAME to
+  `cname.vercel-dns.com`).
+- **Admin Test:** `test-admin.sellertray.com` (same DNS-only target).
+- Both names are fixed Test-only identifiers. At this checkpoint neither is
+  attached to the corresponding Vercel project or QA-branch deployment.
+  Never attach either as an unscoped Production alias, trigger an unapproved
+  Preview, or create a QA branch merely to bypass Vercel's branch requirement.
+- Existing Merchant Vercel password/SSO protection is off. Existing Admin SSO
+  is `all_except_custom_domains`; it does not protect the approved Test
+  custom domain. Review protection that explicitly covers **both custom
+  domains** before serving Test traffic; do not disrupt Production access
+  controls to solve this.
+- Test Supabase Auth Site URL and QA native redirects have operator screenshot
+  evidence, but the Site URL remains nonoperational until the protected
+  Merchant QA deployment exists. SMTP, provider callbacks, login flows and
+  legacy Preview compiled endpoint binding are **not** attested.
+- Firebase Test project/app identity and HTTP v1 availability were verified,
+  and uploaded Test Android client JSON matched all four configured QA
+  identity values. Expo QA application identifier/keystore/FCM sender are
+  pending; no QA APK or live push was authorised. Maintain the existing
+  `qa-staging` fail-closed attestation policy.
+
+## 08/11/2026 — Meta QA webhook source boundary (review only, not deployment)
+
+The two-production-environment resource model requires the existing
+Production Meta webhook to remain uninterrupted. Draft PR #228 adds a
+**Test-project-only** inbound callback configuration check for project
+`iukgsukdoowvnhlfmpml`: the Test function will fail closed unless
+`META_TEST_APP_ID=1429945732160146` and
+`META_TEST_PHONE_NUMBER_ID=1271836092686870` are configured on **Test
+only**. Every signed Test inbound callback must contain only the approved
+Phone Number ID; all other events are rejected **before webhook receipt
+persistence or message/commerce processing**. The usual HMAC verification,
+tenant retirement/connection and legal-consent checks continue. The
+Production project and local developer route retain their existing
+behavior.
+
+These QA resource IDs are **public provider identifiers, not tokens or
+secrets**. The Test project must use its own `META_APP_SECRET` and
+`META_WEBHOOK_VERIFY_TOKEN`; neither is recorded in Git. Meta App ID,
+phone-number ownership and credential separation remain subject to
+provider-side screenshot/hosted acceptance. Do not configure external
+callbacks or test traffic until the controlled Test rebuild, provider
+authorization and hosted guards are independently accepted. A source CI
+PASS alone is **not** an approved staging attestation.
+
+
+## 09/11/2026 — owner-approved Standard Vercel Authentication is now active
+
+This later explicit user-approved security configuration **supersedes the 08/11
+statement that Merchant Preview protection was disabled and Admin scope was
+`all_except_custom_domains`**. The user authorized a narrow protection-only
+change to the two **existing** Vercel projects; no Vercel Pro subscription,
+build, new Preview, DNS binding or application deployment was authorized.
+
+The project API now confirms both `sellertray-merchant` and
+`sellertray-admin` with `ssoProtection.enabled=true` and
+`ssoProtection.deploymentType="prod_deployment_urls_and_all_previews"`.
+Their existing verified Production custom domains
+`app.sellertray.com` and `admin.sellertray.com` remain attached. The
+user personally verified, using Incognito/signed-out browsing, that both
+preserved historical Merchant and Admin Preview URLs redirect to Vercel
+Authentication; after signing in as the Vercel Owner, **both original
+Preview pages opened**. The user confirmed that both canonical Production
+domains open publicly without Vercel login. All five historical Agreement
+Preview deployments remain `READY` with their original Git SHAs and aliases.
+
+These observations **do not** establish any unrelated external reviewer
+grant, the original historical Preview's compiled Supabase endpoint identity,
+the exact anonymous four-GET status/redirect script, or protection of the
+yet-unbound Test custom domains. Specifically, `test.sellertray.com` and
+`test-admin.sellertray.com` remain **unattached** and must be independently
+tested for access protection *after* their separately authorized Test-only
+binding. Do not loosen production access or use `all` deployment protection
+in place of the confirmed Standard scope.
+
+The OA5 backend attestation remains `state:blocked` and
+`qa_preview_access_protection_preflight_verified:false`. The successful
+owner-access checks alone do **not** authorize a Test reset, cron pause,
+Edge Function deployment, sandbox provider callback, new preview, QA APK or
+C2 production runtime cutover. The existing Production/Tandar core retains
+its current authority. See the exact provider evidence and owner browser
+acceptance notes on draft PR #228.
+
+A later Test-only archive-census review also identified one new Auth session
+(archive 5 versus hosted Test 6). On 09/11/2026, the owner explicitly approved
+discarding **exactly that one additional post-archive Test Auth session** only
+during a future, separately authorised controlled rebuild of Test project
+`iukgsukdoowvnhlfmpml`. This approval does not delete or revoke the session
+now, pause cron, reset Test, change providers, deploy code, touch Production or
+Tandar, or waive any other archive-to-live difference.
+
+The approval remains fail-closed at execution time. After a fresh Test-only
+count snapshot, the protected private review record must still identify the
+exact 5-to-6 session scope and satisfy the short-lived after-capture review
+window enforced by `scripts/qa/oa5-test-live-census.mjs`. Every other governed
+count must match the verified archive, and the separate provider-isolation,
+four-job pause, Auth/Storage cleanup, rollback and operation-specific
+destructive-authorisation gates remain mandatory. No private session identity,
+token or review record belongs in Git.
+
+## 12/11/2026 — Test Meta phone collision found in Production (later authoritative safety finding)
+
+A read-only **Production** SQL census on `eujxswjspolugrzlsjnn` identified the previously proposed Test Meta Phone Number ID `1271836092686870` in **one** historical `public.tenant_whatsapp_connections` row **and one** `public.tenants.whatsapp_phone_number_id` legacy Business mapping. The connection row says `disconnected` but has no `disconnected_at`; webhook subscription status is `unknown`, and its credential mode is `platform_system_user`. No private credentials are attached to that connection at this checkpoint. This evidence does **not** establish current Meta Console ownership/callback release and does not authorize editing Production mappings.
+
+**Safety consequence:** the Test-only `whatsapp-webhook/test-environment-guard.mjs` must **reject every Test webhook verification and inbound event** until a distinctly owned, independently provider-verified Test Meta phone with **no Production historical/live mapping** is approved and pinned to a reviewed source allowlist. The previously proposed QA ID is **not approved for use** solely because it was shown in a Test configuration screenshot. A Test environment variable, a disconnected status flag, or an empty Test webhook queue may not override the no-cross-environment-phone rule. The webhook on Production and local development retains its existing behavior.
+
+**Operational gate:** independently confirm Meta App ownership, phone registration, callback subscription and HMAC credentials and obtain a newly isolated Test phone identity (or an independently verified release-and-remapping plan), then update the Test allowlist and security tests under a separate reviewed source change. Never detach a Production phone, rotate Production credentials or modify Tandar as a shortcut. This collision finding supersedes the provisional 08/11 Test phone-identity presumption without changing the approved two-environment policy, Test Firebase identity, DNS, Auth or payment-provider decisions.

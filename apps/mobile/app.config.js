@@ -9,6 +9,9 @@ const { resolve } = require('node:path');
 const easConfig = require('./eas.json');
 
 const QA_PACKAGE = 'ng.processedge.sellertray.qa';
+const QA_FIREBASE_PROJECT = 'sellertray-test';
+const QA_FIREBASE_SENDER_ID = '362913608913';
+const QA_FIREBASE_APP_ID = '1:362913608913:android:622042be355ff1a94b41f0';
 const PRODUCTION_PACKAGE = 'ng.processedge.sellertray';
 const PRODUCTION_URL = 'https://eujxswjspolugrzlsjnn.supabase.co';
 const UNATTESTED_AGREEMENT_TEST_URL = 'https://iukgsukdoowvnhlfmpml.supabase.co';
@@ -63,11 +66,16 @@ function qaConfiguration({ config }, env = process.env, testEvidence = undefined
   } catch {
     throw new Error('QA Android Firebase file is missing or invalid');
   }
-  const matchesQaPackage = Array.isArray(firebase.client) && firebase.client.some(
+  if (firebase.project_info?.project_id !== QA_FIREBASE_PROJECT
+      || String(firebase.project_info?.project_number ?? '') !== QA_FIREBASE_SENDER_ID)
+    throw new Error('QA Android Firebase project identity does not match the registered Test project');
+  const qaClients = Array.isArray(firebase.client) ? firebase.client.filter(
     (client) => client?.client_info?.android_client_info?.package_name === QA_PACKAGE
-  );
-  if (!matchesQaPackage)
+  ) : [];
+  if (qaClients.length !== 1)
     throw new Error('QA Android Firebase package identity does not match the QA application ID');
+  if (qaClients[0]?.client_info?.mobilesdk_app_id !== QA_FIREBASE_APP_ID)
+    throw new Error('QA Android Firebase App ID does not match the registered Test application');
   return {
     ...config,
     name: 'SellerTray QA',

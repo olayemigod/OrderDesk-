@@ -11,10 +11,77 @@ on:
       - 'scripts/qa/oa5-staging-isolation.test.mjs'
       - 'scripts/qa/oa5-migration-boundary.mjs'
       - 'scripts/qa/oa5-migration-boundary.test.mjs'
+      - 'scripts/qa/oa5-test-rebuild-method-review.mjs'
+      - 'scripts/qa/oa5-test-rebuild-method-review.test.mjs'
+      - 'docs/qa/oa5-test-rebuild-method-b-retained-auth-2026-11-11.md'
+      - 'scripts/qa/oa5-test-post-canonical-auth-quarantine.mjs'
+      - 'scripts/qa/oa5-test-post-canonical-auth-quarantine.test.mjs'
+      - 'docs/qa/oa5-test-post-canonical-auth-quarantine-2026-11-11.md'
+      - 'scripts/qa/oa5-test-historical-auth-lineage.mjs'
+      - 'scripts/qa/oa5-test-historical-auth-lineage.test.mjs'
+      - 'docs/qa/oa5-historical-test-auth-lineage-2026-11-11.md'
+      - 'scripts/qa/oa5-archive-canonical-transition.mjs'
+      - 'scripts/qa/oa5-archive-canonical-transition.test.mjs'
+      - 'docs/qa/oa5-archive-canonical-transition-2026-11-11.md'
+      - 'scripts/qa/oa5-test-migration-order-census.mjs'
+      - 'scripts/qa/oa5-test-migration-order-census.test.mjs'
+      - 'scripts/qa/oa5-migration-scope-inventory.mjs'
+      - 'scripts/qa/oa5-migration-scope-inventory.test.mjs'
       - 'scripts/qa/oa5-test-merchant-fixtures.mjs'
       - 'scripts/qa/oa5-test-merchant-fixtures.test.mjs'
       - 'scripts/qa/oa5-test-backup-manifest.mjs'
       - 'scripts/qa/oa5-test-backup-manifest.test.mjs'
+      - 'scripts/qa/oa5-test-cron-maintenance-gate.mjs'
+      - 'scripts/qa/oa5-test-cron-maintenance-gate.test.mjs'
+      - 'scripts/qa/oa5-test-cron-freeze-candidate.mjs'
+      - 'scripts/qa/oa5-test-cron-freeze-candidate.test.mjs'
+      - 'scripts/qa/oa5-test-provider-containment.mjs'
+      - 'scripts/qa/oa5-test-provider-containment.test.mjs'
+      - 'docs/qa/oa5-test-provider-containment-review-2026-11-11.md'
+      - 'scripts/qa/oa5-test-worker-egress.mjs'
+      - 'scripts/qa/oa5-test-worker-egress.test.mjs'
+      - 'docs/qa/oa5-test-worker-egress-callgraph-2026-11-09.md'
+      - 'scripts/qa/oa5-test-rebuild-preflight.mjs'
+      - 'scripts/qa/oa5-test-live-census.mjs'
+      - 'scripts/qa/oa5-test-live-census.test.mjs'
+      - 'scripts/qa/oa5-test-managed-boundary.mjs'
+      - 'scripts/qa/oa5-test-managed-boundary.test.mjs'
+      - 'scripts/qa/oa5-test-auth-decommission-boundary.mjs'
+      - 'scripts/qa/oa5-test-auth-decommission-boundary.test.mjs'
+      - 'scripts/qa/oa5-test-rebuild-preflight.test.mjs'
+      - 'docs/qa/oa5-test-rebuild-operator-preflight-2026-11-09.md'
+      - 'docs/qa/oa5-test-provider-auth-storage-isolation-review-2026-11-09.md'
+      - 'scripts/qa/oa5-historical-preview-custody.mjs'
+      - 'scripts/qa/oa5-test-edge-inventory.mjs'
+      - 'scripts/qa/oa5-test-edge-inventory.test.mjs'
+      - 'scripts/qa/oa5-test-edge-bundle-drift.mjs'
+      - 'scripts/qa/oa5-test-edge-bundle-drift.test.mjs'
+      - 'docs/qa/oa5-test-edge-bundle-custody-2026-11-09.json'
+
+      - 'docs/qa/oa5-test-edge-bundle-integrity-and-egress-review-2026-11-09.md'
+      - 'scripts/qa/oa5-test-edge-bundle-drift.mjs'
+      - 'scripts/qa/oa5-test-edge-bundle-drift.test.mjs'
+      - 'docs/qa/oa5-test-edge-bundle-custody-2026-11-09.json'
+      - 'docs/qa/oa5-test-edge-function-custody-2026-11-09.json'
+      - 'scripts/qa/oa5-historical-preview-custody.test.mjs'
+      - 'scripts/qa/oa5-historical-preview-bundle-inspection.mjs'
+      - 'scripts/qa/oa5-preview-module-graph.mjs'
+      - 'scripts/qa/oa5-preview-module-graph-vm.test.mjs'
+      - 'scripts/qa/oa5-historical-preview-bundle-inspection.test.mjs'
+      - 'scripts/qa/oa5-protected-preview-capture.mjs'
+      - 'scripts/qa/oa5-protected-preview-capture.test.mjs'
+      - 'scripts/qa/oa5-partial-preview-diagnose.mjs'
+      - 'scripts/qa/oa5-partial-preview-diagnose.test.mjs'
+      - 'scripts/qa/oa5-private-capture-integrity.mjs'
+      - 'scripts/qa/oa5-private-capture-integrity.test.mjs'
+      - 'docs/qa/oa5-original-preview-alias-fingerprints-2026-11-09.json'
+      - 'docs/qa/oa5-protected-vercel-compiled-preview-capture-operator-2026-11-09.md'
+      - 'scripts/qa/oa5-vercel-anonymous-access.mjs'
+      - 'scripts/qa/oa5-vercel-anonymous-access.test.mjs'
+      - 'scripts/qa/oa5-vercel-project-protection.mjs'
+      - 'scripts/qa/oa5-vercel-project-protection.test.mjs'
+      - 'docs/qa/oa5-existing-vercel-project-protection-2026-11-09.json'
+      - 'docs/qa/oa5-historical-vercel-preview-custody-2026-11-09.json'
       - 'docs/qa/oa5-test-merchant-fixtures.json'
       - 'scripts/qa/oa5-android-qa-variant.test.mjs'
       - 'apps/mobile/src/domain/nativeAuthScheme.ts'
@@ -45,5 +112,34 @@ jobs:
           node --test scripts/qa/oa5-staging-isolation.test.mjs scripts/qa/oa5-migration-boundary.test.mjs scripts/qa/oa5-test-merchant-fixtures.test.mjs scripts/qa/oa5-android-qa-variant.test.mjs
           node scripts/qa/oa5-test-merchant-fixtures.mjs --check
           node --test scripts/qa/oa5-test-backup-manifest.test.mjs
+          node --test scripts/qa/oa5-test-cron-maintenance-gate.test.mjs
+          node --test scripts/qa/oa5-test-cron-freeze-candidate.test.mjs
+          node --test scripts/qa/oa5-test-provider-containment.test.mjs
+          node --test scripts/qa/oa5-test-worker-egress.test.mjs
+          node --test scripts/qa/oa5-test-rebuild-method-review.test.mjs
+          node --test scripts/qa/oa5-test-post-canonical-auth-quarantine.test.mjs
+          node --test scripts/qa/oa5-test-historical-auth-lineage.test.mjs
+          node --test scripts/qa/oa5-test-rebuild-preflight.test.mjs
+          node --test scripts/qa/oa5-archive-canonical-transition.test.mjs
+          node --test scripts/qa/oa5-test-migration-order-census.test.mjs
+          node --test scripts/qa/oa5-migration-scope-inventory.test.mjs
+          node scripts/qa/oa5-migration-scope-inventory.mjs --review-window supabase/migrations
+          node --test scripts/qa/oa5-test-live-census.test.mjs
+          node --test scripts/qa/oa5-test-managed-boundary.test.mjs
+          node --test scripts/qa/oa5-test-auth-decommission-boundary.test.mjs
+          node --test scripts/qa/oa5-historical-preview-custody.test.mjs
+          node --test scripts/qa/oa5-historical-preview-bundle-inspection.test.mjs
+          node --test scripts/qa/oa5-protected-preview-capture.test.mjs
+          node --experimental-vm-modules --test scripts/qa/oa5-preview-module-graph-vm.test.mjs
+          node --experimental-vm-modules --test scripts/qa/oa5-private-capture-integrity.test.mjs
+          node --test scripts/qa/oa5-partial-preview-diagnose.test.mjs
+          node --test scripts/qa/oa5-test-edge-inventory.test.mjs
+          node --test scripts/qa/oa5-test-edge-bundle-drift.test.mjs
+          node scripts/qa/oa5-test-edge-bundle-drift.mjs --baseline docs/qa/oa5-test-edge-bundle-custody-2026-11-09.json --offline
+          node scripts/qa/oa5-test-edge-inventory.mjs --baseline docs/qa/oa5-test-edge-function-custody-2026-11-09.json
+          node --test scripts/qa/oa5-vercel-anonymous-access.test.mjs
+          node --test scripts/qa/oa5-vercel-project-protection.test.mjs
+          node scripts/qa/oa5-vercel-project-protection.mjs --baseline docs/qa/oa5-existing-vercel-project-protection-2026-11-09.json --offline
+          node scripts/qa/oa5-historical-preview-custody.mjs --check docs/qa/oa5-historical-vercel-preview-custody-2026-11-09.json
           node --test scripts/qa/vercel-frontend-environment.test.mjs
           node --experimental-strip-types --test apps/mobile/scripts/native-auth-scheme.test.mjs

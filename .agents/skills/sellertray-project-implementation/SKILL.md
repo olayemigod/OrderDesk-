@@ -746,3 +746,39 @@ A SellerTray implementation slice is complete only when:
 - WhatsApp regressions are checked when shared commerce changed;
 - migrations and deployment steps are documented;
 - no known divergence from this governing skill remains unaddressed.
+
+## 08/11/2026 — fixed OA5 hosted Test hostnames and fail-closed activation
+
+The owner approved **Merchant Test = `https://test.sellertray.com`** and
+**Admin Test = `https://test-admin.sellertray.com`**, independently of
+Production `https://app.sellertray.com` and
+`https://admin.sellertray.com`. Both approved Test hostnames have Cloudflare
+DNS-only CNAME records to `cname.vercel-dns.com`; DNS correctness is **not**
+application binding or deployment approval. No Test hostname may become a
+production alias or be served by an unscoped Production Vercel deployment.
+Only explicit surface-specific `qa-preview/merchant-*` and
+`qa-preview/admin-*` branch bindings are allowed after hosted Test backend
+attestation, protected Test credentials, historical Preview preservation and
+custom-domain access protection are independently verified. Vercel Merchant
+project password/SSO protection is currently disabled and Admin SSO excludes
+custom domains; do not expose Test hostnames until reviewed Test-specific
+protection applies. A Git branch must never be created solely to make a DNS
+assignment succeed ahead of those stop gates.
+
+Test Supabase remains the independent project `iukgsukdoowvnhlfmpml`;
+Production `eujxswjspolugrzlsjnn` is never a QA fallback. Auth Test Site
+URL `https://test.sellertray.com` and native redirect allowlist
+`sellertray-qa://auth-confirm` and `sellertray-qa://reset-password`
+were evidenced by owner screenshots. The Test Site URL is not yet
+operationally hosted; email/SMTP settings, provider-side callbacks and
+login-return functionality require independent verification. Do not claim
+hosted Auth acceptance from screenshots or from a CNAME record.
+
+A separately registered Firebase Test project `sellertray-test` and
+Android app `ng.processedge.sellertray.qa` have owner screenshot proof,
+and the downloaded QA Android client configuration passed exact identity
+validation. Firebase Cloud Messaging HTTP v1 is enabled for Test, but
+neither Android QA signing/Expo sender credentials nor actual Test push
+delivery are accepted. The Expo credential wizard was exited without an
+approved QA keystore. Keep mobile QA builds blocked until all backend,
+provider, signing and credential gates pass.

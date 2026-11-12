@@ -1,6 +1,6 @@
 # SellerTray OA5 Test project — archive and rebuild operator handover
 
-**Verified:** 04/11/2026 (dd/mm/yyyy). **Mode:** read-only due diligence only.
+**Verified:** 04/11/2026 (dd/mm/yyyy); read-only baseline refreshed 06/11/2026. **Mode:** read-only due diligence only.
 **Approval state:** **BLOCKED**. This document is NOT a backup, a reset approval, a staging attestation or permission to deploy.
 **Source dependency:** Build 47 PR #214 (candidate `7433447b7ac84931ba320a2155207af3ff9427e0`), based on environment PR #209. Follow `ENVIRONMENTS_RESOURCES.md` and `oa5-existing-test-project-reuse-assessment-2026-11-04.md`.
 
@@ -10,7 +10,7 @@
 - **Candidate reusable standalone Test project:** `iukgsukdoowvnhlfmpml` — SellerTray Agreement Package Test, `ACTIVE_HEALTHY`, region `eu-west-1`, Postgres 17.
 - This is an independent *project*, **not** a child Supabase branch of Production. Do not claim or set `parent_project_ref` for it.
 - Neither the old `qa` APK nor its EAS profile is isolated: both point to Production and use package `ng.processedge.sellertray`. Only an attested `qa-staging` build may use independent package `ng.processedge.sellertray.qa`, nonproduction publishable key and Firebase registration.
-- The Test project still has 52 historical, agreement-specific migration ledger entries (latest `20261101203725`) and cannot be treated as canonical migration parity. **Never spoof migration versions or do a bulk production `supabase db push`.**
+- The Test project still has 54 historical, agreement-specific migration ledger entries (latest `20261104214453`) and cannot be treated as canonical migration parity. **Never spoof migration versions or do a bulk production `supabase db push`.**
 
 ## Repeatable pre-archive read-only baseline
 
@@ -19,7 +19,7 @@ The following were rechecked through the connected Supabase read-only interfaces
 | Evidence category | Current count |
 | --- | ---: |
 | Public tables / functions | 132 / 479 |
-| Applied migrations | 52 |
+| Applied migrations | 54 |
 | Synthetic/test-labelled Businesses / Branches | 3 / 3 |
 | Auth users / sessions | 5 / 5 |
 | Historical Platform Admin audit events | 14 |
@@ -53,7 +53,7 @@ After the separate Test-only SQL dumps and **actual** disposable-local restore r
 - `files` mapping exactly `roles.sql`, `schema.sql`, `data.sql`, `history_schema.sql`, `history_data.sql` to their actual `sha256` and byte sizes;
 - `restore_target: "local_disposable"`, `restore_verified: true`, `secrets_committed_to_git: false` and `restore_counts` documenting the actual restored `auth_users`, `businesses`, `branches`, `commercial_orders`, `agreement_packages`, `order_form_confirmations`, `migration_rows` counts.
 
-The read-only baseline counts at 04/11/2026 are **5, 3, 3, 5, 5, 5, 52** respectively. If the historical Test project changes, stop and refresh/review this baseline rather than falsifying the manifest.
+The read-only baseline counts at 04/11/2026 are **5, 3, 3, 5, 5, 5, 54** respectively. If the historical Test project changes, stop and refresh/review this baseline rather than falsifying the manifest.
 
 The operator may check file integrity **locally** (never upload raw SQL to CI):
 
@@ -71,7 +71,7 @@ This checker is strictly offline: it confirms the named files' checksums and pre
 | Successful restore rehearsal | NOT PROVIDED | Disposable DB report and checksum |
 | Historical agreement/PR proof retention | NOT PROVIDED | Agreement/QA operator |
 | Five Vercel preview dependencies and auth callbacks reconciled | NOT PROVIDED | Vercel project operator |
-| Explicit approval to reset/rebuild `iukgsukdoowvnhlfmpml` | **NOT GRANTED** | Product owner/release authority |
+| Explicit approval to reset/rebuild `iukgsukdoowvnhlfmpml` | **GRANTED 06/11/2026, conditional on independently verified recoverable archive and reviewed rebuild plan** | Product owner/release authority |
 | Canonical clean migration/replay and safety attestation | NOT EXECUTED | DB/release reviewer |
 | Independent Test Firebase/auth/provider sinks | NOT VERIFIED | QA/release operator |
 | Build 47 exact-source QA APK + real hardware acceptance | NOT EXECUTED | Device QA |
@@ -79,4 +79,322 @@ This checker is strictly offline: it confirms the named files' checksums and pre
 
 ## Read-only review outcome
 
-Reuse of the Agreement Test project remains the preferred **cost-conscious** design, with **no new paid Supabase project or branch required at this stage**. It is blocked on archival and explicit destructive-change approval, not on missing app source code. Existing merchants remain on Production. There has been **no** data export, destructive operation, paid resource creation, deployment, APK build or tenant mutation during this assessment.
+Reuse of the Agreement Test project remains the preferred **cost-conscious** design, with **no new paid Supabase project or branch required at this stage**. It is blocked on archival and independent archive/restore verification, not on missing app source code. Existing merchants remain on Production. There has been **no** data export, destructive operation, paid resource creation, deployment, APK build or tenant mutation during this assessment.
+
+
+## 06/11/2026 owner decision and baseline refresh
+
+The owner authorised archiving the existing Agreement Package Test evidence and rebuilding this **same Test project** as the persistent isolated Test/Staging environment. This is conditional on verifiable encrypted Test-only backup, successful disposable restore, preservation of the five historical preview dependencies and a reviewed rebuild sequence. It does not authorise any Production change, uncontrolled bulk migration, new paid Supabase resource or QA notification to real contacts. No destructive operation may proceed until the archive gate is independently attested.
+
+The Test migration ledger advanced from 52 to **54** entries because the two PR219 security migrations were recorded; read-only verification on 06/11/2026 confirms 5 Auth users, 3 Businesses, 3 Branches, 5 commercial orders, 5 Agreement Packages, 5 Order Form confirmations, 5 Auth sessions and 14 Admin audit events. The offline archive checker and its synthetic tests now require 54 migration records, not the stale 52.
+
+## 07/11/2026 recovery and hosted-readiness reconciliation
+
+This section supersedes only the **as-of-04/11** evidence status above. It does
+not erase the older audit trail, expand the 06/11 conditional owner approval, or
+authorise a destructive Test rebuild. The same two-environment resource policy
+and all production/live-merchant protections remain in force.
+
+### Evidence now completed
+
+- **Encrypted Test-only recovery archive:** 49 packaged files; encrypted
+  `sellertray-test-recovery-package-oa5-20261107.tar.gz.gpg` size
+  **2,908,531 bytes**, SHA-256
+  `38b28dd9f8ef4ed35b69f85b1f97fa2f52829512f11ab1961de0a55056238616`.
+  Five Supabase CLI-style SQL exports, their per-file checksums, separately
+  captured migration history and a disposable, offline PostgreSQL 17 restore
+  were independently verified. Archive bytes and credentials stay outside Git.
+- **OneDrive-synced archive:** operator's Windows PowerShell `Get-FileHash`
+  returned `ONEDRIVE_BACKUP_CHECKSUM=PASS` for the correctly named OA5 file;
+  the earlier 2,184,506-byte package without `-oa5-` is a different archive
+  and should not be deleted or substituted. A separately, freshly downloaded
+  cloud-object checksum was not performed. The encrypted backup/restore gate
+  therefore passes locally and on the synced OneDrive copy; cloud independent
+  download proof remains distinct.
+- **Consolidated source candidate:** draft PR #228, based on Build 47 integration,
+  combines PR #226's two forward-only Branch/inventory audit-history repairs
+  and its pgTAP suite with PR #227's three recovery-manifest changes. Source
+  before this documentation update is
+  `01b3b8776c01c7f9cb1890e510de09085f84d888`.
+  Its source contains **457 uniquely versioned SQL migrations**.
+  The exact prior source HEAD passed Database CI (full disposable local
+  migration replay plus database tests), Mobile CI and OA5 isolation CI.
+  Any subsequent document-only commit needs independent source-diff confirmation;
+  do not silently carry exact-HEAD CI attribution to a different SHA.
+- **Current Test baseline, read-only recheck:** 54 historical Test migration
+  entries, 132 public tables, 479 public functions, five Auth users and five
+  Auth sessions. Agreement proof remains archived; the existing hosted Test
+  ledger is **not** the canonical 457-migration source ledger.
+
+### Integration and dependency stop gates
+
+- **Historical Vercel Previews:** the following are the five known branch-scoped
+  agreement/visual evidence dependencies (latest READY deployment at this
+  checkpoint, as returned by the Vercel API). Preserve audit/visual evidence
+  before resetting data; do not use old builds for fresh Test acceptance until
+  the compiled Supabase endpoint is independently certified.
+
+  | Surface | Historical branch | Latest READY deployment ID |
+  | --- | --- | --- |
+  | Merchant | `codex/agreement-package-oa5c-convergence` | `dpl_Cfh7oAt9nHQkdUZtbXShj7jfhMfw` |
+  | Merchant | `codex/agreement-package-architecture` | `dpl_Gh9s6Rm2dJibEKuBDDcm7jZ3bGmz` |
+  | Admin | `fix/admin-visual-baseline-oa5-convergence-20261031` | `dpl_5UfqxbGpPuQqGkSu1rU4bpCFrQWZ` |
+  | Admin | `codex/agreement-package-oa5c-convergence` | `dpl_H1suGYapnAjZR9rAKBq8WLtHu5Uo` |
+  | Admin | `codex/agreement-package-architecture` | `dpl_J9nL3wiNKyXcJEoVjbb65kUw4JnA` |
+
+- **Current Test database provider state:** read-only SQL returned **zero**
+  WhatsApp connections, private WhatsApp credential rows, inbound webhook
+  receipts, WhatsApp catalogue settings, merchant payment methods, billing
+  payment authorisations, outbound notifications, merchant notifications,
+  notification-worker invocations, runtime configuration rows and order payment
+  events. These zero counts **do not prove** external Meta, Paystack,
+  Flutterwave, email or Auth callback registrations are disconnected.
+- **Scheduled work:** four active Test cron jobs exist: Agreement Package retry,
+  merchant push retry, WhatsApp notification retry (each every minute), and
+  usage settlement preparation (daily). Review and safely quiesce/reconfigure
+  their Test-only execution as part of the explicitly reviewed cutover.
+  Zero outbound runtime configuration is only a current safeguard, not a
+  permanent reset-time guarantee.
+- **Auth and separate devices:** Hosted Test redirect allowlist, Test site URL,
+  SMTP/safe email destination, callback owner and login/logout continuity
+  need fresh operator proof. Mandatory native return routes are
+  `sellertray-qa://auth-confirm` and
+  `sellertray-qa://reset-password`, never a Production auth redirect.
+  A separately registered QA Firebase app for
+  `ng.processedge.sellertray.qa` is required before a QA APK. Existing
+  `qa`/Build 47 Android is Production-bound.
+- **External integrations and secrets:** Test-only Meta/payment/API/email
+  secrets, callback registrations, signing/verifier configuration and controlled
+  notification sinks must be inventoried by the credential owners. Never read
+  secrets into Git or a PR, copy live Meta/PSP/OpenAI credentials by convenience,
+  or activate real-customer messages and payments for staging. Existing Test
+  has only five agreement-scoped Edge Functions; operational
+  WhatsApp/payment/parser/installer/printer functions are not yet deployed.
+- **Current staging attestation:** `docs/qa/oa5-staging-backend-attestation.json`
+  remains `state: "blocked"`. Do not mark it `verified` from source CI,
+  archive success or Vercel environment correction alone.
+
+### Reviewed execution sequence — STOP until outstanding gates close
+
+1. **Evidence custody and preflight:** an independent reviewer accepts the
+   encrypted archive, restore report, migration proof, historic Preview
+   preservation/cutover record, Test Auth/callback inventory, QA Firebase plan,
+   sandbox-only integrations, and four-cron-job quarantine plan.
+2. **Exact-scope operator sign-off:** record the agreed disposable proof
+   retention, expected **loss of the five existing Test Auth users/sessions**
+   and agreement-specific hosted dataset, the reviewed Test-only
+   cleanup/rebuild mechanism, exact reviewed source SHA, named operator,
+   rollback owner and explicit execution approval. The owner approved
+   same-project rebuild **conditionally on 06/11/2026**; that does not
+   override the remaining STOP checks.
+3. **Controlled Test-only cutover:** confirm Supabase project ref
+   `iukgsukdoowvnhlfmpml` twice immediately before any write; no Production
+   database connection, generic production `supabase db push`, migration
+   ledger rewriting, or blind restore of historic Test rows into the new
+   canonical schema. Quiesce Test workers/webhooks; execute the separately
+   reviewed clean-schema migration plan in canonical order and verify actual
+   hosted schema, migrations, policies, functions, grants, stock/Branch
+   governance and audit-history immutability.
+4. **Hosted acceptance (not yet executed):** deploy exact-source OA5-related
+   Edge Functions with Test-only configuration, configure Auth links and
+   external sandbox/mocked sinks, then seed only the governed synthetic
+   merchant fixtures. Verify separate Owner/Staff/Installer AAL2,
+   branch denials, UOM/stock-ledger/payment idempotency, installer handover,
+   WhatsApp fallback/no unwanted outbound notifications, and Merchant/Admin
+   exact-build identity. Keep C2 production runtime cutover out of scope.
+5. **Release evidence:** approve staging attestation only after hosted
+   invariants and reviewer sign-off. Create at most the purposeful
+   `qa-staging` APK with package `ng.processedge.sellertray.qa` after
+   isolated Firebase and embedded endpoint/commit attestation; validate
+   physical 58/80mm printers, normal/failure/reprint behavior and native
+   Auth callbacks. Production Build 47 needs an independent release plan.
+
+**Current decision: NO-GO for destructive Test reset, hosted migration,
+external webhook activation or QA APK.** Source/backup integrity is PASS;
+historical Preview retirement, provider/callback and cron safety, exact
+operator reset mechanism, and hosted acceptance remain OPEN. No Test/Production
+database mutations were performed in this reconciliation.
+
+## 07/11/2026 scheduled-job preflight — current hosted Test
+
+Read-only `cron.job` / `cron.job_run_details` queries on the **Test ref only**
+(`iukgsukdoowvnhlfmpml`) identified the four active entries below. These
+are currently running normally; they must **not** be assumed inert merely
+because the connected Test provider tables and runtime configuration are empty.
+
+| Job ID | Job name | Schedule | Target function |
+| --- | --- | --- | --- |
+| 4 | `sellertray-agreement-package-retry` | Every minute | `public.process_sellertray_agreement_package_retries(integer)` |
+| 3 | `sellertray-merchant-push-retry` | Every minute | `sellertray_private.kick_merchant_push_worker()` |
+| 1 | `sellertray-prepare-usage-settlements` | Daily 01:15 (cron time zone) | `public.prepare_due_orderdesk_usage_settlements()` |
+| 2 | `sellertray-whatsapp-notification-retry` | Every minute | `sellertray_private.kick_whatsapp_notification_worker()` |
+
+At the read-only snapshot, the three per-minute jobs each reported 1,440
+recorded runs in the preceding 24 hours, while the daily job reported one;
+all reported zero failed runs in that window. Both notification worker
+functions are `SECURITY DEFINER`, contain `net.http` references and read
+`sellertray_private.runtime_config`; the latter had zero rows. The
+agreement retry and usage settlement entry functions are also
+`SECURITY DEFINER`. These findings describe the observed functions, **not**
+proof that all transitively called routines lack external effects.
+
+### Exact pre-reset freeze procedure (operator-reviewed, NOT executed)
+
+1. Confirm the project ID and the current `cron.job` names/IDs again from a
+   **read-only** Test connection, and compare current run counts, worker
+   definitions, `runtime_config` and provider row counts with the baseline.
+   Abort on any unexpected job, endpoint, secret, non-Test recipient or new
+   integration.
+2. Securely record schedule, job ID, owner, enabled state and source functions
+   so a verified Test-only schedule can later be recreated. Never copy
+   secrets, recipient identifiers or private backup contents to GitHub.
+3. During the approved maintenance window, block incoming Test clients,
+   external webhooks and all callback routes **before** database teardown.
+   Using the independently reviewed Test-only maintenance procedure, pause
+   the four jobs reversibly via the installed `cron.alter_job` capability;
+   do **not** unschedule/delete the job definitions by default. Read back `cron.job` and check
+   `cron.job_run_details` for in-flight execution; do not treat a successful
+   disable command as proof that already-running jobs have stopped.
+4. Recheck Test project identity immediately before each destructive
+   operation; **never** pass the Production ref `eujxswjspolugrzlsjnn`
+   to reset/migration tooling. This handover deliberately provides no
+   executable destructive reset or `cron.unschedule` command; the exact
+   mechanism needs independent operator review and rollback acceptance.
+5. Once canonical Test schema and test-safe secrets are deployed and
+   externally registered Test sinks are verified, restore only the reviewed
+   Test schedules. Verify zero real-customer/provider effects,
+   idempotency, and sampled job-run/audit records. Maintain an emergency
+   quiesce path for the new Test workers.
+
+**Read-only audit query** (run only when connected to the verified Test ref):
+
+```sql
+SELECT j.jobid, j.jobname, j.schedule, j.active,
+       count(d.runid) FILTER (
+         WHERE d.start_time >= now() - interval '24 hours'
+       ) AS runs_last_24h,
+       count(d.runid) FILTER (
+         WHERE d.start_time >= now() - interval '24 hours'
+           AND d.status = 'failed'
+       ) AS failures_last_24h
+FROM cron.job AS j
+LEFT JOIN cron.job_run_details AS d ON d.jobid = j.jobid
+GROUP BY j.jobid, j.jobname, j.schedule, j.active
+ORDER BY j.jobname;
+```
+
+**Status: pre-reset cron inventory complete; actual job quiescence and
+post-rebuild reactivation NOT performed.** No Test or Production job was
+changed in this review.
+
+### Hosted remote-reset semantics — additional STOP condition
+
+The Supabase CLI reference for [`supabase db reset`](https://supabase.com/docs/reference/cli/supabase-db-reset)
+states that a remote reset with `--linked` or `--db-url` runs SQL
+to **drop user-created entities**. It does **not** equate to replacing the
+whole hosted Supabase project. Cluster-level custom roles persist, and the
+effects on managed Auth users/sessions, Storage metadata/objects, project
+Secrets, Edge deployments, cron state, Auth URL allowlists and external
+provider callbacks require independent verification. The historical Test
+users/session/agreements must **not** be assumed cleared simply because
+canonical `public` migrations replayed successfully. A source-only CI
+replay proves neither hosted wipe completeness nor provider isolation.
+
+The installed Test `pg_cron` version exposes
+`cron.alter_job(job_id bigint, ..., active boolean DEFAULT NULL)`;
+that supports a **reversible pause** instead of losing job definitions
+through `cron.unschedule`. The read-only snapshot found exact job IDs
+1, 2, 3 and 4, four active jobs, and **no unfinished runs in the
+preceding hour**. Those observations are not maintenance-window evidence:
+recheck immediately before approved execution and wait for all in-flight
+runs to complete after pausing. Restore/recreate schedules **only**
+from the reviewed canonical Test definition after the hosted rebuild.
+The two outbound worker routines explicitly return before
+`net.http_post` when their Test runtime-configured URL is absent;
+this does not make agreement/settlement database activity inert.
+
+**Do not run remote `supabase db reset`, `supabase db push`, custom
+`DROP` scripts, `cron.alter_job` or `cron.unschedule` from this
+handover.** The reviewed operator plan must identify the exact
+hosted Test-only cleanup mechanism, its Auth/Storage/secret scope,
+a preflight identity check for project `iukgsukdoowvnhlfmpml`,
+post-reset parity probes, rollback/restore owner, protected evidence
+retention and signed authorization. None of these commands was
+executed during this documentation review.
+
+## 08/11/2026 — Test/Firebase/domain refresh (read-only and source-only)
+
+This section supersedes the older **unknown** Firebase and Cloudflare
+configuration status, but **does not** change Test reset/rollback approval
+or hosted acceptance. Source candidate: draft PR #228, commit
+`5828af11c1afa362a690e50b18f22f9a060dcb1b` at this preflight.
+Any later documentation commit requires fresh exact-HEAD evidence.
+
+| Acceptance item | Latest verified evidence | Gate |
+| --- | --- | --- |
+| Owner-approved Merchant/Admin QA names | `test.sellertray.com` / `test-admin.sellertray.com` | Naming PASS |
+| Cloudflare | DNS-only CNAME to Vercel target on both; Vercel reports no DNS errors | DNS PASS |
+| Vercel domain/app binding | Neither Test domain attached; dedicated QA Git branches undeployed | OPEN |
+| Vercel Test custom-domain protection | Merchant protection disabled; Admin SSO excludes custom domains | OPEN — unsafe to serve Test traffic |
+| Supabase Test Auth redirects | Operator screenshot shows QA-native confirmation and recovery URLs | Config screenshot PASS; runtime/SMTP OPEN |
+| Supabase Test Auth Site URL | Operator screenshot shows `https://test.sellertray.com`; hostname not served | Runtime OPEN |
+| Test Firebase project and Android app | `sellertray-test`; `ng.processedge.sellertray.qa`; sender `362913608913`; App ID registered | Identity PASS |
+| Firebase HTTP v1 | Operator Cloud Messaging screenshot: enabled; legacy API disabled | API PASS |
+| Test `google-services.json` | Operator uploaded Android client JSON; QA project, sender, app ID, package matched source checks | Client identity PASS; protected EAS path OPEN |
+| Expo credentials and QA APK | Credential wizard exited without an approved QA keystore; sender not bound | OPEN |
+| External Meta/PSP/email/provider callbacks | No authoritative external provider-side verification | OPEN |
+| Source security gate | Expired Expo CLI/Zod advisory exception blocks Mobile dependency audit; tracked in issue #229 | OPEN |
+| Historical Preview compiled backends | Five dependencies preserved, compiled endpoint proof still outstanding | OPEN |
+| Exact hosted reset, cron freeze and rollback | Reviewed execution-signoff still outstanding | STOP |
+
+**Fresh Test-only Supabase read-only inventory:** project
+`iukgsukdoowvnhlfmpml` remains `ACTIVE_HEALTHY`, Postgres 17.11.
+Auth users/sessions `5/5`, applied migrations `54`, active scheduled jobs
+`4`, queued `net.http_request_queue` records `0`, push devices `0`,
+worker invocations `0`, runtime destination rows `0` and storage
+objects `0`. Current Edge list remains the five agreement-only deployed
+functions. The four scheduled jobs remain **active** and reported no
+failed executions in the inspected 24-hour window; **none was paused**.
+
+An additional count-only, Test-only census across **15** WhatsApp
+connections/credentials/webhook/catalogue, payment/checkout/provider,
+notification, push-dispatch and payment-event tables returned `0` rows
+in **every** inspected table. This is a **database-only inactivity
+observation**, not evidence that external Meta, Paystack, Flutterwave,
+Firebase/Expo, SMTP or authentication callbacks are disconnected.
+Do not copy provider secrets or live recipients into Test to pass a smoke
+test. No SQL/cron mutation was performed in this reconciliation.
+
+**Immediate operator priorities:** (1) verify SMTP/safe recipient and
+third-party callback ownership entirely outside Production, (2) preserve
+historic Preview compiled backend evidence, (3) define protected access
+for both Test custom domains, (4) finalise independent Test-only Auth,
+cron quiescence, hosted cleanup/restore and rollback sign-off. Then and
+only then conduct the controlled Test rebuild. Never use an unscoped
+Production domain binding, the legacy Production-bound `qa` APK/profile,
+or a generic remote `supabase db reset` as a substitute for the
+independently reviewed hosted reset plan.
+
+
+## 08/11/2026 — Meta and Paystack provider acceptance proposal
+
+The current safe read-only provider-side audit, proposed separate Meta
+Test architecture and platform Paystack mode-hardening plan are recorded
+in `docs/qa/oa5-meta-paystack-test-callback-acceptance-2026-11-08.md`.
+Production Meta and Paystack targets must not be repointed. A separate
+Meta development/test app and number are proposed but **not authorised**,
+and no Test callback endpoint is currently deployed. Source-only Paystack
+checks do not close the real-provider hosted callback acceptance gate.
+
+## 08/11/2026 — five historical Vercel Preview identities verified
+
+Independent read-only Vercel deployment metadata reconfirmed all **five**
+preserved agreement/visual Preview IDs as `READY`, including the exact
+branches and source SHAs. The custody map and reviewed safety sequence
+are in `docs/qa/oa5-vercel-preview-custody-and-test-domain-protection-2026-11-08.md`. Compiled backend identity, signed-out reviewer access
+and authority to retire old proof remain **OPEN**. Merchant Preview
+authentication is currently OFF; Admin protection excludes custom domains;
+the QA domain records remain DNS-only, unbound and **not** protected by
+Cloudflare Access (the connected account reports Access not enabled).
+Do not change protection until historic reviewer continuity is approved;
+do not attach QA domains before the staged backend attestation.

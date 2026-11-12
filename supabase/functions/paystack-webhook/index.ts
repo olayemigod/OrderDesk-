@@ -1,3 +1,5 @@
+import { paystackWebhookModeForProject, paystackWebhookDomainMatches } from './environment-guard.mjs';
+
 type JsonRecord = Record<string, unknown>;
 
 type TenantResolution = {
@@ -25,6 +27,12 @@ Deno.serve(withObservability('paystack-webhook', async (request) => {
   if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !PAYSTACK_SECRET_KEY) {
     return new Response('Billing webhook not configured', { status: 503 });
   }
+  // A signed callback must also belong to the correct environment. A live
+  // Paystack secret can never authorize a callback in the independent Test DB.
+  const webhookMode = paystackWebhookModeForProject(SUPABASE_URL, PAYSTACK_SECRET_KEY);
+  if (!webhookMode) {
+    return new Response('Billing webhook environment not configured', { status: 503 });
+  }
 
   const bodyRead = await readRequestTextLimited(request, 524_288);
   if (!bodyRead.ok) {
@@ -45,6 +53,12 @@ Deno.serve(withObservability('paystack-webhook', async (request) => {
 
   const eventType = asString(payload.event) ?? 'unknown';
   const data = isRecord(payload.data) ? payload.data : {};
+  // charge.success normally includes data.domain. Other legacy subscription
+  // events may omit it: in those cases the validated project/key pairing and
+  // HMAC signature remain mandatory. Reject any explicit conflicting domain.
+  if (!paystackWebhookDomainMatches(webhookMode, eventType, data.domain)) {
+    return new Response('Provider environment mismatch', { status: 409 });
+  }
   const fingerprint = await sha256Hex(rawBody);
 
   const existing = await rest<Array<{ processed_at: string | null }>>(

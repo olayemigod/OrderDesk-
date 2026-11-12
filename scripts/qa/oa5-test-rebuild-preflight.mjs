@@ -1,0 +1,147 @@
+#!/usr/bin/env node
+/**
+ * SellerTray OA5: OFFLINE PRE-RESET OPERATOR EVIDENCE GATE.
+ * No network, SQL, migrations, provider calls, Vercel actions, or reset.
+ * All true evidence flags are operator assertions requiring independent review.
+ * A pass is NOT destructive execution authorization.
+ */
+import {readFileSync} from 'node:fs';
+import {resolve} from 'node:path';
+import {execFileSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+import {checkTestArchive} from './oa5-test-backup-manifest.mjs';
+import {assessCronMaintenance,TEST_PROJECT} from './oa5-test-cron-maintenance-gate.mjs';
+import {assessTestLiveCensus} from './oa5-test-live-census.mjs';
+import {assessTestManagedBoundary} from './oa5-test-managed-boundary.mjs';
+import {assessTestEdgeBundleDrift} from './oa5-test-edge-bundle-drift.mjs';
+import {assessExistingVercelProtection} from './oa5-vercel-project-protection.mjs';
+import {assessTestWorkerEgress} from './oa5-test-worker-egress.mjs';
+import {assessTestProviderContainment} from './oa5-test-provider-containment.mjs';
+import {assessArchiveCanonicalTransition} from './oa5-archive-canonical-transition.mjs';
+import {assessHistoricalTestAuthLineage} from './oa5-test-historical-auth-lineage.mjs';
+import {inventoryOa5SourceMigrationScope} from './oa5-migration-scope-inventory.mjs';
+
+export const REQUIRED_EVIDENCE=Object.freeze([
+  'archive_restore_reviewed',
+  'five_historical_previews_preserved',
+  'historical_reviewer_continuity',
+  'historical_compiled_backend_boundary',
+  'production_custom_domains_public',
+  'vercel_preview_auth_protection',
+  'test_only_ingress_freeze_reviewed',
+  'meta_test_app_phone_webhook_ownership',
+  'paystack_test_keys_callbacks_and_replay',
+  'flutterwave_test_disabled_or_sandbox_only',
+  'smtp_safe_sink_recipients_and_auth_redirects',
+  'firebase_fcm_test_sender_and_qa_devices',
+  'ai_parser_and_notification_worker_egress',
+  'test_admin_merchant_domains_and_auth_redirects',
+  'test_auth_sessions_storage_scope',
+  'reversible_four_job_pause_approved',
+  'reviewed_cleanup_method_and_scope',
+  'rollback_operator_and_recovery_plan',
+  'exact_source_migration_order_and_parity',
+  'synthetic_fixture_and_retention_plan',
+  'archive_to_current_live_state_reconciled',
+  'historical_archive_to_canonical_review',
+  'historic_test_auth_authority_lineage_review',
+  'external_provider_structured_containment_review',
+]);
+const exactKeys=(obj,keys)=>!!obj&&typeof obj==='object'&&!Array.isArray(obj)&&
+  Object.keys(obj).sort().join('|')===[...keys].sort().join('|');
+const sha=x=>typeof x==='string'&&/^[0-9a-f]{40}$/.test(x);
+
+export function assessRebuildPreflight(record,{sourceSha,archive,cron,liveCensus,managedBoundary,edgeBundles,vercelProtection,workerEgress,archiveTransition,historicAuthLineage,providerContainment}={}){
+  const reasons=[];
+  if(!exactKeys(record,['schema_version','project_ref','reviewed_source_sha','purpose','evidence']))
+    return {preconditions_met:false,destructive_execution_authorized:false,
+      reasons:['Missing or malformed private Test operator record']};
+  if(record.schema_version!==2||record.project_ref!==TEST_PROJECT||
+     record.purpose!=='pre-reset-human-review')
+    reasons.push('Wrong Test project, purpose or schema');
+  if(!sha(sourceSha)||record.reviewed_source_sha!==sourceSha)
+    reasons.push('Reviewed Git source commit must equal the exact local checkout');
+  if(!exactKeys(record.evidence,REQUIRED_EVIDENCE))
+    reasons.push('Every named manual evidence category is required; no extras');
+  const usedEvidenceRefs=new Set();
+  for(const key of REQUIRED_EVIDENCE){
+    const x=record.evidence?.[key];
+    if(!exactKeys(x,['reviewed','evidence_ref'])||
+       x.reviewed!==true||
+       typeof x.evidence_ref!=='string'||
+       !/^[a-zA-Z0-9][a-zA-Z0-9_-]{7,79}$/.test(x.evidence_ref)){
+      reasons.push('Independent protected evidence not reviewed: '+key);
+      continue;
+    }
+    if(usedEvidenceRefs.has(x.evidence_ref))
+      reasons.push('Different review categories cannot reuse one evidence reference: '+key);
+    usedEvidenceRefs.add(x.evidence_ref);
+  }
+  if(!archive?.ok)reasons.push('Encrypted Test archive or disposable restore offline guard failed');
+  if(!cron?.ok)reasons.push('Test cron all-age run / pg_net quiescence guard failed');
+  if(!liveCensus?.ok)reasons.push('Archived Test dataset diverges from current hosted Test census');
+  if(!managedBoundary?.ok)reasons.push('Test managed Auth/Storage/FK census missing or drifted');
+  if(!edgeBundles?.metadata_matches_historical_baseline)
+    reasons.push('Historical Test Edge bundle SHA/version/JWT metadata missing, stale or drifted');
+  if(!vercelProtection?.protection_metadata_consistent)
+    reasons.push('Existing Merchant/Admin Vercel protection metadata missing, stale or drifted');
+  if(!historicAuthLineage?.historical_baseline_consistent)
+    reasons.push('Historical Test Auth/merchant/admin grant lineage is missing, stale or drifted');
+  if(!archiveTransition?.review_package_consistent)
+    reasons.push('Historical archive-to-clean-canonical evidence/disposition review missing or blocked');
+  if(!providerContainment?.provider_review_record_consistent)
+    reasons.push('Independent Test provider-console containment review missing, stale or incomplete');
+  if(!workerEgress?.worker_route_counts_quiescent)
+    reasons.push('Test indirect pg_net worker routing or scheduled-work counts missing, stale or drifted');
+  const preconditions_met=reasons.length===0;
+  return {preconditions_met,destructive_execution_authorized:false,reasons,
+    next:'A human must separately authorize the exact Test-only operation and verify provider quiescence immediately before execution'};
+}
+
+function main(){
+  if((process.argv.length!==14&&process.argv.length!==15)||process.argv[2]!=='--check'){
+    console.error('Usage: node scripts/qa/oa5-test-rebuild-preflight.mjs --check <private-record.json> <private-archive-directory> <private-fresh-cron-snapshot.json> <private-fresh-live-census.json> <private-fresh-managed-state.json> <private-fresh-edge-bundle-snapshot.json> <private-fresh-vercel-project-snapshot.json> <private-fresh-worker-egress-census.json> <private-archive-to-canonical-transition-review.json> <private-fresh-historical-auth-authority-census.json> <private-provider-containment-review.json> [private-reviewed-session-loss.json]');
+    process.exitCode=2;return;
+  }
+  let record,cronSnapshot,liveSnapshot,managedSnapshot,edgeSnapshot,vercelSnapshot,workerSnapshot,approvedSessionLoss=null,transitionRecord,historicAuthLineageSnapshot,providerContainmentSnapshot,sourceSha;
+  try{
+    record=JSON.parse(readFileSync(resolve(process.argv[3]),'utf8'));
+    cronSnapshot=JSON.parse(readFileSync(resolve(process.argv[5]),'utf8'));
+    liveSnapshot=JSON.parse(readFileSync(resolve(process.argv[6]),'utf8'));
+    managedSnapshot=JSON.parse(readFileSync(resolve(process.argv[7]),'utf8'));
+    edgeSnapshot=JSON.parse(readFileSync(resolve(process.argv[8]),'utf8'));
+    vercelSnapshot=JSON.parse(readFileSync(resolve(process.argv[9]),'utf8'));
+    workerSnapshot=JSON.parse(readFileSync(resolve(process.argv[10]),'utf8'));
+    transitionRecord=JSON.parse(readFileSync(resolve(process.argv[11]),'utf8'));
+    historicAuthLineageSnapshot=JSON.parse(readFileSync(resolve(process.argv[12]),'utf8'));
+    providerContainmentSnapshot=JSON.parse(readFileSync(resolve(process.argv[13]),'utf8'));
+    if(process.argv[14])approvedSessionLoss=JSON.parse(readFileSync(resolve(process.argv[14]),'utf8'));
+    sourceSha=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8',timeout:10000}).trim();
+  }catch{
+    console.error('BLOCKED: private operator evidence, cron snapshot or Git identity unavailable');
+    process.exitCode=1;return;
+  }
+  const archive=checkTestArchive(resolve(process.argv[4]));
+  const cron=assessCronMaintenance(cronSnapshot);
+  const liveCensus=assessTestLiveCensus(liveSnapshot,new Date(),approvedSessionLoss);
+  const managedBoundary=assessTestManagedBoundary(managedSnapshot);
+  const edgeBundles=assessTestEdgeBundleDrift(edgeSnapshot,new Date(),'recheck');
+  const vercelProtection=assessExistingVercelProtection(vercelSnapshot,new Date(),'recheck');
+  const workerEgress=assessTestWorkerEgress(workerSnapshot,new Date());
+  const archiveTransition=assessArchiveCanonicalTransition(transitionRecord,{
+    archive,sourceInventory:inventoryOa5SourceMigrationScope(resolve('supabase/migrations')),sourceSha
+  });
+  const historicAuthLineage=assessHistoricalTestAuthLineage(historicAuthLineageSnapshot);
+  const providerContainment=assessTestProviderContainment(providerContainmentSnapshot,{sourceSha});
+  const result=assessRebuildPreflight(record,{sourceSha,archive,cron,liveCensus,managedBoundary,edgeBundles,vercelProtection,workerEgress,archiveTransition,historicAuthLineage,providerContainment});
+  if(!result.preconditions_met){
+    console.error('BLOCKED: OA5 Test rebuild pre-reset evidence is incomplete.');
+    for(const reason of result.reasons)console.error(' - '+reason);
+    for(const reason of [...(archive.errors||[]),...(cron.reasons||[]),...(liveCensus.reasons||[]),...(managedBoundary.reasons||[]),...(edgeBundles.reasons||[]),...(vercelProtection.reasons||[]),...(workerEgress.reasons||[]),...(archiveTransition.reasons||[]),...(historicAuthLineage.reasons||[]),...(providerContainment.reasons||[])])
+      console.error(' - '+reason);
+    process.exitCode=1;return;
+  }
+  console.log('PASS: offline operator evidence preconditions recorded; independently review assertions.');
+  console.log('NOT AUTHORIZED: no Test reset, SQL mutation, cron pause, provider callback, deployment or production change may be inferred.');
+}
+if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))main();

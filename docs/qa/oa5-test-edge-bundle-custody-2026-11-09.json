@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "project_ref": "iukgsukdoowvnhlfmpml",
+  "purpose": "historical-test-edge-bundle-baseline",
+  "observed_at_utc": "2026-11-09T21:38:28Z",
+  "functions": [
+    {
+      "slug": "agreement-pdf-runtime-probe",
+      "status": "ACTIVE",
+      "version": 5,
+      "verify_jwt": true,
+      "bundle_sha256": "10e9119e1358628b83216e570588817de8b01234ec071936303b2d3b01f522d8"
+    },
+    {
+      "slug": "commercial-agreements",
+      "status": "ACTIVE",
+      "version": 4,
+      "verify_jwt": true,
+      "bundle_sha256": "23a06cf3c81130b64ff5c4ef72b17db346ec26f1c8072624dec1e93c7a767b76"
+    },
+    {
+      "slug": "master-agreements",
+      "status": "ACTIVE",
+      "version": 6,
+      "verify_jwt": true,
+      "bundle_sha256": "a5864bb52957f82c2aef6f19564a153b6fb74c4c385d80defb92b320ee435412"
+    },
+    {
+      "slug": "platform-admin",
+      "status": "ACTIVE",
+      "version": 5,
+      "verify_jwt": true,
+      "bundle_sha256": "c70bd4f0bbf51e052509376811187460c8f67eb53f4d9117800bc8054273144e"
+    },
+    {
+      "slug": "platform-admin-settlement",
+      "status": "ACTIVE",
+      "version": 4,
+      "verify_jwt": true,
+      "bundle_sha256": "fa1004e5b91aa3d7d9e5ae536ae837a99b32499ad07a4cb02a7d0484839d527c"
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -18,6 +18,7 @@ const approvedReuse = {
   historical_agreement_evidence_archived:true,
   restore_path_verified:true,
   vercel_preview_dependencies_reconciled:true,
+  qa_preview_access_protection_preflight_verified:true,
   test_only_auth_and_provider_config_verified:true,
   qa_edge_functions_deployed_and_verified:true,
 };
@@ -29,9 +30,12 @@ const testKey = 'sb_publishable_' + 's'.repeat(24);
 const dir = mkdtempSync(join(tmpdir(), 'sellertray-qa-config-'));
 const firebasePath = join(dir, 'google-services.qa.json');
 writeFileSync(firebasePath, JSON.stringify({
-  project_info: { project_id: 'sellertray-qa-placeholder' },
+  project_info: { project_id: 'sellertray-test', project_number: '362913608913' },
   client: [
-    { client_info: { android_client_info: { package_name: 'ng.processedge.sellertray.qa' } } },
+    { client_info: {
+      mobilesdk_app_id: '1:362913608913:android:622042be355ff1a94b41f0',
+      android_client_info: { package_name: 'ng.processedge.sellertray.qa' },
+    } },
   ]
 }));
 process.on('exit', () => rmSync(dir, { recursive:true, force:true }));
@@ -99,8 +103,30 @@ test('QA fails without its dedicated Firebase configuration', () => {
 
 test('QA rejects a Firebase configuration registered to a production Android package', () => {
   const bad = join(dir, 'production-firebase-placeholder.json');
-  writeFileSync(bad, JSON.stringify({client:[{client_info:{android_client_info:{package_name:'ng.processedge.sellertray'}}}]}));
+  writeFileSync(bad, JSON.stringify({
+    project_info: {project_id:'sellertray-test',project_number:'362913608913'},
+    client:[{client_info:{android_client_info:{package_name:'ng.processedge.sellertray'}}}],
+  }));
   assert.throws(() => dynamicConfig({config:original}, {...validEnv(),SELLERTRAY_QA_GOOGLE_SERVICES_FILE:bad}, approvedSynthetic), /Firebase package identity/);
+});
+
+test('QA rejects wrong Firebase project, sender, or Android App ID even with matching QA package', () => {
+  const valid = JSON.parse(readFileSync(firebasePath, 'utf8'));
+  const scenarios = [
+    { name:'production-project', modify: (f) => { f.project_info.project_id = 'sellertray-d4b18'; }, error:/Firebase project identity/ },
+    { name:'wrong-project-number', modify: (f) => { f.project_info.project_number = '999999999999'; }, error:/Firebase project identity/ },
+    { name:'wrong-app-id', modify: (f) => { f.client[0].client_info.mobilesdk_app_id = '1:362913608913:android:wrong'; }, error:/Firebase App ID/ },
+    { name:'missing-project', modify: (f) => { delete f.project_info; }, error:/Firebase project identity/ },
+  ];
+  for (const scenario of scenarios) {
+    const file = join(dir, scenario.name+'.json');
+    const altered = structuredClone(valid);
+    scenario.modify(altered);
+    writeFileSync(file, JSON.stringify(altered));
+    assert.throws(() => dynamicConfig({config:original}, {
+      ...validEnv(), SELLERTRAY_QA_GOOGLE_SERVICES_FILE:file,
+    }, approvedSynthetic), scenario.error, scenario.name);
+  }
 });
 
 test('QA fails when production source application ID drifts instead of modifying another package', () => {
@@ -137,4 +163,9 @@ test('the same reused Test project is build-eligible only with matching reviewed
     {...validEnv(), EXPO_PUBLIC_SUPABASE_URL:reuseUrl}, approvedReuse);
   assert.equal(accepted.android.package, 'ng.processedge.sellertray.qa');
   assert.equal(accepted.name, 'SellerTray QA');
+});
+
+test('Test QA native backend identity cannot be approved before web Preview access preflight', () => {
+  const denied={...approvedReuse,qa_preview_access_protection_preflight_verified:false};
+  assert.equal(reusedTestProjectApproved(denied,'https://iukgsukdoowvnhlfmpml.supabase.co'),false);
 });

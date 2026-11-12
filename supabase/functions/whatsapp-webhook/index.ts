@@ -1,5 +1,7 @@
 import { PDFDocument, StandardFonts, rgb } from 'npm:pdf-lib@1.17.1';
 import { handleCustomerPaymentSelfService } from './payment.ts';
+import { activeWhatsAppTenantLookupQuery } from './routing-boundary.mjs';
+import { metaTestWebhookConfiguration, metaTestWebhookPayloadAllowed } from './test-environment-guard.mjs';
 import {
   normalizeIntentText,
   resolveConversationIntent,
@@ -127,6 +129,9 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const META_VERIFY_TOKEN = Deno.env.get('META_WEBHOOK_VERIFY_TOKEN') ?? '';
 const META_APP_SECRET = Deno.env.get('META_APP_SECRET') ?? '';
+// Set in the standalone Supabase Test project only; never copy live Meta keys.
+const META_TEST_APP_ID = Deno.env.get('META_TEST_APP_ID') ?? '';
+const META_TEST_PHONE_NUMBER_ID = Deno.env.get('META_TEST_PHONE_NUMBER_ID') ?? '';
 const configuredParserUrl = Deno.env.get('ORDER_PARSER_URL')?.trim() ?? '';
 const ORDER_PARSER_URL = configuredParserUrl || (SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/order-parser` : '');
 const ORDER_PARSER_TOKEN = Deno.env.get('ORDER_PARSER_TOKEN') ?? '';
@@ -138,6 +143,15 @@ const AI_TENANT_MINUTE_LIMIT = boundedEnvInt('AI_TENANT_MINUTE_LIMIT', 60, 1, 10
 const AI_TENANT_DAILY_LIMIT = boundedEnvInt('AI_TENANT_DAILY_LIMIT', 2000, 1, 100000);
 
 Deno.serve(withObservability('whatsapp-webhook', async (request) => {
+  // Before subscription verification or signed messages, require a pinned QA
+  // app/phone configuration when this is the governed standalone Test project.
+  // Production and local development retain their existing webhook contract.
+  const metaTestEnvironment = metaTestWebhookConfiguration(
+    SUPABASE_URL, META_TEST_APP_ID, META_TEST_PHONE_NUMBER_ID,
+  );
+  if (!metaTestEnvironment.ok) {
+    return new Response('Test WhatsApp server configuration error', { status: 503 });
+  }
   if (request.method === 'GET') {
     return verifyWebhookSubscription(request);
   }
@@ -167,6 +181,14 @@ Deno.serve(withObservability('whatsapp-webhook', async (request) => {
     payload = JSON.parse(rawBody) as JsonRecord;
   } catch {
     return new Response('Invalid JSON', { status: 400 });
+  }
+
+  // No Test database writes or message interpretation for signed events
+  // addressed to any phone number outside the approved Meta QA test number.
+  if (!metaTestWebhookPayloadAllowed(
+    metaTestEnvironment, extractWebhookPhoneNumberIds(payload),
+  )) {
+    return new Response('Test WhatsApp phone number rejected', { status: 409 });
   }
 
   let webhookReceiptId: string | null = null;
@@ -331,10 +353,11 @@ async function resolveConsentedWebhookPhoneNumbers(
   const allowed = new Set<string>();
 
   for (const phoneNumberId of extractWebhookPhoneNumberIds(payload)) {
+    // Signed webhook payloads still require an *operationally connected*,
+    // non-retired tenant. Historical policy consent is retained for audit,
+    // but is not by itself permission to route an incoming message.
     const tenants = await rest<Array<{ id: string }>>(
-      '/rest/v1/tenants?select=id' +
-        '&whatsapp_phone_number_id=eq.' + encodeURIComponent(phoneNumberId) +
-        '&limit=1',
+      activeWhatsAppTenantLookupQuery(phoneNumberId),
     );
     const tenantId = tenants[0]?.id ?? null;
 
@@ -474,7 +497,7 @@ function extractInboundMessages(
 
 async function ingestMessage(event: ReturnType<typeof extractInboundMessages>[number]) {
   const tenants = await rest<Array<{ id: string; currency: string | null; name: string }>>(
-    `/rest/v1/tenants?select=id,currency,name&whatsapp_phone_number_id=eq.${encodeURIComponent(event.phoneNumberId)}&limit=1`,
+    activeWhatsAppTenantLookupQuery(event.phoneNumberId, true),
   );
   const tenant = tenants[0];
   const tenantId = tenant?.id;
