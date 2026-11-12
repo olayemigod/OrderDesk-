@@ -44,7 +44,8 @@ requireValue(
 requireValue(
   hasPageImport('OrdersManagement') &&
     navigation.includes("{ id: 'orders', label: 'Orders', section: 'Sales', available: true }") &&
-    app.includes("page === 'orders' && branch && <OrdersManagement tenantId={business.id} branchId={branch.id} currency={business.currency}") &&
+    app.includes("page === 'orders' && branch && <OrdersManagement") &&
+    app.includes('key={`${business.id}:${branch.id}`} tenantId={business.id} branchId={branch.id} currency={business.currency}') &&
     orders.includes("functions.invoke('order-draft-action'") &&
     orders.includes("rpc('get_sellertray_order_management_list'") &&
     orders.includes("rpc('get_sellertray_order_management_detail'") &&
