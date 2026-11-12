@@ -21,6 +21,7 @@ export default function OrdersManagement({ tenantId, branchId, currency }: Props
   const [selected, setSelected] = useState<OrderDetail | null>(null);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('open');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -97,7 +98,11 @@ export default function OrdersManagement({ tenantId, branchId, currency }: Props
   return <div className="page-stack">
     <section className="page-heading"><div><p className="eyebrow">Business</p><h2>Orders</h2><p>Review open orders and POS drafts. Completed transactions remain in Sales.</p></div><button type="button" className="secondary-button" onClick={() => void load()} disabled={loading}>{loading ? 'Refreshing…' : 'Refresh'}</button></section>
     {error ? <div className="error-banner">{error}</div> : null}
-    <section className="panel-card"><div className="toolbar-row"><SellerTrayInput className="text-input" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search order, customer or product" /><SellerTraySelect className="text-input" value={status} onChange={(event) => setStatus(event.target.value)}><option value="open">Open orders</option><option value="draft">Drafts</option><option value="awaiting_payment">Awaiting payment</option><option value="cancelled">Cancelled</option><option value="all">All orders</option></SellerTraySelect></div>
+    <section className="panel-card">
+      <div className="toolbar-row">
+        <button type="button" className="text-button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen((current) => !current)}>{filtersOpen ? 'Hide search & filters' : 'Search & filter orders'} {query.trim() || status !== 'open' ? '· Active' : ''}</button>
+      </div>
+      {filtersOpen ? <div className="toolbar-row"><SellerTrayInput className="text-input" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search order, customer or product" aria-label="Search orders" /><SellerTraySelect className="text-input" value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Filter orders by status"><option value="open">Open orders</option><option value="draft">Drafts</option><option value="awaiting_payment">Awaiting payment</option><option value="cancelled">Cancelled</option><option value="all">All orders</option></SellerTraySelect><button type="button" className="text-button" onClick={() => { setQuery(''); setStatus('open'); }}>Clear</button></div> : null}
       {loading ? <p>Loading orders…</p> : orders.length === 0 ? <p className="muted-copy">No orders match these filters.</p> : <div className="table-wrap"><table><thead><tr><th>Order</th><th>Customer</th><th>Channel</th><th>Status</th><th>Payment</th><th>Total</th><th>Collected</th><th>Date</th><th /></tr></thead><tbody>{orders.map((order) => <tr key={order.id}><td><strong>{order.publicOrderId}</strong></td><td>{order.customerName}</td><td>{label(order.source)}</td><td>{label(order.status)}</td><td>{label(order.paymentStatus)}</td><td>{money(order.totalAmount, order.currency || currency)}</td><td>{money(order.amountPaid, order.currency || currency)}</td><td>{dateTime(order.createdAt)}</td><td><button type="button" className="text-button" onClick={() => void openOrder(order.id)} disabled={detailLoading}>View</button></td></tr>)}</tbody></table></div>}
       <div className="toolbar-row"><span className="muted-copy">{pageStart}–{pageEnd} of {totalCount}</span><div className="topbar-actions"><button type="button" className="text-button" disabled={loading || page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>Previous</button><button type="button" className="text-button" disabled={loading || pageEnd >= totalCount} onClick={() => setPage((value) => value + 1)}>Next</button></div></div>
     </section>
