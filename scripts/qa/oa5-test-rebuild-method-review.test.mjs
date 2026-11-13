@@ -19,11 +19,11 @@ test('synthetic complete method candidate is never an authorization or proof of 
  'hosted_test_reconstruction_authorized','cron_pause_authorized','production_cutover_authorized'])
   assert.equal(r[k],false);
 });
-test('reject Production target, wrong strategy, changed source and missing 457 migrations',()=>{
+test('reject Production target, wrong strategy, changed source and missing 461 migrations',()=>{
  for(const modify of [
   x=>x.project_ref='eujxswjspolugrzlsjnn',x=>x.project_ref='user',
   x=>x.method='delete_all_managed_auth',x=>x.intent='production-release',
-  x=>x.source_sha='c'.repeat(40),x=>x.migration_count=456,
+  x=>x.source_sha='c'.repeat(40),x=>x.migration_count=MIGRATIONS-1,
   x=>x.migration_inventory_sha256='c'.repeat(64),x=>x.version=2,
   x=>x.private_project_url='secret',x=>x.irreversible_assumptions.live_keys='hidden',
  ]){
@@ -31,7 +31,7 @@ test('reject Production target, wrong strategy, changed source and missing 457 m
   assert.equal(check(x).candidate_method_structurally_consistent,false);
  }
  assert.equal(check(null).candidate_method_structurally_consistent,false);
- assert.equal(assessRebuildMethodCandidate(candidate(),{sourceSha:sha,sourceInventory:{...inventory,source_migrations_scanned:456}}).candidate_method_structurally_consistent,false);
+ assert.equal(assessRebuildMethodCandidate(candidate(),{sourceSha:sha,sourceInventory:{...inventory,source_migrations_scanned:MIGRATIONS-1}}).candidate_method_structurally_consistent,false);
 });
 test('every managed service and preserved artifact has a mandatory immutable disposition',()=>{
  for(const [k] of Object.entries(BOUNDARIES)){

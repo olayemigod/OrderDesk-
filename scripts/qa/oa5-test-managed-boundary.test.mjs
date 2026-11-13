@@ -33,6 +33,18 @@ test('stale, malformed or future timestamps are rejected', () => {
     assert.equal(assessTestManagedBoundary(s, now).ok, false);
   }
 });
+test('observed Test seven sessions and twenty-two refresh tokens fail closed against dated managed baseline', () => {
+  const s = snapshot();
+  s.counts.auth_sessions = 7;
+  s.counts.auth_refresh_tokens = 22;
+  const result = assessTestManagedBoundary(s, now);
+  assert.equal(result.ok, false);
+  assert.equal(result.managed_cleanup_authorized, false);
+  assert.equal(result.destructive_execution_authorized, false);
+  assert.match(result.reasons.join(' '), /auth_sessions/);
+  assert.match(result.reasons.join(' '), /auth_refresh_tokens/);
+});
+
 test('missing/extra/negative/fractional fields and even one count drift stop', () => {
   for (const key of Object.keys(BASELINE_20261109)) {
     let s = snapshot(); s.counts[key] += 1;
