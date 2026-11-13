@@ -33,3 +33,7 @@ Backend authority remains the 461-migration Test candidate. Merchant Web invitat
 Exact-head Mobile CI must pass dependency audit + verify + Hermes export + Orders/saved-sale tests; Mobile Native CI must pass Kotlin compile. These are source/native compilation gates only, not real-device acceptance. Physical Android acceptance remains required for sale speed, saved-sale resume, offline retry/idempotency, customer history navigation, barcode scan, camera, push, WhatsApp links, 58/80mm printing, Branch switching and payments before calling the artifact Build47-ready.
 
 No Test/Production SQL mutation, Vercel deployment, provider call, cron pause, APK build/distribution or Production/Tandar change is authorised by this branch.
+
+## 13 Nov exact Expo patch refresh
+
+Exact-head CI on this integrated branch correctly blocked `expo ~58.0.24`: current Expo Doctor now requires `~58.0.25`. The already-governed SDK58 dependency probe PR #235 has an npm-resolved lock with `expo 58.0.25`, while every other dependency/devDependency/override matches this Build47 candidate. This branch therefore adopts only the one-line Expo pin refresh plus that exact audited lock blob; Build47 scripts and OA5 Test isolation remain unchanged. No audit waiver or `expo.install.exclude` bypass was added.
