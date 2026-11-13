@@ -64,10 +64,24 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - name: Typecheck offline payment Edge Functions
+      - name: Typecheck offline payment Edge Functions in isolated Deno graph
         run: |
-          deno check --node-modules-dir=auto supabase/functions/merchant-order/index.ts
-          deno check --node-modules-dir=auto supabase/functions/pos-checkout/index.ts
+          # These Supabase Edge entrypoints are Deno-first and import their
+          # runtime npm dependency explicitly. Check them outside the npm
+          # monorepo so a newly published Mobile/Expo workspace dependency
+          # cannot contaminate Edge typechecking. Keep Deno's minimum
+          # dependency-age protection intact; do not use --min-dep-age=0.
+          edge_tmp="$(mktemp -d)"
+          trap 'rm -rf "$edge_tmp"' EXIT
+          mkdir -p "$edge_tmp/functions"
+          cp -R supabase/functions/merchant-order "$edge_tmp/functions/"
+          cp -R supabase/functions/pos-checkout "$edge_tmp/functions/"
+          (
+            cd "$edge_tmp"
+            deno check --no-config --node-modules-dir=none \
+              functions/merchant-order/index.ts \
+              functions/pos-checkout/index.ts
+          )
 
   mobile-offline-contract:
     runs-on: ubuntu-latest
