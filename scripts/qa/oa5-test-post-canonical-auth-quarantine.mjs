@@ -14,7 +14,7 @@ export const TEST_REF='iukgsukdoowvnhlfmpml';
 export const PRE_PURPOSE='pre-rebuild-historical-auth-cohort';
 export const POST_PURPOSE='post-canonical-historical-auth-cohort';
 export const EXPECTED_HISTORIC_USERS=5;
-export const EXPECTED_CANONICAL_MIGRATIONS=457;
+export const EXPECTED_CANONICAL_MIGRATIONS=461;
 export const HISTORIC_AUTH_LINK_CATEGORIES=Object.freeze([
   'tenant_member_grants',
   'branch_user_access_grants',
