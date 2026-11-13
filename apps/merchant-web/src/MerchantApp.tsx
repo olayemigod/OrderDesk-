@@ -7,6 +7,7 @@ import CommercialAgreementsManagement from './CommercialAgreementsManagement';
 import CustomersManagement from './CustomersManagement';
 import DashboardOverview from './DashboardOverview';
 import InventoryManagement from './InventoryManagement';
+import IncomingBusinessInvitations, { pendingInvitationIdFromBrowser } from './IncomingBusinessInvitations';
 import ManagementPage from './ManagementPage';
 import MerchantNotificationsManagement from './MerchantNotificationsManagement';
 import OrdersManagement from './OrdersManagement';
@@ -110,6 +111,7 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
   }, [navOpen]);
 
   const managementBusinesses = useMemo(() => businesses.filter((row) => MANAGEMENT_ROLES.includes(row.role)), [businesses]);
+  const pendingInvitationId = pendingInvitationIdFromBrowser();
   const business = managementBusinesses.find((row) => row.id === businessId) ?? null;
   const branch = branches.find((row) => row.id === branchId) ?? null;
 
@@ -205,8 +207,12 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
   if (booting) return <Status title="Opening SellerTray" body="Checking your merchant session." />;
   if (!session) return <Status title="Session ended" body="Sign in again to access SellerTray Merchant Web." />;
   if (loading && businesses.length === 0) return <Status title="Opening your business" body="Loading SellerTray management." />;
-  if (businesses.length > 0 && managementBusinesses.length === 0) return <Status title="Use SellerTray mobile for daily operations" body="Merchant Web management is available to business Owners and Managers. Staff access remains available in the SellerTray mobile app for permitted Branch operations." action={<button className="secondary-button" onClick={() => void signOut()}>Sign out</button>} />;
-  if (!business) return <Status title="No management workspace" body={error || 'No Owner or Manager business is available for this account.'} action={<button className="secondary-button" onClick={() => void signOut()}>Sign out</button>} />;
+  if (businesses.length > 0 && managementBusinesses.length === 0) return pendingInvitationId
+    ? <Status title="Review your Business invitation" body="Your existing Cashier access remains unchanged until you accept another Business invitation." action={<div className="page-stack"><IncomingBusinessInvitations onMembershipChanged={loadBusinesses} /><button className="secondary-button" onClick={() => void signOut()}>Sign out</button></div>} />
+    : <Status title="Use SellerTray mobile for daily operations" body="Merchant Web management is available to business Owners and Managers. Staff access remains available in the SellerTray mobile app for permitted Branch operations." action={<button className="secondary-button" onClick={() => void signOut()}>Sign out</button>} />;
+  if (!business) return pendingInvitationId
+    ? <Status title="Review your Business invitation" body={error || 'Accept the invitation below to add the Business to this same SellerTray account.'} action={<div className="page-stack"><IncomingBusinessInvitations onMembershipChanged={loadBusinesses} /><button className="secondary-button" onClick={() => void signOut()}>Sign out</button></div>} />
+    : <Status title="No management workspace" body={error || 'No Owner or Manager business is available for this account.'} action={<button className="secondary-button" onClick={() => void signOut()}>Sign out</button>} />;
 
   const displayBusinessName = businessIdentity?.name || business.name;
   const managementRole = business.role as ManagementRole;
@@ -238,6 +244,7 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
 
       {error ? <div className="error-banner">{error}<button onClick={() => setError(null)}>Dismiss</button></div> : null}
       <section className="context-bar" aria-label="Current business context"><Context label="Business code" value={business.merchantCode || '—'} /><Context label="Subscription" value={statusText(business.subscriptionStatus)} /><Context label="Active Branch" value={branch?.name ?? 'No active Branch'} /></section>
+      {pendingInvitationId ? <IncomingBusinessInvitations onMembershipChanged={loadBusinesses} /> : null}
       {COMMERCIAL_JOURNEY_PAGES.includes(page) ? <CommercialJourneyNavigation activePage={page} onNavigate={navigate} /> : null}
       {page === 'overview' && <DashboardOverview tenantId={business.id} currency={business.currency} go={navigate} openBranch={openBranchPage} />}
       {page === 'notifications' && <MerchantNotificationsManagement key={business.id} tenantId={business.id} unreadCount={unreadCount} onUnreadChanged={() => void loadUnreadCount(business.id)} />}

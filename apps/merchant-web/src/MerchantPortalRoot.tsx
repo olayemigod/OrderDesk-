@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import MerchantAuth, { merchantAuthModeFromLocation } from './MerchantAuth';
+import IncomingBusinessInvitations, { pendingInvitationIdFromBrowser } from './IncomingBusinessInvitations';
 import { SellerTrayMark } from './merchantShell';
 import { errorMessage, supabase } from './supabase';
 
@@ -12,6 +13,7 @@ export default function MerchantPortalRoot({ children }: { children: ReactNode }
   const [workspaceState, setWorkspaceState] = useState<WorkspaceState>('checking');
   const [workspaceError, setWorkspaceError] = useState('');
   const authIntent = merchantAuthModeFromLocation();
+  const pendingInvitationId = pendingInvitationIdFromBrowser();
 
   const inspectWorkspace = useCallback(async (nextSession: Session) => {
     setWorkspaceState('checking');
@@ -95,7 +97,7 @@ export default function MerchantPortalRoot({ children }: { children: ReactNode }
   }
 
   if (!session) {
-    return <MerchantAuth session={null} initialMode="sign-in" onAuthenticated={(next) => void acceptAuthenticated(next)} />;
+    return <MerchantAuth session={null} initialMode="sign-in" invitationId={pendingInvitationId} onAuthenticated={(next) => void acceptAuthenticated(next)} />;
   }
 
   if (workspaceState === 'checking') {
@@ -103,6 +105,12 @@ export default function MerchantPortalRoot({ children }: { children: ReactNode }
   }
 
   if (workspaceState === 'none') {
+    if (pendingInvitationId) {
+      return <PortalInvitation
+        onMembershipChanged={() => inspectWorkspace(session)}
+        onSignOut={() => void supabase.auth.signOut({ scope: 'local' })}
+      />;
+    }
     return <MerchantAuth
       session={session}
       initialMode="create-business"
@@ -135,4 +143,24 @@ function PortalStatus({ title, body, action }: { title: string; body: string; ac
       {action}
     </div>
   </div>;
+}
+
+
+function PortalInvitation({
+  onMembershipChanged,
+  onSignOut,
+}: {
+  onMembershipChanged: () => Promise<void> | void;
+  onSignOut: () => void;
+}) {
+  return <main className="status-page">
+    <section className="status-card">
+      <SellerTrayMark large />
+      <p className="eyebrow">SellerTray Business access</p>
+      <h1>Review your Business invitation</h1>
+      <p>Access begins only after the signed-in account matches the invited email and you explicitly accept.</p>
+      <IncomingBusinessInvitations onMembershipChanged={onMembershipChanged} />
+      <button type="button" className="secondary-button" onClick={onSignOut}>Sign out</button>
+    </section>
+  </main>;
 }
