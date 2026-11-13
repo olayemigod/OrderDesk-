@@ -33,6 +33,15 @@ test('every mutable Auth membership, administrator, Branch and Agreement count i
   assert.equal(assessHistoricalTestAuthLineage(y,now).historical_baseline_consistent,false,key);
  }
 });
+test('seven retained managed sessions do not match the archived six-session historical authority checkpoint',()=>{
+ const x=fresh();x.counts.auth_sessions=7;
+ const result=assessHistoricalTestAuthLineage(x,now);
+ assert.equal(result.historical_baseline_consistent,false);
+ assert.equal(result.historical_users_quarantined_in_canonical_schema,false);
+ assert.equal(result.destructive_execution_authorized,false);
+ assert.match(result.reasons.join(' '),/auth_sessions/);
+});
+
 test('stale, future-dated, invalid and negative counts fail closed',()=>{
  for(const d of ['2026-11-11T19:44:59Z','2026-11-11T19:56:00Z','invalid-date']){
    const x=fresh();x.captured_at_utc=d;
