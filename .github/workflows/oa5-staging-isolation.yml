@@ -18,6 +18,9 @@ on:
       - 'scripts/qa/oa5-test-post-canonical-auth-quarantine.mjs'
       - 'scripts/qa/oa5-test-post-canonical-auth-quarantine.test.mjs'
       - 'docs/qa/oa5-test-post-canonical-auth-quarantine-2026-11-11.md'
+      - 'scripts/qa/oa5-method-b-retained-auth-session-census.mjs'
+      - 'scripts/qa/oa5-method-b-retained-auth-session-census.test.mjs'
+      - 'docs/qa/oa5-method-b-retained-auth-session-provenance-2026-11-13.md'
       - 'scripts/qa/oa5-test-historical-auth-lineage.mjs'
       - 'scripts/qa/oa5-test-historical-auth-lineage.test.mjs'
       - 'docs/qa/oa5-historical-test-auth-lineage-2026-11-11.md'
@@ -120,6 +123,7 @@ jobs:
           node --test scripts/qa/oa5-test-rebuild-method-review.test.mjs
           node --test scripts/qa/oa5-test-post-canonical-auth-quarantine.test.mjs
           node --test scripts/qa/oa5-test-historical-auth-lineage.test.mjs
+          node --test scripts/qa/oa5-method-b-retained-auth-session-census.test.mjs
           node --test scripts/qa/oa5-test-rebuild-preflight.test.mjs
           node --test scripts/qa/oa5-archive-canonical-transition.test.mjs
           node --test scripts/qa/oa5-test-migration-order-census.test.mjs
