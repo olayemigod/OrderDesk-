@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { loadActiveCashShift, type CashShift } from '../data/cashShiftRepository';
 import { loadAccessibleBranches, type CommerceBranch } from '../data/commerceRepository';
 import { loadStockTransfers } from '../data/inventoryRepository';
 import { loadLowStock } from '../data/lowStockRepository';
+import { loadOrderById } from '../data/ordersRepository';
 import type { MerchantOrder } from '../domain/order';
 import { orderTotal } from '../domain/order';
 import { useBusinesses } from '../hooks/useBusinesses';
@@ -53,6 +54,11 @@ export default function RedesignWorkspace() {
   const [whatsappRouteKey, setWhatsappRouteKey] = useState(0);
   const [syncRouteKey, setSyncRouteKey] = useState(0);
   const [resumeDraftOrder, setResumeDraftOrder] = useState<MerchantOrder | null>(null);
+  const [pendingCustomerOrderId, setPendingCustomerOrderId] = useState<string | null>(null);
+  const [focusedExternalOrder, setFocusedExternalOrder] = useState<MerchantOrder | null>(null);
+  const customerOrderRequestRef = useRef(0);
+  const currentBusinessIdRef = useRef(activeBusiness?.id ?? '');
+  currentBusinessIdRef.current = activeBusiness?.id ?? '';
 
   const {
     orders,
@@ -119,6 +125,21 @@ export default function RedesignWorkspace() {
     setFocusedOrderId(null);
   }, [activeBranchId]);
 
+  useEffect(() => {
+    customerOrderRequestRef.current += 1;
+    setFocusedExternalOrder(null);
+    setPendingCustomerOrderId(null);
+  }, [activeBusiness?.id]);
+
+  useEffect(() => {
+    if (!pendingCustomerOrderId || !activeBranchId) return;
+    const targetOrder = orders.find((order) => order.id === pendingCustomerOrderId)
+      ?? (focusedExternalOrder?.id === pendingCustomerOrderId ? focusedExternalOrder : null);
+    if (targetOrder?.branchId !== activeBranchId) return;
+    setFocusedOrderId(targetOrder.id);
+    setPendingCustomerOrderId(null);
+  }, [activeBranchId, pendingCustomerOrderId, orders, focusedExternalOrder]);
+
   const activeBranch = useMemo(
     () => branches.find((branch) => branch.id === activeBranchId) ?? branches[0] ?? null,
     [activeBranchId, branches],
@@ -128,8 +149,9 @@ export default function RedesignWorkspace() {
     [activeBranch, orders],
   );
   const focusedOrder = useMemo(
-    () => focusedOrderId ? orders.find((order) => order.id === focusedOrderId) ?? null : null,
-    [focusedOrderId, orders],
+    () => focusedOrderId ? orders.find((order) => order.id === focusedOrderId)
+      ?? (focusedExternalOrder?.id === focusedOrderId ? focusedExternalOrder : null) : null,
+    [focusedOrderId, orders, focusedExternalOrder],
   );
   const ordersForWorkspace = useMemo(
     () => focusedOrder ? [focusedOrder] : branchOrders,
@@ -585,7 +607,7 @@ export default function RedesignWorkspace() {
           {focusedOrder ? (
             <View style={[styles.focusedOrderCard, appearance.dark && darkStyles.card]}>
               <View style={styles.focusedOrderCopy}>
-                <Text style={[styles.focusedOrderEyebrow, appearance.dark && darkStyles.bodyText]}>OPENED FROM NOTIFICATION</Text>
+                <Text style={[styles.focusedOrderEyebrow, appearance.dark && darkStyles.bodyText]}>ORDER DETAILS</Text>
                 <Text style={[styles.focusedOrderTitle, appearance.dark && darkStyles.titleText]}>{focusedOrder.publicOrderId}</Text>
                 <Text style={[styles.focusedOrderMeta, appearance.dark && darkStyles.bodyText]}>{focusedOrder.customerName} · {focusedOrder.branchName}</Text>
               </View>
@@ -599,9 +621,40 @@ export default function RedesignWorkspace() {
             businessCurrency={activeBusiness.currency}
             orders={ordersForWorkspace}
             loading={ordersLoading}
+            focusedOrderId={focusedOrder?.id ?? null}
             canReturnCompletedSale={canRefundSale && Boolean(activeCashShift) && (!focusedOrder || focusedOrder.branchId === activeBranch?.id)}
             onResumeDraft={(order) => {
-              if (order.branchId !== activeBranch?.id) return;
+              if (order.branchId !== activeBranch?.id) {
+                const targetBranch = branches.find((branch) => branch.id === order.branchId);
+                if (!targetBranch) {
+                  Alert.alert('Branch access required', 'You do not have access to the Branch that owns this saved sale.');
+                  return;
+                }
+                Alert.alert(
+                  'Switch Branch to resume',
+                  `This saved sale belongs to ${targetBranch.name}. Switch to that Branch, then open it again from Orders.`,
+                  [
+                    { text: 'Not now', style: 'cancel' },
+                    { text: 'Switch Branch', onPress: () => { setFocusedOrderId(null); setActiveBranchId(targetBranch.id); setTab('orders'); } },
+                  ],
+                );
+                return;
+              }
+              if (cashShiftLoading) {
+                Alert.alert('Checking your shift', 'SellerTray is checking your Cashier shift. Try Resume sale again once the check finishes.');
+                return;
+              }
+              if (!activeCashShift) {
+                Alert.alert(
+                  'Open a shift to resume',
+                  'Your saved sale is still available. Open a Cashier shift for this Branch, then return to Orders and resume it.',
+                  [
+                    { text: 'Not now', style: 'cancel' },
+                    { text: 'Open Cash & Shift', onPress: openCashWorkspace },
+                  ],
+                );
+                return;
+              }
               setResumeDraftOrder(order);
               setFocusedOrderId(null);
               setTab('sell');
@@ -644,6 +697,37 @@ export default function RedesignWorkspace() {
               setResumeDraftOrder(null);
               setFocusedOrderId(null);
               setTab('orders');
+            }}
+            onOpenCustomerOrder={async (orderId) => {
+              const requestId = ++customerOrderRequestRef.current;
+              const tenantId = activeBusiness.id;
+              try {
+                  const existing = orders.find((row) => row.id === orderId);
+                  const order = existing ?? await loadOrderById(tenantId, orderId);
+                  if (requestId !== customerOrderRequestRef.current || currentBusinessIdRef.current !== tenantId) return;
+                  if (!order) {
+                    Alert.alert('Order unavailable', 'This order could not be loaded. Refresh Customer history and try again.');
+                    return;
+                  }
+                  if (!branches.some((branch) => branch.id === order.branchId)) {
+                    Alert.alert('Branch access required', 'This order belongs to a Branch you cannot access.');
+                    return;
+                  }
+                  setFocusedExternalOrder(existing ? null : order);
+                  setShowNotifications(false);
+                  setResumeDraftOrder(null);
+                  setTab('orders');
+                  if (order.branchId !== activeBranch?.id) {
+                    setPendingCustomerOrderId(order.id);
+                    setActiveBranchId(order.branchId);
+                  } else {
+                    setFocusedOrderId(order.id);
+                  }
+                } catch {
+                  if (requestId === customerOrderRequestRef.current && currentBusinessIdRef.current === tenantId) {
+                    Alert.alert('Unable to open order', 'Check your connection and Branch access, then try again.');
+                  }
+                }
             }}
             onSyncOfflineSales={() => offline.syncNow()}
             onDiscardOfflineSale={offline.discard}

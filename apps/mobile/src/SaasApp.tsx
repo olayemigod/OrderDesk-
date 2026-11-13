@@ -163,7 +163,7 @@ function Workspace() {
   }, [activeBusiness?.id]);
 
   useEffect(() => {
-    function routeIncomingUrl(url: string | null) {
+    function routeIncomingUrl(url: string | null | undefined) {
       if (!url || !url.startsWith('sellertray://whatsapp-connect')) return;
       setView('more');
       setSettingsRouteKey((value) => value + 1);
@@ -243,7 +243,6 @@ function Workspace() {
     <SafeAreaView style={[styles.safeArea, appearance.dark && darkStyles.safeArea]}>
       <StatusBar
         barStyle={appearance.dark ? 'light-content' : 'dark-content'}
-        backgroundColor={appearance.dark ? '#081825' : '#F8FAFC'}
       />
       <View style={[styles.appFrame, appearance.dark && darkStyles.appFrame]}>
         <PinnedBrandHeader
