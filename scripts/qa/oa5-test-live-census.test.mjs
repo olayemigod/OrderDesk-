@@ -13,6 +13,19 @@ test('current sixth Auth session blocks archive-to-live parity',()=>{
  const r=assessTestLiveCensus(s,now);
  assert.equal(r.ok,false);assert.deepEqual(r.drift,[{category:'auth_sessions',archive_count:5,current_count:6}]);
 });
+test('live seven-session Test drift is two beyond the archive and cannot reuse six-session loss approval',()=>{
+ const s=safe();s.counts.auth_sessions=7;
+ const withoutReview=assessTestLiveCensus(s,now);
+ assert.equal(withoutReview.ok,false);
+ assert.equal(withoutReview.may_reset,false);
+ assert.deepEqual(withoutReview.drift,[{category:'auth_sessions',archive_count:5,current_count:7}]);
+ const withOldReview=assessTestLiveCensus(s,now,reviewed());
+ assert.equal(withOldReview.ok,false);
+ assert.equal(withOldReview.reviewed_session_loss_accepted,false);
+ assert.equal(withOldReview.may_reset,false);
+ assert.match(withOldReview.reasons.join(' '),/Unreviewed|Post-archive/);
+});
+
 test('any count drifting after archive requires review',()=>{
  for(const key of Object.keys(ARCHIVED_COUNTS)){
    const s=safe();s.counts[key]++;
