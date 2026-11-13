@@ -102,3 +102,17 @@ The checker refuses unexpected accounts, extra or missing sessions, changed priv
 4. **After separately approved reconstruction**, run real historical-user **read and write denial** checks, admin RPC and old JWT/session checks, compare the five-user fingerprint, then test newly provisioned synthetic merchant positive controls and restore a safe Test-only provider path only upon separate acceptance.
 
 The existing archived-count, managed-state and historical-authority guards intentionally still fail closed when seven sessions are compared with old five-/six-session baselines. Do **not** simply change those historical baselines or use an older one-session-loss exception to waive this new finding. The new retained-session helper records the **correct Method B non-deletion strategy** in parallel; future operator evidence can reconcile custody explicitly, not manufacture archival parity. **No hosted change performed in this workstream.**
+
+## Read-only historical user-schema object census — no remote reset performed
+
+A second **read-only** catalog inventory of the existing Test project at **2026-11-13T07:11:23Z** found:
+
+| Existing namespace | Tables | Functions | SECURITY DEFINER functions | RLS policies |
+| --- | ---: | ---: | ---: | ---: |
+| `public` | 132 | 479 | 348 | 54 |
+| `sellertray_private` | 8 | 8 | 6 | 0 |
+| `supabase_migrations` | 1 | 0 | 0 | 0 |
+
+The query found **66 foreign keys to `auth.users` outside the Auth/Storage schemas** and again confirmed **all four cron jobs inactive** with **54** historical migration versions. This FK count measures **all non-Auth/non-Storage namespaces**, and is **not directly comparable** to the earlier *public-only* FK count of 64; it does not demonstrate a newly added relationship. Catalog metadata was aggregated without returning table row data, user identities, tokens, provider credentials or function bodies.
+
+**Method B consequence:** remote reset cannot be approved solely on a CLI promise to drop “user-created objects.” The operator/reviewer must explicitly reconcile the existing `public` and `sellertray_private` object and Auth FK graph, `supabase_migrations` ledger effects, `SECURITY DEFINER` grants, Auth/Storage/cron/pg_net/Vault managed resources and the post-replay canonical source. The actual remote CLI v3 confirmation plan, privileges and object list have not been inspected on the hosted project. In particular, catalog counts are **not** a sanctioned object-retirement list or rollback proof, and no hosted SQL reset or schema modification was executed.
