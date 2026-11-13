@@ -6,12 +6,15 @@ const read = (path) => readFileSync(resolve(root, path), 'utf8');
 const supabaseClient = read('src/supabase.ts');
 const main = read('src/main.tsx');
 const app = read('src/MerchantApp.tsx');
+const orders = read('src/OrdersManagement.tsx');
 const dashboard = read('src/DashboardOverview.tsx');
 const cash = read('src/CashShiftsManagement.tsx');
 const cashReview = read('src/CashShiftsReview.tsx');
 const businessExpenses = read('src/BusinessExpensesManagement.tsx');
 const inventory = read('src/InventoryManagement.tsx');
 const management = read('src/ManagementPage.tsx');
+const customers = read('src/CustomersManagement.tsx');
+const customerBranchHistory = read('../../supabase/migrations/20261109230000_customer_history_order_branch_scope.sql');
 const products = read('src/ProductsManagement.tsx');
 const suppliers = read('src/SuppliersManagement.tsx');
 const branches = read('src/BranchesManagement.tsx');
@@ -22,6 +25,8 @@ const reports = read('src/ReportCenter.tsx');
 const salesReports = read('src/SalesReportCenter.tsx');
 const taxReports = read('src/TaxReportCenter.tsx');
 const procurementReports = read('src/ProcurementReportCenter.tsx');
+const profitReports = read('src/ProfitabilityReportCenter.tsx');
+const profitAuthority = read('../../supabase/migrations/20261112050000_profitability_report_management.sql');
 const settings = read('src/SettingsManagement.tsx');
 const posPolicySettings = read('src/PosPolicySettings.tsx');
 const taxSettings = read('src/TaxSettings.tsx');
@@ -32,8 +37,8 @@ const supplierPaymentsCenter = read('src/SupplierPaymentsCenter.tsx');
 const vercel = read('vercel.json');
 const cashSource = [cash, cashReview, businessExpenses].join('\n');
 const settingsSource = [settings, posPolicySettings, taxSettings].join('\n');
-const reportSource = [reports, salesReports, taxReports, procurementReports].join('\n');
-const browserSource = [supabaseClient, main, app, dashboard, cash, cashReview, businessExpenses, inventory, management, products, suppliers, branches, team, whatsapp, devices, reports, salesReports, taxReports, procurementReports, settings, posPolicySettings, taxSettings, purchasing, purchasingOperations, supplierPayments, supplierPaymentsCenter].join('\n');
+const reportSource = [reports, salesReports, taxReports, procurementReports, profitReports].join('\n');
+const browserSource = [supabaseClient, main, app, orders, dashboard, cash, cashReview, businessExpenses, inventory, management, customers, products, suppliers, branches, team, whatsapp, devices, reports, salesReports, taxReports, procurementReports, profitReports, settings, posPolicySettings, taxSettings, purchasing, purchasingOperations, supplierPayments, supplierPaymentsCenter].join('\n');
 const failures = [];
 const requireValue = (condition, message) => { if (!condition) failures.push(message); };
 const excludes = (source, values) => values.every((value) => !source.includes(value));
@@ -49,6 +54,25 @@ requireValue(excludes(cashSource, ["from('sellertray_cash_shifts')", "from('sell
 
 requireValue(management.includes('<ProductsManagement') && ['save_sellertray_product', 'set_sellertray_product_active', 'save_sellertray_product_uom', 'delete_sellertray_product_uom'].every((name) => products.includes(`rpc('${name}'`)), 'Products and Pricing must use governed product and UOM commands.');
 requireValue(excludes(products, ["from('catalog_item_uoms').insert", "from('catalog_item_uoms').update", "from('catalog_item_uoms').delete", "from('catalog_items').insert", "from('catalog_items').update", "from('catalog_items').delete"]), 'Merchant Web must not bypass product and UOM commands with raw writes.');
+
+requireValue(
+  customers.includes("rpc('get_sellertray_customer_management_detail'")
+    && customers.includes("rpc('get_sellertray_order_management_detail'")
+    && customers.includes('p_branch_id: order.branchId')
+    && customers.includes("aria-label={`Open order ${order.publicOrderId}`}")
+    && customers.includes("p_phone: newPhone.trim() || null")
+    && customers.includes('Phone <span className="muted">Optional</span>')
+    && !customers.includes(".from('orders')")
+    && customerBranchHistory.includes("'branchId',q.branch_id"),
+  'Customer history must open through the original governed Branch/order read authority while preserving the approved optional-phone customer creation contract.'
+);
+requireValue(
+  orders.includes('const [filtersOpen, setFiltersOpen] = useState(false)')
+    && orders.includes('Hide search & filters')
+    && orders.includes('Search & filter orders')
+    && orders.includes('aria-expanded={filtersOpen}'),
+  'Merchant Orders search/filter must remain collapsed by default and deliberately expandable.'
+);
 
 requireValue(management.includes('<SuppliersManagement') && suppliers.includes("rpc('get_sellertray_suppliers_management_list'") && suppliers.includes("rpc('get_sellertray_supplier_management_detail'") && suppliers.includes("rpc('save_sellertray_supplier'"), 'Suppliers must use governed supplier management reads and save command.');
 
@@ -69,6 +93,23 @@ requireValue(['customer', 'store', 'audit', 'accounts', 'dispatch', 'production'
 requireValue(app.includes("import ReportCenter from './ReportCenter'") && app.includes('<ReportCenter tenantId={business.id} currency={business.currency}') && reports.includes("import SalesReportCenter from './SalesReportCenter'") && reports.includes("import TaxReportCenter from './TaxReportCenter'") && reports.includes("import ProcurementReportCenter from './ProcurementReportCenter'") && reports.includes('Sales & Operations') && reports.includes('Tax') && reports.includes('Purchasing'), 'Report Center must expose Sales & Operations, Tax and Purchasing views.');
 requireValue(salesReports.includes("rpc('get_sellertray_report_management'") && salesReports.includes('Branch comparison') && salesReports.includes('Payment methods') && salesReports.includes('Top customers') && taxReports.includes("rpc('get_sellertray_tax_report_summary'") && taxReports.includes('Net revenue') && taxReports.includes('Net tax') && taxReports.includes('Gross sales') && taxReports.includes('Tax reversed') && procurementReports.includes("rpc('sellertray_report_center'") && procurementReports.includes('Procurement by Branch') && procurementReports.includes('Supplier Outstanding'), 'Report Center must consume governed Sales, Tax and Purchasing reporting models.');
 requireValue(excludes(reportSource, ["from('orders')", "from('order_payments')", "from('sale_returns')", "from('sellertray_cash_shifts')", "from('sellertray_purchase_orders')", "from('sellertray_supplier_payments')", "from('sellertray_supplier_payment_reversals')", "from('sellertray_purchase_receipts')"]), 'Report Center must not reproduce commerce, tax or procurement calculations with raw browser queries.');
+requireValue(
+  reports.includes("import ProfitabilityReportCenter from './ProfitabilityReportCenter'")
+    && reports.includes('>Profitability</button>')
+    && profitReports.includes("rpc('get_sellertray_profitability_report'")
+    && profitReports.includes('grossProfit: optionalAmount(row.grossProfit)')
+    && profitReports.includes('costComplete: row.costComplete === true')
+    && profitAuthority.includes('sellertray_user_can_read_report_branch')
+    && profitAuthority.includes('sellertray_inventory_valuation_entries')
+    && profitAuthority.includes('o.deleted_at is null')
+    && profitAuthority.includes("o.status='completed'"),
+  'Profitability must reuse governed historical valuation/Branch authority and withhold incomplete margins.'
+);
+requireValue(
+  excludes(profitReports, ["from('orders')", "from('sellertray_inventory_valuation_entries')", "from('inventory_movements')"]),
+  'Browser profitability must not calculate profit from raw commerce or valuation tables.'
+);
+
 requireValue(procurementReports.includes('Purchase, receiving and supplier-payment activity follow the selected period.') && procurementReports.includes('Supplier outstanding is the current unpaid balance across placed Purchase Orders.'), 'Procurement reports must distinguish period activity from current outstanding state.');
 
 requireValue(management.includes('<SettingsManagement') && settings.includes("rpc('get_sellertray_business_profile'") && settings.includes("rpc('save_sellertray_business_profile'") && settings.includes("rpc('sellertray_get_operational_policy'") && settings.includes("rpc('sellertray_save_operational_policy'") && settings.includes("functions.invoke('payment-settings'") && settings.includes("action: 'connect_gateway'") && settings.includes("action: 'disconnect_gateway'") && posPolicySettings.includes("import { TaxSettings } from './TaxSettings'") && posPolicySettings.includes('<TaxSettings tenantId={tenantId} />') && taxSettings.includes("rpc('get_sellertray_tax_settings'") && taxSettings.includes("rpc('save_sellertray_tax_settings'"), 'Settings must reuse governed business-profile, policy, payment and tax boundaries.');

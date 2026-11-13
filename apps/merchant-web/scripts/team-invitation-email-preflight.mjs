@@ -4,13 +4,16 @@ import path from 'node:path';
 
 const merchantRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = path.resolve(merchantRoot, '../..');
-const [source, authEmailSource, inviteHtml, inviteJs, inviteCss, incomingInvitationsSource] = await Promise.all([
+const [source, authEmailSource, inviteHtml, inviteJs, inviteCss, incomingInvitationsSource, portalRootSource, merchantAuthSource, merchantAppSource] = await Promise.all([
   readFile(path.join(repoRoot, 'supabase/functions/team-management/index.ts'), 'utf8'),
   readFile(path.join(repoRoot, 'supabase/functions/send-auth-email/index.ts'), 'utf8'),
   readFile(path.join(merchantRoot, 'public/invite.html'), 'utf8'),
   readFile(path.join(merchantRoot, 'public/invite.js'), 'utf8'),
   readFile(path.join(merchantRoot, 'public/invite.css'), 'utf8'),
   readFile(path.join(merchantRoot, 'src/IncomingBusinessInvitations.tsx'), 'utf8'),
+  readFile(path.join(merchantRoot, 'src/MerchantPortalRoot.tsx'), 'utf8'),
+  readFile(path.join(merchantRoot, 'src/MerchantAuth.tsx'), 'utf8'),
+  readFile(path.join(merchantRoot, 'src/MerchantApp.tsx'), 'utf8'),
 ]);
 
 const failures = [];
@@ -73,6 +76,18 @@ expect(incomingInvitationsSource.includes('setLoading(false);'), 'Merchant Web m
 expect(incomingInvitationsSource.includes('loading && focusedInvitationId && !error'), 'focused browser invitation must show a loading state while server status is unresolved');
 expect(incomingInvitationsSource.includes('!focusedInvitationIsPending && !loading && !error'), 'resolved invitation copy must not appear before a successful invitation fetch completes');
 expect(incomingInvitationsSource.includes('Loading invitation…'), 'Merchant Web must explain that invitation status is still being checked');
+
+expect(incomingInvitationsSource.includes('export function pendingInvitationIdFromBrowser()'), 'Merchant Web must expose the validated non-authoritative invitation locator to the shared auth gate');
+expect(portalRootSource.includes("import IncomingBusinessInvitations, { pendingInvitationIdFromBrowser } from './IncomingBusinessInvitations'"), 'The shared Merchant portal gate must own focused invitation recovery');
+expect(portalRootSource.includes("workspaceState === 'none'") && portalRootSource.includes('<PortalInvitation') && portalRootSource.includes('onMembershipChanged={() => inspectWorkspace(session)}'), 'An authenticated invitee with no Business must review the invitation instead of being forced to provision a new Business');
+expect(portalRootSource.includes('invitationId={pendingInvitationId}'), 'Unauthenticated focused invitation intent must reach the governed MerchantAuth component');
+expect(merchantAuthSource.includes("'join-invitation'") && merchantAuthSource.includes('merchantPortalUrl(undefined, invitationId)') && merchantAuthSource.includes('Business access starts only after authenticated acceptance.'), 'Invitation account signup must preserve the locator and keep membership acceptance explicit');
+const joinStart = merchantAuthSource.indexOf('async function joinInvitation(');
+const joinEnd = merchantAuthSource.indexOf('async function requestPasswordReset(', joinStart);
+expect(joinStart >= 0 && joinEnd > joinStart && !merchantAuthSource.slice(joinStart, joinEnd).includes('provision-business'), 'Invitation account creation must never provision a new Business');
+expect(merchantAppSource.includes("import IncomingBusinessInvitations, { pendingInvitationIdFromBrowser } from './IncomingBusinessInvitations'") && merchantAppSource.includes('<IncomingBusinessInvitations onMembershipChanged={loadBusinesses} />'), 'Existing Owner/Manager or Cashier identities must be able to accept another Business invitation without replacing current memberships');
+expect(!merchantAppSource.includes('function Login()'), 'Invitation convergence must preserve the single shared MerchantAuth authority');
+
 expect(!inviteHtml.includes('<script>'), 'browser fallback must not require inline script under Merchant Web CSP');
 expect(!inviteHtml.includes('<style>'), 'browser fallback must not require inline style under Merchant Web CSP');
 expect(inviteCss.length > 0, 'browser fallback must ship self-hosted styles');
