@@ -58,7 +58,7 @@ test('every old-user authority path fails with even one leftover grant',()=>{
  }
 });
 test('positive controls prevent vacuous empty-database passing',()=>{
- for(const [key,value] of [['applied_migrations',456],['new_auth_users',0],
+ for(const [key,value] of [['applied_migrations',457],['new_auth_users',0],
   ['new_business_members',0],['businesses_present',0],['new_auth_users','2']]){
   const f=fixture();f.post.canonical[key]=value;
   assert.equal(assess(f).sql_authority_link_quarantine_evidence_consistent,false,key);
