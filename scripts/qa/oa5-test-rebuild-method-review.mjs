@@ -78,7 +78,7 @@ export function assessRebuildMethodCandidate(record,{sourceSha,sourceInventory}=
      record.migration_count!==MIGRATIONS||!sourceInventory?.structural_source_check_passed||
      sourceInventory.source_migrations_scanned!==MIGRATIONS||
      record.migration_inventory_sha256!==sourceInventory.source_inventory_sha256)
-  reasons.push('Exact Git SHA and all 457 ordered canonical source migration hashes must match');
+  reasons.push('Exact Git SHA and all 461 ordered canonical source migration hashes must match');
  if(!exact(record.boundaries,Object.keys(BOUNDARIES)))
   reasons.push('Every user-created and managed-service scope must be explicitly classified');
  else for(const [k,value] of Object.entries(BOUNDARIES))
