@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   addOrderItem,
@@ -20,30 +20,67 @@ import type { MerchantOrder, OrderStatus } from '../domain/order';
 
 export function useOrders(tenantId: string | null) {
   const [orders, setOrders] = useState<MerchantOrder[]>([]);
+  const [ordersScope, setOrdersScope] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Realtime can emit multiple events for a single sale (order, payment, stock).
+  // A tenant gets one active read at a time, plus at most one queued recheck.
+  // Do not show a full-screen loading state when refreshing already loaded orders.
+  const currentTenantRef = useRef(tenantId);
+  currentTenantRef.current = tenantId;
+  const loadedTenantRef = useRef<string | null>(null);
+  const inFlightRef = useRef<{ tenantId: string; pending: boolean; task: Promise<void> } | null>(null);
 
   const refresh = useCallback(async () => {
     if (!tenantId) {
       setOrders([]);
+      setOrdersScope(null);
       setLoading(false);
       setError(null);
       return;
     }
 
-    setLoading(true);
-    try {
-      const next = await loadOrders(tenantId);
-      setOrders(next);
-      setError(null);
-    } catch (err) {
-      setError(isLikelyConnectivityError(err) ? null : errorMessage(err, 'Unable to load orders.'));
-    } finally {
-      setLoading(false);
+    const active = inFlightRef.current;
+    if (active?.tenantId === tenantId) {
+      active.pending = true;
+      return active.task;
     }
+
+    const operation = { tenantId, pending: false, task: Promise.resolve() };
+    if (loadedTenantRef.current !== tenantId) setLoading(true);
+    operation.task = (async () => {
+      try {
+        do {
+          operation.pending = false;
+          try {
+            const next = await loadOrders(tenantId);
+            if (currentTenantRef.current !== tenantId) break;
+            setOrders(next);
+            setOrdersScope(tenantId);
+            loadedTenantRef.current = tenantId;
+            setError(null);
+          } catch (err) {
+            if (currentTenantRef.current !== tenantId) break;
+            setError(isLikelyConnectivityError(err) ? null : errorMessage(err, 'Unable to load orders.'));
+          }
+        } while (operation.pending && currentTenantRef.current === tenantId);
+      } finally {
+        if (inFlightRef.current === operation) inFlightRef.current = null;
+        if (currentTenantRef.current === tenantId) setLoading(false);
+      }
+    })();
+    inFlightRef.current = operation;
+    return operation.task;
   }, [tenantId]);
 
   useEffect(() => {
+    // Prevent showing another merchant's records during an account switch.
+    loadedTenantRef.current = null;
+    setOrders([]);
+    setOrdersScope(null);
+    setError(null);
+    setLoading(Boolean(tenantId));
     void refresh();
     if (!tenantId) return undefined;
 
@@ -172,7 +209,8 @@ export function useOrders(tenantId: string | null) {
   );
 
   return {
-    orders,
+    // Reject even a single render of stale records during an account/Business switch.
+    orders: ordersScope === tenantId ? orders : [],
     loading,
     error,
     refresh,
