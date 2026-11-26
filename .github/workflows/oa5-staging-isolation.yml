@@ -58,6 +58,9 @@ on:
       - 'scripts/qa/oa5-historical-preview-custody.mjs'
       - 'scripts/qa/oa5-test-edge-inventory.mjs'
       - 'scripts/qa/oa5-test-edge-inventory.test.mjs'
+      - 'scripts/qa/oa5-test-edge-restore-parity.mjs'
+      - 'scripts/qa/oa5-test-edge-restore-parity.test.mjs'
+      - 'docs/qa/oa5-test-edge-restore-integrity-2026-11-26.md'
       - 'scripts/qa/oa5-test-edge-bundle-drift.mjs'
       - 'scripts/qa/oa5-test-edge-bundle-drift.test.mjs'
       - 'docs/qa/oa5-test-edge-bundle-custody-2026-11-09.json'
@@ -140,6 +143,7 @@ jobs:
           node --test scripts/qa/oa5-partial-preview-diagnose.test.mjs
           node --test scripts/qa/oa5-test-edge-inventory.test.mjs
           node --test scripts/qa/oa5-test-edge-bundle-drift.test.mjs
+          node --test scripts/qa/oa5-test-edge-restore-parity.test.mjs
           node scripts/qa/oa5-test-edge-bundle-drift.mjs --baseline docs/qa/oa5-test-edge-bundle-custody-2026-11-09.json --offline
           node scripts/qa/oa5-test-edge-inventory.mjs --baseline docs/qa/oa5-test-edge-function-custody-2026-11-09.json
           node --test scripts/qa/oa5-vercel-anonymous-access.test.mjs
