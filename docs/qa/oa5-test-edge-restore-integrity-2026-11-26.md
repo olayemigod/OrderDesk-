@@ -57,3 +57,16 @@ Read-only verification is at a measured instant; evidence is stale after ten min
 - Separately scoped owner approval before any destructive Test user-created-object reconstruction.
 
 **Conclusion:** five Edge function bundle digests **PASS**, strict old version metadata remains a **documented uniform +1 discrepancy**, and overall Method B hosted reconstruction remains **NO-GO**. Production and Tandar are untouched.
+
+## 26 Nov 19:46 UTC — refreshed read-only Test SQL worker containment evidence
+
+The already restored Test database was queried **read-only** using the archived SELECT in `docs/qa/oa5-test-worker-egress-callgraph-2026-11-09.md`. The snapshot at **2026-11-26T19:46:15Z** confirmed:
+
+- **Zero** `sellertray_private.runtime_config` rows and **zero** configured `notification_worker_url` / `merchant_push_worker_url` rows;
+- **Zero** `usage_events` / Agreement retry-processing rows, **zero** queued `pg_net` HTTP requests and **zero** retained `net._http_response` rows;
+- The two private worker SQL function source SHA-256 digests **match** the frozen worker callgraph, remain single-overload `SECURITY DEFINER`, and contain no literal URL or Production Supabase project reference;
+- SQL outbound surface unchanged: **479** public functions, **8** private functions, **0** direct public HTTP dispatch implementations and **2** reviewed private worker HTTP dispatch implementations.
+
+The read-only census confirms **this bounded SQL worker configuration is quiescent**; it is not proof of Meta/PSP/SMTP/FCM/AI console ownership, already-dispatched provider deliveries, Auth sessions or other ingress paths. The four-Test-cron pause was independently reconfirmed after restore at **2026-11-26T19:40:15Z** (all 4 inactive, 0 unfinished runs, 0 pending HTTP). Those point-in-time counts are not perpetual evidence and must be refreshed within a new change window.
+
+**Exact-head code verification:** OA5 `non-production-boundary` CI **PASS** on Git SHA `8c24103df5383ab7498977d7101261e1deb332e9`, GitHub run `45886048100`. The six new negative-path/binary-parity tests report PASS, and source migration scan confirms **461** ordered migrations. Supabase Preview intentionally SKIPPED. No release APK or hosted reconstruction executed.
