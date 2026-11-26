@@ -88,6 +88,7 @@ on:
       - 'scripts/qa/oa5-vercel-project-protection.mjs'
       - 'scripts/qa/oa5-vercel-project-protection.test.mjs'
       - 'docs/qa/oa5-existing-vercel-project-protection-2026-11-09.json'
+      - 'docs/qa/oa5-historical-preview-recovery-2026-11-26.md'
       - 'docs/qa/oa5-historical-vercel-preview-custody-2026-11-09.json'
       - 'docs/qa/oa5-test-merchant-fixtures.json'
       - 'scripts/qa/oa5-android-qa-variant.test.mjs'
