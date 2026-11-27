@@ -186,9 +186,75 @@ jobs:
           mkdir -p qa-artifact
           "$signer" verify --verbose --print-certs "$apk" > qa-artifact/apk-signature-verification.txt
           cat qa-artifact/apk-signature-verification.txt
-          actual="$(awk -F ': ' '/Signer #1 certificate SHA-256 digest:/{print tolower($2)}' qa-artifact/apk-signature-verification.txt)"
-          test "$actual" = "$SELLERTRAY_QA_SIGNING_CERT_SHA256"
-          test "$(grep -c '^Signer #[0-9]* certificate SHA-256 digest:' qa-artifact/apk-signature-verification.txt)" -eq 1
+          # Current apksigner emits "V2 Signer:" instead of "Signer #1".
+          # Require a single verified signer and an exact SHA-256 match in either supported format.
+          python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+          def verify(report, expected):
+              counts = re.findall(r'^Number of signers: ([0-9]+)\s*
+          "$aapt" dump badging "$apk" > qa-artifact/apk-manifest-verification.txt
+          grep -E "^package: name='ng\.processedge\.sellertray' versionCode='47' versionName='1\.0\.0'" qa-artifact/apk-manifest-verification.txt
+          node -e 'const a=require("./app.json").expo; if(a.android.versionCode!==47||a.android.package!=="ng.processedge.sellertray")process.exit(1)'
+          echo "Actual APK signature, package and version PASS"
+
+      - name: Stage QA APK
+        run: |
+          mkdir -p qa-artifact
+          cp android/app/build/outputs/apk/release/app-release.apk qa-artifact/sellertray-qa.apk
+          sha256sum qa-artifact/sellertray-qa.apk > qa-artifact/sellertray-qa.apk.sha256
+          printf '%s\n' "${{ steps.source.outputs.sha }}" > qa-artifact/source-commit.txt
+          node -p "require('./app.json').expo.android.versionCode" > qa-artifact/version-code.txt
+          printf '%s\n' "ng.processedge.sellertray" > qa-artifact/package-name.txt
+          printf '%s\n' "$SELLERTRAY_QA_SIGNING_CERT_SHA256" > qa-artifact/signing-cert-sha256.txt
+
+      - name: Upload QA APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: sellertray-build47-accepted-${{ steps.source.outputs.sha }}
+          path: apps/mobile/qa-artifact/
+          if-no-files-found: error
+          retention-days: 14
+, report, re.M)
+              certs = re.findall(r'^(?:Signer #[0-9]+|V[0-9]+(?:\.[0-9]+)? Signer):? certificate SHA-256 digest: ([a-fA-F0-9]{64})\s*
+          "$aapt" dump badging "$apk" > qa-artifact/apk-manifest-verification.txt
+          grep -E "^package: name='ng\.processedge\.sellertray' versionCode='47' versionName='1\.0\.0'" qa-artifact/apk-manifest-verification.txt
+          node -e 'const a=require("./app.json").expo; if(a.android.versionCode!==47||a.android.package!=="ng.processedge.sellertray")process.exit(1)'
+          echo "Actual APK signature, package and version PASS"
+
+      - name: Stage QA APK
+        run: |
+          mkdir -p qa-artifact
+          cp android/app/build/outputs/apk/release/app-release.apk qa-artifact/sellertray-qa.apk
+          sha256sum qa-artifact/sellertray-qa.apk > qa-artifact/sellertray-qa.apk.sha256
+          printf '%s\n' "${{ steps.source.outputs.sha }}" > qa-artifact/source-commit.txt
+          node -p "require('./app.json').expo.android.versionCode" > qa-artifact/version-code.txt
+          printf '%s\n' "ng.processedge.sellertray" > qa-artifact/package-name.txt
+          printf '%s\n' "$SELLERTRAY_QA_SIGNING_CERT_SHA256" > qa-artifact/signing-cert-sha256.txt
+
+      - name: Upload QA APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: sellertray-build47-accepted-${{ steps.source.outputs.sha }}
+          path: apps/mobile/qa-artifact/
+          if-no-files-found: error
+          retention-days: 14
+, report, re.M)
+              if counts != ['1'] or not certs or any(cert.lower() != expected for cert in certs):
+                  raise ValueError('APK signing lineage verification failed')
+          expected = os.environ['SELLERTRAY_QA_SIGNING_CERT_SHA256']
+          for label in ('Signer #1', 'V2 Signer:'):
+              good = f'Number of signers: 1\n{label} certificate SHA-256 digest: {expected}\n'
+              verify(good, expected)
+              for bad in (good.replace('signers: 1','signers: 2'), good.replace(expected, '0'*64), 'Number of signers: 1\n', good + 'V3 Signer: certificate SHA-256 digest: ' + '0'*64 + '\n'):
+                  try:
+                      verify(bad, expected)
+                  except ValueError:
+                      continue
+                  raise AssertionError('Signing parser accepted invalid evidence')
+          verify(Path('qa-artifact/apk-signature-verification.txt').read_text(), expected)
+          print('APK signer count and certificate SHA-256 PASS')
+          PY
           "$aapt" dump badging "$apk" > qa-artifact/apk-manifest-verification.txt
           grep -E "^package: name='ng\.processedge\.sellertray' versionCode='47' versionName='1\.0\.0'" qa-artifact/apk-manifest-verification.txt
           node -e 'const a=require("./app.json").expo; if(a.android.versionCode!==47||a.android.package!=="ng.processedge.sellertray")process.exit(1)'
