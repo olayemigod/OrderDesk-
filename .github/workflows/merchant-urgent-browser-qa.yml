@@ -1,0 +1,38 @@
+name: Merchant Urgent Release Browser QA
+on:
+  pull_request:
+    branches:
+      - fix/oa5-billing-first-purchase-runtime-authority-20261031
+    paths:
+      - 'apps/merchant-web/**'
+      - '.github/workflows/merchant-urgent-browser-qa.yml'
+permissions:
+  contents: read
+jobs:
+  browser:
+    if: github.event.pull_request.head.ref == 'fix/production-web-invitation-orders-only-20261127'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    defaults:
+      run:
+        working-directory: apps/merchant-web
+    env:
+      VITE_SUPABASE_URL: https://sellertray-smoke.invalid
+      VITE_SUPABASE_PUBLISHABLE_KEY: synthetic-browser-test-only
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Verify exact candidate
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - run: npm --prefix . install --no-audit --no-fund
+      - run: npm run build
+      - name: Install isolated browser tooling
+        run: |
+          npm install --prefix "$RUNNER_TEMP/sellertray-browser" --no-save --no-package-lock --no-audit --no-fund playwright@1.58.2
+          "$RUNNER_TEMP/sellertray-browser/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Verify real UI with intercepted synthetic API
+        run: SELLERTRAY_BROWSER_TOOLS="$RUNNER_TEMP/sellertray-browser" node scripts/urgent-release-browser-smoke.mjs
