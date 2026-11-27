@@ -66,8 +66,15 @@ jobs:
           deno-version: v2.x
       - name: Typecheck offline payment Edge Functions
         run: |
-          deno check --node-modules-dir=auto supabase/functions/merchant-order/index.ts
-          deno check --node-modules-dir=auto supabase/functions/pos-checkout/index.ts
+          # Deno auto-discovers the root npm workspaces, including unrelated Mobile Expo packages.
+          # Check the exact Edge source in a standalone directory instead of resolving client dependencies.
+          edge_root="$(mktemp -d "${RUNNER_TEMP}/sellertray-edge-check.XXXXXX")"
+          trap 'rm -rf "$edge_root"' EXIT
+          cp -a supabase/functions "$edge_root/functions"
+          diff -qr supabase/functions "$edge_root/functions"
+          cd "$edge_root"
+          deno check --node-modules-dir=auto functions/merchant-order/index.ts
+          deno check --node-modules-dir=auto functions/pos-checkout/index.ts
 
   mobile-offline-contract:
     runs-on: ubuntu-latest
