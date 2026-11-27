@@ -34,3 +34,5 @@
   .settings-actions { justify-content: stretch; flex-direction: column; }
   .settings-actions button { width: 100%; }
 }
+
+.business-logo-preview { display: block; width: 96px; height: 96px; object-fit: contain; border-radius: 12px; }

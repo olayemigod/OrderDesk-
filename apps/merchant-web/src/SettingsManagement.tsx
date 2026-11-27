@@ -71,6 +71,7 @@ export default function SettingsManagement({ tenantId }: { tenantId: string }) {
   const [businessLogoFile, setBusinessLogoFile] = useState<File | null>(null);
   const [removeBusinessLogo, setRemoveBusinessLogo] = useState(false);
   const [logoInputKey, setLogoInputKey] = useState(0);
+  const [failedLogoUrl, setFailedLogoUrl] = useState<string | null>(null);
   const [policy, setPolicy] = useState<OperationalPolicy>(DEFAULT_POLICY);
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
   const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
@@ -191,7 +192,8 @@ export default function SettingsManagement({ tenantId }: { tenantId: string }) {
       });
       if (rpcError) throw rpcError;
 
-      const savedProfile = parseBusinessProfile(data);
+      const savedProfile = parseBusinessProfile(Array.isArray(data) ? data[0] : data);
+      setFailedLogoUrl(null);
       const previousLogoPath = managedBusinessLogoPath(previousLogoUrl, tenantId);
       setProfile(savedProfile);
       setBusinessLogoFile(null);
@@ -322,7 +324,7 @@ export default function SettingsManagement({ tenantId }: { tenantId: string }) {
         </div>
         <div className="settings-field">
           <span>Business logo</span>
-          {profile.logoUrl && !businessLogoFile && !removeBusinessLogo ? <img src={profile.logoUrl} alt="Current business logo" style={{ width: 96, height: 96, objectFit: 'contain', borderRadius: 12 }} /> : null}
+          {profile.logoUrl && !businessLogoFile && !removeBusinessLogo ? failedLogoUrl === profile.logoUrl ? <small className="muted" role="status">Business logo could not be displayed. You can replace it with another image.</small> : <img key={profile.logoUrl} className="business-logo-preview" src={profile.logoUrl} alt="Current business logo" onError={() => setFailedLogoUrl(profile.logoUrl)} /> : null}
           <SellerTrayInput key={logoInputKey} type="file" accept="image/png,image/jpeg,image/webp" disabled={busy !== null} onChange={(event) => selectBusinessLogo(event.target.files?.[0] ?? null)} />
           {businessLogoFile ? <small className="muted">Selected: {businessLogoFile.name}</small> : <small className="muted">PNG, JPG or WebP. Maximum 5 MB.</small>}
           {removeBusinessLogo ? <small className="muted">The current logo will be removed when you save the business profile.</small> : null}

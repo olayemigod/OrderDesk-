@@ -6,7 +6,6 @@ import FeedbackDashboard from './FeedbackDashboard';
 import ProductsManagement from './ProductsManagement';
 import { SellerTraySelect } from './SellerTrayElements';
 import SettingsManagement from './SettingsManagement';
-import SetupSchedulingManagement from './SetupSchedulingManagement';
 import SuppliersManagement from './SuppliersManagement';
 import TeamPermissionsManagement from './TeamPermissionsManagement';
 import { errorMessage, supabase } from './supabase';
@@ -33,10 +32,7 @@ export default function ManagementPage({
   if (page === 'team') return <TeamPermissionsManagement tenantId={tenantId} />;
   if (page === 'devices') return <DeviceManagement tenantId={tenantId} />;
   if (page === 'feedback') return <FeedbackDashboard tenantId={tenantId} />;
-  return <div className="page-stack">
-    <SetupSchedulingManagement tenantId={tenantId} />
-    <SettingsManagement tenantId={tenantId} />
-  </div>;
+  return <SettingsManagement key={tenantId} tenantId={tenantId} />;
 }
 
 function DeviceManagement({ tenantId }: { tenantId: string }) {
