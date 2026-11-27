@@ -38,9 +38,9 @@ export function quietSql(prefix){
  ].join('\n');
 }
 export function batchActions(batch){
- if(batch.mode==='native')return [{kind:'native-up',args:['migration','up','--db-url',TEST_URL]}];
+ if(batch.mode==='native')return [{kind:'native-up',args:['migration','up','--db-url',TEST_URL,'--yes']}];
  if(batch.mode!=='guarded'||batch.end!==batch.before+1||!/^\d{14}_/.test(batch.file))throw Error('Invalid guarded batch');
- return [{kind:'guarded-sql'},{kind:'quiet-after-sql-before-record'},{kind:'record-executed-version',args:['migration','repair',batch.file.slice(0,14),'--status','applied','--db-url',TEST_URL]}];
+ return [{kind:'guarded-sql'},{kind:'quiet-after-sql-before-record'},{kind:'record-executed-version',args:['migration','repair',batch.file.slice(0,14),'--status','applied','--db-url',TEST_URL,'--yes']}];
 }
 function main(){
  if(process.argv.length!==6||process.argv[2]!=='--execute-approved-test-replay'||process.argv[5]!==TEST_REF)throw Error('No explicit Test execution invocation');
@@ -61,7 +61,7 @@ function main(){
  function run(bin,args,cwd,input,logname){
   const fd=openSync(join(logs,logname),'wx',0o600);
   try{
-   const r=spawnSync(bin,args,{cwd,env,input,encoding:'utf8',stdio:[input===undefined?'inherit':'pipe','pipe',fd],maxBuffer:32*1024*1024});
+   const r=spawnSync(bin,args,{cwd,env,input,encoding:'utf8',stdio:[input===undefined?'ignore':'pipe','pipe',fd],maxBuffer:32*1024*1024,timeout:30*60*1000});
    writeFileSync(join(logs,logname+'.stdout'),r.stdout||'',{mode:0o600,flag:'wx'});
    if(r.status!==0||r.error||r.signal)throw Error('Command failed or uncertain');
    return (r.stdout||'').trim();
