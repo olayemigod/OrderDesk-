@@ -67,7 +67,8 @@ export function renderReviewedSchedulerFile(spec,bytes){
   if(begins.length!==1||commits.length!==1||!/^commit;\s*$/i.test(sql.slice(commits[0].index)))
    throw Error('Unexpected reviewed transaction boundaries');
   const offset=begins[0].index+begins[0][0].length;
-  return sql.slice(0,offset)+'\n'+pre+sql.slice(offset,commits[0].index)+post+sql.slice(commits[0].index);
+  if(sql[offset]!=='\n')throw Error('Unexpected BEGIN line ending');
+  return sql.slice(0,offset+1)+pre+sql.slice(offset+1,commits[0].index)+post+sql.slice(commits[0].index);
  }
  return 'BEGIN;\n'+pre+sql+'\n'+post+'COMMIT;\n';
 }
