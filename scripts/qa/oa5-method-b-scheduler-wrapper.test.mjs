@@ -16,7 +16,7 @@ test('exact four canonical files render with guards before original commit',()=>
   assert.equal((sql.match(/^DO \$oa5_guard\$$/gm)||[]).length,2);
   assert.equal((sql.match(/^END \$oa5_guard\$;$/gm)||[]).length,2);
   const restored=sql.replace(/DO \$oa5_guard\$\n[\s\S]*?END \$oa5_guard\$;\n/g,'');
-  if(spec.explicit) assert.equal(restored.replace(/\r?\n/g,'\n').trim().replace(/^begin;\n\n/gmi,'begin;\n'),original.replace(/\r?\n/g,'\n').trim().replace(/^begin;\n\n/gmi,'begin;\n'));
+  if(spec.explicit) assert.equal(restored,original);
   else assert.equal(restored.slice('BEGIN;\n'.length,-'\nCOMMIT;\n'.length),original);
   assert.ok(sql.lastIndexOf('PERFORM cron.alter_job(v_id,active=>false);')<sql.toLowerCase().lastIndexOf('commit;'));
   assert.ok(sql.indexOf('OA5 active cron job')<sql.indexOf('OA5 lifecycle job drift')||spec.pause!=='sellertray-lifecycle-notifications');
