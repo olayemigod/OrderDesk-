@@ -11,6 +11,8 @@ on:
       - 'scripts/qa/oa5-staging-isolation.test.mjs'
       - 'scripts/qa/oa5-migration-boundary.mjs'
       - 'scripts/qa/oa5-migration-boundary.test.mjs'
+      - 'scripts/qa/oa5-method-b-scheduler-wrapper.mjs'
+      - 'scripts/qa/oa5-method-b-scheduler-wrapper.test.mjs'
       - 'scripts/qa/oa5-method-b-scheduler-review.mjs'
       - 'scripts/qa/oa5-method-b-scheduler-review.test.mjs'
       - 'scripts/qa/oa5-test-rebuild-method-review.mjs'
@@ -128,6 +130,8 @@ jobs:
           node --test scripts/qa/oa5-test-worker-egress.test.mjs
           node --test scripts/qa/oa5-test-rebuild-method-review.test.mjs scripts/qa/oa5-method-b-scheduler-review.test.mjs
           node scripts/qa/oa5-method-b-scheduler-review.mjs supabase/migrations
+          node --test scripts/qa/oa5-method-b-scheduler-wrapper.test.mjs
+          node scripts/qa/oa5-method-b-scheduler-wrapper.mjs supabase/migrations
           node --test scripts/qa/oa5-test-post-canonical-auth-quarantine.test.mjs
           node --test scripts/qa/oa5-test-historical-auth-lineage.test.mjs
           node --test scripts/qa/oa5-method-b-retained-auth-session-census.test.mjs
