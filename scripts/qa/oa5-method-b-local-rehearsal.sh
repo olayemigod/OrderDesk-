@@ -59,8 +59,8 @@ fi
 # preloaded but the installed version does not expose this control.
 cron_setting=$(db -Atc "select coalesce(current_setting('cron.launch_active_jobs',true),'unavailable')")
 # The Supabase postgres role is not necessarily permitted to ALTER SYSTEM.
-# Use the local container's administrative role only for scheduler control,
-# never for migration replay. No password, remote connection or role grant.
+# Use the local container's administrative role for scheduler control and the verified local ACL repair,
+# never for migration replay. No password, remote connection or role membership grant.
 db_admin(){
  [[ "$(docker inspect -f '{{.HostConfig.NetworkMode}}' "$C")" == none ]]
  docker exec -i -u postgres "$C" psql -X -h /run/postgresql -U supabase_admin -d postgres -v ON_ERROR_STOP=1 "$@"
@@ -95,7 +95,7 @@ if [[ "$MODE" == --resume-first-fk-failure ]]; then
  # Reject all unexpected application objects and never CASCADE on resumption.
  db <<'SQL'
 BEGIN;
-DO $
+DO $$
 BEGIN
  IF (SELECT count(*) FROM auth.users) <> 5
  OR (SELECT count(*) FROM auth.sessions) <> 5
@@ -108,7 +108,7 @@ BEGIN
             AND c.relkind IN ('r','p','v','m','S','f')
             AND NOT (n.nspname='public' AND c.relname='tenants' AND c.relkind='r'))
  THEN RAISE EXCEPTION 'Unexpected partial baseline; refusing resumption'; END IF;
-END $;
+END $$;
 DROP TABLE public.tenants RESTRICT;
 COMMIT;
 SQL
