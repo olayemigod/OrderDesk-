@@ -17,6 +17,15 @@ BEGIN
      FROM supabase_migrations.schema_migrations m)
      IS DISTINCT FROM '6c47ed928eaebf1ceb63a19611840c1ce65d5d542df0d13b7dcd2517ad14e031'
  OR (SELECT count(*) FROM cron.job)<>4
+ OR EXISTS(SELECT 1 FROM (VALUES
+   (1::bigint,'sellertray-prepare-usage-settlements','15 1 * * *','19adca9347f95ae6df6caaf31f45b2c7a2a102375aaa44227456ddea992ebaac'),
+   (2::bigint,'sellertray-whatsapp-notification-retry','* * * * *','5271a0ecf65418ef0943a49e187a79c7c66733f2418e5c4c067342f5073fc3be'),
+   (3::bigint,'sellertray-merchant-push-retry','* * * * *','9415cef3fdd4acc626406791c201d275fb49fe3ac89d0f4dbee3218fb49aeb37'),
+   (4::bigint,'sellertray-agreement-package-retry','* * * * *','280ed1badf510aceee14117efad11d008fa0b4eaf589d9721650970077c5bc36')
+ ) AS expected(id,name,schedule,digest)
+ WHERE NOT EXISTS(SELECT 1 FROM cron.job j WHERE j.jobid=expected.id
+  AND j.jobname=expected.name AND j.schedule=expected.schedule AND j.username='postgres'
+  AND encode(sha256(convert_to(j.command,'UTF8')),'hex')=expected.digest))
  OR EXISTS(SELECT 1 FROM cron.job WHERE active)
  OR EXISTS(SELECT 1 FROM cron.job_run_details WHERE end_time IS NULL)
  OR EXISTS(SELECT 1 FROM net.http_request_queue)
