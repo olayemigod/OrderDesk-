@@ -2,7 +2,7 @@
 # Local-only Method B replay. The original encrypted archive remains the recovery source.
 # This intentionally changes ONLY the existing disposable, network-none restore.
 # It does not modify the historical migration ledger or certify hosted readiness.
-set -euo pipefail
+set -Eeuo pipefail
 umask 077
 [[ "${1:-}" == "--execute-disposable-local" && $# == 1 ]] || { echo "Local rehearsal requires --execute-disposable-local"; exit 2; }
 C=sellertray-oa5-restore-20261107
@@ -38,15 +38,30 @@ db -Atc "select extname,extversion from pg_extension order by extname" | LC_ALL=
 # Disable local cron launcher before replay. Fail closed if the extension is
 # preloaded but the installed version does not expose this control.
 cron_setting=$(db -Atc "select coalesce(current_setting('cron.launch_active_jobs',true),'unavailable')")
+# The Supabase postgres role is not necessarily permitted to ALTER SYSTEM.
+# Use the local container's administrative role only for scheduler control,
+# never for migration replay. No password, remote connection or role grant.
+db_admin(){
+ [[ "$(docker inspect -f '{{.HostConfig.NetworkMode}}' "$C")" == none ]]
+ docker exec -i -u postgres "$C" psql -X -h /run/postgresql -U supabase_admin -d postgres -v ON_ERROR_STOP=1 "$@"
+}
 if [[ "$cron_setting" != unavailable ]]; then
- db -c "alter system set cron.launch_active_jobs = off" > "$LOG/cron-disable.log"
- db -c "select pg_reload_conf()" >> "$LOG/cron-disable.log"
- sleep 2
+ if [[ "$cron_setting" != off ]]; then
+  [[ "$(db_admin -Atc "select rolsuper and inet_server_addr() is null from pg_roles where rolname=current_user")" == t ]]
+  db_admin -c "alter system set cron.launch_active_jobs = off" > "$LOG/cron-disable.log"
+  db_admin -c "select pg_reload_conf()" >> "$LOG/cron-disable.log"
+  for attempt in {1..10}; do
+   [[ "$(db -Atc "show cron.launch_active_jobs")" == off ]] && break
+   sleep 1
+  done
+ fi
  [[ "$(db -Atc "show cron.launch_active_jobs")" == off ]]
 else
  [[ "$(db -Atc "show shared_preload_libraries")" != *pg_cron* ]]
 fi
-db -c "select cron.alter_job(jobid,active=>false) from cron.job where active" > "$LOG/cron-pause.log"
+db_admin -c "select cron.alter_job(jobid,active=>false) from cron.job where active" > "$LOG/cron-pause.log"
+[[ "$(db_admin -Atc "select count(*) from cron.job where active")" == 0 ]]
+echo "Local scheduler disabled: PASS"
 # Repeat the proven local retirement inside a transaction, with a strict
 # allowlist for cross-schema cascades. No managed Auth rows or ledger writes.
 db > "$LOG/retirement.log" 2>&1 <<'SQL'
@@ -127,7 +142,8 @@ for f in supabase/migrations/*.sql; do
  if (( i % 50 == 0 )); then echo "Replayed $i/461"; fi
 done
 [[ "$i" == 461 ]]
-db -c "select cron.alter_job(jobid,active=>false) from cron.job where active" > "$LOG/cron-post.log"
+db_admin -c "select cron.alter_job(jobid,active=>false) from cron.job where active" > "$LOG/cron-post.log"
+[[ "$(db_admin -Atc "select count(*) from cron.job where active")" == 0 ]]
 auth_snapshot > "$LOG/auth-after-replay.private"
 cmp "$LOG/auth-before.private" "$LOG/auth-after-replay.private"
 db -Atc "select id from storage.buckets order by id" | LC_ALL=C sort > "$LOG/buckets-after.private"
