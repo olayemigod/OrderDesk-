@@ -90,7 +90,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow SellerTray to select product images from your photo library.",
+          "photosPermission": "Allow SellerTray to select product images and your business logo from your photo library.",
           "cameraPermission": "Allow SellerTray to scan product barcodes during selling and product setup.",
           "microphonePermission": false
         }
