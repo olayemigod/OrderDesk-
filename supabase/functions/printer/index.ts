@@ -4,7 +4,8 @@ import { customerContactPhone, customerPublicName } from '../_shared/customerCon
 type JsonRecord = Record<string, unknown>;
 type PrinterAction = 'save_printer' | 'request_print' | 'request_business_document_print' | 'update_print';
 type BusinessDocumentType = 'sales_invoice' | 'payment_receipt';
-type SupabaseClient = ReturnType<typeof createClient>;
+// Derive the helper client from the actual configured instance, not the unspecialised generic factory.
+type SupabaseClient = NonNullable<typeof admin>;
 type PrintJobRow = {
   id: string;
   printer_id: string;
