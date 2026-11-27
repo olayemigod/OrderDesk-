@@ -40,6 +40,20 @@ pg_dump --dbname="$URL" --no-password --format=custom \
 [[ -s "$WORK/$FILE" ]] || { echo 'BLOCKED: archive empty'; exit 1; }
 # Read entire archive and generate SQL into /dev/null, not a database.
 gpg --decrypt "$WORK/$FILE" 2>"$WORK/gpg-verify.log" | pg_restore --file=/dev/null
+# Count COPY records in the actual archive, not only the live source or TOC.
+# Never print the COPY content (which contains private Auth/merchant data).
+gpg --decrypt "$WORK/$FILE" 2>>"$WORK/gpg-verify.log" | pg_restore --data-only --file=- | awk '
+BEGIN { expected["auth.users"]=5; expected["auth.sessions"]=7; expected["auth.refresh_tokens"]=22; expected["public.tenants"]=3; expected["supabase_migrations.schema_migrations"]=54 }
+active!="" {
+ if ($0=="\\.") { active=""; next }
+ counts[active]++; next
+}
+$1=="COPY" && ($2 in expected) && / FROM stdin;$/ { active=$2; seen[active]++ }
+END {
+ if (active!="") exit 1
+ for (t in expected) if (seen[t]!=1 || counts[t]!=expected[t]) exit 1
+ print "ARCHIVE_ROW_COUNTS=PASS"
+}'
 gpg --decrypt "$WORK/$FILE" 2>>"$WORK/gpg-verify.log" | { pg_restore --list >"$WORK/toc.txt"; cat >/dev/null; }
 [[ "$(grep -Ec ' TABLE DATA (public|sellertray_private) ' "$WORK/toc.txt")" == 140 ]] || { echo 'BLOCKED: app table data entries differ'; exit 1; }
 for item in 'auth users' 'auth sessions' 'auth refresh_tokens' 'supabase_migrations schema_migrations' 'storage buckets' 'storage objects'; do
