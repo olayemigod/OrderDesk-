@@ -365,7 +365,8 @@ async function upload(path: string, pdf: Uint8Array): Promise<void> {
       'cache-control': '3600',
       'x-upsert': 'true',
     },
-    body: pdf,
+    // Copy the exact PDF byte range into an ArrayBuffer-backed request body.
+    body: new Uint8Array(pdf).buffer,
   });
   if (!r.ok) throw new Error('Financial document upload failed with HTTP ' + r.status);
 }
