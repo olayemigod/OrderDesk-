@@ -7,8 +7,8 @@ umask 077
 MODE="${1:-}"
 case "$MODE" in
  --execute-disposable-local) [[ $# == 1 ]] ;;
- --resume-first-fk-failure) [[ $# == 2 ]] ;;
- *) echo "Expected --execute-disposable-local or --resume-first-fk-failure <private prior log directory>"; exit 2 ;;
+ --resume-first-fk-failure|--resume-storage-bucket-failure) [[ $# == 2 ]] ;;
+ *) echo "Expected --execute-disposable-local or a specific --resume-* mode with prior private log directory"; exit 2 ;;
 esac
 C=sellertray-oa5-restore-20261107
 cd "$(git rev-parse --show-toplevel)"
@@ -22,13 +22,30 @@ if(!r.structural_source_check_passed||r.source_migrations_scanned!==461||
  r.source_inventory_sha256!=='d91f7762448aa0b1d4fc44093700e6bc48e20a6177c09bb8735ea01c98efa42c') throw Error('Unexpected migration corpus');
 console.log('Canonical source: 461 files, fingerprint PASS');
 JS
-if [[ "$MODE" == --resume-first-fk-failure ]]; then
+if [[ "$MODE" != --execute-disposable-local ]]; then
  LOG=$(realpath -- "$2")
  [[ "$LOG" == "$HOME"/oa5-method-b-local.* && -d "$LOG" ]]
  [[ -f "$LOG/auth-before.private" && -f "$LOG/auth-after-retirement.private" ]]
  cmp "$LOG/auth-before.private" "$LOG/auth-after-retirement.private"
- [[ "$(cat "$LOG/replay-progress.log")" == "1 20260909080000_initial_core_schema_baseline.sql" ]]
- grep -Fxq 'psql:<stdin>:23: ERROR:  permission denied for table users' "$LOG/20260909080000_initial_core_schema_baseline.sql.log"
+ if [[ "$MODE" == --resume-first-fk-failure ]]; then
+  [[ "$(cat "$LOG/replay-progress.log")" == "1 20260909080000_initial_core_schema_baseline.sql" ]]
+  grep -Fxq 'psql:<stdin>:23: ERROR:  permission denied for table users' "$LOG/20260909080000_initial_core_schema_baseline.sql.log"
+ else
+  [[ "$(wc -l < "$LOG/replay-progress.log")" == 53 ]]
+  [[ "$(tail -n 1 "$LOG/replay-progress.log")" == "53 20260912054500_pdf_receipt_delivery.sql" ]]
+  [[ "$(cat "$LOG/20260912054500_pdf_receipt_delivery.sql.log")" == 'psql:<stdin>:11: ERROR:  permission denied for table buckets' ]]
+  # Validate all attempted filenames and successful preceding logs in exact order.
+  j=0
+  for file in supabase/migrations/*.sql; do
+   j=$((j+1))
+   [[ "$j" -le 53 ]] || break
+   [[ "$(sed -n "${j}p" "$LOG/replay-progress.log")" == "$j ${file##*/}" ]]
+   [[ -f "$LOG/${file##*/}.log" ]]
+   if (( j < 53 )); then
+    ! grep -Eq '(^|: )(ERROR|FATAL|PANIC):' "$LOG/${file##*/}.log" || exit 1
+   fi
+  done
+ fi
 else
  LOG=$(mktemp -d "$HOME/oa5-method-b-local.XXXXXX")
 fi
@@ -90,7 +107,25 @@ if [[ "$(db -Atc "select has_table_privilege(current_user,'auth.users','REFERENC
  db_admin -c "grant references on table auth.users to postgres" > "$LOG/local-auth-references.log"
 fi
 [[ "$(db -Atc "select has_column_privilege(current_user,'auth.users','id','REFERENCES')")" == t ]]
-if [[ "$MODE" == --resume-first-fk-failure ]]; then
+# Hosted Test grants postgres SELECT/INSERT/UPDATE on buckets, required by
+# canonical upserts, and SELECT/DELETE on objects, required by governed cleanup.
+# Reconcile only these confirmed table-level privileges on the local restore.
+db_admin -c "grant select, insert, update on table storage.buckets to postgres; grant select, delete on table storage.objects to postgres" > "$LOG/local-storage-acl.log"
+[[ "$(db -Atc "select has_table_privilege(current_user,'storage.buckets','SELECT') and has_table_privilege(current_user,'storage.buckets','INSERT') and has_table_privilege(current_user,'storage.buckets','UPDATE') and has_table_privilege(current_user,'storage.objects','SELECT') and has_table_privilege(current_user,'storage.objects','DELETE')")" == t ]]
+echo "Local Storage migration permissions reconciled: PASS"
+START=1
+if [[ "$MODE" == --resume-storage-bucket-failure ]]; then
+ # Migration 53 failed on its first statement; no receipt columns or
+ # receipt guard may exist yet. No prior successful SQL is repeated.
+ [[ "$(db -Atc "select (select count(*) from auth.users)||'|'||(select count(*) from auth.sessions)||'|'||(select count(*) from public.tenants)||'|'||(select count(*) from public.tenant_members)||'|'||(select count(*) from supabase_migrations.schema_migrations)")" == '5|5|0|0|54' ]]
+ [[ "$(db -Atc "select count(*) from pg_attribute where attrelid='public.orders'::regclass and attname in ('receipt_storage_path','receipt_generated_at','receipt_version') and not attisdropped")" == 0 ]]
+ [[ "$(db -Atc "select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='guard_sellertray_receipt_cache'")" == 0 ]]
+ cp "$LOG/replay-progress.log" "$LOG/second-attempt-progress.log"
+ head -n 52 "$LOG/second-attempt-progress.log" > "$LOG/replay-progress.log"
+ mv "$LOG/20260912054500_pdf_receipt_delivery.sql.log" "$LOG/second-attempt-migration-53.log"
+ START=53
+ echo "First 52 completed migrations retained; resuming at 53"
+elif [[ "$MODE" == --resume-first-fk-failure ]]; then
  # Only the empty tenants table from the first two statements can remain.
  # Reject all unexpected application objects and never CASCADE on resumption.
  db <<'SQL'
@@ -189,6 +224,7 @@ i=0
 for f in supabase/migrations/*.sql; do
  [[ "$(docker inspect -f '{{.HostConfig.NetworkMode}}' "$C")" == none ]]
  i=$((i+1))
+ (( i >= START )) || continue
  printf '%s %s\n' "$i" "${f##*/}" >> "$LOG/replay-progress.log"
  if ! db -f - < "$f" > "$LOG/${f##*/}.log" 2>&1; then
   echo "Migration failed: $i ${f##*/} (private log in $LOG)"
