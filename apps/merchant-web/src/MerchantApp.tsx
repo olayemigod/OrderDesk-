@@ -19,6 +19,7 @@ import SellerTrayBillingManagement from './SellerTrayBillingManagement';
 import SetupSchedulingManagement from './SetupSchedulingManagement';
 import WhatsAppManagement from './WhatsAppManagement';
 import type { MerchantHandoffTarget } from './merchantHandoff';
+import IncomingBusinessInvitations, { pendingInvitationIdFromBrowser } from './IncomingBusinessInvitations';
 import { SellerTrayBrand, SellerTrayMark, NavIcon, ShellIcon } from './merchantShell';
 import { SellerTrayInput, SellerTraySelect } from './SellerTrayElements';
 import { AVAILABLE_MERCHANT_PORTAL_NAVIGATION, MERCHANT_PORTAL_SECTIONS, type MerchantPortalPage, type MerchantPortalSection } from './portalNavigation';
@@ -144,8 +145,18 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
   if (booting) return <Status title="Opening SellerTray" body="Checking your merchant session." />;
   if (!session) return <Login />;
   if (loading && businesses.length === 0) return <Status title="Opening your business" body="Loading SellerTray management." />;
-  if (businesses.length > 0 && managementBusinesses.length === 0) return <Status title="Use SellerTray mobile for daily operations" body="Merchant Web management is available to business Owners and Managers. Staff access remains available in the SellerTray mobile app for permitted Branch operations." action={<button className="secondary-button" onClick={() => void signOut()}>Sign out</button>} />;
-  if (!business) return <Status title="No management workspace" body={error || 'No Owner or Manager business is available for this account.'} action={<button className="secondary-button" onClick={() => void signOut()}>Sign out</button>} />;
+  if (businesses.length > 0 && managementBusinesses.length === 0) return <InvitationAccess
+    title="Use SellerTray mobile for daily operations"
+    description="Merchant Web management is available to Business Owners and Managers. You can review another Business invitation without changing existing Cashier access."
+    onMembershipChanged={loadBusinesses}
+    onSignOut={() => void signOut()}
+  />;
+  if (!business) return <InvitationAccess
+    title="Review your Business invitation"
+    description={error || 'If you were invited to a Business, accept your invitation below. You do not need to create another Business.'}
+    onMembershipChanged={loadBusinesses}
+    onSignOut={() => void signOut()}
+  />;
 
   const managementRole = business.role as ManagementRole;
   const currentNav = NAV.find((item) => item.id === page);
@@ -175,6 +186,7 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
       </header>
 
       {error ? <div className="error-banner">{error}<button onClick={() => setError(null)}>Dismiss</button></div> : null}
+      {pendingInvitationIdFromBrowser() && <IncomingBusinessInvitations onMembershipChanged={loadBusinesses} />}
       <section className="context-bar" aria-label="Current business context"><Context label="Business code" value={business.merchantCode || '—'} /><Context label="Subscription" value={statusText(business.subscriptionStatus)} /><Context label="Active Branch" value={branch?.name ?? 'No active Branch'} /></section>
       {page === 'overview' && <DashboardOverview tenantId={business.id} currency={business.currency} go={navigate} openBranch={openBranchPage} />}
       {page === 'notifications' && <MerchantNotificationsManagement key={business.id} tenantId={business.id} unreadCount={unreadCount} onUnreadChanged={() => void loadUnreadCount(business.id)} />}
@@ -201,10 +213,101 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
   </div>;
 }
 
+function InvitationAccess({
+  title: heading,
+  description,
+  onMembershipChanged,
+  onSignOut,
+}: {
+  title: string;
+  description: string;
+  onMembershipChanged: () => Promise<void>;
+  onSignOut: () => void;
+}) {
+  return <main className="status-page">
+    <section className="status-card">
+      <SellerTrayMark large />
+      <p className="eyebrow">SellerTray Business access</p>
+      <h1>{heading}</h1>
+      <p>{description}</p>
+      <IncomingBusinessInvitations onMembershipChanged={onMembershipChanged} />
+      <button type="button" className="secondary-button" onClick={onSignOut}>Sign out</button>
+    </section>
+  </main>;
+}
+
 function Login() {
-  const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [busy, setBusy] = useState(false); const [message, setMessage] = useState('');
-  async function submit(event: FormEvent) { event.preventDefault(); setBusy(true); setMessage(''); try { const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password }); if (error) throw error; } catch (cause) { setMessage(errorMessage(cause, 'Unable to sign in.')); } finally { setBusy(false); } }
-  return <div className="login-shell"><section className="login-brand"><SellerTrayMark large /><p className="eyebrow">SellerTray</p><h1>Manage the business. Keep selling on mobile.</h1><p>Review sales, products, stock, purchasing, money, channels and Branch performance from one governed merchant workspace.</p></section><form className="login-card" onSubmit={submit}><div><p className="eyebrow">Merchant Web</p><h2>Sign in</h2><p className="muted">Use the same SellerTray account you use for your business.</p></div><label>Email<SellerTrayInput type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label><label>Password<SellerTrayInput type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} /></label>{message ? <div className="error-banner compact">{message}</div> : null}<button className="primary-button" disabled={busy}>{busy ? 'Signing in' : 'Continue'}</button></form></div>;
+  const invitationId = pendingInvitationIdFromBrowser();
+  const [mode, setMode] = useState<'sign-in' | 'join'>('sign-in');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setMessage('');
+    setSuccess(false);
+    try {
+      if (mode === 'join') {
+        if (!invitationId) throw new Error('This invitation link is missing. Ask the Business to send a new invitation.');
+        if (password.length < 8) throw new Error('Use at least 8 characters for your password.');
+        if (password !== confirmPassword) throw new Error('The passwords do not match.');
+        // This is only a non-authoritative invitation locator; no membership
+        // is granted until the invited email signs in and explicitly accepts.
+        const verificationUrl = new URL(window.location.href);
+        verificationUrl.search = '';
+        verificationUrl.hash = '';
+        verificationUrl.searchParams.set('invitation', invitationId);
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: { emailRedirectTo: verificationUrl.toString() },
+        });
+        if (error) throw error;
+        setSuccess(true);
+        setMessage(data.session
+          ? 'Account created. Reviewing invitations for your email.'
+          : 'Check your email to confirm your SellerTray account. After confirmation, return to review and accept the invitation.');
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+        if (error) throw error;
+      }
+    } catch (cause) {
+      setMessage(errorMessage(cause, mode === 'join' ? 'Unable to create your SellerTray account.' : 'Unable to sign in.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <div className="login-shell">
+    <section className="login-brand">
+      <SellerTrayMark large />
+      <p className="eyebrow">SellerTray</p>
+      <h1>Manage the business. Keep selling on mobile.</h1>
+      <p>Review sales, products, stock, purchasing, money, channels and Branch performance from one governed merchant workspace.</p>
+    </section>
+    <form className="login-card" onSubmit={(event) => void submit(event)}>
+      <div>
+        <p className="eyebrow">Merchant Web</p>
+        <h2>{mode === 'join' ? 'Create an account to accept an invitation' : 'Sign in'}</h2>
+        <p className="muted">{mode === 'join'
+          ? 'Use the email address that received the invitation. Your Business access starts only after you accept.'
+          : 'Use the same SellerTray account you use for your business.'}</p>
+      </div>
+      <label>Email<SellerTrayInput type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
+      <label>Password<SellerTrayInput type="password" autoComplete={mode === 'join' ? 'new-password' : 'current-password'} minLength={mode === 'join' ? 8 : undefined} required value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+      {mode === 'join' && <label>Confirm password<SellerTrayInput type="password" autoComplete="new-password" minLength={8} required value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} /></label>}
+      {message ? <div className={success ? 'auth-message success' : 'error-banner compact'} role="status">{message}</div> : null}
+      <button type="submit" className="primary-button" disabled={busy || (mode === 'join' && success)}>{busy ? 'Please wait…' : mode === 'join' ? 'Create account' : 'Continue'}</button>
+      {invitationId && <button type="button" className="text-button" onClick={() => { setMode(mode === 'join' ? 'sign-in' : 'join'); setMessage(''); setSuccess(false); setPassword(''); setConfirmPassword(''); }}>
+        {mode === 'join' ? 'Already have an account? Sign in' : 'New to SellerTray? Create an account to accept the invitation'}
+      </button>}
+    </form>
+  </div>;
 }
 function Select({ label, value, onChange, disabled, children }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean; children: ReactNode }) { return <label className="select-field"><span>{label}</span><SellerTraySelect value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled}>{children}</SellerTraySelect></label>; }
 function Context({ label, value }: { label: string; value: string }) { return <div><span>{label}</span><strong>{value}</strong></div>; }

@@ -21,7 +21,7 @@ export default function IncomingBusinessInvitations({
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const focusedInvitationId = invitationIdFromBrowser();
+  const focusedInvitationId = pendingInvitationIdFromBrowser();
   const orderedInvitations = useMemo(() => {
     if (!focusedInvitationId) return invitations;
     return [...invitations].sort((left, right) => {
@@ -117,7 +117,7 @@ export default function IncomingBusinessInvitations({
   </article>;
 }
 
-function invitationIdFromBrowser(): string | null {
+export function pendingInvitationIdFromBrowser(): string | null {
   if (typeof window === 'undefined') return null;
   const queryValue = new URLSearchParams(window.location.search).get('invitation')?.trim().toLowerCase() ?? '';
   if (INVITATION_UUID_RE.test(queryValue)) {
