@@ -29,6 +29,10 @@ permissions:
 
 jobs:
   build-qa-apk:
+    # QA APK creation is an explicitly approved artifact operation, not an
+    # automatic side-effect of source-only PRs or Supabase SQL changes.
+    # workflow_dispatch remains available after the release/device QA gate.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
