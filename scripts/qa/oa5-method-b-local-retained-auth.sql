@@ -15,6 +15,17 @@ BEGIN
  THEN RAISE EXCEPTION 'Unexpected local admin or baseline'; END IF;
 END $$;
 GRANT INSERT ON TABLE auth.users TO postgres;
+-- Restore the verified hosted Test function/schema privileges only for the
+-- test roles, transaction-locally. No Auth table grant to merchant roles.
+GRANT USAGE ON SCHEMA auth, public, extensions, storage TO authenticated, anon, service_role;
+GRANT EXECUTE ON FUNCTION auth.uid(), auth.jwt(), auth.role() TO authenticated, anon, service_role;
+DO $$
+BEGIN
+ IF NOT has_schema_privilege('authenticated','auth','USAGE')
+ OR NOT has_function_privilege('authenticated','auth.uid()','EXECUTE')
+ OR (SELECT rolbypassrls OR rolsuper FROM pg_roles WHERE rolname='authenticated')
+ THEN RAISE EXCEPTION 'Invalid authenticated test role prerequisites'; END IF;
+END $;
 SET LOCAL SESSION AUTHORIZATION postgres;
 DO $$
 BEGIN
