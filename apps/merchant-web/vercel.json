@@ -37,7 +37,8 @@
   ],
   "git": {
     "deploymentEnabled": {
-      "fix/production-web-invitation-orders-only-20261127": false
+      "fix/production-web-invitation-orders-only-20261127": false,
+      "fix/production-web-customer-profitability-20261127": false
     }
   }
 }

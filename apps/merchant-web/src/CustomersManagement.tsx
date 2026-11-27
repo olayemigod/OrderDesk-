@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { SellerTrayInput } from './SellerTrayElements';
 import { errorMessage, numberValue, supabase } from './supabase';
 
@@ -15,6 +15,7 @@ type Customer = {
 
 type CustomerOrder = {
   id: string;
+  branchId: string | null;
   publicOrderId: string;
   status: string;
   paymentStatus: string;
@@ -23,6 +24,19 @@ type CustomerOrder = {
   amountPaid: number;
   outstandingBalance: number;
   createdAt: string;
+};
+
+type LinkedOrderDetail = {
+  id: string;
+  publicOrderId: string;
+  status: string;
+  source: string;
+  paymentStatus: string;
+  totalAmount: number | string;
+  amountPaid: number | string;
+  currency: string;
+  customerNote: string | null;
+  items: Array<{ id: string; itemName: string; selectedUom: string; quantity: number | string; unitPrice: number | string | null }>;
 };
 
 type CustomerDetail = {
@@ -45,6 +59,10 @@ export default function CustomersManagement({ tenantId, currency }: { tenantId: 
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [openedOrder, setOpenedOrder] = useState<LinkedOrderDetail | null>(null);
+  const [openedOrderLoadingId, setOpenedOrderLoadingId] = useState<string | null>(null);
+  const [openedOrderError, setOpenedOrderError] = useState<string | null>(null);
+  const orderRequestRef = useRef(0);
   const [saving, setSaving] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +80,13 @@ export default function CustomersManagement({ tenantId, currency }: { tenantId: 
     const timer = window.setTimeout(() => { void loadCustomers(0, undefined, search); }, 250);
     return () => window.clearTimeout(timer);
   }, [tenantId, search]);
+
+  useEffect(() => {
+    orderRequestRef.current += 1;
+    setOpenedOrder(null);
+    setOpenedOrderError(null);
+    setOpenedOrderLoadingId(null);
+  }, [tenantId, selectedId]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -121,6 +146,31 @@ export default function CustomersManagement({ tenantId, currency }: { tenantId: 
       setError(errorMessage(cause, 'Unable to load this customer.'));
     } finally {
       setDetailLoading(false);
+    }
+  }
+
+  async function openCustomerOrder(order: CustomerOrder) {
+    const orderId = order.id;
+    const requestId = ++orderRequestRef.current;
+    setOpenedOrder(null);
+    setOpenedOrderLoadingId(orderId);
+    setOpenedOrderError(null);
+    try {
+      // The governed customer history response supplies the original Branch.
+      // Do not re-read raw orders just to find Branch attribution.
+      if (!order.branchId) throw new Error('This order is missing its Branch reference. Refresh customer history and try again.');
+      const { data, error: detailError } = await supabase.rpc('get_sellertray_order_management_detail', {
+        p_tenant_id: tenantId,
+        p_branch_id: order.branchId,
+        p_order_id: orderId,
+      });
+      if (detailError) throw detailError;
+      if (!data || typeof data !== 'object') throw new Error('Order details are unavailable.');
+      if (requestId === orderRequestRef.current) setOpenedOrder(data as LinkedOrderDetail);
+    } catch (cause) {
+      if (requestId === orderRequestRef.current) setOpenedOrderError(errorMessage(cause, 'Unable to open this order.'));
+    } finally {
+      if (requestId === orderRequestRef.current) setOpenedOrderLoadingId(null);
     }
   }
 
@@ -237,8 +287,24 @@ export default function CustomersManagement({ tenantId, currency }: { tenantId: 
         {selected ? <article className="panel">
           <div className="panel-head"><div><p className="eyebrow">History</p><h3>Recent orders</h3></div></div>
           {detailLoading ? <p className="muted">Loading orders…</p> : detail?.orders.length ? <div className="table-wrap"><table><thead><tr><th>Order</th><th>Source</th><th>Status</th><th>Payment</th><th>Total</th><th>Collected</th><th>Outstanding</th><th>Created</th></tr></thead><tbody>
-            {detail.orders.map((order) => <tr key={order.id}><td><strong>{order.publicOrderId}</strong></td><td>{label(order.source)}</td><td>{label(order.status)}</td><td>{label(order.paymentStatus)}</td><td>{money(order.totalAmount, currency)}</td><td>{money(order.amountPaid, currency)}</td><td>{money(order.outstandingBalance, currency)}</td><td>{dateTime(order.createdAt)}</td></tr>)}
+            {detail.orders.map((order) => <tr key={order.id}><td><button type="button" className="text-button" disabled={openedOrderLoadingId !== null} onClick={() => void openCustomerOrder(order)} aria-label={`Open order ${order.publicOrderId}`}>{order.publicOrderId}</button></td><td>{label(order.source)}</td><td>{label(order.status)}</td><td>{label(order.paymentStatus)}</td><td>{money(order.totalAmount, currency)}</td><td>{money(order.amountPaid, currency)}</td><td>{money(order.outstandingBalance, currency)}</td><td>{dateTime(order.createdAt)}</td></tr>)}
           </tbody></table></div> : <div className="empty-state"><strong>No linked orders</strong><p>Orders attributed to this customer will appear here.</p></div>}
+          {openedOrderLoadingId ? <p className="muted" role="status">Opening order…</p> : null}
+          {openedOrderError ? <div className="error-banner" role="alert">{openedOrderError}<button type="button" onClick={() => setOpenedOrderError(null)}>Dismiss</button></div> : null}
+          {openedOrder ? <section className="panel page-stack" aria-label={`Order details ${openedOrder.publicOrderId}`}>
+            <div className="panel-head"><div><p className="eyebrow">Order details</p><h3>{openedOrder.publicOrderId}</h3></div><button type="button" className="secondary-button" onClick={() => setOpenedOrder(null)}>Close details</button></div>
+            <div className="status-grid">
+              <Stat label="Status" value={label(openedOrder.status)} />
+              <Stat label="Channel" value={label(openedOrder.source)} />
+              <Stat label="Payment" value={label(openedOrder.paymentStatus)} />
+              <Stat label="Total" value={money(openedOrder.totalAmount, openedOrder.currency || currency)} />
+              <Stat label="Collected" value={money(openedOrder.amountPaid, openedOrder.currency || currency)} />
+            </div>
+            {openedOrder.customerNote ? <p className="muted">{openedOrder.customerNote}</p> : null}
+            <div className="table-wrap"><table><thead><tr><th>Product</th><th>Unit</th><th>Quantity</th><th>Unit price</th><th>Line total</th></tr></thead><tbody>
+              {(openedOrder.items ?? []).map((item) => <tr key={item.id}><td>{item.itemName}</td><td>{item.selectedUom}</td><td>{Number(item.quantity)}</td><td>{item.unitPrice == null ? '—' : money(item.unitPrice, openedOrder.currency || currency)}</td><td>{item.unitPrice == null ? '—' : money(Number(item.quantity) * Number(item.unitPrice), openedOrder.currency || currency)}</td></tr>)}
+            </tbody></table></div>
+          </section> : null}
         </article> : <article className="panel"><div className="empty-state"><strong>No customer selected</strong><p>Select a customer to review their history.</p></div></article>}
       </section>
     </div>
@@ -274,6 +340,7 @@ function parseCustomerDetail(value: unknown): CustomerDetail {
       const row = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
       return {
         id: String(row.id ?? ''),
+        branchId: typeof row.branchId === 'string' ? row.branchId : null,
         publicOrderId: String(row.publicOrderId ?? 'Order'),
         status: String(row.status ?? ''),
         paymentStatus: String(row.paymentStatus ?? ''),
@@ -295,11 +362,13 @@ function label(value: string) {
   return value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function money(value: number, currency: string) {
+function money(value: number | string, currency: string) {
+  const amount = Number(value);
+  const safeAmount = Number.isFinite(amount) ? amount : 0;
   try {
-    return new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 2 }).format(value);
+    return new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 2 }).format(safeAmount);
   } catch {
-    return `${currency} ${value.toLocaleString('en-NG', { maximumFractionDigits: 2 })}`;
+    return `${currency} ${safeAmount.toLocaleString('en-NG', { maximumFractionDigits: 2 })}`;
   }
 }
 
