@@ -44,6 +44,7 @@ async function scenario(label, options, test) {
     calls.push({path:url.pathname,search:url.search,data});
     if(url.pathname==='/auth/v1/token')return reply(session);
     if(url.pathname==='/auth/v1/signup')return reply(user);
+    if(url.pathname==='/auth/v1/recover')return reply({});
     if(url.pathname==='/auth/v1/user')return reply(user);
     if(url.pathname==='/auth/v1/logout')return reply({});
     if(url.pathname==='/functions/v1/team-management'){
@@ -55,6 +56,7 @@ async function scenario(label, options, test) {
       }
     }
     if(url.pathname==='/rest/v1/rpc/sellertray_list_businesses_for_current_user')return reply(businesses);
+    if(url.pathname==='/rest/v1/rpc/get_sellertray_business_profile')return reply({name:'First Business',logoUrl:'',currency:'NGN'});
     if(url.pathname==='/rest/v1/rpc/get_sellertray_accessible_branches')return reply([{id:branchId,name:'QA Branch',code:'QA',is_default:true}]);
     if(url.pathname==='/rest/v1/rpc/sellertray_merchant_unread_notification_count')return reply(0);
     if(url.pathname==='/rest/v1/rpc/get_sellertray_report_management')return reply({});
@@ -131,6 +133,34 @@ try{
     assert.equal(new URL(new URLSearchParams(signup.search).get('redirect_to')).searchParams.get('invitation'),inviteId);
     assert.equal(hasAction(calls,'accept_invite'),false);
     assert.equal(calls.some(x=>x.path.includes('provision-business')),false);
+  });
+  await scenario('password visibility and recovery use the active auth surface',{signedIn:false,focus:false},async(p,calls)=>{
+    await p.getByLabel('Password',{exact:true}).fill('synthetic-password');
+    await p.getByRole('button',{name:'Show password',exact:true}).click();
+    assert.equal(await p.getByLabel('Password',{exact:true}).getAttribute('type'),'text');
+    await p.getByRole('button',{name:'Hide password',exact:true}).click();
+    assert.equal(await p.getByLabel('Password',{exact:true}).getAttribute('type'),'password');
+    await p.getByRole('button',{name:'Forgot password?',exact:true}).click();
+    await p.getByLabel('Email',{exact:true}).fill(email);
+    await p.getByRole('button',{name:'Send reset instructions',exact:true}).click();
+    await p.getByText('If an account exists for that email',{exact:false}).waitFor();
+    assert.ok(calls.some(x=>x.path==='/auth/v1/recover'));
+    assert.equal(calls.some(x=>x.path.includes('provision-business')),false);
+  });
+  await scenario('refresh and browser Back/Forward preserve valid merchant pages',{businesses:[business()],focus:false},async(p,calls)=>{
+    await p.getByRole('heading',{name:'Business overview'}).waitFor();
+    await p.getByRole('button',{name:'Orders',exact:true}).click();
+    await p.getByRole('button',{name:/Search & filter orders/}).waitFor();
+    assert.equal(new URL(p.url()).searchParams.get('page'),'orders');
+    await p.getByRole('button',{name:'Customers',exact:true}).click();
+    await p.getByRole('button',{name:'Open order QA/001'}).waitFor();
+    await p.goBack();
+    await p.getByRole('button',{name:/Search & filter orders/}).waitFor();
+    await p.goForward();
+    await p.getByRole('button',{name:'Open order QA/001'}).waitFor();
+    await p.reload();
+    await p.getByRole('button',{name:'Open order QA/001'}).waitFor();
+    assert.equal(new URL(p.url()).searchParams.get('page'),'customers');
   });
   await scenario('ordinary login and collapsed Orders filters retain governed query',{signedIn:false,focus:false,businesses:[business()]},async(p,calls)=>{
     await p.getByLabel('Email',{exact:true}).fill(email);

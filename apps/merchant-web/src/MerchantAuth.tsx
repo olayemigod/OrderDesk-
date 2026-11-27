@@ -353,7 +353,7 @@ export default function MerchantAuth({
             : <button type="button" className="text-button" onClick={() => changeMode('create-business')}>Create My Business</button>}
         </>}
         {mode !== 'sign-in' && mode !== 'reset-password' && <button type="button" className="text-button" onClick={() => changeMode('sign-in')}>Back to sign in</button>}
-        {mode === 'reset-password' && <button type="button" className="text-button" onClick={() => { clearAuthIntent(); void supabase.auth.signOut({ scope: 'local' }); changeMode('sign-in'); }}>Back to sign in</button>}
+        {mode === 'reset-password' && <button type="button" className="text-button" onClick={() => { void supabase.auth.signOut({ scope: 'local' }).then(() => { clearAuthIntent(); changeMode('sign-in'); }); }}>Back to sign in</button>}
         {mode === 'create-business' && session && <button type="button" className="text-button" onClick={() => void supabase.auth.signOut({ scope: 'local' })}>Use another account</button>}
       </div>
     </form>
@@ -379,6 +379,7 @@ function PasswordField({
     {label}
     <span className="password-field">
       <SellerTrayInput
+        aria-label={label}
         type={visible ? 'text' : 'password'}
         autoComplete={autoComplete}
         minLength={autoComplete === 'current-password' ? undefined : 8}

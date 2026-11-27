@@ -46,6 +46,7 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
   const sessionRef = useRef<Session | null>(null);
   const businessRequest = useRef(0);
   const workspaceRequest = useRef(0);
+  const profileRevision = useRef(0);
   const [verifiedUserId, setVerifiedUserId] = useState('');
   const [membershipChecked, setMembershipChecked] = useState(false);
   const [authIntent, setAuthIntent] = useState<MerchantAuthMode | null>(() => merchantAuthModeFromLocation());
@@ -123,6 +124,7 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
     const onBusinessProfileUpdated = (event: Event) => {
       const detail = (event as CustomEvent<BusinessProfileUpdatedDetail>).detail;
       if (!detail || detail.tenantId !== businessId) return;
+      profileRevision.current += 1;
       applyBusinessIdentity(detail.tenantId, detail);
     };
     window.addEventListener(BUSINESS_PROFILE_UPDATED_EVENT, onBusinessProfileUpdated);
@@ -170,6 +172,7 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
 
   async function loadWorkspace(tenantId: string) {
     const requestId = ++workspaceRequest.current;
+    const requestedProfileRevision = profileRevision.current;
     setLoading(true); setError(null);
     try {
       const [branchResult, profileResult] = await Promise.all([
@@ -180,7 +183,7 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
       if (branchResult.error) throw branchResult.error;
       const nextBranches = ((branchResult.data ?? []) as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id ?? ''), code: String(row.code ?? ''), name: String(row.name ?? 'Branch'), isDefault: row.is_default === true } satisfies Branch));
       const chosen = nextBranches.find((row) => row.id === branchId)?.id ?? nextBranches.find((row) => row.isDefault)?.id ?? nextBranches[0]?.id ?? '';
-      if (!profileResult.error) {
+      if (!profileResult.error && requestedProfileRevision === profileRevision.current) {
         const profileRow = Array.isArray(profileResult.data) ? profileResult.data[0] : profileResult.data;
         applyBusinessIdentity(tenantId, parseBusinessIdentity(profileRow));
       }
@@ -236,6 +239,12 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
 
   async function refresh() { if (businessId) await Promise.all([loadWorkspace(businessId), loadUnreadCount(businessId)]); }
   async function signOut() { await supabase.auth.signOut(); }
+  function selectBusiness(nextId: string) {
+    if (nextId === businessId || !managementBusinesses.some(row => row.id === nextId)) return;
+    workspaceRequest.current += 1; profileRevision.current += 1;
+    setBusinessIdentity(null); setBranches([]); setBranchId(''); setUnreadCount(0);
+    setBusinessId(nextId);
+  }
   function navigate(next: Page) { setPage(next); if (businessId) syncMerchantPageUrl(businessId, next, 'push'); setNavOpen(false); }
   function openBranchPage(next: Page, nextBranchId: string) { setBranchId(nextBranchId); navigate(next); }
   function toggleSection(section: MerchantPortalSection) { setCollapsedSections((current) => { const next = new Set(current); if (next.has(section)) next.delete(section); else next.add(section); return next; }); }
@@ -303,7 +312,7 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
     <main className="workspace">
       <header className="topbar">
         <div className="topbar-heading"><button className="mobile-menu-button" type="button" aria-label="Open navigation" aria-controls="merchant-navigation" aria-expanded={navOpen} onClick={() => setNavOpen(true)}><ShellIcon name="menu" /></button><div><p className="eyebrow">{displayBusinessName}</p><h1>{currentPageLabel}</h1><p className="topbar-context"><span className="context-dot" />{branch?.name ?? 'No active Branch'} <span aria-hidden="true">·</span> {title(business.role)}</p></div></div>
-        <div className="topbar-actions"><Select label="Business" value={businessId} onChange={setBusinessId}>{managementBusinesses.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</Select><Select label="Branch" value={branchId} onChange={setBranchId} disabled={!branches.length}>{branches.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</Select><button className="icon-button compact-icon-button notification-bell-button" aria-label={unreadCount ? `Open notifications, ${unreadCount} unread` : 'Open notifications'} title="Notifications" onClick={() => navigate('notifications')}><ShellIcon name="bell" />{unreadCount > 0 ? <span className="notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span> : null}</button><button className="icon-button compact-icon-button" aria-label={dark ? 'Use light theme' : 'Use dark theme'} title={dark ? 'Use light theme' : 'Use dark theme'} onClick={() => setDark((value) => !value)}><ShellIcon name={dark ? 'sun' : 'moon'} /></button><button className="secondary-button refresh-button" disabled={loading} onClick={() => void refresh()}><ShellIcon name="refresh" />{loading ? 'Refreshing' : 'Refresh'}</button></div>
+        <div className="topbar-actions"><Select label="Business" value={businessId} onChange={selectBusiness}>{managementBusinesses.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</Select><Select label="Branch" value={branchId} onChange={setBranchId} disabled={!branches.length}>{branches.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</Select><button className="icon-button compact-icon-button notification-bell-button" aria-label={unreadCount ? `Open notifications, ${unreadCount} unread` : 'Open notifications'} title="Notifications" onClick={() => navigate('notifications')}><ShellIcon name="bell" />{unreadCount > 0 ? <span className="notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span> : null}</button><button className="icon-button compact-icon-button" aria-label={dark ? 'Use light theme' : 'Use dark theme'} title={dark ? 'Use light theme' : 'Use dark theme'} onClick={() => setDark((value) => !value)}><ShellIcon name={dark ? 'sun' : 'moon'} /></button><button className="secondary-button refresh-button" disabled={loading} onClick={() => void refresh()}><ShellIcon name="refresh" />{loading ? 'Refreshing' : 'Refresh'}</button></div>
       </header>
 
       {error ? <div className="error-banner">{error}<button onClick={() => setError(null)}>Dismiss</button></div> : null}

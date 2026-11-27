@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const read = (name) => readFileSync(new URL('../src/' + name, import.meta.url), 'utf8');
-const app = read('MerchantApp.tsx');
+const app = read('MerchantAuth.tsx');
 assert.ok(app.includes("type={visible ? 'text' : 'password'}"));
 assert.ok(app.includes('aria-pressed={visible}'));
 assert.ok(app.includes('type="button"\n        className="password-toggle"'));
 assert.ok(app.includes('visible={showPassword}'));
 assert.ok(app.includes('visible={showConfirmPassword}'));
 assert.ok(app.includes('setShowPassword(false); setShowConfirmPassword(false);'));
+assert.ok(read('MerchantApp.tsx').includes('<MerchantAuth'));
 assert.ok(read('main.tsx').includes("import './merchant-auth.css'"));
 const management = read('ManagementPage.tsx');
 const settings = read('SettingsManagement.tsx');
