@@ -3,6 +3,7 @@ on:
   pull_request:
     branches:
       - fix/oa5-billing-first-purchase-runtime-authority-20261031
+      - fix/production-web-invitation-orders-only-20261127
     paths:
       - 'apps/merchant-web/**'
       - '.github/workflows/merchant-urgent-browser-qa.yml'
@@ -10,13 +11,14 @@ permissions:
   contents: read
 jobs:
   browser:
-    if: github.event.pull_request.head.ref == 'fix/production-web-invitation-orders-only-20261127'
+    if: github.event.pull_request.head.ref == 'fix/production-web-customer-profitability-20261127'
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     defaults:
       run:
         working-directory: apps/merchant-web
     env:
+      SELLERTRAY_REPORTING_QA: '1'
       VITE_SUPABASE_URL: https://sellertray-smoke.invalid
       VITE_SUPABASE_PUBLISHABLE_KEY: synthetic-browser-test-only
     steps:
