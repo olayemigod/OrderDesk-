@@ -32,9 +32,9 @@ WHERE n.nspname='auth' AND c.relkind='r' ORDER BY c.relname
 SQL
 }
 auth_snapshot > "$LOG/auth-before.private"
-db -Atc "select id from storage.buckets order by id" > "$LOG/buckets-before.private"
+db -Atc "select id from storage.buckets order by id" | LC_ALL=C sort > "$LOG/buckets-before.private"
 db -Atc "select count(*) from storage.objects" > "$LOG/storage-before.private"
-db -Atc "select extname,extversion from pg_extension order by extname" > "$LOG/extensions-before.private"
+db -Atc "select extname,extversion from pg_extension order by extname" | LC_ALL=C sort > "$LOG/extensions-before.private"
 # Disable local cron launcher before replay. Fail closed if the extension is
 # preloaded but the installed version does not expose this control.
 cron_setting=$(db -Atc "select coalesce(current_setting('cron.launch_active_jobs',true),'unavailable')")
@@ -92,13 +92,13 @@ BEGIN
  SELECT string_agg(format('%I.%I(%s)',n.nspname,p.proname,pg_get_function_identity_arguments(p.oid)),', ') INTO targets
  FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN ('public','sellertray_private');
  IF targets IS NOT NULL THEN EXECUTE 'DROP ROUTINE '||targets||' CASCADE'; END IF;
- IF EXISTS(SELECT 1 FROM dropped d WHERE NOT (
+ IF EXISTS(SELECT 1 FROM dropped d WHERE (
  coalesce(d.schema_name,'') IN ('public','sellertray_private')
  OR (d.schema_name='pg_toast' AND d.object_type IN ('index','toast table'))
  OR (d.schema_name='auth' AND d.classid='pg_trigger'::regclass AND d.objid IN (SELECT oid FROM allowed_auth_triggers))
  OR (d.schema_name='storage' AND d.classid='pg_policy'::regclass AND d.objid IN (SELECT oid FROM allowed_storage_policies))
  OR (d.schema_name IS NULL AND d.classid='pg_publication_rel'::regclass AND d.objid IN (SELECT oid FROM allowed_publication_members))
- ) IS TRUE) THEN RAISE EXCEPTION 'Unexpected cross-boundary cascade'; END IF;
+ ) IS NOT TRUE) THEN RAISE EXCEPTION 'Unexpected cross-boundary cascade'; END IF;
  IF EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
  WHERE n.nspname IN ('public','sellertray_private') AND c.relkind IN ('r','p','v','m','S','f'))
  OR EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN ('public','sellertray_private'))
@@ -130,10 +130,10 @@ done
 db -c "select cron.alter_job(jobid,active=>false) from cron.job where active" > "$LOG/cron-post.log"
 auth_snapshot > "$LOG/auth-after-replay.private"
 cmp "$LOG/auth-before.private" "$LOG/auth-after-replay.private"
-db -Atc "select id from storage.buckets order by id" > "$LOG/buckets-after.private"
+db -Atc "select id from storage.buckets order by id" | LC_ALL=C sort > "$LOG/buckets-after.private"
 [[ -z "$(comm -23 "$LOG/buckets-before.private" "$LOG/buckets-after.private")" ]]
 [[ "$(db -Atc "select count(*) from storage.objects")" == "$(cat "$LOG/storage-before.private")" ]]
-db -Atc "select extname,extversion from pg_extension order by extname" > "$LOG/extensions-after.private"
+db -Atc "select extname,extversion from pg_extension order by extname" | LC_ALL=C sort > "$LOG/extensions-after.private"
 [[ -z "$(comm -23 "$LOG/extensions-before.private" "$LOG/extensions-after.private")" ]]
 db -c "select (select count(*) from auth.users) as retained_users,(select count(*) from auth.sessions) as retained_sessions,(select count(*) from public.tenants) as merchants,(select count(*) from public.tenant_members) as memberships,(select count(*) from cron.job where active) as active_jobs,(select count(*) from supabase_migrations.schema_migrations) as historical_ledger_rows"
 [[ "$(db -Atc "select (select count(*) from public.tenants)||'|'||(select count(*) from public.tenant_members)||'|'||(select count(*) from cron.job where active)||'|'||(select count(*) from supabase_migrations.schema_migrations)")" == '0|0|0|54' ]]
