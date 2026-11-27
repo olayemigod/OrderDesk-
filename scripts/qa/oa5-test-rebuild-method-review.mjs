@@ -20,14 +20,16 @@ export const STAGES=Object.freeze([
  'provider_console_ingress_and_egress_contained',
  'test_specific_four_cron_pause_approved_separately',
  'fresh_post_pause_cron_and_network_zero_queue',
- 'cli_v3_exact_target_affected_objects_independently_reviewed',
+ 'selective_retirement_exact_target_and_cross_schema_dependencies_reviewed',
+ 'retained_state_local_replay_and_sql_authority_denial_proven',
+ 'canonical_ledger_transition_and_hosted_execution_rollback_plan_reviewed',
  'separately_authorized_test_user_schema_retirement_and_full_canonical_replay',
  'retained_historical_auth_zero_authority_and_synthetic_positive_controls',
  'post_replay_merchant_admin_whatsapp_payment_and_offline_acceptance',
  'separately_authorized_test_cron_and_callbacks_reenable'
 ]);
 export const BOUNDARIES=Object.freeze({
-  historical_ledger:'encrypted_archive_only',
+  historical_ledger:'preserve_archive_and_review_exact_canonical_transition',
   user_created_sql:'reviewed_test_only_retirement_and_full_canonical_replay',
   managed_auth_users:'retain_original_five_without_canonical_authority',
   managed_auth_sessions:'retain_original_state_no_revoke_without_separate_approval',
@@ -45,7 +47,7 @@ export const IRREVERSIBLE=Object.freeze({
   sql_archive_recovers_auth_secrets_or_mfa:false,
   sql_archive_restores_actual_storage_object_bytes:false,
   sql_archive_recalls_provider_delivery:false,
-  remote_reset_deletes_managed_auth_users_automatically:false,
+  generic_remote_reset_preserves_managed_auth:false,
   remote_reset_proves_historical_preview_access:false,
   source_migration_pass_proves_hosted_provider_isolation:false
 });
@@ -59,7 +61,8 @@ export function assessRebuildMethodCandidate(record,{sourceSha,sourceInventory}=
  const result=()=>({
   candidate_method_structurally_consistent:reasons.length===0,
   method_independently_approved:false,
-  exact_remote_cli_side_effects_dry_run_verified:false,
+  exact_hosted_selective_retirement_plan_verified:false,
+  hosted_canonical_ledger_transition_verified:false,
   historical_auth_post_replay_quarantine_verified:false,
   provider_console_quiescence_verified:false,
   hosted_test_reconstruction_authorized:false,
@@ -71,7 +74,7 @@ export function assessRebuildMethodCandidate(record,{sourceSha,sourceInventory}=
      'migration_count','method','boundaries','irreversible_assumptions','stages'])){
   reasons.push('Missing or unexpected Test-only method review fields');return result();
  }
- if(record.schema_version!==1||record.project_ref!==TEST_REF||record.intent!==INTENT||
+ if(record.schema_version!==2||record.project_ref!==TEST_REF||record.intent!==INTENT||
     record.method!=='retain_managed_auth_quarantine_clean_canonical')
   reasons.push('Incorrect target or unsupported hosted reconstruction strategy');
  if(!SHA(sourceSha)||record.source_sha!==sourceSha||!SHA256(record.migration_inventory_sha256)||
@@ -90,7 +93,7 @@ export function assessRebuildMethodCandidate(record,{sourceSha,sourceInventory}=
      reasons.push('Unsupported managed-service recovery assertion: '+k);
  if(!Array.isArray(record.stages)||record.stages.length!==STAGES.length||
     record.stages.some((s,i)=>s!==STAGES[i]))
-  reasons.push('Pre-review, pause, reset, Auth quarantine and reactivation stage order drifted');
+  reasons.push('Pre-review, pause, selective reconstruction, Auth quarantine and reactivation stage order drifted');
  return result();
 }
 async function main(){
@@ -113,7 +116,7 @@ async function main(){
  const review=assessRebuildMethodCandidate(record,{sourceSha,sourceInventory:inventory});
  console.log(JSON.stringify(review,null,2));
  if(!review.candidate_method_structurally_consistent)process.exitCode=1;
- console.log('NOT VERIFIED: external providers, historical Preview review, live remote CLI object plan, managed state or old Auth JWT behavior.');
+ console.log('NOT VERIFIED: external providers, historical Preview review, exact hosted selective retirement and ledger plan, managed state or old Auth JWT behavior.');
  console.log('NOT AUTHORIZED: no cron pause, remote reset, Auth deletion, hosted seed, provider delivery or Production/C2 release.');
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))main();

@@ -6,7 +6,7 @@ import {assessRebuildMethodCandidate,BOUNDARIES,IRREVERSIBLE,STAGES,TEST_REF,INT
 const sha='a'.repeat(40),hash='b'.repeat(64);
 const inventory={structural_source_check_passed:true,source_migrations_scanned:MIGRATIONS,source_inventory_sha256:hash};
 const candidate=()=>({
- schema_version:1,project_ref:TEST_REF,intent:INTENT,source_sha:sha,
+ schema_version:2,project_ref:TEST_REF,intent:INTENT,source_sha:sha,
  migration_inventory_sha256:hash,migration_count:MIGRATIONS,
  method:'retain_managed_auth_quarantine_clean_canonical',
  boundaries:{...BOUNDARIES},irreversible_assumptions:{...IRREVERSIBLE},stages:[...STAGES]
@@ -14,7 +14,7 @@ const candidate=()=>({
 const check=r=>assessRebuildMethodCandidate(r,{sourceSha:sha,sourceInventory:inventory});
 test('synthetic complete method candidate is never an authorization or proof of a hosted dry run',()=>{
  const r=check(candidate());assert.equal(r.candidate_method_structurally_consistent,true,r.reasons.join('\\n'));
- for(const k of ['method_independently_approved','exact_remote_cli_side_effects_dry_run_verified',
+ for(const k of ['method_independently_approved','exact_hosted_selective_retirement_plan_verified','hosted_canonical_ledger_transition_verified',
  'historical_auth_post_replay_quarantine_verified','provider_console_quiescence_verified',
  'hosted_test_reconstruction_authorized','cron_pause_authorized','production_cutover_authorized'])
   assert.equal(r[k],false);
@@ -25,7 +25,7 @@ test('reject Production target, wrong strategy, changed source and missing 461 m
   x=>x.method='delete_all_managed_auth',x=>x.intent='production-release',
   x=>x.source_sha='c'.repeat(40),x=>x.migration_count=MIGRATIONS-1,
   x=>x.migration_inventory_sha256='c'.repeat(64),x=>x.version=2,
-  x=>x.private_project_url='secret',x=>x.irreversible_assumptions.live_keys='hidden',
+  x=>x.schema_version=1,x=>x.private_project_url='secret',x=>x.irreversible_assumptions.live_keys='hidden',
  ]){
   const x=candidate();modify(x);
   assert.equal(check(x).candidate_method_structurally_consistent,false);
