@@ -31,6 +31,7 @@ export function quietSql(prefix){
  " OR EXISTS(SELECT 1 FROM (VALUES "+expected+") AS e(id,name,schedule,digest) WHERE NOT EXISTS(SELECT 1 FROM cron.job j WHERE j.jobid=e.id AND j.jobname=e.name AND j.schedule=e.schedule AND j.username='postgres' AND encode(sha256(convert_to(j.command,'UTF8')),'hex')=e.digest))",
  ...(lifecycle?[" OR NOT EXISTS(SELECT 1 FROM cron.job WHERE jobname='sellertray-lifecycle-notifications' AND username='postgres' AND schedule='17 * * * *' AND encode(sha256(convert_to(command,'UTF8')),'hex')="+q(sha('select public.materialize_sellertray_lifecycle_notifications();'))+")"]:[]),
  " THEN RAISE EXCEPTION 'Test maintenance baseline mismatch'; END IF;",
+ ...(prefix===0?[" IF EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname IN ('public','sellertray_private') AND c.relkind IN ('r','p','v','m','S','f')) OR EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname IN ('public','sellertray_private')) THEN RAISE EXCEPTION 'Retirement incomplete or partial replay'; END IF;"]:[]),
  " IF to_regclass('public.tenants') IS NOT NULL THEN EXECUTE 'SELECT count(*) FROM public.tenants' INTO n; IF n<>0 THEN RAISE EXCEPTION 'Merchant data present'; END IF; END IF;",
  " IF to_regclass('sellertray_private.runtime_config') IS NOT NULL THEN EXECUTE 'SELECT count(*) FROM sellertray_private.runtime_config' INTO n; IF n<>0 THEN RAISE EXCEPTION 'Worker config present'; END IF; END IF;",
  "END $oa5$;"
