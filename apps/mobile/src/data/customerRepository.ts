@@ -8,6 +8,14 @@ export type CustomerOrderSummary = {
   createdAt: string;
 };
 
+/** Never display reserved manual/walk-in customer keys as contact information. */
+export function customerContactPhone(customer: { phone: string | null; whatsappId: string }): string | null {
+  const phone = customer.phone?.trim() ?? '';
+  if (/^\+?[0-9]{7,15}$/.test(phone.replace(/[\s()-]/g, ''))) return phone;
+  const whatsappId = customer.whatsappId.trim();
+  return /^\+?[0-9]{7,15}$/.test(whatsappId.replace(/[\s()-]/g, '')) ? whatsappId : null;
+}
+
 export type MerchantCustomer = {
   id: string;
   tenantId: string;

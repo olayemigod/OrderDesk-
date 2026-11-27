@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+const view = readFileSync(resolve(import.meta.dirname,'../src/components/CustomersView.tsx'),'utf8');
+assert.match(view, /<View style=\{\[styles\.detailCard, appearance\.dark && darkStyles\.card\]\}>\s*<Text style=\{\[styles\.sectionTitle, appearance\.dark && darkStyles\.titleText\]\}>Order history/);
+assert.match(view, /style=\{\[styles\.orderRef, appearance\.dark && darkStyles\.titleText\]\}/);
+assert.match(view, /style=\{\[styles\.meta, appearance\.dark && darkStyles\.bodyText\]\}>\{formatDate\(order\.createdAt\)/);
+assert.match(view, /style=\{\[styles\.orderAmount, appearance\.dark && darkStyles\.titleText\]\}/);
+assert.match(view, /rowBorder: \{ borderTopColor:/);
+assert.match(view, /style=\{\[styles\.identityLabel, appearance\.dark && darkStyles\.bodyText\]\}/);
+assert.match(view, /style=\{\[styles\.fieldLabel, appearance\.dark && darkStyles\.bodyText\]\}/);
+assert.match(view, /onPress=\{\(\) => void openHistoryOrder\(order\.id\)\}/);
+console.log('Customer profile and order history dark-mode regression preflight passed.');

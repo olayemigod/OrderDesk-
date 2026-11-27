@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.115.0';
+import { customerContactPhone, customerPublicName } from '../_shared/customerContact.ts';
 
 type JsonRecord = Record<string, unknown>;
 type PrinterAction = 'save_printer' | 'request_print' | 'request_business_document_print' | 'update_print';
@@ -277,11 +278,13 @@ async function requestBusinessDocumentPrint(
       .maybeSingle();
     if (customerError) return json({ error: customerError.message }, 400);
     if (customer) {
-      customerName = cleanText(customer.display_name, 160)
-        ?? cleanText(customer.phone, 80)
-        ?? cleanText(customer.wa_id, 80)
-        ?? customerName;
-      customerPhone = cleanText(customer.phone, 80) ?? cleanText(customer.wa_id, 80);
+      customerName = customerPublicName(
+        cleanText(customer.display_name, 160),
+        customer.phone,
+        customer.wa_id,
+        customerName,
+      );
+      customerPhone = customerContactPhone(customer.phone, customer.wa_id);
     }
   }
 

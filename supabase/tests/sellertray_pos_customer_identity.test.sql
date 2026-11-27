@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(10);
+select extensions.plan(13);
 
 create temp table sellertray_pos_customer_fixture (
   tenant_id uuid not null,
@@ -259,6 +259,21 @@ select extensions.ok(
   (select changed_customer_rejected from sellertray_pos_customer_fixture),
   'Reusing a sale reference with a different customer is rejected'
 );
+
+-- New named customer without a phone is resolved exactly once on replay.
+alter table sellertray_pos_customer_fixture add column phone_less_order_id uuid;
+update sellertray_pos_customer_fixture f set phone_less_order_id=public.create_sellertray_pos_order_idempotent(
+  f.tenant_id,f.branch_id,null::uuid,'Named customer without phone',null,null,
+  jsonb_build_array(jsonb_build_object('catalog_item_id',f.product_id,'uom_id',f.uom_id,'quantity',1,'expected_selling_price',250,'expected_conversion_factor',1)),
+  '22222222-3333-4444-8555-666666666666'::uuid
+);
+select extensions.ok(exists(select 1 from public.orders o join public.customers c on c.tenant_id=o.tenant_id and c.id=o.customer_id where o.id=f.phone_less_order_id and c.phone is null and c.wa_id like 'manual:unlinked:%' and c.display_name='Named customer without phone'),'POS draft preserves distinct named customer without a phone') from sellertray_pos_customer_fixture f;
+select extensions.is(public.create_sellertray_pos_order_idempotent(
+  f.tenant_id,f.branch_id,null::uuid,'Named customer without phone',null,null,
+  jsonb_build_array(jsonb_build_object('catalog_item_id',f.product_id,'uom_id',f.uom_id,'quantity',1,'expected_selling_price',250,'expected_conversion_factor',1)),
+  '22222222-3333-4444-8555-666666666666'::uuid
+),f.phone_less_order_id,'Phone-less POS draft replay returns the existing order') from sellertray_pos_customer_fixture f;
+select extensions.is((select count(*)::integer from public.customers c where c.tenant_id=f.tenant_id and c.display_name='Named customer without phone'),1,'POS retry does not create duplicate phone-less customer') from sellertray_pos_customer_fixture f;
 
 select * from extensions.finish();
 rollback;
