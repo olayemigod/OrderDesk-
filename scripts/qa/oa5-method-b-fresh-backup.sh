@@ -6,20 +6,56 @@ umask 077
 REF=iukgsukdoowvnhlfmpml
 DEST='/mnt/c/Users/Mathew Alao/OneDrive/SellerTray Backup/Test'
 [[ -d "$DEST" ]] || { echo 'BLOCKED: existing encrypted backup destination missing'; exit 1; }
+# Discover tools before prompting for secrets. Prefer native client 17+;
+# otherwise reuse the image of the existing, isolated restoration container.
+BIN=/usr/lib/postgresql/17/bin
+if [[ -x "$BIN/pg_dump" && -x "$BIN/psql" && -x "$BIN/pg_restore" ]]; then export PATH="$BIN:$PATH"; fi
+native_ok=true
+for x in pg_dump pg_restore psql; do command -v "$x" >/dev/null || native_ok=false; done
+if [[ "$native_ok" == true ]]; then
+  for x in pg_dump pg_restore psql; do
+    major="$("$x" --version | grep -oE '[0-9]+\.[0-9]+' | head -1 | cut -d. -f1)"
+    [[ "$major" -ge 17 ]] || native_ok=false
+  done
+fi
+if [[ "$native_ok" != true ]]; then
+  command -v docker >/dev/null || { echo 'BLOCKED: PostgreSQL client 17+ or existing rehearsal image required'; exit 1; }
+  IMAGE="$(docker inspect --type container --format '{{.Image}}' sellertray-oa5-restore-20261107)"
+  [[ "$IMAGE" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo 'BLOCKED: unexpected rehearsal image identity'; exit 1; }
+  # Separate disposable client containers; never connect the preserved restore
+  # container to any network, mount its data, or start a database server.
+  for x in pg_dump pg_restore psql; do
+    major="$(docker run --pull=never --rm --network none --user postgres --entrypoint "$x" "$IMAGE" --version | grep -oE '[0-9]+\.[0-9]+' | head -1 | cut -d. -f1)"
+    [[ "$major" -ge 17 ]] || { echo 'BLOCKED: rehearsal image client is older than 17'; exit 1; }
+  done
+  docker_remote_client() {
+    local tool="$1"; shift
+    docker run --pull=never --rm -i --network bridge --user postgres --entrypoint "$tool" \
+      --env PGPASSWORD --env PGSSLROOTCERT=/tmp/oa5-ca.crt \
+      --mount "type=bind,src=$PGSSLROOTCERT,dst=/tmp/oa5-ca.crt,readonly" \
+      "$IMAGE" "$@"
+  }
+  psql() { docker_remote_client psql "$@"; }
+  pg_dump() { docker_remote_client pg_dump "$@"; }
+  pg_restore() {
+    docker run --pull=never --rm -i --network none --user postgres --entrypoint pg_restore "$IMAGE" "$@"
+  }
+  echo 'POSTGRES_CLIENT=EXISTING_PG17_PLUS_IMAGE'
+else
+  echo 'POSTGRES_CLIENT=NATIVE_17_PLUS'
+fi
+for x in gpg sha256sum; do command -v "$x" >/dev/null || { echo "BLOCKED: missing $x"; exit 1; }; done
 read -r -p 'Test dashboard session-pooler HOST (host only): ' HOST
 [[ "$HOST" =~ ^aws-[0-9]+-eu-west-1\.pooler\.supabase\.com$ ]] || { echo 'BLOCKED: unexpected Test pooler hostname'; exit 1; }
 unset PGHOST PGHOSTADDR PGPORT PGUSER PGDATABASE PGSERVICE PGSERVICEFILE PGPASSFILE PGOPTIONS PGSSLCERT PGSSLKEY PGPASSWORD
 if [[ ! -v PGSSLROOTCERT || -z "$PGSSLROOTCERT" ]]; then export PGSSLROOTCERT=/etc/ssl/certs/ca-certificates.crt; fi
 [[ -r "$PGSSLROOTCERT" ]] || { echo 'BLOCKED: trusted CA unavailable'; exit 1; }
+PGSSLROOTCERT="$(realpath "$PGSSLROOTCERT")"
+export PGSSLROOTCERT
 URL="postgresql://postgres.$REF@$HOST:5432/postgres?sslmode=verify-full&connect_timeout=10"
 read -r -s -p 'Existing TEST database password (not echoed): ' PGPASSWORD; echo
 [[ -n "$PGPASSWORD" ]] || exit 1
 export PGPASSWORD
-BIN=/usr/lib/postgresql/17/bin
-if [[ -x "$BIN/pg_dump" && -x "$BIN/psql" && -x "$BIN/pg_restore" ]]; then export PATH="$BIN:$PATH"; fi
-for x in pg_dump pg_restore psql gpg sha256sum; do command -v "$x" >/dev/null || { echo "BLOCKED: missing $x"; exit 1; }; done
-DUMP_MAJOR="$(pg_dump --version | grep -oE '[0-9]+\.[0-9]+' | head -1 | cut -d. -f1)"
-[[ "$DUMP_MAJOR" -ge 17 ]] || { echo 'BLOCKED: PostgreSQL client 17+ required'; exit 1; }
 WORK="$(mktemp -d "$HOME/oa5-current-test-backup.XXXXXX")"
 trap 'unset PGPASSWORD' EXIT
 export GPG_TTY="$(tty)"
