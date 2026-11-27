@@ -25,7 +25,7 @@ BEGIN
  OR NOT has_function_privilege('authenticated','auth.uid()','EXECUTE')
  OR (SELECT rolbypassrls OR rolsuper FROM pg_roles WHERE rolname='authenticated')
  THEN RAISE EXCEPTION 'Invalid authenticated test role prerequisites'; END IF;
-END $;
+END $$;
 SET LOCAL SESSION AUTHORIZATION postgres;
 DO $$
 BEGIN
