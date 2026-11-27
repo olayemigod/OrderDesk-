@@ -179,7 +179,7 @@ for (const permission of requiredBlockedAndroidPermissions) {
 }
 requireValue(app.android?.versionCode === 19, 'Android versionCode must be 19 for the merchant-reference QA line');
 requireValue(app.ios?.bundleIdentifier === 'ng.processedge.sellertray', 'iOS bundle ID must match SellerTray identity');
-requireValue(pkg.dependencies?.['expo-notifications'] === '~58.1.9', 'SellerTray mobile must pin expo-notifications for native push');
+requireValue(pkg.dependencies?.['expo-notifications'] === '~58.1.10', 'SellerTray mobile must pin expo-notifications for native push');
 requireValue(pkg.dependencies?.['expo-constants'] === '~58.0.16', 'SellerTray mobile must pin expo-constants for Expo push project identity');
 requireValue(
   (app.plugins ?? []).some((plugin) => Array.isArray(plugin) ? plugin[0] === 'expo-notifications' : plugin === 'expo-notifications'),
