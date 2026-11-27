@@ -56,6 +56,7 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [businessId, setBusinessId] = useState('');
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchScope, setBranchScope] = useState('');
   const [branchId, setBranchId] = useState('');
   const [page, setPage] = useState<Page>(handoffTarget?.page ?? readMerchantPageFromLocation() ?? 'overview');
   const [loading, setLoading] = useState(false);
@@ -97,7 +98,7 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
   useEffect(() => { if (session) void loadBusinesses(); }, [session?.access_token]);
   useEffect(() => {
     workspaceRequest.current += 1;
-    setBusinessIdentity(null); setBranches([]); setBranchId('');
+    setBusinessIdentity(null); setBranches([]); setBranchId(''); setBranchScope('');
     if (!businessId || !verifiedUserId || !membershipChecked) { setUnreadCount(0); return; }
     const restored = handoffPending.current && handoffTarget?.businessId === businessId
       ? handoffTarget.page
@@ -139,7 +140,7 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
 
   const managementBusinesses = useMemo(() => businesses.filter((row) => MANAGEMENT_ROLES.includes(row.role)), [businesses]);
   const business = managementBusinesses.find((row) => row.id === businessId) ?? null;
-  const branch = branches.find((row) => row.id === branchId) ?? null;
+  const branch = branchScope === businessId ? branches.find((row) => row.id === branchId) ?? null : null;
 
   async function loadBusinesses() {
     const currentSession = sessionRef.current;
@@ -188,7 +189,7 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
         applyBusinessIdentity(tenantId, parseBusinessIdentity(profileRow));
       }
       // Profile read failures must not prevent authorised Branch management.
-      setBranches(nextBranches); setBranchId(chosen);
+      setBranches(nextBranches); setBranchId(chosen); setBranchScope(tenantId);
     } catch (cause) {
       if (requestId === workspaceRequest.current) setError(errorMessage(cause, 'Unable to load SellerTray management data.'));
     } finally {
@@ -242,7 +243,7 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
   function selectBusiness(nextId: string) {
     if (nextId === businessId || !managementBusinesses.some(row => row.id === nextId)) return;
     workspaceRequest.current += 1; profileRevision.current += 1;
-    setBusinessIdentity(null); setBranches([]); setBranchId(''); setUnreadCount(0);
+    setBusinessIdentity(null); setBranches([]); setBranchId(''); setBranchScope(''); setUnreadCount(0);
     setBusinessId(nextId);
   }
   function navigate(next: Page) { setPage(next); if (businessId) syncMerchantPageUrl(businessId, next, 'push'); setNavOpen(false); }
@@ -286,6 +287,7 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
     onSignOut={() => void signOut()}
   />;
 
+  if (branchScope !== business.id) return <Status title="Opening your Business" body={error || 'Loading your permitted Branches.'} action={error ? <button className="primary-button" onClick={() => void refresh()}>Try again</button> : undefined} />;
   const currentIdentity = businessIdentity?.tenantId === business.id ? businessIdentity : null;
   const displayBusinessName = currentIdentity?.name || business.name;
   const managementRole = business.role as ManagementRole;
