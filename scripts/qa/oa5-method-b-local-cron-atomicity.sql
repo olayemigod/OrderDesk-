@@ -10,15 +10,25 @@ BEGIN
  OR (SELECT count(*) FROM supabase_migrations.schema_migrations)<>54
  OR (SELECT count(*) FROM auth.users)<>5
  OR (SELECT count(*) FROM auth.sessions)<>5
- OR (SELECT count(*) FROM cron.job)<>5
+ OR (SELECT count(*) FROM cron.job)<>4
  OR EXISTS(SELECT 1 FROM cron.job WHERE active OR username<>'postgres')
+ OR EXISTS(SELECT 1 FROM (VALUES
+   (1::bigint,'sellertray-prepare-usage-settlements','15 1 * * *'),
+   (2::bigint,'sellertray-whatsapp-notification-retry','* * * * *'),
+   (3::bigint,'sellertray-merchant-push-retry','* * * * *'),
+   (4::bigint,'sellertray-lifecycle-notifications','17 * * * *')
+ ) AS expected(jobid,jobname,schedule) WHERE NOT EXISTS (
+   SELECT 1 FROM cron.job j WHERE j.jobid=expected.jobid AND j.jobname=expected.jobname AND j.schedule=expected.schedule))
  OR (SELECT count(*) FROM cron.job WHERE jobname IN (
    'sellertray-prepare-usage-settlements','sellertray-whatsapp-notification-retry',
-   'sellertray-merchant-push-retry','sellertray-agreement-package-retry',
-   'sellertray-lifecycle-notifications'))<>5
+   'sellertray-merchant-push-retry',
+   'sellertray-lifecycle-notifications'))<>4
  OR EXISTS(SELECT 1 FROM net.http_request_queue)
  THEN RAISE EXCEPTION 'Unexpected local canonical or scheduler baseline'; END IF;
 END $$;
+-- The archive restore did not retain the hosted agreement retry job.
+-- Keep the exact observed local four-job baseline, not the hosted roster.
+-- The hosted historical fourth job remains independently protected.
 CREATE TEMP TABLE oa5_cron_before ON COMMIT DROP AS
  SELECT jobid,jobname,schedule,command,username,active FROM cron.job;
 DO $$
@@ -42,7 +52,7 @@ BEGIN
  v_id:=cron.schedule('sellertray-lifecycle-notifications','17 * * * *',
    'select public.materialize_sellertray_lifecycle_notifications();');
  PERFORM cron.alter_job(v_id,active=>false);
- IF (SELECT count(*) FROM cron.job)<>5 OR EXISTS(SELECT 1 FROM cron.job WHERE active)
+ IF (SELECT count(*) FROM cron.job)<>4 OR EXISTS(SELECT 1 FROM cron.job WHERE active)
  OR EXISTS(SELECT 1 FROM oa5_cron_before b WHERE b.jobname<>'sellertray-lifecycle-notifications'
     AND NOT EXISTS(SELECT 1 FROM cron.job j WHERE j.jobid=b.jobid AND j.jobname=b.jobname
         AND j.schedule=b.schedule AND j.command=b.command AND j.username=b.username AND NOT j.active))
@@ -53,7 +63,8 @@ END $$;
 ROLLBACK;
 DO $$
 BEGIN
- IF (SELECT count(*) FROM cron.job)<>5 OR EXISTS(SELECT 1 FROM cron.job WHERE active)
+ IF (SELECT count(*) FROM cron.job)<>4 OR EXISTS(SELECT 1 FROM cron.job WHERE active)
+ OR NOT EXISTS(SELECT 1 FROM cron.job WHERE jobid=4 AND jobname='sellertray-lifecycle-notifications' AND schedule='17 * * * *')
  OR EXISTS(SELECT 1 FROM net.http_request_queue)
  THEN RAISE EXCEPTION 'Unexpected post-rollback scheduler state'; END IF;
 END $$;
