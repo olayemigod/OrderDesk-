@@ -1,6 +1,27 @@
 -- Disposable network-none restored database only. No persistent fixture.
 -- Reuse the canonical synthetic commerce fixture from the existing pgTAP test.
 BEGIN;
+-- The archived local ACL lacks postgres INSERT on auth.users. Hosted Test
+-- already has it. Temporarily supply that single privilege for fixture setup
+-- in this transaction; ROLLBACK removes it along with the synthetic rows.
+DO $$
+BEGIN
+ IF current_user <> 'supabase_admin' OR inet_server_addr() IS NOT NULL
+ OR current_setting('cron.launch_active_jobs',true) IS DISTINCT FROM 'off'
+ OR (SELECT count(*) FROM auth.users)<>5
+ OR (SELECT count(*) FROM auth.sessions)<>5
+ OR (SELECT count(*) FROM public.tenants)<>0
+ OR (SELECT count(*) FROM supabase_migrations.schema_migrations)<>54
+ THEN RAISE EXCEPTION 'Unexpected local admin or baseline'; END IF;
+END $$;
+GRANT INSERT ON TABLE auth.users TO postgres;
+SET LOCAL SESSION AUTHORIZATION postgres;
+DO $$
+BEGIN
+ IF current_user <> 'postgres' OR session_user <> 'postgres'
+ OR (SELECT rolsuper FROM pg_roles WHERE rolname=current_user)
+ THEN RAISE EXCEPTION 'Invalid non-superuser test identity'; END IF;
+END $$;
 DO $$
 BEGIN
  IF (SELECT count(*) FROM auth.users)<>5 OR
