@@ -4,7 +4,12 @@
 # It does not modify the historical migration ledger or certify hosted readiness.
 set -Eeuo pipefail
 umask 077
-[[ "${1:-}" == "--execute-disposable-local" && $# == 1 ]] || { echo "Local rehearsal requires --execute-disposable-local"; exit 2; }
+MODE="${1:-}"
+case "$MODE" in
+ --execute-disposable-local) [[ $# == 1 ]] ;;
+ --resume-first-fk-failure) [[ $# == 2 ]] ;;
+ *) echo "Expected --execute-disposable-local or --resume-first-fk-failure <private prior log directory>"; exit 2 ;;
+esac
 C=sellertray-oa5-restore-20261107
 cd "$(git rev-parse --show-toplevel)"
 [[ "$(docker inspect -f '{{.HostConfig.NetworkMode}}' "$C")" == none ]]
@@ -17,11 +22,20 @@ if(!r.structural_source_check_passed||r.source_migrations_scanned!==461||
  r.source_inventory_sha256!=='d91f7762448aa0b1d4fc44093700e6bc48e20a6177c09bb8735ea01c98efa42c') throw Error('Unexpected migration corpus');
 console.log('Canonical source: 461 files, fingerprint PASS');
 JS
-LOG=$(mktemp -d "$HOME/oa5-method-b-local.XXXXXX")
+if [[ "$MODE" == --resume-first-fk-failure ]]; then
+ LOG=$(realpath -- "$2")
+ [[ "$LOG" == "$HOME"/oa5-method-b-local.* && -d "$LOG" ]]
+ [[ -f "$LOG/auth-before.private" && -f "$LOG/auth-after-retirement.private" ]]
+ cmp "$LOG/auth-before.private" "$LOG/auth-after-retirement.private"
+ [[ "$(cat "$LOG/replay-progress.log")" == "1 20260909080000_initial_core_schema_baseline.sql" ]]
+ grep -Fxq 'psql:<stdin>:23: ERROR:  permission denied for table users' "$LOG/20260909080000_initial_core_schema_baseline.sql.log"
+else
+ LOG=$(mktemp -d "$HOME/oa5-method-b-local.XXXXXX")
+fi
 echo "Private local logs: $LOG"
 db(){ docker exec -i "$C" psql -X -h /run/postgresql -U postgres -d postgres -v ON_ERROR_STOP=1 "$@"; }
 trap 'echo "BLOCKED: local rehearsal stopped. Do not retry on a partially rebuilt database. Inspect private logs: $LOG" >&2' ERR
-[[ "$(db -Atc "select (select count(*) from auth.users)||'|'||(select count(*) from auth.sessions)||'|'||(select count(*) from public.tenants)||'|'||(select count(*) from supabase_migrations.schema_migrations)")" == '5|5|3|54' ]]
+
 # Fingerprint all ordinary Auth tables, without returning any row content.
 auth_snapshot(){
  db -At <<'SQL'
@@ -31,10 +45,16 @@ WHERE n.nspname='auth' AND c.relkind='r' ORDER BY c.relname
 \gexec
 SQL
 }
+if [[ "$MODE" == --execute-disposable-local ]]; then
+[[ "$(db -Atc "select (select count(*) from auth.users)||'|'||(select count(*) from auth.sessions)||'|'||(select count(*) from public.tenants)||'|'||(select count(*) from supabase_migrations.schema_migrations)")" == '5|5|3|54' ]]
 auth_snapshot > "$LOG/auth-before.private"
 db -Atc "select id from storage.buckets order by id" | LC_ALL=C sort > "$LOG/buckets-before.private"
 db -Atc "select count(*) from storage.objects" > "$LOG/storage-before.private"
 db -Atc "select extname,extversion from pg_extension order by extname" | LC_ALL=C sort > "$LOG/extensions-before.private"
+else
+ auth_snapshot > "$LOG/auth-resume.private"
+ cmp "$LOG/auth-before.private" "$LOG/auth-resume.private"
+fi
 # Disable local cron launcher before replay. Fail closed if the extension is
 # preloaded but the installed version does not expose this control.
 cron_setting=$(db -Atc "select coalesce(current_setting('cron.launch_active_jobs',true),'unavailable')")
@@ -62,6 +82,40 @@ fi
 db_admin -c "select cron.alter_job(jobid,active=>false) from cron.job where active" > "$LOG/cron-pause.log"
 [[ "$(db_admin -Atc "select count(*) from cron.job where active")" == 0 ]]
 echo "Local scheduler disabled: PASS"
+# The first attempt established that the restored local ACL omits REFERENCES
+# on auth.users. Hosted Test read-only census confirmed postgres has an
+# explicit table REFERENCES grant. Restore only this local missing privilege,
+# not superuser status or wider access. Do not make any hosted ACL changes.
+if [[ "$(db -Atc "select has_table_privilege(current_user,'auth.users','REFERENCES')")" != t ]]; then
+ db_admin -c "grant references on table auth.users to postgres" > "$LOG/local-auth-references.log"
+fi
+[[ "$(db -Atc "select has_column_privilege(current_user,'auth.users','id','REFERENCES')")" == t ]]
+if [[ "$MODE" == --resume-first-fk-failure ]]; then
+ # Only the empty tenants table from the first two statements can remain.
+ # Reject all unexpected application objects and never CASCADE on resumption.
+ db <<'SQL'
+BEGIN;
+DO $
+BEGIN
+ IF (SELECT count(*) FROM auth.users) <> 5
+ OR (SELECT count(*) FROM auth.sessions) <> 5
+ OR (SELECT count(*) FROM supabase_migrations.schema_migrations) <> 54
+ OR (SELECT count(*) FROM public.tenants) <> 0
+ OR EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+            WHERE n.nspname IN ('public','sellertray_private'))
+ OR EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+            WHERE n.nspname IN ('public','sellertray_private')
+            AND c.relkind IN ('r','p','v','m','S','f')
+            AND NOT (n.nspname='public' AND c.relname='tenants' AND c.relkind='r'))
+ THEN RAISE EXCEPTION 'Unexpected partial baseline; refusing resumption'; END IF;
+END $;
+DROP TABLE public.tenants RESTRICT;
+COMMIT;
+SQL
+ mv "$LOG/replay-progress.log" "$LOG/first-attempt-progress.log"
+ mv "$LOG/20260909080000_initial_core_schema_baseline.sql.log" "$LOG/first-attempt-migration-1.log"
+ echo "Known partial migration removed; local Auth REFERENCES privilege reconciled: PASS"
+else
 # Repeat the proven local retirement inside a transaction, with a strict
 # allowlist for cross-schema cascades. No managed Auth rows or ledger writes.
 db > "$LOG/retirement.log" 2>&1 <<'SQL'
@@ -127,6 +181,7 @@ SQL
 auth_snapshot > "$LOG/auth-after-retirement.private"
 cmp "$LOG/auth-before.private" "$LOG/auth-after-retirement.private"
 echo "Selective retirement and managed Auth row preservation: PASS"
+fi
 # Files contain their own transaction boundaries. Run each in order, stop
 # at first error, and retain a private log. No fabricated ledger entries.
 export LC_ALL=C
