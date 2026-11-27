@@ -80,7 +80,6 @@ export function MobileShell({
     <SafeAreaView style={[styles.safeArea, dark && darkStyles.safeArea]}>
       <StatusBar
         barStyle={dark ? 'light-content' : 'dark-content'}
-        backgroundColor={dark ? theme.colors.navyDeep : theme.colors.cloud}
       />
 
       <View style={[styles.frame, dark && darkStyles.frame]}>

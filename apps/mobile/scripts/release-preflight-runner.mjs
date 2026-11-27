@@ -101,7 +101,7 @@ const blockedPermissions = new Set(app.android?.blockedPermissions ?? []);
 if (blockedPermissions.has('android.permission.BLUETOOTH_CONNECT')) throw new Error('Bluetooth printer connection must not be blocked when the SellerTray printer module is enabled');
 if (!blockedPermissions.has('android.permission.BLUETOOTH_SCAN')) throw new Error('Bluetooth scanning must remain blocked; SellerTray supports already-paired printers only');
 if (blockedPermissions.has('android.permission.CAMERA')) throw new Error('SellerTray POS barcode scanning requires Android camera permission');
-if (pkg.dependencies?.['expo-camera'] !== '~57.0.6') throw new Error('SellerTray POS barcode scanning must retain the pinned expo-camera dependency');
+if (pkg.dependencies?.['expo-camera'] !== '~58.0.14') throw new Error('SellerTray POS barcode scanning must retain the pinned Expo SDK 58 camera dependency');
 const cameraPlugin = (app.plugins ?? []).find((plugin) => Array.isArray(plugin) && plugin[0] === 'expo-camera');
 if (!cameraPlugin) throw new Error('SellerTray POS barcode scanning requires the expo-camera config plugin');
 if (!String(cameraPlugin?.[1]?.cameraPermission ?? '').includes('scan product barcodes')) throw new Error('SellerTray camera permission must explain product barcode scanning');

@@ -1,4 +1,4 @@
-import { forwardRef } from 'react';
+import { forwardRef, type ComponentRef } from 'react';
 import {
   StyleSheet,
   TextInput as NativeTextInput,
@@ -11,7 +11,7 @@ import {
   sellerTrayScaledLineHeight,
 } from '../theme/typography';
 
-export const SellerTrayTextInput = forwardRef<NativeTextInput, TextInputProps>(function SellerTrayTextInput(
+export const SellerTrayTextInput = forwardRef<ComponentRef<typeof NativeTextInput>, TextInputProps>(function SellerTrayTextInput(
   { style, ...props },
   ref,
 ) {

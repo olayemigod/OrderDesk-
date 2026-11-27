@@ -35,6 +35,7 @@ type Props = {
   onSaveBusiness: (businessId: string, input: BusinessProfileInput) => Promise<void>;
   onShiftChanged: (shift: CashShift | null) => void;
   onOpenOrders?: (customerId?: string) => void;
+  onOpenCustomerOrder?: (orderId: string) => Promise<void> | void;
   onSyncOfflineSales: () => Promise<void>;
   onDiscardOfflineSale: (clientReference: string) => Promise<void>;
 };
@@ -51,6 +52,7 @@ export function MoreWorkspace({
   onSaveBusiness,
   onShiftChanged,
   onOpenOrders,
+  onOpenCustomerOrder,
   onSyncOfflineSales,
   onDiscardOfflineSale,
 }: Props) {
@@ -250,7 +252,7 @@ export function MoreWorkspace({
         <Ionicons name="chevron-forward" size={19} color={theme.colors.subtle} />
       </Pressable>
 
-      <View style={styles.settingsBlock}><Text style={[styles.sectionLabel, dark && darkStyles.bodyText]}>BUSINESS</Text><SettingsHub business={business} onSaveBusiness={onSaveBusiness} /></View>
+      <View style={styles.settingsBlock}><Text style={[styles.sectionLabel, dark && darkStyles.bodyText]}>BUSINESS</Text><SettingsHub business={business} onSaveBusiness={onSaveBusiness} onOpenCustomerOrder={onOpenCustomerOrder} /></View>
       <Text style={[styles.buildStamp, dark && darkStyles.bodyText]}>{buildStamp}</Text>
     </View>
   );

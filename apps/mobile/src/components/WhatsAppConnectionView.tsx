@@ -95,7 +95,7 @@ export function WhatsAppConnectionView({ business }: { business: MerchantBusines
 
     let active = true;
 
-    async function handleUrl(url: string | null) {
+    async function handleUrl(url: string | null | undefined) {
       if (!active || !url) return;
       try {
         const callback = await parseEmbeddedSignupCallback(url);
