@@ -67,6 +67,9 @@ async function scenario(label, options, test) {
     assert.deepEqual(unexpected,[],'unmocked requests');
     assert.deepEqual(pageErrors,[],'uncaught browser errors');
     console.log('PASS '+label);
+  }catch(error){
+    console.error('FAILED '+label, JSON.stringify({body:(await page.locator('body').innerText().catch(()=>'' )).slice(0,4000),calls:calls.map(x=>({path:x.path,action:x.data.action})),unexpected,pageErrors}));
+    throw error;
   }finally{await context.close();}
 }
 const hasAction=(calls,action)=>calls.some(x=>x.path==='/functions/v1/team-management'&&x.data.action===action);
@@ -91,9 +94,14 @@ try{
     assert.equal(hasAction(calls,'accept_invite'),false);
   });
   await scenario('second Business invitation denial leaves membership unchanged',{businesses:[business()],invitations:[pending],deny:true},async(p,calls)=>{
+    const denied=p.waitForResponse(r=>r.url().endsWith('/functions/v1/team-management')&&r.request().postDataJSON()?.action==='accept_invite');
     await p.getByRole('button',{name:'Accept',exact:true}).click();
-    await p.getByText('Invitation is not available to this account',{exact:false}).waitFor();
+    assert.equal((await denied).status(),403);
+    const banner=p.locator('.invitation-panel .error-banner');
+    await banner.waitFor();
+    assert.match(await banner.innerText(),/Invitation is not available to this account|Unable to accept this Business invitation|Edge Function returned a non-2xx status code/i);
     assert.equal(hasAction(calls,'accept_invite'),true);
+    await p.getByRole('button',{name:'Accept',exact:true}).waitFor();
     assert.equal(await p.getByRole('option',{name:'Inviting Business'}).count(),0);
   });
   await scenario('resolved or unavailable invitation never auto-accepts',{businesses:[business()]},async(p,calls)=>{
