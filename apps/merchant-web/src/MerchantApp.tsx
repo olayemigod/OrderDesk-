@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import AiInsights from './AiInsights';
 import BusinessExpensesManagement from './BusinessExpensesManagement';
@@ -21,7 +21,10 @@ import WhatsAppManagement from './WhatsAppManagement';
 import type { MerchantHandoffTarget } from './merchantHandoff';
 import IncomingBusinessInvitations, { pendingInvitationIdFromBrowser } from './IncomingBusinessInvitations';
 import { SellerTrayBrand, SellerTrayMark, NavIcon, ShellIcon } from './merchantShell';
-import { SellerTrayInput, SellerTraySelect } from './SellerTrayElements';
+import { SellerTraySelect } from './SellerTrayElements';
+import MerchantAuth, { merchantAuthModeFromLocation, type MerchantAuthMode } from './MerchantAuth';
+import { BUSINESS_PROFILE_UPDATED_EVENT, type BusinessProfileUpdatedDetail } from './businessProfileEvents';
+import { readMerchantPageFromLocation, rememberMerchantPage, resolveMerchantPage, syncMerchantPageUrl, readMerchantLastPage } from './merchantRouteState';
 import { AVAILABLE_MERCHANT_PORTAL_NAVIGATION, MERCHANT_PORTAL_SECTIONS, type MerchantPortalPage, type MerchantPortalSection } from './portalNavigation';
 import { errorMessage, supabase } from './supabase';
 
@@ -29,6 +32,7 @@ type MerchantRole = 'owner' | 'manager' | 'staff';
 type ManagementRole = 'owner' | 'manager';
 type Page = MerchantPortalPage;
 type Business = { id: string; name: string; merchantCode: string; role: MerchantRole; currency: string; subscriptionStatus: string; whatsappConnectionStatus: string };
+type BusinessIdentity = { tenantId: string; name: string; logoUrl: string; currency: string };
 type Branch = { id: string; code: string; name: string; isDefault: boolean };
 
 const MANAGEMENT_ROLES: MerchantRole[] = ['owner', 'manager'];
@@ -39,11 +43,20 @@ type MerchantAppProps = { handoffTarget?: MerchantHandoffTarget | null };
 export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) {
   const [booting, setBooting] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
+  const sessionRef = useRef<Session | null>(null);
+  const businessRequest = useRef(0);
+  const workspaceRequest = useRef(0);
+  const [verifiedUserId, setVerifiedUserId] = useState('');
+  const [membershipChecked, setMembershipChecked] = useState(false);
+  const [authIntent, setAuthIntent] = useState<MerchantAuthMode | null>(() => merchantAuthModeFromLocation());
+  const [businessIdentity, setBusinessIdentity] = useState<BusinessIdentity | null>(null);
+  const handoffPending = useRef(Boolean(handoffTarget));
+  const initialRoutePending = useRef(true);
   const [businesses, setBusinesses] = useState<Business[]>([]);
-  const [businessId, setBusinessId] = useState(handoffTarget?.businessId ?? '');
+  const [businessId, setBusinessId] = useState('');
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchId, setBranchId] = useState('');
-  const [page, setPage] = useState<Page>(handoffTarget?.page ?? 'overview');
+  const [page, setPage] = useState<Page>(handoffTarget?.page ?? readMerchantPageFromLocation() ?? 'overview');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -55,13 +68,66 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
 
   useEffect(() => {
     let mounted = true;
-    void supabase.auth.getSession().then(({ data }) => { if (mounted) { setSession(data.session); setBooting(false); } });
-    const { data } = supabase.auth.onAuthStateChange((_event, next) => { setSession(next); if (!next) { setBusinesses([]); setBusinessId(''); setBranches([]); setBranchId(''); setUnreadCount(0); } });
-    return () => { mounted = false; data.subscription.unsubscribe(); };
+    function receiveSession(next: Session | null) {
+      if (!mounted) return;
+      if (sessionRef.current?.user.id !== next?.user.id || !next) {
+        businessRequest.current += 1; workspaceRequest.current += 1;
+        setVerifiedUserId(''); setMembershipChecked(false);
+        setBusinesses([]); setBusinessId(''); setBusinessIdentity(null);
+        setBranches([]); setBranchId(''); setUnreadCount(0);
+        initialRoutePending.current = true;
+      }
+      sessionRef.current = next;
+      setSession(next);
+      setBooting(false);
+    }
+    void supabase.auth.getSession().then(({ data, error: sessionError }) => {
+      if (sessionError && mounted) setError(errorMessage(sessionError, 'Unable to restore your session.'));
+      receiveSession(data.session);
+    }).catch(() => receiveSession(null));
+    const { data } = supabase.auth.onAuthStateChange((event, next) => {
+      // Do not await Auth/RPC work inside Supabase's session callback.
+      if (event === 'PASSWORD_RECOVERY') setAuthIntent('reset-password');
+      receiveSession(next);
+    });
+    return () => { mounted = false; businessRequest.current += 1; workspaceRequest.current += 1; data.subscription.unsubscribe(); };
   }, []);
   useEffect(() => { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; localStorage.setItem('sellertray.merchant.theme', dark ? 'dark' : 'light'); }, [dark]);
   useEffect(() => { if (session) void loadBusinesses(); }, [session?.access_token]);
-  useEffect(() => { if (businessId) void loadWorkspace(businessId); else setUnreadCount(0); }, [businessId]);
+  useEffect(() => {
+    workspaceRequest.current += 1;
+    setBusinessIdentity(null); setBranches([]); setBranchId('');
+    if (!businessId || !verifiedUserId || !membershipChecked) { setUnreadCount(0); return; }
+    const restored = handoffPending.current && handoffTarget?.businessId === businessId
+      ? handoffTarget.page
+      : initialRoutePending.current ? resolveMerchantPage(businessId) : readMerchantLastPage(businessId) ?? 'overview';
+    handoffPending.current = false;
+    initialRoutePending.current = false;
+    setPage(restored);
+    syncMerchantPageUrl(businessId, restored, 'replace');
+    void loadWorkspace(businessId);
+  }, [businessId, verifiedUserId, membershipChecked]);
+  useEffect(() => {
+    const onPopState = () => {
+      if (!businessId) return;
+      const restored = readMerchantPageFromLocation() ?? 'overview';
+      setPage(restored);
+      rememberMerchantPage(businessId, restored);
+      if (!readMerchantPageFromLocation()) syncMerchantPageUrl(businessId, restored, 'replace');
+      setNavOpen(false);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [businessId]);
+  useEffect(() => {
+    const onBusinessProfileUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<BusinessProfileUpdatedDetail>).detail;
+      if (!detail || detail.tenantId !== businessId) return;
+      applyBusinessIdentity(detail.tenantId, detail);
+    };
+    window.addEventListener(BUSINESS_PROFILE_UPDATED_EVENT, onBusinessProfileUpdated);
+    return () => window.removeEventListener(BUSINESS_PROFILE_UPDATED_EVENT, onBusinessProfileUpdated);
+  }, [businessId]);
   useEffect(() => {
     if (!navOpen) return;
     const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setNavOpen(false); };
@@ -74,31 +140,63 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
   const branch = branches.find((row) => row.id === branchId) ?? null;
 
   async function loadBusinesses() {
+    const currentSession = sessionRef.current;
+    if (!currentSession) return;
+    const revision = ++businessRequest.current;
+    const current = () => businessRequest.current === revision && sessionRef.current?.access_token === currentSession.access_token;
     setLoading(true); setError(null);
     try {
+      const verified = await supabase.auth.getUser(currentSession.access_token);
+      if (!current()) return;
+      if (verified.error || verified.data.user?.id !== currentSession.user.id) throw verified.error ?? new Error('Unable to verify your SellerTray session.');
       const { data, error: rpcError } = await supabase.rpc('sellertray_list_businesses_for_current_user');
+      if (!current()) return;
       if (rpcError) throw rpcError;
       const next = ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id ?? ''), name: String(row.name ?? 'SellerTray business'), merchantCode: String(row.merchant_code ?? ''), role: merchantRole(row.role), currency: String(row.currency ?? 'NGN'), subscriptionStatus: String(row.subscription_status ?? 'unknown'), whatsappConnectionStatus: String(row.whatsapp_connection_status ?? 'not_connected') } satisfies Business));
       setBusinesses(next);
+      setVerifiedUserId(currentSession.user.id);
+      setMembershipChecked(true);
       const manageable = next.filter((row) => MANAGEMENT_ROLES.includes(row.role));
-      if (handoffTarget?.businessId && !manageable.some((row) => row.id === handoffTarget.businessId)) {
+      if (handoffPending.current && handoffTarget?.businessId && !manageable.some((row) => row.id === handoffTarget.businessId)) {
         setBusinessId('');
         setError('This SellerTray continuation is no longer authorized for the selected Business. Return to SellerTray mobile and try again.');
         return;
       }
-      setBusinessId((current) => manageable.some((row) => row.id === current) ? current : manageable[0]?.id ?? '');
-    } catch (cause) { setError(errorMessage(cause, 'Unable to load your SellerTray businesses.')); } finally { setLoading(false); }
+      setBusinessId((selected) => handoffPending.current && handoffTarget?.businessId ? handoffTarget.businessId : manageable.some((row) => row.id === selected) ? selected : manageable[0]?.id ?? '');
+    } catch (cause) {
+      if (current()) { setMembershipChecked(false); setVerifiedUserId(''); setBusinesses([]); setBusinessId(''); setError(errorMessage(cause, 'Unable to load your SellerTray businesses.')); }
+    } finally { if (current()) setLoading(false); }
   }
 
   async function loadWorkspace(tenantId: string) {
+    const requestId = ++workspaceRequest.current;
     setLoading(true); setError(null);
     try {
-      const branchResult = await supabase.rpc('get_sellertray_accessible_branches', { p_tenant_id: tenantId });
+      const [branchResult, profileResult] = await Promise.all([
+        supabase.rpc('get_sellertray_accessible_branches', { p_tenant_id: tenantId }),
+        supabase.rpc('get_sellertray_business_profile', { p_tenant_id: tenantId }),
+      ]);
+      if (requestId !== workspaceRequest.current) return;
       if (branchResult.error) throw branchResult.error;
       const nextBranches = ((branchResult.data ?? []) as Array<Record<string, unknown>>).map((row) => ({ id: String(row.id ?? ''), code: String(row.code ?? ''), name: String(row.name ?? 'Branch'), isDefault: row.is_default === true } satisfies Branch));
       const chosen = nextBranches.find((row) => row.id === branchId)?.id ?? nextBranches.find((row) => row.isDefault)?.id ?? nextBranches[0]?.id ?? '';
+      if (!profileResult.error) {
+        const profileRow = Array.isArray(profileResult.data) ? profileResult.data[0] : profileResult.data;
+        applyBusinessIdentity(tenantId, parseBusinessIdentity(profileRow));
+      }
+      // Profile read failures must not prevent authorised Branch management.
       setBranches(nextBranches); setBranchId(chosen);
-    } catch (cause) { setError(errorMessage(cause, 'Unable to load SellerTray management data.')); } finally { setLoading(false); }
+    } catch (cause) {
+      if (requestId === workspaceRequest.current) setError(errorMessage(cause, 'Unable to load SellerTray management data.'));
+    } finally {
+      if (requestId === workspaceRequest.current) setLoading(false);
+    }
+  }
+  function applyBusinessIdentity(tenantId: string, identity: Omit<BusinessIdentity, 'tenantId'>) {
+    setBusinessIdentity({ ...identity, tenantId });
+    setBusinesses((previous) => previous.map((row) => row.id === tenantId
+      ? { ...row, name: identity.name || row.name, currency: identity.currency || row.currency }
+      : row));
   }
 
   const loadUnreadCount = useCallback(async (tenantId: string) => {
@@ -138,12 +236,33 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
 
   async function refresh() { if (businessId) await Promise.all([loadWorkspace(businessId), loadUnreadCount(businessId)]); }
   async function signOut() { await supabase.auth.signOut(); }
-  function navigate(next: Page) { setPage(next); setNavOpen(false); }
+  function navigate(next: Page) { setPage(next); if (businessId) syncMerchantPageUrl(businessId, next, 'push'); setNavOpen(false); }
   function openBranchPage(next: Page, nextBranchId: string) { setBranchId(nextBranchId); navigate(next); }
   function toggleSection(section: MerchantPortalSection) { setCollapsedSections((current) => { const next = new Set(current); if (next.has(section)) next.delete(section); else next.add(section); return next; }); }
 
   if (booting) return <Status title="Opening SellerTray" body="Checking your merchant session." />;
-  if (!session) return <Login />;
+  function changeAuthMode(mode: MerchantAuthMode) {
+    const next = mode === 'create-business' || mode === 'reset-password' ? mode : null;
+    setAuthIntent(next);
+    const url = new URL(window.location.href);
+    if (next) url.searchParams.set('auth', next);
+    else url.searchParams.delete('auth');
+    window.history.replaceState({}, '', url);
+  }
+  const pendingInvitationId = pendingInvitationIdFromBrowser();
+  // An invitation never becomes a provisioning flow, even with an old create-business URL.
+  const createIntent = authIntent === 'create-business' && !pendingInvitationId && (!membershipChecked || businesses.length === 0);
+  if (!session || authIntent === 'reset-password' || createIntent) return <MerchantAuth
+    session={session}
+    initialMode={authIntent === 'reset-password' ? 'reset-password' : createIntent ? 'create-business' : 'sign-in'}
+    invitationId={pendingInvitationId}
+    onModeChange={changeAuthMode}
+    onBusinessCreated={loadBusinesses}
+  />;
+  if (!membershipChecked || verifiedUserId !== session.user.id) return error
+    ? <Status title="We could not open your Business" body={error} action={<div className="auth-status-actions"><button className="primary-button" onClick={() => void loadBusinesses()}>Try again</button><button className="secondary-button" onClick={() => void signOut()}>Sign out</button></div>} />
+    : <Status title="Opening your business" body="Verifying your SellerTray session and Business access." />;
+  if (!businesses.length && !pendingInvitationId && !handoffPending.current) return <MerchantAuth session={session} initialMode="create-business" onModeChange={changeAuthMode} onBusinessCreated={loadBusinesses} />;
   if (loading && businesses.length === 0) return <Status title="Opening your business" body="Loading SellerTray management." />;
   if (businesses.length > 0 && managementBusinesses.length === 0) return <InvitationAccess
     title="Use SellerTray mobile for daily operations"
@@ -158,6 +277,8 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
     onSignOut={() => void signOut()}
   />;
 
+  const currentIdentity = businessIdentity?.tenantId === business.id ? businessIdentity : null;
+  const displayBusinessName = currentIdentity?.name || business.name;
   const managementRole = business.role as ManagementRole;
   const currentNav = NAV.find((item) => item.id === page);
   const currentPageLabel = page === 'notifications' ? 'Notifications' : currentNav?.label ?? 'Dashboard';
@@ -176,12 +297,12 @@ export default function MerchantApp({ handoffTarget = null }: MerchantAppProps) 
           return <div key={section} className="nav-group"><button className="nav-section-button" aria-expanded={!collapsed} onClick={() => toggleSection(section)}><span>{section}</span><span className={collapsed ? 'nav-chevron collapsed' : 'nav-chevron'}><ShellIcon name="chevron" /></span></button><div className={collapsed ? 'nav-group-items collapsed' : 'nav-group-items'}>{items.map((item) => <button key={item.id} aria-current={page === item.id ? 'page' : undefined} className={page === item.id ? 'nav-button active' : 'nav-button'} onClick={() => navigate(item.id)}><span className="nav-button-icon"><NavIcon name={item.id} /></span><span className="nav-button-label">{item.label}</span></button>)}</div></div>;
         })}
       </nav>
-      <div className="sidebar-foot"><div className="account-summary"><span className="account-avatar">{accountInitial(session.user.email)}</span><div><strong>{session.user.email ?? 'SellerTray account'}</strong><span>{title(business.role)}</span></div></div><button className="text-button" onClick={() => void signOut()}>Sign out</button></div>
+      <div className="sidebar-foot"><div className="account-summary"><BusinessAvatar logoUrl={currentIdentity?.logoUrl ?? ''} fallback={accountInitial(session.user.email)} businessName={displayBusinessName} /><div><strong>{displayBusinessName}</strong><span>{title(business.role)} · {session.user.email ?? 'SellerTray account'}</span></div></div><button className="text-button" onClick={() => void signOut()}>Sign out</button></div>
     </aside>
 
     <main className="workspace">
       <header className="topbar">
-        <div className="topbar-heading"><button className="mobile-menu-button" type="button" aria-label="Open navigation" aria-controls="merchant-navigation" aria-expanded={navOpen} onClick={() => setNavOpen(true)}><ShellIcon name="menu" /></button><div><p className="eyebrow">{business.name}</p><h1>{currentPageLabel}</h1><p className="topbar-context"><span className="context-dot" />{branch?.name ?? 'No active Branch'} <span aria-hidden="true">·</span> {title(business.role)}</p></div></div>
+        <div className="topbar-heading"><button className="mobile-menu-button" type="button" aria-label="Open navigation" aria-controls="merchant-navigation" aria-expanded={navOpen} onClick={() => setNavOpen(true)}><ShellIcon name="menu" /></button><div><p className="eyebrow">{displayBusinessName}</p><h1>{currentPageLabel}</h1><p className="topbar-context"><span className="context-dot" />{branch?.name ?? 'No active Branch'} <span aria-hidden="true">·</span> {title(business.role)}</p></div></div>
         <div className="topbar-actions"><Select label="Business" value={businessId} onChange={setBusinessId}>{managementBusinesses.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</Select><Select label="Branch" value={branchId} onChange={setBranchId} disabled={!branches.length}>{branches.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</Select><button className="icon-button compact-icon-button notification-bell-button" aria-label={unreadCount ? `Open notifications, ${unreadCount} unread` : 'Open notifications'} title="Notifications" onClick={() => navigate('notifications')}><ShellIcon name="bell" />{unreadCount > 0 ? <span className="notification-badge">{unreadCount > 99 ? '99+' : unreadCount}</span> : null}</button><button className="icon-button compact-icon-button" aria-label={dark ? 'Use light theme' : 'Use dark theme'} title={dark ? 'Use light theme' : 'Use dark theme'} onClick={() => setDark((value) => !value)}><ShellIcon name={dark ? 'sun' : 'moon'} /></button><button className="secondary-button refresh-button" disabled={loading} onClick={() => void refresh()}><ShellIcon name="refresh" />{loading ? 'Refreshing' : 'Refresh'}</button></div>
       </header>
 
@@ -236,81 +357,17 @@ function InvitationAccess({
   </main>;
 }
 
-function Login() {
-  const invitationId = pendingInvitationIdFromBrowser();
-  const [mode, setMode] = useState<'sign-in' | 'join'>('sign-in');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState('');
-  const [success, setSuccess] = useState(false);
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true);
-    setMessage('');
-    setSuccess(false);
-    try {
-      if (mode === 'join') {
-        if (!invitationId) throw new Error('This invitation link is missing. Ask the Business to send a new invitation.');
-        if (password.length < 8) throw new Error('Use at least 8 characters for your password.');
-        if (password !== confirmPassword) throw new Error('The passwords do not match.');
-        // This is only a non-authoritative invitation locator; no membership
-        // is granted until the invited email signs in and explicitly accepts.
-        const verificationUrl = new URL(window.location.href);
-        verificationUrl.search = '';
-        verificationUrl.hash = '';
-        verificationUrl.searchParams.set('invitation', invitationId);
-        const { data, error } = await supabase.auth.signUp({
-          email: email.trim(),
-          password,
-          options: { emailRedirectTo: verificationUrl.toString() },
-        });
-        if (error) throw error;
-        setSuccess(true);
-        setMessage(data.session
-          ? 'Account created. Reviewing invitations for your email.'
-          : 'Check your email to confirm your SellerTray account. After confirmation, return to review and accept the invitation.');
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-        if (error) throw error;
-      }
-    } catch (cause) {
-      setMessage(errorMessage(cause, mode === 'join' ? 'Unable to create your SellerTray account.' : 'Unable to sign in.'));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return <div className="login-shell">
-    <section className="login-brand">
-      <SellerTrayMark large />
-      <p className="eyebrow">SellerTray</p>
-      <h1>Manage the business. Keep selling on mobile.</h1>
-      <p>Review sales, products, stock, purchasing, money, channels and Branch performance from one governed merchant workspace.</p>
-    </section>
-    <form className="login-card" onSubmit={(event) => void submit(event)}>
-      <div>
-        <p className="eyebrow">Merchant Web</p>
-        <h2>{mode === 'join' ? 'Create an account to accept an invitation' : 'Sign in'}</h2>
-        <p className="muted">{mode === 'join'
-          ? 'Use the email address that received the invitation. Your Business access starts only after you accept.'
-          : 'Use the same SellerTray account you use for your business.'}</p>
-      </div>
-      <label>Email<SellerTrayInput type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
-      <PasswordField label="Password" value={password} onChange={setPassword} visible={showPassword} onToggle={() => setShowPassword(value => !value)} autoComplete={mode === 'join' ? 'new-password' : 'current-password'} />
-      {mode === 'join' && <PasswordField label="Confirm password" value={confirmPassword} onChange={setConfirmPassword} visible={showConfirmPassword} onToggle={() => setShowConfirmPassword(value => !value)} autoComplete="new-password" />}
-      {message ? <div className={success ? 'auth-message success' : 'error-banner compact'} role="status">{message}</div> : null}
-      <button type="submit" className="primary-button" disabled={busy || (mode === 'join' && success)}>{busy ? 'Please wait…' : mode === 'join' ? 'Create account' : 'Continue'}</button>
-      {invitationId && <button type="button" className="text-button" onClick={() => { setMode(mode === 'join' ? 'sign-in' : 'join'); setMessage(''); setSuccess(false); setPassword(''); setConfirmPassword(''); setShowPassword(false); setShowConfirmPassword(false); }}>
-        {mode === 'join' ? 'Already have an account? Sign in' : 'New to SellerTray? Create an account to accept the invitation'}
-      </button>}
-    </form>
-  </div>;
+function BusinessAvatar({ logoUrl, fallback, businessName }: { logoUrl: string; fallback: string; businessName: string }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setFailed(false); }, [logoUrl]);
+  if (!logoUrl || failed) return <span className="account-avatar">{fallback}</span>;
+  return <span className="account-avatar"><img src={logoUrl} alt={`${businessName} logo`} onError={() => setFailed(true)} style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 'inherit' }} /></span>;
 }
+function parseBusinessIdentity(value: unknown): Omit<BusinessIdentity, 'tenantId'> {
+  const row = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  return { name:String(row.name ?? ''), logoUrl:typeof (row.logoUrl ?? row.logo_url)==='string' ? String(row.logoUrl ?? row.logo_url) : '',currency:String(row.currency ?? 'NGN') };
+}
+
 function Select({ label, value, onChange, disabled, children }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean; children: ReactNode }) { return <label className="select-field"><span>{label}</span><SellerTraySelect value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled}>{children}</SellerTraySelect></label>; }
 function Context({ label, value }: { label: string; value: string }) { return <div><span>{label}</span><strong>{value}</strong></div>; }
 function Heading({ eyebrow, title: heading, note }: { eyebrow: string; title: string; note?: string }) { return <div className="section-heading"><div><p className="eyebrow">{eyebrow}</p><h2>{heading}</h2></div>{note ? <p className="muted">{note}</p> : null}</div>; }
@@ -322,39 +379,3 @@ function accountInitial(value: string | undefined): string { return value?.trim(
 function title(value: string): string { return value ? value[0].toUpperCase() + value.slice(1) : value; }
 function statusText(value: string): string { return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()); }
 
-function PasswordField({
-  label,
-  value,
-  onChange,
-  visible,
-  onToggle,
-  autoComplete,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  visible: boolean;
-  onToggle: () => void;
-  autoComplete: string;
-}) {
-  return <label>
-    {label}
-    <span className="password-field">
-      <SellerTrayInput
-        type={visible ? 'text' : 'password'}
-        autoComplete={autoComplete}
-        minLength={autoComplete === 'current-password' ? undefined : 8}
-        required
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-      <button
-        type="button"
-        className="password-toggle"
-        aria-label={visible ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
-        aria-pressed={visible}
-        onClick={onToggle}
-      >{visible ? 'Hide' : 'Show'}</button>
-    </span>
-  </label>;
-}
