@@ -7,6 +7,9 @@ on:
     paths:
       - 'supabase/functions/merchant-order/**'
       - 'supabase/functions/pos-checkout/**'
+      - 'supabase/functions/printer/**'
+      - 'supabase/functions/financial-document/**'
+      - 'supabase/functions/_shared/customerContact.ts'
       - 'supabase/migrations/20261010101500_pos_draft_client_idempotency.sql'
       - 'supabase/migrations/20261010101600_offline_pos_replay_validation.sql'
       - 'supabase/migrations/20261022102500_offline_pos_payment_parity.sql'
@@ -27,6 +30,9 @@ on:
     paths:
       - 'supabase/functions/merchant-order/**'
       - 'supabase/functions/pos-checkout/**'
+      - 'supabase/functions/printer/**'
+      - 'supabase/functions/financial-document/**'
+      - 'supabase/functions/_shared/customerContact.ts'
       - 'supabase/migrations/20261010101500_pos_draft_client_idempotency.sql'
       - 'supabase/migrations/20261010101600_offline_pos_replay_validation.sql'
       - 'supabase/migrations/20261022102500_offline_pos_payment_parity.sql'
@@ -64,10 +70,19 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - name: Typecheck offline payment Edge Functions
+      - name: Typecheck offline payment and customer document Edge Functions
         run: |
-          deno check --node-modules-dir=auto supabase/functions/merchant-order/index.ts
-          deno check --node-modules-dir=auto supabase/functions/pos-checkout/index.ts
+          # Deno auto-discovers the root npm workspaces, including unrelated Mobile Expo packages.
+          # Check the exact Edge source in a standalone directory instead of resolving client dependencies.
+          edge_root="$(mktemp -d "${RUNNER_TEMP}/sellertray-edge-check.XXXXXX")"
+          trap 'rm -rf "$edge_root"' EXIT
+          cp -a supabase/functions "$edge_root/functions"
+          diff -qr supabase/functions "$edge_root/functions"
+          cd "$edge_root"
+          deno check --node-modules-dir=auto functions/merchant-order/index.ts
+          deno check --node-modules-dir=auto functions/pos-checkout/index.ts
+          deno check --node-modules-dir=auto functions/printer/index.ts
+          deno check --node-modules-dir=auto functions/financial-document/index.ts
 
   mobile-offline-contract:
     runs-on: ubuntu-latest

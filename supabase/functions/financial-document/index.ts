@@ -1,4 +1,5 @@
 import { PDFDocument, StandardFonts, rgb } from 'npm:pdf-lib@1.17.1';
+import { customerContactPhone, customerPublicName } from '../_shared/customerContact.ts';
 
 type J = Record<string, unknown>;
 
@@ -150,8 +151,8 @@ async function loadDocument(id: string): Promise<J | null> {
     business_name: tenant.name || 'SellerTray merchant',
     business_email: tenant.business_email || null,
     business_phone: tenant.business_phone || null,
-    customer_name: customer.display_name || customer.phone || customer.wa_id || 'Customer',
-    customer_phone: customer.phone || customer.wa_id || null,
+    customer_name: customerPublicName(customer.display_name, customer.phone, customer.wa_id),
+    customer_phone: customerContactPhone(customer.phone, customer.wa_id),
     payment_method_type: payment.method_type || null,
     payment_provider: payment.provider || null,
     payment_reference: payment.provider_reference || null,
@@ -364,7 +365,8 @@ async function upload(path: string, pdf: Uint8Array): Promise<void> {
       'cache-control': '3600',
       'x-upsert': 'true',
     },
-    body: pdf,
+    // Copy the exact PDF byte range into an ArrayBuffer-backed request body.
+    body: new Uint8Array(pdf).buffer,
   });
   if (!r.ok) throw new Error('Financial document upload failed with HTTP ' + r.status);
 }

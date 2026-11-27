@@ -83,3 +83,6 @@ export const MERCHANT_PORTAL_SECTIONS: MerchantPortalSection[] = [
 ];
 
 export const AVAILABLE_MERCHANT_PORTAL_NAVIGATION = MERCHANT_PORTAL_NAVIGATION.filter((item) => item.available);
+
+// Notifications is a governed header destination rather than a sidebar entry.
+export const AVAILABLE_MERCHANT_PORTAL_PAGE_IDS: MerchantPortalPage[] = [...AVAILABLE_MERCHANT_PORTAL_NAVIGATION.map(item => item.id), 'notifications'];

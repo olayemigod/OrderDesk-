@@ -14,6 +14,8 @@ const [source, authEmailSource, inviteHtml, inviteJs, inviteCss, incomingInvitat
   readFile(path.join(merchantRoot, 'src/MerchantApp.tsx'), 'utf8'),
 ]);
 
+const merchantAuthSource = await readFile(path.join(merchantRoot, 'src/MerchantAuth.tsx'), 'utf8');
+const joinSource = merchantAuthSource.slice(merchantAuthSource.indexOf('async function joinInvitation'), merchantAuthSource.indexOf('async function requestPasswordReset'));
 const failures = [];
 function expect(condition, message) {
   if (!condition) failures.push(message);
@@ -83,8 +85,8 @@ expect(inviteCss.length > 0, 'browser fallback must ship self-hosted styles');
 expect(merchantAppSource.includes("import IncomingBusinessInvitations, { pendingInvitationIdFromBrowser } from './IncomingBusinessInvitations'"), 'Production Merchant Web must mount the existing governed invitation review UI');
 expect(merchantAppSource.includes('if (!business) return <InvitationAccess') && merchantAppSource.includes('managementBusinesses.length === 0) return <InvitationAccess'), 'Invited users with zero Businesses or Cashier-only membership must be allowed to review invitations');
 expect(merchantAppSource.includes('pendingInvitationIdFromBrowser() && <IncomingBusinessInvitations onMembershipChanged={loadBusinesses} />'), 'Existing Owner/Manager users must also be able to review a focused second-Business invitation');
-expect(merchantAppSource.includes('supabase.auth.signUp({') && merchantAppSource.includes('emailRedirectTo: verificationUrl.toString()') && !merchantAppSource.includes("functions.invoke('provision-business'"), 'New invitees may register without automatically creating a separate Business');
-expect(merchantAppSource.includes('verificationUrl.searchParams.set(\'invitation\', invitationId)'), 'Sign-up confirmation must preserve the validated invitation locator');
+expect(joinSource.includes('supabase.auth.signUp({') && joinSource.includes('emailRedirectTo: merchantPortalUrl(undefined, invitationId)') && !joinSource.includes("functions.invoke('provision-business'") && merchantAuthSource.includes('if (invitationId) {'), 'New invitees may register without automatically creating a separate Business');
+expect(merchantAuthSource.includes("url.searchParams.set('invitation', invitationId)") && merchantAppSource.includes('invitationId={pendingInvitationId}'), 'Sign-up confirmation must preserve the validated invitation locator');
 expect(incomingInvitationsSource.includes('export function pendingInvitationIdFromBrowser'), 'Invitation focus must use the existing shared validated browser-locator reader');
 expect(incomingInvitationsSource.includes("body: { action, invitationId }"), 'Acceptance/decline must remain server-authoritative');
 

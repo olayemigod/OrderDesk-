@@ -1,15 +1,27 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { Image, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import type {
   BusinessProfileInput,
   MerchantBusiness,
 } from '../data/businessRepository';
+import {
+  governedBusinessLogoPath,
+  removeBusinessLogo,
+  uploadBusinessLogo,
+} from '../data/businessLogoRepository';
+import { sellerTrayTheme as theme } from '../theme/sellerTrayTheme';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 
 type Props = {
   business: MerchantBusiness;
   onSave: (businessId: string, input: BusinessProfileInput) => Promise<void>;
+};
+
+type SelectedLogo = {
+  uri: string;
+  mimeType: string;
 };
 
 export function BusinessProfileView({ business, onSave }: Props) {
@@ -19,9 +31,10 @@ export function BusinessProfileView({ business, onSave }: Props) {
   const [businessType, setBusinessType] = useState(business.businessType ?? '');
   const [email, setEmail] = useState(business.businessEmail ?? '');
   const [phone, setPhone] = useState(business.businessPhone ?? '');
-  const [logoUrl, setLogoUrl] = useState(business.logoUrl ?? '');
   const [currency, setCurrency] = useState(business.currency);
   const [timezone, setTimezone] = useState(business.timezone);
+  const [selectedLogo, setSelectedLogo] = useState<SelectedLogo | null>(null);
+  const [removeLogo, setRemoveLogo] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -31,12 +44,49 @@ export function BusinessProfileView({ business, onSave }: Props) {
     setBusinessType(business.businessType ?? '');
     setEmail(business.businessEmail ?? '');
     setPhone(business.businessPhone ?? '');
-    setLogoUrl(business.logoUrl ?? '');
     setCurrency(business.currency);
     setTimezone(business.timezone);
+    setSelectedLogo(null);
+    setRemoveLogo(false);
     setError(null);
     setNotice(null);
   }, [business]);
+
+  async function chooseBusinessLogo() {
+    if (!canEdit || saving) return;
+    setError(null);
+    setNotice(null);
+
+    if (Platform.OS === 'ios') {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setError('Allow photo access to choose your business logo.');
+        return;
+      }
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.9,
+    });
+    if (result.canceled || !result.assets[0]) return;
+
+    const asset = result.assets[0];
+    const mimeType = (asset.mimeType ?? 'image/jpeg').toLowerCase();
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(mimeType)) {
+      setError('Business logo must be a PNG, JPG, or WebP image.');
+      return;
+    }
+    if (typeof asset.fileSize === 'number' && asset.fileSize > 5 * 1024 * 1024) {
+      setError('Choose a business logo that is 5 MB or smaller.');
+      return;
+    }
+
+    setSelectedLogo({ uri: asset.uri, mimeType });
+    setRemoveLogo(false);
+  }
 
   async function save() {
     if (!canEdit) return;
@@ -47,23 +97,51 @@ export function BusinessProfileView({ business, onSave }: Props) {
     setSaving(true);
     setError(null);
     setNotice(null);
+
+    const previousLogoUrl = business.logoUrl?.trim() || null;
+    const previousLogoPath = governedBusinessLogoPath(business.id, previousLogoUrl);
+    let uploadedLogoPath: string | null = null;
+    let nextLogoUrl = removeLogo ? null : previousLogoUrl;
+
     try {
+      if (selectedLogo) {
+        const uploaded = await uploadBusinessLogo(business.id, selectedLogo.uri, selectedLogo.mimeType);
+        uploadedLogoPath = uploaded.objectPath;
+        nextLogoUrl = uploaded.publicUrl;
+      }
+
       await onSave(business.id, {
         name,
         businessEmail: email || null,
         businessPhone: phone || null,
         businessType: businessType || null,
-        logoUrl: logoUrl || null,
+        logoUrl: nextLogoUrl,
         currency,
         timezone,
       });
+
+      setSelectedLogo(null);
+      setRemoveLogo(false);
       setNotice('Business profile saved.');
+
+      if (previousLogoPath && previousLogoUrl !== nextLogoUrl && previousLogoPath !== uploadedLogoPath) {
+        void removeBusinessLogo(previousLogoPath).catch((cleanupError) => {
+          console.warn('Unable to remove the previous SellerTray business logo.', cleanupError);
+        });
+      }
     } catch (err) {
+      if (uploadedLogoPath) {
+        void removeBusinessLogo(uploadedLogoPath).catch((cleanupError) => {
+          console.warn('Unable to clean up an uncommitted SellerTray business logo.', cleanupError);
+        });
+      }
       setError(err instanceof Error ? err.message : 'Unable to save business profile.');
     } finally {
       setSaving(false);
     }
   }
+
+  const previewLogo = removeLogo ? null : selectedLogo?.uri ?? business.logoUrl ?? null;
 
   return (
     <View style={styles.wrap}>
@@ -89,7 +167,7 @@ export function BusinessProfileView({ business, onSave }: Props) {
             value={name}
             onChangeText={setName}
             placeholder="e.g. Pisonmart Enterprises"
-            placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
+            placeholderTextColor={appearance.dark ? theme.dark.textSubtle : theme.colors.muted}
             style={[styles.input, appearance.dark && darkStyles.input, !canEdit && styles.inputDisabled, !canEdit && appearance.dark && darkStyles.inputDisabled]}
           />
         </Field>
@@ -102,7 +180,7 @@ export function BusinessProfileView({ business, onSave }: Props) {
             editable={false}
             value={business.merchantCode}
             autoCapitalize="characters"
-            style={[styles.input, styles.inputDisabled]}
+            style={[styles.input, appearance.dark && darkStyles.input, styles.inputDisabled, appearance.dark && darkStyles.inputDisabled]}
           />
         </Field>
 
@@ -112,7 +190,7 @@ export function BusinessProfileView({ business, onSave }: Props) {
             value={businessType}
             onChangeText={setBusinessType}
             placeholder="e.g. Retail, Food vendor, Fashion"
-            placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
+            placeholderTextColor={appearance.dark ? theme.dark.textSubtle : theme.colors.muted}
             style={[styles.input, appearance.dark && darkStyles.input, !canEdit && styles.inputDisabled, !canEdit && appearance.dark && darkStyles.inputDisabled]}
           />
         </Field>
@@ -125,7 +203,7 @@ export function BusinessProfileView({ business, onSave }: Props) {
             autoCapitalize="none"
             keyboardType="email-address"
             placeholder="orders@business.com"
-            placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
+            placeholderTextColor={appearance.dark ? theme.dark.textSubtle : theme.colors.muted}
             style={[styles.input, appearance.dark && darkStyles.input, !canEdit && styles.inputDisabled, !canEdit && appearance.dark && darkStyles.inputDisabled]}
           />
         </Field>
@@ -137,7 +215,7 @@ export function BusinessProfileView({ business, onSave }: Props) {
             onChangeText={setPhone}
             keyboardType="phone-pad"
             placeholder="+234..."
-            placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
+            placeholderTextColor={appearance.dark ? theme.dark.textSubtle : theme.colors.muted}
             style={[styles.input, appearance.dark && darkStyles.input, !canEdit && styles.inputDisabled, !canEdit && appearance.dark && darkStyles.inputDisabled]}
           />
         </Field>
@@ -150,7 +228,7 @@ export function BusinessProfileView({ business, onSave }: Props) {
             autoCapitalize="characters"
             maxLength={3}
             placeholder="NGN"
-            placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
+            placeholderTextColor={appearance.dark ? theme.dark.textSubtle : theme.colors.muted}
             style={[styles.input, appearance.dark && darkStyles.input, !canEdit && styles.inputDisabled, !canEdit && appearance.dark && darkStyles.inputDisabled]}
           />
         </Field>
@@ -162,25 +240,52 @@ export function BusinessProfileView({ business, onSave }: Props) {
             onChangeText={setTimezone}
             autoCapitalize="none"
             placeholder="Africa/Lagos"
-            placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
+            placeholderTextColor={appearance.dark ? theme.dark.textSubtle : theme.colors.muted}
             style={[styles.input, appearance.dark && darkStyles.input, !canEdit && styles.inputDisabled, !canEdit && appearance.dark && darkStyles.inputDisabled]}
           />
         </Field>
 
-        <Field label="Logo URL" hint="Optional for now. Direct logo upload will replace this temporary field.">
-          <TextInput
-            editable={canEdit && !saving}
-            value={logoUrl}
-            onChangeText={setLogoUrl}
-            autoCapitalize="none"
-            placeholder="https://..."
-            placeholderTextColor={appearance.dark ? '#98A2B3' : '#667085'}
-            style={[styles.input, appearance.dark && darkStyles.input, !canEdit && styles.inputDisabled, !canEdit && appearance.dark && darkStyles.inputDisabled]}
-          />
+        <Field label="Business logo" hint="PNG, JPG or WebP. Maximum 5 MB. Square logos work best.">
+          {previewLogo ? (
+            <View style={[styles.logoPreview, appearance.dark && darkStyles.logoPreview]}>
+              <Image source={{ uri: previewLogo }} style={styles.logoImage} resizeMode="contain" />
+            </View>
+          ) : (
+            <View style={[styles.logoPlaceholder, appearance.dark && darkStyles.logoPreview]}>
+              <Text style={[styles.logoPlaceholderText, appearance.dark && darkStyles.bodyText]}>No logo uploaded</Text>
+            </View>
+          )}
+
+          {canEdit ? (
+            <View style={styles.logoActions}>
+              <Pressable
+                disabled={saving}
+                onPress={() => void chooseBusinessLogo()}
+                style={({ pressed }) => [styles.secondaryButton, appearance.dark && darkStyles.secondaryButton, pressed && styles.pressed, saving && styles.disabled]}
+              >
+                <Text style={[styles.secondaryButtonText, appearance.dark && darkStyles.secondaryButtonText]}>{previewLogo ? 'Change logo' : 'Choose logo'}</Text>
+              </Pressable>
+              {previewLogo ? (
+                <Pressable
+                  disabled={saving}
+                  onPress={() => {
+                    setSelectedLogo(null);
+                    setRemoveLogo(true);
+                    setNotice(null);
+                    setError(null);
+                  }}
+                  style={({ pressed }) => [styles.removeButton, appearance.dark && darkStyles.removeButton, pressed && styles.pressed, saving && styles.disabled]}
+                >
+                  <Text style={[styles.removeButtonText, appearance.dark && darkStyles.removeButtonText]}>Remove logo</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+          {removeLogo ? <Text style={[styles.pendingLogoText, appearance.dark && darkStyles.bodyText]}>The current logo will be removed when you save.</Text> : null}
         </Field>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {notice ? <Text style={styles.notice}>{notice}</Text> : null}
+        {error ? <Text style={[styles.error, appearance.dark && darkStyles.errorText]}>{error}</Text> : null}
+        {notice ? <Text style={[styles.notice, appearance.dark && darkStyles.noticeText]}>{notice}</Text> : null}
 
         {canEdit ? (
           <Pressable
@@ -220,33 +325,50 @@ function Field({
 const styles = StyleSheet.create({
   wrap: { gap: 16 },
   heading: { gap: 5 },
-  eyebrow: { color: '#667085', fontSize: 12, fontWeight: '900', letterSpacing: 1.2 },
-  title: { color: '#102A43', fontSize: 25, fontWeight: '900' },
-  subtitle: { color: '#667085', fontSize: 13, lineHeight: 19 },
+  eyebrow: { color: theme.colors.muted, fontSize: 12, fontWeight: '900', letterSpacing: 1.2 },
+  title: { color: theme.colors.navy, fontSize: 25, fontWeight: '900' },
+  subtitle: { color: theme.colors.muted, fontSize: 13, lineHeight: 19 },
   readOnlyNotice: { backgroundColor: '#FFF8E7', borderRadius: 14, padding: 14 },
   readOnlyTitle: { color: '#7A2E0E', fontWeight: '900', fontSize: 13 },
   readOnlyText: { color: '#854A0E', fontSize: 12, lineHeight: 18, marginTop: 4 },
-  card: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E7EC', borderRadius: 18, padding: 16, gap: 15 },
+  card: { backgroundColor: theme.colors.white, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 18, padding: 16, gap: 15 },
   field: { gap: 6 },
   label: { color: '#344054', fontSize: 12, fontWeight: '900' },
-  help: { color: '#667085', fontSize: 12, lineHeight: 15 },
-  input: { minHeight: 48, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 11, paddingHorizontal: 12, backgroundColor: '#FFFFFF', color: '#102A43' },
-  inputDisabled: { backgroundColor: '#F9FAFB', color: '#667085' },
+  help: { color: theme.colors.muted, fontSize: 12, lineHeight: 15 },
+  input: { minHeight: 48, borderWidth: 1, borderColor: '#D0D5DD', borderRadius: 11, paddingHorizontal: 12, backgroundColor: theme.colors.white, color: theme.colors.navy },
+  inputDisabled: { backgroundColor: '#F9FAFB', color: theme.colors.muted },
+  logoPreview: { width: 112, height: 112, borderRadius: 16, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.cloud, padding: 8, alignItems: 'center', justifyContent: 'center' },
+  logoImage: { width: '100%', height: '100%' },
+  logoPlaceholder: { minHeight: 72, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: '#D0D5DD', backgroundColor: '#F9FAFB', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14 },
+  logoPlaceholderText: { color: theme.colors.muted, fontSize: 12, fontWeight: '700' },
+  logoActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  secondaryButton: { minHeight: 42, borderRadius: 11, borderWidth: 1, borderColor: '#D0D5DD', backgroundColor: theme.colors.white, paddingHorizontal: 13, alignItems: 'center', justifyContent: 'center' },
+  secondaryButtonText: { color: theme.colors.navy, fontSize: 12, fontWeight: '900' },
+  removeButton: { minHeight: 42, borderRadius: 11, borderWidth: 1, borderColor: '#FDA29B', backgroundColor: theme.colors.dangerSoft, paddingHorizontal: 13, alignItems: 'center', justifyContent: 'center' },
+  removeButtonText: { color: '#B42318', fontSize: 12, fontWeight: '900' },
+  pendingLogoText: { color: theme.colors.muted, fontSize: 11, lineHeight: 16 },
   error: { color: '#B42318', fontSize: 12, lineHeight: 17 },
   notice: { color: '#027A48', fontSize: 12, fontWeight: '700' },
-  saveButton: { minHeight: 50, borderRadius: 12, backgroundColor: '#12B76A', alignItems: 'center', justifyContent: 'center', marginTop: 2 },
-  saveButtonText: { color: '#FFFFFF', fontWeight: '900', fontSize: 14 },
+  saveButton: { minHeight: 50, borderRadius: 12, backgroundColor: theme.colors.green, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+  saveButtonText: { color: theme.colors.white, fontWeight: '900', fontSize: 14 },
   pressed: { opacity: 0.8 },
   disabled: { opacity: 0.5 },
 });
 
 const darkStyles = StyleSheet.create({
-  card: { backgroundColor: '#102A43', borderColor: '#344054' },
-  titleText: { color: '#F8FAFC' },
-  bodyText: { color: '#D0D5DD' },
-  input: { backgroundColor: '#F8FAFC', borderColor: '#98A2B3', color: '#102A43' },
-  inputDisabled: { backgroundColor: '#D0D5DD', color: '#475467' },
-  warningCard: { backgroundColor: '#3D2A12' },
+  card: { backgroundColor: theme.dark.surface, borderColor: theme.dark.border },
+  titleText: { color: theme.dark.text },
+  bodyText: { color: theme.dark.textMuted },
+  input: { backgroundColor: theme.dark.surfaceSubtle, borderColor: theme.dark.borderStrong, color: theme.dark.text },
+  inputDisabled: { backgroundColor: theme.dark.disabledSurface, color: theme.dark.disabledText },
+  logoPreview: { backgroundColor: theme.dark.surfaceSubtle, borderColor: theme.dark.borderStrong },
+  secondaryButton: { backgroundColor: theme.dark.surfaceSubtle, borderColor: theme.dark.borderStrong },
+  secondaryButtonText: { color: theme.dark.text },
+  removeButton: { backgroundColor: theme.dark.dangerSurface, borderColor: theme.dark.dangerBorder },
+  removeButtonText: { color: theme.dark.dangerText },
+  errorText: { color: theme.dark.dangerText },
+  noticeText: { color: theme.dark.accentText },
+  warningCard: { backgroundColor: theme.dark.warningSurface },
   warningTitle: { color: '#FEDF89' },
   warningText: { color: '#FEC84B' },
 });

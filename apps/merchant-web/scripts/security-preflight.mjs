@@ -6,6 +6,7 @@ const read = (path) => readFileSync(resolve(root, path), 'utf8');
 const supabaseClient = read('src/supabase.ts');
 const main = read('src/main.tsx');
 const app = read('src/MerchantApp.tsx');
+const merchantAuth = read('src/MerchantAuth.tsx');
 const dashboard = read('src/DashboardOverview.tsx');
 const cash = read('src/CashShiftsManagement.tsx');
 const cashReview = read('src/CashShiftsReview.tsx');
@@ -15,6 +16,7 @@ const orders = read('src/OrdersManagement.tsx');
 const management = read('src/ManagementPage.tsx');
 const customers = read('src/CustomersManagement.tsx');
 const customerBranchHistory = read('../../supabase/migrations/20261109230000_customer_history_order_branch_scope.sql');
+const optionalPhoneMigration = read('../../supabase/migrations/20261103194500_pre_c2_customer_optional_phone_identity.sql');
 const products = read('src/ProductsManagement.tsx');
 const suppliers = read('src/SuppliersManagement.tsx');
 const branches = read('src/BranchesManagement.tsx');
@@ -38,7 +40,7 @@ const vercel = read('vercel.json');
 const cashSource = [cash, cashReview, businessExpenses].join('\n');
 const settingsSource = [settings, posPolicySettings, taxSettings].join('\n');
 const reportSource = [reports, salesReports, taxReports, procurementReports, profitReports].join('\n');
-const browserSource = [supabaseClient, main, app, orders, dashboard, cash, cashReview, businessExpenses, inventory, management, customers, products, suppliers, branches, team, whatsapp, devices, reports, salesReports, taxReports, procurementReports, profitReports, settings, posPolicySettings, taxSettings, purchasing, purchasingOperations, supplierPayments, supplierPaymentsCenter].join('\n');
+const browserSource = [supabaseClient, main, app, merchantAuth, orders, dashboard, cash, cashReview, businessExpenses, inventory, management, customers, products, suppliers, branches, team, whatsapp, devices, reports, salesReports, taxReports, procurementReports, profitReports, settings, posPolicySettings, taxSettings, purchasing, purchasingOperations, supplierPayments, supplierPaymentsCenter].join('\n');
 const failures = [];
 const requireValue = (condition, message) => { if (!condition) failures.push(message); };
 const excludes = (source, values) => values.every((value) => !source.includes(value));
@@ -60,10 +62,15 @@ requireValue(
     && customers.includes("rpc('get_sellertray_order_management_detail'")
     && customers.includes('p_branch_id: order.branchId')
     && customers.includes("aria-label={`Open order ${order.publicOrderId}`}")
-    && customers.includes('<label>Phone<SellerTrayInput required inputMode="tel"')
+    && customers.includes('p_phone: newPhone.trim() || null')
+    && !customers.includes('<label>Phone<SellerTrayInput required inputMode="tel"')
+    && optionalPhoneMigration.includes('create_sellertray_customer')
+    && optionalPhoneMigration.includes('resolve_sellertray_pos_customer')
+    && optionalPhoneMigration.includes("'manual:unlinked:'")
+    && optionalPhoneMigration.includes('v_phone is not null and v_phone !~')
     && !customers.includes(".from('orders')")
     && customerBranchHistory.includes("'branchId',q.branch_id"),
-  'Customer history must use the original governed Branch and must preserve current Production phone rules.'
+  'Customer history must use the original governed Branch and optional phone must be backed by the existing shared identity migration.'
 );
 requireValue(management.includes('<SuppliersManagement') && suppliers.includes("rpc('get_sellertray_suppliers_management_list'") && suppliers.includes("rpc('get_sellertray_supplier_management_detail'") && suppliers.includes("rpc('save_sellertray_supplier'"), 'Suppliers must use governed supplier management reads and save command.');
 

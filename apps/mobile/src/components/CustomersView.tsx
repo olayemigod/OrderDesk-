@@ -5,16 +5,20 @@ import { Ionicons } from '@expo/vector-icons';
 import type { MerchantBusiness } from '../data/businessRepository';
 import { useSellerTrayAppearance } from '../theme/AppearanceContext';
 import {
+  customerContactPhone,
   loadCustomers,
   updateCustomerProfile,
   type MerchantCustomer,
 } from '../data/customerRepository';
 
-export function CustomersView({ business }: { business: MerchantBusiness }) {
+export function CustomersView({ business, onOpenOrder }: { business: MerchantBusiness; onOpenOrder?: (orderId: string) => Promise<void> | void }) {
   const appearance = useSellerTrayAppearance();
   const [customers, setCustomers] = useState<MerchantCustomer[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [query, setQuery] = useState('');
+  const [openingOrderId, setOpeningOrderId] = useState<string | null>(null);
+  const [visibleHistoryLimit, setVisibleHistoryLimit] = useState(10);
+  useEffect(() => setVisibleHistoryLimit(10), [selectedId, business.id]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +49,7 @@ export function CustomersView({ business }: { business: MerchantBusiness }) {
       customer.displayName ?? '',
       customer.phone ?? '',
       customer.email ?? '',
-      customer.whatsappId,
+      customerContactPhone(customer) ?? '',
       ...customer.orders.map((order) => order.publicOrderId),
     ].join(' ').toLowerCase().includes(needle));
   }, [customers, query]);
@@ -61,6 +65,16 @@ export function CustomersView({ business }: { business: MerchantBusiness }) {
   const canEdit =
     business.role !== 'staff' &&
     ['trial', 'active', 'grace'].includes(business.subscriptionStatus);
+
+  async function openHistoryOrder(orderId: string) {
+    if (!onOpenOrder || openingOrderId) return;
+    setOpeningOrderId(orderId);
+    try {
+      await onOpenOrder(orderId);
+    } finally {
+      setOpeningOrderId(null);
+    }
+  }
 
   async function save() {
     if (!selected || !canEdit || busy) return;
@@ -100,8 +114,8 @@ export function CustomersView({ business }: { business: MerchantBusiness }) {
             <Text style={styles.avatarText}>{customerInitials(selected.displayName || selected.phone || 'Customer')}</Text>
           </View>
           <View style={styles.customerCopy}>
-            <Text style={[styles.profileName, appearance.dark && darkStyles.titleText]}>{selected.displayName || selected.phone || 'WhatsApp customer'}</Text>
-            <Text style={[styles.meta, appearance.dark && darkStyles.bodyText]}>{selected.phone || selected.whatsappId}</Text>
+            <Text style={[styles.profileName, appearance.dark && darkStyles.titleText]}>{selected.displayName || selected.phone || 'Customer'}</Text>
+            <Text style={[styles.meta, appearance.dark && darkStyles.bodyText]}>{customerContactPhone(selected) ?? 'No phone saved'}</Text>
             {selected.email ? <Text style={[styles.meta, appearance.dark && darkStyles.bodyText]}>{selected.email}</Text> : null}
           </View>
         </View>
@@ -113,14 +127,14 @@ export function CustomersView({ business }: { business: MerchantBusiness }) {
 
         <View style={[styles.detailCard, appearance.dark && darkStyles.card]}>
           <Text style={[styles.sectionTitle, appearance.dark && darkStyles.titleText]}>Customer profile</Text>
-          <Text style={styles.identityLabel}>WhatsApp / phone identity</Text>
-          <Text style={[styles.identityValue, appearance.dark && darkStyles.titleText]}>{selected.phone || selected.whatsappId}</Text>
-          <Text style={[styles.identityHelp, appearance.dark && darkStyles.bodyText]}>Read-only. SellerTray uses this identity to keep WhatsApp order history linked correctly.</Text>
+          <Text style={[styles.identityLabel, appearance.dark && darkStyles.bodyText]}>Contact phone</Text>
+          <Text style={[styles.identityValue, appearance.dark && darkStyles.titleText]}>{customerContactPhone(selected) ?? 'No phone saved'}</Text>
+          <Text style={[styles.identityHelp, appearance.dark && darkStyles.bodyText]}>A verified phone number is used to link WhatsApp orders to this customer when available.</Text>
 
-          <Text style={styles.fieldLabel}>Display name</Text>
+          <Text style={[styles.fieldLabel, appearance.dark && darkStyles.bodyText]}>Display name</Text>
           <TextInput value={displayName} onChangeText={setDisplayName} editable={canEdit && !busy} maxLength={120} style={[styles.input, appearance.dark && darkStyles.input, appearance.dark && darkStyles.inputText]} />
 
-          <Text style={styles.fieldLabel}>Email</Text>
+          <Text style={[styles.fieldLabel, appearance.dark && darkStyles.bodyText]}>Email</Text>
           <TextInput value={email} onChangeText={setEmail} editable={canEdit && !busy} autoCapitalize="none" keyboardType="email-address" maxLength={254} style={[styles.input, appearance.dark && darkStyles.input, appearance.dark && darkStyles.inputText]} />
 
           {canEdit ? (
@@ -128,24 +142,30 @@ export function CustomersView({ business }: { business: MerchantBusiness }) {
               <Text style={styles.primaryText}>{busy ? 'Saving…' : 'Save profile'}</Text>
             </Pressable>
           ) : (
-            <Text style={styles.identityHelp}>Owner or Manager access with writable subscription status is required to edit customer profile metadata.</Text>
+            <Text style={[styles.identityHelp, appearance.dark && darkStyles.bodyText]}>Owner or Manager access with writable subscription status is required to edit customer profile metadata.</Text>
           )}
 
-          {notice ? <Text style={styles.notice}>{notice}</Text> : null}
+          {notice ? <Text style={[styles.notice, appearance.dark && darkStyles.greenText]}>{notice}</Text> : null}
         </View>
 
-        <View style={styles.detailCard}>
+        <View style={[styles.detailCard, appearance.dark && darkStyles.card]}>
           <Text style={[styles.sectionTitle, appearance.dark && darkStyles.titleText]}>Order history</Text>
-          {selected.orders.slice(0, 10).map((order) => (
-            <View key={order.id} style={[styles.orderRow, appearance.dark && darkStyles.rowBorder]}>
+          {selected.orders.slice(0, visibleHistoryLimit).map((order) => (
+            <Pressable key={order.id} accessibilityRole="button" accessibilityLabel={`Open order ${order.publicOrderId}`} disabled={!onOpenOrder || openingOrderId !== null} onPress={() => void openHistoryOrder(order.id)} style={[styles.orderRow, appearance.dark && darkStyles.rowBorder]}>
               <View style={styles.orderCopy}>
-                <Text style={styles.orderRef}>{order.publicOrderId}</Text>
-                <Text style={styles.meta}>{formatDate(order.createdAt)} · {humanize(order.status)}</Text>
+                <Text style={[styles.orderRef, appearance.dark && darkStyles.titleText]}>{order.publicOrderId}</Text>
+                <Text style={[styles.meta, appearance.dark && darkStyles.bodyText]}>{formatDate(order.createdAt)} · {humanize(order.status)}</Text>
               </View>
               <Text style={[styles.orderAmount, appearance.dark && darkStyles.titleText]}>{order.totalAmount === null ? 'Unpriced' : formatMoney(order.totalAmount, business.currency)}</Text>
-            </View>
+              {openingOrderId === order.id ? <ActivityIndicator size="small" /> : onOpenOrder ? <Ionicons name="chevron-forward" size={16} color={appearance.dark ? '#D0D5DD' : '#667085'} /> : null}
+            </Pressable>
           ))}
-          {selected.orders.length === 0 ? <Text style={styles.muted}>No orders recorded for this customer.</Text> : null}
+          {selected.orders.length > visibleHistoryLimit ? (
+            <Pressable accessibilityRole="button" onPress={() => setVisibleHistoryLimit((count) => count + 10)} style={styles.refresh}>
+              <Text style={[styles.refreshText, appearance.dark && darkStyles.greenText]}>Show older orders · {Math.min(visibleHistoryLimit, selected.orders.length)} of {selected.orders.length}</Text>
+            </Pressable>
+          ) : null}
+          {selected.orders.length === 0 ? <Text style={[styles.muted, appearance.dark && darkStyles.bodyText]}>No orders recorded for this customer.</Text> : null}
         </View>
       </View>
     );
@@ -180,7 +200,7 @@ export function CustomersView({ business }: { business: MerchantBusiness }) {
       {loading && customers.length === 0 ? (
         <View style={[styles.stateCard, appearance.dark && darkStyles.card]}><ActivityIndicator /><Text style={[styles.muted, appearance.dark && darkStyles.bodyText]}>Loading customers…</Text></View>
       ) : null}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <Text style={[styles.error, appearance.dark && darkStyles.errorText]}>{error}</Text> : null}
 
       {!loading && visible.length === 0 ? (
         <View style={[styles.stateCard, appearance.dark && darkStyles.card]}><Text style={[styles.emptyTitle, appearance.dark && darkStyles.titleText]}>No customers found</Text><Text style={[styles.muted, appearance.dark && darkStyles.bodyText]}>Customers appear here after WhatsApp or manual orders are created.</Text></View>
@@ -198,12 +218,12 @@ export function CustomersView({ business }: { business: MerchantBusiness }) {
             </View>
             <View style={styles.customerCopy}>
               <View style={styles.customerNameRow}>
-                <Text style={[styles.customerName, appearance.dark && darkStyles.titleText]}>{customer.displayName || customer.phone || 'WhatsApp customer'}</Text>
+                <Text style={[styles.customerName, appearance.dark && darkStyles.titleText]}>{customer.displayName || customer.phone || 'Customer'}</Text>
                 <Text style={[styles.orderCount, appearance.dark && darkStyles.bodyText]}>{customer.orderCount} order{customer.orderCount === 1 ? '' : 's'}</Text>
               </View>
-              <Text style={styles.meta}>{customer.phone || customer.whatsappId}</Text>
+              <Text style={[styles.meta, appearance.dark && darkStyles.bodyText]}>{customerContactPhone(customer) ?? 'No phone saved'}</Text>
               <Text style={[styles.value, appearance.dark && darkStyles.greenText]}>{formatMoney(customer.lifetimeValue, business.currency)} completed value</Text>
-              <Text style={styles.meta}>Last order: {customer.lastOrderAt ? formatDate(customer.lastOrderAt) : 'No orders yet'}</Text>
+              <Text style={[styles.meta, appearance.dark && darkStyles.bodyText]}>Last order: {customer.lastOrderAt ? formatDate(customer.lastOrderAt) : 'No orders yet'}</Text>
             </View>
             <Text style={styles.chevron}>›</Text>
           </Pressable>
@@ -211,7 +231,7 @@ export function CustomersView({ business }: { business: MerchantBusiness }) {
       </View>
 
       <Pressable onPress={() => void refresh()} disabled={loading} style={styles.refresh}>
-        <Text style={styles.refreshText}>{loading ? 'Refreshing…' : 'Refresh customers'}</Text>
+        <Text style={[styles.refreshText, appearance.dark && darkStyles.greenText]}>{loading ? 'Refreshing…' : 'Refresh customers'}</Text>
       </Pressable>
     </View>
   );
@@ -313,5 +333,6 @@ const darkStyles = StyleSheet.create({
   greenText: { color: '#6CE9A6' },
   input: { backgroundColor: '#102A43', borderColor: '#475467' },
   inputText: { color: '#F8FAFC' },
-  rowBorder: { borderBottomColor: '#344054' },
+  rowBorder: { borderTopColor: '#344054' },
+  errorText: { color: '#FDA29B' },
 });

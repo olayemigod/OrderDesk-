@@ -3,10 +3,11 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const mobileRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const [appJsonText, linkSource, provisionedSource, businessHookSource] = await Promise.all([
+const [appJsonText, linkSource, provisionedSource, authGateSource, businessHookSource] = await Promise.all([
   readFile(path.join(mobileRoot, 'app.json'), 'utf8'),
   readFile(path.join(mobileRoot, 'src/lib/invitationLink.ts'), 'utf8'),
   readFile(path.join(mobileRoot, 'src/ProvisionedApp.tsx'), 'utf8'),
+  readFile(path.join(mobileRoot, 'src/components/AuthGate.tsx'), 'utf8'),
   readFile(path.join(mobileRoot, 'src/hooks/useBusinesses.ts'), 'utf8'),
 ]);
 
@@ -28,6 +29,13 @@ expect(linkSource.includes("Linking.addEventListener('url'"), 'runtime invitatio
 expect(linkSource.includes("app.sellertray.com"), 'only the canonical Merchant Web production origin may be treated as an HTTPS invitation URL');
 expect(linkSource.includes("sellertray://") || linkSource.includes("sellertray|orderdesk"), 'custom SellerTray invitation links must be supported');
 expect(provisionedSource.includes('useInvitationLink'), 'ProvisionedApp must consume the invitation locator');
+expect(provisionedSource.includes('<AuthGate hasPendingInvitation={Boolean(invitationLink.invitationId)}>'), 'Mobile must keep the pending invitation visible before authentication');
+expect(authGateSource.includes('if (!session && hasPendingInvitation && mode === \'welcome\')'), 'Invited guests must see a dedicated review/signup screen rather than generic welcome');
+expect(authGateSource.includes('Create an account to review'), 'New invitees must be offered account creation with invited email');
+expect(authGateSource.includes('Use the invited email address to review your pending Business invitation.'), 'Invited sign-in screen must explain the email match requirement');
+expect(provisionedSource.includes('Invitation not available to this account'), 'Wrong signed-in identity must not falsely report that an invitation is resolved');
+expect(provisionedSource.includes('Sign in with invited email') && provisionedSource.includes("supabase.auth.signOut({ scope: 'local' })"), 'Wrong signed-in identity must have an explicit non-impersonating account switch');
+expect(!provisionedSource.includes('This invitation is no longer pending'), 'Missing current-user visibility must not be confused with terminal invitation state');
 expect(provisionedSource.includes("useEffect(() => {\n    let active = true;\n    setLoadedFocusedInvitationId(null);"), 'a newly focused runtime invitation must invalidate the previously loaded invitation snapshot');
 expect(provisionedSource.includes("}, [focusedInvitationId, refreshInvitations]);"), 'pending invitations must reload whenever the focused invitation link changes');
 expect(provisionedSource.includes('focusedInvitationRefreshing'), 'Mobile must distinguish invitation refresh from a resolved invitation');

@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { loadActiveCashShift, type CashShift } from '../data/cashShiftRepository';
 import { loadAccessibleBranches, type CommerceBranch } from '../data/commerceRepository';
 import { loadStockTransfers } from '../data/inventoryRepository';
 import { loadLowStock } from '../data/lowStockRepository';
+import { loadOrderById } from '../data/ordersRepository';
 import type { MerchantOrder } from '../domain/order';
 import { orderTotal } from '../domain/order';
 import { useBusinesses } from '../hooks/useBusinesses';
@@ -53,6 +54,11 @@ export default function RedesignWorkspace() {
   const [whatsappRouteKey, setWhatsappRouteKey] = useState(0);
   const [syncRouteKey, setSyncRouteKey] = useState(0);
   const [resumeDraftOrder, setResumeDraftOrder] = useState<MerchantOrder | null>(null);
+  const [pendingCustomerOrderId, setPendingCustomerOrderId] = useState<string | null>(null);
+  const [focusedExternalOrder, setFocusedExternalOrder] = useState<MerchantOrder | null>(null);
+  const customerOrderRequestRef = useRef(0);
+  const currentBusinessIdRef = useRef(activeBusiness?.id ?? '');
+  currentBusinessIdRef.current = activeBusiness?.id ?? '';
 
   const {
     orders,
@@ -119,6 +125,21 @@ export default function RedesignWorkspace() {
     setFocusedOrderId(null);
   }, [activeBranchId]);
 
+  useEffect(() => {
+    customerOrderRequestRef.current += 1;
+    setFocusedExternalOrder(null);
+    setPendingCustomerOrderId(null);
+  }, [activeBusiness?.id]);
+
+  useEffect(() => {
+    if (!pendingCustomerOrderId || !activeBranchId) return;
+    const targetOrder = orders.find((order) => order.id === pendingCustomerOrderId)
+      ?? (focusedExternalOrder?.id === pendingCustomerOrderId ? focusedExternalOrder : null);
+    if (targetOrder?.branchId !== activeBranchId) return;
+    setFocusedOrderId(targetOrder.id);
+    setPendingCustomerOrderId(null);
+  }, [activeBranchId, pendingCustomerOrderId, orders, focusedExternalOrder]);
+
   const activeBranch = useMemo(
     () => branches.find((branch) => branch.id === activeBranchId) ?? branches[0] ?? null,
     [activeBranchId, branches],
@@ -128,8 +149,9 @@ export default function RedesignWorkspace() {
     [activeBranch, orders],
   );
   const focusedOrder = useMemo(
-    () => focusedOrderId ? orders.find((order) => order.id === focusedOrderId) ?? null : null,
-    [focusedOrderId, orders],
+    () => focusedOrderId ? orders.find((order) => order.id === focusedOrderId)
+      ?? (focusedExternalOrder?.id === focusedOrderId ? focusedExternalOrder : null) : null,
+    [focusedOrderId, orders, focusedExternalOrder],
   );
   const ordersForWorkspace = useMemo(
     () => focusedOrder ? [focusedOrder] : branchOrders,
@@ -585,7 +607,7 @@ export default function RedesignWorkspace() {
           {focusedOrder ? (
             <View style={[styles.focusedOrderCard, appearance.dark && darkStyles.card]}>
               <View style={styles.focusedOrderCopy}>
-                <Text style={[styles.focusedOrderEyebrow, appearance.dark && darkStyles.bodyText]}>OPENED FROM NOTIFICATION</Text>
+                <Text style={[styles.focusedOrderEyebrow, appearance.dark && darkStyles.bodyText]}>ORDER DETAILS</Text>
                 <Text style={[styles.focusedOrderTitle, appearance.dark && darkStyles.titleText]}>{focusedOrder.publicOrderId}</Text>
                 <Text style={[styles.focusedOrderMeta, appearance.dark && darkStyles.bodyText]}>{focusedOrder.customerName} · {focusedOrder.branchName}</Text>
               </View>
@@ -599,9 +621,40 @@ export default function RedesignWorkspace() {
             businessCurrency={activeBusiness.currency}
             orders={ordersForWorkspace}
             loading={ordersLoading}
+            focusedOrderId={focusedOrder?.id ?? null}
             canReturnCompletedSale={canRefundSale && Boolean(activeCashShift) && (!focusedOrder || focusedOrder.branchId === activeBranch?.id)}
             onResumeDraft={(order) => {
-              if (order.branchId !== activeBranch?.id) return;
+              if (order.branchId !== activeBranch?.id) {
+                const targetBranch = branches.find((branch) => branch.id === order.branchId);
+                if (!targetBranch) {
+                  Alert.alert('Branch access required', 'You do not have access to the Branch that owns this saved sale.');
+                  return;
+                }
+                Alert.alert(
+                  'Switch Branch to resume',
+                  `This saved sale belongs to ${targetBranch.name}. Switch to that Branch, then open it again from Orders.`,
+                  [
+                    { text: 'Not now', style: 'cancel' },
+                    { text: 'Switch Branch', onPress: () => { setFocusedOrderId(null); setActiveBranchId(targetBranch.id); setTab('orders'); } },
+                  ],
+                );
+                return;
+              }
+              if (cashShiftLoading) {
+                Alert.alert('Checking your shift', 'SellerTray is checking your Cashier shift. Try Resume sale again once the check finishes.');
+                return;
+              }
+              if (!activeCashShift) {
+                Alert.alert(
+                  'Open a shift to resume',
+                  'Your saved sale is still available. Open a Cashier shift for this Branch, then return to Orders and resume it.',
+                  [
+                    { text: 'Not now', style: 'cancel' },
+                    { text: 'Open Cash & Shift', onPress: openCashWorkspace },
+                  ],
+                );
+                return;
+              }
               setResumeDraftOrder(order);
               setFocusedOrderId(null);
               setTab('sell');
@@ -644,6 +697,37 @@ export default function RedesignWorkspace() {
               setResumeDraftOrder(null);
               setFocusedOrderId(null);
               setTab('orders');
+            }}
+            onOpenCustomerOrder={async (orderId) => {
+              const requestId = ++customerOrderRequestRef.current;
+              const tenantId = activeBusiness.id;
+              try {
+                  const existing = orders.find((row) => row.id === orderId);
+                  const order = existing ?? await loadOrderById(tenantId, orderId);
+                  if (requestId !== customerOrderRequestRef.current || currentBusinessIdRef.current !== tenantId) return;
+                  if (!order) {
+                    Alert.alert('Order unavailable', 'This order could not be loaded. Refresh Customer history and try again.');
+                    return;
+                  }
+                  if (!branches.some((branch) => branch.id === order.branchId)) {
+                    Alert.alert('Branch access required', 'This order belongs to a Branch you cannot access.');
+                    return;
+                  }
+                  setFocusedExternalOrder(existing ? null : order);
+                  setShowNotifications(false);
+                  setResumeDraftOrder(null);
+                  setTab('orders');
+                  if (order.branchId !== activeBranch?.id) {
+                    setPendingCustomerOrderId(order.id);
+                    setActiveBranchId(order.branchId);
+                  } else {
+                    setFocusedOrderId(order.id);
+                  }
+                } catch {
+                  if (requestId === customerOrderRequestRef.current && currentBusinessIdRef.current === tenantId) {
+                    Alert.alert('Unable to open order', 'Check your connection and Branch access, then try again.');
+                  }
+                }
             }}
             onSyncOfflineSales={() => offline.syncNow()}
             onDiscardOfflineSale={offline.discard}
@@ -697,14 +781,27 @@ function BranchSwitcher({ branches, activeBranchId, onSelect }: { branches: Comm
       <View style={styles.branchList}>
         {branches.map((branch) => {
           const active = branch.id === activeBranchId;
-          return <Pressable key={branch.id} onPress={() => onSelect(branch.id)} style={[styles.branchRow, appearance.dark && darkStyles.subtleCard, active && styles.branchRowActive]}>
-            <View style={styles.branchIcon}><Ionicons name="storefront-outline" size={19} color={theme.colors.greenDark} /></View>
-            <View style={styles.branchCopy}>
-              <Text style={[styles.branchName, appearance.dark && darkStyles.titleText]}>{branch.name}</Text>
-              <Text style={[styles.branchCode, appearance.dark && darkStyles.bodyText]}>{branch.code}{branch.isDefault ? ' · Default' : ''}</Text>
-            </View>
-            {active ? <Ionicons name="checkmark-circle" size={21} color={theme.colors.green} /> : null}
-          </Pressable>;
+          return (
+            <Pressable
+              key={branch.id}
+              onPress={() => onSelect(branch.id)}
+              style={[
+                styles.branchRow,
+                appearance.dark && darkStyles.subtleCard,
+                active && styles.branchRowActive,
+                appearance.dark && active && darkStyles.branchRowActive,
+              ]}
+            >
+              <View style={[styles.branchIcon, appearance.dark && darkStyles.branchIcon]}>
+                <Ionicons name="storefront-outline" size={19} color={appearance.dark ? theme.dark.accentText : theme.colors.greenDark} />
+              </View>
+              <View style={styles.branchCopy}>
+                <Text style={[styles.branchName, appearance.dark && darkStyles.titleText]}>{branch.name}</Text>
+                <Text style={[styles.branchCode, appearance.dark && darkStyles.bodyText]}>{branch.code}{branch.isDefault ? ' · Default' : ''}</Text>
+              </View>
+              {active ? <Ionicons name="checkmark-circle" size={21} color={appearance.dark ? theme.dark.accentText : theme.colors.green} /> : null}
+            </Pressable>
+          );
         })}
       </View>
     </View>
@@ -763,10 +860,12 @@ const styles = StyleSheet.create({
 });
 
 const darkStyles = StyleSheet.create({
-  page: { backgroundColor: '#081825' },
-  card: { backgroundColor: theme.colors.navy, borderColor: '#344054' },
-  subtleCard: { backgroundColor: '#162F46', borderColor: '#344054' },
+  page: { backgroundColor: theme.dark.canvas },
+  card: { backgroundColor: theme.dark.surface, borderColor: theme.dark.border },
+  subtleCard: { backgroundColor: theme.dark.surfaceSubtle, borderColor: theme.dark.border },
+  branchRowActive: { backgroundColor: theme.dark.accentSoft, borderColor: theme.colors.green },
+  branchIcon: { backgroundColor: theme.dark.surfaceRaised, borderWidth: 1, borderColor: theme.dark.borderStrong },
   errorCard: { backgroundColor: '#3A1717', borderColor: '#7A271A' },
-  titleText: { color: theme.colors.cloud },
-  bodyText: { color: '#D0D5DD' },
+  titleText: { color: theme.dark.text },
+  bodyText: { color: theme.dark.textMuted },
 });

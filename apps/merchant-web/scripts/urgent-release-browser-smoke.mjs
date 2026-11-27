@@ -3,10 +3,16 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 const root = 'http://127.0.0.1:4173';
 const backend = 'https://sellertray-smoke.invalid';
+// Intercept every request; no hosted database or storage traffic.
+const logoOrigin = 'https://sellertray-smoke.supabase.co';
+const logoUrl = logoOrigin + '/storage/v1/object/public/business-logos/33333333-3333-4333-8333-333333333333/business-logo-test.png';
+const logoPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=', 'base64');
+const productionCsp = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url),'utf8')).headers.flatMap(rule=>rule.headers).find(header=>header.key==='Content-Security-Policy').value;
 const inviteId = '11111111-1111-4111-8111-111111111111';
 const userId = '22222222-2222-4222-8222-222222222222';
 const tenantId = '33333333-3333-4333-8333-333333333333';
@@ -35,7 +41,15 @@ async function scenario(label, options, test) {
   await context.routeWebSocket('**/*',ws=>ws.close());
   await context.route('**/*', async route=>{
     const req=route.request(), url=new URL(req.url());
-    if(url.origin===root) return route.continue();
+    if(url.origin===root) {
+      if(options.logo && req.resourceType()==='document'){
+        const response=await route.fetch();
+        // Keep Production image restrictions exactly; only substitute the synthetic API origin.
+        return route.fulfill({response,headers:{...response.headers(),'content-security-policy':productionCsp.replace("connect-src 'self'","connect-src 'self' "+backend)}});
+      }
+      return route.continue();
+    }
+    if(options.logo && req.url()===logoUrl) return route.fulfill({status:200,contentType:'image/png',body:logoPng});
     if(url.origin!==backend){ unexpected.push(url.origin+url.pathname); return route.abort(); }
     const headers={'access-control-allow-origin':'*','access-control-allow-headers':'*','access-control-allow-methods':'GET,POST,OPTIONS','content-type':'application/json'};
     const reply=(body,status=200)=>route.fulfill({status,headers,body:JSON.stringify(body)});
@@ -44,6 +58,7 @@ async function scenario(label, options, test) {
     calls.push({path:url.pathname,search:url.search,data});
     if(url.pathname==='/auth/v1/token')return reply(session);
     if(url.pathname==='/auth/v1/signup')return reply(user);
+    if(url.pathname==='/auth/v1/recover')return reply({});
     if(url.pathname==='/auth/v1/user')return reply(user);
     if(url.pathname==='/auth/v1/logout')return reply({});
     if(url.pathname==='/functions/v1/team-management'){
@@ -55,6 +70,10 @@ async function scenario(label, options, test) {
       }
     }
     if(url.pathname==='/rest/v1/rpc/sellertray_list_businesses_for_current_user')return reply(businesses);
+    if(url.pathname==='/rest/v1/rpc/get_sellertray_business_profile')return reply({name:'First Business',logoUrl:options.logo?logoUrl:'',currency:'NGN',timezone:'Africa/Lagos'});
+    if(options.logo && ['/rest/v1/rpc/sellertray_get_operational_policy','/rest/v1/rpc/sellertray_get_pos_policy','/rest/v1/rpc/get_sellertray_tax_settings','/rest/v1/rpc/get_sellertray_payment_methods_management','/rest/v1/rpc/get_sellertray_onboarding_state'].includes(url.pathname))return reply({});
+    if(options.logo && url.pathname==='/rest/v1/merchant_payment_methods')return reply([]);
+    if(options.logo && url.pathname==='/rest/v1/rpc/get_sellertray_setup_schedule')return reply({appointments:[]});
     if(url.pathname==='/rest/v1/rpc/get_sellertray_accessible_branches')return reply([{id:branchId,name:'QA Branch',code:'QA',is_default:true}]);
     if(url.pathname==='/rest/v1/rpc/sellertray_merchant_unread_notification_count')return reply(0);
     if(url.pathname==='/rest/v1/rpc/get_sellertray_report_management')return reply({});
@@ -132,6 +151,34 @@ try{
     assert.equal(hasAction(calls,'accept_invite'),false);
     assert.equal(calls.some(x=>x.path.includes('provision-business')),false);
   });
+  await scenario('password visibility and recovery use the active auth surface',{signedIn:false,focus:false},async(p,calls)=>{
+    await p.getByLabel('Password',{exact:true}).fill('synthetic-password');
+    await p.getByRole('button',{name:'Show password',exact:true}).click();
+    assert.equal(await p.getByLabel('Password',{exact:true}).getAttribute('type'),'text');
+    await p.getByRole('button',{name:'Hide password',exact:true}).click();
+    assert.equal(await p.getByLabel('Password',{exact:true}).getAttribute('type'),'password');
+    await p.getByRole('button',{name:'Forgot password?',exact:true}).click();
+    await p.getByLabel('Email',{exact:true}).fill(email);
+    await p.getByRole('button',{name:'Send reset instructions',exact:true}).click();
+    await p.getByText('If an account exists for that email',{exact:false}).waitFor();
+    assert.ok(calls.some(x=>x.path==='/auth/v1/recover'));
+    assert.equal(calls.some(x=>x.path.includes('provision-business')),false);
+  });
+  await scenario('refresh and browser Back/Forward preserve valid merchant pages',{businesses:[business()],focus:false},async(p,calls)=>{
+    await p.getByRole('heading',{name:'Business overview'}).waitFor();
+    await p.getByRole('button',{name:'Orders',exact:true}).click();
+    await p.getByRole('button',{name:/Search & filter orders/}).waitFor();
+    assert.equal(new URL(p.url()).searchParams.get('page'),'orders');
+    await p.getByRole('button',{name:'Customers',exact:true}).click();
+    await p.getByRole('button',{name:'Open order QA/001'}).waitFor();
+    await p.goBack();
+    await p.getByRole('button',{name:/Search & filter orders/}).waitFor();
+    await p.goForward();
+    await p.getByRole('button',{name:'Open order QA/001'}).waitFor();
+    await p.reload();
+    await p.getByRole('button',{name:'Open order QA/001'}).waitFor();
+    assert.equal(new URL(p.url()).searchParams.get('page'),'customers');
+  });
   await scenario('ordinary login and collapsed Orders filters retain governed query',{signedIn:false,focus:false,businesses:[business()]},async(p,calls)=>{
     await p.getByLabel('Email',{exact:true}).fill(email);
     await p.getByLabel('Password',{exact:true}).fill('synthetic-password');
@@ -152,6 +199,25 @@ try{
     await p.getByRole('button',{name:/Search & filter orders.*Active/}).waitFor();
     assert.equal(await p.getByRole('textbox',{name:'Search orders'}).count(),0);
     assert.equal(hasAction(calls,'accept_invite'),false);
+  });
+  await scenario('saved logo decodes under Production CSP; Settings and Setup remain separate',{businesses:[business()],focus:false,logo:true},async(p,calls)=>{
+    await p.getByRole('heading',{name:'Business overview'}).waitFor();
+    await p.getByRole('button',{name:'Settings',exact:true}).click();
+    await p.getByRole('heading',{name:'Business details'}).waitFor();
+    const logo=p.getByAltText('Current business logo',{exact:true});
+    const avatar=p.getByAltText('First Business logo',{exact:true});
+    await logo.waitFor(); await avatar.waitFor();
+    await p.waitForFunction(()=>Array.from(document.querySelectorAll('img[alt="Current business logo"],img[alt="First Business logo"]')).length===2 && Array.from(document.querySelectorAll('img[alt="Current business logo"],img[alt="First Business logo"]')).every(img=>img.complete&&img.naturalWidth>0));
+    assert.equal(await p.getByRole('region',{name:'Setup and activation'}).count(),0);
+    assert.equal(calls.some(x=>x.path.endsWith('/get_sellertray_setup_schedule')),false);
+    await p.getByRole('tab',{name:'Payments',exact:true}).click();
+    await p.getByRole('heading',{name:'Branch availability & terminals'}).waitFor();
+    assert.equal(await logo.isVisible(),false);
+    await p.getByRole('button',{name:'Setup & Activation',exact:true}).click();
+    await p.getByRole('region',{name:'Setup and activation'}).waitFor();
+    await p.getByText('No setup appointment scheduled yet',{exact:true}).waitFor();
+    assert.equal(calls.some(x=>x.path.endsWith('/get_sellertray_setup_schedule')),true);
+    assert.equal(await p.getByRole('heading',{name:'Settings',exact:true}).count(),0);
   });
   if(process.env.SELLERTRAY_REPORTING_QA==='1'){
     await scenario('customer history opens original Branch order', {businesses:[business()],focus:false},async(p,calls)=>{

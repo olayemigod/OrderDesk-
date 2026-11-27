@@ -2,13 +2,16 @@
   "expo": {
     "name": "SellerTray",
     "slug": "sellertray",
-    "scheme": ["sellertray", "orderdesk"],
+    "scheme": [
+      "sellertray",
+      "orderdesk"
+    ],
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "android": {
       "package": "ng.processedge.sellertray",
-      "versionCode": 45,
+      "versionCode": 48,
       "intentFilters": [
         {
           "action": "VIEW",
@@ -20,7 +23,10 @@
               "pathPrefix": "/invite"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ],
       "blockedPermissions": [
@@ -84,7 +90,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow SellerTray to select product images from your photo library.",
+          "photosPermission": "Allow SellerTray to select product images and your business logo from your photo library.",
           "cameraPermission": "Allow SellerTray to scan product barcodes during selling and product setup.",
           "microphonePermission": false
         }
@@ -95,14 +101,18 @@
           "color": "#12B76A",
           "defaultChannel": "sellertray-alerts"
         }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#102A43",
+          "imageWidth": 200
+        }
       ]
     ],
     "icon": "./assets/icon.png",
-    "splash": {
-      "image": "./assets/icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#102A43"
-    },
     "extra": {
       "eas": {
         "projectId": "e6f57a2d-6db7-4972-b4ed-410df0495485"
