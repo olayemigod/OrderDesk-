@@ -103,8 +103,8 @@ export default function ProfitabilityReportCenter({
       <div className="report-filter-grid">
         <label><span>From</span><SellerTrayInput type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => setDateFrom(event.target.value)} /></label>
         <label><span>To</span><SellerTrayInput type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} /></label>
-        <label><span>Branch</span><SellerTraySelect value={branchId} onChange={(event) => setBranchId(event.target.value)}><option value="">All accessible Branches</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</SellerTraySelect></label>
-        <label><span>Channel</span><SellerTraySelect value={source} onChange={(event) => setSource(event.target.value)}><option value="all">All channels</option><option value="pos">POS</option><option value="whatsapp">WhatsApp</option><option value="manual">Manual</option></SellerTraySelect></label>
+        <label><span>Branch</span><SellerTraySelect aria-label="Branch" value={branchId} onChange={(event) => setBranchId(event.target.value)}><option value="">All accessible Branches</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</SellerTraySelect></label>
+        <label><span>Channel</span><SellerTraySelect aria-label="Channel" value={source} onChange={(event) => setSource(event.target.value)}><option value="all">All channels</option><option value="pos">POS</option><option value="whatsapp">WhatsApp</option><option value="manual">Manual</option></SellerTraySelect></label>
       </div>
       <div className="report-filter-foot">
         <span className="muted">{report ? report.dateFrom + ' to ' + report.dateTo + ' · ' + report.timezone : 'Selected Business-local sales dates'}</span>
