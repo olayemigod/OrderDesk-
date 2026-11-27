@@ -1,0 +1,20 @@
+.auth-card { position: relative; }
+.auth-card h2 { margin-bottom: 6px; }
+.auth-links { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.auth-links .text-button { min-height: 32px; }
+.auth-optional { color: var(--muted); font-weight: 550; }
+.password-field { position: relative; display: block; }
+.password-field .sellertray-input { padding-right: 70px; }
+.password-toggle { position: absolute; top: 50%; right: 7px; min-width: 52px; min-height: 31px; transform: translateY(-50%); border: 0; border-radius: 7px; color: #087a48; background: transparent; font-size: .72rem; font-weight: 800; }
+.password-toggle:hover { background: var(--mint); }
+:root[data-theme="dark"] .password-toggle { color: #50d89b; }
+:root[data-theme="dark"] .password-toggle:hover { background: #123829; }
+.auth-message { border-radius: 10px; padding: 11px 13px; font-size: .82rem; line-height: 1.45; }
+.auth-message.success { color: #087443; background: #ecfdf3; border: 1px solid #abefc6; }
+:root[data-theme="dark"] .auth-message.success { color: #75e0aa; background: #123829; border-color: #246646; }
+
+@media (max-width: 560px) {
+  .auth-links { align-items: stretch; flex-direction: column; }
+  .auth-links .text-button { width: 100%; text-align: left; }
+  .password-toggle { min-height: 34px; }
+}

@@ -242,6 +242,8 @@ function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [success, setSuccess] = useState(false);
@@ -299,11 +301,11 @@ function Login() {
           : 'Use the same SellerTray account you use for your business.'}</p>
       </div>
       <label>Email<SellerTrayInput type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
-      <label>Password<SellerTrayInput type="password" autoComplete={mode === 'join' ? 'new-password' : 'current-password'} minLength={mode === 'join' ? 8 : undefined} required value={password} onChange={(event) => setPassword(event.target.value)} /></label>
-      {mode === 'join' && <label>Confirm password<SellerTrayInput type="password" autoComplete="new-password" minLength={8} required value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} /></label>}
+      <PasswordField label="Password" value={password} onChange={setPassword} visible={showPassword} onToggle={() => setShowPassword(value => !value)} autoComplete={mode === 'join' ? 'new-password' : 'current-password'} />
+      {mode === 'join' && <PasswordField label="Confirm password" value={confirmPassword} onChange={setConfirmPassword} visible={showConfirmPassword} onToggle={() => setShowConfirmPassword(value => !value)} autoComplete="new-password" />}
       {message ? <div className={success ? 'auth-message success' : 'error-banner compact'} role="status">{message}</div> : null}
       <button type="submit" className="primary-button" disabled={busy || (mode === 'join' && success)}>{busy ? 'Please wait…' : mode === 'join' ? 'Create account' : 'Continue'}</button>
-      {invitationId && <button type="button" className="text-button" onClick={() => { setMode(mode === 'join' ? 'sign-in' : 'join'); setMessage(''); setSuccess(false); setPassword(''); setConfirmPassword(''); }}>
+      {invitationId && <button type="button" className="text-button" onClick={() => { setMode(mode === 'join' ? 'sign-in' : 'join'); setMessage(''); setSuccess(false); setPassword(''); setConfirmPassword(''); setShowPassword(false); setShowConfirmPassword(false); }}>
         {mode === 'join' ? 'Already have an account? Sign in' : 'New to SellerTray? Create an account to accept the invitation'}
       </button>}
     </form>
@@ -319,3 +321,40 @@ function merchantRole(value: unknown): MerchantRole { return value === 'owner' |
 function accountInitial(value: string | undefined): string { return value?.trim().charAt(0).toUpperCase() || 'S'; }
 function title(value: string): string { return value ? value[0].toUpperCase() + value.slice(1) : value; }
 function statusText(value: string): string { return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()); }
+
+function PasswordField({
+  label,
+  value,
+  onChange,
+  visible,
+  onToggle,
+  autoComplete,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  visible: boolean;
+  onToggle: () => void;
+  autoComplete: string;
+}) {
+  return <label>
+    {label}
+    <span className="password-field">
+      <SellerTrayInput
+        type={visible ? 'text' : 'password'}
+        autoComplete={autoComplete}
+        minLength={autoComplete === 'current-password' ? undefined : 8}
+        required
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <button
+        type="button"
+        className="password-toggle"
+        aria-label={visible ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
+        aria-pressed={visible}
+        onClick={onToggle}
+      >{visible ? 'Hide' : 'Show'}</button>
+    </span>
+  </label>;
+}

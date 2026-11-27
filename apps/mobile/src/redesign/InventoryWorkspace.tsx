@@ -304,7 +304,7 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
             <View style={styles.operationHead}>
               <View style={styles.flexCopy}>
                 <Text style={[styles.operationTitle, dark && darkStyles.titleText]}>Adjust stock</Text>
-                <Text style={[styles.muted, dark && darkStyles.bodyText]}>Record a controlled correction to this branch stock. Do not use this for supplier receipts or branch transfers.</Text>
+                <Text style={[styles.muted, dark && darkStyles.bodyText]}>Enter the amount to add or remove, not the new total. For an actual physical balance, use Stock count and review the variance. Do not use this for supplier receipts or branch transfers.</Text>
               </View>
               <Pressable onPress={closeAdjustment} disabled={saving} style={styles.iconButton}><Ionicons name="close" size={20} color={theme.colors.slate} /></Pressable>
             </View>
@@ -331,9 +331,9 @@ export function InventoryWorkspace({ tenantId, branch }: Props) {
               ))}
             </View>
 
-            <Text style={[styles.fieldLabel, dark && darkStyles.bodyText]}>Quantity</Text>
+            <Text style={[styles.fieldLabel, dark && darkStyles.bodyText]}>{direction === 'increase' ? 'Quantity to ADD (not new total)' : 'Quantity to REMOVE (not new total)'}</Text>
             <TextInput value={quantity} onChangeText={setQuantity} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={theme.colors.subtle} style={[styles.input, dark && darkStyles.input]} />
-            {previewStockQuantity !== null && selectedUom ? <Text style={[styles.preview, dark && darkStyles.bodyText]}>{formatQuantity(parsedQuantity)} {selectedUom.name} = {formatQuantity(previewStockQuantity)} {selected.stockUom}</Text> : null}
+            {previewStockQuantity !== null && selectedUom ? <Text style={[styles.preview, dark && darkStyles.bodyText]}>{formatQuantity(parsedQuantity)} {selectedUom.name} = {direction === 'increase' ? '+' : '-'}{formatQuantity(previewStockQuantity)} {selected.stockUom}. Current: {formatQuantity(selected.quantityOnHand)}. Estimated balance: {formatQuantity(selected.quantityOnHand + (direction === 'increase' ? previewStockQuantity : -previewStockQuantity))} {selected.stockUom}. Final balance confirmed by SellerTray.</Text> : null}
 
             <View style={styles.fieldHeadingRow}>
               <Text style={[styles.fieldLabel, dark && darkStyles.bodyText]}>Reference</Text>
