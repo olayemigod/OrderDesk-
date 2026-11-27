@@ -6,7 +6,7 @@
 
 - Actual retained-state local selective retirement and all 461 original migrations passed (source `908647c78eb15cd24f193a7bd130ee29cc22cabc`; corpus SHA-256 `d91f7762448aa0b1d4fc44093700e6bc48e20a6177c09bb8735ea01c98efa42c`).
 - Five retained archived Auth actors denied the reviewed synthetic commerce reads and order updates; authorized owner positive control and rollback passed at `a597012f41b5cb1df255a2801c3ca09bf1467b67`. Do not repeat the full local replay.
-- OA5 Staging Isolation Contract run 45976549525 passed for `8e12fc8075962485fafb4998a351b62a24ca13f9`, including the updated Method B v2 offline review contract. New scheduler inventory CI is separate and pending.
+- OA5 Staging Isolation Contract run 45976549525 passed for `8e12fc8075962485fafb4998a351b62a24ca13f9`, including the updated Method B v2 offline review contract. New scheduler inventory and tests passed in OA5 Staging Isolation Contract run 45977322238, job 140432209724, at 149922541dd5fa62e7da802ff9334751eeb1edb2.
 - Hosted Test ledger census: 54 nonnull names and statement arrays. postgres owns supabase_migrations.schema_migrations; primary key version, nullable statements/name/created_by/idempotency_key/rollback, unique idempotency_key. postgres has INSERT/DELETE. Preserve all columns and complete original row contents privately, not merely version numbers. The local rehearsal intentionally retained the 54 rows.
 - Hosted Test scheduler census on 27 November: four exact jobs IDs 1–4 remain inactive, zero sampled unfinished runs and queued HTTP; all four are owned by postgres. The cron.launch_active_jobs GUC is ON with sighup context; postgres has neither SET nor ALTER SYSTEM permission. This means the local admin launcher-disable mechanism cannot simply be copied to hosted Test. postgres can execute cron.schedule, cron.schedule_in_database and cron.alter_job. This is permission metadata, not evidence of a successful hosted mutation.
 
@@ -24,8 +24,24 @@ Prefer the native migration executor for normal canonical files, not a fabricate
 
 ## Bounded next evidence
 
-The new read-only `scripts/qa/oa5-method-b-scheduler-review.mjs` scans the exact fingerprinted 461-file corpus for cron, schedule, network, possible transaction boundaries and dynamic SQL. It only emits filenames and boolean flags; it is deliberately over-inclusive and is not a SQL parser or complete semantic safety proof. The existing OA5 offline CI runs the scanner and its unit tests. Review every matching file for actual execution and transaction boundaries, then validate the narrow schedule/pause transaction against the existing isolated restore without repeating its 461 migrations. A fresh hosted preflight remains mandatory. Do not ask the owner for destructive approval until the executable plan is verified and provider boundaries closed.
+The read-only `scripts/qa/oa5-method-b-scheduler-review.mjs` scans the exact fingerprinted 461-file corpus for cron, schedule, network, possible transaction boundaries and dynamic SQL. It only emits filenames and boolean flags; it is deliberately over-inclusive and is not a SQL parser or complete semantic safety proof. The existing OA5 offline CI runs the scanner and its unit tests. Review every matching file for actual execution and transaction boundaries, then validate the narrow schedule/pause transaction against the existing isolated restore without repeating its 461 migrations. A fresh hosted preflight remains mandatory. Do not ask the owner for destructive approval until the executable plan is verified and provider boundaries closed.
 
 ## No changes to runtime
 
 This is an operator design and source review only. No migration, schema, hosted permission, cron, provider, Vercel, Android or C2 runtime change has been performed.
+
+
+## 27 November — actual complete lexical source census and four cron-bearing file review
+
+CI verified the pinned 461-file corpus. It emitted 25 lexical candidates: four with cron references, two with network references (both among the four cron files). The other candidates contain the broader word schedule (not evidence of cron). Inspection of the four exact cron-bearing migration files established the following concrete execution boundaries:
+
+| Version | Behavior | Required execution handling |
+|---|---|---|
+| 20260910234500 | Named usage settlement job scheduling, no top-level BEGIN/COMMIT | Wrap original SQL in one transaction, pause the exact job before commit |
+| 20260913002145 | WhatsApp retry job scheduling; creates worker and trigger with net.http_post in function body; explicit BEGIN/COMMIT | Insert exact paused-roster/zero-queue check and pause before original COMMIT |
+| 20260913023000 | Merchant push retry scheduled only if named job absent; worker body uses net.http_post; explicit BEGIN/COMMIT | Preserve already paused named job, confirm original identity and zero queue before original COMMIT |
+| 20261026073126 | Dynamic unschedule-if-existing and schedule lifecycle notification job; direct lifecycle materialization at file end; no top-level BEGIN/COMMIT | Wrap original SQL, enforce empty merchant baseline and no configured worker URL/queued HTTP, pause newly created lifecycle job before commit |
+
+**Important correction to the four-job assumption:** four historical jobs must remain paused before reconstruction, but canonical replay introduces a fifth job, sellertray-lifecycle-notifications. The original agreement retry job is retained from the historical managed roster, not newly scheduled by the four inspected files. Do not require a post-replay four-job roster or leave the fifth active. The historical four jobs retain their original IDs/schedules/commands; the new lifecycle job must be reviewed, recorded by its actual assigned ID, and remain inactive until separate authorization. Pre-rebuild four-job guards remain valid only before reconstruction.
+
+A narrowly scoped existing-local rehearsal, `scripts/qa/oa5-method-b-local-cron-atomicity.sql` (548e0787bbc00228f45a0e2e8d56d7d54ff9bb36), exercises named job identity preservation, lifecycle creation and same-transaction pauses under postgres. It uses the already reconstructed local DB, no migration replay, no execution of job commands, and rolls back job row changes. The cron job sequence may advance in this disposable database even on rollback. The global launcher remains OFF in the local rehearsal. This is not direct evidence of hosted launcher behavior; the proposed hosted wrapper must still prove transaction boundaries and every actual job row transition. No provider traffic or hosted mutation. The exact native ledger handoff and hosted retirement mechanism remain pending.
