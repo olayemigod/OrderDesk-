@@ -131,18 +131,34 @@ Deno.serve(async (request) => {
   const commandId = cleanCommandId(body.commandId);
   const rawReason = cleanText(body.reason, 120);
   const reason = rawReason ? cleanReason(rawReason) : null;
+  // Cost evidence is optional on a positive adjustment. An explicit zero is
+  // a verified zero cost, not "missing". Never infer cost from selling price.
+  const hasCost = body.stockUnitCost !== undefined && body.stockUnitCost !== null && body.stockUnitCost !== '';
+  const stockUnitCost = hasCost ? cleanNonNegativeNumber(body.stockUnitCost) : null;
+  const costReference = body.costReference == null ? null : cleanText(body.costReference, 160);
+  const costReason = body.costReason == null ? null : cleanText(body.costReason, 500);
 
   if (!productId || !uomId || quantity === null || !adjustmentDirection || !reference || !commandId || !rawReason) {
     return json({ error: 'Product, unit, quantity, direction, reference and reason are required' }, 400);
   }
   if (!reason) return json({ error: 'Choose an approved reason for this stock adjustment' }, 400);
+  if (hasCost && (stockUnitCost === null || !costReference || !costReason)) {
+    return json({ error: 'Verified stock cost requires a non-negative cost per Stock UOM, document reference and evidence rationale' }, 400);
+  }
+  if (adjustmentDirection === 'decrease' &&
+      (hasCost || body.costReference != null || body.costReason != null)) {
+    return json({ error: 'Reductions use existing governed inventory cost; do not enter a new cost' }, 409);
+  }
+  if (!hasCost && (body.costReference != null || body.costReason != null)) {
+    return json({ error: 'Provide a verified unit cost alongside the cost evidence reference and rationale' }, 400);
+  }
 
   const forcedDirection = requiredDirectionForReason(reason);
   if (forcedDirection && adjustmentDirection !== forcedDirection) {
     return json({ error: `${reason} must ${forcedDirection === 'increase' ? 'increase' : 'reduce'} stock` }, 409);
   }
 
-  const { data: result, error } = await admin.rpc('apply_sellertray_stock_adjustment', {
+  const { data: result, error } = await admin.rpc('apply_sellertray_stock_adjustment_with_cost', {
     p_tenant_id: tenantId,
     p_branch_id: branchId,
     p_catalog_item_id: productId,
@@ -153,6 +169,9 @@ Deno.serve(async (request) => {
     p_reason: reason,
     p_command_id: commandId,
     p_actor_user_id: userId,
+    p_stock_unit_cost: stockUnitCost,
+    p_cost_reference: costReference,
+    p_cost_reason: costReason,
   });
 
   if (error || !isInventoryOperationResult(result, 'adjust')) {

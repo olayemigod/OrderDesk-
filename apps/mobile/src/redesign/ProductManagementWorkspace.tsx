@@ -1,3 +1,4 @@
+import { stockUnitSellingPrice } from '../domain/uomPrice';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
@@ -121,9 +122,9 @@ export function ProductManagementWorkspace({ tenantId, currency, onClose }: Prop
       setPrice('0');
       return;
     }
-    const selling = product.uoms.find((uom) => uom.isDefaultSelling)?.sellingPrice
-      ?? product.uoms.find((uom) => uom.isStockUom)?.sellingPrice
-      ?? 0;
+    // Product base price is always Stock UOM, never a calculated default-selling
+    // alternate UOM price. Saving an unrelated edit must not multiply base cost.
+    const selling = stockUnitSellingPrice(product.uoms) ?? 0;
     setDraft({
       name: product.name,
       sku: product.sku,

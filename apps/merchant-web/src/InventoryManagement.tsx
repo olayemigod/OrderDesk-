@@ -1,5 +1,5 @@
 import { SellerTrayInput, SellerTraySelect, SellerTrayTabs } from './SellerTrayElements';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { errorMessage, numberValue, supabase } from './supabase';
 
 type Branch = { id: string; name: string };
@@ -130,6 +130,7 @@ export default function InventoryManagement({ tenantId, branch, branches }: { te
   const [products, setProducts] = useState<Product[]>([]);
   const [count, setCount] = useState<StockCount | null>(null);
   const [capabilities, setCapabilities] = useState<Capabilities>({});
+  const [canManageCost, setCanManageCost] = useState(false);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -158,7 +159,14 @@ export default function InventoryManagement({ tenantId, branch, branches }: { te
   const [adjustQty, setAdjustQty] = useState('');
   const [adjustDirection, setAdjustDirection] = useState<'increase' | 'decrease'>('decrease');
   const [adjustReason, setAdjustReason] = useState(ADJUST_REASONS[0]);
+  const [costMode, setCostMode] = useState<'pending' | 'verified'>('pending');
+  const [verifiedUnitCost, setVerifiedUnitCost] = useState('');
+  const [costEvidenceReference, setCostEvidenceReference] = useState('');
+  const [costEvidenceRationale, setCostEvidenceRationale] = useState('');
   const [adjustReference, setAdjustReference] = useState(() => reference('ADJ'));
+  // Keep one command key for identical retry payloads when the network
+  // response is lost after the server has already committed the movement.
+  const adjustRequest = useRef<{ fingerprint: string; id: string } | null>(null);
   const [countReference, setCountReference] = useState(() => reference('COUNT'));
   const [countReason, setCountReason] = useState('Routine stock count');
   const [countEntryProductId, setCountEntryProductId] = useState<string | null>(null);
@@ -177,6 +185,14 @@ export default function InventoryManagement({ tenantId, branch, branches }: { te
   const [transferCancelReason, setTransferCancelReason] = useState('');
 
   const selectedProduct = products.find((row) => row.id === adjustProductId) ?? null;
+  const adjustmentUom = selectedProduct?.catalog_item_uoms?.find((row) => row.id === adjustUomId) ?? null;
+  const parsedAdjustmentQty = adjustQty.trim() ? Number(adjustQty) : null;
+  const convertedAdjustment = adjustmentUom && parsedAdjustmentQty !== null && Number.isFinite(parsedAdjustmentQty) && parsedAdjustmentQty > 0
+    ? parsedAdjustmentQty * numberValue(adjustmentUom.conversion_factor) : null;
+  const selectedStockRow = stock.items.find((row) => row.catalogItemId === adjustProductId) ?? null;
+  const projectedStockBalance = convertedAdjustment !== null && selectedStockRow
+    ? numberValue(selectedStockRow.quantityOnHand) + (adjustDirection === 'increase' ? convertedAdjustment : -convertedAdjustment)
+    : null;
   const lineProduct = products.find((row) => row.id === lineProductId) ?? null;
   const policyProduct = policyProductId ? stock.items.find((row) => row.catalogItemId === policyProductId) ?? null : null;
   const countEntryItem = count?.items.find((item) => item.productId === countEntryProductId) ?? null;
@@ -184,6 +200,12 @@ export default function InventoryManagement({ tenantId, branch, branches }: { te
   const transferToCancel = transferCancelId ? transfers.items.find((row) => row.id === transferCancelId) ?? null : null;
 
   useEffect(() => {
+    adjustRequest.current = null;
+    setCostMode('pending');
+    setVerifiedUnitCost('');
+    setCostEvidenceReference('');
+    setCostEvidenceRationale('');
+    setCanManageCost(false);
     setMessage(null); setError(null); setCount(null); setStock(EMPTY_STOCK); setMovements(EMPTY_MOVEMENTS); setTransfers(EMPTY_TRANSFERS); setProducts([]); setPolicyProductId(null);
     setCountEntryProductId(null); setCountEntryUomId(''); setCountEntryQty(''); setCountCancelOpen(false); setCountCancelReason('');
     setTransferCancelId(null); setTransferCancelReason(''); setStockOffset(0); setMovementOffset(0); setTransferOffset(0);
@@ -266,13 +288,14 @@ export default function InventoryManagement({ tenantId, branch, branches }: { te
     setLoading(true); setError(null);
     try {
       const asOf = new Date().toISOString();
-      const [stockResult, movementResult, transferResult, countResult, capabilityResult, productResult] = await Promise.all([
+      const [stockResult, movementResult, transferResult, countResult, capabilityResult, productResult, costAccessResult] = await Promise.all([
         supabase.rpc('get_sellertray_inventory_management_stock', { p_tenant_id: tenantId, p_branch_id: branch.id, p_search: stockSearch.trim() || null, p_stock_state: stockState, p_valuation_state: valuationState, p_as_of: asOf, p_limit: PAGE_SIZE, p_offset: nextStockOffset }),
         supabase.rpc('get_sellertray_inventory_management_movements', { p_tenant_id: tenantId, p_branch_id: branch.id, p_search: movementSearch.trim() || null, p_movement_type: movementType === 'all' ? null : movementType, p_date_from: movementDateFrom || null, p_date_to: movementDateTo || null, p_limit: PAGE_SIZE, p_offset: nextMovementOffset }),
         supabase.rpc('get_sellertray_inventory_management_transfers', { p_tenant_id: tenantId, p_branch_id: branch.id, p_search: transferSearch.trim() || null, p_status: transferStatus, p_date_from: transferDateFrom || null, p_date_to: transferDateTo || null, p_limit: PAGE_SIZE, p_offset: nextTransferOffset }),
         supabase.rpc('get_sellertray_active_stock_count', { p_tenant_id: tenantId, p_branch_id: branch.id }),
         supabase.rpc('get_sellertray_inventory_capabilities', { p_tenant_id: tenantId, p_branch_id: branch.id }),
         supabase.rpc('get_sellertray_inventory_product_options', { p_tenant_id: tenantId, p_branch_id: branch.id }),
+        supabase.rpc('get_sellertray_inventory_valuation_authority', { p_tenant_id: tenantId, p_branch_id: branch.id }),
       ]);
       for (const result of [stockResult, movementResult, transferResult, countResult, capabilityResult, productResult]) if (result.error) throw result.error;
       setStock((stockResult.data ?? EMPTY_STOCK) as StockManagementResponse);
@@ -282,6 +305,8 @@ export default function InventoryManagement({ tenantId, branch, branches }: { te
       setCount((countResult.data ?? null) as StockCount | null);
       const cap = Array.isArray(capabilityResult.data) ? capabilityResult.data[0] : capabilityResult.data;
       setCapabilities((cap ?? {}) as Capabilities);
+      const costAccess = Array.isArray(costAccessResult.data) ? costAccessResult.data[0] : costAccessResult.data;
+      setCanManageCost(!costAccessResult.error && costAccess?.can_manage_historical_cost === true);
       const nextProducts = (productResult.data ?? []) as Product[];
       setProducts(nextProducts);
       setAdjustProductId((current) => nextProducts.some((row) => row.id === current) ? current : nextProducts[0]?.id ?? '');
@@ -305,11 +330,33 @@ export default function InventoryManagement({ tenantId, branch, branches }: { te
   async function submitAdjustment(event: FormEvent) {
     event.preventDefault(); if (!branch) return;
     const quantity = Number(adjustQty);
-    if (!adjustProductId || !adjustUomId || !Number.isFinite(quantity) || quantity <= 0 || !adjustReference.trim()) { setError('Choose a product and enter a valid quantity and reference.'); return; }
+    if (!adjustProductId || !adjustUomId || !Number.isFinite(quantity) || quantity <= 0 || !adjustReference.trim()) { setError('Enter the amount of stock to change, not the new total.'); return; }
+    // The preview is advisory: a previous exact command may already have
+    // committed while its response was lost, so never block server replay.
+    const verified = adjustDirection === 'increase' && canManageCost && costMode === 'verified';
+    if (verified && (!verifiedUnitCost.trim() || !Number.isFinite(Number(verifiedUnitCost)) || Number(verifiedUnitCost) < 0 || !costEvidenceReference.trim() || !costEvidenceRationale.trim())) {
+      setError('Enter verified cost per Stock UOM, a document reference and a cost evidence rationale.'); return;
+    }
+    const fingerprint = JSON.stringify([tenantId,branch.id,adjustProductId,adjustUomId,quantity,adjustDirection,adjustReference.trim(),adjustReason,
+      verified,verified ? verifiedUnitCost.trim() : null,verified ? costEvidenceReference.trim() : null,verified ? costEvidenceRationale.trim() : null]);
+    const id = adjustRequest.current?.fingerprint === fingerprint ? adjustRequest.current.id : commandId('adjust');
+    adjustRequest.current = { fingerprint, id };
     setBusy(true); setError(null); setMessage(null);
     try {
-      await invoke('inventory-operation', { tenantId, branchId: branch.id, productId: adjustProductId, uomId: adjustUomId, operation: 'adjust', quantity, adjustmentDirection: adjustDirection, reference: adjustReference, reason: adjustReason, commandId: commandId('adjust') });
-      setMessage('Stock adjustment posted.'); setAdjustQty(''); setAdjustReference(reference('ADJ')); await loadBranchInventory();
+      const result = await invoke('inventory-operation', { tenantId, branchId: branch.id, productId: adjustProductId, uomId: adjustUomId, operation: 'adjust', quantity, adjustmentDirection: adjustDirection, reference: adjustReference.trim(), reason: adjustReason, commandId: id,
+        stockUnitCost: verified ? Number(verifiedUnitCost) : null,
+        costReference: verified ? costEvidenceReference.trim() : null,
+        costReason: verified ? costEvidenceRationale.trim() : null });
+      adjustRequest.current = null;
+      const balanceNote = typeof result?.quantityOnHand === 'number' && typeof result?.stockUom === 'string'
+        ? `Stock adjusted. Current stock: ${formatNumber(result.quantityOnHand)} ${result.stockUom}.`
+        : 'Stock adjustment posted. Refresh to see the latest stock balance.';
+      const costNote = result?.costEvidenceStatus === 'valued' ? ' Verified cost evidence recorded.'
+        : adjustDirection === 'increase' ? ' Additional stock is unvalued pending authorised cost evidence.' : '';
+      setMessage(balanceNote + costNote);
+      setAdjustQty(''); setAdjustReference(reference('ADJ'));
+      setCostMode('pending'); setVerifiedUnitCost(''); setCostEvidenceReference(''); setCostEvidenceRationale('');
+      await loadBranchInventory();
     } catch (cause) { setError(errorMessage(cause, 'Unable to post this stock adjustment.')); } finally { setBusy(false); }
   }
 
@@ -481,14 +528,48 @@ export default function InventoryManagement({ tenantId, branch, branches }: { te
         <label className="field">Low-stock threshold<SellerTrayInput type="number" min="0" step="any" value={policyThreshold} onChange={(event) => setPolicyThreshold(event.target.value)} /></label>
         <label className="field">Reorder target<SellerTrayInput type="number" min="0" step="any" value={policyTarget} onChange={(event) => setPolicyTarget(event.target.value)} placeholder="Optional" /></label>
       </div><div className="form-actions"><button className="primary-button" disabled={busy}>{busy ? 'Saving…' : 'Save policy'}</button></div></form> : null}
-      {capabilities.can_adjust_stock ? <form className="panel product-editor-stack" onSubmit={submitAdjustment}><div className="panel-head"><div><p className="eyebrow">Controlled correction</p><h3>Adjust stock</h3></div></div><p className="muted">Use this only for corrections, damage, expiry, shrinkage or recovery. Supplier receipts belong in Purchasing and Branch receipts belong in Transfers.</p><div className="form-grid">
-        <label className="field">Product<SellerTraySelect value={adjustProductId} onChange={(event) => setAdjustProductId(event.target.value)}>{products.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</SellerTraySelect></label>
-        <label className="field">Unit<SellerTraySelect value={adjustUomId} onChange={(event) => setAdjustUomId(event.target.value)}>{selectedProduct?.catalog_item_uoms?.map((row) => <option key={row.id} value={row.id}>{row.uom_name}</option>)}</SellerTraySelect></label>
-        <label className="field">Quantity<SellerTrayInput type="number" min="0" step="any" value={adjustQty} onChange={(event) => setAdjustQty(event.target.value)} /></label>
-        <label className="field">Direction<SellerTraySelect value={adjustDirection} onChange={(event) => setAdjustDirection(event.target.value as 'increase' | 'decrease')}><option value="decrease">Reduce stock</option><option value="increase">Increase stock</option></SellerTraySelect></label>
+      {capabilities.can_adjust_stock ? <form className="panel product-editor-stack" onSubmit={submitAdjustment}><div className="panel-head"><div><p className="eyebrow">Controlled correction</p><h3>Adjust stock</h3></div></div><p className="muted">Enter the amount of stock to add or remove, not the new total on hand. For an actual counted balance, use Stock count, review the variance and apply. Supplier receipts belong in Purchasing and Branch receipts belong in Transfers.</p><div className="form-grid">
+        <label className="field">Product<SellerTraySelect value={adjustProductId} onChange={(event) => {
+          setAdjustProductId(event.target.value); setCostMode('pending');
+          setVerifiedUnitCost(''); setCostEvidenceReference(''); setCostEvidenceRationale('');
+          adjustRequest.current = null;
+        }}>{products.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}</SellerTraySelect></label>
+        <label className="field">Unit<SellerTraySelect value={adjustUomId} onChange={(event) => {
+          setAdjustUomId(event.target.value); setCostMode('pending');
+          setVerifiedUnitCost(''); setCostEvidenceReference(''); setCostEvidenceRationale('');
+          adjustRequest.current = null;
+        }}>{selectedProduct?.catalog_item_uoms?.map((row) => <option key={row.id} value={row.id}>{row.uom_name}</option>)}</SellerTraySelect></label>
+        <label className="field">{adjustDirection === 'increase' ? 'Quantity to ADD (not new total)' : 'Quantity to REMOVE (not new total)'}<SellerTrayInput type="number" min="0" step="any" value={adjustQty} onChange={(event) => setAdjustQty(event.target.value)} /></label>
+        <label className="field">Direction<SellerTraySelect value={adjustDirection} onChange={(event) => {
+          setAdjustDirection(event.target.value as 'increase' | 'decrease');
+          setCostMode('pending'); setVerifiedUnitCost(''); setCostEvidenceReference(''); setCostEvidenceRationale('');
+          adjustRequest.current = null;
+        }}><option value="decrease">Reduce stock</option><option value="increase">Increase stock</option></SellerTraySelect></label>
         <label className="field">Reason<SellerTraySelect value={adjustReason} onChange={(event) => setAdjustReason(event.target.value)}>{ADJUST_REASONS.map((reason) => <option key={reason}>{reason}</option>)}</SellerTraySelect></label>
         <label className="field">Reference<SellerTrayInput value={adjustReference} onChange={(event) => setAdjustReference(event.target.value)} /></label>
-      </div><div className="form-actions"><button className="primary-button" disabled={busy}>{busy ? 'Posting…' : 'Post adjustment'}</button></div></form> : null}
+      </div>
+      {adjustDirection === 'increase' ? <div className="panel product-editor-stack">
+        <h4>Cost evidence for added stock</h4>
+        {canManageCost ? <>
+          <label className="field">Cost treatment<SellerTraySelect value={costMode} onChange={(event) => setCostMode(event.target.value as 'pending' | 'verified')}>
+            <option value="pending">Cost unavailable — flag for management review</option>
+            <option value="verified">Attach verified historical cost now</option>
+          </SellerTraySelect></label>
+          {costMode === 'verified' ? <div className="form-grid">
+            <label className="field">Cost per {selectedProduct?.stock_uom || 'Stock UOM'} (not selling price)<SellerTrayInput type="number" min="0" step="0.00000001" value={verifiedUnitCost} onChange={(event) => setVerifiedUnitCost(event.target.value)} required /></label>
+            <label className="field">Cost evidence reference<SellerTrayInput maxLength={160} placeholder="Invoice or verified count sheet" value={costEvidenceReference} onChange={(event) => setCostEvidenceReference(event.target.value)} required /></label>
+            <label className="field">Why is this historical cost authoritative?<SellerTrayInput maxLength={500} value={costEvidenceRationale} onChange={(event) => setCostEvidenceRationale(event.target.value)} required /></label>
+          </div> : <p className="muted">The new stock will remain unvalued until verified cost is recorded. SellerTray will not infer cost from selling price or current average cost.</p>}
+        </> : <p className="muted">You can change stock quantity, but only an authorised inventory-cost Manager can attach cost evidence. Missing cost will appear in Historical cost evidence for review.</p>}
+      </div> : <p className="muted">Stock reductions automatically use existing valuation; no additional cost entry is required.</p>}
+      {convertedAdjustment !== null && selectedProduct ? <p className="muted">
+        Stock change: {adjustDirection === 'increase' ? '+' : '-'}{formatNumber(convertedAdjustment)} {selectedProduct.stock_uom}.
+        {projectedStockBalance !== null && selectedStockRow
+          ? ` Current: ${formatNumber(numberValue(selectedStockRow.quantityOnHand))}; after adjustment: ${formatNumber(projectedStockBalance)} ${selectedProduct.stock_uom}.`
+          : ' Current on-hand stock is not loaded for this Product. Review the Branch stock list before posting.'}
+        {' '}Final balance is verified against the latest stock ledger.
+      </p> : null}
+      <div className="form-actions"><button className="primary-button" disabled={busy}>{busy ? 'Posting…' : 'Post adjustment'}</button></div></form> : null}
     </> : null}
 
     {tab === 'movements' ? <article className="panel">
