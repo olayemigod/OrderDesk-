@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.115.0';
+import { parseAdjustmentUnitCost, parseAdjustmentEvidenceText } from './adjustment-cost.ts';
 
 type JsonRecord = Record<string, unknown>;
 type InventoryAction = 'adjust' | 'policy' | 'opening';
@@ -134,9 +135,9 @@ Deno.serve(async (request) => {
   // Cost evidence is optional on a positive adjustment. An explicit zero is
   // a verified zero cost, not "missing". Never infer cost from selling price.
   const hasCost = body.stockUnitCost !== undefined && body.stockUnitCost !== null && body.stockUnitCost !== '';
-  const stockUnitCost = hasCost ? cleanNonNegativeNumber(body.stockUnitCost) : null;
-  const costReference = body.costReference == null ? null : cleanText(body.costReference, 160);
-  const costReason = body.costReason == null ? null : cleanText(body.costReason, 500);
+  const stockUnitCost = hasCost ? parseAdjustmentUnitCost(body.stockUnitCost) : null;
+  const costReference = body.costReference == null ? null : parseAdjustmentEvidenceText(body.costReference, 160);
+  const costReason = body.costReason == null ? null : parseAdjustmentEvidenceText(body.costReason, 500);
 
   if (!productId || !uomId || quantity === null || !adjustmentDirection || !reference || !commandId || !rawReason) {
     return json({ error: 'Product, unit, quantity, direction, reference and reason are required' }, 400);
