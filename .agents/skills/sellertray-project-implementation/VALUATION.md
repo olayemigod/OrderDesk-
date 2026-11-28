@@ -19,6 +19,16 @@ This file is a normative extension of `SKILL.md` for every SellerTray task that 
 13. Single-currency valuation uses the Business currency. Do not silently perform FX valuation without an explicitly approved exchange-rate model.
 14. Quantity integrity and value integrity are separate. SellerTray may know stock quantity while cost is partial or unknown; the system must expose that state rather than treating unknown cost as zero.
 
+## Cost-aware stock adjustments (approved 04/11/2026; Build 47)
+
+1. **Stock reduction** (damage, expiry, shrinkage or authorised correction) consumes existing governed valuation/quantity composition. Never ask the merchant to enter a new cost per Stock UOM to reduce quantity; historical COGS and unvalued composition remain governed.
+2. **Positive adjustment with verifiable historical cost** may capture cost per Stock UOM, evidence document reference and documented rationale **in the same atomic stock-adjustment command**. The actor must have Branch stock-operation permission and cost-management authority (`can_adjust_stock` and `can_manage_purchasing`). An entered zero is a documented zero, not missing evidence.
+3. **Positive adjustment without verifiable cost** may still be recorded by an otherwise authorised stock operator; the shared ledger flags its inbound cost as unvalued and exposes the outstanding evidence in Merchant Web. Do not invent a price, assume current weighted average or silently substitute the selling price.
+4. When cost is supplied, the entire movement and immutable cost-evidence record commit together or fail together. Existing stock-command retries replay the same event, and cost-command identity is deterministically tied to that stock command. Same-identity, different-cost claims fail closed; the old no-cost adjustment API remains backward-compatible.
+5. Mobile performs controlled quantity corrections and, only for authorised inventory-cost managers, may capture documentary cost evidence during that correction. Merchant Web manages historical cost review, correction and cost evidence; existing historical evidence screens remain the follow-up path.
+6. Legitimate recovery of an earlier loss may cite its original movement as supporting evidence, but costs are not inherited from an unlinked movement without verified documentary authority. Transfer/receipt, Return and governed Purchase Receiving paths retain their own valuation authority and must not be replaced by adjustments.
+7. Branch Stock views, movement history and reporting continue to read the shared quantity ledger and valuation replay; missing-cost flags are not a stock-count discrepancy. Existing Production stock and historical evidence are not rewritten by this release.
+
 ## Historical cost-basis evidence
 
 1. Merchant Web may resolve a legitimate historical valuation gap by attaching **verified historical cost evidence** to an existing eligible positive inbound movement. This is a valuation correction only; it must not add, remove, date-shift, or rewrite stock quantity.

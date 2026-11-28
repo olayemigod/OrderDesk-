@@ -1,0 +1,48 @@
+name: Inventory Edge CI
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/functions/inventory-operation/**'
+      - '.github/workflows/inventory-edge-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/inventory-operation/**'
+      - '.github/workflows/inventory-edge-ci.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: inventory-edge-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      - name: Verify exact candidate
+        run: test "$(git rev-parse HEAD)" = "${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.8
+      - name: Isolate exact Edge source from monorepo Node workspace
+        run: |
+          mkdir -p "$RUNNER_TEMP/inventory-edge"
+          cp supabase/functions/inventory-operation/{index,adjustment-cost,adjustment-cost.test}.ts "$RUNNER_TEMP/inventory-edge/"
+          cmp supabase/functions/inventory-operation/index.ts "$RUNNER_TEMP/inventory-edge/index.ts"
+          cmp supabase/functions/inventory-operation/adjustment-cost.ts "$RUNNER_TEMP/inventory-edge/adjustment-cost.ts"
+          cmp supabase/functions/inventory-operation/adjustment-cost.test.ts "$RUNNER_TEMP/inventory-edge/adjustment-cost.test.ts"
+      - name: Typecheck inventory Edge handler
+        run: |
+          cd "$RUNNER_TEMP/inventory-edge"
+          deno check --no-config --node-modules-dir=none index.ts
+      - name: Test verified-cost payload parsing without network or secrets
+        run: |
+          cd "$RUNNER_TEMP/inventory-edge"
+          deno test --no-config adjustment-cost.test.ts

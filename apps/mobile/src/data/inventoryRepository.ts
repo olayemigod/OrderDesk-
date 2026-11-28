@@ -33,6 +33,7 @@ export type InventoryCapabilities = {
   canCountStock?: boolean;
   canApplyStockCount?: boolean;
   canTransferStock?: boolean;
+  canManageHistoricalCost?: boolean;
 };
 
 export type InventoryOperation = 'receive' | 'adjust';
@@ -49,6 +50,9 @@ export type InventoryOperationInput = {
   adjustmentDirection?: InventoryAdjustmentDirection | null;
   reference: string;
   reason: string;
+  stockUnitCost?: number | null;
+  costReference?: string | null;
+  costReason?: string | null;
 };
 
 export type InventoryOperationResult = {
@@ -64,6 +68,8 @@ export type InventoryOperationResult = {
   quantityOnHand: number;
   reference: string;
   idempotentReplay: boolean;
+  costEvidenceStatus?: 'valued' | 'needs_evidence' | 'not_required';
+  costEvidenceId?: string | null;
 };
 
 export type StockCountStatus = 'counting' | 'review' | 'applied' | 'cancelled';
@@ -309,22 +315,33 @@ export async function loadInventoryCapabilities(
       canCountStock: false,
       canApplyStockCount: false,
       canTransferStock: false,
+      canManageHistoricalCost: false,
     };
   }
 
-  const { data, error } = await supabase.rpc('get_sellertray_inventory_capabilities', {
-    p_tenant_id: tenantId,
-    p_branch_id: branchId,
-  });
-
-  if (error) throw error;
-  const row = ((data ?? []) as CapabilityRpcRow[])[0];
+  const [capability, historicalCost] = await Promise.all([
+    supabase.rpc('get_sellertray_inventory_capabilities', {
+      p_tenant_id: tenantId,
+      p_branch_id: branchId,
+    }),
+    supabase.rpc('get_sellertray_inventory_valuation_authority', {
+      p_tenant_id: tenantId,
+      p_branch_id: branchId,
+    }),
+  ]);
+  if (capability.error) throw capability.error;
+  const row = ((capability.data ?? []) as CapabilityRpcRow[])[0];
+  const managerAccess = Array.isArray(historicalCost.data) ? historicalCost.data[0] : historicalCost.data;
   return {
     canReceiveStock: row?.can_receive_stock === true,
     canAdjustStock: row?.can_adjust_stock === true,
     canCountStock: row?.can_count_stock === true,
     canApplyStockCount: row?.can_apply_stock_count === true,
     canTransferStock: row?.can_transfer_stock === true,
+    // Deny the cost editor on missing/failed authority reads. The server
+    // independently validates the actor on the actual mutation.
+    canManageHistoricalCost: !historicalCost.error
+      && (managerAccess as { can_manage_historical_cost?: boolean } | null)?.can_manage_historical_cost === true,
   };
 }
 
@@ -344,6 +361,17 @@ export async function applyInventoryOperation(
   }
   if (!input.reference.trim()) throw new Error('Reference is required.');
   if (!input.reason.trim()) throw new Error('Reason is required.');
+  const includesCost = input.stockUnitCost !== undefined && input.stockUnitCost !== null;
+  if (includesCost && (input.operation !== 'adjust' || input.adjustmentDirection !== 'increase')) {
+    throw new Error('Only positive stock adjustments may include new cost evidence.');
+  }
+  if (includesCost && (!Number.isFinite(input.stockUnitCost) || Number(input.stockUnitCost) < 0
+      || !input.costReference?.trim() || !input.costReason?.trim())) {
+    throw new Error('Enter the verified cost per Stock UOM, evidence reference and rationale.');
+  }
+  if (!includesCost && (input.costReference || input.costReason)) {
+    throw new Error('Cost evidence requires a verified Stock UOM cost.');
+  }
 
   const { data, error } = await supabase.functions.invoke('inventory-operation', {
     body: {
@@ -357,6 +385,9 @@ export async function applyInventoryOperation(
       adjustmentDirection: input.operation === 'adjust' ? input.adjustmentDirection : null,
       reference: input.reference.trim(),
       reason: input.reason.trim(),
+      stockUnitCost: includesCost ? input.stockUnitCost : null,
+      costReference: includesCost ? input.costReference?.trim() : null,
+      costReason: includesCost ? input.costReason?.trim() : null,
     },
   });
 

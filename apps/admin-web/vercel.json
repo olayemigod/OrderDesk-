@@ -46,7 +46,8 @@
     "deploymentEnabled": {
       "fix/production-web-invitation-orders-only-20261127": false,
       "fix/production-web-customer-profitability-20261127": false,
-      "fix/production-mobile-release3-20261127": false
+      "fix/production-mobile-release3-20261127": false,
+      "fix/production-uom-cost-release4-20261128": false
     }
   }
 }

@@ -63,7 +63,7 @@ select extensions.ok(
 );
 
 select extensions.ok(
-  lower(pg_get_functiondef('public.record_sellertray_inventory_cost_basis(uuid,uuid,numeric,text,text,uuid,uuid)'::regprocedure))
+  lower(pg_get_functiondef('public.record_sellertray_inventory_cost_basis_for_actor(uuid,uuid,numeric,text,text,uuid,uuid,uuid)'::regprocedure))
     like '%governed purchase receiving already owns this receipt cost basis%',
   'governed Purchase Receiving cost snapshots remain non-overridable'
 );
